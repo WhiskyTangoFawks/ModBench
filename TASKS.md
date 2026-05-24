@@ -1,32 +1,32 @@
 # mEdit — Phased Task Breakdown
 
-**Status:** Pre-scaffold. No code exists.
+**Status:** Phase 0 complete. Starting Phase 1.
 **Target game (v1):** Fallout 4. Other games behind a `GameRelease` enum later.
 
 ---
 
-## Phase 0 — Project Scaffold
+## Phase 0 — Project Scaffold ✓
 
 *Goal: both projects compile and start. No domain logic. Skeleton only.*
 
 ### C# Backend (`BethesdaPluginService/`)
-- [ ] Create solution: `BethesdaPluginService.sln`
-- [ ] Create `BethesdaPluginService.Core` class library
-- [ ] Create `BethesdaPluginService.Api` ASP.NET Core minimal API
-- [ ] Add NuGet deps: `Mutagen.Bethesda.Fallout4`, `DuckDB.NET`, `Swashbuckle.AspNetCore`, `Autofac.Extensions.DependencyInjection`, `Serilog.AspNetCore`
-- [ ] Wire Autofac into ASP.NET Core host (`UseServiceProviderFactory`)
-- [ ] Configure Serilog (console sink + rolling file sink)
-- [ ] Mount Swashbuckle → OpenAPI at `/openapi.json` and Swagger UI at `/swagger`
-- [ ] `GET /health` → `200 { status: "ok" }`
-- [ ] Verify: `dotnet run`, curl health, swagger UI loads
+- [x] Create solution: `BethesdaPluginService.sln`
+- [x] Create `BethesdaPluginService.Core` class library
+- [x] Create `BethesdaPluginService.Api` ASP.NET Core minimal API
+- [x] Add NuGet deps: `Mutagen.Bethesda.Fallout4`, `DuckDB.NET`, `Swashbuckle.AspNetCore`, `Autofac.Extensions.DependencyInjection`, `Serilog.AspNetCore`
+- [x] Wire Autofac into ASP.NET Core host (`UseServiceProviderFactory`)
+- [x] Configure Serilog (console sink + rolling file sink)
+- [x] Mount Swashbuckle → OpenAPI at `/openapi.json` and Swagger UI at `/swagger`
+- [x] `GET /health` → `200 { status: "ok" }`
+- [x] Verify: `dotnet run`, curl health, swagger UI loads
 
 ### VS Code Extension (`bethesda-plugin-editor/`)
-- [ ] Scaffold with `yo code` → TypeScript extension
-- [ ] Add webview build: Vite + React + TypeScript in `webview/`
-- [ ] Register commands in `package.json`: `mEdit.openEditor`, `mEdit.openCompare`
-- [ ] `extension.ts`: commands registered, each opens a placeholder webview panel
-- [ ] Webview renders a `<div>mEdit loading…</div>`
-- [ ] Verify: F5 launches Extension Development Host, commands appear in palette
+- [x] Scaffold with `yo code` → TypeScript extension
+- [x] Add webview build: Vite + React + TypeScript in `webview/`
+- [x] Register commands in `package.json`: `mEdit.openEditor`, `mEdit.openCompare`
+- [x] `extension.ts`: commands registered, each opens a placeholder webview panel
+- [x] Webview renders a `<div>mEdit loading…</div>`
+- [x] Verify: F5 launches Extension Development Host, commands appear in palette
 
 ---
 
@@ -35,12 +35,12 @@
 *Goal: given a Data folder path, load plugins via Mutagen and enumerate records in memory.*
 
 ### IPluginLoader Service
-- [ ] Define `IPluginLoader` interface in Core
-- [ ] Read `Plugins.txt` (FO4 AppData path) to resolve enabled plugins and load order
-- [ ] Load each plugin into `LoadOrder<IModListing<IModGetter>>` via Mutagen
+- [x] Define `IPluginLoader` interface in Core
+- [x] Read `Plugins.txt` (FO4 AppData path) to resolve enabled plugins and load order
+- [x] Load each plugin into `LoadOrder<IModListing<IModGetter>>` via Mutagen
 - [ ] Expose `IGameEnvironment` scoped to session lifetime
-- [ ] `PluginMetadata` model: name, path, load_order_idx, is_light, is_master, masters list, record_count
-- [ ] Integration test: load a known test plugin, assert record count matches xEdit
+- [x] `PluginMetadata` model: name, path, load_order_idx, is_light, is_master, masters list, record_count
+- [x] Integration test: load a known test plugin, assert record count matches xEdit
 
 ### FormKey Resolution
 - [ ] `IFormKeyResolver.Resolve(FormKey) → string editorId` via winning override lookup

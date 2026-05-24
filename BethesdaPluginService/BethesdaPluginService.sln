@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -6,6 +6,8 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BethesdaPluginService.Core", "BethesdaPluginService.Core\BethesdaPluginService.Core.csproj", "{5C8B5CBD-E1D8-428D-ADBB-FB4FE9188341}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BethesdaPluginService.Api", "BethesdaPluginService.Api\BethesdaPluginService.Api.csproj", "{11B06E27-2300-4489-9AC2-CE69C6698212}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BethesdaPluginService.Tests", "BethesdaPluginService.Tests\BethesdaPluginService.Tests.csproj", "{70F9B0A3-3081-4CFE-A2EC-9CB1D66EBDA2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -24,5 +26,9 @@ Global
 		{11B06E27-2300-4489-9AC2-CE69C6698212}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{11B06E27-2300-4489-9AC2-CE69C6698212}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{11B06E27-2300-4489-9AC2-CE69C6698212}.Release|Any CPU.Build.0 = Release|Any CPU
+		{70F9B0A3-3081-4CFE-A2EC-9CB1D66EBDA2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{70F9B0A3-3081-4CFE-A2EC-9CB1D66EBDA2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{70F9B0A3-3081-4CFE-A2EC-9CB1D66EBDA2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{70F9B0A3-3081-4CFE-A2EC-9CB1D66EBDA2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
