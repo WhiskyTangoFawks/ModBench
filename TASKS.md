@@ -1,201 +1,248 @@
-# mEdit — Phased Task Breakdown
+# mEdit — Task Roadmap
 
-**Status:** Phase 0 complete. Starting Phase 1.
-**Target game (v1):** Fallout 4. Other games behind a `GameRelease` enum later.
+**POC complete** (Phases 0–7 + M). Core stack operational: plugin loading, DuckDB index, record compare grid, inline edit + save, FormKey picker, session wizard, backend lifecycle.
 
----
-
-## Phase 0 — Project Scaffold ✓
-
-*Goal: both projects compile and start. No domain logic. Skeleton only.*
-
-### C# Backend (`BethesdaPluginService/`)
-- [x] Create solution: `BethesdaPluginService.sln`
-- [x] Create `BethesdaPluginService.Core` class library
-- [x] Create `BethesdaPluginService.Api` ASP.NET Core minimal API
-- [x] Add NuGet deps: `Mutagen.Bethesda.Fallout4`, `DuckDB.NET`, `Swashbuckle.AspNetCore`, `Autofac.Extensions.DependencyInjection`, `Serilog.AspNetCore`
-- [x] Wire Autofac into ASP.NET Core host (`UseServiceProviderFactory`)
-- [x] Configure Serilog (console sink + rolling file sink)
-- [x] Mount Swashbuckle → OpenAPI at `/openapi.json` and Swagger UI at `/swagger`
-- [x] `GET /health` → `200 { status: "ok" }`
-- [x] Verify: `dotnet run`, curl health, swagger UI loads
-
-### VS Code Extension (`bethesda-plugin-editor/`)
-- [x] Scaffold with `yo code` → TypeScript extension
-- [x] Add webview build: Vite + React + TypeScript in `webview/`
-- [x] Register commands in `package.json`: `mEdit.openEditor`, `mEdit.openCompare`
-- [x] `extension.ts`: commands registered, each opens a placeholder webview panel
-- [x] Webview renders a `<div>mEdit loading…</div>`
-- [x] Verify: F5 launches Extension Development Host, commands appear in palette
+**Target game (v1):** Fallout 4. Multi-game architecture complete (Phase M); other games need NuGet packages + extension wiring.
 
 ---
 
-## Phase 1 — Plugin Loading
+## Completed Phases ✓
 
-*Goal: given a Data folder path, load plugins via Mutagen and enumerate records in memory.*
-
-### IPluginLoader Service
-- [x] Define `IPluginLoader` interface in Core
-- [x] Read `Plugins.txt` (FO4 AppData path) to resolve enabled plugins and load order
-- [x] Load each plugin into `LoadOrder<IModListing<IModGetter>>` via Mutagen
-- [ ] Expose `IGameEnvironment` scoped to session lifetime
-- [x] `PluginMetadata` model: name, path, load_order_idx, is_light, is_master, masters list, record_count
-- [x] Integration test: load a known test plugin, assert record count matches xEdit
-
-### FormKey Resolution
-- [ ] `IFormKeyResolver.Resolve(FormKey) → string editorId` via winning override lookup
-- [ ] `IFormKeyResolver.Search(string query, IEnumerable<string> validTypes) → FormKey[]` for FormKeyPicker
-- [ ] Cache both directions in `ConcurrentDictionary` for session duration
-
----
-
-## Phase 2 — DuckDB Index
-
-*Goal: all loaded records queryable via SQL. Rebuild from plugins in <30 s. mtime-cached across sessions.*
-
-### Schema Generator
-- [ ] `SchemaGenerator.CreateTablesFor(Type recordType, DuckDBConnection conn)`
-- [ ] Implement type mapping (see mEdit.md §4): `string/TranslatedString → VARCHAR`, `int/short → INTEGER`, `float/double → FLOAT`, `bool → BOOLEAN`, enum → `VARCHAR`, `FormLink<T> → VARCHAR`, 1-level struct → inline prefixed columns, 2+-level / `ExtendedList<T>` → `JSON`
-- [ ] Hardcoded schema for `plugins` and `index_state` tables
-- [ ] On startup: compare stored Mutagen assembly version hash → if changed, drop and recreate all generated tables
-- [ ] Schema generation is idempotent (`CREATE TABLE IF NOT EXISTS`)
-
-### Indexer
-- [ ] `RecordIndexer.Index(IModGetter plugin, int loadOrderIdx)` walks all major record types
-- [ ] Map each record's properties → column values via reflection (matching the schema generator's logic)
-- [ ] Batch-insert via DuckDB `Appender` for performance
-- [ ] Composite PK `(form_key, plugin)` — upsert semantics for incremental updates
-- [ ] Compute `is_winner`: highest `load_order_idx` row for each `form_key`
-- [ ] Store `file_mtime` per plugin in `plugins` table
-
-### Session Cache
-- [ ] On startup: compute `load_order_hash` (plugin list + all mtimes) → compare to `index_state`
-- [ ] Hash matches: skip all plugins (instant start)
-- [ ] Hash differs: reindex only plugins whose mtime changed, full reindex if load order changed
-- [ ] Integration test: index a 2-plugin set, verify `is_winner` is set correctly on the override
+| Phase | Summary |
+|-------|---------|
+| **0** | Solution scaffold — C# backend + VS Code extension compile and start; `GET /health` live |
+| **1** | Plugin loading — `IPluginLoader`, `PluginMetadata`, `IFormKeyResolver`; integration test |
+| **2** | DuckDB index — `SchemaGenerator`, `RecordIndexer`, `UpdateWinners`, `SessionCache`; winner test |
+| **3** | Read API — `/plugins`, `/record-types`, `/records`, `/records/{fk}`, `/records/{fk}/compare` |
+| **4** | Write API — `PATCH /records/{fk}`, `POST /copy-to`, `GET/DELETE /changes`, `POST /save`; `PluginWriter`; backups |
+| **5** | VS Code extension — backend lifecycle, status bar, session wizard, game path detection, generated API client |
+| **5.1** | Tree drill-down — plugin → record type → record nodes; pagination; click → `mEdit.openEditor` |
+| **6** | Webview read-only — compare grid (field × plugin), conflict highlighting, FormKey links |
+| **M** | Multi-game architecture — `GameRelease` threaded through stack; implicit plugin loading; immutable base-game enforcement |
+| **7** | Webview edit mode — inline field editing, pending change columns, revert, save, copy-to, `FormKeyPicker` |
+| **8** | UI polish: immutability enforcement (lock icon, read-only badge, pending column suppression); error surfacing (409 → "Plugin is read-only"); `POST /plugins/create`; "New Plugin…" + "Copy as Override Into…" commands; `api.ts` regenerated with all write endpoints |
+| **A** | Architectural cleanup — `SchemaReflector`/`TableDdlBuilder` split, `IConflictClassifier` extracted, `PluginWriter` apply-function tests, `SessionManager` thread-safety audit, `PluginFixtureBuilder`, naming pass, RFC 7807 error model, parameterized SQL |
 
 ---
 
-## Phase 3 — Read API
+## Phase 9 — Conflict Dashboard & Filtering
 
-*Goal: frontend can navigate plugins → record types → records → field details.*
+*Goal: users can see the conflict landscape at a glance and drill into only the records that matter.*
 
-### Endpoints
-- [ ] `GET /plugins` → list of `PluginMetadata`
-- [ ] `GET /records?plugin=&type=&search=&limit=&offset=` → paginated `{ items, total }`
-- [ ] `GET /records/{formKey}` → record with all field values + per-field metadata
-- [ ] `GET /records/{formKey}/compare` → all override rows ordered by load order + `FieldDiff[]`
-- [ ] `GET /record-types` → list of record type names (for filter dropdowns)
+### Backend
+- [ ] Add conflict classification enum: `NO_CONFLICT` (1 override), `OVERRIDE` (multiple, all values agree), `CONFLICT` (multiple, values differ)
+- [ ] `GET /conflicts` — returns `{ formKey, editorId, plugin, conflictType }[]` for all FormKeys with >1 override; uses DuckDB `GROUP BY` + `COUNT` + field comparison
+- [ ] `GET /records?conflictState=conflict|override|clean` — extend existing query endpoint to filter by conflict classification
+- [ ] `GET /plugins/{plugin}/conflicts` — conflict records scoped to one plugin's overrides
 
-### Field Metadata Shape
-Each field in a record response includes:
-- `name: string`
-- `type: "string" | "int" | "float" | "bool" | "enum" | "formKey" | "struct" | "array"`
-- `isArray: bool`
-- `validFormKeyTypes: string[]` — derived from `FormLink<T>`'s generic parameter; empty for non-FormKey fields
-- `enumValues: string[]` — for enum and flag fields
+### Extension
+- [ ] Top-level "Conflicts" tree node showing total conflict count; lazy-loads `GET /conflicts`
+- [ ] Conflict and override badge icons on record nodes in the tree
+- [ ] Filter toolbar on plugin tree: "All" / "Conflicts Only" / "Overrides Only" toggle
+- [ ] `mEdit.showConflicts` command (palette + tree toolbar)
 
-### Diff Object (CompareView)
-```typescript
-interface FieldDiff {
-  fieldName: string
-  values: Record<string, unknown>  // plugin → value
-  isConflict: boolean
-  winnerPlugin: string
-  winnerValue: unknown
-}
-```
-Computed server-side. Frontend is a dumb renderer.
+### Tests
+- [ ] Backend: `GET /conflicts` returns correct counts for a two-plugin fixture with one conflicting record
+- [ ] Backend: `GET /records?conflictState=conflict` filters correctly
 
 ---
 
-## Phase 4 — Write API
+## Phase 10 — ITM Detection & Cleaning
 
-*Goal: edits flow through the C# service, update DuckDB, and flush to disk on explicit save.*
+*Goal: mod authors can identify and remove Identical To Master records — the primary reason most people run xEdit.*
 
-### Endpoints
-- [ ] `PATCH /records/{formKey}` — body: `{ plugin: string, fields: Record<string, unknown> }` → partial field update
-- [ ] `POST /records/{formKey}/copy-to/{plugin}` — copy winning record as a new override into target plugin
-- [ ] `POST /plugins/{plugin}/save` — write plugin to disk (create `.bak` first)
-- [ ] `POST /session/load` — load a new plugin set, replacing current session
-- [ ] `POST /records/{formKey}/undo` — restore pre-edit state from in-memory stack
+### Backend
+- [ ] `GET /plugins/{plugin}/itms` — records in `plugin` that are identical to their lowest-load-order master override (all indexed fields match); uses DuckDB self-join
+- [ ] `POST /plugins/{plugin}/clean-itms` — removes ITM records from the plugin binary via Mutagen, re-indexes, returns `{ removed: int, backupPath: string }`
+- [ ] `GET /plugins/{plugin}/deleted-references` — records with deletion flag set instead of disabled+temporary pattern
+- [ ] `POST /plugins/{plugin}/fix-deleted-references` — converts deleted refs to `IsDeleted=false, IsTemporary=true`; re-indexes; returns count
+- [ ] `POST /plugins/{plugin}/check-errors` — structural validation: missing masters, unresolved FormLinks, malformed records; returns `ErrorReport[]`
 
-### In-Memory Undo
-- [ ] Hold pre-edit Mutagen object in `Dictionary<(FormKey, string plugin), IMajorRecord>` per session
-- [ ] Undo restores the object and flushes DuckDB row
-- [ ] Stack cleared on explicit save
+### Extension
+- [ ] "Clean Plugin…" command on plugin tree node context menu → runs ITM detection, shows count in confirmation dialog, applies on confirm
+- [ ] Cleaning report webview panel: lists removed ITMs, fixed deleted refs, errors found
+- [ ] `mEdit.checkErrors` command
 
-### Backup
-- [ ] Before every save: `<plugin>.<yyyy-MM-ddTHH-mm-ss>.bak`
-- [ ] Keep last 5 backups per plugin; prune oldest on each save
-- [ ] Return backup path in save response
-
----
-
-## Phase 5 — VS Code Extension
-
-*Goal: extension manages backend process lifetime, exposes tree view, opens webview panels.*
-
-### Backend Process Lifecycle
-- [ ] On activation: locate bundled C# binary, spawn as child process
-- [ ] Poll `GET /health` until ready (timeout: 15 s, retry every 500 ms)
-- [ ] Port: default 5172; fall back to random free port; store in extension context
-- [ ] On deactivation: send SIGTERM, wait up to 3 s, then SIGKILL
-- [ ] Restart on unexpected exit; surface error notification to user
-
-### TypeScript API Client
-- [ ] Add `openapi-typescript` (type generation) + `openapi-fetch` (runtime client) to devDeps
-- [ ] `npm run generate-api`: fetch `http://localhost:{port}/openapi.json` → emit `src/generated/api.ts`
-- [ ] All webview↔backend communication goes through the typed client
-- [ ] Port passed to webview as initial state
-
-### TreeView Provider
-- [ ] `PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeItem>`
-- [ ] Level 0: plugins (from `GET /plugins`)
-- [ ] Level 1: record type groups within a plugin
-- [ ] Level 2: individual records — label: `EditorID`, description: `[FormKey]`
-- [ ] Click on record → `mEdit.openEditor` command with FormKey arg
-- [ ] Refresh command wired to tree view title bar
+### Tests
+- [ ] Backend: ITM detection returns correct record for a plugin that copies a master record unchanged
+- [ ] Backend: `clean-itms` removes record, re-indexes, leaves non-ITM records intact
 
 ---
 
-## Phase 6 — Webview UI
+## Phase 11 — Referenced By / Record Graph
 
-*Goal: users can view, navigate, and edit records; compare overrides side-by-side.*
+*Goal: see every record that references a given FormKey — essential for understanding the impact of a change.*
 
-### RecordView (`webview/RecordView.tsx`)
-- [ ] `<RecordView formKey record fieldMeta />` — recursive renderer
-- [ ] `<ScalarField>` — `<input>` typed to field type (string/int/float) or `<input type="checkbox">` for bool
-- [ ] `<FormKeyField>` — view: clickable `EditorID [FormKey]` link; edit: opens `<FormKeyPicker>`
-- [ ] `<FlagField>` — checkbox group for enum flag fields
-- [ ] `<StructField>` — collapsible `<details>` section, recurses into children
-- [ ] `<ArrayField>` — list of items, each recursively rendered; reorderable drag handle in edit mode
-- [ ] Edit/view mode toggle; edit mode shows Save + Cancel buttons
-- [ ] Save: `PATCH /records/{formKey}` → optimistic local state update
+### Backend
+- [ ] `GET /records/{formKey}/references` — backend-generated `UNION ALL` across all FormLink columns in all record tables; returns `{ formKey, editorId, plugin, fieldPath }[]`
+- [ ] No extra cache needed — this is a DuckDB read
 
-### CompareView (`webview/CompareView.tsx`)
-- [ ] `<CompareView formKey diff />` — receives `FieldDiff[]` from `GET /records/{formKey}/compare`
-- [ ] N columns, one per plugin, ordered by load_order_idx
-- [ ] Column header: plugin name + `[idx]`
-- [ ] Per-cell background: `green` = matches winner, `red` = conflicts, unstyled = unique
-- [ ] "Copy to patch" button per column → `POST /records/{formKey}/copy-to/{plugin}`
+### Extension / Webview
+- [ ] "Referenced By" tab in the record panel (alongside the compare grid); lazy-loads on tab click
+- [ ] Each reference entry: plugin chip + record EditorID + field path; clicking opens that record
+- [ ] Empty state: "No references found"
 
-### FormKeyPicker (`webview/FormKeyPicker.tsx`)
-- [ ] Controlled `<input>` with 200 ms debounce
-- [ ] Calls `GET /records?search=&type=<validTypes>`
-- [ ] Results rendered as `EditorID [FormKey]` in a dropdown
-- [ ] Keyboard nav: arrow keys move selection, Enter confirms, Escape closes
-- [ ] Only shows record types valid for the target field (from `validFormKeyTypes` in field metadata)
+### Tests
+- [ ] Backend: references endpoint returns the referencing NPC when a weapon FormKey is searched
+- [ ] Backend: unknown FormKey returns empty array (not 404)
 
 ---
 
-## Deferred (Post-v1)
+## Phase 12 — Struct/Array Field Types
 
-- Conflict detection dashboard — list all `form_key` values with `COUNT(*) > 1`
-- ITM detection — self-join where `data` is identical across two rows for same FormKey
-- DuckDB peer extension integration (SQL browsing, ad-hoc queries)
-- Circular leveled list detection via recursive CTE
-- Kuzu graph DB for reachability analysis (if recursive CTEs prove insufficient)
-- Standalone Electron/Tauri build
-- Non-FO4 game support (Skyrim SE, Oblivion) behind `GameRelease` param
-- Batch operations API (bulk field edits across multiple records)
+*Goal: complex fields (keyword lists, NPC traits, weapon damage entries) render instead of being silently omitted, with full type safety derived from Mutagen's reflection model.*
+
+### Backend
+- [ ] `SchemaGenerator`: serialize `IReadOnlyList<T>` / `ExtendedList<T>` as JSON `VARCHAR`; emit `type: 'array'` in field metadata; element type recursively reflected
+- [ ] `SchemaGenerator`: for nested struct properties (getter interfaces, C# value types), walk the type's own properties recursively via reflection to produce a `fields: FieldMetadata[]` sub-schema — same shape as top-level field metadata, so the frontend gets `name`, `type`, `enumValues`, `validFormKeyTypes` at every nesting level
+- [ ] Sub-schema generation is recursive (structs can contain FormLinks, enums, further structs); stop at primitives and known leaf types
+- [ ] `PluginWriter`: handle JSON round-trip for array and struct fields on write; use sub-schema to apply individual sub-field writes with correct types (no raw string coercion)
+
+### Extension / Webview
+- [ ] `<ArrayRowGroup>`: collapsible row-group; each element a child row; add/remove in edit mode
+- [ ] `<StructRowGroup>`: collapsible row-group; each property a child row with type-correct cell (uses sub-schema `FieldMetadata` to drive `ScalarCell` / `FormKeyCell` / nested group)
+- [ ] Edit inputs for struct sub-fields and array elements are driven by the sub-schema type — no free-text JSON entry; the type hierarchy from Mutagen reflection is the source of truth
+- [ ] Collapsed by default; expand state persisted per session
+
+### Tests
+- [ ] Backend: `SchemaGenerator` emits `type: 'array'` for a known list property (e.g. `IKeywordGetter` list)
+- [ ] Backend: struct sub-schema contains correct `FieldMetadata` entries (names + types) for a known Mutagen getter interface
+- [ ] Backend: array field survives round-trip through write → re-index → read
+
+---
+
+## Phase 13 — Spreadsheet Views
+
+*Goal: tabular comparison of a record type across all plugins — popular for balancing weapon stats, armor values, NPC levels.*
+
+### Backend
+- [ ] `GET /spreadsheet?type=weap&plugins[]=...` — one row per FormKey, columns = field names; winner values by default; includes `conflictType` per row
+- [ ] Column metadata returned alongside rows (same `FieldMetadata` shape as compare)
+
+### Extension / Webview
+- [ ] "Open Spreadsheet" command on `RecordTypeNode` context menu → opens spreadsheet webview
+- [ ] Spreadsheet webview: fixed header row (field names), scrollable data rows
+- [ ] Sortable columns (click header); text filter bar; plugin filter chips
+- [ ] Cell conflict highlighting consistent with compare grid (green winner / red conflict)
+- [ ] Click a row → opens that record's compare panel
+
+### Tests
+- [ ] Backend: spreadsheet returns correct row count for a known record type + plugin set
+- [ ] Backend: conflict column set correctly for a known conflicting record
+
+---
+
+## Phase 14 — Plugin File Management
+
+*Goal: operations mod authors need for preparing plugins for distribution or integration.*
+
+### Backend
+- [ ] `POST /plugins/{plugin}/compact-formids` — renumber non-master FormIDs into 0x001–0xFFF range for ESL eligibility; returns `{ remapped: int, backupPath: string }`
+- [ ] `POST /plugins/{plugin}/convert` — toggle ESL/ESM flag; request body `{ targetType: "esp"|"esm"|"esl" }`
+- [ ] `POST /plugins/{plugin}/masters/add` — add a new master reference to the plugin header
+- [ ] `POST /plugins/{plugin}/masters/sort` — reorder masters to match current load order
+- [ ] `POST /plugins/{plugin}/masters/clean` — remove unused master references (not referenced by any record)
+- [ ] `POST /plugins/merge` — merge source plugin records into target plugin; adjusts FormID mapping; creates backup
+
+### Extension
+- [ ] Plugin context menu: "Compact FormIDs", "Convert to ESL / ESM", "Add Master…", "Sort Masters", "Clean Masters", "Merge Into…"
+- [ ] Confirmation dialogs for all destructive operations
+- [ ] Result notification (backup path, counts)
+
+### Tests
+- [ ] Backend: `compact-formids` renumbers records and updates all cross-references within the plugin
+- [ ] Backend: `masters/clean` removes only the unreferenced master
+
+---
+
+## Phase 15 — Scripting Engine
+
+*Goal: power users write JS scripts against the loaded mod data — the xEdit scripting experience, native to VS Code.*
+
+### Backend
+- [ ] `POST /query` — execute arbitrary SQL against DuckDB; returns `{ columns: string[], rows: unknown[][] }`; all statement types permitted (DuckDB is a cache — scripts may create temp tables, run CTEs, insert staging data; direct DuckDB writes bypass `PluginWriter` and do not affect plugin files on disk)
+- [ ] `GET /scripts` — list available scripts from user-configurable folder + built-in `extension/scripts/`; returns `{ name, description, context }[]`
+- [ ] Script frontmatter format: YAML header with `name`, `description`, `context` (record | plugin | global)
+- [ ] Token substitution in script files: `{{formKey}}`, `{{plugin}}`, `{{editorId}}`, `{{type}}`
+
+### Extension
+- [ ] Script runtime: evaluate JS scripts in VS Code extension host (Node.js); expose `getRecord(fk)`, `patchRecord(fk, plugin, fields)`, `save(plugin)`, `getPlugins()`, `query(sql)` APIs
+- [ ] `patchRecord` and `save` go through `PendingChangeService` → `PluginWriter` — scripts that write go through the same pipeline as manual edits; `query` writes go to DuckDB only
+- [ ] "Run Script…" command on tree context menu + command palette; QuickPick populated from `GET /scripts`
+- [ ] Script output panel (append-only log)
+- [ ] User setting: `mEdit.scriptsPath` for custom script folder
+
+### Built-in scripts (`extension/scripts/`)
+- [ ] `find-references.js` — lists all records referencing current FormKey
+- [ ] `list-overrides.js` — lists all FormKeys with >1 override for current plugin
+- [ ] `find-itms.js` — finds ITM records in current plugin (SQL-based)
+- [ ] `conflict-summary.js` — prints conflict counts by record type
+
+### Tests
+- [ ] Backend: `POST /query` returns correct rows for a SELECT statement
+- [ ] Backend: `POST /query` executes a CREATE TEMP TABLE statement without error (write to DuckDB allowed)
+
+---
+
+## Phase 16 — ModGroups
+
+*Goal: suppress intentional conflicts in curated mod lists so the conflict view stays signal-rich.*
+
+### Format & Backend
+- [ ] ModGroup file format: YAML listing named groups; each group is a list of plugin names whose inter-conflicts are intentional
+- [ ] `GET /modgroups` — returns active modgroups loaded from `mEdit.modGroupsPath`
+- [ ] `POST /modgroups` — create or update a modgroup entry
+- [ ] Conflict detection in `GET /conflicts` and compare grid: skip pairs covered by an active modgroup
+- [ ] `GET /records/{fk}/compare` — include `suppressedBy?: string` (modgroup name) per diff when conflict is suppressed
+
+### Extension / Webview
+- [ ] ModGroup manager panel: list groups, add/remove plugins from a group
+- [ ] Suppressed conflicts shown in compare grid with neutral styling + modgroup name tooltip
+- [ ] `mEdit.manageModGroups` command
+
+### Tests
+- [ ] Backend: conflict suppressed for a known pair after modgroup created
+- [ ] Backend: non-grouped conflict still reported
+
+---
+
+## Phase 17 — CLI Automation Modes
+
+*Goal: headless operation for MO2 / Vortex integrations and automated cleaning pipelines.*
+
+### Backend
+- [ ] `--quickautoclean <plugin>` — load session, run ITM detection, fix deleted refs, save, exit; writes cleaning log to stdout
+- [ ] `--autoload` — skip interactive session wizard; load from `--data-folder` + `--plugins-txt` immediately at startup
+- [ ] `--autoexit` — exit process after operation completes (for automation pipelines)
+- [ ] `--quickedit:<plugin>` — pre-select only that plugin + its required masters on load
+
+### Tests
+- [ ] `CliArgs`: all new flags parse correctly; incompatible combos rejected with clear error
+- [ ] Backend integration: `--quickautoclean` on a plugin with known ITMs produces correct output and exits 0
+
+---
+
+## Deferred / Stretch Goals
+
+### Near-term deferred
+- **Non-FO4 game support** — backend architecture complete (Phase M); blocked on adding `Mutagen.Bethesda.Skyrim`, `.Oblivion`, `.Starfield` NuGet packages + extension game-picker wiring
+- **Backend binary bundled in VSIX** — package .NET self-contained binary into the extension so users don't need a separate install step
+- **MO2 native reconstruction** — doc: add backend exe to MO2 Tools, start from MO2 → attached mode works normally
+
+### Power / analysis features
+- **Build Reachable Info** — graph traversal from known entry points through all record references; marks unreachable records stricken-through; complex, low ROI for most users
+- **Conflict resolution assistant** — "Apply All Wins" batch action: copies all winning-override field values to a designated patch plugin in one operation
+- **Diff export** — save conflict report (all overrides for selected records) to `.txt` or `.html`
+- **Circular leveled list detection** — recursive CTE query to find cycles in `lvln`/`lvli` chains
+- **Batch field edits** — `PATCH /records` supporting multiple FormKeys in one request for bulk operations
+
+### Future explorations
+- Agentic integration - ACP/MPC?
+- Extra mutagen tooling
+    * Spriggit style export
+    * Analysis
+    * Merge Plugins
+    * ???
+- **REFR spatial rendering** — select placed-object (`REFR`) records, render their 3D cell positions on a top-down map; use DuckDB spatial extension (`ST_Within`, radius queries) for proximity searches; requires a Three.js or Canvas 2D renderer webview
+- **Asset handling** — resolve loose-file and BA2-packed assets referenced by records (textures, meshes, sounds); repeat XEdit hash textures so faction paintjob distribution can me migrated
+- Vector DB for semantic lookup -> this work is inherently template based, so being able to do a lookup is going to be fairly critical for a more automated agent -> need to dump the FO4 wiki here too...

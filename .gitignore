@@ -23,3 +23,6 @@ src/generated/
 # OS
 .DS_Store
 Thumbs.db
+
+# Mutagen source reference (read-only, not part of this project)
+Mutagen/

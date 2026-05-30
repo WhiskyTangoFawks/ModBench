@@ -1,0 +1,127 @@
+using MEditService.Core.Edits;
+using MEditService.Core.Records;
+using MEditService.Core.Schema;
+using MEditService.Core.Session;
+
+namespace MEditService.Core.Queries;
+
+public sealed class RecordQueryService : IRecordQueryService
+{
+    private readonly ISessionManager _session;
+    private readonly IPendingChangeService _changes;
+    private readonly ISchemaReflector _schemaReflector;
+    private readonly IConflictClassifier _conflictClassifier;
+
+    public RecordQueryService(
+        ISessionManager session,
+        IPendingChangeService changes,
+        ISchemaReflector schemaReflector,
+        IConflictClassifier conflictClassifier)
+    {
+        _session = session;
+        _changes = changes;
+        _schemaReflector = schemaReflector;
+        _conflictClassifier = conflictClassifier;
+    }
+
+    public IReadOnlyList<PluginResponse> GetPlugins()
+    {
+        var s = RequireSession();
+        return s.Plugins.Select(PluginResponse.FromMetadata).ToList();
+    }
+
+    public IReadOnlyList<string> GetRecordTypes() =>
+        RequireSchemas().Keys.Order().ToList();
+
+    public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset)
+    {
+        var repository = RequireRepository();
+        var schemas = RequireSchemas();
+
+        if (type != null)
+        {
+            if (!schemas.ContainsKey(type))
+                return new PagedResult<RecordSummary>([], 0);
+            return repository.GetRecords(type, plugin, search, limit, offset);
+        }
+
+        var allItems = new List<RecordSummary>();
+        int total = 0;
+        foreach (var tableName in schemas.Keys)
+        {
+            var page = repository.GetRecords(tableName, plugin, search, int.MaxValue, 0);
+            total += page.Total;
+            allItems.AddRange(page.Items);
+        }
+
+        allItems.Sort((a, b) => string.Compare(a.EditorId, b.EditorId, StringComparison.OrdinalIgnoreCase));
+        return new PagedResult<RecordSummary>(allItems.Skip(offset).Take(limit).ToList(), total);
+    }
+
+    public RecordDetail? GetRecord(string formKey)
+    {
+        var repository = RequireRepository();
+        foreach (var (tableName, schema) in RequireSchemas())
+        {
+            var detail = repository.GetRecord(tableName, schema, formKey, plugin: null, winnerOnly: true);
+            if (detail != null) return detail;
+        }
+        return null;
+    }
+
+    public RecordDetail? GetRecordForPlugin(string formKey, string plugin)
+    {
+        var repository = RequireRepository();
+        foreach (var (tableName, schema) in RequireSchemas())
+        {
+            var detail = repository.GetRecord(tableName, schema, formKey, plugin, winnerOnly: false);
+            if (detail != null) return detail;
+        }
+        return null;
+    }
+
+    public string? GetRecordType(string formKey) =>
+        RequireRepository().FindRecordType(formKey);
+
+    public CompareResult? GetCompare(string formKey)
+    {
+        var repository = RequireRepository();
+        foreach (var (tableName, schema) in RequireSchemas())
+        {
+            var overrides = repository.GetAllOverrides(tableName, schema, formKey);
+            if (overrides.Count == 0) continue;
+
+            var withPending = overrides.Select(o =>
+            {
+                var pending = _changes.GetPendingFields(formKey, o.Plugin);
+                if (pending == null) return o;
+                return o with { PendingFields = pending.ToDictionary(kv => kv.Key, kv => (object?)kv.Value) };
+            }).ToList();
+
+            var diffs = _conflictClassifier.ComputeDiffs(withPending);
+            return new CompareResult(withPending, diffs);
+        }
+        return null;
+    }
+
+    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin)
+    {
+        var repository = RequireRepository();
+        var result = new List<PluginRecordTypeCount>();
+        foreach (var tableName in RequireSchemas().Keys)
+        {
+            var count = repository.CountRecordsForPlugin(tableName, plugin);
+            if (count > 0) result.Add(new PluginRecordTypeCount(tableName, count));
+        }
+        return result.OrderBy(r => r.Type).ToList();
+    }
+
+    private IGameSession RequireSession() =>
+        _session.Session ?? throw new InvalidOperationException("No session loaded.");
+
+    private IRecordRepository RequireRepository() =>
+        _session.Repository ?? throw new InvalidOperationException("No session loaded.");
+
+    private IReadOnlyDictionary<string, Schema.RecordTableSchema> RequireSchemas() =>
+        _schemaReflector.GetSchemas(RequireSession().GameRelease);
+}
