@@ -35,7 +35,11 @@ public static class ChangeEndpoints
             };
         })
         .WithName("PatchRecord")
-        .WithTags("Changes");
+        .WithTags("Changes")
+        .Produces<IReadOnlyList<PendingChange>>()
+        .ProducesProblem(404)
+        .ProducesProblem(409)
+        .ProducesProblem(422);
 
         app.MapGet("/changes", (
             [FromQuery] string? plugin,
@@ -47,7 +51,8 @@ public static class ChangeEndpoints
             return Results.Ok(changes.GetChanges(decodedPlugin, decodedFormKey));
         })
         .WithName("GetChanges")
-        .WithTags("Changes");
+        .WithTags("Changes")
+        .Produces<IReadOnlyList<PendingChange>>();
 
         app.MapDelete("/changes/{changeId}", (
             Guid changeId,
@@ -57,7 +62,9 @@ public static class ChangeEndpoints
             return removed ? Results.NoContent() : Results.NotFound();
         })
         .WithName("DeleteChange")
-        .WithTags("Changes");
+        .WithTags("Changes")
+        .Produces(204)
+        .ProducesProblem(404);
 
         app.MapDelete("/changes", (
             [FromQuery] string? plugin,
@@ -67,10 +74,11 @@ public static class ChangeEndpoints
             var decodedPlugin  = plugin  != null ? Uri.UnescapeDataString(plugin)  : null;
             var decodedFormKey = formKey != null ? Uri.UnescapeDataString(formKey) : null;
             var count = changes.Revert(decodedPlugin, decodedFormKey);
-            return Results.Ok(new { removed = count });
+            return Results.Ok(count);
         })
         .WithName("BulkDeleteChanges")
-        .WithTags("Changes");
+        .WithTags("Changes")
+        .Produces<int>();
 
         app.MapPost("/records/{formKey}/copy-to/{targetPlugin}", (
             [FromRoute] string formKey,
@@ -98,7 +106,10 @@ public static class ChangeEndpoints
             };
         })
         .WithName("CopyRecordTo")
-        .WithTags("Changes");
+        .WithTags("Changes")
+        .Produces<IReadOnlyList<PendingChange>>()
+        .ProducesProblem(404)
+        .ProducesProblem(409);
 
         app.MapPost("/plugins/{plugin}/save", async (
             [FromRoute] string plugin,
@@ -119,18 +130,12 @@ public static class ChangeEndpoints
 
             var pending = changes.DrainForPlugin(decodedPlugin);
             if (pending.Count == 0)
-                return Results.Ok(new { backupPath = (string?)null, applied = Array.Empty<string>(), readOnly = Array.Empty<string>(), notFound = Array.Empty<string>() });
+                return Results.Ok(new SaveResult(string.Empty, [], [], []));
 
             try
             {
                 var result = await session.SavePlugin(decodedPlugin, pending);
-                return Results.Ok(new
-                {
-                    backupPath = result.BackupPath,
-                    applied    = result.Applied,
-                    readOnly   = result.ReadOnly,
-                    notFound   = result.NotFound,
-                });
+                return Results.Ok(result);
             }
             catch (Exception ex)
             {
@@ -145,7 +150,10 @@ public static class ChangeEndpoints
             }
         })
         .WithName("SavePlugin")
-        .WithTags("Changes");
+        .WithTags("Changes")
+        .Produces<SaveResult>()
+        .ProducesProblem(404)
+        .ProducesProblem(409);
 
         return app;
     }

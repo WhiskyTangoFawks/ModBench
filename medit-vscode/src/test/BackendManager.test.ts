@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as http from 'node:http';
-import * as childProcess from 'node:child_process';
 import { EventEmitter } from 'node:events';
 
 vi.mock('node:http');
-vi.mock('node:child_process');
 
 import { BackendManager, type StatusBarAdapter } from '../BackendManager';
 
@@ -22,15 +20,13 @@ function makeHealthyHttpGet() {
   vi.mocked(http.get).mockImplementation((_url: any, cb: any) => {
     const res = Object.assign(new EventEmitter(), { statusCode: 200 });
     cb(res);
-    const req = Object.assign(new EventEmitter(), { destroy: vi.fn() });
-    return req as any;
+    return Object.assign(new EventEmitter(), { destroy: vi.fn() }) as any;
   });
 }
 
 function makeFailingHttpGet() {
   vi.mocked(http.get).mockImplementation((_url: any, _cb: any) => {
     const req = Object.assign(new EventEmitter(), { destroy: vi.fn() });
-    // emit error asynchronously so the manager has a chance to register listener
     process.nextTick(() => req.emit('error', new Error('ECONNREFUSED')));
     return req as any;
   });
@@ -48,63 +44,51 @@ describe('BackendManager', () => {
     vi.restoreAllMocks();
   });
 
-  it('enters attached mode when health check succeeds immediately', async () => {
+  it('emits attached when backend is already running', async () => {
     makeHealthyHttpGet();
 
     const mgr = new BackendManager({ port: 5172, statusBar });
+    const statuses: string[] = [];
+    mgr.on('status', (s) => statuses.push(s));
+
     await mgr.connect();
 
-    expect(mgr.mode).toBe('attached');
     expect(mgr.isHealthy).toBe(true);
-    expect(childProcess.spawn).not.toHaveBeenCalled();
+    expect(statuses).toEqual(['attached']);
   });
 
-  it('enters managed mode and spawns process when health check fails', async () => {
-    // First call fails (no existing backend), then succeeds after spawn
+  it('polls until backend becomes healthy', async () => {
     let call = 0;
     vi.mocked(http.get).mockImplementation((_url: any, cb: any) => {
       const req = Object.assign(new EventEmitter(), { destroy: vi.fn() });
-      if (call === 0) {
-        call++;
+      if (call++ < 2) {
         process.nextTick(() => req.emit('error', new Error('ECONNREFUSED')));
       } else {
-        call++;
         const res = Object.assign(new EventEmitter(), { statusCode: 200 });
         cb(res);
       }
       return req as any;
     });
 
-    const fakeProcess = Object.assign(new EventEmitter(), {
-      pid: 999,
-      kill: vi.fn(),
-      stdout: new EventEmitter(),
-      stderr: new EventEmitter(),
-    });
-    vi.mocked(childProcess.spawn).mockReturnValue(fakeProcess as any);
-
-    const mgr = new BackendManager({ port: 5172, statusBar, binaryPath: '/fake/backend', pollIntervalMs: 10 });
-    await mgr.connect();
-
-    expect(mgr.mode).toBe('managed');
-    expect(childProcess.spawn).toHaveBeenCalledWith('/fake/backend', expect.any(Array), expect.any(Object));
-    expect(mgr.isHealthy).toBe(true);
-  });
-
-  it('emits disconnected status when poll times out', async () => {
-    makeFailingHttpGet();
-
-    const fakeProcess = Object.assign(new EventEmitter(), {
-      pid: 999, kill: vi.fn(),
-      stdout: new EventEmitter(), stderr: new EventEmitter(),
-    });
-    vi.mocked(childProcess.spawn).mockReturnValue(fakeProcess as any);
-
+    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 10 });
     const statuses: string[] = [];
-    const mgr = new BackendManager({ port: 5172, statusBar, binaryPath: '/fake/backend', pollIntervalMs: 10, pollTimeoutMs: 50 });
     mgr.on('status', (s) => statuses.push(s));
 
-    await mgr.connect().catch(() => {});
+    await mgr.connect();
+
+    expect(mgr.isHealthy).toBe(true);
+    expect(statuses).toEqual(['attached']);
+    expect(http.get).toHaveBeenCalledTimes(3);
+  });
+
+  it('emits disconnected when backend never starts within timeout', async () => {
+    makeFailingHttpGet();
+
+    const statuses: string[] = [];
+    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 10, pollTimeoutMs: 50 });
+    mgr.on('status', (s) => statuses.push(s));
+
+    await mgr.connect();
 
     expect(statuses).toContain('disconnected');
     expect(mgr.isHealthy).toBe(false);

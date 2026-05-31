@@ -14,12 +14,14 @@ public static class PluginEndpoints
 
         app.MapGet("/record-types", (IRecordQueryService svc) => Results.Ok(svc.GetRecordTypes()))
             .WithName("GetRecordTypes")
-            .WithTags("Records");
+            .WithTags("Records")
+            .Produces<IReadOnlyList<string>>();
 
         app.MapGet("/plugins/{plugin}/record-types", (string plugin, IRecordQueryService svc) =>
             Results.Ok(svc.GetPluginRecordTypes(Uri.UnescapeDataString(plugin))))
             .WithName("GetPluginRecordTypes")
-            .WithTags("Plugins");
+            .WithTags("Plugins")
+            .Produces<IReadOnlyList<PluginRecordTypeCount>>();
 
         app.MapPost("/plugins/create", (CreatePluginRequest req, ISessionManager sessionManager) =>
         {

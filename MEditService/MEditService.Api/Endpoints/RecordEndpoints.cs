@@ -18,7 +18,8 @@ public static class RecordEndpoints
             return Results.Ok(result);
         })
         .WithName("GetRecords")
-        .WithTags("Records");
+        .WithTags("Records")
+        .Produces<PagedResult<RecordSummary>>();
 
         app.MapGet("/records/{formKey}", (string formKey, IRecordQueryService svc) =>
         {
@@ -27,7 +28,9 @@ public static class RecordEndpoints
             return detail is null ? Results.NotFound() : Results.Ok(detail);
         })
         .WithName("GetRecord")
-        .WithTags("Records");
+        .WithTags("Records")
+        .Produces<RecordDetail>()
+        .ProducesProblem(404);
 
         app.MapGet("/records/{formKey}/compare", (string formKey, IRecordQueryService svc) =>
         {
@@ -36,7 +39,9 @@ public static class RecordEndpoints
             return result is null ? Results.NotFound() : Results.Ok(result);
         })
         .WithName("CompareRecord")
-        .WithTags("Records");
+        .WithTags("Records")
+        .Produces<CompareResult>()
+        .ProducesProblem(404);
 
         return app;
     }

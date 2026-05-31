@@ -216,8 +216,32 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CompareResult: {
+            overrides?: components["schemas"]["RecordDetail"][] | null;
+            diffs?: components["schemas"]["FieldDiff"][] | null;
+        };
         CreatePluginRequest: {
             name?: string | null;
+        };
+        FieldDiff: {
+            fieldName?: string | null;
+            values?: {
+                [key: string]: unknown;
+            } | null;
+            isConflict?: boolean;
+            winnerPlugin?: string | null;
+            winnerValue?: unknown;
+        };
+        FieldMetadata: {
+            name?: string | null;
+            type?: string | null;
+            isArray?: boolean;
+            validFormKeyTypes?: string[] | null;
+            enumValues?: string[] | null;
+        };
+        FieldValue: {
+            metadata?: components["schemas"]["FieldMetadata"];
+            value?: unknown;
         };
         PatchRecordRequest: {
             plugin?: string | null;
@@ -226,6 +250,25 @@ export interface components {
             } | null;
             source?: string | null;
             description?: string | null;
+        };
+        PendingChange: {
+            /** Format: uuid */
+            id?: string;
+            formKey?: string | null;
+            plugin?: string | null;
+            fieldPath?: string | null;
+            recordType?: string | null;
+            oldValue?: unknown;
+            newValue?: unknown;
+            source?: string | null;
+            description?: string | null;
+            /** Format: date-time */
+            changedAt?: string;
+        };
+        PluginRecordTypeCount: {
+            type?: string | null;
+            /** Format: int32 */
+            count?: number;
         };
         PluginResponse: {
             name?: string | null;
@@ -248,6 +291,37 @@ export interface components {
             instance?: string | null;
         } & {
             [key: string]: unknown;
+        };
+        RecordDetail: {
+            formKey?: string | null;
+            plugin?: string | null;
+            /** Format: int32 */
+            loadOrderIndex?: number;
+            isWinner?: boolean;
+            editorId?: string | null;
+            fields?: components["schemas"]["FieldValue"][] | null;
+            pendingFields?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        RecordSummary: {
+            formKey?: string | null;
+            plugin?: string | null;
+            /** Format: int32 */
+            loadOrderIndex?: number;
+            isWinner?: boolean;
+            editorId?: string | null;
+        };
+        RecordSummaryPagedResult: {
+            items?: components["schemas"]["RecordSummary"][] | null;
+            /** Format: int32 */
+            total?: number;
+        };
+        SaveResult: {
+            backupPath?: string | null;
+            applied?: string[] | null;
+            readOnly?: string[] | null;
+            notFound?: string[] | null;
         };
         SessionLoadRequest: {
             dataFolderPath?: string | null;
@@ -279,7 +353,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RecordDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };
@@ -303,7 +388,36 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PendingChange"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };
@@ -324,7 +438,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PendingChange"][];
+                };
             };
         };
     };
@@ -345,7 +461,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": number;
+                };
             };
         };
     };
@@ -360,12 +478,21 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
-            200: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };
@@ -388,7 +515,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PendingChange"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };
@@ -408,7 +555,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SaveResult"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };
@@ -466,7 +633,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PluginRecordTypeCount"][];
+                };
             };
         };
     };
@@ -526,7 +695,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": string[];
+                };
             };
         };
     };
@@ -550,7 +721,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RecordSummaryPagedResult"];
+                };
             };
         };
     };
@@ -570,7 +743,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["CompareResult"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };

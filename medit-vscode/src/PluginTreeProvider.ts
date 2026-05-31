@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import type { ApiClient, PluginMetadata, RecordSummary } from './ApiClient';
+import type { PluginMetadata, RecordSummary } from './ApiClient';
+import type { PluginRepository } from './PluginRepository';
 
 const PAGE_SIZE = 50;
 
@@ -58,13 +59,15 @@ export class LoadMoreNode extends vscode.TreeItem {
 
 export type PluginTreeNode = PluginNode | RecordTypeNode | RecordNode | LoadMoreNode;
 
+type PageCache = Map<string, { items: RecordSummary[]; total: number }>;
+
 export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private readonly pageCache = new Map<RecordTypeNode, { items: RecordSummary[]; total: number }>();
+  private readonly pageCache: PageCache = new Map();
 
-  constructor(private readonly client: ApiClient) {}
+  constructor(private readonly repository: PluginRepository) {}
 
   refresh(): void {
     this.pageCache.clear();
@@ -84,34 +87,29 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   async loadMore(node: LoadMoreNode): Promise<void> {
     const parent = node.parentNode;
-    const cached = this.pageCache.get(parent) ?? { items: [], total: 0 };
+    const cacheKey = this.cacheKey(parent);
+    const cached = this.pageCache.get(cacheKey) ?? { items: [], total: 0 };
     try {
-      const { data } = await this.client.GET('/records', {
-        params: {
-          query: {
-            plugin: parent.plugin,
-            type: parent.recordType,
-            limit: PAGE_SIZE,
-            offset: cached.items.length,
-          },
-        },
+      const result = await this.repository.getRecords(
+        parent.plugin, parent.recordType, cached.items.length, PAGE_SIZE,
+      );
+      this.pageCache.set(cacheKey, {
+        items: [...cached.items, ...result.items],
+        total: result.total,
       });
-      const result = data as { items: RecordSummary[]; total: number } | undefined;
-      if (result) {
-        cached.items = [...cached.items, ...result.items];
-        cached.total = result.total;
-        this.pageCache.set(parent, cached);
-      }
     } catch {
       // leave cache as-is
     }
     this._onDidChangeTreeData.fire(parent);
   }
 
+  private cacheKey(node: RecordTypeNode): string {
+    return `${node.plugin}::${node.recordType}`;
+  }
+
   private async fetchPlugins(): Promise<PluginNode[]> {
     try {
-      const { data } = await this.client.GET('/plugins', {});
-      const plugins = (data as PluginMetadata[] | undefined) ?? [];
+      const plugins = await this.repository.getPlugins();
       return plugins.map(p => new PluginNode(p));
     } catch {
       return [];
@@ -120,10 +118,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   private async fetchRecordTypes(node: PluginNode): Promise<RecordTypeNode[]> {
     try {
-      const { data } = await this.client.GET('/plugins/{plugin}/record-types', {
-        params: { path: { plugin: node.plugin.name } },
-      });
-      const types = (data as { type: string; count: number }[] | undefined) ?? [];
+      const types = await this.repository.getRecordTypes(node.plugin.name);
       return types.map(t => new RecordTypeNode(node.plugin.name, t.type, t.count));
     } catch {
       return [];
@@ -131,22 +126,12 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   }
 
   private async fetchRecords(node: RecordTypeNode): Promise<(RecordNode | LoadMoreNode)[]> {
-    let cached = this.pageCache.get(node);
+    const cacheKey = this.cacheKey(node);
+    let cached = this.pageCache.get(cacheKey);
     if (!cached) {
       try {
-        const { data } = await this.client.GET('/records', {
-          params: {
-            query: {
-              plugin: node.plugin,
-              type: node.recordType,
-              limit: PAGE_SIZE,
-              offset: 0,
-            },
-          },
-        });
-        const result = data as { items: RecordSummary[]; total: number } | undefined;
-        cached = result ?? { items: [], total: 0 };
-        this.pageCache.set(node, cached);
+        cached = await this.repository.getRecords(node.plugin, node.recordType, 0, PAGE_SIZE);
+        this.pageCache.set(cacheKey, cached);
       } catch {
         return [];
       }

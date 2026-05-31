@@ -40,55 +40,47 @@ var path2 = __toESM(require("path"));
 // src/BackendManager.ts
 var import_node_events = require("node:events");
 var http = __toESM(require("node:http"));
-var childProcess = __toESM(require("node:child_process"));
 var BackendManager = class extends import_node_events.EventEmitter {
   port;
   statusBar;
-  binaryPath;
   pollIntervalMs;
   pollTimeoutMs;
-  _mode = "unknown";
   _isHealthy = false;
-  _process = null;
   constructor(opts) {
     super();
     this.port = opts.port;
     this.statusBar = opts.statusBar;
-    this.binaryPath = opts.binaryPath ?? "";
     this.pollIntervalMs = opts.pollIntervalMs ?? 500;
-    this.pollTimeoutMs = opts.pollTimeoutMs ?? 15e3;
-    this.statusBar.setText("$(loading~spin) mEdit: Starting\u2026");
+    this.pollTimeoutMs = opts.pollTimeoutMs ?? 3e4;
+    this.statusBar.setText("$(loading~spin) mEdit: Connecting\u2026");
     this.statusBar.show();
-  }
-  get mode() {
-    return this._mode;
   }
   get isHealthy() {
     return this._isHealthy;
   }
-  async connect() {
-    const healthy = await this.checkHealth();
-    if (healthy) {
-      this._mode = "attached";
-      this._isHealthy = true;
-      this.emitStatus("attached");
-      return;
-    }
-    this.spawnProcess();
-    await this.pollUntilHealthy();
-  }
-  setStatus(status) {
-    this.emitStatus(status);
+  connect() {
+    return new Promise((resolve) => {
+      const deadline = Date.now() + this.pollTimeoutMs;
+      const attempt = async () => {
+        const healthy = await this.checkHealth();
+        if (healthy) {
+          this._isHealthy = true;
+          this.emitStatus("attached");
+          resolve();
+          return;
+        }
+        if (Date.now() >= deadline) {
+          this._isHealthy = false;
+          this.emitStatus("disconnected");
+          resolve();
+          return;
+        }
+        setTimeout(attempt, this.pollIntervalMs);
+      };
+      attempt();
+    });
   }
   dispose() {
-    if (this._process) {
-      this._process.kill("SIGTERM");
-      setTimeout(() => {
-        if (this._process?.exitCode === null) {
-          this._process.kill("SIGKILL");
-        }
-      }, 3e3);
-    }
     this.statusBar.dispose();
   }
   checkHealth() {
@@ -99,55 +91,11 @@ var BackendManager = class extends import_node_events.EventEmitter {
       req.on("error", () => resolve(false));
     });
   }
-  spawnProcess() {
-    const proc = childProcess.spawn(
-      this.binaryPath,
-      ["--urls", `http://localhost:${this.port}`],
-      { detached: false }
-    );
-    proc.stdout?.on("data", () => {
-    });
-    proc.stderr?.on("data", () => {
-    });
-    proc.on("exit", (code) => {
-      if (this._isHealthy) {
-        this._isHealthy = false;
-        this.emitStatus("disconnected");
-      }
-    });
-    this._process = proc;
-    this._mode = "managed";
-  }
-  pollUntilHealthy() {
-    return new Promise((resolve, reject) => {
-      const deadline = Date.now() + this.pollTimeoutMs;
-      const attempt = async () => {
-        if (Date.now() >= deadline) {
-          this._isHealthy = false;
-          this.emitStatus("disconnected");
-          reject(new Error("Backend did not become healthy within timeout"));
-          return;
-        }
-        const healthy = await this.checkHealth();
-        if (healthy) {
-          this._isHealthy = true;
-          this.emitStatus("managed");
-          resolve();
-        } else {
-          setTimeout(attempt, this.pollIntervalMs);
-        }
-      };
-      attempt();
-    });
-  }
   emitStatus(status) {
     const labels = {
-      starting: "$(loading~spin) mEdit: Starting\u2026",
+      starting: "$(loading~spin) mEdit: Connecting\u2026",
       attached: "$(plug) mEdit: Attached",
-      managed: "$(plug) mEdit: Connected",
-      "no-session": "$(plug) mEdit: No session",
-      ready: "$(check) mEdit: Ready",
-      disconnected: "$(error) mEdit: Disconnected"
+      disconnected: "$(error) mEdit: Disconnected \u2014 start MEditService and reload"
     };
     this.statusBar.setText(labels[status]);
     this.emit("status", status);
@@ -180,7 +128,7 @@ function createClient(clientOptions) {
   async function coreFetch(schemaPath, fetchOptions) {
     const {
       baseUrl: localBaseUrl,
-      fetch: fetch2 = baseFetch,
+      fetch = baseFetch,
       Request = CustomRequest,
       headers,
       params = {},
@@ -247,7 +195,7 @@ function createClient(clientOptions) {
       id = randomID();
       options = Object.freeze({
         baseUrl: finalBaseUrl,
-        fetch: fetch2,
+        fetch,
         parseAs,
         querySerializer,
         bodySerializer,
@@ -277,7 +225,7 @@ function createClient(clientOptions) {
     }
     if (!response) {
       try {
-        response = await fetch2(request, requestInitExt);
+        response = await fetch(request, requestInitExt);
       } catch (error2) {
         let errorAfterMiddleware = error2;
         if (finalMiddlewares.length) {
@@ -750,6 +698,62 @@ var SessionWizard = class {
   }
 };
 
+// src/SessionController.ts
+var SessionController = class {
+  constructor(deps) {
+    this.deps = deps;
+  }
+  deps;
+  async getPlugins() {
+    const { data } = await this.deps.client.GET("/plugins", {});
+    return data ?? [];
+  }
+  async createPlugin(name) {
+    const { response } = await this.deps.client.POST("/plugins/create", { body: { name } });
+    if (!response.ok) {
+      const text = await response.text();
+      this.deps.showError(`mEdit: Failed to create plugin \u2014 ${text}`);
+      return;
+    }
+    this.deps.refreshTree();
+  }
+  async copyRecordTo(formKey, target) {
+    const { response } = await this.deps.client.POST(
+      "/records/{formKey}/copy-to/{targetPlugin}",
+      { params: { path: { formKey, targetPlugin: target } } }
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      this.deps.showError(`mEdit: Copy failed \u2014 ${text}`);
+      return;
+    }
+    this.deps.refreshTree();
+  }
+  async loadSession() {
+    const loaded = await this.deps.makeWizard().run();
+    if (!loaded) return;
+    this.deps.setStatusText("$(check) mEdit: Ready");
+    this.deps.refreshTree();
+  }
+  async onBackendConnected() {
+    const loaded = await this.deps.makeWizard().run();
+    if (!loaded) {
+      this.deps.setStatusText("$(plug) mEdit: No session");
+      this.deps.refreshTree();
+      return;
+    }
+    const plugins = await this.getPlugins();
+    const count = plugins.length;
+    if (count === 0) {
+      this.deps.showWarning(
+        "mEdit: Session loaded but no plugins were found. Plugins.txt may be listing no plugins (common with vanilla post-NextGen FO4). Use MO2 or add plugins to Plugins.txt manually."
+      );
+    }
+    this.deps.setStatusText(`$(check) mEdit: Ready (${count} plugins)`);
+    this.deps.refreshTree();
+  }
+};
+
 // src/PluginTreeProvider.ts
 var vscode = __toESM(require("vscode"));
 var PAGE_SIZE = 50;
@@ -809,10 +813,10 @@ var LoadMoreNode = class extends vscode.TreeItem {
   kind = "loadMore";
 };
 var PluginTreeProvider = class {
-  constructor(client) {
-    this.client = client;
+  constructor(repository) {
+    this.repository = repository;
   }
-  client;
+  repository;
   _onDidChangeTreeData = new vscode.EventEmitter();
   onDidChangeTreeData = this._onDidChangeTreeData.event;
   pageCache = /* @__PURE__ */ new Map();
@@ -831,32 +835,29 @@ var PluginTreeProvider = class {
   }
   async loadMore(node) {
     const parent = node.parentNode;
-    const cached = this.pageCache.get(parent) ?? { items: [], total: 0 };
+    const cacheKey = this.cacheKey(parent);
+    const cached = this.pageCache.get(cacheKey) ?? { items: [], total: 0 };
     try {
-      const { data } = await this.client.GET("/records", {
-        params: {
-          query: {
-            plugin: parent.plugin,
-            type: parent.recordType,
-            limit: PAGE_SIZE,
-            offset: cached.items.length
-          }
-        }
+      const result = await this.repository.getRecords(
+        parent.plugin,
+        parent.recordType,
+        cached.items.length,
+        PAGE_SIZE
+      );
+      this.pageCache.set(cacheKey, {
+        items: [...cached.items, ...result.items],
+        total: result.total
       });
-      const result = data;
-      if (result) {
-        cached.items = [...cached.items, ...result.items];
-        cached.total = result.total;
-        this.pageCache.set(parent, cached);
-      }
     } catch {
     }
     this._onDidChangeTreeData.fire(parent);
   }
+  cacheKey(node) {
+    return `${node.plugin}::${node.recordType}`;
+  }
   async fetchPlugins() {
     try {
-      const { data } = await this.client.GET("/plugins", {});
-      const plugins = data ?? [];
+      const plugins = await this.repository.getPlugins();
       return plugins.map((p) => new PluginNode(p));
     } catch {
       return [];
@@ -864,32 +865,19 @@ var PluginTreeProvider = class {
   }
   async fetchRecordTypes(node) {
     try {
-      const { data } = await this.client.GET("/plugins/{plugin}/record-types", {
-        params: { path: { plugin: node.plugin.name } }
-      });
-      const types = data ?? [];
+      const types = await this.repository.getRecordTypes(node.plugin.name);
       return types.map((t) => new RecordTypeNode(node.plugin.name, t.type, t.count));
     } catch {
       return [];
     }
   }
   async fetchRecords(node) {
-    let cached = this.pageCache.get(node);
+    const cacheKey = this.cacheKey(node);
+    let cached = this.pageCache.get(cacheKey);
     if (!cached) {
       try {
-        const { data } = await this.client.GET("/records", {
-          params: {
-            query: {
-              plugin: node.plugin,
-              type: node.recordType,
-              limit: PAGE_SIZE,
-              offset: 0
-            }
-          }
-        });
-        const result = data;
-        cached = result ?? { items: [], total: 0 };
-        this.pageCache.set(node, cached);
+        cached = await this.repository.getRecords(node.plugin, node.recordType, 0, PAGE_SIZE);
+        this.pageCache.set(cacheKey, cached);
       } catch {
         return [];
       }
@@ -899,6 +887,60 @@ var PluginTreeProvider = class {
       nodes.push(new LoadMoreNode(node, cached.total - cached.items.length));
     }
     return nodes;
+  }
+};
+
+// src/PluginRepository.ts
+function toPluginMetadata(r) {
+  return {
+    name: r.name ?? "",
+    path: r.path ?? "",
+    loadOrderIndex: r.loadOrderIndex ?? 0,
+    isLight: r.isLight ?? false,
+    isMaster: r.isMaster ?? false,
+    masters: r.masters ?? [],
+    recordCount: r.recordCount ?? 0,
+    isImmutable: r.isImmutable ?? false
+  };
+}
+function toRecordSummary(r) {
+  return {
+    formKey: r.formKey ?? "",
+    plugin: r.plugin ?? "",
+    loadOrderIndex: r.loadOrderIndex ?? 0,
+    isWinner: r.isWinner ?? false,
+    editorId: r.editorId ?? null
+  };
+}
+function toRecordTypeCount(r) {
+  return { type: r.type ?? "", count: r.count ?? 0 };
+}
+var ApiPluginRepository = class {
+  constructor(client) {
+    this.client = client;
+  }
+  client;
+  async getPlugins() {
+    const { data } = await this.client.GET("/plugins", {});
+    const raw = data ?? [];
+    return raw.map(toPluginMetadata);
+  }
+  async getRecordTypes(plugin) {
+    const { data } = await this.client.GET("/plugins/{plugin}/record-types", {
+      params: { path: { plugin } }
+    });
+    const raw = data ?? [];
+    return raw.map(toRecordTypeCount);
+  }
+  async getRecords(plugin, type, offset, limit) {
+    const { data } = await this.client.GET("/records", {
+      params: { query: { plugin, type, offset, limit } }
+    });
+    const raw = data;
+    return {
+      items: (raw?.items ?? []).map(toRecordSummary),
+      total: raw?.total ?? 0
+    };
   }
 };
 
@@ -937,27 +979,39 @@ async function activate(context) {
       },
       show: () => statusBarItem.show(),
       dispose: () => statusBarItem.dispose()
-    },
-    binaryPath: path2.join(context.extensionPath, "backend", "BethesdaPluginService.Api")
+    }
   });
   const client = createApiClient(port);
-  const treeProvider = new PluginTreeProvider(client);
+  const treeProvider = new PluginTreeProvider(new ApiPluginRepository(client));
   const openPanels = /* @__PURE__ */ new Map();
+  const controller = new SessionController({
+    client,
+    makeWizard: () => new SessionWizard({
+      client,
+      detectPaths: () => {
+        const dataOverride = cfg.get("game.dataFolderPath") ?? "";
+        const pluginsOverride = cfg.get("game.pluginsTxtPath") ?? "";
+        if (dataOverride && pluginsOverride) {
+          return Promise.resolve({ dataFolder: dataOverride, pluginsTxt: pluginsOverride });
+        }
+        return detectGamePaths();
+      },
+      showQuickPick: (items) => vscode2.window.showQuickPick(items, { placeHolder: "Select game path" }),
+      showInputBox: (opts) => vscode2.window.showInputBox({ prompt: opts.prompt, value: opts.value }),
+      showErrorMessage: (msg) => vscode2.window.showErrorMessage(msg)
+    }),
+    refreshTree: () => treeProvider.refresh(),
+    setStatusText: (t) => {
+      statusBarItem.text = t;
+    },
+    showWarning: (msg) => vscode2.window.showWarningMessage(msg),
+    showError: (msg) => vscode2.window.showErrorMessage(msg)
+  });
   context.subscriptions.push(
     vscode2.window.registerTreeDataProvider("mEdit.pluginTree", treeProvider),
     vscode2.commands.registerCommand("mEdit.refreshTree", () => treeProvider.refresh()),
-    vscode2.commands.registerCommand("mEdit.loadSession", async () => {
-      const wizard = makeWizard(client, cfg);
-      const loaded = await wizard.run();
-      if (loaded) {
-        backendManager?.setStatus("ready");
-        await warnIfEmpty(client);
-        treeProvider.refresh();
-      }
-    }),
-    vscode2.commands.registerCommand("mEdit.reloadSession", () => {
-      treeProvider.refresh();
-    }),
+    vscode2.commands.registerCommand("mEdit.loadSession", () => controller.loadSession()),
+    vscode2.commands.registerCommand("mEdit.reloadSession", () => treeProvider.refresh()),
     vscode2.commands.registerCommand("mEdit.openEditor", (args) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? "mEdit", args?.formKey, port);
     }),
@@ -966,7 +1020,8 @@ async function activate(context) {
     }),
     vscode2.commands.registerCommand("mEdit.loadMore", (node) => treeProvider.loadMore(node)),
     vscode2.commands.registerCommand("mEdit.newPlugin", async () => {
-      await runNewPlugin(port, treeProvider);
+      const name = await promptPluginName();
+      if (name) await controller.createPlugin(name);
     }),
     vscode2.commands.registerCommand("mEdit.copyAsOverrideInto", async (node) => {
       const formKey = node?.record?.formKey;
@@ -974,61 +1029,45 @@ async function activate(context) {
         vscode2.window.showErrorMessage("mEdit: No record selected.");
         return;
       }
-      await runCopyAsOverrideInto(client, port, formKey, treeProvider);
+      let allPlugins;
+      try {
+        allPlugins = await controller.getPlugins();
+      } catch {
+        vscode2.window.showErrorMessage("mEdit: Failed to fetch plugins.");
+        return;
+      }
+      const mutablePlugins = allPlugins.filter((p) => !p.isImmutable);
+      const NEW_PLUGIN_LABEL = "$(add) New Plugin\u2026";
+      const items = [
+        { label: NEW_PLUGIN_LABEL, description: "Create a new plugin and copy into it" },
+        ...mutablePlugins.map((p) => ({ label: p.name, description: `[${p.loadOrderIndex}]` }))
+      ];
+      const picked = await vscode2.window.showQuickPick(items, { placeHolder: "Select target plugin" });
+      if (!picked) return;
+      let targetPlugin = picked.label;
+      if (picked.label === NEW_PLUGIN_LABEL) {
+        const name = await promptPluginName();
+        if (!name) return;
+        await controller.createPlugin(name);
+        targetPlugin = name;
+      }
+      await controller.copyRecordTo(formKey, targetPlugin);
     })
   );
   backendManager.on("status", async (status) => {
-    if (status === "attached" || status === "managed") {
-      const wizard = makeWizard(client, cfg);
-      const loaded = await wizard.run();
-      if (loaded) {
-        const { data } = await client.GET("/plugins", {}).catch(() => ({ data: null }));
-        const plugins = data;
-        const count = Array.isArray(plugins) ? plugins.length : 0;
-        if (count === 0) {
-          await warnIfEmpty(client);
-        }
-        statusBarItem.text = `$(check) mEdit: Ready (${count} plugins)`;
-      } else {
-        statusBarItem.text = "$(plug) mEdit: No session";
-      }
-      treeProvider.refresh();
+    if (status === "attached") {
+      await controller.onBackendConnected();
     }
   });
   await backendManager.connect().catch((err) => {
     vscode2.window.showErrorMessage(`mEdit: Backend failed to start \u2014 ${err.message}`);
   });
 }
-async function warnIfEmpty(client) {
-  const { data } = await client.GET("/plugins", {}).catch(() => ({ data: null }));
-  const plugins = data;
-  if (Array.isArray(plugins) && plugins.length === 0) {
-    vscode2.window.showWarningMessage(
-      "mEdit: Session loaded but no plugins were found. Plugins.txt may be listing no plugins (common with vanilla post-NextGen FO4). Use MO2 or add plugins to Plugins.txt manually."
-    );
-  }
-}
-function makeWizard(client, cfg) {
-  return new SessionWizard({
-    client,
-    detectPaths: () => {
-      const dataOverride = cfg.get("game.dataFolderPath") ?? "";
-      const pluginsOverride = cfg.get("game.pluginsTxtPath") ?? "";
-      if (dataOverride && pluginsOverride) {
-        return Promise.resolve({ dataFolder: dataOverride, pluginsTxt: pluginsOverride });
-      }
-      return detectGamePaths();
-    },
-    showQuickPick: (items) => vscode2.window.showQuickPick(items, { placeHolder: "Select game path" }),
-    showInputBox: (opts) => vscode2.window.showInputBox({ prompt: opts.prompt, value: opts.value }),
-    showErrorMessage: (msg) => vscode2.window.showErrorMessage(msg)
-  });
-}
 function deactivate() {
   backendManager?.dispose();
 }
-async function runNewPlugin(port, treeProvider) {
-  const name = await vscode2.window.showInputBox({
+function promptPluginName() {
+  return vscode2.window.showInputBox({
     prompt: "Enter new plugin name (e.g. MyPatch.esp)",
     validateInput: (v) => {
       if (!v) return "Name is required";
@@ -1036,62 +1075,6 @@ async function runNewPlugin(port, treeProvider) {
       return void 0;
     }
   });
-  if (!name) return void 0;
-  try {
-    const res = await fetch(`http://localhost:${port}/plugins/create`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name })
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      vscode2.window.showErrorMessage(`mEdit: Failed to create plugin \u2014 ${text}`);
-      return void 0;
-    }
-    treeProvider.refresh();
-    return name;
-  } catch (err) {
-    vscode2.window.showErrorMessage(`mEdit: Failed to create plugin \u2014 ${err instanceof Error ? err.message : String(err)}`);
-    return void 0;
-  }
-}
-async function runCopyAsOverrideInto(client, port, formKey, treeProvider) {
-  let mutablePlugins = [];
-  try {
-    const { data } = await client.GET("/plugins", {});
-    const all = data ?? [];
-    mutablePlugins = all.filter((p) => !p.isImmutable);
-  } catch {
-    vscode2.window.showErrorMessage("mEdit: Failed to fetch plugins.");
-    return;
-  }
-  const NEW_PLUGIN_LABEL = "$(add) New Plugin\u2026";
-  const items = [
-    { label: NEW_PLUGIN_LABEL, description: "Create a new plugin and copy into it" },
-    ...mutablePlugins.map((p) => ({ label: p.name, description: `[${p.loadOrderIndex}]` }))
-  ];
-  const picked = await vscode2.window.showQuickPick(items, { placeHolder: "Select target plugin" });
-  if (!picked) return;
-  let targetPlugin = picked.label;
-  if (picked.label === NEW_PLUGIN_LABEL) {
-    const created = await runNewPlugin(port, treeProvider);
-    if (!created) return;
-    targetPlugin = created;
-  }
-  try {
-    const res = await fetch(
-      `http://localhost:${port}/records/${encodeURIComponent(formKey)}/copy-to/${encodeURIComponent(targetPlugin)}`,
-      { method: "POST" }
-    );
-    if (!res.ok) {
-      const text = await res.text();
-      vscode2.window.showErrorMessage(`mEdit: Copy failed \u2014 ${text}`);
-      return;
-    }
-    treeProvider.refresh();
-  } catch (err) {
-    vscode2.window.showErrorMessage(`mEdit: Copy failed \u2014 ${err instanceof Error ? err.message : String(err)}`);
-  }
 }
 var RECORD_PANEL_KEY = "__record_view__";
 function openRecordPanel(context, openPanels, title, formKey, port) {

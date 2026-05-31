@@ -98,7 +98,7 @@
         {
           "command": "mEdit.copyAsOverrideInto",
           "when": "view == mEdit.pluginTree && viewItem == record",
-          "group": "inline"
+          "group": "mEdit@1"
         }
       ]
     }
