@@ -8,7 +8,7 @@ namespace MEditService.Core.Session;
 public interface ISessionManager
 {
     IGameSession? Session { get; }
-    IRecordRepository? Repository { get; }
+    IRecordReader? Repository { get; }
 
     void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease);
     void Unload();

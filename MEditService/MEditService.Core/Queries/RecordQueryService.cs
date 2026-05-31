@@ -119,7 +119,7 @@ public sealed class RecordQueryService : IRecordQueryService
     private IGameSession RequireSession() =>
         _session.Session ?? throw new InvalidOperationException("No session loaded.");
 
-    private IRecordRepository RequireRepository() =>
+    private IRecordReader RequireRepository() =>
         _session.Repository ?? throw new InvalidOperationException("No session loaded.");
 
     private IReadOnlyDictionary<string, Schema.RecordTableSchema> RequireSchemas() =>

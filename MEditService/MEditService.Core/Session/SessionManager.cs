@@ -34,7 +34,7 @@ public sealed class SessionManager : ISessionManager, IDisposable
     }
 
     public IGameSession? Session { get { lock (_lock) return _session; } }
-    public IRecordRepository? Repository { get { lock (_lock) return _repository; } }
+    public IRecordReader? Repository { get { lock (_lock) return _repository; } }
 
     public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease)
     {

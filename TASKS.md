@@ -237,6 +237,7 @@
 - **Batch field edits** — `PATCH /records` supporting multiple FormKeys in one request for bulk operations
 
 ### Future explorations
+- Open plugin file OR Spriggit outside a load order (mutagen grabs the default steam load order)
 - Agentic integration - ACP/MPC?
 - Extra mutagen tooling
     * Spriggit style export
