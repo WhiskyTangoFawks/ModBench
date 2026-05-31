@@ -10,15 +10,19 @@ namespace MEditService.Tests.Session;
 public class SessionManagerThreadSafetyTests : IClassFixture<TestPluginFixture>
 {
     private readonly TestPluginFixture _fixture;
-    private static readonly ISchemaReflector _reflector = new SchemaReflector();
-    private static readonly ITableDdlBuilder _ddl = new TableDdlBuilder(_reflector);
-    private static readonly IFieldMetadataMapper _mapper = new FieldMetadataMapper();
 
     public SessionManagerThreadSafetyTests(TestPluginFixture fixture) => _fixture = fixture;
 
+    private static SessionManager MakeManager()
+    {
+        var reflector = new SchemaReflector();
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector), new FieldMetadataMapper());
+        return new SessionManager(factory, new PluginWriter(reflector));
+    }
+
     private SessionManager MakeLoadedManager()
     {
-        var m = new SessionManager(_reflector, _ddl, _mapper, new PluginWriter(_reflector));
+        var m = MakeManager();
         m.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
         return m;
     }
@@ -73,7 +77,7 @@ public class SessionManagerThreadSafetyTests : IClassFixture<TestPluginFixture>
     [Fact]
     public void CreatePlugin_NoSession_Throws()
     {
-        using var manager = new SessionManager(_reflector, _ddl, _mapper, new PluginWriter(_reflector));
+        using var manager = MakeManager();
         Assert.Throws<InvalidOperationException>(() => manager.CreatePlugin("X.esp"));
     }
 

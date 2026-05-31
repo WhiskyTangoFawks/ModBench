@@ -38,7 +38,8 @@ try
     builder.Services.AddSwaggerGen();
     builder.Services.AddSingleton<ISchemaReflector, SchemaReflector>();
     builder.Services.AddSingleton<ITableDdlBuilder, TableDdlBuilder>();
-    builder.Services.AddSingleton<IFieldMetadataMapper, FieldMetadataMapper>(); // consumed by SessionManager → DuckDbRecordRepository
+    builder.Services.AddSingleton<IFieldMetadataMapper, FieldMetadataMapper>();
+    builder.Services.AddSingleton<IRecordRepositoryFactory, DuckDbRecordRepositoryFactory>();
     builder.Services.AddSingleton<IConflictClassifier, ConflictClassifier>();
     builder.Services.AddSingleton<IPluginWriter, PluginWriter>();
     builder.Services.AddSingleton<ISessionManager, SessionManager>();

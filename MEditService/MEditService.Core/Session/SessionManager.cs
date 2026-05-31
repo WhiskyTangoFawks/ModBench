@@ -1,7 +1,6 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
-using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -14,9 +13,7 @@ public sealed class SessionManager : ISessionManager, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger<SessionManager> _logger;
-    private readonly ISchemaReflector _schemaReflector;
-    private readonly ITableDdlBuilder _ddlBuilder;
-    private readonly IFieldMetadataMapper _metadataMapper;
+    private readonly IRecordRepositoryFactory _repositoryFactory;
     private readonly IPluginWriter _writer;
     private IGameSession? _session;
     private IRecordRepository? _repository;
@@ -27,15 +24,11 @@ public sealed class SessionManager : ISessionManager, IDisposable
     private GameRelease _gameRelease;
 
     public SessionManager(
-        ISchemaReflector schemaReflector,
-        ITableDdlBuilder ddlBuilder,
-        IFieldMetadataMapper metadataMapper,
+        IRecordRepositoryFactory repositoryFactory,
         IPluginWriter writer,
         ILogger<SessionManager>? logger = null)
     {
-        _schemaReflector = schemaReflector;
-        _ddlBuilder = ddlBuilder;
-        _metadataMapper = metadataMapper;
+        _repositoryFactory = repositoryFactory;
         _writer = writer;
         _logger = logger ?? NullLogger<SessionManager>.Instance;
     }
@@ -61,8 +54,7 @@ public sealed class SessionManager : ISessionManager, IDisposable
                     string.Join(", ", session.Plugins.Select(p => p.Name)));
 
                 _logger.LogInformation("Initializing DuckDB record repository");
-                var repository = new DuckDbRecordRepository(_schemaReflector, _ddlBuilder, _metadataMapper, _logger);
-                repository.Initialize(gameRelease);
+                var repository = _repositoryFactory.Create(gameRelease);
 
                 foreach (var plugin in session.Plugins)
                 {

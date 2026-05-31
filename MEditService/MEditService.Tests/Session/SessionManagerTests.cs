@@ -14,10 +14,6 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
 {
     private readonly TestPluginFixture _fixture;
 
-    private static readonly ISchemaReflector _reflector = new SchemaReflector();
-    private static readonly ITableDdlBuilder _ddl = new TableDdlBuilder(_reflector);
-    private static readonly IFieldMetadataMapper _mapper = new FieldMetadataMapper();
-
     public SessionManagerTests(TestPluginFixture fixture) => _fixture = fixture;
 
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
@@ -26,7 +22,26 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
         new(Guid.NewGuid(), formKey, plugin, fieldPath, recordType,
             J("null"), J(json), "user", null, DateTime.UtcNow);
 
-    private SessionManager MakeManager() => new(_reflector, _ddl, _mapper, new PluginWriter(_reflector));
+    private static SessionManager MakeManager()
+    {
+        var reflector = new SchemaReflector();
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector), new FieldMetadataMapper());
+        return new SessionManager(factory, new PluginWriter(reflector));
+    }
+
+    [Fact]
+    public void Load_DelegatesToFactory()
+    {
+        var reflector = new SchemaReflector();
+        var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector), new FieldMetadataMapper());
+        var spy = new SpyRepositoryFactory(inner);
+        using var manager = new SessionManager(spy, new PluginWriter(reflector));
+
+        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+
+        Assert.Equal(1, spy.CreateCallCount);
+        Assert.Equal(GameRelease.Fallout4, spy.LastGameRelease);
+    }
 
     [Fact]
     public void Load_PopulatesSessionAndRepository()
@@ -120,6 +135,24 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
         }
     }
 
+    // --- helpers ---
+
+    private sealed class SpyRepositoryFactory : IRecordRepositoryFactory
+    {
+        private readonly IRecordRepositoryFactory _inner;
+        public int CreateCallCount { get; private set; }
+        public GameRelease? LastGameRelease { get; private set; }
+
+        public SpyRepositoryFactory(IRecordRepositoryFactory inner) => _inner = inner;
+
+        public IRecordRepository Create(GameRelease gameRelease)
+        {
+            CreateCallCount++;
+            LastGameRelease = gameRelease;
+            return _inner.Create(gameRelease);
+        }
+    }
+
     [Fact]
     public async Task SavePlugin_AfterSave_RepositoryReflectsNewFieldValue()
     {
@@ -136,7 +169,7 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
         {
             using var manager = MakeManager();
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var schema = _reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
+            var schema = new SchemaReflector().GetSchemas(GameRelease.Fallout4)["npc_"];
             var change = MakePendingChange(npcKey.ToString(), "TestPlugin.esp", "aggression", "npc_", "\"Frenzied\"");
 
             await manager.SavePlugin("TestPlugin.esp", [change]);
