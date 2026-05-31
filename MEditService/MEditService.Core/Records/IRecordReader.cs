@@ -10,4 +10,5 @@ public interface IRecordReader
     IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, RecordTableSchema schema, string formKey);
     int CountRecordsForPlugin(string tableName, string plugin);
     string? FindRecordType(string formKey);
+    PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset);
 }

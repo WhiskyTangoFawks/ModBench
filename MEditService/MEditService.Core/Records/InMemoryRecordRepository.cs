@@ -124,5 +124,19 @@ public sealed class InMemoryRecordRepository : IRecordRepository
         return null;
     }
 
+    public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset)
+    {
+        var allItems = new List<RecordSummary>();
+        int total = 0;
+        foreach (var tableName in tableNames)
+        {
+            var page = GetRecords(tableName, plugin, search, int.MaxValue, 0);
+            total += page.Total;
+            allItems.AddRange(page.Items);
+        }
+        allItems.Sort((a, b) => string.Compare(a.EditorId, b.EditorId, StringComparison.OrdinalIgnoreCase));
+        return new PagedResult<RecordSummary>(allItems.Skip(offset).Take(limit).ToList(), total);
+    }
+
     public void Dispose() { }
 }

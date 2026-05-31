@@ -78,6 +78,15 @@ public class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, IDispos
     }
 
     [Fact]
+    public void GetRecords_AllTypes_ReturnsCombinedResults()
+    {
+        var result = _svc.GetRecords(type: null, plugin: null, search: null, limit: 100, offset: 0);
+
+        Assert.Equal(TestPluginFixture.RecordCount, result.Total);
+        Assert.Equal(TestPluginFixture.RecordCount, result.Items.Count);
+    }
+
+    [Fact]
     public void GetRecords_Pagination_RespectsLimitAndOffset()
     {
         var page1 = _svc.GetRecords(type: "npc_", plugin: null, search: null, limit: 1, offset: 0);

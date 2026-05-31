@@ -45,17 +45,7 @@ public sealed class RecordQueryService : IRecordQueryService
             return repository.GetRecords(type, plugin, search, limit, offset);
         }
 
-        var allItems = new List<RecordSummary>();
-        int total = 0;
-        foreach (var tableName in schemas.Keys)
-        {
-            var page = repository.GetRecords(tableName, plugin, search, int.MaxValue, 0);
-            total += page.Total;
-            allItems.AddRange(page.Items);
-        }
-
-        allItems.Sort((a, b) => string.Compare(a.EditorId, b.EditorId, StringComparison.OrdinalIgnoreCase));
-        return new PagedResult<RecordSummary>(allItems.Skip(offset).Take(limit).ToList(), total);
+        return repository.SearchRecords(schemas.Keys.ToList(), plugin, search, limit, offset);
     }
 
     public RecordDetail? GetRecord(string formKey)

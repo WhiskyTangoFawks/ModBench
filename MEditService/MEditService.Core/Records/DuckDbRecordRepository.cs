@@ -208,6 +208,37 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return null;
     }
 
+    public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset)
+    {
+        if (tableNames.Count == 0)
+            return new PagedResult<RecordSummary>([], 0);
+
+        var (where, paramValues) = BuildWhere(plugin, search);
+        const string cols = "form_key, plugin, load_order_idx, is_winner, editor_id";
+        var union = string.Join("\nUNION ALL\n",
+            tableNames.Select(t => $"SELECT {cols} FROM \"{t}\"{where}"));
+
+        using var countCmd = _connection.CreateCommand();
+        countCmd.CommandText = $"SELECT COUNT(*) FROM ({union})";
+        AddParams(countCmd, paramValues);
+        var total = (long)countCmd.ExecuteScalar()!;
+
+        using var dataCmd = _connection.CreateCommand();
+        dataCmd.CommandText = $"""
+            SELECT {cols} FROM ({union})
+            ORDER BY editor_id
+            LIMIT {limit} OFFSET {offset}
+            """;
+        AddParams(dataCmd, paramValues);
+
+        var items = new List<RecordSummary>();
+        using var reader = dataCmd.ExecuteReader();
+        while (reader.Read())
+            items.Add(ReadSummary(reader));
+
+        return new PagedResult<RecordSummary>(items, (int)total);
+    }
+
     // --- Helpers ---
 
     private static RecordSummary ReadSummary(IDataReader reader) =>
