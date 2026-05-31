@@ -16,7 +16,7 @@ public class SessionManagerThreadSafetyTests : IClassFixture<TestPluginFixture>
     private static SessionManager MakeManager()
     {
         var reflector = new SchemaReflector();
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector), new FieldMetadataMapper());
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         return new SessionManager(factory, new PluginWriter(reflector));
     }
 

@@ -14,7 +14,6 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 {
     private readonly ISchemaReflector _schemaReflector;
     private readonly ITableDdlBuilder _ddlBuilder;
-    private readonly IFieldMetadataMapper _metadataMapper;
     private readonly ILogger _logger;
     private readonly DuckDBConnection _connection;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
@@ -23,12 +22,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     public DuckDbRecordRepository(
         ISchemaReflector schemaReflector,
         ITableDdlBuilder ddlBuilder,
-        IFieldMetadataMapper metadataMapper,
         ILogger? logger = null)
     {
         _schemaReflector = schemaReflector;
         _ddlBuilder = ddlBuilder;
-        _metadataMapper = metadataMapper;
         _logger = logger ?? NullLogger.Instance;
         _connection = new DuckDBConnection("DataSource=:memory:");
         _connection.Open();
@@ -142,8 +139,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return new PagedResult<RecordSummary>(items, (int)total);
     }
 
-    public RecordDetail? GetRecord(string tableName, RecordTableSchema schema, string formKey, string? plugin, bool winnerOnly)
+    public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly)
     {
+        var schema = RequireSchemas()[tableName];
         var conditions = new List<string> { "form_key = $1" };
         var values = new List<string> { formKey };
 
@@ -168,8 +166,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return reader.Read() ? ReadDetail(reader, schema) : null;
     }
 
-    public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, RecordTableSchema schema, string formKey)
+    public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey)
     {
+        var schema = RequireSchemas()[tableName];
         var sql = $"""
             SELECT form_key, plugin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
             FROM "{tableName}"
@@ -258,7 +257,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         {
             var col = schema.RecordColumns[i];
             object? value = reader.IsDBNull(5 + i) ? null : reader.GetValue(5 + i);
-            fields.Add(new FieldValue(_metadataMapper.Map(col), value));
+            fields.Add(new FieldValue(col.ToFieldMetadata(), value));
         }
 
         return new RecordDetail(formKey, plugin, loadOrderIndex, isWinner, editorId, fields);

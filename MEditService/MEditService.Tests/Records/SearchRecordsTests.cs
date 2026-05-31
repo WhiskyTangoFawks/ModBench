@@ -15,7 +15,7 @@ public class SearchRecordsTests : IClassFixture<TestPluginFixture>
     private SessionManager MakeLoadedManager()
     {
         var reflector = new SchemaReflector();
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector), new FieldMetadataMapper());
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var manager = new SessionManager(factory, new PluginWriter(reflector));
         manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
         return manager;

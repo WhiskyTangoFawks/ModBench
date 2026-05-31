@@ -25,7 +25,7 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
     private static SessionManager MakeManager()
     {
         var reflector = new SchemaReflector();
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector), new FieldMetadataMapper());
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         return new SessionManager(factory, new PluginWriter(reflector));
     }
 
@@ -33,7 +33,7 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
     public void Load_DelegatesToFactory()
     {
         var reflector = new SchemaReflector();
-        var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector), new FieldMetadataMapper());
+        var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var spy = new SpyRepositoryFactory(inner);
         using var manager = new SessionManager(spy, new PluginWriter(reflector));
 
@@ -135,6 +135,62 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
         }
     }
 
+    // --- CreatePlugin ---
+
+    [Fact]
+    public void CreatePlugin_DoesNotReplaceRepository()
+    {
+        var data = new PluginFixtureBuilder("cp-no-replace")
+            .WithPlugin("Base.esp")
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var repositoryBefore = manager.Repository;
+
+            manager.CreatePlugin("NewPlugin.esp");
+
+            Assert.Same(repositoryBefore, manager.Repository);
+        }
+    }
+
+    [Fact]
+    public void CreatePlugin_NewPluginAppearsInSession()
+    {
+        var data = new PluginFixtureBuilder("cp-appears")
+            .WithPlugin("Base.esp")
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            manager.CreatePlugin("NewPlugin.esp");
+
+            Assert.Contains(manager.Session!.Plugins, p => p.Name == "NewPlugin.esp");
+        }
+    }
+
+    [Fact]
+    public void CreatePlugin_ExistingPluginRecordsStillPresent()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("cp-existing-records")
+            .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("ExistingNPC").FormKey)
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            manager.CreatePlugin("NewPlugin.esp");
+
+            var count = manager.Repository!.CountRecordsForPlugin("npc_", "Base.esp");
+            Assert.Equal(1, count);
+        }
+    }
+
     // --- helpers ---
 
     private sealed class SpyRepositoryFactory : IRecordRepositoryFactory
@@ -169,12 +225,11 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
         {
             using var manager = MakeManager();
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var schema = new SchemaReflector().GetSchemas(GameRelease.Fallout4)["npc_"];
             var change = MakePendingChange(npcKey.ToString(), "TestPlugin.esp", "aggression", "npc_", "\"Frenzied\"");
 
             await manager.SavePlugin("TestPlugin.esp", [change]);
 
-            var detail = manager.Repository!.GetRecord("npc_", schema, npcKey.ToString(), "TestPlugin.esp", winnerOnly: false)!;
+            var detail = manager.Repository!.GetRecord("npc_", npcKey.ToString(), "TestPlugin.esp", winnerOnly: false)!;
             var aggressionValue = detail.Fields.First(f => f.Metadata.Name == "aggression").Value?.ToString();
             Assert.Equal("Frenzied", aggressionValue);
         }

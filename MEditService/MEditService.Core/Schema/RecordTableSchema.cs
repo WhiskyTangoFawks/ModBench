@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Queries;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
@@ -11,7 +12,12 @@ public sealed record ColumnSpec(
     string ApiType,
     string[] ValidFormKeyTypes,
     string[] EnumValues,
-    Action<IMajorRecord, JsonElement>? Apply);
+    Action<IMajorRecord, JsonElement>? Apply,
+    bool IsArray = false)
+{
+    public FieldMetadata ToFieldMetadata() =>
+        new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumValues);
+}
 
 public sealed class RecordTableSchema
 {

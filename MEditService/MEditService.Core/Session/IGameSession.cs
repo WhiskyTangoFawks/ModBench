@@ -11,4 +11,5 @@ public interface IGameSession : IDisposable
     IReadOnlyList<PluginMetadata> Plugins { get; }
     ILinkCache LinkCache { get; }
     IModGetter? GetMod(string pluginName);
+    PluginMetadata AddPlugin(string filePath);
 }

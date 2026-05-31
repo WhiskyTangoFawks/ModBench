@@ -16,7 +16,7 @@ public class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, IDispos
     public RecordQueryServiceTests(TestPluginFixture fixture)
     {
         var reflector = new SchemaReflector();
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector), new FieldMetadataMapper());
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         _manager = new SessionManager(factory, new PluginWriter(reflector));
         _manager.Load(fixture.DataFolder, fixture.PluginsTxtPath, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, new PendingChangeService(), reflector, new ConflictClassifier());

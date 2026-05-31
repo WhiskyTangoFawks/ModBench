@@ -12,12 +12,13 @@ public sealed class GameSession : IGameSession
 {
     private readonly List<IModDisposeGetter> _mods = [];
     private readonly Dictionary<string, IModGetter> _modsByName = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<PluginMetadata> _plugins = [];
     private readonly ILinkCache _linkCache;
     private bool _disposed;
 
     public string DataFolderPath { get; }
     public GameRelease GameRelease { get; }
-    public IReadOnlyList<PluginMetadata> Plugins { get; }
+    public IReadOnlyList<PluginMetadata> Plugins => _plugins;
     public ILinkCache LinkCache => _linkCache;
 
     public IModGetter? GetMod(string pluginName) =>
@@ -48,7 +49,6 @@ public sealed class GameSession : IGameSession
             combined.Count, implicitKeys.Count);
 
         var modListings = new List<IModListing<IModGetter>>(combined.Count);
-        var metadata = new List<PluginMetadata>(combined.Count);
 
         for (int i = 0; i < combined.Count; i++)
         {
@@ -83,7 +83,7 @@ public sealed class GameSession : IGameSession
             logger.LogInformation("[{Index}] {FileName}: {RecordCount} records, masters: [{Masters}]",
                 i, fileName, recordCount, string.Join(", ", masters));
 
-            metadata.Add(new PluginMetadata(
+            _plugins.Add(new PluginMetadata(
                 Name: fileName,
                 Path: filePath,
                 LoadOrderIndex: i,
@@ -98,8 +98,37 @@ public sealed class GameSession : IGameSession
         logger.LogInformation("Building load order and link cache for {Count} plugin(s)", modListings.Count);
         var loadOrder = new LoadOrder<IModListing<IModGetter>>(modListings);
         _linkCache = loadOrder.ToUntypedImmutableLinkCache(gameRelease.ToCategory());
-        Plugins = metadata;
         logger.LogInformation("GameSession ready");
+    }
+
+    public PluginMetadata AddPlugin(string filePath)
+    {
+        var fileName = Path.GetFileName(filePath);
+        var modKey = ModKey.FromFileName(fileName);
+        var modPath = new ModPath(modKey, filePath);
+        var mod = ModFactory.ImportGetter(modPath, GameRelease);
+
+        var masters = mod.MasterReferences
+            .Select(r => r.Master.FileName.ToString())
+            .ToList();
+
+        var loadOrderIndex = _mods.Count;
+        _mods.Add(mod);
+        _modsByName[fileName] = mod;
+
+        var metadata = new PluginMetadata(
+            Name: fileName,
+            Path: filePath,
+            LoadOrderIndex: loadOrderIndex,
+            IsLight: fileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase),
+            IsMaster: fileName.EndsWith(".esm", StringComparison.OrdinalIgnoreCase),
+            Masters: masters,
+            RecordCount: mod.EnumerateMajorRecords().Count(),
+            IsImmutable: false
+        );
+
+        _plugins.Add(metadata);
+        return metadata;
     }
 
     public void Dispose()

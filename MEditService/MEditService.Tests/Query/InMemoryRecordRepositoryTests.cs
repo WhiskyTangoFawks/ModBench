@@ -12,13 +12,12 @@ public class InMemoryRecordRepositoryTests : IClassFixture<TestPluginFixture>
 {
     private readonly TestPluginFixture _fixture;
     private static readonly ISchemaReflector _reflector = new SchemaReflector();
-    private static readonly IFieldMetadataMapper _mapper = new FieldMetadataMapper();
 
     public InMemoryRecordRepositoryTests(TestPluginFixture fixture) => _fixture = fixture;
 
     private InMemoryRecordRepository LoadedRepository()
     {
-        var repo = new InMemoryRecordRepository(_reflector, _mapper);
+        var repo = new InMemoryRecordRepository(_reflector);
         repo.Initialize(GameRelease.Fallout4);
         var modPath = new ModPath(
             ModKey.FromFileName(TestPluginFixture.PluginName),
@@ -85,10 +84,9 @@ public class InMemoryRecordRepositoryTests : IClassFixture<TestPluginFixture>
     public void GetRecord_WinnerOnly_ReturnsWinner()
     {
         using var repo = LoadedRepository();
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var record = repo.GetRecord("npc_", schema, formKey, null, winnerOnly: true);
+        var record = repo.GetRecord("npc_", formKey, null, winnerOnly: true);
 
         Assert.NotNull(record);
         Assert.True(record.IsWinner);
@@ -99,10 +97,9 @@ public class InMemoryRecordRepositoryTests : IClassFixture<TestPluginFixture>
     public void GetRecord_WithPlugin_ReturnsMatchingPlugin()
     {
         using var repo = LoadedRepository();
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var record = repo.GetRecord("npc_", schema, formKey, TestPluginFixture.PluginName, winnerOnly: false);
+        var record = repo.GetRecord("npc_", formKey, TestPluginFixture.PluginName, winnerOnly: false);
 
         Assert.NotNull(record);
         Assert.Equal(TestPluginFixture.PluginName, record.Plugin);
@@ -112,9 +109,8 @@ public class InMemoryRecordRepositoryTests : IClassFixture<TestPluginFixture>
     public void GetRecord_UnknownFormKey_ReturnsNull()
     {
         using var repo = LoadedRepository();
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
 
-        var record = repo.GetRecord("npc_", schema, "FFFFFF:Unknown.esp", null, winnerOnly: false);
+        var record = repo.GetRecord("npc_", "FFFFFF:Unknown.esp", null, winnerOnly: false);
 
         Assert.Null(record);
     }
@@ -125,10 +121,9 @@ public class InMemoryRecordRepositoryTests : IClassFixture<TestPluginFixture>
     public void GetAllOverrides_SinglePlugin_ReturnsSingleEntry()
     {
         using var repo = LoadedRepository();
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var overrides = repo.GetAllOverrides("npc_", schema, formKey);
+        var overrides = repo.GetAllOverrides("npc_", formKey);
 
         Assert.Single(overrides);
         Assert.Equal(formKey, overrides[0].FormKey);
@@ -157,14 +152,13 @@ public class InMemoryRecordRepositoryTests : IClassFixture<TestPluginFixture>
         var overrideNpc = modALoaded.Npcs.First().DeepCopy();
         modB.Npcs.Set(overrideNpc);
 
-        using var repo = new InMemoryRecordRepository(_reflector, _mapper);
+        using var repo = new InMemoryRecordRepository(_reflector);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index(modALoaded, 0);
         repo.Index(modB, 1);
         repo.UpdateWinners();
 
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
-        var overrides = repo.GetAllOverrides("npc_", schema, npcKey.ToString());
+        var overrides = repo.GetAllOverrides("npc_", npcKey.ToString());
 
         Assert.Equal(2, overrides.Count);
         Assert.Equal(0, overrides[0].LoadOrderIndex);

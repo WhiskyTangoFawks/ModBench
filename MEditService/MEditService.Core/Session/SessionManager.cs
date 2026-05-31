@@ -99,7 +99,7 @@ public sealed class SessionManager : ISessionManager, IDisposable
 
         lock (_lock)
         {
-            if (_dataFolderPath is null || _pluginsTxtPath is null)
+            if (_session is null || _repository is null || _dataFolderPath is null || _pluginsTxtPath is null)
                 throw new InvalidOperationException("No session loaded.");
 
             var filePath = Path.Combine(_dataFolderPath, name);
@@ -112,13 +112,14 @@ public sealed class SessionManager : ISessionManager, IDisposable
 
             File.AppendAllText(_pluginsTxtPath, $"*{name}\n");
 
-            Load(_dataFolderPath, _pluginsTxtPath, _gameRelease);
+            var metadata = _session.AddPlugin(filePath);
+            var pluginMod = _session.GetMod(name)
+                ?? throw new InvalidOperationException($"Plugin '{name}' not found after AddPlugin.");
 
-            var created = _session!.Plugins.FirstOrDefault(p =>
-                string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
-                ?? throw new InvalidOperationException($"Plugin '{name}' not found after reload.");
+            _repository.Index(pluginMod, metadata.LoadOrderIndex);
+            _repository.UpdateWinners();
 
-            return PluginResponse.FromMetadata(created);
+            return PluginResponse.FromMetadata(metadata);
         }
     }
 

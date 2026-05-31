@@ -51,9 +51,9 @@ public sealed class RecordQueryService : IRecordQueryService
     public RecordDetail? GetRecord(string formKey)
     {
         var repository = RequireRepository();
-        foreach (var (tableName, schema) in RequireSchemas())
+        foreach (var tableName in RequireSchemas().Keys)
         {
-            var detail = repository.GetRecord(tableName, schema, formKey, plugin: null, winnerOnly: true);
+            var detail = repository.GetRecord(tableName, formKey, plugin: null, winnerOnly: true);
             if (detail != null) return detail;
         }
         return null;
@@ -62,9 +62,9 @@ public sealed class RecordQueryService : IRecordQueryService
     public RecordDetail? GetRecordForPlugin(string formKey, string plugin)
     {
         var repository = RequireRepository();
-        foreach (var (tableName, schema) in RequireSchemas())
+        foreach (var tableName in RequireSchemas().Keys)
         {
-            var detail = repository.GetRecord(tableName, schema, formKey, plugin, winnerOnly: false);
+            var detail = repository.GetRecord(tableName, formKey, plugin, winnerOnly: false);
             if (detail != null) return detail;
         }
         return null;
@@ -76,9 +76,9 @@ public sealed class RecordQueryService : IRecordQueryService
     public CompareResult? GetCompare(string formKey)
     {
         var repository = RequireRepository();
-        foreach (var (tableName, schema) in RequireSchemas())
+        foreach (var tableName in RequireSchemas().Keys)
         {
-            var overrides = repository.GetAllOverrides(tableName, schema, formKey);
+            var overrides = repository.GetAllOverrides(tableName, formKey);
             if (overrides.Count == 0) continue;
 
             var withPending = overrides.Select(o =>

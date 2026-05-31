@@ -10,7 +10,7 @@ public class RecordRepositoryFactoryTests
     public void Create_ReturnsInitializedRepository()
     {
         var reflector = new SchemaReflector();
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector), new FieldMetadataMapper());
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
 
         using var repo = factory.Create(GameRelease.Fallout4);
 
@@ -22,7 +22,7 @@ public class RecordRepositoryFactoryTests
     public void Create_ReturnsIRecordReader()
     {
         var reflector = new SchemaReflector();
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector), new FieldMetadataMapper());
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
 
         using var repo = factory.Create(GameRelease.Fallout4);
         IRecordReader reader = repo;

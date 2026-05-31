@@ -1,6 +1,5 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
-using MEditService.Core.Queries;
 using MEditService.Core.Session;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,47 +12,27 @@ public static class ChangeEndpoints
         app.MapMethods("/records/{formKey}", ["PATCH"],
             ([FromRoute] string formKey,
              [FromBody] PatchRecordRequest req,
-             IRecordQueryService query,
-             IPendingChangeService changes,
              ISessionManager session,
-             IPluginWriter writer) =>
+             IEditOrchestrator orchestrator) =>
         {
             var s = session.Session;
             if (s == null) return Results.Problem("No session loaded.");
 
-            var pluginMeta = s.Plugins.FirstOrDefault(p =>
-                string.Equals(p.Name, req.Plugin, StringComparison.OrdinalIgnoreCase));
-            if (pluginMeta?.IsImmutable == true)
-                return Results.Problem($"'{req.Plugin}' is a base-game plugin and cannot be edited.", statusCode: 409);
-
             var decoded = Uri.UnescapeDataString(formKey);
+            var result = orchestrator.StageEdit(decoded, req.Plugin, req.Fields, req.Source ?? "user", req.Description);
 
-            var recordType = query.GetRecordType(decoded);
-            if (recordType == null) return Results.NotFound();
-
-            // Reject read-only fields before staging the change
-            var readOnlyFields = req.Fields.Keys
-                .Where(f => writer.IsReadOnly(s.GameRelease, recordType, f))
-                .ToList();
-            if (readOnlyFields.Count > 0)
-                return Results.Problem(
-                    detail: $"The following fields are read-only and cannot be edited: {string.Join(", ", readOnlyFields)}",
-                    statusCode: 422);
-
-            var currentRecord = query.GetRecordForPlugin(decoded, req.Plugin);
-            var oldValues = new Dictionary<string, JsonElement>();
-            if (currentRecord != null)
+            return result switch
             {
-                foreach (var fv in currentRecord.Fields)
-                {
-                    if (req.Fields.ContainsKey(fv.Metadata.Name))
-                        oldValues[fv.Metadata.Name] = JsonSerializer.SerializeToElement(fv.Value);
-                }
-            }
-
-            var result = changes.Upsert(decoded, req.Plugin, recordType, req.Fields,
-                req.Source ?? "user", req.Description, oldValues);
-            return Results.Ok(result);
+                StageEditResult.NoSession        => Results.Problem("No session loaded."),
+                StageEditResult.PluginImmutable i => Results.Problem(
+                    $"'{i.Plugin}' is a base-game plugin and cannot be edited.", statusCode: 409),
+                StageEditResult.RecordNotFound   => Results.NotFound(),
+                StageEditResult.ReadOnlyFields r  => Results.Problem(
+                    detail: $"The following fields are read-only and cannot be edited: {string.Join(", ", r.Fields)}",
+                    statusCode: 422),
+                StageEditResult.Staged staged      => Results.Ok(staged.Changes),
+                _                                 => Results.Problem("Unexpected error.")
+            };
         })
         .WithName("PatchRecord")
         .WithTags("Changes");
@@ -97,41 +76,26 @@ public static class ChangeEndpoints
             [FromRoute] string formKey,
             [FromRoute] string targetPlugin,
             [FromQuery] string? source,
-            IRecordQueryService query,
-            IPendingChangeService changes,
-            ISessionManager session) =>
+            ISessionManager session,
+            IEditOrchestrator orchestrator) =>
         {
-            var decoded       = Uri.UnescapeDataString(formKey);
-            var decodedTarget = Uri.UnescapeDataString(targetPlugin);
-
             var s = session.Session;
             if (s == null) return Results.Problem("No session loaded.");
 
-            var targetMeta = s.Plugins.FirstOrDefault(p =>
-                string.Equals(p.Name, decodedTarget, StringComparison.OrdinalIgnoreCase));
-            if (targetMeta?.IsImmutable == true)
-                return Results.Problem($"'{decodedTarget}' is a base-game plugin and cannot be edited.", statusCode: 409);
+            var decoded       = Uri.UnescapeDataString(formKey);
+            var decodedTarget = Uri.UnescapeDataString(targetPlugin);
 
-            var recordType = query.GetRecordType(decoded);
-            if (recordType == null) return Results.NotFound();
+            var result = orchestrator.CopyRecordTo(decoded, decodedTarget, source ?? "user");
 
-            var winner = query.GetRecord(decoded);
-            if (winner == null) return Results.NotFound();
-
-            var fields = winner.Fields.ToDictionary(
-                fv => fv.Metadata.Name,
-                fv => JsonSerializer.SerializeToElement(fv.Value));
-
-            var currentTarget = query.GetRecordForPlugin(decoded, decodedTarget);
-            var oldValues = new Dictionary<string, JsonElement>();
-            if (currentTarget != null)
+            return result switch
             {
-                foreach (var fv in currentTarget.Fields)
-                    oldValues[fv.Metadata.Name] = JsonSerializer.SerializeToElement(fv.Value);
-            }
-
-            var result = changes.Upsert(decoded, decodedTarget, recordType, fields, source ?? "user", null, oldValues);
-            return Results.Ok(result);
+                StageEditResult.NoSession        => Results.Problem("No session loaded."),
+                StageEditResult.PluginImmutable i => Results.Problem(
+                    $"'{i.Plugin}' is a base-game plugin and cannot be edited.", statusCode: 409),
+                StageEditResult.RecordNotFound   => Results.NotFound(),
+                StageEditResult.Staged staged      => Results.Ok(staged.Changes),
+                _                                 => Results.Problem("Unexpected error.")
+            };
         })
         .WithName("CopyRecordTo")
         .WithTags("Changes");

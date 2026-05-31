@@ -13,13 +13,12 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
     private readonly TestPluginFixture _fixture;
     private static readonly ISchemaReflector _reflector = new SchemaReflector();
     private static readonly ITableDdlBuilder _ddl = new TableDdlBuilder(_reflector);
-    private static readonly IFieldMetadataMapper _mapper = new FieldMetadataMapper();
 
     public DuckDbRecordRepositoryTests(TestPluginFixture fixture) => _fixture = fixture;
 
     private DuckDbRecordRepository LoadedRepository()
     {
-        var repo = new DuckDbRecordRepository(_reflector, _ddl, _mapper);
+        var repo = new DuckDbRecordRepository(_reflector, _ddl);
         repo.Initialize(GameRelease.Fallout4);
         var modPath = new ModPath(
             ModKey.FromFileName(TestPluginFixture.PluginName),
@@ -86,10 +85,9 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
     public void GetRecord_WinnerOnly_ReturnsWinner()
     {
         using var repo = LoadedRepository();
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var record = repo.GetRecord("npc_", schema, formKey, null, winnerOnly: true);
+        var record = repo.GetRecord("npc_", formKey, null, winnerOnly: true);
 
         Assert.NotNull(record);
         Assert.True(record.IsWinner);
@@ -101,10 +99,9 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
     public void GetRecord_WithPlugin_ReturnsMatchingPlugin()
     {
         using var repo = LoadedRepository();
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var record = repo.GetRecord("npc_", schema, formKey, TestPluginFixture.PluginName, winnerOnly: false);
+        var record = repo.GetRecord("npc_", formKey, TestPluginFixture.PluginName, winnerOnly: false);
 
         Assert.NotNull(record);
         Assert.Equal(TestPluginFixture.PluginName, record.Plugin);
@@ -114,9 +111,8 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
     public void GetRecord_UnknownFormKey_ReturnsNull()
     {
         using var repo = LoadedRepository();
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
 
-        var record = repo.GetRecord("npc_", schema, "FFFFFF:Unknown.esp", null, winnerOnly: false);
+        var record = repo.GetRecord("npc_", "FFFFFF:Unknown.esp", null, winnerOnly: false);
 
         Assert.Null(record);
     }
@@ -144,14 +140,13 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
                 { Master = ModKey.FromFileName("PluginA.esm") });
             modB.Npcs.Set(modALoaded.EnumerateMajorRecords<INpcGetter>().First().DeepCopy());
 
-            using var repo = new DuckDbRecordRepository(_reflector, _ddl, _mapper);
+            using var repo = new DuckDbRecordRepository(_reflector, _ddl);
             repo.Initialize(GameRelease.Fallout4);
             repo.Index(modALoaded, 0);
             repo.Index(modB, 1);
             repo.UpdateWinners();
 
-            var schema = _reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
-            var overrides = repo.GetAllOverrides("npc_", schema, npcKey.ToString());
+            var overrides = repo.GetAllOverrides("npc_", npcKey.ToString());
 
             Assert.Equal(2, overrides.Count);
             Assert.Equal(0, overrides[0].LoadOrderIndex);

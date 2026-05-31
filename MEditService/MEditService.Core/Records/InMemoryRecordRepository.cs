@@ -8,14 +8,12 @@ namespace MEditService.Core.Records;
 public sealed class InMemoryRecordRepository : IRecordRepository
 {
     private readonly ISchemaReflector _schemaReflector;
-    private readonly IFieldMetadataMapper _metadataMapper;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
     private readonly Dictionary<string, List<RecordDetail>> _tables = new();
 
-    public InMemoryRecordRepository(ISchemaReflector schemaReflector, IFieldMetadataMapper metadataMapper)
+    public InMemoryRecordRepository(ISchemaReflector schemaReflector)
     {
         _schemaReflector = schemaReflector;
-        _metadataMapper = metadataMapper;
     }
 
     public void Initialize(GameRelease release) =>
@@ -37,7 +35,7 @@ public sealed class InMemoryRecordRepository : IRecordRepository
             foreach (var record in records)
             {
                 var fields = schema.RecordColumns
-                    .Select(col => new FieldValue(_metadataMapper.Map(col), col.Extract(record)))
+                    .Select(col => new FieldValue(col.ToFieldMetadata(), col.Extract(record)))
                     .ToList();
                 table.Add(new RecordDetail(
                     record.FormKey.ToString(), plugin, loadOrderIndex,
@@ -84,7 +82,7 @@ public sealed class InMemoryRecordRepository : IRecordRepository
         return new PagedResult<RecordSummary>(items, all.Count);
     }
 
-    public RecordDetail? GetRecord(string tableName, RecordTableSchema schema, string formKey, string? plugin, bool winnerOnly)
+    public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly)
     {
         if (!_tables.TryGetValue(tableName, out var table))
             return null;
@@ -96,7 +94,7 @@ public sealed class InMemoryRecordRepository : IRecordRepository
         return query.FirstOrDefault();
     }
 
-    public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, RecordTableSchema schema, string formKey)
+    public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey)
     {
         if (!_tables.TryGetValue(tableName, out var table))
             return [];

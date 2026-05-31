@@ -38,13 +38,13 @@ try
     builder.Services.AddSwaggerGen();
     builder.Services.AddSingleton<ISchemaReflector, SchemaReflector>();
     builder.Services.AddSingleton<ITableDdlBuilder, TableDdlBuilder>();
-    builder.Services.AddSingleton<IFieldMetadataMapper, FieldMetadataMapper>();
     builder.Services.AddSingleton<IRecordRepositoryFactory, DuckDbRecordRepositoryFactory>();
     builder.Services.AddSingleton<IConflictClassifier, ConflictClassifier>();
     builder.Services.AddSingleton<IPluginWriter, PluginWriter>();
     builder.Services.AddSingleton<ISessionManager, SessionManager>();
     builder.Services.AddSingleton<IPendingChangeService, PendingChangeService>();
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
+    builder.Services.AddSingleton<IEditOrchestrator, EditOrchestrator>();
 
     var app = builder.Build();
 
