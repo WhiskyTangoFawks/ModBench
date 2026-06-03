@@ -43,11 +43,13 @@ def committed_config(config_path: Path, repo_root: Path) -> str:
 
 
 @contextlib.contextmanager
-def patched_config(config_path: Path, repo_root: Path, mutate: list[str]):
-    """Temporarily set mutate in stryker-config.json, restore to HEAD on exit."""
+def patched_config(config_path: Path, repo_root: Path, mutate: list[str], mutant_ids: list[int] | None = None):
+    """Temporarily patch stryker-config.json, restore to HEAD on exit."""
     original = committed_config(config_path, repo_root)
     config = json.loads(original)
     config["stryker-config"]["mutate"] = mutate
+    if mutant_ids:
+        config["stryker-config"]["mutant-id"] = mutant_ids
     config_path.write_text(json.dumps(config, indent=2) + "\n")
     try:
         yield
@@ -127,7 +129,24 @@ def print_mutants(label: str, items: list) -> None:
 
 def main() -> None:
     use_all = "--all" in sys.argv
-    base_dir = Path(next((a for a in sys.argv[1:] if not a.startswith("--")), ".")).resolve()
+    mutant_ids: list[int] = []
+    args = sys.argv[1:]
+    if "--mutant-ids" in args:
+        idx = args.index("--mutant-ids")
+        raw = args[idx + 1:]
+        for v in raw:
+            if v.startswith("--"):
+                break
+            try:
+                mutant_ids.append(int(v))
+            except ValueError:
+                print(f"ERROR: --mutant-ids expects integers, got {v!r}", file=sys.stderr)
+                sys.exit(2)
+        if not mutant_ids:
+            print("ERROR: --mutant-ids requires at least one mutant ID", file=sys.stderr)
+            sys.exit(2)
+
+    base_dir = Path(next((a for a in args if not a.startswith("--")), ".")).resolve()
     r = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
         capture_output=True, text=True, cwd=base_dir,
@@ -137,13 +156,18 @@ def main() -> None:
         sys.exit(2)
     repo_root = Path(r.stdout.strip())
 
-    if use_all:
+    if mutant_ids:
+        mutate = FALLBACK_MUTATE
+    elif use_all:
         mutate = FALLBACK_MUTATE
     else:
         mutate = compute_mutate_scope(repo_root)
 
     print("=" * 70)
-    print("MUTATION SCOPE")
+    if mutant_ids:
+        print(f"TARGETED RUN — mutant IDs: {', '.join(str(i) for i in mutant_ids)}")
+    else:
+        print("MUTATION SCOPE")
     print("=" * 70)
     for p in mutate:
         print(f"  {p}")
@@ -151,13 +175,16 @@ def main() -> None:
     config_path = base_dir / "stryker-config.json"
 
     print(f"\n{'=' * 70}")
-    print("Running Stryker.NET  (initial test run ~60s, then mutation phase)")
+    if mutant_ids:
+        print("Running Stryker.NET  (initial test run ~60s, then targeted mutation phase)")
+    else:
+        print("Running Stryker.NET  (initial test run ~60s, then mutation phase)")
     print("=" * 70)
     sys.stdout.flush()
 
     run_start = time.time()
 
-    with patched_config(config_path, repo_root, mutate):
+    with patched_config(config_path, repo_root, mutate, mutant_ids=mutant_ids):
         subprocess.run(
             ["dotnet", "stryker", "--config-file", "stryker-config.json"],
             cwd=base_dir,

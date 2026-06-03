@@ -11,16 +11,22 @@ Do not read or cite results from a prior Stryker run. The scope may have been di
 The script auto-scopes to Core files touched in the current diff (staged + unstaged + commits ahead of main), patches `stryker-config.json` at runtime, and restores it when done. Never edit `stryker-config.json` manually.
 
 ```bash
-cd MEditService && python stryker-report.py
+cd MEditService && python ../.claude/skills/mutation-test/stryker-report.py
 ```
 
 To scope to all of Core instead:
 
 ```bash
-cd MEditService && python stryker-report.py --all
+cd MEditService && python ../.claude/skills/mutation-test/stryker-report.py --all
 ```
 
-Allow up to 3 minutes. The script prints the computed scope before running so you can confirm it is correct.
+To rerun only specific mutant IDs (targeted verification — still pays the ~60s initial test run):
+
+```bash
+cd MEditService && python ../.claude/skills/mutation-test/stryker-report.py --mutant-ids 42 57
+```
+
+Allow up to 3 minutes for a full run. The script prints the computed scope before running so you can confirm it is correct.
 
 The script exits 0 if all mutants killed, 1 if any survivors or NoCoverage mutants remain.
 
