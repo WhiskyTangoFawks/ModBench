@@ -18,14 +18,14 @@ public sealed class InMemoryRecordRepository : IRecordRepository
     }
 
     public DuckDBConnection Connection =>
-        throw new NotSupportedException("InMemoryRecordRepository does not have a DuckDB connection.");
+        throw new NotSupportedException();
 
     public void Initialize(GameRelease release) =>
         _schemas = _schemaReflector.GetSchemas(release);
 
     public void Index(IModGetter mod, int loadOrderIndex)
     {
-        var schemas = _schemas ?? throw new InvalidOperationException("Call Initialize before Index.");
+        var schemas = _schemas ?? throw new InvalidOperationException();
         var plugin = mod.ModKey.FileName.ToString();
 
         foreach (var (tableName, schema) in schemas)

@@ -345,4 +345,41 @@ public class InMemoryRecordRepositoryTests : IClassFixture<TestPluginFixture>
         Assert.Equal(0, result.Total);
         Assert.Empty(result.Items);
     }
+
+    [Fact]
+    public void SearchRecords_MultiplePlugins_ResultsSortedByEditorIdAscending()
+    {
+        // Index records from two independent plugins so they interleave alphabetically.
+        // Without the Sort() in SearchRecords, results arrive in insertion order (Bravo before Alpha).
+        var data = new PluginFixtureBuilder("inmem-search-sort").Build();
+        var modAPath = Path.Combine(data.DataFolder, "SortA.esm");
+        var modBPath = Path.Combine(data.DataFolder, "SortB.esm");
+
+        var modA = new Fallout4Mod(ModKey.FromFileName("SortA.esm"), Fallout4Release.Fallout4);
+        modA.Npcs.AddNew("Bravo");
+        modA.WriteToBinary(modAPath);
+
+        var modB = new Fallout4Mod(ModKey.FromFileName("SortB.esm"), Fallout4Release.Fallout4);
+        modB.Npcs.AddNew("Alpha");
+        modB.WriteToBinary(modBPath);
+
+        var modALoaded = Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("SortA.esm"), modAPath), Fallout4Release.Fallout4);
+        var modBLoaded = Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("SortB.esm"), modBPath), Fallout4Release.Fallout4);
+
+        using var repo = new InMemoryRecordRepository(_reflector);
+        repo.Initialize(GameRelease.Fallout4);
+        repo.Index(modALoaded, 0);  // Bravo indexed first
+        repo.Index(modBLoaded, 1);  // Alpha indexed second
+        repo.UpdateWinners();
+
+        var result = repo.SearchRecords(["npc_"], null, null, 100, 0);
+
+        Assert.Equal(2, result.Total);
+        Assert.Equal("Alpha", result.Items[0].EditorId);
+        Assert.Equal("Bravo", result.Items[1].EditorId);
+
+        data.Dispose();
+    }
 }

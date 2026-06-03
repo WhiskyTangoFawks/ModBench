@@ -7,6 +7,7 @@ using MEditService.Core.Session;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
+using MEditService.Tests;
 
 namespace MEditService.Tests.Query;
 
@@ -298,6 +299,116 @@ public class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, IDispos
     {
         var unloaded = MakeUnloadedService();
         Assert.Throws<InvalidOperationException>(() => unloaded.GetRecords("npc_", null, null, 10, 0));
+    }
+
+    [Fact]
+    public void GetPlugins_NoSession_ExceptionMessageIsNoSessionLoaded()
+    {
+        // Mutant 262: assert the exact message so string mutation is killed
+        var unloaded = MakeUnloadedService();
+        var ex = Assert.Throws<InvalidOperationException>(() => unloaded.GetPlugins());
+        Assert.Equal("No session loaded.", ex.Message);
+    }
+
+    [Fact]
+    public void GetRecordType_NoSession_ExceptionMessageIsNoSessionLoaded()
+    {
+        // Mutant 264: RequireRepository() message — GetRecordType calls RequireRepository() directly
+        // without going through RequireSession/RequireSchemas first, so this exercises line 118.
+        var unloaded = MakeUnloadedService();
+        var ex = Assert.Throws<InvalidOperationException>(() => unloaded.GetRecordType("AABBCC:Test.esp"));
+        Assert.Equal("No session loaded.", ex.Message);
+    }
+
+    [Fact]
+    public void GetRecord_WithMultipleOverrides_ReturnsWinnerPlugin()
+    {
+        // Mutant 241: winnerOnly: true → false — with a single plugin there's only one record so
+        // winnerOnly has no observable effect. Build a two-plugin fixture: PluginA defines an NPC,
+        // PluginB overrides it. GetRecord must return PluginB's version (the winner).
+        var dataFolder = Path.Combine(Path.GetTempPath(), $"rqs-winner-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dataFolder);
+
+        var modA = new Mutagen.Bethesda.Fallout4.Fallout4Mod(
+            Mutagen.Bethesda.Plugins.ModKey.FromFileName("WinnerA.esm"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        var sourceNpc = modA.Npcs.AddNew("WinnerNPC");
+        var npcKey = sourceNpc.FormKey;
+        modA.WriteToBinary(Path.Combine(dataFolder, "WinnerA.esm"));
+
+        using var modALoaded = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
+            new Mutagen.Bethesda.Plugins.ModPath(
+                Mutagen.Bethesda.Plugins.ModKey.FromFileName("WinnerA.esm"),
+                Path.Combine(dataFolder, "WinnerA.esm")),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+
+        var modB = new Mutagen.Bethesda.Fallout4.Fallout4Mod(
+            Mutagen.Bethesda.Plugins.ModKey.FromFileName("WinnerB.esp"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        modB.ModHeader.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference
+            { Master = Mutagen.Bethesda.Plugins.ModKey.FromFileName("WinnerA.esm") });
+        modB.Npcs.Set(modALoaded.Npcs.First().DeepCopy());
+        modB.WriteToBinary(Path.Combine(dataFolder, "WinnerB.esp"));
+
+        var pluginsTxtPath = Path.Combine(dataFolder, "Plugins.txt");
+        File.WriteAllText(pluginsTxtPath, "*WinnerA.esm\n*WinnerB.esp\n");
+        var fixtureData = new PluginFixtureData(dataFolder, pluginsTxtPath);
+        using (fixtureData)
+        {
+            var reflector = new SchemaReflector();
+            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            manager.Load(dataFolder, pluginsTxtPath, GameRelease.Fallout4);
+            var svc = new RecordQueryService(manager, MakePendingChangeService(), reflector, new ConflictClassifier());
+
+            var detail = svc.GetRecord(npcKey.ToString());
+
+            // winnerOnly: true means we get PluginB (load order index 1, higher = winner)
+            Assert.NotNull(detail);
+            Assert.Equal("WinnerB.esp", detail.Plugin);
+            Assert.True(detail.IsWinner);
+        }
+    }
+
+    [Fact]
+    public void GetPluginRecordTypes_WithMultipleTypes_ReturnsAscendingOrder()
+    {
+        // Mutant 260: OrderBy → OrderByDescending — single record type ("npc_") can't distinguish
+        // ascending from descending. Build a fixture with NPCs ("npc_") and Weapons ("weap") to verify.
+        var dataFolder = Path.Combine(Path.GetTempPath(), $"rqs-multitype-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dataFolder);
+
+        const string pluginName = "MultiType.esp";
+        var mod = new Mutagen.Bethesda.Fallout4.Fallout4Mod(
+            Mutagen.Bethesda.Plugins.ModKey.FromFileName(pluginName),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        mod.Npcs.AddNew("SomeNPC");
+        mod.Weapons.AddNew("SomeWeapon");
+        mod.WriteToBinary(Path.Combine(dataFolder, pluginName));
+
+        var pluginsTxtPath = Path.Combine(dataFolder, "Plugins.txt");
+        File.WriteAllText(pluginsTxtPath, $"*{pluginName}\n");
+        var fixtureData = new PluginFixtureData(dataFolder, pluginsTxtPath);
+        using (fixtureData)
+        {
+            var reflector = new SchemaReflector();
+            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            manager.Load(dataFolder, pluginsTxtPath, GameRelease.Fallout4);
+            var svc = new RecordQueryService(manager, MakePendingChangeService(), reflector, new ConflictClassifier());
+
+            var result = svc.GetPluginRecordTypes(pluginName);
+            var types = result.Select(r => r.Type).ToList();
+
+            // Must contain both npc_ and weap — ensures ascending vs descending is distinguishable
+            Assert.Contains("npc_", types);
+            Assert.Contains("weap", types);
+            // Must be in ascending order (npc_ comes before weap alphabetically)
+            Assert.Equal(types.Order().ToList(), types);
+            var npcIndex = types.IndexOf("npc_");
+            var weapIndex = types.IndexOf("weap");
+            Assert.True(npcIndex < weapIndex, $"Expected npc_ (index {npcIndex}) before weap (index {weapIndex}) in ascending order");
+        }
     }
 
     private static DuckDbPendingChangeService MakePendingChangeService()

@@ -72,7 +72,6 @@ public sealed class GameSession : IGameSession
 
             _mods.Add(mod);
             _modsByName[fileName] = mod;
-            // Stryker disable once Boolean : ToUntypedImmutableLinkCache reads listing.Mod directly and ignores the enabled flag
             modListings.Add(new ModListing<IModGetter>(mod, enabled: true));
 
             var masters = mod.MasterReferences
@@ -134,7 +133,6 @@ public sealed class GameSession : IGameSession
     public void Dispose()
     {
         foreach (var mod in _mods)
-            // Stryker disable once Statement : verifying per-mod disposal requires OS-level resource checks beyond the public API
             mod.Dispose();
     }
 }

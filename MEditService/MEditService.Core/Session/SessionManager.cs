@@ -89,7 +89,6 @@ public sealed class SessionManager : ISessionManager, IDisposable
     public PluginResponse CreatePlugin(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
-            // Stryker disable once String : exception message text is not part of the tested contract
             throw new ArgumentException("Plugin name cannot be empty.", nameof(name));
 
         var ext = Path.GetExtension(name);
@@ -97,19 +96,16 @@ public sealed class SessionManager : ISessionManager, IDisposable
             !ext.Equals(".esm", StringComparison.OrdinalIgnoreCase) &&
             !ext.Equals(".esl", StringComparison.OrdinalIgnoreCase))
         {
-            // Stryker disable once String : exception message text is not part of the tested contract
             throw new ArgumentException($"Invalid plugin extension '{ext}'. Must be .esp, .esm, or .esl.", nameof(name));
         }
 
         lock (_lock)
         {
             if (_session is null)
-                // Stryker disable once String : exception message text is not part of the tested contract
                 throw new InvalidOperationException("No session loaded.");
 
             var filePath = Path.Combine(_dataFolderPath!, name);
             if (File.Exists(filePath))
-                // Stryker disable once String : exception message text is not part of the tested contract
                 throw new IOException($"Plugin file already exists: {name}");
 
             var modKey = ModKey.FromFileName(name);
@@ -132,12 +128,10 @@ public sealed class SessionManager : ISessionManager, IDisposable
         lock (_lock)
         {
             if (_session == null)
-                // Stryker disable once String : exception message text is not part of the tested contract
                 throw new InvalidOperationException("No session loaded.");
             var meta = _session.Plugins.FirstOrDefault(p =>
                 string.Equals(p.Name, plugin, StringComparison.OrdinalIgnoreCase));
             if (meta == null)
-                // Stryker disable once String : exception message text is not part of the tested contract
                 throw new KeyNotFoundException($"Plugin '{plugin}' not found in session.");
             metadata = meta;
             repository = _repository!;

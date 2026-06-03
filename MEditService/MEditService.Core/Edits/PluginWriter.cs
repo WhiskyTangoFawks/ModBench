@@ -112,18 +112,18 @@ public sealed class PluginWriter : IPluginWriter
         return ApplyOutcome.Applied;
     }
 
-    private static string CreateBackup(string pluginPath)
+    internal static string CreateBackup(string pluginPath, string? timestamp = null)
     {
         var dir = Path.GetDirectoryName(pluginPath)!;
         var name = Path.GetFileNameWithoutExtension(pluginPath);
         var ext = Path.GetExtension(pluginPath);
-        var ts = DateTime.UtcNow.ToString("yyyy-MM-ddTHH-mm-ss");
+        var ts = timestamp ?? DateTime.UtcNow.ToString("yyyy-MM-ddTHH-mm-ss");
         var path = Path.Combine(dir, $"{name}.{ts}.bak{ext}");
         File.Copy(pluginPath, path, overwrite: false);
         return path;
     }
 
-    private void PruneOldBackups(string pluginPath)
+    internal void PruneOldBackups(string pluginPath)
     {
         var dir = Path.GetDirectoryName(pluginPath)!;
         var name = Path.GetFileNameWithoutExtension(pluginPath);

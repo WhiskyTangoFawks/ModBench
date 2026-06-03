@@ -229,6 +229,172 @@ public sealed class EditOrchestratorTests
         }
     }
 
+    [Fact]
+    public void StageEdit_PluginNotInSession_DoesNotThrow()
+    {
+        // Mutant 99: FirstOrDefault → First would throw when plugin is absent from session.
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-plugin-absent")
+            .WithPlugin("Present.esp", mod =>
+                npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+                var fields = new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") };
+
+                // "Ghost.esp" is not in session.Plugins — must not throw
+                var result = orchestrator.StageEdit(npcKey.ToString(), "Ghost.esp", fields, "user", null);
+
+                // Plugin not found → treated as mutable, proceeds until RecordNotFound or Staged
+                // (formKey exists under Present.esp, not Ghost.esp, so GetRecordForPlugin returns null → oldValues empty → Staged)
+                Assert.IsType<StageEditResult.Staged>(result);
+            }
+        }
+    }
+
+    [Fact]
+    public void StageEdit_NullCurrentRecord_OldValuesEmpty()
+    {
+        // Mutant 107: currentRecord != null → currentRecord == null would populate oldValues from null, crashing.
+        // When GetRecordForPlugin returns null, oldValues must stay empty (OldValue is null for the staged change).
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-null-record")
+            .WithPlugin("Source.esp", mod =>
+                npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+                var fields = new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") };
+
+                // Target.esp has no record for npcKey, so GetRecordForPlugin returns null
+                var result = orchestrator.StageEdit(npcKey.ToString(), "Target.esp", fields, "user", null);
+
+                var staged = Assert.IsType<StageEditResult.Staged>(result);
+                // OldValue should be null (not populated) because currentRecord was null
+                Assert.All(staged.Changes, c => Assert.Equal(JsonValueKind.Null, c.OldValue.ValueKind));
+            }
+        }
+    }
+
+    [Fact]
+    public void StageEdit_OldValuesOnlyContainsEditedFields()
+    {
+        // Mutant 110: fields.ContainsKey negated → would capture fields NOT being edited instead of fields being edited.
+        // A record with fields A, B, C; edit only A → OldValue is set only for A, not B or C.
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-old-values-filter")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("TestNPC");
+                npc.Aggression = Npc.AggressionType.Frenzied;
+                npc.Confidence = Npc.ConfidenceType.Brave;
+                npcKey = npc.FormKey;
+            })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+                // Only edit "aggression"; "confidence" is in the record but not in the edit
+                var fields = new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") };
+
+                var result = orchestrator.StageEdit(npcKey.ToString(), "TestPlugin.esp", fields, "user", null);
+
+                var staged = Assert.IsType<StageEditResult.Staged>(result);
+                var aggressionChange = Assert.Single(staged.Changes, c => c.FieldPath == "aggression");
+                // OldValue must be the real prior value (not null) because "aggression" IS in the edit fields
+                Assert.NotEqual(JsonValueKind.Null, aggressionChange.OldValue.ValueKind);
+                // There must be no staged change for "confidence" (only aggression was edited)
+                Assert.DoesNotContain(staged.Changes, c => c.FieldPath == "confidence");
+            }
+        }
+    }
+
+    [Fact]
+    public void CopyRecordTo_TargetPluginNotInSession_DoesNotThrow()
+    {
+        // Mutant 113: FirstOrDefault → First in CopyRecordTo would throw when targetPlugin is absent.
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-copy-plugin-absent")
+            .WithPlugin("Source.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("TestNPC");
+                npc.Aggression = Npc.AggressionType.Frenzied;
+                npcKey = npc.FormKey;
+            })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                // "Ghost.esp" is not in session.Plugins — must not throw
+                var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Ghost.esp", "user");
+
+                // Plugin absent → treated as mutable, proceeds → Staged
+                Assert.IsType<StageEditResult.Staged>(result);
+            }
+        }
+    }
+
+    [Fact]
+    public void CopyRecordTo_ExistingTargetRecord_CapturesOldValues()
+    {
+        // Mutant 119: NoCoverage — the branch capturing oldValues from the existing target record was never exercised.
+        // Set up: npcKey exists in both Source.esp (Frenzied) and Target.esp (override, Aggressive).
+        // CopyRecordTo should populate oldValues from the target's existing record.
+        FormKey npcKey = default;
+
+        // Build Source.esp first to capture npcKey, then build Target.esp as an override
+        var dataFolder = Path.Combine(Path.GetTempPath(), $"eo-copy-existing-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dataFolder);
+
+        var sourceMod = new Fallout4Mod(ModKey.FromFileName("Source.esp"), Fallout4Release.Fallout4);
+        var sourceNpc = sourceMod.Npcs.AddNew("TestNPC");
+        sourceNpc.Aggression = Npc.AggressionType.Frenzied;
+        npcKey = sourceNpc.FormKey;
+        sourceMod.WriteToBinary(Path.Combine(dataFolder, "Source.esp"));
+
+        // Target.esp overrides the same NPC with a different aggression
+        var targetMod = new Fallout4Mod(ModKey.FromFileName("Target.esp"), Fallout4Release.Fallout4);
+        var targetOverrideNpc = targetMod.Npcs.GetOrAddAsOverride(sourceNpc);
+        targetOverrideNpc.Aggression = Npc.AggressionType.Aggressive;
+        targetMod.WriteToBinary(Path.Combine(dataFolder, "Target.esp"));
+
+        var pluginsTxtPath = Path.Combine(dataFolder, "Plugins.txt");
+        File.WriteAllText(pluginsTxtPath, "*Source.esp\n*Target.esp\n");
+
+        var fixtureData = new PluginFixtureData(dataFolder, pluginsTxtPath);
+        using (fixtureData)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(dataFolder, pluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user");
+
+                var staged = Assert.IsType<StageEditResult.Staged>(result);
+                Assert.NotEmpty(staged.Changes);
+                // At least one change should have a non-null OldValue (populated from existing target record)
+                Assert.Contains(staged.Changes, c => c.OldValue.ValueKind != JsonValueKind.Null);
+            }
+        }
+    }
+
     // --- helpers ---
 
     /// <summary>

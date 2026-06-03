@@ -151,6 +151,10 @@ public class PluginWriterApplyTests
         new(Guid.NewGuid(), formKey.ToString(), "TestPlugin.esp", fieldPath, "npc_",
             JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow);
 
+    private static PendingChange MakeChangeRaw(string rawFormKey, string fieldPath, string json) =>
+        new(Guid.NewGuid(), rawFormKey, "TestPlugin.esp", fieldPath, "npc_",
+            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow);
+
     private static (string pluginPath, FormKey npcKey) BuildFixture()
     {
         FormKey npcKey = default;
@@ -233,5 +237,139 @@ public class PluginWriterApplyTests
     {
         var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
         Assert.True(writer.IsReadOnly(GameRelease.Fallout4, "npc_", "nonexistent_field"));
+    }
+
+    // --- FormKey validation: malformed FormKey string goes to notFound (mutants 125, 126) ---
+
+    [Fact]
+    public async Task SaveAsync_MalformedFormKey_FieldAppearsInNotFound()
+    {
+        var (pluginPath, _) = BuildFixture();
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var change = MakeChangeRaw("INVALID", "aggression", "\"Frenzied\"");
+
+        var result = await writer.SaveAsync(pluginPath, [change], GameRelease.Fallout4);
+
+        Assert.Contains("aggression", result.NotFound);
+        Assert.Empty(result.Applied);
+        Assert.Empty(result.ReadOnly);
+    }
+
+    // --- Valid FormKey not in mod goes to notFound (mutants 127, 131, 132) ---
+
+    [Fact]
+    public async Task SaveAsync_FormKeyNotInMod_FieldAppearsInNotFound()
+    {
+        var (pluginPath, _) = BuildFixture();
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        // FormKey is valid but this NPC doesn't exist in the plugin
+        var absentKey = FormKey.Factory("FFFFFF:TestPlugin.esp");
+        var change = MakeChange(absentKey, "aggression", "\"Frenzied\"");
+
+        var result = await writer.SaveAsync(pluginPath, [change], GameRelease.Fallout4);
+
+        Assert.Contains("aggression", result.NotFound);
+        Assert.Empty(result.Applied);
+        Assert.Empty(result.ReadOnly);
+    }
+
+    // --- CreateBackup throws IOException when backup already exists (mutant 156) ---
+
+    [Fact]
+    public void CreateBackup_FileAlreadyExists_ThrowsIOException()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"pw-backup-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var pluginPath = Path.Combine(dir, "TestPlugin.esp");
+            File.WriteAllText(pluginPath, "dummy");
+
+            var ts = "2020-01-01T00-00-00";
+            // First call succeeds
+            PluginWriter.CreateBackup(pluginPath, ts);
+
+            // Second call with same timestamp must throw, not silently overwrite
+            Assert.Throws<IOException>(() => PluginWriter.CreateBackup(pluginPath, ts));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // --- PruneOldBackups deletes oldest files, keeps newest MaxBackups (mutants 138, 159, 160, 162) ---
+
+    [Fact]
+    public void PruneOldBackups_ExcessBackups_DeletesOldestKeepsNewest()
+    {
+        const int MaxBackups = 5;
+        var dir = Path.Combine(Path.GetTempPath(), $"pw-prune-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var pluginPath = Path.Combine(dir, "TestPlugin.esp");
+            File.WriteAllText(pluginPath, "dummy");
+
+            // Create MaxBackups + 2 backup files with known ascending timestamps
+            var timestamps = new[]
+            {
+                "2020-01-01T00-00-01",
+                "2020-01-01T00-00-02",
+                "2020-01-01T00-00-03",
+                "2020-01-01T00-00-04",
+                "2020-01-01T00-00-05",
+                "2020-01-01T00-00-06",
+                "2020-01-01T00-00-07",
+            };
+
+            var createdPaths = timestamps
+                .Select(ts => PluginWriter.CreateBackup(pluginPath, ts))
+                .ToList();
+
+            var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+            writer.PruneOldBackups(pluginPath);
+
+            // Newest MaxBackups should survive; oldest 2 should be deleted
+            var surviving = Directory.GetFiles(dir, "TestPlugin.*.bak.esp");
+            Assert.Equal(MaxBackups, surviving.Length);
+
+            // The two oldest (timestamps[0] and timestamps[1]) must be gone
+            Assert.False(File.Exists(createdPaths[0]), "Oldest backup should be deleted");
+            Assert.False(File.Exists(createdPaths[1]), "Second oldest backup should be deleted");
+
+            // The newest MaxBackups must still exist
+            for (int i = 2; i < timestamps.Length; i++)
+                Assert.True(File.Exists(createdPaths[i]), $"Backup {i} should survive");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // --- PruneOldBackups is called after save (mutant 138 via SaveAsync integration) ---
+
+    [Fact]
+    public async Task SaveAsync_WithExcessBackups_PrunesAfterSave()
+    {
+        var (pluginPath, npcKey) = BuildFixture();
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var dir = Path.GetDirectoryName(pluginPath)!;
+        var name = Path.GetFileNameWithoutExtension(pluginPath);
+
+        // Pre-create MaxBackups + 1 backups (SaveAsync will add one more → MaxBackups + 2 total before prune)
+        for (int i = 1; i <= 6; i++)
+        {
+            var ts = $"2020-01-0{i}T00-00-00";
+            PluginWriter.CreateBackup(pluginPath, ts);
+        }
+
+        var change = MakeChange(npcKey, "aggression", "\"Frenzied\"");
+        await writer.SaveAsync(pluginPath, [change], GameRelease.Fallout4);
+
+        // After save + prune, backup count must not exceed MaxBackups
+        var backups = Directory.GetFiles(dir, $"{name}.*.bak.esp");
+        Assert.True(backups.Length <= 5, $"Expected at most 5 backups after prune, got {backups.Length}");
     }
 }

@@ -8,7 +8,9 @@ Do not read or cite results from a prior Stryker run. The scope may have been di
 
 ## Running the report
 
-The default run uses Stryker's built-in `since` feature (configured in `stryker-config.json`) to scope to files changed since `main`. `--all` and `--mutant-ids` temporarily disable `since` by patching the config at runtime and restoring it when done. Never edit `stryker-config.json` manually.
+The default run uses Stryker's built-in `since` feature (configured in `stryker-config.json`) to scope to files changed since `main`, and `--with-baseline` to cache mutant results across runs — mutants whose source and covering tests haven't changed are reused from `StrykerOutput/baseline/`. `--all` and `--mutant-ids` temporarily disable `since` by patching the config at runtime and restoring it when done. Never edit `stryker-config.json` manually.
+
+If you suspect the baseline is stale (e.g. a Survived result that should have been killed), delete `StrykerOutput/baseline/` and re-run.
 
 ```bash
 cd MEditService && python ../.claude/skills/mutation-test/stryker-report.py
@@ -68,7 +70,6 @@ Triage each survivor in order. Stop at the first step that resolves it. **Never 
 ### Source-level (line)
 
 ```csharp
-// Stryker disable once <MutatorName>: <reason why the code exists> / <reason the mutation is inert>
 someCode();
 ```
 

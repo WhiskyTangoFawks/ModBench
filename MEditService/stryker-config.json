@@ -1,20 +1,29 @@
 {
   "stryker-config": {
     "project": "MEditService.Core/MEditService.Core.csproj",
-    "test-projects": ["MEditService.Tests/MEditService.Tests.csproj"],
+    "test-projects": [
+      "MEditService.Tests/MEditService.Tests.csproj"
+    ],
     "concurrency": 10,
     "mutation-level": "Standard",
-    "reporters": ["html", "json", "dots"],
+    "reporters": [
+      "html",
+      "json",
+      "dots"
+    ],
     "thresholds": {
       "high": 80,
       "low": 60,
       "break": 0
     },
-    "mutate": ["**/MEditService.Core/**/*.cs"],
-    "ignore-methods": ["Log*"],
+    "mutate": [
+      "**/MEditService.Core/**/*.cs"
+    ],
+    "ignore-methods": [
+      "Log*"
+    ],
     "since": {
-      "enabled": true,
-      "target": "main"
+      "enabled": false
     }
   }
 }

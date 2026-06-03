@@ -172,7 +172,7 @@ public sealed class SchemaReflector : ISchemaReflector
         typeof(ITranslatedStringGetter).IsAssignableFrom(type);
 
     private static bool IsFormLink(Type type) =>
-        type.IsInterface && type.IsGenericType &&
+        type.IsInterface &&
         typeof(IFormLinkGetter).IsAssignableFrom(type);
 
     // IReadOnlyList<T> only — that's what Mutagen getter interfaces expose for collections.
@@ -197,19 +197,6 @@ public sealed class SchemaReflector : ISchemaReflector
         var linked = core.IsGenericType ? core.GetGenericArguments()[0] : null;
         return linked != null && getterTypeToTable.TryGetValue(linked, out var tn)
             ? [tn] : _empty;
-    }
-
-    // Retrieve the concrete mutable class (e.g. RankPlacement) via ILoquiRegistration.SetterType.
-    private static Type? GetSetterType(Type getterInterface)
-    {
-        try
-        {
-            var regProp = getterInterface.GetProperty(
-                "StaticRegistration", BindingFlags.Public | BindingFlags.Static);
-            var reg = regProp?.GetValue(null);
-            return reg?.GetType().GetProperty("SetterType")?.GetValue(reg) as Type;
-        }
-        catch { return null; }
     }
 
     // ── Sub-schema building ───────────────────────────────────────────────────
@@ -526,16 +513,16 @@ public sealed class SchemaReflector : ISchemaReflector
                         if (json.ValueKind != JsonValueKind.Array) return;
                         var rp = record.GetType()
                             .GetProperty(capturedPName, BindingFlags.Public | BindingFlags.Instance);
-                        if (rp == null || !rp.CanWrite) return;
+                        if (rp == null) return;
 
                         var listType = rp.PropertyType;
                         var newList = Activator.CreateInstance(listType)!;
                         var addMethod = listType.GetMethod("Add")!;
 
-                        // Derive the concrete element type from the mutable list's generic argument,
-                        // not from GetSetterType — which returns the setter *interface* (e.g.
-                        // IRankPlacement), not the instantiable concrete class (RankPlacement).
-                        Type? setterType = capturedIsLoqui && listType.IsGenericType
+                        // Derive the concrete element type from the mutable list's generic argument —
+                        // the registration SetterType is an interface (e.g. IRankPlacement), not the
+                        // instantiable concrete class (RankPlacement).
+                        Type? setterType = listType.IsGenericType
                             ? listType.GetGenericArguments()[0]
                             : null;
 
@@ -552,10 +539,10 @@ public sealed class SchemaReflector : ISchemaReflector
                                     item = Activator.CreateInstance(flType, fk);
                                 }
                             }
-                            else if (capturedIsLoqui && setterType != null && capturedSubFields != null)
+                            else if (capturedIsLoqui && setterType != null)
                             {
                                 var elemObj = Activator.CreateInstance(setterType)!;
-                                foreach (var sf in capturedSubFields)
+                                foreach (var sf in capturedSubFields!)
                                 {
                                     if (sf.Apply == null) continue;
                                     if (elem.TryGetProperty(sf.Name, out var sfVal))
@@ -598,32 +585,7 @@ public sealed class SchemaReflector : ISchemaReflector
                 catch { return null; }
             };
 
-            var setterType = GetSetterType(core);
-            Action<IMajorRecord, JsonElement>? apply = null;
-            if (setterType != null)
-            {
-                apply = (record, json) =>
-                {
-                    try
-                    {
-                        if (json.ValueKind != JsonValueKind.Object) return;
-                        var rp = record.GetType()
-                            .GetProperty(capturedPName, BindingFlags.Public | BindingFlags.Instance);
-                        if (rp == null) return;
-                        var obj = rp.GetValue(record) ?? Activator.CreateInstance(setterType)!;
-                        foreach (var sf in capturedSF)
-                        {
-                            if (sf.Apply == null) continue;
-                            if (json.TryGetProperty(sf.Name, out var sfVal))
-                                sf.Apply(obj, sfVal);
-                        }
-                        if (rp.CanWrite) rp.SetValue(record, obj);
-                    }
-                    catch { }
-                };
-            }
-
-            return new("VARCHAR", extractor, "struct", _empty, _empty, apply,
+            return new("VARCHAR", extractor, "struct", _empty, _empty, null,
                 SubFieldMetas: subFieldMetas);
         }
 

@@ -88,7 +88,6 @@ def print_mutants(label: str, items: list) -> None:
         print(f"\n  [{mutant_id}]  {file_path}  line {start_line}")
         print(f"  Mutator:      {mutator}")
         print(f"  Mutation:     {description}")
-        print(f"  Suppression:  // Stryker disable once {mutator}: <reason>")
         print(f"\n  Code:")
         for line in source_context(source_lines, start_line, end_line).split("\n"):
             print(f"    {line}")

@@ -182,18 +182,31 @@ Pending-change cells show the new value with a yellow background and a revert (�
 
 **Drag-drop (Phase 17):** In edit mode, cells can be dragged between plugin columns. Dropping copies the source value as a pending field change into the target column's plugin. Target must be editable.
 
-#### Conflict Color Coding (Phase 9)
+#### Conflict Color Coding (Phase 9 / Phase 9.7)
 
-Row and cell background by conflict state of that field value across the override stack:
+The compare grid uses the two-axis model from ADR-0016.
 
-| State | Color |
-|-------|-------|
-| No override (record in one plugin) | No highlight |
-| Override — all plugins agree on this field | Green background |
-| Change lost — this plugin changes the field, but a later plugin reverts it | Yellow background |
-| Conflict — plugins disagree, last-in-stack wins | Red background |
+**Axis 1 — ConflictAll → row background color** (one value per record)
 
-Cell text: red text when this cell's value is present in the override stack but overwritten by a later plugin (the "losing" value).
+| ConflictAll | Row background |
+|---|---|
+| OnlyOne, NoConflict | No tint |
+| Override | Subtle green |
+| Conflict | Subtle orange |
+
+**Axis 2 — ConflictThis → cell background + text color** (computed per-field per-plugin — a plugin may be Override on one field and ConflictLoses on another)
+
+| ConflictThis | Cell background | Text color |
+|---|---|---|
+| Master, OnlyOne | None | Default |
+| IdenticalToMaster | Grey | Default |
+| Override | Green | Default |
+| ConflictWins | Orange | Default |
+| ConflictLoses | Red | Red |
+
+Absent fields (null value in a non-master plugin — PartialForm absent-field rule) render with no background and no text color.
+
+Column headers use the per-record ConflictThis aggregate (the worst ConflictThis across all fields for that plugin) as a quick summary; individual cell colors are the authoritative per-field states.
 
 ### 3.3 Referenced By Tab (Phase 11)
 

@@ -1,0 +1,60 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "C#: Build",
+      "type": "shell",
+      "command": "dotnet build",
+      "options": { "cwd": "${workspaceFolder}/MEditService" },
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "C#: Tests",
+      "type": "shell",
+      "command": "dotnet test --logger \"console;verbosity=normal\"",
+      "options": { "cwd": "${workspaceFolder}/MEditService" },
+      "group": "test",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "C#: Mutation Tests (Stryker)",
+      "type": "shell",
+      "command": "dotnet stryker",
+      "options": { "cwd": "${workspaceFolder}/MEditService" },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "TS: Build",
+      "type": "shell",
+      "command": "npm run build",
+      "options": { "cwd": "${workspaceFolder}/medit-vscode" },
+      "group": "build",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "TS: Unit Tests (Vitest)",
+      "type": "shell",
+      "command": "npm run test:unit",
+      "options": { "cwd": "${workspaceFolder}/medit-vscode" },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "TS: Integration Tests",
+      "type": "shell",
+      "command": "npm run test:integration",
+      "options": { "cwd": "${workspaceFolder}/medit-vscode" },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "All Tests",
+      "dependsOn": ["C#: Tests", "TS: Unit Tests (Vitest)", "TS: Integration Tests"],
+      "dependsOrder": "sequence",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    }
+  ]
+}

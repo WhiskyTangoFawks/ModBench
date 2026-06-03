@@ -329,7 +329,6 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             case "FLOAT": row.AppendValue((float?)Convert.ToSingle(value)); break;
             case "DOUBLE": row.AppendValue((double?)Convert.ToDouble(value)); break;
             case "VARCHAR": row.AppendValue(value.ToString()); break;
-            default: row.AppendValue(JsonSerializer.Serialize(value)); break;
         }
     }
 

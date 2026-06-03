@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Core.Queries;
 
 namespace MEditService.Tests.Query;
@@ -178,6 +179,32 @@ public class ConflictClassifierTests
         var winner = MakeOverride("C.esp", 2, true, ("name", "Alice"));
         var result = _svc.Classify([master, partial, winner]);
         Assert.NotEqual(ConflictAll.Conflict, result.ConflictAll);
+    }
+
+    // --- JsonElement comparison (ValuesEqual branch) ---
+
+    [Fact]
+    public void Classify_TwoPlugins_JsonElementFields_EqualValues_ReturnsNoConflict()
+    {
+        // JsonElement fields come from DuckDbRecordRepository (array/struct fields).
+        // ValuesEqual must compare by raw text, not reference equality.
+        var arrayA = JsonSerializer.Deserialize<JsonElement>("[1,2,3]");
+        var arrayB = JsonSerializer.Deserialize<JsonElement>("[1,2,3]");
+        var master = MakeOverride("A.esp", 0, false, ("keywords", (object?)arrayA));
+        var override1 = MakeOverride("B.esp", 1, true, ("keywords", (object?)arrayB));
+        var result = _svc.Classify([master, override1]);
+        Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
+    }
+
+    [Fact]
+    public void Classify_TwoPlugins_JsonElementFields_DifferentValues_ReturnsOverride()
+    {
+        var arrayA = JsonSerializer.Deserialize<JsonElement>("[1,2,3]");
+        var arrayB = JsonSerializer.Deserialize<JsonElement>("[4,5,6]");
+        var master = MakeOverride("A.esp", 0, false, ("keywords", (object?)arrayA));
+        var override1 = MakeOverride("B.esp", 1, true, ("keywords", (object?)arrayB));
+        var result = _svc.Classify([master, override1]);
+        Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
 
     [Fact]
