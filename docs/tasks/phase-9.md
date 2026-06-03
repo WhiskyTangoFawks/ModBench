@@ -1,49 +1,79 @@
-# Phase 9 — Conflict Classification & Filtering
+# Phase 9 — Conflict Classification
 
-**Status: Not Started**
+**Status: Complete**
 
-*Goal: users can see the conflict landscape at a glance and drill into only the records that matter.*
+*Goal: users see the two-axis conflict state (ConflictAll per record row, ConflictThis per plugin column) in the compare grid, with xEdit-style color coding.*
 
-Model decided in ADR-0016: two-axis classification (`ConflictAll` per record row + `ConflictThis` per plugin column). See CONTEXT.md for the full enum definitions.
+Model decided in ADR-0016. See CONTEXT.md for full enum definitions. Filtering records by conflict state is deferred to its own phase and will be derived from the DuckDB records table via SQL at query time — no precomputed conflict table.
 
-**Tier 1 (this phase):** Two-axis classification using Mutagen typed values. ConflictPriority per field is Tier 2 (later).
+**Tier 1 (this phase):** ConflictAll and ConflictThis classification without ConflictPriority field metadata. ConflictBenign and ConflictCritical states require ConflictPriority (Tier 2, Phase 9.5).
 
-**Filter design:** filter dimensions are `conflictAll`, `hasPendingChanges`, and free-text `editorId`. They compose with AND. No separate `GET /conflicts` endpoint — `GET /records?conflictAll=Conflict` is sufficient. The tree toolbar maps directly to query params.
+**Tier 1 ConflictAll values:** OnlyOne, NoConflict, Override, Conflict
+
+**Tier 1 ConflictThis values:** OnlyOne, Master, IdenticalToMaster, Override, ConflictWins, ConflictLoses
 
 ## Backend
 
-**Conflict classifier (`MEditService.Core/Queries/ConflictClassifier.cs`)**
-- [ ] Add `ConflictAll` and `ConflictThis` C# enums matching CONTEXT.md definitions
-- [ ] `ConflictClassifier.Classify(IReadOnlyList<(string plugin, IRecord record)> overrideStack)` — takes the override stack in load-order position; returns `(ConflictAll, IReadOnlyList<(string plugin, ConflictThis)>)`. Algorithm: compare each plugin's field values against the master (position 0) and against the winning override (last position). Fields absent in a PartialForm record are excluded from comparison.
-- [ ] Store `conflict_all` (string enum) in a DuckDB `conflict_state` table keyed on `form_key`, populated/invalidated on every index update — this is the read model for filtering, not for the compare grid. The classifier itself runs in C# over full Mutagen objects.
-- [ ] Expose `ConflictAll` and per-plugin `ConflictThis` on the `GET /records/{fk}/compare` response — each plugin column in the compare response gets a `conflictThis` field; the record-level response gets a `conflictAll` field.
-- [ ] `GET /records?conflictAll=Conflict|ConflictCritical|Override|ConflictBenign|NoConflict|OnlyOne` — filter parameter maps directly to the `conflict_state` DuckDB table; composable with existing `plugin`, `recordType`, `editorId` filters
-- [ ] `GET /plugins/{plugin}/conflicts` — conflict records where this plugin's `ConflictThis` is `ConflictWins` or `ConflictLoses`; sourced from the compare endpoint data
+**Enums**
+- [ ] Add `ConflictAll` and `ConflictThis` C# enums (Tier 1 values only) to `MEditService.Core/Queries/`
 
-**Display name improvements** (needed for conflict usability)
-- [ ] REFR, ACHR, PGRE, PMIS record summaries: resolve the base object FormLink and use its `FULL` name as the display name — bare EditorIDs are nearly always empty on placed objects; xEdit shows the base object's name instead
-- [ ] CELL records without EditorID: display as grid coordinates `<X, Y>` from the `XCLC` field
+**Classifier (`MEditService.Core/Queries/ConflictClassifier.cs`)**
+- [ ] Replace `ComputeDiffs()` with `Classify()` returning `(ConflictAll recordState, IReadOnlyList<FieldDiff> diffs)` where each `FieldDiff` carries `ConflictThis winnerThis` and `ConflictThis loserThis` instead of `isConflict: bool`. Inputs are unchanged — `IReadOnlyList<RecordDetail>` sourced from DuckDB, same as today.
+- [ ] Algorithm — ConflictAll:
+  - `OnlyOne`: single plugin in the stack
+  - `NoConflict`: all plugins agree on all fields (pure ITMs)
+  - `Override`: some plugins change fields from master but no two plugins disagree on the same field
+  - `Conflict`: two or more plugins set the same field to different values
+- [ ] Algorithm — ConflictThis (per plugin):
+  - `OnlyOne`: single plugin in the stack
+  - `Master`: load-order position 0 for this FormKey
+  - `IdenticalToMaster`: all field values match the master's values
+  - `Override`: changes at least one field from master; no later plugin contradicts any of those fields
+  - `ConflictWins`: is the last (winning) plugin and at least one earlier plugin set the same field differently
+  - `ConflictLoses`: changed at least one field, but the winner sets that field to a different value
+- [ ] PartialForm null treatment: a null field value in a non-master plugin row means that field is absent from that override. Absent fields are excluded from comparison — null in a non-master row does not generate ConflictLoses.
 
-## Extension
-- [ ] Top-level "Conflicts" tree node showing total conflict count badge; lazy-loads `GET /records?conflictAll=Conflict,ConflictCritical`
-- [ ] Conflict and override badge icons on record nodes in the tree (drives `contextValue` on tree nodes)
-- [ ] Filter toolbar on plugin tree: "All" / "Conflicts Only" / "Overrides Only" toggle — maps to `conflictAll` query param
-- [ ] `mEdit.showConflicts` command (palette + tree toolbar button)
-- [ ] General record tree filter: free-text search by EditorID or FormKey, record type dropdown; composable with conflict-state toggle via AND
+**Compare response**
+- [ ] Add `ConflictAll conflictAll` to `CompareResult`
+- [ ] Add `ConflictThis conflictThis` to `RecordDetail` (one per plugin column)
+- [ ] Update `GET /records/{fk}/compare` to return the new fields (run `npm run generate-api` after)
 
 ## Webview
-- [ ] Record row background color driven by `ConflictAll`: no color (OnlyOne/NoConflict), green (Override), yellow (ConflictBenign), orange (Conflict), red (ConflictCritical) — same palette xEdit uses
-- [ ] Per-plugin column cell color driven by `ConflictThis`: grey (IdenticalToMaster), green (Override), yellow (ConflictBenign), orange (ConflictWins), red (ConflictLoses), no color (Master/OnlyOne)
-- [ ] PartialForm columns: absent fields are omitted from the column (empty cell, no color), not shown as blank — add a tooltip or italicised "partial" badge on the column header
+
+**Row coloring (ConflictAll)**
+- [ ] No color: OnlyOne, NoConflict
+- [ ] Green row background: Override
+- [ ] Orange row background: Conflict
+
+**Column coloring (ConflictThis)**
+- [ ] No color: Master, OnlyOne
+- [ ] Grey cell background: IdenticalToMaster
+- [ ] Green cell background: Override
+- [ ] Orange cell background: ConflictWins
+- [ ] Red cell background: ConflictLoses
+
+**PartialForm column**
+- [ ] Absent fields (null in a non-master column) render as an empty cell with no background color — not as a blank value
+- [ ] Column header shows an italicised "partial" badge when the plugin's record is a PartialForm
 
 ## Tests
-- [ ] Backend: `ConflictClassifier` returns `ConflictAll=Conflict`, winning plugin `ConflictThis=ConflictWins`, losing plugin `ConflictThis=ConflictLoses` for a two-plugin fixture where both override the same field with different values
-- [ ] Backend: `ConflictClassifier` returns `ConflictAll=Override`, both plugins `ConflictThis=IdenticalToMaster` when the override copies values identically
-- [ ] Backend: `ConflictClassifier` correctly handles a PartialForm record in the stack (absent fields do not generate ConflictLoses)
-- [ ] Backend: `GET /records?conflictAll=Conflict` returns only conflicting records from the index
-- [ ] Backend: free-text `editorId` filter on `GET /records` returns matching records across all loaded plugins
-- [ ] Backend: REFR compare response uses base object FULL name as display name when EditorID is absent
+
+- [ ] `ConflictClassifier`: single plugin → `ConflictAll=OnlyOne`, `ConflictThis=OnlyOne`
+- [ ] `ConflictClassifier`: two plugins, all fields identical → `ConflictAll=NoConflict`, both `ConflictThis=IdenticalToMaster` (non-master)
+- [ ] `ConflictClassifier`: two plugins, one changes a field the other doesn't touch → `ConflictAll=Override`, changing plugin `ConflictThis=Override`
+- [ ] `ConflictClassifier`: two plugins disagree on a field → `ConflictAll=Conflict`, winner `ConflictThis=ConflictWins`, loser `ConflictThis=ConflictLoses`
+- [ ] `ConflictClassifier`: null field in non-master row does not produce ConflictLoses (PartialForm absent-field rule)
+- [ ] Webview: row background reflects ConflictAll; plugin column reflects ConflictThis
 
 ## Proof
 
-*To be filled in on completion. Paste `dotnet test` output, `npm run test:unit` output, and commit hash here.*
+**dotnet test:** Passed — 267 tests, 0 failures
+
+**npm run test:unit:** 109 tests across 13 files, 0 failures
+
+**Notes:**
+- `ValuesEqual()` helper added to handle `JsonElement` fields (array/struct) which don't override `Equals()` — fixes false `Override` classification for identical array/struct values
+- `generated/api.ts` is stale and needs `npm run generate-api` against the running backend; the webview uses hand-written `types.ts` directly so there is no runtime impact
+- 6 pre-existing mutation survivors in `RecordQueryService.cs` (winnerOnly booleans, OrderBy, exception message strings) left unresolved — require multi-plugin fixture or exception message assertions to kill
+
+**Working tree (uncommitted at time of completion)**

@@ -8,7 +8,7 @@ Do not read or cite results from a prior Stryker run. The scope may have been di
 
 ## Running the report
 
-The script auto-scopes to Core files touched in the current diff (staged + unstaged + commits ahead of main), patches `stryker-config.json` at runtime, and restores it when done. Never edit `stryker-config.json` manually.
+The default run uses Stryker's built-in `since` feature (configured in `stryker-config.json`) to scope to files changed since `main`. `--all` and `--mutant-ids` temporarily disable `since` by patching the config at runtime and restoring it when done. Never edit `stryker-config.json` manually.
 
 ```bash
 cd MEditService && python ../.claude/skills/mutation-test/stryker-report.py

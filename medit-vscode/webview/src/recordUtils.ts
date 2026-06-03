@@ -1,10 +1,10 @@
-import type { RecordDetail } from './types';
+import type { CompareOverride } from './types';
 
 export type Column =
-  | { kind: 'disk'; override: RecordDetail }
+  | { kind: 'disk'; override: CompareOverride }
   | { kind: 'pending'; plugin: string };
 
-export function buildColumns(overrides: RecordDetail[], immutableSet?: Set<string>): Column[] {
+export function buildColumns(overrides: CompareOverride[], immutableSet?: Set<string>): Column[] {
   const cols: Column[] = [];
   for (const o of overrides) {
     cols.push({ kind: 'disk', override: o });

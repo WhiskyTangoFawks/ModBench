@@ -46,15 +46,31 @@ public record RecordDetail(
     IReadOnlyList<FieldValue> Fields,
     Dictionary<string, object?>? PendingFields = null);
 
+public record CompareOverride(
+    string FormKey,
+    string Plugin,
+    int LoadOrderIndex,
+    bool IsWinner,
+    string? EditorId,
+    IReadOnlyList<FieldValue> Fields,
+    Dictionary<string, object?>? PendingFields,
+    ConflictThis ConflictThis)
+    : RecordDetail(FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, PendingFields);
+
 public record FieldDiff(
     string FieldName,
     Dictionary<string, object?> Values,
-    bool IsConflict,
     string WinnerPlugin,
     object? WinnerValue);
 
-public record CompareResult(
-    IReadOnlyList<RecordDetail> Overrides,
+public record ClassifyResult(
+    ConflictAll ConflictAll,
+    IReadOnlyDictionary<string, ConflictThis> PluginStates,
     IReadOnlyList<FieldDiff> Diffs);
+
+public record CompareResult(
+    IReadOnlyList<CompareOverride> Overrides,
+    IReadOnlyList<FieldDiff> Diffs,
+    ConflictAll ConflictAll);
 
 public record PluginRecordTypeCount(string Type, int Count);

@@ -50,6 +50,13 @@ public class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, IDispos
         Assert.True(types.Count >= 20);
     }
 
+    [Fact]
+    public void GetRecordTypes_ReturnsTypesInAscendingOrder()
+    {
+        var types = _svc.GetRecordTypes();
+        Assert.Equal(types.Order().ToList(), types);
+    }
+
     // --- GET /records ---
 
     [Fact]
@@ -147,7 +154,7 @@ public class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, IDispos
 
         Assert.NotNull(compare);
         Assert.Single(compare.Overrides);
-        Assert.DoesNotContain(compare.Diffs, d => d.IsConflict);
+        Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
     }
 
     [Fact]
@@ -168,6 +175,14 @@ public class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, IDispos
         var npc = Assert.Single(result, r => r.Type == "npc_");
         Assert.Equal(TestPluginFixture.RecordCount, npc.Count);
         Assert.All(result, r => Assert.True(r.Count > 0));
+    }
+
+    [Fact]
+    public void GetPluginRecordTypes_ReturnsTypesInAscendingOrder()
+    {
+        var result = _svc.GetPluginRecordTypes(TestPluginFixture.PluginName);
+        var types = result.Select(r => r.Type).ToList();
+        Assert.Equal(types.Order().ToList(), types);
     }
 
     [Fact]

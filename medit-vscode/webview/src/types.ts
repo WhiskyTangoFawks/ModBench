@@ -14,6 +14,9 @@ export interface FieldValue {
   value: unknown;
 }
 
+export type ConflictAll = 'OnlyOne' | 'NoConflict' | 'Override' | 'Conflict';
+export type ConflictThis = 'OnlyOne' | 'Master' | 'IdenticalToMaster' | 'Override' | 'ConflictWins' | 'ConflictLoses';
+
 export interface RecordDetail {
   formKey: string;
   plugin: string;
@@ -24,17 +27,21 @@ export interface RecordDetail {
   pendingFields?: Record<string, unknown>;
 }
 
+export interface CompareOverride extends RecordDetail {
+  conflictThis: ConflictThis;
+}
+
 export interface FieldDiff {
   fieldName: string;
   values: Record<string, unknown>;
-  isConflict: boolean;
   winnerPlugin: string;
   winnerValue: unknown;
 }
 
 export interface CompareResult {
-  overrides: RecordDetail[];
+  overrides: CompareOverride[];
   diffs: FieldDiff[];
+  conflictAll: ConflictAll;
 }
 
 export interface PendingChange {

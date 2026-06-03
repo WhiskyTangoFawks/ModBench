@@ -4,7 +4,7 @@ import { FormKeyPicker } from './FormKeyPicker';
 import { StructRowGroup } from './StructRowGroup';
 import { buildColumns } from './recordUtils';
 import type { Column } from './recordUtils';
-import type { CompareResult, FieldDiff, FieldMetadata, PendingChange, RecordDetail } from './types';
+import type { CompareOverride, CompareResult, ConflictAll, ConflictThis, FieldDiff, FieldMetadata, PendingChange, RecordDetail } from './types';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 
@@ -30,10 +30,20 @@ const baseCell: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
-function getCellBg(isConflict: boolean, isWinner: boolean): string | undefined {
-  if (!isConflict) return undefined;
-  return isWinner ? 'rgba(76,175,80,0.18)' : 'rgba(244,67,54,0.18)';
-}
+const ROW_BG: Partial<Record<ConflictAll, string>> = {
+  Override: 'rgba(76,175,80,0.08)',
+  Conflict: 'rgba(255,152,0,0.08)',
+};
+
+const COL_BG: Partial<Record<ConflictThis, string>> = {
+  IdenticalToMaster: 'rgba(150,150,150,0.18)',
+  Override:          'rgba(76,175,80,0.18)',
+  ConflictWins:      'rgba(255,152,0,0.18)',
+  ConflictLoses:     'rgba(244,67,54,0.18)',
+};
+
+const getRowBg = (c: ConflictAll): string | undefined => ROW_BG[c];
+const getColBg = (c: ConflictThis | undefined): string | undefined => c !== undefined ? COL_BG[c] : undefined;
 
 // ── ScalarCell ────────────────────────────────────────────────────────────────
 
@@ -307,8 +317,9 @@ function PluginHeader({
 
 interface DiffRowProps {
   diff: FieldDiff;
+  conflictAll: ConflictAll;
   columns: Column[];
-  overrideMap: Record<string, RecordDetail>;
+  overrideMap: Record<string, CompareOverride>;
   fieldMetaMap: Record<string, FieldMetadata>;
   editMode: boolean;
   port: number;
@@ -319,20 +330,19 @@ interface DiffRowProps {
 }
 
 function DiffRow({
-  diff, columns, overrideMap, fieldMetaMap, editMode, port,
+  diff, conflictAll, columns, overrideMap, fieldMetaMap, editMode, port,
   pendingChangeMap, onOpen, onEdit, onRevert,
 }: DiffRowProps) {
   const meta = fieldMetaMap[diff.fieldName];
   if (!meta) return null;
 
   return (
-    <tr>
+    <tr style={{ backgroundColor: getRowBg(conflictAll) }}>
       <td style={{ ...baseCell, opacity: 0.75, userSelect: 'text' }}>{diff.fieldName}</td>
       {columns.map(col => {
         if (col.kind === 'disk') {
           const { override: o } = col;
-          const isWinner = o.plugin === diff.winnerPlugin;
-          const bg = getCellBg(diff.isConflict, isWinner);
+          const bg = getColBg(o.conflictThis);
           return (
             <td key={`disk:${o.plugin}`} style={{ ...baseCell, backgroundColor: bg, userSelect: 'text' }}>
               {renderCell(diff.values[o.plugin], meta, editMode, port, onOpen,
@@ -520,14 +530,14 @@ export function RecordPanel() {
   if (error) return <div style={{ ...containerStyle, color: 'var(--vscode-errorForeground, #f44)' }}>Error: {error}</div>;
   if (!result) return <div style={containerStyle}>Loading…</div>;
 
-  const { overrides, diffs } = result;
+  const { overrides, diffs, conflictAll } = result;
 
   const fieldMetaMap: Record<string, FieldMetadata> = {};
   for (const fv of overrides[0]?.fields ?? []) {
     fieldMetaMap[fv.metadata.name] = fv.metadata;
   }
 
-  const overrideMap: Record<string, RecordDetail> = {};
+  const overrideMap: Record<string, CompareOverride> = {};
   for (const o of overrides) overrideMap[o.plugin] = o;
 
   const columns = buildColumns(overrides, immutableSet);
@@ -577,7 +587,7 @@ export function RecordPanel() {
               {columns.map(col => {
                 if (col.kind === 'disk') {
                   return (
-                    <th key={`disk:${col.override.plugin}`} style={{ ...baseCell, fontWeight: 600, textAlign: 'left', minWidth: '200px' }}>
+                    <th key={`disk:${col.override.plugin}`} style={{ ...baseCell, fontWeight: 600, textAlign: 'left', minWidth: '200px', backgroundColor: getColBg(col.override.conflictThis) }}>
                       <PluginHeader
                         override={col.override}
                         isImmutable={immutableSet.has(col.override.plugin)}
@@ -607,6 +617,7 @@ export function RecordPanel() {
               <DiffRow
                 key={diff.fieldName}
                 diff={diff}
+                conflictAll={conflictAll}
                 columns={columns}
                 overrideMap={overrideMap}
                 fieldMetaMap={fieldMetaMap}

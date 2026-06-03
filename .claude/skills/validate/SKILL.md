@@ -57,7 +57,7 @@ If anything fails, fix it now. Do not proceed to Gate 3 until Gate 2 is clean.
 
 ## Gates 3 & 4 — Tests  *(run applicable gates in parallel as sub-agents)*
 
-Gates 3 and 4 are independent. If both apply, spawn them as sub-agents in a **single message** so they run concurrently. Each sub-agent starts with a clean context — the output-heavy test runs never touch the main window.
+Gates 3 and 4 are independent. If both apply, spawn them as sub-agents in a **single message** so they run concurrently.
 
 ### Gate 3 — Backend tests  *(backend changes only)*
 

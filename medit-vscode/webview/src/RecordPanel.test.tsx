@@ -148,6 +148,7 @@ describe('FormKeyCell — edit mode', () => {
 // ── RecordPanel ───────────────────────────────────────────────────────────────
 
 const compareResult = {
+  conflictAll: 'Conflict',
   overrides: [
     {
       formKey: '000001:Fallout4.esm',
@@ -159,6 +160,7 @@ const compareResult = {
         { metadata: strMeta, value: 'Original Name' },
       ],
       pendingFields: {},
+      conflictThis: 'Master',
     },
     {
       formKey: '000001:Fallout4.esm',
@@ -170,13 +172,13 @@ const compareResult = {
         { metadata: strMeta, value: 'Override Name' },
       ],
       pendingFields: {},
+      conflictThis: 'ConflictWins',
     },
   ],
   diffs: [
     {
       fieldName: 'Name',
       values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
-      isConflict: true,
       winnerPlugin: 'MyMod.esp',
       winnerValue: 'Override Name',
     },
@@ -263,6 +265,7 @@ describe('RecordPanel', () => {
 // ── postMessage wiring ────────────────────────────────────────────────────────
 
 const fkCompareResult = {
+  conflictAll: 'OnlyOne',
   overrides: [
     {
       formKey: '000001:Fallout4.esm',
@@ -272,13 +275,13 @@ const fkCompareResult = {
       editorId: 'TestNPC',
       fields: [{ metadata: fkMeta, value: '00013918:Fallout4.esm' }],
       pendingFields: {},
+      conflictThis: 'OnlyOne',
     },
   ],
   diffs: [
     {
       fieldName: 'Race',
       values: { 'Fallout4.esm': '00013918:Fallout4.esm' },
-      isConflict: false,
       winnerPlugin: 'Fallout4.esm',
       winnerValue: '00013918:Fallout4.esm',
     },

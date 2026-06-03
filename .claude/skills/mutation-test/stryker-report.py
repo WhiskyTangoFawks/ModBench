@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
 """
-Run Stryker.NET mutation tests scoped to files changed in the working tree.
+Run Stryker.NET mutation tests against MEditService.Core.
 
 Usage (from MEditService/):
-  python stryker-report.py          # auto-scope from git diff
+  python stryker-report.py          # scope to files changed since main (via stryker-config since)
   python stryker-report.py --all    # scope to all of MEditService.Core
+  python stryker-report.py --mutant-ids 42 57  # rerun specific mutant IDs
 
 The script:
-  1. Determines scope from git diff (staged + unstaged changes vs HEAD,
-     plus any commits ahead of main)
-  2. Patches stryker-config.json with the computed mutate list
-  3. Runs `dotnet stryker`
-  4. Restores stryker-config.json (always, even on failure)
-  5. Prints a structured report: summary + each survivor/NoCoverage with
+  1. Runs `dotnet stryker` (--all and --mutant-ids temporarily patch the config)
+  2. Prints a structured report: summary + each survivor/NoCoverage with
      source context and suppression snippet
-  6. Exits 0 if all mutants killed, 1 if any survivors or NoCoverage remain
+  3. Exits 0 if all mutants killed, 1 if any survivors or NoCoverage remain
 """
 
 import contextlib
@@ -43,11 +40,11 @@ def committed_config(config_path: Path, repo_root: Path) -> str:
 
 
 @contextlib.contextmanager
-def patched_config(config_path: Path, repo_root: Path, mutate: list[str], mutant_ids: list[int] | None = None):
-    """Temporarily patch stryker-config.json, restore to HEAD on exit."""
+def patched_config(config_path: Path, repo_root: Path, *, mutant_ids: list[int] | None = None):
+    """Temporarily patch stryker-config.json to disable since and optionally pin mutant IDs, restore to HEAD on exit."""
     original = committed_config(config_path, repo_root)
     config = json.loads(original)
-    config["stryker-config"]["mutate"] = mutate
+    config["stryker-config"]["since"] = {"enabled": False}
     if mutant_ids:
         config["stryker-config"]["mutant-id"] = mutant_ids
     config_path.write_text(json.dumps(config, indent=2) + "\n")
@@ -55,36 +52,6 @@ def patched_config(config_path: Path, repo_root: Path, mutate: list[str], mutant
         yield
     finally:
         config_path.write_text(original)
-
-
-def changed_names(repo_root: Path, extra_args: list[str]) -> set[str]:
-    r = subprocess.run(
-        ["git", "diff", "--name-only"] + extra_args,
-        capture_output=True, text=True, cwd=repo_root,
-    )
-    return set(r.stdout.splitlines()) if r.returncode == 0 else set()
-
-
-def compute_mutate_scope(repo_root: Path) -> list[str]:
-    """Return mutate globs for all Core .cs files touched since main or in the working tree."""
-    all_changed: set[str] = set()
-    all_changed |= changed_names(repo_root, [])              # unstaged vs HEAD
-    all_changed |= changed_names(repo_root, ["--cached"])    # staged vs HEAD
-    all_changed |= changed_names(repo_root, ["main...HEAD"]) # commits ahead of main
-
-    marker = "MEditService.Core/"
-    core_files = [f for f in all_changed if marker in f and f.endswith(".cs")]
-    if not core_files:
-        print("WARNING: no Core files found in diff — falling back to full Core scan (slow)")
-        return FALLBACK_MUTATE
-
-    patterns: set[str] = set()
-    for f in core_files:
-        idx = f.find(marker)
-        rel = f[idx + len(marker):]
-        patterns.add(f"**/{rel}")
-
-    return sorted(patterns)
 
 
 def find_latest_report(base_dir: Path) -> str | None:
@@ -156,23 +123,16 @@ def main() -> None:
         sys.exit(2)
     repo_root = Path(r.stdout.strip())
 
-    if mutant_ids:
-        mutate = FALLBACK_MUTATE
-    elif use_all:
-        mutate = FALLBACK_MUTATE
-    else:
-        mutate = compute_mutate_scope(repo_root)
+    config_path = base_dir / "stryker-config.json"
 
     print("=" * 70)
     if mutant_ids:
         print(f"TARGETED RUN — mutant IDs: {', '.join(str(i) for i in mutant_ids)}")
+    elif use_all:
+        print("SCOPE: all of MEditService.Core")
     else:
-        print("MUTATION SCOPE")
+        print("SCOPE: files changed since main  (Stryker since)")
     print("=" * 70)
-    for p in mutate:
-        print(f"  {p}")
-
-    config_path = base_dir / "stryker-config.json"
 
     print(f"\n{'=' * 70}")
     if mutant_ids:
@@ -184,7 +144,11 @@ def main() -> None:
 
     run_start = time.time()
 
-    with patched_config(config_path, repo_root, mutate, mutant_ids=mutant_ids):
+    need_patch = use_all or bool(mutant_ids)
+    ctx = patched_config(config_path, repo_root, mutant_ids=mutant_ids) \
+        if need_patch else contextlib.nullcontext()
+
+    with ctx:
         subprocess.run(
             ["dotnet", "stryker", "--config-file", "stryker-config.json"],
             cwd=base_dir,
@@ -206,7 +170,6 @@ def main() -> None:
     survivors: list = []
     no_coverage: list = []
     killed = 0
-    ignored = 0
     compile_errors = 0
 
     for file_path, file_data in report.get("files", {}).items():
@@ -221,8 +184,6 @@ def main() -> None:
                 no_coverage.append((file_path, mutant, source_lines))
             elif status == "CompileError":
                 compile_errors += 1
-            elif status == "Ignored":
-                ignored += 1
 
     effective = killed + len(survivors) + len(no_coverage)
     score = (killed / effective * 100) if effective > 0 else 0.0

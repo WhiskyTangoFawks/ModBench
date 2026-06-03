@@ -26,8 +26,9 @@ Each phase has its own spec file in [docs/tasks/](docs/tasks/). Completed phases
 | **A** | ✓ POC | Architectural cleanup — `SchemaReflector`/`TableDdlBuilder` split, conflict classifier, thread-safety audit, RFC 7807, parameterized SQL | [phase-A](docs/tasks/phase-A.md) |
 | **B** | ✓ | Pending change model redesign — ADR-0017, DuckDB-backed storage design, field-level granularity | [phase-B](docs/tasks/phase-B.md) |
 | **B.1** | ✓ POC | Migrate `PendingChangeService` to DuckDB — prerequisite for Phase 9 `hasDelta` filter and Phase 15 scripting | [phase-B1](docs/tasks/phase-B1.md) |
-| **9** | Not Started | Conflict classification & filtering — two-axis `ConflictAll`/`ConflictThis`, filter toolbar, conflict colors | [phase-9](docs/tasks/phase-9.md) |
+| **9** | ✓ | Conflict classification — two-axis `ConflictAll`/`ConflictThis` enums, compare grid row/column coloring | [phase-9](docs/tasks/phase-9.md) |
 | **9.5** | Not Started | ConflictPriority refinements — `cpIgnore`/`cpBenign` table from xEdit defs, sorted arrays, injected records | [phase-9.5](docs/tasks/phase-9.5.md) |
+| **9.6** | Not Started | Record filtering — SQL-derived conflict filter, free-text EditorID search, conflict tree node + toolbar | [phase-9.6](docs/tasks/phase-9.6.md) |
 | **10** | Not Started | Record lifecycle — create, delete, renumber; `ChangeGroup`; atomic multi-plugin save | [phase-10](docs/tasks/phase-10.md) |
 | **11** | Not Started | Referenced By / record graph — `form_references` DuckDB table, "Referenced By" tab in record panel | [phase-11](docs/tasks/phase-11.md) |
 | **12** | Not Started | Struct/array field types — recursive sub-schema, `<ArrayRowGroup>`, `<StructRowGroup>`, enum/flag cells | [phase-12](docs/tasks/phase-12.md) |

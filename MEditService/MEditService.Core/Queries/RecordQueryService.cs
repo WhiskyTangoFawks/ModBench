@@ -88,8 +88,13 @@ public sealed class RecordQueryService : IRecordQueryService
                 return o with { PendingFields = pending.ToDictionary(kv => kv.Key, kv => (object?)kv.Value) };
             }).ToList();
 
-            var diffs = _conflictClassifier.ComputeDiffs(withPending);
-            return new CompareResult(withPending, diffs);
+            var classification = _conflictClassifier.Classify(withPending);
+            var annotated = withPending
+                .Select(o => new CompareOverride(
+                    o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields, o.PendingFields,
+                    classification.PluginStates.GetValueOrDefault(o.Plugin, ConflictThis.OnlyOne)))
+                .ToList();
+            return new CompareResult(annotated, classification.Diffs, classification.ConflictAll);
         }
         return null;
     }

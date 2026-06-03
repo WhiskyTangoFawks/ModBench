@@ -11,6 +11,10 @@
       "break": 0
     },
     "mutate": ["**/MEditService.Core/**/*.cs"],
-    "ignore-methods": ["Log*"]
+    "ignore-methods": ["Log*"],
+    "since": {
+      "enabled": true,
+      "target": "main"
+    }
   }
 }
