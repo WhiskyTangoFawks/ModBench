@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
@@ -317,9 +317,11 @@ describe('RecordPanel — postMessage wiring', () => {
     render(<RecordPanel />);
     await waitFor(() => screen.getByText('TestNPC [000001:Fallout4.esm]'));
 
-    window.dispatchEvent(new MessageEvent('message', {
-      data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000002:Fallout4.esm' },
-    }));
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000002:Fallout4.esm' },
+      }));
+    });
 
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(

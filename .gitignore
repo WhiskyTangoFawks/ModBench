@@ -33,8 +33,7 @@ medit-vscode/tsconfig.integration.json
 .DS_Store
 Thumbs.db
 
-# Mutagen source reference (read-only, not part of this project)
+# Source reference (read-only, not part of this project)
 Mutagen/
-
-# TES5Edit source reference (read-only, not part of this project)
 TES5Edit/
+SFRecordCompareEngine/

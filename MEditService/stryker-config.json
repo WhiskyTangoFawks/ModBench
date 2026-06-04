@@ -7,9 +7,7 @@
     "concurrency": 10,
     "mutation-level": "Standard",
     "reporters": [
-      "html",
-      "json",
-      "dots"
+      "json"
     ],
     "thresholds": {
       "high": 80,

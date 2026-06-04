@@ -79,9 +79,11 @@ var BackendManager = class extends import_node_events.EventEmitter {
           resolve();
           return;
         }
-        setTimeout(attempt, this.pollIntervalMs);
+        setTimeout(() => {
+          void attempt();
+        }, this.pollIntervalMs);
       };
-      attempt();
+      void attempt();
     });
   }
   dispose() {
@@ -684,7 +686,7 @@ var SessionWizard = class {
     ];
     const choice = await this.deps.showQuickPick(items);
     if (!choice) return false;
-    let paths = null;
+    let paths;
     if (choice.label === "Use detected paths" && detected) {
       paths = detected;
     } else {
@@ -1048,14 +1050,20 @@ async function activate(context) {
       },
       showQuickPick: (items) => vscode2.window.showQuickPick(items, { placeHolder: "Select game path" }),
       showInputBox: (opts) => vscode2.window.showInputBox({ prompt: opts.prompt, value: opts.value }),
-      showErrorMessage: (msg) => vscode2.window.showErrorMessage(msg)
+      showErrorMessage: (msg) => {
+        void vscode2.window.showErrorMessage(msg);
+      }
     }),
     refreshTree: () => treeProvider.refresh(),
     setStatusText: (t) => {
       statusBarItem.text = t;
     },
-    showWarning: (msg) => vscode2.window.showWarningMessage(msg),
-    showError: (msg) => vscode2.window.showErrorMessage(msg)
+    showWarning: (msg) => {
+      void vscode2.window.showWarningMessage(msg);
+    },
+    showError: (msg) => {
+      void vscode2.window.showErrorMessage(msg);
+    }
   });
   context.subscriptions.push(
     vscode2.window.registerTreeDataProvider("mEdit.pluginTree", treeProvider),
@@ -1104,13 +1112,13 @@ async function activate(context) {
       await controller.copyRecordTo(formKey, targetPlugin);
     })
   );
-  backendManager.on("status", async (status) => {
+  backendManager.on("status", (status) => {
     if (status === "attached") {
-      await controller.onBackendConnected();
+      void controller.onBackendConnected();
     }
   });
   await backendManager.connect().catch((err) => {
-    vscode2.window.showErrorMessage(`mEdit: Backend failed to start \u2014 ${err.message}`);
+    vscode2.window.showErrorMessage(`mEdit: Backend failed to start \u2014 ${err instanceof Error ? err.message : String(err)}`);
   });
 }
 function deactivate() {

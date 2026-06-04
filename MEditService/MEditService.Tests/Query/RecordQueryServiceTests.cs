@@ -290,14 +290,83 @@ public class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, IDispos
     public void GetPlugins_NoSession_ThrowsInvalidOperationException()
     {
         var unloaded = MakeUnloadedService();
-        Assert.Throws<InvalidOperationException>(() => unloaded.GetPlugins());
+        var ex = Assert.Throws<InvalidOperationException>(() => unloaded.GetPlugins());
+        Assert.Contains("No session loaded", ex.Message);
     }
 
     [Fact]
     public void GetRecords_NoSession_ThrowsInvalidOperationException()
     {
         var unloaded = MakeUnloadedService();
-        Assert.Throws<InvalidOperationException>(() => unloaded.GetRecords("npc_", null, null, 10, 0));
+        var ex = Assert.Throws<InvalidOperationException>(() => unloaded.GetRecords("npc_", null, null, 10, 0));
+        Assert.Contains("No session loaded", ex.Message);
+    }
+
+    [Fact]
+    public void GetRecords_AllTypes_ReturnsSortedByEditorId()
+    {
+        var data = new PluginFixtureBuilder("rqs-sort-records")
+            .WithPlugin("SortTest.esp", mod =>
+            {
+                mod.Npcs.AddNew("Zebra");
+                mod.Npcs.AddNew("Apple");
+            })
+            .Build();
+        using (data)
+        {
+            var reflector = new SchemaReflector();
+            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var svc = new RecordQueryService(manager, MakePendingChangeService(), reflector, new ConflictClassifier());
+
+            var result = svc.GetRecords(type: null, plugin: null, search: null, limit: 10, offset: 0);
+
+            var editorIds = result.Items.Select(r => r.EditorId).ToList();
+            Assert.Equal(2, editorIds.Count);
+            Assert.Equal(editorIds.OrderBy(e => e, StringComparer.OrdinalIgnoreCase).ToList(), editorIds);
+        }
+    }
+
+    [Fact]
+    public void GetPluginRecordTypes_WithMultipleTypes_ReturnsInAscendingOrder()
+    {
+        var data = new PluginFixtureBuilder("rqs-sort-types")
+            .WithPlugin("MultiType.esp", mod =>
+            {
+                mod.Npcs.AddNew("TestNPC");
+                mod.Weapons.AddNew("TestWeapon");
+            })
+            .Build();
+        using (data)
+        {
+            var reflector = new SchemaReflector();
+            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var svc = new RecordQueryService(manager, MakePendingChangeService(), reflector, new ConflictClassifier());
+
+            var result = svc.GetPluginRecordTypes("MultiType.esp");
+            var types = result.Select(r => r.Type).ToList();
+
+            Assert.True(types.Count >= 2, "Expected at least 2 record types");
+            Assert.Equal(types.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList(), types);
+        }
+    }
+
+    private static DuckDbPendingChangeService MakePendingChangeService()
+    {
+        var conn = new DuckDBConnection("DataSource=:memory:");
+        conn.Open();
+        return new DuckDbPendingChangeService(conn);
+    }
+
+    private static RecordQueryService MakeUnloadedService()
+    {
+        var reflector = new SchemaReflector();
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        return new RecordQueryService(manager, MakePendingChangeService(), reflector, new ConflictClassifier());
     }
 
     // --- GetRecord / GetRecordForPlugin use FindRecordType, not table scan ---
@@ -360,27 +429,65 @@ public class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, IDispos
         Assert.Equal(1, spy.GetRecordCalls);
     }
 
-    private static DuckDbPendingChangeService MakePendingChangeService()
+    [Fact]
+    public void GetRecord_PassesWinnerOnlyTrue()
     {
-        var conn = new DuckDBConnection("DataSource=:memory:");
-        conn.Open();
-        return new DuckDbPendingChangeService(conn);
+        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
+        var fk = all.Items[0].FormKey;
+
+        var reflector = new SchemaReflector();
+        var inner = new InMemoryRecordRepository(reflector);
+        inner.Initialize(GameRelease.Fallout4);
+        using var mod = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
+            new Mutagen.Bethesda.Plugins.ModPath(
+                Mutagen.Bethesda.Plugins.ModKey.FromFileName(TestPluginFixture.PluginName),
+                Path.Combine(_manager.Session!.DataFolderPath, TestPluginFixture.PluginName)),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        inner.Index(mod, 0);
+        inner.UpdateWinners();
+
+        var spy = new SpyRecordReader(inner);
+        var stubSession = new StubSessionManager(spy, GameRelease.Fallout4);
+        var svc = new RecordQueryService(stubSession, MakePendingChangeService(), reflector, new ConflictClassifier());
+
+        svc.GetRecord(fk);
+
+        Assert.True(spy.LastWinnerOnly);
     }
 
-    private static RecordQueryService MakeUnloadedService()
+    [Fact]
+    public void GetRecordForPlugin_PassesWinnerOnlyFalse()
     {
+        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
+        var fk = all.Items[0].FormKey;
+
         var reflector = new SchemaReflector();
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-        var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
-        return new RecordQueryService(manager, MakePendingChangeService(), reflector, new ConflictClassifier());
+        var inner = new InMemoryRecordRepository(reflector);
+        inner.Initialize(GameRelease.Fallout4);
+        using var mod = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
+            new Mutagen.Bethesda.Plugins.ModPath(
+                Mutagen.Bethesda.Plugins.ModKey.FromFileName(TestPluginFixture.PluginName),
+                Path.Combine(_manager.Session!.DataFolderPath, TestPluginFixture.PluginName)),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        inner.Index(mod, 0);
+        inner.UpdateWinners();
+
+        var spy = new SpyRecordReader(inner);
+        var stubSession = new StubSessionManager(spy, GameRelease.Fallout4);
+        var svc = new RecordQueryService(stubSession, MakePendingChangeService(), reflector, new ConflictClassifier());
+
+        svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName);
+
+        Assert.False(spy.LastWinnerOnly);
     }
 
     private sealed class SpyRecordReader(IRecordReader inner) : IRecordReader
     {
         public int FindRecordTypeCalls { get; private set; }
         public int GetRecordCalls { get; private set; }
+        public bool? LastWinnerOnly { get; private set; }
 
-        public void Reset() { FindRecordTypeCalls = 0; GetRecordCalls = 0; }
+        public void Reset() { FindRecordTypeCalls = 0; GetRecordCalls = 0; LastWinnerOnly = null; }
 
         public string? FindRecordType(string formKey)
         {
@@ -391,6 +498,7 @@ public class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, IDispos
         public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly)
         {
             GetRecordCalls++;
+            LastWinnerOnly = winnerOnly;
             return inner.GetRecord(tableName, formKey, plugin, winnerOnly);
         }
 

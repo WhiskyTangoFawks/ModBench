@@ -1,3 +1,4 @@
+using System.Globalization;
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using MEditService.Api;
@@ -11,7 +12,7 @@ using Mutagen.Bethesda;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
+    .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
     .CreateBootstrapLogger();
 
 try
@@ -25,12 +26,13 @@ try
             .ReadFrom.Configuration(ctx.Configuration)
             .ReadFrom.Services(services)
             .Enrich.FromLogContext()
-            .WriteTo.Console()
+            .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
             .WriteTo.File(
                 Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "mEdit", "logs", "medit-.log"),
-                rollingInterval: RollingInterval.Day));
+                rollingInterval: RollingInterval.Day,
+                formatProvider: CultureInfo.InvariantCulture));
 
     builder.Services.AddCors(opts =>
         opts.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
@@ -84,7 +86,7 @@ try
         }
     }
 
-    app.Run();
+    await app.RunAsync();
 
     static string? AutoDetectPluginsTxt(string dataFolderPath, GameRelease gameRelease)
     {
@@ -130,5 +132,5 @@ catch (Exception ex)
 }
 finally
 {
-    Log.CloseAndFlush();
+    await Log.CloseAndFlushAsync();
 }

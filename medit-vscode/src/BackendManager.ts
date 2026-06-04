@@ -61,10 +61,10 @@ export class BackendManager extends EventEmitter {
           return;
         }
 
-        setTimeout(attempt, this.pollIntervalMs);
+        setTimeout(() => { void attempt(); }, this.pollIntervalMs);
       };
 
-      attempt();
+      void attempt();
     });
   }
 

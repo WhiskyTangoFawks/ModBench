@@ -23,14 +23,14 @@ public sealed class InMemoryRecordRepository : IRecordRepository
     public void Initialize(GameRelease release) =>
         _schemas = _schemaReflector.GetSchemas(release);
 
-    public void Index(IModGetter mod, int loadOrderIndex)
+    public void Index(IModGetter pluginMod, int loadOrderIndex)
     {
         var schemas = _schemas ?? throw new InvalidOperationException();
-        var plugin = mod.ModKey.FileName.ToString();
+        var plugin = pluginMod.ModKey.FileName.ToString();
 
         foreach (var (tableName, schema) in schemas)
         {
-            var records = mod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false).ToList();
+            var records = pluginMod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false).ToList();
             if (!_tables.TryGetValue(tableName, out var table))
                 _tables[tableName] = table = [];
 

@@ -2,25 +2,25 @@ namespace MEditService.Core.Queries;
 
 public sealed class ConflictClassifier : IConflictClassifier
 {
-    public ClassifyResult Classify(IReadOnlyList<RecordDetail> overrides)
+    public ClassifyResult Classify(IReadOnlyList<RecordDetail> conflictingRecords)
     {
-        if (overrides.Count <= 1)
+        if (conflictingRecords.Count <= 1)
         {
-            var pluginStates = overrides.Count == 1
-                ? new Dictionary<string, ConflictThis> { [overrides[0].Plugin] = ConflictThis.OnlyOne }
+            var pluginStates = conflictingRecords.Count == 1
+                ? new Dictionary<string, ConflictThis> { [conflictingRecords[0].Plugin] = ConflictThis.OnlyOne }
                 : new Dictionary<string, ConflictThis>();
             return new ClassifyResult(ConflictAll.OnlyOne, pluginStates, []);
         }
 
-        var master = overrides[0];
-        var winner = overrides.First(o => o.IsWinner);
+        var master = conflictingRecords[0];
+        var winner = conflictingRecords.First(o => o.IsWinner);
         var masterValues = IndexByName(master.Fields);
         var fieldNames = master.Fields.Select(f => f.Metadata.Name).ToList();
 
         var diffs = fieldNames
             .Select(fieldName =>
             {
-                var values = overrides.ToDictionary(
+                var values = conflictingRecords.ToDictionary(
                     o => o.Plugin,
                     o => o.Fields.FirstOrDefault(f => f.Metadata.Name == fieldName)?.Value);
                 var winnerValue = values.GetValueOrDefault(winner.Plugin);
@@ -29,11 +29,11 @@ public sealed class ConflictClassifier : IConflictClassifier
             .Where(d => d.Values.Values.Any(v => v != null))
             .ToList();
 
-        var conflictAll = ComputeConflictAll(master.Plugin, masterValues, overrides, diffs);
+        var conflictAll = ComputeConflictAll(master.Plugin, masterValues, conflictingRecords, diffs);
 
-        var pluginConflictThis = overrides.ToDictionary(
+        var pluginConflictThis = conflictingRecords.ToDictionary(
             o => o.Plugin,
-            o => ComputeConflictThis(o, master.Plugin, masterValues, winner, overrides));
+            o => ComputeConflictThis(o, master.Plugin, masterValues, winner, conflictingRecords));
 
         return new ClassifyResult(conflictAll, pluginConflictThis, diffs);
     }

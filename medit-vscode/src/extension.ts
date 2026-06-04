@@ -54,12 +54,12 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.showQuickPick(items, { placeHolder: 'Select game path' }) as Promise<{ label: string } | undefined>,
       showInputBox: (opts) =>
         vscode.window.showInputBox({ prompt: opts.prompt, value: opts.value }),
-      showErrorMessage: (msg) => vscode.window.showErrorMessage(msg),
+      showErrorMessage: (msg) => { void vscode.window.showErrorMessage(msg); },
     }),
     refreshTree: () => treeProvider.refresh(),
     setStatusText: (t) => { statusBarItem.text = t; },
-    showWarning: (msg) => vscode.window.showWarningMessage(msg),
-    showError: (msg) => vscode.window.showErrorMessage(msg),
+    showWarning: (msg) => { void vscode.window.showWarningMessage(msg); },
+    showError: (msg) => { void vscode.window.showErrorMessage(msg); },
   });
 
   context.subscriptions.push(
@@ -115,14 +115,14 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  backendManager.on('status', async (status) => {
+  backendManager.on('status', (status) => {
     if (status === 'attached') {
-      await controller.onBackendConnected();
+      void controller.onBackendConnected();
     }
   });
 
-  await backendManager.connect().catch((err) => {
-    vscode.window.showErrorMessage(`mEdit: Backend failed to start — ${err.message}`);
+  await backendManager.connect().catch((err: unknown) => {
+    vscode.window.showErrorMessage(`mEdit: Backend failed to start — ${err instanceof Error ? err.message : String(err)}`);
   });
 }
 

@@ -8,6 +8,8 @@ export default defineConfig({
     exclude: ['src/test/integration/**'],
     environment: 'node',
     globals: true,
+    reporters: ['basic'],
+    silent: true,
     environmentMatchGlobs: [['webview/src/**', 'happy-dom']],
   },
 });

@@ -106,13 +106,15 @@
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build": "tsc -p tsconfig.json --noEmit && node esbuild.mjs && npm run build:webview",
-    "build:webview": "vite build --config webview/vite.config.ts",
+    "build:webview": "VITE_CJS_IGNORE_WARNING=1 vite build --config webview/vite.config.ts",
     "watch": "node esbuild.mjs --watch",
     "generate-api": "openapi-typescript http://localhost:5172/swagger/v1/swagger.json -o src/generated/api.ts",
     "test:unit": "vitest run",
-    "test:integration": "tsc -p tsconfig.integration.json && vscode-test"
+    "test:integration": "tsc -p tsconfig.integration.json && vscode-test",
+    "lint": "eslint src webview/src"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/mocha": "^10.0.0",
@@ -120,15 +122,20 @@
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^8.60.1",
+    "@typescript-eslint/parser": "^8.60.1",
     "@vitejs/plugin-react": "^4.0.0",
     "@vitest/coverage-v8": "^2.1.9",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "esbuild": "^0.28.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "happy-dom": "^20.9.0",
     "jsdom": "^29.1.1",
     "openapi-typescript": "^7.13.0",
     "typescript": "^5.3.0",
+    "typescript-eslint": "^8.60.1",
     "vite": "^5.0.0",
     "vitest": "^2.1.9"
   },

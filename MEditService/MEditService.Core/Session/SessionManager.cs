@@ -16,7 +16,7 @@ public sealed class SessionManager : ISessionManager, IDisposable
     private readonly IRecordRepositoryFactory _repositoryFactory;
     private readonly IPluginWriter _writer;
     private readonly IPendingChangeLifecycle? _changeLifecycle;
-    private IGameSession? _session;
+    private GameSession? _session;
     private IRecordRepository? _repository;
 
     private string? _dataFolderPath;

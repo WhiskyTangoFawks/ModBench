@@ -4,6 +4,8 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using MEditService.Core.Queries;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -13,6 +15,13 @@ namespace MEditService.Core.Schema;
 
 public sealed class SchemaReflector : ISchemaReflector
 {
+    private readonly ILogger _logger;
+
+    public SchemaReflector(ILogger<SchemaReflector>? logger = null)
+    {
+        _logger = logger ?? NullLogger<SchemaReflector>.Instance;
+    }
+
     private static readonly HashSet<string> _excludedTables = new(StringComparer.OrdinalIgnoreCase)
     {
         "refr", "achr",
@@ -31,9 +40,9 @@ public sealed class SchemaReflector : ISchemaReflector
         GetCache(release.ToCategory()).Schemas;
 
     private GameSchemaCache GetCache(GameCategory category) =>
-        _cache.GetOrAdd(category, BuildForCategory);
+        _cache.GetOrAdd(category, c => BuildForCategory(c, _logger));
 
-    private static GameSchemaCache BuildForCategory(GameCategory category)
+    private static GameSchemaCache BuildForCategory(GameCategory category, ILogger logger)
     {
         var assemblyName = $"Mutagen.Bethesda.{category}";
         var assembly = AppDomain.CurrentDomain.GetAssemblies()
@@ -61,8 +70,7 @@ public sealed class SchemaReflector : ISchemaReflector
             if (_excludedTables.Contains(tableName)) continue;
             if (!seenTables.Add(tableName)) continue;
 
-            var getterInterface = assembly.GetType($"Mutagen.Bethesda.{category}.I{type.Name}Getter");
-            if (getterInterface == null) continue;
+            var getterInterface = assembly.GetType($"Mutagen.Bethesda.{category}.I{type.Name}Getter")!;
 
             discovered.Add((tableName, getterInterface));
         }
@@ -71,13 +79,13 @@ public sealed class SchemaReflector : ISchemaReflector
 
         var schemas = new Dictionary<string, RecordTableSchema>();
         foreach (var (tableName, getterType) in discovered)
-            schemas[tableName] = BuildSchema(tableName, getterType, getterTypeToTable);
+            schemas[tableName] = BuildSchema(tableName, getterType, getterTypeToTable, logger);
 
         return new GameSchemaCache(schemas, getterTypeToTable);
     }
 
     private static RecordTableSchema BuildSchema(
-        string tableName, Type getterType, IReadOnlyDictionary<Type, string> getterTypeToTable)
+        string tableName, Type getterType, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
         var baseSkip = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -98,7 +106,7 @@ public sealed class SchemaReflector : ISchemaReflector
             var prop = group.Aggregate((best, candidate) =>
                 best.DeclaringType!.IsAssignableFrom(candidate.DeclaringType!) ? candidate : best);
 
-            var info = GetColumnInfo(prop, getterTypeToTable);
+            var info = GetColumnInfo(prop, getterTypeToTable, logger);
             if (info == null) continue;
 
             columns.Add(new ColumnSpec(
@@ -158,15 +166,10 @@ public sealed class SchemaReflector : ISchemaReflector
             "StaticRegistration", "Registration",
         };
 
-    private static IEnumerable<PropertyInfo> GetAllInterfaceProperties(Type type)
-    {
-        if (!type.IsInterface)
-            return type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
-        return type.GetInterfaces()
+    private static IEnumerable<PropertyInfo> GetAllInterfaceProperties(Type type) =>
+        type.GetInterfaces()
             .Append(type)
             .SelectMany(i => i.GetProperties(BindingFlags.Public | BindingFlags.Instance));
-    }
 
     private static bool IsTranslatedString(Type type) =>
         typeof(ITranslatedStringGetter).IsAssignableFrom(type);
@@ -207,16 +210,17 @@ public sealed class SchemaReflector : ISchemaReflector
             var regProp = getterInterface.GetProperty(
                 "StaticRegistration", BindingFlags.Public | BindingFlags.Static);
             var reg = regProp?.GetValue(null);
-            return reg?.GetType().GetProperty("SetterType")?.GetValue(reg) as Type;
+            return reg?.GetType().GetField("ClassType", BindingFlags.Public | BindingFlags.Static)?.GetValue(null) as Type;
         }
         catch { return null; }
     }
 
     // ── Sub-schema building ───────────────────────────────────────────────────
 
-    private static IReadOnlyList<SubFieldSpec> BuildSubSchema(
+    private static List<SubFieldSpec> BuildSubSchema(
         Type getterInterface,
         IReadOnlyDictionary<Type, string> getterTypeToTable,
+        ILogger logger,
         int depth = 0)
     {
         if (depth > 3) return [];
@@ -231,7 +235,7 @@ public sealed class SchemaReflector : ISchemaReflector
             var prop = group.Aggregate((best, candidate) =>
                 best.DeclaringType!.IsAssignableFrom(candidate.DeclaringType!) ? candidate : best);
 
-            var spec = GetSubFieldInfo(prop, getterTypeToTable, depth + 1);
+            var spec = GetSubFieldInfo(prop, getterTypeToTable, depth + 1, logger);
             if (spec != null) result.Add(spec);
         }
         return result;
@@ -239,7 +243,7 @@ public sealed class SchemaReflector : ISchemaReflector
 
     // Element metadata for use in FieldMetadata.ElementType.
     private static FieldMetadata? BuildElementMeta(
-        Type elementType, IReadOnlyDictionary<Type, string> getterTypeToTable)
+        Type elementType, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
         var core = Nullable.GetUnderlyingType(elementType) ?? elementType;
 
@@ -250,18 +254,16 @@ public sealed class SchemaReflector : ISchemaReflector
 
         if (IsLoquiInterface(core))
         {
-            var sub = BuildSubSchema(core, getterTypeToTable);
+            var sub = BuildSubSchema(core, getterTypeToTable, logger);
             if (sub.Count == 0) return null;
             return new FieldMetadata("", "struct", false, _empty, _empty,
                 Fields: sub.Select(s => s.ToFieldMetadata()).ToList());
         }
 
-        if (core == typeof(bool)) return new("", "bool", false, _empty, _empty);
-        if (core == typeof(float) || core == typeof(double))
+        if (core == typeof(float))
             return new("", "float", false, _empty, _empty);
         if (core == typeof(string) || IsTranslatedString(core))
             return new("", "string", false, _empty, _empty);
-        if (core.IsEnum) return new("", "enum", false, _empty, Enum.GetNames(core));
         if (core == typeof(byte) || core == typeof(sbyte) ||
             core == typeof(short) || core == typeof(ushort) ||
             core == typeof(int) || core == typeof(uint) ||
@@ -298,8 +300,6 @@ public sealed class SchemaReflector : ISchemaReflector
         { duckDbType = "BIGINT"; apiType = "int"; converter = v => (object)v.GetUInt64(); return true; }
         if (core == typeof(float))
         { duckDbType = "FLOAT"; apiType = "float"; converter = v => (object)v.GetSingle(); return true; }
-        if (core == typeof(double))
-        { duckDbType = "DOUBLE"; apiType = "float"; converter = v => (object)v.GetDouble(); return true; }
         if (core == typeof(string))
         { duckDbType = "VARCHAR"; apiType = "string"; converter = v => v.GetString(); return true; }
         duckDbType = ""; apiType = ""; converter = _ => null;
@@ -311,7 +311,8 @@ public sealed class SchemaReflector : ISchemaReflector
     private static SubFieldSpec? GetSubFieldInfo(
         PropertyInfo prop,
         IReadOnlyDictionary<Type, string> getterTypeToTable,
-        int depth)
+        int depth,
+        ILogger logger)
     {
         if (depth > 3) return null;
 
@@ -330,13 +331,13 @@ public sealed class SchemaReflector : ISchemaReflector
             return (obj, val) =>
             {
                 var rp = cache.GetOrAdd(obj.GetType(), t =>
-                {
-                    var p = t.GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
-                    return p is { CanWrite: true } ? p : null;
-                });
+                    t.GetProperty(pName, BindingFlags.Public | BindingFlags.Instance));
                 if (rp == null) return;
                 if (val.ValueKind == JsonValueKind.Null)
-                { if (nullable) rp.SetValue(obj, null); return; }
+                {
+                    if (nullable) rp.SetValue(obj, null);
+                    return;
+                }
                 var v = conv(val);
                 if (v != null) rp.SetValue(obj, v);
             };
@@ -377,7 +378,7 @@ public sealed class SchemaReflector : ISchemaReflector
                     var link = rp.GetValue(obj);
                     link?.GetType().GetMethod("SetTo", [typeof(FormKey)])?.Invoke(link, [fk]);
                 }
-                catch { }
+                catch (Exception ex) { logger.LogTrace(ex, "Apply skipped for property {Property}", pName); }
             };
             return new(colName, "formKey", GetFormLinkValidTypes(core, getterTypeToTable), _empty,
                 obj => (g(obj) as IFormLinkGetter)?.FormKeyNullable?.ToString(),
@@ -386,7 +387,7 @@ public sealed class SchemaReflector : ISchemaReflector
 
         if (IsLoquiInterface(core))
         {
-            var sub = BuildSubSchema(core, getterTypeToTable, depth);
+            var sub = BuildSubSchema(core, getterTypeToTable, logger, depth);
             if (sub.Count == 0) return null;
             var g = Getter();
             return new(colName, "struct", _empty, _empty,
@@ -427,7 +428,7 @@ public sealed class SchemaReflector : ISchemaReflector
     // ── GetColumnInfo ─────────────────────────────────────────────────────────
 
     private static ColumnInfoResult? GetColumnInfo(
-        PropertyInfo prop, IReadOnlyDictionary<Type, string> getterTypeToTable)
+        PropertyInfo prop, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
         var type = prop.PropertyType;
         var core = Nullable.GetUnderlyingType(type) ?? type;
@@ -440,13 +441,13 @@ public sealed class SchemaReflector : ISchemaReflector
             return (record, value) =>
             {
                 var rp = cache.GetOrAdd(record.GetType(), t =>
-                {
-                    var p = t.GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
-                    return p is { CanWrite: true } ? p : null;
-                });
+                    t.GetProperty(pName, BindingFlags.Public | BindingFlags.Instance));
                 if (rp == null) return;
                 if (value.ValueKind == JsonValueKind.Null)
-                { if (nullable) rp.SetValue(record, null); return; }
+                {
+                    if (nullable) rp.SetValue(record, null);
+                    return;
+                }
                 var v = conv(value);
                 if (v != null) rp.SetValue(record, v);
             };
@@ -483,14 +484,14 @@ public sealed class SchemaReflector : ISchemaReflector
 
         if (IsListType(core, out var elementType))
         {
-            var elemCore = Nullable.GetUnderlyingType(elementType) ?? elementType;
+            var elemCore = elementType;
             var isFl = IsFormLink(elemCore);
             var isLoqui = !isFl && IsLoquiInterface(elemCore);
 
             IReadOnlyList<SubFieldSpec>? elemSubFields = isLoqui
-                ? BuildSubSchema(elemCore, getterTypeToTable) : null;
+                ? BuildSubSchema(elemCore, getterTypeToTable, logger) : null;
 
-            var elemMeta = BuildElementMeta(elementType, getterTypeToTable);
+            var elemMeta = BuildElementMeta(elementType, getterTypeToTable, logger);
             if (elemMeta == null) return null;
 
             Func<IMajorRecordGetter, object?> extractor = r =>
@@ -519,7 +520,7 @@ public sealed class SchemaReflector : ISchemaReflector
                         if (json.ValueKind != JsonValueKind.Array) return;
                         var rp = record.GetType()
                             .GetProperty(capturedPName, BindingFlags.Public | BindingFlags.Instance);
-                        if (rp == null || !rp.CanWrite) return;
+                        if (rp == null) return;
 
                         var listType = rp.PropertyType;
                         var newList = Activator.CreateInstance(listType)!;
@@ -528,7 +529,7 @@ public sealed class SchemaReflector : ISchemaReflector
                         // Derive the concrete element type from the mutable list's generic argument,
                         // not from GetSetterType — which returns the setter *interface* (e.g.
                         // IRankPlacement), not the instantiable concrete class (RankPlacement).
-                        Type? setterType = capturedIsLoqui && listType.IsGenericType
+                        Type? setterType = capturedIsLoqui
                             ? listType.GetGenericArguments()[0]
                             : null;
 
@@ -545,10 +546,10 @@ public sealed class SchemaReflector : ISchemaReflector
                                     item = Activator.CreateInstance(flType, fk);
                                 }
                             }
-                            else if (capturedIsLoqui && setterType != null && capturedSubFields != null)
+                            else if (capturedIsLoqui && setterType != null)
                             {
                                 var elemObj = Activator.CreateInstance(setterType)!;
-                                foreach (var sf in capturedSubFields)
+                                foreach (var sf in capturedSubFields!)
                                 {
                                     if (sf.Apply == null) continue;
                                     if (elem.TryGetProperty(sf.Name, out var sfVal))
@@ -561,7 +562,7 @@ public sealed class SchemaReflector : ISchemaReflector
 
                         rp.SetValue(record, newList);
                     }
-                    catch { }
+                    catch (Exception ex) { logger.LogTrace(ex, "Apply skipped for property {Property}", pName); }
                 };
             }
 
@@ -573,7 +574,7 @@ public sealed class SchemaReflector : ISchemaReflector
 
         if (IsLoquiInterface(core))
         {
-            var subFields = BuildSubSchema(core, getterTypeToTable);
+            var subFields = BuildSubSchema(core, getterTypeToTable, logger);
             if (subFields.Count == 0) return null;
 
             var subFieldMetas = subFields.Select(s => s.ToFieldMetadata()).ToList();
@@ -612,7 +613,7 @@ public sealed class SchemaReflector : ISchemaReflector
                         }
                         if (rp.CanWrite) rp.SetValue(record, obj);
                     }
-                    catch { }
+                    catch (Exception ex) { logger.LogTrace(ex, "Apply skipped for property {Property}", pName); }
                 };
             }
 

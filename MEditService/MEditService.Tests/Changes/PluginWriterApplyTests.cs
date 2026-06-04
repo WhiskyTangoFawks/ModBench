@@ -179,6 +179,7 @@ public class PluginWriterApplyTests
         Assert.Empty(result.ReadOnly);
         Assert.Empty(result.NotFound);
         Assert.NotNull(result.BackupPath);
+        Assert.Matches(@"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}", result.BackupPath);
     }
 
     [Fact]
@@ -251,6 +252,7 @@ public class PluginWriterApplyTests
         var result = await writer.SaveAsync(pluginPath, [change], GameRelease.Fallout4);
 
         Assert.Contains("aggression", result.NotFound);
+        Assert.Single(result.NotFound);  // exactly one entry — malformed key path not double-counted
         Assert.Empty(result.Applied);
         Assert.Empty(result.ReadOnly);
     }

@@ -230,7 +230,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         }
     }
 
-    private static PendingChange ReadChange(IDataReader reader)
+    private static PendingChange ReadChange(DuckDBDataReader reader)
     {
         var id = Guid.Parse(reader.GetString(0));
         var formKey = reader.GetString(1);

@@ -303,6 +303,78 @@ public class SchemaReflectorTests
         Assert.Equal(factionKey, npc.Factions[0].Faction.FormKey);
     }
 
+    // ── IsFormLink requires both IsInterface AND IsGenericType (mutant 599) ─────
+
+    [Fact]
+    public void GetSchemas_Npc_Weight_IsStructNotFormkey()
+    {
+        // INpcWeightGetter is a non-generic interface. With the IsFormLink && → || mutant,
+        // IsInterface=true alone would classify it as a formkey column.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "weight");
+        Assert.NotNull(col);
+        Assert.Equal("struct", col.ApiType);
+    }
+
+    // ── Null list returns null from Extract (mutant 894) ──────────────────────
+
+    [Fact]
+    public void GetSchemas_Npc_Keywords_Extract_ReturnsNullWhenKeywordsNotSet()
+    {
+        // A freshly created NPC has Keywords = null. The extractor should return null,
+        // not call SerializeListItems on a null IEnumerable.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "keywords");
+        Assert.NotNull(col);
+
+        var npc = new Mutagen.Bethesda.Fallout4.Npc(
+            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+
+        var result = col.Extract(npc);
+        Assert.Null(result);
+    }
+
+    // ── Loqui scalar Apply: applies JSON object to struct sub-field ───────────────
+
+    [Fact]
+    public void GetSchemas_Npc_Weight_Apply_UpdatesSubFields()
+    {
+        // The weight column holds INpcWeightGetter (a Loqui scalar). Apply should
+        // deserialise a JSON object and write each primitive sub-field back via
+        // the sub-field Apply delegates (loqui scalar Apply path, lines ~582-597).
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "weight");
+        Assert.NotNull(col);
+        Assert.NotNull(col.Apply);
+
+        var npc = new Mutagen.Bethesda.Fallout4.Npc(
+            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+
+        var json = """{"thin":0.5,"fat":0.8,"muscular":0.3}""";
+        col.Apply(npc, System.Text.Json.JsonDocument.Parse(json).RootElement);
+
+        Assert.NotNull(npc.Weight);
+        Assert.Equal(0.5f, npc.Weight!.Thin, precision: 3);
+        Assert.Equal(0.8f, npc.Weight.Fat, precision: 3);
+        Assert.Equal(0.3f, npc.Weight.Muscular, precision: 3);
+    }
+
+    // ── ulong column: TryMapPrimitive BIGINT path (mutant 296/297) ───────────────
+
+    [Fact]
+    public void GetSchemas_ImageSpaceAdapter_UInt64Column_MapsToBigInt()
+    {
+        // IImageSpaceAdapterGetter has a UInt64 Unknown field — exercises the ulong branch
+        // in TryMapPrimitive (maps to BIGINT / "int").
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["imad"].RecordColumns.FirstOrDefault(c => c.Name == "unknown");
+        Assert.NotNull(col);
+        Assert.Equal("BIGINT", col.DuckDbType);
+        Assert.Equal("int", col.ApiType);
+    }
+
     // ── Primitive type parity: GetColumnInfo and GetSubFieldInfo cover the same types ──
     // For each primitive api-type, verify that a top-level column of that type exists (GetColumnInfo
     // handled it) AND a sub-field of that same type exists in a struct/array-element column

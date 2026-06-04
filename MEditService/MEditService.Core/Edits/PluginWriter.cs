@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging;
@@ -117,7 +118,7 @@ public sealed class PluginWriter : IPluginWriter
         var dir = Path.GetDirectoryName(pluginPath)!;
         var name = Path.GetFileNameWithoutExtension(pluginPath);
         var ext = Path.GetExtension(pluginPath);
-        var ts = timestamp ?? DateTime.UtcNow.ToString("yyyy-MM-ddTHH-mm-ss");
+        var ts = timestamp ?? DateTime.UtcNow.ToString("yyyy-MM-ddTHH-mm-ss", CultureInfo.InvariantCulture);
         var path = Path.Combine(dir, $"{name}.{ts}.bak{ext}");
         File.Copy(pluginPath, path, overwrite: false);
         return path;

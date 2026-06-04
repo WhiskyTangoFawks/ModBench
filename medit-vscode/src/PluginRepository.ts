@@ -54,7 +54,7 @@ export class ApiPluginRepository implements PluginRepository {
   async getPlugins(): Promise<PluginMetadata[]> {
     try {
       const { data } = await this.client.GET('/plugins', {});
-      const raw = (data as PluginResponse[] | undefined) ?? [];
+      const raw = data ?? [];
       return raw.map(toPluginMetadata);
     } catch (e) {
       this.log(`[PluginRepository] getPlugins failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -67,7 +67,7 @@ export class ApiPluginRepository implements PluginRepository {
       const { data } = await this.client.GET('/plugins/{plugin}/record-types', {
         params: { path: { plugin } },
       });
-      const raw = (data as PluginRecordTypeCount[] | undefined) ?? [];
+      const raw = data ?? [];
       return raw.map(toRecordTypeCount);
     } catch (e) {
       this.log(`[PluginRepository] getRecordTypes(${plugin}) failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -80,7 +80,7 @@ export class ApiPluginRepository implements PluginRepository {
       const { data } = await this.client.GET('/records', {
         params: { query: { plugin, type, offset, limit } },
       });
-      const raw = data as RecordSummaryPagedResult | undefined;
+      const raw = data;
       return {
         items: (raw?.items ?? []).map(toRecordSummary),
         total: raw?.total ?? 0,

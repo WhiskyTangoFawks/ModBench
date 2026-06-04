@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using DuckDB.NET.Data;
 using MEditService.Core.Schema;
@@ -54,7 +55,7 @@ public sealed class TableDdlBuilder : ITableDdlBuilder
         sb.Append("editor_id VARCHAR");
 
         foreach (var col in schema.RecordColumns)
-            sb.Append($", \"{col.Name}\" {col.DuckDbType}");
+            sb.Append(CultureInfo.InvariantCulture, $", \"{col.Name}\" {col.DuckDbType}");
 
         Execute(connection, $"CREATE TABLE IF NOT EXISTS \"{schema.TableName}\" ({sb})");
     }

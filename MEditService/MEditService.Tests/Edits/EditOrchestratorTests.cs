@@ -60,6 +60,34 @@ public sealed class EditOrchestratorTests
                 var staged = Assert.IsType<StageEditResult.Staged>(result);
                 Assert.Single(staged.Changes);
                 Assert.Equal("aggression", staged.Changes[0].FieldPath);
+                // Verify old value was captured (kills mutants on null-check and ContainsKey)
+                Assert.NotEqual(System.Text.Json.JsonValueKind.Null, staged.Changes[0].OldValue.ValueKind);
+            }
+        }
+    }
+
+    [Fact]
+    public void StageEdit_PluginHasNoOverride_OldValueIsNull()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-no-override")
+            .WithPlugin("Source.esp", mod =>
+                npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
+            .WithPlugin("Target.esp")  // empty — no override of npcKey
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+                var fields = new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") };
+
+                // Target.esp has no existing record for npcKey → currentRecord will be null → OldValue stored as null
+                var result = orchestrator.StageEdit(npcKey.ToString(), "Target.esp", fields, "user", null);
+
+                var staged = Assert.IsType<StageEditResult.Staged>(result);
+                Assert.Equal(System.Text.Json.JsonValueKind.Null, staged.Changes[0].OldValue.ValueKind);
             }
         }
     }
@@ -226,6 +254,43 @@ public sealed class EditOrchestratorTests
 
             var immutable = Assert.IsType<StageEditResult.PluginImmutable>(result);
             Assert.Equal("Source.esp", immutable.Plugin);
+        }
+    }
+
+    [Fact]
+    public void CopyRecordTo_TargetAlreadyHasOverride_OldValueIsPopulated()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-copy-override")
+            .WithPlugin("Source.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("SourceNPC");
+                npc.Aggression = Mutagen.Bethesda.Fallout4.Npc.AggressionType.Frenzied;
+                npcKey = npc.FormKey;
+            })
+            .WithPlugin("Target.esp", mod =>
+            {
+                // Create override: same FormKey, different aggression value
+                var overrideNpc = new Mutagen.Bethesda.Fallout4.Npc(npcKey, Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+                overrideNpc.Aggression = Mutagen.Bethesda.Fallout4.Npc.AggressionType.Unaggressive;
+                mod.Npcs.Add(overrideNpc);
+            })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user");
+
+                var staged = Assert.IsType<StageEditResult.Staged>(result);
+                Assert.NotEmpty(staged.Changes);
+                // Target had an existing override → old values should be populated (not all null)
+                Assert.Contains(staged.Changes, c =>
+                    c.OldValue.ValueKind != System.Text.Json.JsonValueKind.Null);
+            }
         }
     }
 

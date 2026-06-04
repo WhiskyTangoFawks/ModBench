@@ -6,6 +6,6 @@ namespace MEditService.Core.Records;
 public interface IRecordIndexer : IDisposable
 {
     void Initialize(GameRelease release);
-    void Index(IModGetter mod, int loadOrderIndex);
+    void Index(IModGetter pluginMod, int loadOrderIndex);
     void UpdateWinners();
 }

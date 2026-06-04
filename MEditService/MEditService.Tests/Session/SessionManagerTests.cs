@@ -279,13 +279,38 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
         }
     }
 
+    [Fact]
+    public void CreatePlugin_NoSession_ThrowsInvalidOperationException()
+    {
+        using var manager = MakeManager(); // not loaded
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.CreatePlugin("New.esp"));
+        Assert.Contains("No session", ex.Message);
+    }
+
+    [Fact]
+    public void CreatePlugin_AlreadyExists_ThrowsIOException()
+    {
+        var data = new PluginFixtureBuilder("cp-already-exists")
+            .WithPlugin("Base.esp")
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.CreatePlugin("Duplicate.esp"); // first call creates it
+            var ex = Assert.Throws<IOException>(() => manager.CreatePlugin("Duplicate.esp"));
+            Assert.Contains("already exists", ex.Message);
+        }
+    }
+
     // --- CreatePlugin guard clauses ---
 
     [Fact]
     public void CreatePlugin_InvalidExtension_ThrowsArgumentException()
     {
         using var manager = MakeManager(); // no Load — extension check fires first
-        Assert.Throws<ArgumentException>(() => manager.CreatePlugin("Mod.txt"));
+        var ex = Assert.Throws<ArgumentException>(() => manager.CreatePlugin("Mod.txt"));
+        Assert.Contains("extension", ex.Message);
     }
 
     [Fact]
@@ -300,14 +325,16 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
     public void CreatePlugin_NullName_ThrowsArgumentException()
     {
         using var manager = MakeLoadedManager();
-        Assert.Throws<ArgumentException>(() => manager.CreatePlugin(null!));
+        var ex = Assert.Throws<ArgumentException>(() => manager.CreatePlugin(null!));
+        Assert.Contains("empty", ex.Message);
     }
 
     [Fact]
     public void CreatePlugin_WhitespaceName_ThrowsArgumentException()
     {
         using var manager = MakeLoadedManager();
-        Assert.Throws<ArgumentException>(() => manager.CreatePlugin("   "));
+        var ex = Assert.Throws<ArgumentException>(() => manager.CreatePlugin("   "));
+        Assert.Contains("empty", ex.Message);
     }
 
     [Fact]
@@ -334,16 +361,18 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
     public async Task SavePlugin_NoSession_ThrowsInvalidOperationException()
     {
         using var manager = MakeManager();
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => manager.SavePlugin("SomePlugin.esp", []));
+        Assert.Contains("No session", ex.Message);
     }
 
     [Fact]
     public async Task SavePlugin_UnknownPlugin_ThrowsKeyNotFoundException()
     {
         using var manager = MakeLoadedManager();
-        await Assert.ThrowsAsync<KeyNotFoundException>(
+        var ex = await Assert.ThrowsAsync<KeyNotFoundException>(
             () => manager.SavePlugin("DoesNotExist.esp", []));
+        Assert.Contains("not found", ex.Message);
     }
 
     // --- Disposal actually releases resources ---

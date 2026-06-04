@@ -43,11 +43,8 @@ public sealed class EditOrchestrator : IEditOrchestrator
         var oldValues = new Dictionary<string, JsonElement>();
         if (currentRecord != null)
         {
-            foreach (var fv in currentRecord.Fields)
-            {
-                if (fields.ContainsKey(fv.Metadata.Name))
-                    oldValues[fv.Metadata.Name] = JsonSerializer.SerializeToElement(fv.Value);
-            }
+            foreach (var fv in currentRecord.Fields.Where(fv => fields.ContainsKey(fv.Metadata.Name)))
+                oldValues[fv.Metadata.Name] = JsonSerializer.SerializeToElement(fv.Value);
         }
 
         var staged = _changes.Upsert(formKey, plugin, recordType!, fields, source, description, oldValues);

@@ -31,7 +31,7 @@ export class SessionWizard {
     const choice = await this.deps.showQuickPick(items);
     if (!choice) return false;
 
-    let paths: GamePaths | null = null;
+    let paths: GamePaths;
 
     if (choice.label === 'Use detected paths' && detected) {
       paths = detected;

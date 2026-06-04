@@ -71,10 +71,16 @@ dotnet_style_prefer_simplified_interpolation = true:suggestion
 dotnet_style_readonly_field = true:warning
 
 # Parameter preferences
-dotnet_code_quality_unused_parameters = all:suggestion
+dotnet_code_quality_unused_parameters = all:warning
 
 # Suppression preferences
 dotnet_remove_unnecessary_suppression_exclusions = none
+
+# CA1848: LoggerMessage source generators — too much boilerplate for this project's structured logging pattern
+dotnet_diagnostic.CA1848.severity = none
+# S2139: log + rethrow is the deliberate pattern in this codebase (see CLAUDE.md logging conventions)
+dotnet_diagnostic.S2139.severity = none
+
 
 #### C# Coding Conventions ####
 [*.cs]

@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Core.Queries;
@@ -40,17 +41,17 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     // --- Indexing (absorbed from RecordIndexer) ---
 
-    public void Index(IModGetter mod, int loadOrderIndex)
+    public void Index(IModGetter pluginMod, int loadOrderIndex)
     {
         var schemas = RequireSchemas();
-        var plugin = mod.ModKey.FileName.ToString();
+        var plugin = pluginMod.ModKey.FileName.ToString();
 
         foreach (var (tableName, schema) in schemas)
         {
             List<IMajorRecordGetter> records;
             try
             {
-                records = mod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false).ToList();
+                records = pluginMod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false).ToList();
             }
             catch (Exception ex)
             {
@@ -241,11 +242,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     // --- Helpers ---
 
-    private static RecordSummary ReadSummary(IDataReader reader) =>
+    private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
         new(reader.GetString(0), reader.GetString(1), reader.GetInt32(2),
             reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4));
 
-    private RecordDetail ReadDetail(IDataReader reader, RecordTableSchema schema)
+    private static RecordDetail ReadDetail(DuckDBDataReader reader, RecordTableSchema schema)
     {
         var formKey = reader.GetString(0);
         var plugin = reader.GetString(1);
@@ -323,11 +324,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         if (value == null) { row.AppendNullValue(); return; }
         switch (duckDbType)
         {
-            case "BOOLEAN": row.AppendValue((bool?)Convert.ToBoolean(value)); break;
-            case "INTEGER": row.AppendValue((int?)Convert.ToInt32(value)); break;
-            case "BIGINT": row.AppendValue((long?)Convert.ToInt64(value)); break;
-            case "FLOAT": row.AppendValue((float?)Convert.ToSingle(value)); break;
-            case "DOUBLE": row.AppendValue((double?)Convert.ToDouble(value)); break;
+            case "BOOLEAN": row.AppendValue((bool?)Convert.ToBoolean(value, CultureInfo.InvariantCulture)); break;
+            case "INTEGER": row.AppendValue((int?)Convert.ToInt32(value, CultureInfo.InvariantCulture)); break;
+            case "BIGINT": row.AppendValue((long?)Convert.ToInt64(value, CultureInfo.InvariantCulture)); break;
+            case "FLOAT": row.AppendValue((float?)Convert.ToSingle(value, CultureInfo.InvariantCulture)); break;
+            case "DOUBLE": row.AppendValue((double?)Convert.ToDouble(value, CultureInfo.InvariantCulture)); break;
             case "VARCHAR": row.AppendValue(value.ToString()); break;
         }
     }
