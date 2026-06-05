@@ -4,30 +4,21 @@ public sealed class ConflictClassifier : IConflictClassifier
 {
     public ClassifyResult Classify(IReadOnlyList<RecordDetail> conflictingRecords)
     {
-        if (conflictingRecords.Count <= 1)
+        if (conflictingRecords.Count == 0)
+            return new ClassifyResult(ConflictAll.OnlyOne, new Dictionary<string, ConflictThis>(), []);
+
+        if (conflictingRecords.Count == 1)
         {
-            var pluginStates = conflictingRecords.Count == 1
-                ? new Dictionary<string, ConflictThis> { [conflictingRecords[0].Plugin] = ConflictThis.OnlyOne }
-                : new Dictionary<string, ConflictThis>();
-            return new ClassifyResult(ConflictAll.OnlyOne, pluginStates, []);
+            var single = conflictingRecords[0];
+            var pluginState = new Dictionary<string, ConflictThis> { [single.Plugin] = ConflictThis.OnlyOne };
+            var fieldNames = single.Fields.Select(f => f.Metadata.Name).ToList();
+            return new ClassifyResult(ConflictAll.OnlyOne, pluginState, BuildDiffs(fieldNames, conflictingRecords, single));
         }
 
         var master = conflictingRecords[0];
         var winner = conflictingRecords.First(o => o.IsWinner);
         var masterValues = IndexByName(master.Fields);
-        var fieldNames = master.Fields.Select(f => f.Metadata.Name).ToList();
-
-        var diffs = fieldNames
-            .Select(fieldName =>
-            {
-                var values = conflictingRecords.ToDictionary(
-                    o => o.Plugin,
-                    o => o.Fields.FirstOrDefault(f => f.Metadata.Name == fieldName)?.Value);
-                var winnerValue = values.GetValueOrDefault(winner.Plugin);
-                return new FieldDiff(fieldName, values, winner.Plugin, winnerValue);
-            })
-            .Where(d => d.Values.Values.Any(v => v != null))
-            .ToList();
+        var diffs = BuildDiffs(master.Fields.Select(f => f.Metadata.Name).ToList(), conflictingRecords, winner);
 
         var conflictAll = ComputeConflictAll(master.Plugin, masterValues, conflictingRecords, diffs);
 
@@ -100,6 +91,22 @@ public sealed class ConflictClassifier : IConflictClassifier
             return lost ? ConflictThis.ConflictLoses : ConflictThis.Override;
         }
     }
+
+    private static List<FieldDiff> BuildDiffs(
+        IReadOnlyList<string> fieldNames,
+        IReadOnlyList<RecordDetail> records,
+        RecordDetail winner) =>
+        fieldNames
+            .Select(fieldName =>
+            {
+                var values = records.ToDictionary(
+                    o => o.Plugin,
+                    o => o.Fields.FirstOrDefault(f => f.Metadata.Name == fieldName)?.Value);
+                var winnerValue = values.GetValueOrDefault(winner.Plugin);
+                return new FieldDiff(fieldName, values, winner.Plugin, winnerValue);
+            })
+            .Where(d => d.Values.Values.Any(v => v != null))
+            .ToList();
 
     private static Dictionary<string, object?> IndexByName(IReadOnlyList<FieldValue> fields) =>
         fields.ToDictionary(f => f.Metadata.Name, f => f.Value);

@@ -34,6 +34,24 @@ public class ConflictClassifierTests
     }
 
     [Fact]
+    public void Classify_SinglePlugin_ReturnsAllNonNullFieldsAsDiffs()
+    {
+        var o = MakeOverride("DLCRobot.esm", 0, true,
+            ("Name", "SomeNPC"), ("Level", (object?)10), ("NullField", (object?)null));
+        var result = _svc.Classify([o]);
+
+        Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
+        Assert.Contains(result.Diffs, d => d.FieldName == "Name");
+        Assert.Contains(result.Diffs, d => d.FieldName == "Level");
+        Assert.DoesNotContain(result.Diffs, d => d.FieldName == "NullField");
+
+        var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
+        Assert.Equal("SomeNPC", nameDiff.Values["DLCRobot.esm"]);
+        Assert.Equal("DLCRobot.esm", nameDiff.WinnerPlugin);
+        Assert.Equal("SomeNPC", nameDiff.WinnerValue);
+    }
+
+    [Fact]
     public void Classify_MultiplePlugins_NoWinnerMarked_Throws()
     {
         var a = MakeOverride("A.esp", 0, false, ("name", "Alice"));

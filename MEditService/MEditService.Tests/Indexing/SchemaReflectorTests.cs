@@ -389,10 +389,10 @@ public class SchemaReflectorTests
     //        parity is asserted by confirming the DuckDbType for the top-level column.
 
     [Theory]
-    [InlineData("height_min",                "float",   "FLOAT",   "weight",               false, "thin")]
-    [InlineData("xp_value_offset",           "int",     "INTEGER", "factions",             true,  "rank")]
-    [InlineData("race",                      "formKey", "VARCHAR", "factions",             true,  "faction")]
-    [InlineData("aggression",                "enum",    "VARCHAR", "face_tinting_layers",  true,  "data_type")]
+    [InlineData("height_min", "float", "FLOAT", "weight", false, "thin")]
+    [InlineData("xp_value_offset", "int", "INTEGER", "factions", true, "rank")]
+    [InlineData("race", "formKey", "VARCHAR", "factions", true, "faction")]
+    [InlineData("aggression", "enum", "VARCHAR", "face_tinting_layers", true, "data_type")]
     public void GetSchemas_PrimitiveType_ColumnAndSubFieldBothReflected(
         string topLevelColumnName,
         string expectedApiType,
