@@ -55,6 +55,34 @@
       "dependsOrder": "sequence",
       "group": { "kind": "test", "isDefault": true },
       "problemMatcher": []
+    },
+    {
+      "label": "Start Backend",
+      "type": "shell",
+      "command": "dotnet run -- --data-folder \"/home/wayne/.steam/debian-installation/steamapps/common/Fallout 4/Data\" --plugins-txt \"/home/wayne/.steam/debian-installation/steamapps/compatdata/377160/pfx/drive_c/users/steamuser/AppData/Local/Fallout4/Plugins.txt\"",
+      "options": { "cwd": "${workspaceFolder}/MEditService/MEditService.Api" },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "medit-backend",
+        "pattern": { "regexp": "." },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Build succeeded",
+          "endsPattern": "Now listening on"
+        }
+      }
+    },
+    {
+      "label": "Stop Backend",
+      "type": "shell",
+      "command": "pkill -f MEditService.Api || true",
+      "problemMatcher": []
+    },
+    {
+      "label": "Manual Test: Pre-launch",
+      "dependsOn": ["Start Backend", "TS: Build"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
     }
   ]
 }
