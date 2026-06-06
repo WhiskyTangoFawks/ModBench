@@ -47,6 +47,24 @@ public class SchemaReflectorTests
     }
 
     [Fact]
+    public void GetSchemas_Npc_EnumColumn_Apply_SetsEnumValue()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.First(c => c.Name == "aggression");
+        Assert.NotNull(col.Apply);
+        var npc = new Mutagen.Bethesda.Fallout4.Npc(
+            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+
+        col.Apply(npc, System.Text.Json.JsonDocument.Parse("\"Unaggressive\"").RootElement);
+        Assert.Equal("Unaggressive", col.Extract(npc)?.ToString());
+
+        // confirm ignoreCase: true
+        col.Apply(npc, System.Text.Json.JsonDocument.Parse("\"aggressive\"").RootElement);
+        Assert.Equal("Aggressive", col.Extract(npc)?.ToString());
+    }
+
+    [Fact]
     public void GetSchemas_Npc_FormLinkColumn_MapsToFormKeyTypeWithValidTypes()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
@@ -306,6 +324,20 @@ public class SchemaReflectorTests
     // ── IsFormLink requires both IsInterface AND IsGenericType (mutant 599) ─────
 
     [Fact]
+    public void GetSchemas_Npc_Factions_Apply_NonArrayJson_DoesNothing()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.First(c => c.Name == "factions");
+        var npc = new Mutagen.Bethesda.Fallout4.Npc(
+            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+
+        col.Apply!(npc, System.Text.Json.JsonDocument.Parse("\"notanarray\"").RootElement);
+
+        Assert.Empty(npc.Factions);
+    }
+
+    [Fact]
     public void GetSchemas_Npc_Weight_IsStructNotFormkey()
     {
         // INpcWeightGetter is a non-generic interface. With the IsFormLink && → || mutant,
@@ -359,6 +391,42 @@ public class SchemaReflectorTests
         Assert.Equal(0.5f, npc.Weight!.Thin, precision: 3);
         Assert.Equal(0.8f, npc.Weight.Fat, precision: 3);
         Assert.Equal(0.3f, npc.Weight.Muscular, precision: 3);
+    }
+
+    [Fact]
+    public void GetSchemas_Npc_Weight_Apply_NonObjectJson_DoesNothing()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.First(c => c.Name == "weight");
+        var npc = new Mutagen.Bethesda.Fallout4.Npc(
+            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        var originalWeight = npc.Weight;
+
+        col.Apply!(npc, System.Text.Json.JsonDocument.Parse("[1,2,3]").RootElement);
+
+        Assert.Equal(originalWeight, npc.Weight);
+    }
+
+    [Fact]
+    public void GetSchemas_Npc_Weight_Apply_PreservesExistingSubFieldValues()
+    {
+        // Kills the :594 survived mutants (operand-swap and remove-left).
+        // When Weight is non-null, Apply must use the existing instance (rp.GetValue),
+        // not a fresh CreateInstance — so non-applied sub-fields keep their original values.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.First(c => c.Name == "weight");
+        var npc = new Mutagen.Bethesda.Fallout4.Npc(
+            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        npc.Weight = new Mutagen.Bethesda.Fallout4.NpcWeight { Thin = 0.9f, Fat = 0.1f, Muscular = 0.2f };
+
+        col.Apply!(npc, System.Text.Json.JsonDocument.Parse("{\"thin\":0.5}").RootElement);
+
+        Assert.NotNull(npc.Weight);
+        Assert.Equal(0.5f, npc.Weight!.Thin, precision: 3);
+        Assert.Equal(0.1f, npc.Weight.Fat, precision: 3);
+        Assert.Equal(0.2f, npc.Weight.Muscular, precision: 3);
     }
 
     // ── ulong column: TryMapPrimitive BIGINT path (mutant 296/297) ───────────────

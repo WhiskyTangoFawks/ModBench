@@ -8,12 +8,17 @@ namespace MEditService.Tests.Api;
 public sealed class ImmutablePluginApiTests : IClassFixture<ImmutablePluginFixture>
 {
     private readonly ImmutablePluginFixture _fixture;
+    private readonly WebApplicationFactory<Program> _app;
 
-    public ImmutablePluginApiTests(ImmutablePluginFixture fixture) => _fixture = fixture;
-
-    private async Task<HttpClient> LoadedClient(WebApplicationFactory<Program> app)
+    public ImmutablePluginApiTests(ImmutablePluginFixture fixture, ApiWebAppFixture webApp)
     {
-        var client = app.CreateClient();
+        _fixture = fixture;
+        _app = webApp.App;
+    }
+
+    private async Task<HttpClient> LoadedClient()
+    {
+        var client = _app.CreateClient();
         var resp = await client.PostAsJsonAsync("/session/load", new
         {
             dataFolderPath = _fixture.DataFolder,
@@ -27,8 +32,7 @@ public sealed class ImmutablePluginApiTests : IClassFixture<ImmutablePluginFixtu
     [Fact]
     public async Task GetPlugins_ImmutablePlugin_HasIsImmutableTrue()
     {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = await LoadedClient(app);
+        var client = await LoadedClient();
 
         var plugins = await client.GetFromJsonAsync<System.Text.Json.JsonElement[]>("/plugins");
         Assert.NotNull(plugins);
@@ -41,44 +45,27 @@ public sealed class ImmutablePluginApiTests : IClassFixture<ImmutablePluginFixtu
         Assert.True(fo4.GetProperty("isImmutable").GetBoolean());
     }
 
-    [Fact]
-    public async Task Patch_ImmutablePlugin_Returns409()
+    [Theory]
+    [InlineData("patch")]
+    [InlineData("save")]
+    [InlineData("copy")]
+    public async Task Write_ImmutablePlugin_Returns409(string op)
     {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = await LoadedClient(app);
+        var client = await LoadedClient();
         var formKey = Uri.EscapeDataString(_fixture.UserNpcFormKey.ToString());
+        var plugin = Uri.EscapeDataString(ImmutablePluginFixture.ImmutablePluginName);
 
-        var resp = await client.PatchAsJsonAsync($"/records/{formKey}", new
+        var resp = op switch
         {
-            plugin = ImmutablePluginFixture.ImmutablePluginName,
-            fields = new System.Collections.Generic.Dictionary<string, object?> { ["editor_id"] = "Hacked" },
-            source = "user",
-        });
-
-        Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
-    }
-
-    [Fact]
-    public async Task Save_ImmutablePlugin_Returns409()
-    {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = await LoadedClient(app);
-
-        var resp = await client.PostAsync(
-            $"/plugins/{Uri.EscapeDataString(ImmutablePluginFixture.ImmutablePluginName)}/save", null);
-
-        Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
-    }
-
-    [Fact]
-    public async Task CopyTo_ImmutablePlugin_Returns409()
-    {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = await LoadedClient(app);
-        var formKey = Uri.EscapeDataString(_fixture.UserNpcFormKey.ToString());
-        var target = Uri.EscapeDataString(ImmutablePluginFixture.ImmutablePluginName);
-
-        var resp = await client.PostAsync($"/records/{formKey}/copy-to/{target}", null);
+            "patch" => await client.PatchAsJsonAsync($"/records/{formKey}", new
+                       {
+                           plugin = ImmutablePluginFixture.ImmutablePluginName,
+                           fields = new Dictionary<string, object?> { ["editor_id"] = "Hacked" },
+                           source = "user",
+                       }),
+            "save"  => await client.PostAsync($"/plugins/{plugin}/save", null),
+            _       => await client.PostAsync($"/records/{formKey}/copy-to/{plugin}", null),
+        };
 
         Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
     }
@@ -86,8 +73,7 @@ public sealed class ImmutablePluginApiTests : IClassFixture<ImmutablePluginFixtu
     [Fact]
     public async Task CreatePlugin_CreatesFileAndReturnsPlugin()
     {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = await LoadedClient(app);
+        var client = await LoadedClient();
 
         var resp = await client.PostAsJsonAsync("/plugins/create", new { name = "NewMod.esp" });
 
@@ -109,8 +95,7 @@ public sealed class ImmutablePluginApiTests : IClassFixture<ImmutablePluginFixtu
     [Fact]
     public async Task CreatePlugin_DuplicateName_Returns409()
     {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = await LoadedClient(app);
+        var client = await LoadedClient();
 
         // First create
         var resp1 = await client.PostAsJsonAsync("/plugins/create", new { name = "DupMod.esp" });
@@ -124,8 +109,7 @@ public sealed class ImmutablePluginApiTests : IClassFixture<ImmutablePluginFixtu
     [Fact]
     public async Task CreatePlugin_InvalidExtension_Returns400()
     {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = await LoadedClient(app);
+        var client = await LoadedClient();
 
         var resp = await client.PostAsJsonAsync("/plugins/create", new { name = "BadMod.txt" });
 

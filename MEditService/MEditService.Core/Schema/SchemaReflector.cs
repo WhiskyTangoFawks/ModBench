@@ -50,8 +50,7 @@ public sealed class SchemaReflector : ISchemaReflector
                        ?? Assembly.Load(assemblyName);
 
         var majorRecordGetterType =
-            assembly.GetType($"Mutagen.Bethesda.{category}.I{category}MajorRecordGetter")
-            ?? throw new NotSupportedException($"I{category}MajorRecordGetter not found in {assemblyName}");
+            assembly.GetType($"Mutagen.Bethesda.{category}.I{category}MajorRecordGetter")!;
 
         var seenTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var discovered = new List<(string tableName, Type getterType)>();
@@ -205,14 +204,10 @@ public sealed class SchemaReflector : ISchemaReflector
     // Retrieve the concrete mutable class (e.g. RankPlacement) via ILoquiRegistration.SetterType.
     private static Type? GetSetterType(Type getterInterface)
     {
-        try
-        {
-            var regProp = getterInterface.GetProperty(
-                "StaticRegistration", BindingFlags.Public | BindingFlags.Static);
-            var reg = regProp?.GetValue(null);
-            return reg?.GetType().GetField("ClassType", BindingFlags.Public | BindingFlags.Static)?.GetValue(null) as Type;
-        }
-        catch { return null; }
+        var regProp = getterInterface.GetProperty(
+            "StaticRegistration", BindingFlags.Public | BindingFlags.Static);
+        var reg = regProp?.GetValue(null);
+        return reg?.GetType().GetField("ClassType", BindingFlags.Public | BindingFlags.Static)?.GetValue(null) as Type;
     }
 
     // ── Sub-schema building ───────────────────────────────────────────────────
@@ -294,8 +289,6 @@ public sealed class SchemaReflector : ISchemaReflector
         { duckDbType = "INTEGER"; apiType = "int"; converter = v => (object)v.GetInt32(); return true; }
         if (core == typeof(uint))
         { duckDbType = "INTEGER"; apiType = "int"; converter = v => (object)v.GetUInt32(); return true; }
-        if (core == typeof(long))
-        { duckDbType = "BIGINT"; apiType = "int"; converter = v => (object)v.GetInt64(); return true; }
         if (core == typeof(ulong))
         { duckDbType = "BIGINT"; apiType = "int"; converter = v => (object)v.GetUInt64(); return true; }
         if (core == typeof(float))
@@ -417,7 +410,6 @@ public sealed class SchemaReflector : ISchemaReflector
         var result = new List<object?>();
         foreach (var item in items)
         {
-            if (item == null) { result.Add(null); continue; }
             if (isFl) result.Add((item as IFormLinkGetter)?.FormKeyNullable?.ToString());
             else if (subFields != null) result.Add(ExtractSubObject(item, subFields));
             else result.Add(item);
@@ -441,8 +433,7 @@ public sealed class SchemaReflector : ISchemaReflector
             return (record, value) =>
             {
                 var rp = cache.GetOrAdd(record.GetType(), t =>
-                    t.GetProperty(pName, BindingFlags.Public | BindingFlags.Instance));
-                if (rp == null) return;
+                    t.GetProperty(pName, BindingFlags.Public | BindingFlags.Instance))!;
                 if (value.ValueKind == JsonValueKind.Null)
                 {
                     if (nullable) rp.SetValue(record, null);
@@ -469,7 +460,7 @@ public sealed class SchemaReflector : ISchemaReflector
         {
             var enumValues = Enum.GetNames(core);
             return new("VARCHAR", r => TryGet(r, prop)?.ToString(), "enum", _empty, enumValues,
-                MakeApply(v => Enum.Parse(core, v.GetString() ?? "", ignoreCase: true)));
+                MakeApply(v => Enum.Parse(core, v.GetString()!, ignoreCase: true)));
         }
 
         if (IsFormLink(core))
@@ -515,54 +506,45 @@ public sealed class SchemaReflector : ISchemaReflector
 
                 apply = (record, json) =>
                 {
-                    try
+                    if (json.ValueKind != JsonValueKind.Array) return;
+                    var rp = record.GetType()
+                        .GetProperty(capturedPName, BindingFlags.Public | BindingFlags.Instance)!;
+
+                    var listType = rp.PropertyType;
+                    var newList = Activator.CreateInstance(listType)!;
+                    var addMethod = listType.GetMethod("Add")!;
+
+                    foreach (var elem in json.EnumerateArray())
                     {
-                        if (json.ValueKind != JsonValueKind.Array) return;
-                        var rp = record.GetType()
-                            .GetProperty(capturedPName, BindingFlags.Public | BindingFlags.Instance);
-                        if (rp == null) return;
-
-                        var listType = rp.PropertyType;
-                        var newList = Activator.CreateInstance(listType)!;
-                        var addMethod = listType.GetMethod("Add")!;
-
+                        object? item = null;
+                        if (capturedIsFl)
+                        {
+                            var fkStr = elem.GetString();
+                            if (fkStr != null && FormKey.TryFactory(fkStr, out var fk))
+                            {
+                                var flType = typeof(FormLink<>).MakeGenericType(
+                                    capturedElemCore.GetGenericArguments()[0]);
+                                item = Activator.CreateInstance(flType, fk);
+                            }
+                        }
                         // Derive the concrete element type from the mutable list's generic argument,
                         // not from GetSetterType — which returns the setter *interface* (e.g.
                         // IRankPlacement), not the instantiable concrete class (RankPlacement).
-                        Type? setterType = capturedIsLoqui
-                            ? listType.GetGenericArguments()[0]
-                            : null;
-
-                        foreach (var elem in json.EnumerateArray())
+                        else if (capturedIsLoqui)
                         {
-                            object? item = null;
-                            if (capturedIsFl)
+                            var elemConcreteType = listType.GetGenericArguments()[0];
+                            var elemObj = Activator.CreateInstance(elemConcreteType)!;
+                            foreach (var sf in capturedSubFields!)
                             {
-                                var fkStr = elem.GetString();
-                                if (fkStr != null && FormKey.TryFactory(fkStr, out var fk))
-                                {
-                                    var flType = typeof(FormLink<>).MakeGenericType(
-                                        capturedElemCore.GetGenericArguments()[0]);
-                                    item = Activator.CreateInstance(flType, fk);
-                                }
+                                if (elem.TryGetProperty(sf.Name, out var sfVal))
+                                    sf.Apply!(elemObj, sfVal);
                             }
-                            else if (capturedIsLoqui && setterType != null)
-                            {
-                                var elemObj = Activator.CreateInstance(setterType)!;
-                                foreach (var sf in capturedSubFields!)
-                                {
-                                    if (sf.Apply == null) continue;
-                                    if (elem.TryGetProperty(sf.Name, out var sfVal))
-                                        sf.Apply(elemObj, sfVal);
-                                }
-                                item = elemObj;
-                            }
-                            if (item != null) addMethod.Invoke(newList, [item]);
+                            item = elemObj;
                         }
-
-                        rp.SetValue(record, newList);
+                        if (item != null) addMethod.Invoke(newList, [item]);
                     }
-                    catch (Exception ex) { logger.LogTrace(ex, "Apply skipped for property {Property}", pName); }
+
+                    rp.SetValue(record, newList);
                 };
             }
 
@@ -583,13 +565,9 @@ public sealed class SchemaReflector : ISchemaReflector
 
             Func<IMajorRecordGetter, object?> extractor = r =>
             {
-                try
-                {
-                    var obj = TryGet(r, prop);
-                    return obj == null ? null
-                        : JsonSerializer.Serialize(ExtractSubObject(obj, capturedSF));
-                }
-                catch { return null; }
+                var obj = TryGet(r, prop);
+                return obj == null ? null
+                    : JsonSerializer.Serialize(ExtractSubObject(obj, capturedSF));
             };
 
             var setterType = GetSetterType(core);
@@ -598,22 +576,16 @@ public sealed class SchemaReflector : ISchemaReflector
             {
                 apply = (record, json) =>
                 {
-                    try
+                    if (json.ValueKind != JsonValueKind.Object) return;
+                    var rp = record.GetType()
+                        .GetProperty(capturedPName, BindingFlags.Public | BindingFlags.Instance)!;
+                    var obj = rp.GetValue(record) ?? Activator.CreateInstance(setterType)!;
+                    foreach (var sf in capturedSF)
                     {
-                        if (json.ValueKind != JsonValueKind.Object) return;
-                        var rp = record.GetType()
-                            .GetProperty(capturedPName, BindingFlags.Public | BindingFlags.Instance);
-                        if (rp == null) return;
-                        var obj = rp.GetValue(record) ?? Activator.CreateInstance(setterType)!;
-                        foreach (var sf in capturedSF)
-                        {
-                            if (sf.Apply == null) continue;
-                            if (json.TryGetProperty(sf.Name, out var sfVal))
-                                sf.Apply(obj, sfVal);
-                        }
-                        if (rp.CanWrite) rp.SetValue(record, obj);
+                        if (json.TryGetProperty(sf.Name, out var sfVal))
+                            sf.Apply!(obj, sfVal);
                     }
-                    catch (Exception ex) { logger.LogTrace(ex, "Apply skipped for property {Property}", pName); }
+                    if (rp.CanWrite) rp.SetValue(record, obj);
                 };
             }
 

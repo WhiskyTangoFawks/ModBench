@@ -11,8 +11,13 @@ public sealed class ProblemDetailsApiTests : IClassFixture<TestPluginFixture>
     private const string ProblemContentType = "application/problem+json";
 
     private readonly TestPluginFixture _fixture;
+    private readonly WebApplicationFactory<Program> _app;
 
-    public ProblemDetailsApiTests(TestPluginFixture fixture) => _fixture = fixture;
+    public ProblemDetailsApiTests(TestPluginFixture fixture, ApiWebAppFixture webApp)
+    {
+        _fixture = fixture;
+        _app = webApp.App;
+    }
 
     private static void AssertIsProblemDetails(HttpResponseMessage response, int expectedStatus)
     {
@@ -26,51 +31,19 @@ public sealed class ProblemDetailsApiTests : IClassFixture<TestPluginFixture>
 
     // --- POST /session/load ---
 
-    [Fact]
-    public async Task SessionLoad_MissingDataFolder_ReturnsProblemDetails400()
+    [Theory]
+    [InlineData("badFolder", null,         "Fallout4")]
+    [InlineData(null,        "badPlugins", "Fallout4")]
+    [InlineData(null,        null,         "NotAGame")]
+    public async Task SessionLoad_InvalidInput_ReturnsProblemDetails400(
+        string? badFolder, string? badPlugins, string gameRelease)
     {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = app.CreateClient();
-
+        var client = _app.CreateClient();
         var resp = await client.PostAsJsonAsync("/session/load", new
         {
-            dataFolderPath = "/nonexistent/path",
-            pluginsTxtPath = _fixture.PluginsTxtPath,
-            gameRelease = "Fallout4",
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
-        AssertIsProblemDetails(resp, 400);
-    }
-
-    [Fact]
-    public async Task SessionLoad_MissingPluginsTxt_ReturnsProblemDetails400()
-    {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = app.CreateClient();
-
-        var resp = await client.PostAsJsonAsync("/session/load", new
-        {
-            dataFolderPath = _fixture.DataFolder,
-            pluginsTxtPath = "/nonexistent/Plugins.txt",
-            gameRelease = "Fallout4",
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
-        AssertIsProblemDetails(resp, 400);
-    }
-
-    [Fact]
-    public async Task SessionLoad_InvalidGameRelease_ReturnsProblemDetails400()
-    {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = app.CreateClient();
-
-        var resp = await client.PostAsJsonAsync("/session/load", new
-        {
-            dataFolderPath = _fixture.DataFolder,
-            pluginsTxtPath = _fixture.PluginsTxtPath,
-            gameRelease = "NotARealGame",
+            dataFolderPath = badFolder ?? _fixture.DataFolder,
+            pluginsTxtPath = badPlugins ?? _fixture.PluginsTxtPath,
+            gameRelease,
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
@@ -79,108 +52,49 @@ public sealed class ProblemDetailsApiTests : IClassFixture<TestPluginFixture>
 
     // --- POST /plugins/create ---
 
-    [Fact]
-    public async Task CreatePlugin_EmptyName_ReturnsProblemDetails400()
+    [Theory]
+    [InlineData("",                           400)]
+    [InlineData("Plugin.txt",                 400)]
+    [InlineData(TestPluginFixture.PluginName, 409)]
+    public async Task CreatePlugin_InvalidInput_ReturnsProblemDetails(string name, int expectedStatus)
     {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = app.CreateClient();
+        var client = _app.CreateClient();
         await LoadSession(client);
 
-        var resp = await client.PostAsJsonAsync("/plugins/create", new { name = "" });
+        var resp = await client.PostAsJsonAsync("/plugins/create", new { name });
 
-        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
-        AssertIsProblemDetails(resp, 400);
+        Assert.Equal((HttpStatusCode)expectedStatus, resp.StatusCode);
+        AssertIsProblemDetails(resp, expectedStatus);
     }
 
-    [Fact]
-    public async Task CreatePlugin_InvalidExtension_ReturnsProblemDetails400()
-    {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = app.CreateClient();
-        await LoadSession(client);
+    // --- No session ---
 
-        var resp = await client.PostAsJsonAsync("/plugins/create", new { name = "Plugin.txt" });
-
-        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
-        AssertIsProblemDetails(resp, 400);
-    }
-
-    [Fact]
-    public async Task CreatePlugin_AlreadyExists_ReturnsProblemDetails409()
-    {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = app.CreateClient();
-        await LoadSession(client);
-
-        var resp = await client.PostAsJsonAsync("/plugins/create",
-            new { name = TestPluginFixture.PluginName });
-
-        Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
-        AssertIsProblemDetails(resp, 409);
-    }
-
-    [Fact]
-    public async Task CreatePlugin_NoSession_ReturnsProblemDetails503()
+    [Theory]
+    [InlineData("createPlugin", 503)]
+    [InlineData("patch",        500)]
+    [InlineData("copy",         500)]
+    [InlineData("save",         500)]
+    public async Task Endpoint_NoSession_ReturnsProblemDetails(string op, int expectedStatus)
     {
         await using var app = new WebApplicationFactory<Program>();
         var client = app.CreateClient();
 
-        var resp = await client.PostAsJsonAsync("/plugins/create", new { name = "New.esp" });
-
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, resp.StatusCode);
-        AssertIsProblemDetails(resp, 503);
-    }
-
-    // --- PATCH /records/{formKey} ---
-
-    [Fact]
-    public async Task PatchRecord_NoSession_ReturnsProblemDetails500()
-    {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = app.CreateClient();
         var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
+        var plugin  = Uri.EscapeDataString(TestPluginFixture.PluginName);
 
-        var resp = await client.PatchAsJsonAsync($"/records/{formKey}", new
+        var resp = op switch
         {
-            plugin = TestPluginFixture.PluginName,
-            fields = new Dictionary<string, object?> { ["editor_id"] = "x" },
-        });
+            "createPlugin" => await client.PostAsJsonAsync("/plugins/create", new { name = "New.esp" }),
+            "patch"        => await client.PatchAsJsonAsync($"/records/{formKey}", new
+                              {
+                                  plugin = TestPluginFixture.PluginName,
+                                  fields = new Dictionary<string, object?> { ["editor_id"] = "x" },
+                              }),
+            "copy"         => await client.PostAsync($"/records/{formKey}/copy-to/{plugin}", null),
+            _              => await client.PostAsync($"/plugins/{plugin}/save", null),
+        };
 
-        Assert.Equal(HttpStatusCode.InternalServerError, resp.StatusCode);
-        AssertIsProblemDetails(resp, 500);
-    }
-
-    // --- POST /records/{formKey}/copy-to/{plugin} ---
-
-    [Fact]
-    public async Task CopyRecord_NoSession_ReturnsProblemDetails500()
-    {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = app.CreateClient();
-        var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
-
-        var resp = await client.PostAsync(
-            $"/records/{formKey}/copy-to/{Uri.EscapeDataString(TestPluginFixture.PluginName)}",
-            null);
-
-        Assert.Equal(HttpStatusCode.InternalServerError, resp.StatusCode);
-        AssertIsProblemDetails(resp, 500);
-    }
-
-    // --- POST /plugins/{plugin}/save ---
-
-    [Fact]
-    public async Task SavePlugin_NoSession_ReturnsProblemDetails500()
-    {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = app.CreateClient();
-
-        var resp = await client.PostAsync(
-            $"/plugins/{Uri.EscapeDataString(TestPluginFixture.PluginName)}/save",
-            null);
-
-        Assert.Equal(HttpStatusCode.InternalServerError, resp.StatusCode);
-        AssertIsProblemDetails(resp, 500);
+        AssertIsProblemDetails(resp, expectedStatus);
     }
 
     private async Task LoadSession(HttpClient client)

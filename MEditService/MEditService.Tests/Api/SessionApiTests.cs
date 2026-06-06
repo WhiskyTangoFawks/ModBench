@@ -8,14 +8,18 @@ namespace MEditService.Tests.Api;
 public sealed class SessionApiTests : IClassFixture<TestPluginFixture>
 {
     private readonly TestPluginFixture _fixture;
+    private readonly WebApplicationFactory<Program> _app;
 
-    public SessionApiTests(TestPluginFixture fixture) => _fixture = fixture;
+    public SessionApiTests(TestPluginFixture fixture, ApiWebAppFixture webApp)
+    {
+        _fixture = fixture;
+        _app = webApp.App;
+    }
 
     [Fact]
     public async Task PostSessionLoad_WithRealPlugin_Returns200()
     {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = app.CreateClient();
+        var client = _app.CreateClient();
 
         var response = await client.PostAsJsonAsync("/session/load", new
         {
@@ -30,8 +34,7 @@ public sealed class SessionApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task PostSessionLoad_ThenGetPlugins_ReturnsLoadedPlugin()
     {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = app.CreateClient();
+        var client = _app.CreateClient();
 
         var load = await client.PostAsJsonAsync("/session/load", new
         {
@@ -50,8 +53,7 @@ public sealed class SessionApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task PostSessionLoad_ThenGetRecords_ReturnsIndexedRecords()
     {
-        await using var app = new WebApplicationFactory<Program>();
-        var client = app.CreateClient();
+        var client = _app.CreateClient();
 
         var load = await client.PostAsJsonAsync("/session/load", new
         {

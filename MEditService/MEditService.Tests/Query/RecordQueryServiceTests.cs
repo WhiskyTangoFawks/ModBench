@@ -652,6 +652,23 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
     }
 
     [Fact]
+    public void GetRecords_ByPlugin_StagedOnlyRecords_UnknownPlugin_HasNegativeOneLoadOrderIndex()
+    {
+        // "Unknown.esp" is not in _manager's Plugins list → FirstOrDefault returns null → ?? -1 fires.
+        var fk = FormKey.Factory("000001:Fallout4.esm");
+        var changes = MakePendingChangeService();
+        changes.Upsert(fk.ToString(), "Unknown.esp", "npc_",
+            new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
+            "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
+        var svc = new RecordQueryService(_manager, changes, new SchemaReflector(), new ConflictClassifier());
+
+        var result = svc.GetRecords(type: "npc_", plugin: "Unknown.esp", search: null, limit: 100, offset: 0);
+
+        Assert.Single(result.Items);
+        Assert.Equal(-1, result.Items[0].LoadOrderIndex);
+    }
+
+    [Fact]
     public void GetRecords_ByPlugin_StagedAlreadyCommittedRecordIsNotDuplicated()
     {
         // Pick an already-committed record from the loaded fixture, stage a pending change on it,
