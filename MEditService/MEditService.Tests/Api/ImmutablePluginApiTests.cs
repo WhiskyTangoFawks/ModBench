@@ -58,13 +58,13 @@ public sealed class ImmutablePluginApiTests : IClassFixture<ImmutablePluginFixtu
         var resp = op switch
         {
             "patch" => await client.PatchAsJsonAsync($"/records/{formKey}", new
-                       {
-                           plugin = ImmutablePluginFixture.ImmutablePluginName,
-                           fields = new Dictionary<string, object?> { ["editor_id"] = "Hacked" },
-                           source = "user",
-                       }),
-            "save"  => await client.PostAsync($"/plugins/{plugin}/save", null),
-            _       => await client.PostAsync($"/records/{formKey}/copy-to/{plugin}", null),
+            {
+                plugin = ImmutablePluginFixture.ImmutablePluginName,
+                fields = new Dictionary<string, object?> { ["editor_id"] = "Hacked" },
+                source = "user",
+            }),
+            "save" => await client.PostAsync($"/plugins/{plugin}/save", null),
+            _ => await client.PostAsync($"/records/{formKey}/copy-to/{plugin}", null),
         };
 
         Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);

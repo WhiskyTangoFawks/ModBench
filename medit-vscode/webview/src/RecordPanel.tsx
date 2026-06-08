@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrayRowGroup } from './ArrayRowGroup';
 import { FormKeyPicker } from './FormKeyPicker';
 import { StructRowGroup } from './StructRowGroup';
-import { buildColumns } from './recordUtils';
+import { buildColumns, toStr } from './recordUtils';
 import type { Column } from './recordUtils';
 import type { CompareOverride, CompareResult, ConflictAll, ConflictThis, FieldDiff, FieldMetadata, PendingChange, RecordDetail } from './types';
 import { vscode } from './vscode';
@@ -31,15 +31,16 @@ const baseCell: React.CSSProperties = {
 };
 
 const ROW_BG: Partial<Record<ConflictAll, string>> = {
-  Override: 'rgba(76,175,80,0.08)',
-  Conflict: 'rgba(255,152,0,0.08)',
+  Override:        'rgba(76,175,80,0.20)',
+  Conflict:        'rgba(255,152,0,0.20)',
+  ConflictCritical: 'rgba(244,67,54,0.20)',
 };
 
 const COL_BG: Partial<Record<ConflictThis, string>> = {
-  IdenticalToMaster: 'rgba(150,150,150,0.18)',
-  Override:          'rgba(76,175,80,0.18)',
-  ConflictWins:      'rgba(255,152,0,0.18)',
-  ConflictLoses:     'rgba(244,67,54,0.18)',
+  IdenticalToMaster: 'rgba(150,150,150,0.35)',
+  Override:          'rgba(76,175,80,0.35)',
+  ConflictWins:      'rgba(255,152,0,0.35)',
+  ConflictLoses:     'rgba(244,67,54,0.35)',
 };
 
 const getRowBg = (c: ConflictAll): string | undefined => ROW_BG[c];
@@ -55,14 +56,17 @@ interface ScalarCellProps {
 }
 
 export function ScalarCell({ value, meta, editMode, onCommit }: ScalarCellProps) {
-  const [draft, setDraft] = useState(value == null ? '' : String(value));
-
-  useEffect(() => { setDraft(value == null ? '' : String(value)); }, [value]);
+  const [draft, setDraft] = useState(() => toStr(value));
+  const [prevValue, setPrevValue] = useState(value);
+  if (prevValue !== value) {
+    setPrevValue(value);
+    setDraft(toStr(value));
+  }
 
   if (!editMode) {
     return value == null
       ? <span style={{ opacity: 0.35 }}>—</span>
-      : <span>{String(value)}</span>;
+      : <span>{toStr(value)}</span>;
   }
 
   const inputBase: React.CSSProperties = {
@@ -269,7 +273,7 @@ function PluginHeader({
           {showCopyPicker && (
             // onMouseDown on items fires before onBlur, so selection works correctly
             <div
-              onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) onCloseCopyPicker(); }}
+              onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) onCloseCopyPicker(); }}
               tabIndex={-1}
               style={{
                 position: 'absolute',
@@ -298,8 +302,8 @@ function PluginHeader({
                     fontSize: '11px',
                     color: 'var(--vscode-dropdown-foreground, #ccc)',
                   }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'var(--vscode-list-hoverBackground, #2a2d2e)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = ''; }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--vscode-list-hoverBackground, #2a2d2e)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
                 >
                   {p.name}
                   <span style={{ opacity: 0.55, marginLeft: 6 }}>[{p.loadOrderIndex}]</span>
@@ -368,7 +372,7 @@ function DiffRow({
           >
             {hasPending && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span>{String(pendingValue)}</span>
+                <span>{toStr(pendingValue)}</span>
                 {change && (
                   <button
                     onClick={() => onRevert(change.id)}
@@ -414,6 +418,7 @@ export function RecordPanel() {
   const refresh = useCallback(async (fk: string) => {
     if (!fk || !port) return;
     try {
+      setError(null);
       const [cmpRes, chgRes, pluginsRes] = await Promise.all([
         fetch(`http://localhost:${port}/records/${encodeURIComponent(fk)}/compare`),
         fetch(`http://localhost:${port}/changes?formKey=${encodeURIComponent(fk)}`),
@@ -432,18 +437,32 @@ export function RecordPanel() {
     }
   }, [port]);
 
+  const refreshRef = useRef(refresh);
+  useLayoutEffect(() => { refreshRef.current = refresh; }, [refresh]);
+
+  // When the handler drives a new-formKey navigation it calls refresh directly,
+  // so the [formKey, port] effect must skip to avoid a double request.
+  const prevFormKeyRef = useRef(formKey);
+  const skipNextRefreshEffect = useRef(false);
+
   // Listen for loadRecord messages from extension (panel reuse)
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const msg = event.data as { type?: string; formKey?: string };
       if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD && msg.formKey) {
+        if (msg.formKey !== prevFormKeyRef.current) {
+          // formKey will change → [formKey, port] effect will fire; skip it.
+          skipNextRefreshEffect.current = true;
+        }
         setFormKey(msg.formKey);
         setResult(null);
         setAllChanges([]);
         setError(null);
         setActionError(null);
         setEditMode(false);
+        setSavingPlugin(null);
         setCopyPickerPlugin(null);
+        void refreshRef.current(msg.formKey);
       }
     };
     window.addEventListener('message', handler);
@@ -451,13 +470,11 @@ export function RecordPanel() {
   }, []);
 
   useEffect(() => {
+    prevFormKeyRef.current = formKey;
     if (!formKey || !port) return;
-    setResult(null);
-    setAllChanges([]);
-    setError(null);
-    setActionError(null);
-    refresh(formKey);
-  }, [formKey, port, refresh]);
+    if (skipNextRefreshEffect.current) { skipNextRefreshEffect.current = false; return; }
+    void refreshRef.current(formKey);
+  }, [formKey, port]);
 
   async function handleEdit(plugin: string, fieldName: string, value: unknown) {
     setActionError(null);
@@ -519,6 +536,29 @@ export function RecordPanel() {
     vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: fk });
   }
 
+  const fieldMetaMap = useMemo((): Record<string, FieldMetadata> => {
+    const map: Record<string, FieldMetadata> = {};
+    for (const fv of result?.overrides[0]?.fields ?? []) map[fv.metadata.name] = fv.metadata;
+    return map;
+  }, [result]);
+
+  const overrideMap = useMemo((): Record<string, CompareOverride> => {
+    const map: Record<string, CompareOverride> = {};
+    for (const o of result?.overrides ?? []) map[o.plugin] = o;
+    return map;
+  }, [result]);
+
+  const columns = useMemo(
+    () => result ? buildColumns(result.overrides, immutableSet) : [],
+    [result, immutableSet],
+  );
+
+  const pendingChangeMap = useMemo((): Record<string, PendingChange> => {
+    const map: Record<string, PendingChange> = {};
+    for (const c of allChanges) map[`${c.plugin}:${c.fieldPath}`] = c;
+    return map;
+  }, [allChanges]);
+
   const containerStyle: React.CSSProperties = {
     padding: '12px',
     fontFamily: mono,
@@ -531,21 +571,6 @@ export function RecordPanel() {
   if (!result) return <div style={containerStyle}>Loading…</div>;
 
   const { overrides, diffs, conflictAll } = result;
-
-  const fieldMetaMap: Record<string, FieldMetadata> = {};
-  for (const fv of overrides[0]?.fields ?? []) {
-    fieldMetaMap[fv.metadata.name] = fv.metadata;
-  }
-
-  const overrideMap: Record<string, CompareOverride> = {};
-  for (const o of overrides) overrideMap[o.plugin] = o;
-
-  const columns = buildColumns(overrides, immutableSet);
-
-  const pendingChangeMap: Record<string, PendingChange> = {};
-  for (const c of allChanges) {
-    pendingChangeMap[`${c.plugin}:${c.fieldPath}`] = c;
-  }
 
   const winner = overrides.find(o => o.isWinner);
   const displayId = (winner ?? overrides[0])?.editorId;
@@ -595,10 +620,10 @@ export function RecordPanel() {
                         saving={savingPlugin === col.override.plugin}
                         showCopyPicker={copyPickerPlugin === col.override.plugin}
                         mutableTargets={allPlugins.filter(p => !p.isImmutable)}
-                        onSave={() => handleSave(col.override.plugin)}
+                        onSave={() => { void handleSave(col.override.plugin); }}
                         onOpenCopyPicker={() => setCopyPickerPlugin(col.override.plugin)}
                         onCloseCopyPicker={() => setCopyPickerPlugin(null)}
-                        onCopyTo={handleCopyTo}
+                        onCopyTo={p => { void handleCopyTo(p); }}
                       />
                     </th>
                   );
@@ -625,8 +650,8 @@ export function RecordPanel() {
                 port={port}
                 pendingChangeMap={pendingChangeMap}
                 onOpen={handleOpen}
-                onEdit={handleEdit}
-                onRevert={handleRevert}
+                onEdit={(plugin, fieldName, value) => { void handleEdit(plugin, fieldName, value); }}
+                onRevert={changeId => { void handleRevert(changeId); }}
               />
             ))}
           </tbody>

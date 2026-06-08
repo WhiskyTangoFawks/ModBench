@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { FormKeyPicker } from './FormKeyPicker';
 
@@ -13,7 +13,7 @@ describe('FormKeyPicker', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ items: mockResults }),
+      json: () => Promise.resolve({ items: mockResults }),
     }));
   });
 
@@ -79,11 +79,35 @@ describe('FormKeyPicker', () => {
   });
 
   it('includes the type param in the fetch URL for single validTypes', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ items: [] }) });
     vi.stubGlobal('fetch', fetchMock);
     render(<FormKeyPicker port={5172} validTypes={['kywd']} onSelect={vi.fn()} onClose={vi.fn()} />);
     fireEvent.change(screen.getByPlaceholderText('Search EditorID…'), { target: { value: 'sword' } });
     await waitFor(() => expect(fetchMock).toHaveBeenCalled(), { timeout: 1000 });
     expect(fetchMock.mock.calls[0][0]).toContain('type=kywd');
+  });
+
+  it('does not restore stale results when input is cleared while fetch is in-flight', async () => {
+    let resolveFetch!: () => void;
+    const fetchMock = vi.fn(() => new Promise<{ ok: boolean; json: () => Promise<{ items: typeof mockResults }> }>(resolve => {
+      resolveFetch = () => resolve({ ok: true, json: () => Promise.resolve({ items: mockResults }) });
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<FormKeyPicker port={5172} validTypes={[]} onSelect={vi.fn()} onClose={vi.fn()} />);
+    const input = screen.getByPlaceholderText('Search EditorID…');
+
+    fireEvent.change(input, { target: { value: 'my' } });
+    // Wait for debounce to fire and fetch to be called
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled(), { timeout: 1000 });
+
+    // Clear input — should abort the in-flight request
+    fireEvent.change(input, { target: { value: '' } });
+
+    // Resolve the stale fetch response
+    act(() => { resolveFetch(); });
+
+    // Results must not appear — request was aborted
+    expect(screen.queryByText('myKeyword [000001:Test.esp]')).not.toBeInTheDocument();
   });
 });

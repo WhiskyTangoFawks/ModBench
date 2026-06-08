@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StructRowGroup } from './StructRowGroup';
+import { toStr } from './recordUtils';
 import type { FieldMetadata } from './types';
 
 const mono = 'var(--vscode-editor-font-family, "Consolas", monospace)';
@@ -30,7 +31,7 @@ export function ArrayRowGroup({ value, meta, editMode, port, onOpen, onCommit, s
 
   function handleSort() {
     const sorted = [...items].sort((a, b) =>
-      String(a ?? '').localeCompare(String(b ?? ''), undefined, { sensitivity: 'base' })
+      toStr(a).localeCompare(toStr(b), undefined, { sensitivity: 'base' })
     );
     onCommit(sorted);
   }
@@ -124,7 +125,7 @@ function renderElement(
   parentKey: string,
 ): React.ReactNode {
   if (!elemMeta) {
-    return <span style={{ fontFamily: mono, fontSize: '12px', color: fg }}>{String(item ?? '')}</span>;
+    return <span style={{ fontFamily: mono, fontSize: '12px', color: fg }}>{toStr(item)}</span>;
   }
 
   if (elemMeta.type === 'struct') {
@@ -171,7 +172,7 @@ function renderElement(
   if (!editMode) {
     return item == null
       ? <span style={{ opacity: 0.35, fontFamily: mono, fontSize: '12px' }}>—</span>
-      : <span style={{ fontFamily: mono, fontSize: '12px' }}>{String(item)}</span>;
+      : <span style={{ fontFamily: mono, fontSize: '12px' }}>{toStr(item)}</span>;
   }
   const inputStyle: React.CSSProperties = {
     fontFamily: mono, fontSize: '12px',
@@ -187,7 +188,7 @@ function renderElement(
   return (
     <input
       type={elemMeta.type === 'int' || elemMeta.type === 'float' ? 'number' : 'text'}
-      defaultValue={item == null ? '' : String(item)}
+      defaultValue={toStr(item)}
       style={inputStyle}
       onBlur={e => onCommit(coerce(e.target.value))}
       onKeyDown={e => { if (e.key === 'Enter') { onCommit(coerce((e.target as HTMLInputElement).value)); (e.target as HTMLInputElement).blur(); } }}

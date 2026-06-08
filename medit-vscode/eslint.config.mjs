@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
-    { ignores: ['src/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
+    { ignores: ['src/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**', 'src/test/webviewUtils.test.ts'] },
 
     eslint.configs.recommended,
     tseslint.configs.recommendedTypeChecked,

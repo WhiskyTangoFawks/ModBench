@@ -39,7 +39,7 @@ cd MEditService && python ../.claude/skills/mutation-test/parse-report.py Stryke
 
 ## Handling survivors
 
-Don't fix survivors directly. Analyze → plan → get approval → dispatch subagents.
+Don't fix survivors directly. Analyze → plan → get approval → fix inline.
 
 **Propose an action for each survivor** using this triage order (stop at first that applies):
 
@@ -49,13 +49,11 @@ Don't fix survivors directly. Analyze → plan → get approval → dispatch sub
 - **Refactor** — no test writable (hidden dependency, unreachable branch); expose the seam
 - **Suppression** — last resort; flag explicitly for developer approval
 
-**Group survivors** that would be resolved by the same change (same file/method, same new test case). Each group becomes one subagent task.
+**Group survivors** that would be resolved by the same change (same file/method, same new test case).
 
 **Present the plan to the developer** — per group: which survivors, proposed action, one-sentence rationale. Wait for approval before continuing. If any proposal is for suppression, explicit developer yes is required before that group proceeds.
 
-**Dispatch one subagent per approved group.** Each subagent brief must state: the survivors it owns, the approved action, and **not to run mutation tests** — the orchestrating agent reruns after all subagents complete.
-
-**Rerun `run.sh`** after all subagents finish. Repeat from the top for any new survivors.
+**Fix each approved group inline**, one at a time. After all groups are done, rerun `run.sh`. Repeat from the top for any new survivors.
 
 **Never suppress without explicit developer approval.** Only logging may go untested — handled via `stryker-config.json`, never comment annotations.
 

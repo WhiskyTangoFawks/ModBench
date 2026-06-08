@@ -25,7 +25,7 @@ function makeHealthyHttpGet() {
 }
 
 function makeFailingHttpGet() {
-  vi.mocked(http.get).mockImplementation((_url: any, _cb: any) => {
+  vi.mocked(http.get).mockImplementation(() => {
     const req = Object.assign(new EventEmitter(), { destroy: vi.fn() });
     process.nextTick(() => req.emit('error', new Error('ECONNREFUSED')));
     return req as any;

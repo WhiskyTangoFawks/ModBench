@@ -188,21 +188,22 @@ The compare grid uses the two-axis model from ADR-0016.
 
 **Axis 1 — ConflictAll → row background color** (one value per record)
 
-| ConflictAll | Row background |
-|---|---|
-| OnlyOne, NoConflict | No tint |
-| Override | Subtle green |
-| Conflict | Subtle orange |
+| ConflictAll | Row background | Meaning |
+|---|---|---|
+| OnlyOne, NoConflict | No tint | Only in one plugin, or all overrides agree |
+| Override | Subtle green | Overrides exist but no real conflict |
+| Conflict | Subtle orange | Overrides disagree on a field |
+| ConflictCritical | Subtle red | Injected record (FormKey origin not in a plugin's master list) |
 
 **Axis 2 — ConflictThis → cell background + text color** (computed per-field per-plugin — a plugin may be Override on one field and ConflictLoses on another)
 
-| ConflictThis | Cell background | Text color |
-|---|---|---|
-| Master, OnlyOne | None | Default |
-| IdenticalToMaster | Grey | Default |
-| Override | Green | Default |
-| ConflictWins | Orange | Default |
-| ConflictLoses | Red | Red |
+| ConflictThis | Cell background | Text color | Meaning |
+|---|---|---|---|
+| Master, OnlyOne | None | Default | The master (origin) plugin or only plugin |
+| IdenticalToMaster | Grey | Default | Override present but field unchanged |
+| Override | Green | Default | Changed from master; no other plugin disagrees |
+| ConflictWins | Orange | Default | Disagrees with another override; this plugin is the winner |
+| ConflictLoses | Red | Red | Disagrees with another override; this plugin's value was overridden |
 
 Absent fields (null value in a non-master plugin — PartialForm absent-field rule) render with no background and no text color.
 

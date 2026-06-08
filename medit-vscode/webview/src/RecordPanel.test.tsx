@@ -47,12 +47,12 @@ describe('ScalarCell — edit mode', () => {
   it('renders a text input for string type', () => {
     render(<ScalarCell value="Dogmeat" meta={strMeta} editMode={true} onCommit={vi.fn()} />);
     expect(screen.getByDisplayValue('Dogmeat')).toBeInTheDocument();
-    expect((screen.getByDisplayValue('Dogmeat') as HTMLInputElement).type).toBe('text');
+    expect(screen.getByDisplayValue('Dogmeat').type).toBe('text');
   });
 
   it('renders a number input for int type', () => {
     render(<ScalarCell value={5} meta={intMeta} editMode={true} onCommit={vi.fn()} />);
-    expect((screen.getByDisplayValue('5') as HTMLInputElement).type).toBe('number');
+    expect(screen.getByDisplayValue('5').type).toBe('number');
   });
 
   it('calls onCommit with a number (not a string) when int input is blurred', () => {
@@ -77,7 +77,7 @@ describe('ScalarCell — edit mode', () => {
   it('renders a checkbox for bool type', () => {
     render(<ScalarCell value={false} meta={boolMeta} editMode={true} onCommit={vi.fn()} />);
     expect(screen.getByRole('checkbox')).toBeInTheDocument();
-    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByRole('checkbox').checked).toBe(false);
   });
 
   it('calls onCommit with true when bool checkbox is clicked', () => {
@@ -191,10 +191,10 @@ const pluginsResponse = [
 ];
 
 function makeFetch() {
-  return vi.fn(async (url: string) => {
-    if (String(url).includes('/compare')) return { ok: true, json: async () => compareResult };
-    if (String(url).includes('/changes'))  return { ok: true, json: async () => [] };
-    if (String(url).includes('/plugins'))  return { ok: true, json: async () => pluginsResponse };
+  return vi.fn((url: string) => {
+    if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(compareResult) };
+    if (String(url).includes('/changes'))  return { ok: true, json: () => Promise.resolve([]) };
+    if (String(url).includes('/plugins'))  return { ok: true, json: () => Promise.resolve(pluginsResponse) };
     return { ok: false, status: 404, statusText: 'Not Found' };
   });
 }
@@ -288,14 +288,68 @@ const fkCompareResult = {
   ],
 };
 
+// Override fixture — conflictAll: 'Override', second plugin has conflictThis: 'Override'
+const overrideCompareResult = {
+  conflictAll: 'Override',
+  overrides: [
+    { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }],
+      pendingFields: {}, conflictThis: 'Master' },
+    { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Override Name' }],
+      pendingFields: {}, conflictThis: 'Override' },
+  ],
+  diffs: [{ fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
+    winnerPlugin: 'MyMod.esp', winnerValue: 'Override Name' }],
+};
+
+describe('RecordPanel — conflict color coding', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('applies green row background when conflictAll is Override', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(overrideCompareResult) };
+      if (String(url).includes('/changes'))  return { ok: true, json: () => Promise.resolve([]) };
+      if (String(url).includes('/plugins'))  return { ok: true, json: () => Promise.resolve(pluginsResponse) };
+      return { ok: false, status: 404, statusText: 'Not Found' };
+    }));
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Name'));
+    const row = screen.getByText('Name').closest('tr')!;
+    expect(row.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
+  });
+
+  it('applies orange row background when conflictAll is Conflict', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', makeFetch());
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Name'));
+    const row = screen.getByText('Name').closest('tr')!;
+    expect(row.style.backgroundColor).toBe('rgba(255, 152, 0, 0.20)');
+  });
+
+  it('applies orange cell background when conflictThis is ConflictWins', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', makeFetch());
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Override Name'));
+    const cell = screen.getByText('Override Name').closest('td')!;
+    expect(cell.style.backgroundColor).toBe('rgba(255, 152, 0, 0.35)');
+  });
+});
+
 describe('RecordPanel — postMessage wiring', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     vi.stubGlobal('mEditBackendPort', 15172);
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (String(url).includes('/compare')) return { ok: true, json: async () => fkCompareResult };
-      if (String(url).includes('/changes'))  return { ok: true, json: async () => [] };
-      if (String(url).includes('/plugins'))  return { ok: true, json: async () => [{ name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 }] };
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(fkCompareResult) };
+      if (String(url).includes('/changes'))  return { ok: true, json: () => Promise.resolve([]) };
+      if (String(url).includes('/plugins'))  return { ok: true, json: () => Promise.resolve([{ name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 }]) };
       return { ok: false, status: 404, statusText: 'Not Found' };
     }));
     vi.mocked(vscode.postMessage).mockClear();
@@ -317,7 +371,7 @@ describe('RecordPanel — postMessage wiring', () => {
     render(<RecordPanel />);
     await waitFor(() => screen.getByText('TestNPC [000001:Fallout4.esm]'));
 
-    await act(async () => {
+    act(() => {
       window.dispatchEvent(new MessageEvent('message', {
         data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000002:Fallout4.esm' },
       }));
@@ -328,5 +382,89 @@ describe('RecordPanel — postMessage wiring', () => {
         expect.stringContaining('000002%3AFallout4.esm'),
       ),
     );
+  });
+});
+
+// ── LOAD_RECORD state management (bugs 1, 2, 3) ───────────────────────────────
+
+describe('RecordPanel — LOAD_RECORD state management', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('resets savingPlugin when LOAD_RECORD arrives while a save is in-flight', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (String(url).includes('/save')) return new Promise(() => {}); // never resolves
+      if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(compareResult) };
+      if (String(url).includes('/changes')) return { ok: true, json: () => Promise.resolve([]) };
+      if (String(url).includes('/plugins')) return { ok: true, json: () => Promise.resolve(pluginsResponse) };
+      return { ok: false, status: 404, statusText: 'Not Found' };
+    }));
+
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Edit'));
+    await waitFor(() => screen.getByText('Save'));
+    fireEvent.click(screen.getByText('Save'));
+    await waitFor(() => screen.getByText('Saving…'));
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000002:Fallout4.esm' },
+      }));
+    });
+
+    // After LOAD_RECORD, new record loads with same plugins; clicking Edit should not show "Saving…"
+    await waitFor(() => screen.getByText(/TestNPC/));
+    fireEvent.click(screen.getByText('Edit'));
+    expect(screen.queryByText('Saving…')).not.toBeInTheDocument();
+    expect(screen.getByText('Save')).not.toBeDisabled();
+  });
+
+  it('re-fetches data when LOAD_RECORD arrives with the same formKey', async () => {
+    const fetchMock = makeFetch();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText(/TestNPC/));
+    const callsBefore = fetchMock.mock.calls.length;
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000001:Fallout4.esm' },
+      }));
+    });
+
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore));
+    // Panel should recover from Loading… and show data
+    await waitFor(() => screen.getByText(/TestNPC/));
+  });
+
+  it('clears error and shows data after a successful refresh following a load failure', async () => {
+    let shouldFail = true;
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (String(url).includes('/compare')) {
+        if (shouldFail) return { ok: false, status: 500, statusText: 'Internal Server Error' };
+        return { ok: true, json: () => Promise.resolve(compareResult) };
+      }
+      if (String(url).includes('/changes')) return { ok: true, json: () => Promise.resolve([]) };
+      if (String(url).includes('/plugins')) return { ok: true, json: () => Promise.resolve(pluginsResponse) };
+      return { ok: false, status: 404, statusText: 'Not Found' };
+    }));
+
+    render(<RecordPanel />);
+    await waitFor(() => expect(screen.getByText(/Error:/)).toBeInTheDocument());
+
+    shouldFail = false;
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000001:Fallout4.esm' },
+      }));
+    });
+
+    await waitFor(() => expect(screen.queryByText(/Error:/)).not.toBeInTheDocument());
+    await waitFor(() => screen.getByText(/TestNPC/));
   });
 });

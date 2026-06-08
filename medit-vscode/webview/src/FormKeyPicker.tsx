@@ -29,20 +29,24 @@ export function FormKeyPicker({ port, validTypes, onSelect, onClose }: Props) {
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (!query.trim()) { setResults([]); return; }
-    timerRef.current = setTimeout(async () => {
-      try {
-        const typeParam = validTypes.length === 1 ? `&type=${encodeURIComponent(validTypes[0])}` : '';
-        const r = await fetch(
-          `http://localhost:${port}/records?search=${encodeURIComponent(query)}${typeParam}&limit=20`
-        );
-        if (!r.ok) return;
-        const data = await r.json() as { items: RecordSummary[] };
-        setResults(data.items ?? []);
-        setSelectedIdx(0);
-      } catch { /* ignore network errors */ }
+    if (!query.trim()) return;
+    const controller = new AbortController();
+    timerRef.current = setTimeout(() => {
+      void (async () => {
+        try {
+          const typeParam = validTypes.length === 1 ? `&type=${encodeURIComponent(validTypes[0])}` : '';
+          const r = await fetch(
+            `http://localhost:${port}/records?search=${encodeURIComponent(query)}${typeParam}&limit=20`,
+            { signal: controller.signal }
+          );
+          if (!r.ok || controller.signal.aborted) return;
+          const data = await r.json() as { items: RecordSummary[] };
+          setResults(data.items ?? []);
+          setSelectedIdx(0);
+        } catch { /* ignore network + abort errors */ }
+      })();
     }, 200);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+    return () => { controller.abort(); if (timerRef.current) clearTimeout(timerRef.current); };
   }, [query, port, validTypes]);
 
   useEffect(() => {
@@ -62,7 +66,7 @@ export function FormKeyPicker({ port, validTypes, onSelect, onClose }: Props) {
       <input
         ref={inputRef}
         value={query}
-        onChange={e => setQuery(e.target.value)}
+        onChange={e => { setQuery(e.target.value); if (!e.target.value.trim()) setResults([]); }}
         onKeyDown={handleKeyDown}
         onBlur={() => setTimeout(onClose, 150)}
         placeholder="Search EditorID…"

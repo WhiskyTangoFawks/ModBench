@@ -62,10 +62,12 @@ All scope failures reported together — fix all, then rerun. With TDD, expect p
 ### Step 2 — Simplify (LLM)
 /simplify
 
-If simplify changes logic (not just style), rerun Step 1.
+Review findings with developer, propose which to accept/reject, and wait for the developers decision before continuing.If simplify changes logic (not just style), rerun Step 1.
 
 ### Step 3 — Code review (LLM)
 /code-review
+
+Review findings with developer, propose which to accept/reject, and wait for the developers decision before continuing. If any changes are made, rerun Step 1.
 
 ### Step 4 — Mutation tests (only if Core CS changed)
 cd MEditService && bash ../.claude/skills/mutation-test/run.sh

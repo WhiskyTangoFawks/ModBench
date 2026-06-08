@@ -134,6 +134,27 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     }
 
     [Fact]
+    public async Task Compare_ConflictEnums_SerializedAsStrings()
+    {
+        var client = await LoadedClient();
+        var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
+
+        var compareJson = await client.GetStringAsync($"/records/{formKey}/compare");
+        var compare = JsonSerializer.Deserialize<JsonElement>(compareJson);
+
+        var conflictAll = compare.GetProperty("conflictAll");
+        Assert.Equal(JsonValueKind.String, conflictAll.ValueKind);
+        Assert.NotEmpty(conflictAll.GetString()!);
+
+        foreach (var ov in compare.GetProperty("overrides").EnumerateArray())
+        {
+            var conflictThis = ov.GetProperty("conflictThis");
+            Assert.Equal(JsonValueKind.String, conflictThis.ValueKind);
+            Assert.NotEmpty(conflictThis.GetString()!);
+        }
+    }
+
+    [Fact]
     public async Task Compare_AfterPatch_IncludesPendingFields()
     {
         var client = await LoadedClient();

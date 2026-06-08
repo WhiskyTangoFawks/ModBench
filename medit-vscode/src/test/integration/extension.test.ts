@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as http from 'http';
 import * as vscode from 'vscode';
+import { before, after, describe, it } from 'mocha';
 
 const TEST_PORT = 15172;
 let mockBackend: http.Server;

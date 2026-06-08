@@ -38,9 +38,9 @@ Our original four states are actually a subset of `ConflictAll`. Implementing on
 - `ctConflictWins` — wins the conflict (last plugin to change this field)
 - `ctConflictLoses` — loses the conflict (overwritten by a later plugin)
 
-### ConflictPriority modifies the outcome
+### ConflictPriority modifies the outcome in xEdit
 
-Every field definition carries a `ConflictPriority` that the algorithm consults before classifying:
+Every field definition in xEdit carries a `ConflictPriority` that the algorithm consults before classifying:
 
 | Priority | Effect on detection |
 |---|---|
@@ -70,11 +70,21 @@ A record with the `IsPartialForm` header flag intentionally omits fields it does
 
 **Adopt the two-axis model.** Every override-stack computation produces both a `ConflictAll` for the record and a `ConflictThis` for each plugin's version. Both are returned by the API and used in the UI.
 
-**Implementation in two tiers:**
+**Implemented:**
 
-**Tier 1 (Phase 9):** Full two-axis classification using Mutagen field values for comparison. `ConflictThis` and `ConflictAll` values match xEdit semantics for the common cases (identical-to-master, override, conflict wins/loses). `cpBenign`, `cpIgnore`, and `cpCritical` are deferred.
+- Full two-axis classification using Mutagen field values for comparison. `ConflictThis` and `ConflictAll` values match xEdit semantics for the common cases (identical-to-master, override, conflict wins/loses).
+- Injected record detection: if an override plugin's master list does not include the FormKey's origin plugin, the record is flagged `ConflictCritical`. This is a game-agnostic structural check that does not require a priority table.
+- Sorted array order-independent comparison: driven by `FieldMetadata.ElementType.IsSortable` (set by `SchemaReflector` for FormLink arrays), not a lookup table. Two sorted arrays with the same elements in different order do not register as a conflict.
 
-**Tier 2 (later phase):** Per-field `ConflictPriority` refinement, `cpBenignIfAdded` (XLRL), `cpNormalIgnoreEmpty` (DOBJ/actor templates), and sorted-array element matching. These require the TES5Edit field definitions as a reference table.
+**Not implemented — `ConflictPriority` table:**
+
+Investigation revealed that xEdit's `ConflictPriority` system exists because xEdit operates at the raw binary level and must paper over redundant count fields, unused bytes, and internal bookkeeping that appear in the raw record structure. Mutagen abstracts all of that away — those fields simply do not appear in the DuckDB schema. A `ConflictPriority` table would annotate fields that do not exist in our system and would never be consulted. The cpIgnore/cpBenign/cpCritical branches were accordingly removed.
+
+**Final enum values:**
+
+`ConflictAll`: `OnlyOne`, `NoConflict`, `Override`, `Conflict`, `ConflictCritical`
+
+`ConflictThis`: `OnlyOne`, `Master`, `IdenticalToMaster`, `Override`, `ConflictWins`, `ConflictLoses`
 
 **Update CONTEXT.md** conflict state glossary to reflect the two-axis model and retire the simplified four-state definitions.
 
@@ -91,6 +101,6 @@ A record with the `IsPartialForm` header flag intentionally omits fields it does
 
 **Keep the four-state model** — cannot drive per-cell color coding. The "Change Lost" state (a mid-stack change overwritten by a later plugin) maps to `ctConflictLoses` on a specific plugin column, which requires ConflictThis to exist at all.
 
-**Implement ConflictPriority in Tier 1** — the priority table is derived from the xEdit definition files and requires building a lookup table of `(record_type, field_name) → priority`. This is significant additional work and can be added incrementally once the base two-axis model is working.
+**Implement ConflictPriority table** — investigated during Phase 9.5. The priority system exists because xEdit works at the raw binary level and must paper over redundant count fields, unused bytes, and internal bookkeeping. Mutagen abstracts all of those away — those fields do not appear in the DuckDB schema. The table would annotate fields that don't exist in our system. Closed; not deferred.
 
 **Compute conflict state in DuckDB SQL** — conflict classification requires iterating the override stack in load-order position and comparing field values across rows. DuckDB's `GROUP BY` + `COUNT(DISTINCT value)` approximation would give a binary "agrees/disagrees" per field but cannot produce `ConflictThis` per plugin or distinguish `ctConflictWins` from `ctConflictLoses`. The classification belongs in C# using the full record objects, with results persisted to DuckDB for filtering.

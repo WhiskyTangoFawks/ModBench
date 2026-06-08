@@ -80,7 +80,7 @@ describe('detectGamePaths (Linux)', () => {
   });
 
   it('returns correct paths when FO4 library found', async () => {
-    vi.mocked(fs.readFile).mockResolvedValue(VDF_WITH_FO4 as any);
+    vi.mocked(fs.readFile).mockResolvedValue(VDF_WITH_FO4);
     vi.mocked(fs.access).mockResolvedValue(undefined);
 
     const result = await detectGamePaths();

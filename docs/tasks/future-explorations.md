@@ -1,5 +1,11 @@
 # mEdit — Deferred / Stretch Goals
 
+## Technical debt
+
+- **Cache `pluginMasters` dict on session** — `RecordQueryService.GetCompare` rebuilds `Plugins.ToDictionary(p => p.Name, p => p.Masters)` on every compare call; session is immutable so this can be computed once at session-load time and stored on `IGameSession` or lazily on the service. Low priority until 255-plugin load orders become common.
+- **Fold injection into `ComputeConflictAll`** — `IsInjectedRecord` post-hoc overwrites `conflictAll` after classification finishes, meaning `ConflictCritical` fires even on `NoConflict`/`Override` injected records. Clarify the domain rule (is an injected but content-identical record still critical?) then move injection into `ComputeConflictAll` so it's one factor in the grade rather than a silent override.
+- **`PluginContext` record for `IConflictClassifier`** — the interface takes `IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters`, a raw projection of `PluginMetadata`. If the classifier needs a second property (e.g. implicit-master flag for `.esm` injection semantics), a second parallel dict would need threading through. Introduce a small `record PluginContext(string Name, IReadOnlyList<string> Masters)` and map `PluginMetadata → PluginContext` in `RecordQueryService`. Do this when the classifier needs its second property.
+
 ## Near-term deferred
 - **Non-FO4 game support** — backend architecture complete (Phase M); blocked on adding `Mutagen.Bethesda.Skyrim`, `.Oblivion`, `.Starfield` NuGet packages + extension game-picker wiring
 - **Backend binary bundled in VSIX** — package .NET self-contained binary into the extension so users don't need a separate install step
@@ -26,3 +32,11 @@
 - Previsibine generation
 - **Asset handling** — resolve loose-file and BA2-packed assets referenced by records (textures, meshes, sounds); repeat XEdit hash textures so faction paintjob distribution can be migrated
 - Vector DB for semantic lookup with standalone MCP server → this work is inherently template based, so being able to do a lookup is going to be fairly critical for a more automated agent → need to dump the FO4 wiki here too...
+
+## MO2 Functionality
+- 2nd Tree view of the left hand window
+    * Opt 1 - use native MO2 folder structure viewer
+    * Opt 2 - some sort of tree viewer -> tree viewer is bad for editting
+    * Req: Archive parsing
+- Drag and Drop Plugin Ordering in plugin tree
+- Launch Game --> vscode run configuration

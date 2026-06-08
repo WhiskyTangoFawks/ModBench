@@ -32,13 +32,13 @@ function makeClient({
     POST: vi.fn().mockImplementation((path: string) => {
       if (path === '/plugins/create') {
         return Promise.resolve({
-          response: { ok: createPluginOk, status: createPluginOk ? 200 : 400, text: async () => 'Bad Request' },
+          response: { ok: createPluginOk, status: createPluginOk ? 200 : 400, text: () => Promise.resolve('Bad Request') },
           data: createPluginOk ? { name: 'test.esp' } : undefined,
         });
       }
       if (path === '/records/{formKey}/copy-to/{targetPlugin}') {
         return Promise.resolve({
-          response: { ok: copyRecordOk, status: copyRecordOk ? 200 : 400, text: async () => 'Copy failed' },
+          response: { ok: copyRecordOk, status: copyRecordOk ? 200 : 400, text: () => Promise.resolve('Copy failed') },
         });
       }
       return Promise.resolve({ response: { ok: true } });

@@ -32,9 +32,9 @@ public sealed class ProblemDetailsApiTests : IClassFixture<TestPluginFixture>
     // --- POST /session/load ---
 
     [Theory]
-    [InlineData("badFolder", null,         "Fallout4")]
-    [InlineData(null,        "badPlugins", "Fallout4")]
-    [InlineData(null,        null,         "NotAGame")]
+    [InlineData("badFolder", null, "Fallout4")]
+    [InlineData(null, "badPlugins", "Fallout4")]
+    [InlineData(null, null, "NotAGame")]
     public async Task SessionLoad_InvalidInput_ReturnsProblemDetails400(
         string? badFolder, string? badPlugins, string gameRelease)
     {
@@ -53,8 +53,8 @@ public sealed class ProblemDetailsApiTests : IClassFixture<TestPluginFixture>
     // --- POST /plugins/create ---
 
     [Theory]
-    [InlineData("",                           400)]
-    [InlineData("Plugin.txt",                 400)]
+    [InlineData("", 400)]
+    [InlineData("Plugin.txt", 400)]
     [InlineData(TestPluginFixture.PluginName, 409)]
     public async Task CreatePlugin_InvalidInput_ReturnsProblemDetails(string name, int expectedStatus)
     {
@@ -71,27 +71,27 @@ public sealed class ProblemDetailsApiTests : IClassFixture<TestPluginFixture>
 
     [Theory]
     [InlineData("createPlugin", 503)]
-    [InlineData("patch",        500)]
-    [InlineData("copy",         500)]
-    [InlineData("save",         500)]
+    [InlineData("patch", 500)]
+    [InlineData("copy", 500)]
+    [InlineData("save", 500)]
     public async Task Endpoint_NoSession_ReturnsProblemDetails(string op, int expectedStatus)
     {
         await using var app = new WebApplicationFactory<Program>();
         var client = app.CreateClient();
 
         var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
-        var plugin  = Uri.EscapeDataString(TestPluginFixture.PluginName);
+        var plugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
 
         var resp = op switch
         {
             "createPlugin" => await client.PostAsJsonAsync("/plugins/create", new { name = "New.esp" }),
-            "patch"        => await client.PatchAsJsonAsync($"/records/{formKey}", new
-                              {
-                                  plugin = TestPluginFixture.PluginName,
-                                  fields = new Dictionary<string, object?> { ["editor_id"] = "x" },
-                              }),
-            "copy"         => await client.PostAsync($"/records/{formKey}/copy-to/{plugin}", null),
-            _              => await client.PostAsync($"/plugins/{plugin}/save", null),
+            "patch" => await client.PatchAsJsonAsync($"/records/{formKey}", new
+            {
+                plugin = TestPluginFixture.PluginName,
+                fields = new Dictionary<string, object?> { ["editor_id"] = "x" },
+            }),
+            "copy" => await client.PostAsync($"/records/{formKey}/copy-to/{plugin}", null),
+            _ => await client.PostAsync($"/plugins/{plugin}/save", null),
         };
 
         AssertIsProblemDetails(resp, expectedStatus);

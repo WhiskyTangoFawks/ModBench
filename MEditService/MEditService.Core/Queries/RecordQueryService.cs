@@ -107,7 +107,9 @@ public sealed class RecordQueryService : IRecordQueryService
                 return o with { PendingFields = pending.ToDictionary(kv => kv.Key, kv => (object?)kv.Value) };
             }).ToList();
 
-            var classification = _conflictClassifier.Classify(withPending);
+            var pluginMasters = RequireSession().Plugins
+                .ToDictionary(p => p.Name, p => p.Masters);
+            var classification = _conflictClassifier.Classify(withPending, pluginMasters);
             var annotated = withPending
                 .Select(o => new CompareOverride(
                     o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields, o.PendingFields,

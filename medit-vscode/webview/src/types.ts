@@ -14,7 +14,7 @@ export interface FieldValue {
   value: unknown;
 }
 
-export type ConflictAll = 'OnlyOne' | 'NoConflict' | 'Override' | 'Conflict';
+export type ConflictAll = 'OnlyOne' | 'NoConflict' | 'Override' | 'Conflict' | 'ConflictCritical';
 export type ConflictThis = 'OnlyOne' | 'Master' | 'IdenticalToMaster' | 'Override' | 'ConflictWins' | 'ConflictLoses';
 
 export interface RecordDetail {

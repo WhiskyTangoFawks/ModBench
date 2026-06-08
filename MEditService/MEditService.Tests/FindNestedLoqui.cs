@@ -19,35 +19,35 @@ public class FindNestedLoquiTest
             .ToList();
 
         Console.WriteLine($"Checking {getterTypes.Count} Getter types...");
-        
+
         int foundCount = 0;
         foreach (var getterType in getterTypes)
         {
             var props = getterType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-            
+
             foreach (var prop in props)
             {
                 var propType = prop.PropertyType;
-                
+
                 // Check if it's an IReadOnlyList<T>
                 if (!propType.IsGenericType) continue;
                 var genDef = propType.GetGenericTypeDefinition();
                 if (genDef.Name != "IReadOnlyList`1") continue;
-                
+
                 var elemType = propType.GetGenericArguments()[0];
-                
+
                 // Check if element type is a Loqui (ends with Getter)
                 if (!elemType.Name.EndsWith("Getter")) continue;
-                
+
                 // Now check if that Loqui element type has properties that are themselves Loqui interfaces
                 var elemProps = elemType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-                var nestedLoquiProps = elemProps.Where(p => 
-                    p.PropertyType.IsInterface && 
+                var nestedLoquiProps = elemProps.Where(p =>
+                    p.PropertyType.IsInterface &&
                     p.PropertyType.Name.EndsWith("Getter") &&
                     !p.PropertyType.Name.Contains("FormLink") &&
                     p.PropertyType.Name != "IKeywordGetter"
                 ).ToList();
-                
+
                 if (nestedLoquiProps.Count > 0)
                 {
                     foundCount++;
@@ -62,7 +62,7 @@ public class FindNestedLoquiTest
                 }
             }
         }
-        
+
         if (foundCount == 0)
         {
             Console.WriteLine("No nested Loqui-in-Loqui-in-list found.");
@@ -71,7 +71,7 @@ public class FindNestedLoquiTest
         {
             Console.WriteLine($"Found {foundCount} examples total.");
         }
-        
+
         // Dummy assertion to keep xunit happy
         Assert.True(true);
     }

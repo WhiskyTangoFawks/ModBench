@@ -3,7 +3,6 @@ import type { ApiClient, PluginMetadata, RecordSummary } from './ApiClient';
 
 type PluginResponse = components['schemas']['PluginResponse'];
 type GeneratedRecordSummary = components['schemas']['RecordSummary'];
-type RecordSummaryPagedResult = components['schemas']['RecordSummaryPagedResult'];
 type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 
 function toPluginMetadata(r: PluginResponse): PluginMetadata {

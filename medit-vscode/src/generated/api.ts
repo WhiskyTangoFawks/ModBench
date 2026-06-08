@@ -216,10 +216,28 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        CompareResult: {
-            overrides?: components["schemas"]["RecordDetail"][] | null;
-            diffs?: components["schemas"]["FieldDiff"][] | null;
+        CompareOverride: {
+            formKey?: string | null;
+            plugin?: string | null;
+            /** Format: int32 */
+            loadOrderIndex?: number;
+            isWinner?: boolean;
+            editorId?: string | null;
+            fields?: components["schemas"]["FieldValue"][] | null;
+            pendingFields?: {
+                [key: string]: unknown;
+            } | null;
+            conflictThis?: components["schemas"]["ConflictThis"];
         };
+        CompareResult: {
+            overrides?: components["schemas"]["CompareOverride"][] | null;
+            diffs?: components["schemas"]["FieldDiff"][] | null;
+            conflictAll?: components["schemas"]["ConflictAll"];
+        };
+        /** @enum {string} */
+        ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictCritical";
+        /** @enum {string} */
+        ConflictThis: "OnlyOne" | "Master" | "IdenticalToMaster" | "Override" | "ConflictWins" | "ConflictLoses";
         CreatePluginRequest: {
             name?: string | null;
         };
@@ -228,7 +246,6 @@ export interface components {
             values?: {
                 [key: string]: unknown;
             } | null;
-            isConflict?: boolean;
             winnerPlugin?: string | null;
             winnerValue?: unknown;
         };
@@ -466,6 +483,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": number;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

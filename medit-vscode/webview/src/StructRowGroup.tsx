@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { toStr } from './recordUtils';
 import type { FieldMetadata } from './types';
 
 const mono = 'var(--vscode-editor-font-family, "Consolas", monospace)';
@@ -131,7 +132,7 @@ function renderSubCell(
   if (!editMode) {
     return value == null
       ? <span style={{ opacity: 0.35, fontFamily: mono, fontSize: '12px' }}>—</span>
-      : <span style={{ fontFamily: mono, fontSize: '12px' }}>{String(value)}</span>;
+      : <span style={{ fontFamily: mono, fontSize: '12px' }}>{toStr(value)}</span>;
   }
   // Edit mode for scalar
   const inputStyle: React.CSSProperties = {
@@ -149,13 +150,13 @@ function renderSubCell(
   }
   if (meta.type === 'enum' && meta.enumValues.length > 0) {
     return (
-      <select value={String(value ?? '')} style={inputStyle}
+      <select value={toStr(value)} style={inputStyle}
         onChange={e => onCommit(e.target.value)}>
         {meta.enumValues.map(ev => <option key={ev}>{ev}</option>)}
       </select>
     );
   }
-  const strValue = value == null ? '' : String(value);
+  const strValue = toStr(value);
   function coerce(s: string): unknown {
     if (meta.type === 'int')   { const n = parseInt(s, 10);   return isNaN(n) ? value : n; }
     if (meta.type === 'float') { const n = parseFloat(s);     return isNaN(n) ? value : n; }

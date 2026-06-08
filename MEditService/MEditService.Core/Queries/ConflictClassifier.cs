@@ -1,8 +1,12 @@
+using Mutagen.Bethesda.Plugins;
+
 namespace MEditService.Core.Queries;
 
 public sealed class ConflictClassifier : IConflictClassifier
 {
-    public ClassifyResult Classify(IReadOnlyList<RecordDetail> conflictingRecords)
+    public ClassifyResult Classify(
+        IReadOnlyList<RecordDetail> conflictingRecords,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters)
     {
         if (conflictingRecords.Count == 0)
             return new ClassifyResult(ConflictAll.OnlyOne, new Dictionary<string, ConflictThis>(), []);
@@ -16,15 +20,25 @@ public sealed class ConflictClassifier : IConflictClassifier
         }
 
         var master = conflictingRecords[0];
-        var winner = conflictingRecords.First(o => o.IsWinner);
+        var winner = conflictingRecords.FirstOrDefault(o => o.IsWinner)
+            ?? throw new InvalidOperationException(
+                $"No winner in {conflictingRecords.Count} overrides for FormKey '{conflictingRecords[0].FormKey}'");
         var masterValues = IndexByName(master.Fields);
+        var sortedArrays = conflictingRecords
+            .SelectMany(r => r.Fields)
+            .Where(f => f.Metadata.ElementType?.IsSortable == true)
+            .Select(f => f.Metadata.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var diffs = BuildDiffs(master.Fields.Select(f => f.Metadata.Name).ToList(), conflictingRecords, winner);
 
-        var conflictAll = ComputeConflictAll(master.Plugin, masterValues, conflictingRecords, diffs);
+        var conflictAll = ComputeConflictAll(master.Plugin, masterValues, conflictingRecords, diffs, sortedArrays);
 
         var pluginConflictThis = conflictingRecords.ToDictionary(
             o => o.Plugin,
-            o => ComputeConflictThis(o, master.Plugin, masterValues, winner, conflictingRecords));
+            o => ComputeConflictThis(o, master.Plugin, masterValues, winner, conflictingRecords, sortedArrays));
+
+        if (IsInjectedRecord(conflictingRecords, pluginMasters))
+            conflictAll = ConflictAll.ConflictCritical;
 
         return new ClassifyResult(conflictAll, pluginConflictThis, diffs);
     }
@@ -33,10 +47,13 @@ public sealed class ConflictClassifier : IConflictClassifier
         string masterPlugin,
         Dictionary<string, object?> masterValues,
         IReadOnlyList<RecordDetail> overrides,
-        IReadOnlyList<FieldDiff> diffs)
+        IReadOnlyList<FieldDiff> diffs,
+        HashSet<string> sortedArrays)
     {
         var hasAnyChange = overrides.Skip(1).Any(o =>
-            o.Fields.Any(f => f.Value != null && !ValuesEqual(f.Value, masterValues.GetValueOrDefault(f.Metadata.Name))));
+            o.Fields.Any(f =>
+                f.Value != null &&
+                !ValuesEqual(f.Value, masterValues.GetValueOrDefault(f.Metadata.Name), sortedArrays.Contains(f.Metadata.Name))));
 
         if (!hasAnyChange) return ConflictAll.NoConflict;
 
@@ -44,9 +61,7 @@ public sealed class ConflictClassifier : IConflictClassifier
             d.Values
                 .Where(kv => kv.Key != masterPlugin && kv.Value != null)
                 .Select(kv => kv.Value?.ToString())
-                .Distinct()
-                .Skip(1)
-                .Any());
+                .Distinct().Skip(1).Any());
 
         return hasConflict ? ConflictAll.Conflict : ConflictAll.Override;
     }
@@ -56,14 +71,17 @@ public sealed class ConflictClassifier : IConflictClassifier
         string masterPlugin,
         Dictionary<string, object?> masterValues,
         RecordDetail winner,
-        IReadOnlyList<RecordDetail> all)
+        IReadOnlyList<RecordDetail> all,
+        HashSet<string> sortedArrays)
     {
         if (plugin.Plugin == masterPlugin) return ConflictThis.Master;
 
         var pluginValues = IndexByName(plugin.Fields);
 
         var changedFields = pluginValues
-            .Where(kv => kv.Value != null && !ValuesEqual(kv.Value, masterValues.GetValueOrDefault(kv.Key)))
+            .Where(kv =>
+                kv.Value != null &&
+                !ValuesEqual(kv.Value, masterValues.GetValueOrDefault(kv.Key), sortedArrays.Contains(kv.Key)))
             .Select(kv => kv.Key)
             .ToHashSet();
 
@@ -77,7 +95,7 @@ public sealed class ConflictClassifier : IConflictClassifier
                 .Any(f =>
                     changedFields.Contains(f.Metadata.Name) &&
                     f.Value != null &&
-                    !ValuesEqual(f.Value, pluginValues.GetValueOrDefault(f.Metadata.Name)));
+                    !ValuesEqual(f.Value, pluginValues.GetValueOrDefault(f.Metadata.Name), sortedArrays.Contains(f.Metadata.Name)));
             return contested ? ConflictThis.ConflictWins : ConflictThis.Override;
         }
         else
@@ -86,10 +104,22 @@ public sealed class ConflictClassifier : IConflictClassifier
             var lost = changedFields.Any(field =>
             {
                 var winnerVal = winnerValues.GetValueOrDefault(field);
-                return winnerVal != null && !ValuesEqual(winnerVal, pluginValues.GetValueOrDefault(field));
+                return winnerVal != null && !ValuesEqual(winnerVal, pluginValues.GetValueOrDefault(field), sortedArrays.Contains(field));
             });
             return lost ? ConflictThis.ConflictLoses : ConflictThis.Override;
         }
+    }
+
+    private static bool IsInjectedRecord(
+        IReadOnlyList<RecordDetail> overrides,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters)
+    {
+        if (!FormKey.TryFactory(overrides[0].FormKey, out var formKey)) return false;
+        var originPlugin = formKey.ModKey.FileName.String;
+
+        return overrides.Skip(1).Any(o =>
+            pluginMasters.TryGetValue(o.Plugin, out var masters) &&
+            !masters.Contains(originPlugin, StringComparer.OrdinalIgnoreCase));
     }
 
     private static List<FieldDiff> BuildDiffs(
@@ -111,11 +141,23 @@ public sealed class ConflictClassifier : IConflictClassifier
     private static Dictionary<string, object?> IndexByName(IReadOnlyList<FieldValue> fields) =>
         fields.ToDictionary(f => f.Metadata.Name, f => f.Value);
 
-    // JsonElement doesn't override Equals() — compare by raw JSON text to handle array/struct fields
-    private static bool ValuesEqual(object? a, object? b)
+    // JsonElement doesn't override Equals() — compare by raw JSON text to handle array/struct fields.
+    // For sorted arrays, sort elements before comparing so insertion-order differences don't register as conflicts.
+    private static bool ValuesEqual(object? a, object? b, bool isSortedArray = false)
     {
         if (a is System.Text.Json.JsonElement ja && b is System.Text.Json.JsonElement jb)
+        {
+            if (isSortedArray &&
+                ja.ValueKind == System.Text.Json.JsonValueKind.Array &&
+                jb.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                if (ja.GetArrayLength() != jb.GetArrayLength()) return false;
+                var sortedA = ja.EnumerateArray().Select(e => e.GetRawText()).OrderBy(x => x);
+                var sortedB = jb.EnumerateArray().Select(e => e.GetRawText()).OrderBy(x => x);
+                return sortedA.SequenceEqual(sortedB);
+            }
             return ja.GetRawText() == jb.GetRawText();
+        }
         return Equals(a, b);
     }
 }

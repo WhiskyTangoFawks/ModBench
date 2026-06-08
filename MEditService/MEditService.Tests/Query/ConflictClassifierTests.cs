@@ -5,10 +5,21 @@ namespace MEditService.Tests.Query;
 
 public class ConflictClassifierTests
 {
-    private readonly IConflictClassifier _svc = new ConflictClassifier();
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> NoMasters =
+        new Dictionary<string, IReadOnlyList<string>>();
+
+    private static readonly IConflictClassifier _classifier = new ConflictClassifier();
+
+    private static ClassifyResult Classify(IReadOnlyList<RecordDetail> records,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? masters = null) =>
+        _classifier.Classify(records, masters ?? NoMasters);
 
     private static FieldMetadata Meta(string name, string type = "string") =>
         new(name, type, false, [], []);
+
+    private static FieldValue SortedArrayField(string name, object? value) =>
+        new(new FieldMetadata(name, "array", true, [], [],
+            ElementType: new FieldMetadata("", "formKey", false, [], [], IsSortable: true)), value);
 
     private static RecordDetail MakeOverride(string plugin, int loadOrder, bool isWinner,
         params (string name, object? value)[] fields) =>
@@ -20,7 +31,7 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_EmptyList_ReturnsOnlyOne()
     {
-        var result = _svc.Classify([]);
+        var result = Classify([]);
         Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
     }
 
@@ -28,7 +39,7 @@ public class ConflictClassifierTests
     public void Classify_SinglePlugin_ReturnsOnlyOne()
     {
         var o = MakeOverride("A.esp", 0, true, ("name", "Alice"));
-        var result = _svc.Classify([o]);
+        var result = Classify([o]);
         Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
         Assert.Equal(ConflictThis.OnlyOne, result.PluginStates["A.esp"]);
     }
@@ -38,7 +49,7 @@ public class ConflictClassifierTests
     {
         var o = MakeOverride("DLCRobot.esm", 0, true,
             ("Name", "SomeNPC"), ("Level", (object?)10), ("NullField", (object?)null));
-        var result = _svc.Classify([o]);
+        var result = Classify([o]);
 
         Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
         Assert.Contains(result.Diffs, d => d.FieldName == "Name");
@@ -56,7 +67,10 @@ public class ConflictClassifierTests
     {
         var a = MakeOverride("A.esp", 0, false, ("name", "Alice"));
         var b = MakeOverride("B.esp", 1, false, ("name", "Bob"));
-        Assert.Throws<InvalidOperationException>(() => _svc.Classify([a, b]));
+        // MakeOverride uses FormKey "000001:Test.esp" — message must name it so mutants
+        // that swap FirstOrDefault→First (different generic message) or blank the string are killed.
+        var ex = Assert.Throws<InvalidOperationException>(() => Classify([a, b]));
+        Assert.Contains("000001:Test.esp", ex.Message);
     }
 
     // --- NoConflict / Override / Conflict ---
@@ -66,7 +80,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, true, ("name", "Alice"));
-        var result = _svc.Classify([master, override1]);
+        var result = Classify([master, override1]);
         Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
         Assert.Equal(ConflictThis.Master, result.PluginStates["A.esp"]);
         Assert.Equal(ConflictThis.IdenticalToMaster, result.PluginStates["B.esp"]);
@@ -80,7 +94,7 @@ public class ConflictClassifierTests
         var loser = MakeOverride("B.esp", 1, false, ("name", "Bob"));
         var itm = MakeOverride("C.esp", 2, false, ("name", "Alice"));
         var winner = MakeOverride("D.esp", 3, true, ("name", "Charlie"));
-        var result = _svc.Classify([master, loser, itm, winner]);
+        var result = Classify([master, loser, itm, winner]);
         Assert.Equal(ConflictAll.Conflict, result.ConflictAll);
     }
 
@@ -89,7 +103,7 @@ public class ConflictClassifierTests
     {
         var master = MakeOverride("A.esp", 0, false, ("name", "Alice"), ("level", 1));
         var override1 = MakeOverride("B.esp", 1, true, ("name", "Alice"), ("level", 5));
-        var result = _svc.Classify([master, override1]);
+        var result = Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
         Assert.Equal(ConflictThis.Master, result.PluginStates["A.esp"]);
         Assert.Equal(ConflictThis.Override, result.PluginStates["B.esp"]);
@@ -101,7 +115,7 @@ public class ConflictClassifierTests
         // Only one non-master plugin changes the field — uncontested → Override, not Conflict
         var master = MakeOverride("A.esp", 0, false, ("name", "Alice"));
         var override1 = MakeOverride("B.esp", 1, true, ("name", "Bob"));
-        var result = _svc.Classify([master, override1]);
+        var result = Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
         Assert.Equal(ConflictThis.Master, result.PluginStates["A.esp"]);
         Assert.Equal(ConflictThis.Override, result.PluginStates["B.esp"]);
@@ -113,7 +127,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("name", "Alice"));
         var loser = MakeOverride("B.esp", 1, false, ("name", "Bob"));
         var winner = MakeOverride("C.esp", 2, true, ("name", "Charlie"));
-        var result = _svc.Classify([master, loser, winner]);
+        var result = Classify([master, loser, winner]);
         Assert.Equal(ConflictAll.Conflict, result.ConflictAll);
         Assert.Equal(ConflictThis.ConflictLoses, result.PluginStates["B.esp"]);
         Assert.Equal(ConflictThis.ConflictWins, result.PluginStates["C.esp"]);
@@ -126,7 +140,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("name", "Alice"), ("level", 1));
         var loser = MakeOverride("B.esp", 1, false, ("name", "Bob"), ("level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("name", "Bob"), ("level", 10));
-        var result = _svc.Classify([master, loser, winner]);
+        var result = Classify([master, loser, winner]);
         Assert.Equal(ConflictAll.Conflict, result.ConflictAll);
     }
 
@@ -141,7 +155,7 @@ public class ConflictClassifierTests
         var contester = MakeOverride("B.esp", 1, false, ("name", "Bob"), ("level", 1));
         var nonContester = MakeOverride("C.esp", 2, false, ("name", null), ("level", 5));
         var winner = MakeOverride("D.esp", 3, true, ("name", "Dave"), ("level", 5));
-        var result = _svc.Classify([master, contester, nonContester, winner]);
+        var result = Classify([master, contester, nonContester, winner]);
         Assert.Equal(ConflictThis.ConflictWins, result.PluginStates["D.esp"]);
     }
 
@@ -154,7 +168,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("name", "Alice"), ("level", 1));
         var other = MakeOverride("B.esp", 1, false, ("name", "Bob"), ("level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("name", "Alice"), ("level", 5));
-        var result = _svc.Classify([master, other, winner]);
+        var result = Classify([master, other, winner]);
         Assert.Equal(ConflictThis.Override, result.PluginStates["C.esp"]);
     }
 
@@ -168,7 +182,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("name", "Alice"), ("level", 1));
         var loser = MakeOverride("B.esp", 1, false, ("name", "Bob"), ("level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("name", "Charlie"), ("level", 5));
-        var result = _svc.Classify([master, loser, winner]);
+        var result = Classify([master, loser, winner]);
         Assert.Equal(ConflictThis.ConflictLoses, result.PluginStates["B.esp"]);
     }
 
@@ -182,7 +196,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("name", "Alice"), ("level", 1));
         var partial = MakeOverride("B.esp", 1, false, ("name", null), ("level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("name", "Charlie"), ("level", 5));
-        var result = _svc.Classify([master, partial, winner]);
+        var result = Classify([master, partial, winner]);
         Assert.NotEqual(ConflictThis.ConflictLoses, result.PluginStates["B.esp"]);
         // Diff for "name" is included even though B has null (master & C are non-null)
         Assert.Contains(result.Diffs, d => d.FieldName == "name");
@@ -195,7 +209,7 @@ public class ConflictClassifierTests
         var master = MakeOverride("A.esp", 0, false, ("name", "Alice"));
         var partial = MakeOverride("B.esp", 1, false, ("name", null));
         var winner = MakeOverride("C.esp", 2, true, ("name", "Alice"));
-        var result = _svc.Classify([master, partial, winner]);
+        var result = Classify([master, partial, winner]);
         Assert.NotEqual(ConflictAll.Conflict, result.ConflictAll);
     }
 
@@ -210,7 +224,7 @@ public class ConflictClassifierTests
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[1,2,3]");
         var master = MakeOverride("A.esp", 0, false, ("keywords", (object?)arrayA));
         var override1 = MakeOverride("B.esp", 1, true, ("keywords", (object?)arrayB));
-        var result = _svc.Classify([master, override1]);
+        var result = Classify([master, override1]);
         Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
     }
 
@@ -221,7 +235,7 @@ public class ConflictClassifierTests
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[4,5,6]");
         var master = MakeOverride("A.esp", 0, false, ("keywords", (object?)arrayA));
         var override1 = MakeOverride("B.esp", 1, true, ("keywords", (object?)arrayB));
-        var result = _svc.Classify([master, override1]);
+        var result = Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
 
@@ -233,8 +247,136 @@ public class ConflictClassifierTests
             [new FieldValue(Meta("name"), "Alice"), new FieldValue(Meta("level"), 1)]);
         var partial = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
             [new FieldValue(Meta("level"), 5)]);
-        var result = _svc.Classify([master, partial]);
+        var result = Classify([master, partial]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
         Assert.Equal(ConflictThis.Override, result.PluginStates["B.esp"]);
+    }
+
+    // --- Injected record detection ---
+
+    [Fact]
+    public void Classify_InjectedRecord_ReturnsConflictCritical()
+    {
+        // FormKey origin is "Origin.esm" but B.esp's masters don't include it → injected
+        var master = new RecordDetail("000001:Origin.esm", "A.esm", 0, false, null,
+            [new FieldValue(Meta("name"), "Alice")]);
+        var override1 = new RecordDetail("000001:Origin.esm", "B.esp", 1, true, null,
+            [new FieldValue(Meta("name"), "Bob")]);
+        var masters = new Dictionary<string, IReadOnlyList<string>>
+        {
+            ["A.esm"] = ["Origin.esm"],
+            ["B.esp"] = ["SomeOther.esm"],  // Origin.esm NOT in masters → injected
+        };
+        var result = Classify([master, override1], masters: masters);
+        Assert.Equal(ConflictAll.ConflictCritical, result.ConflictAll);
+    }
+
+    [Fact]
+    public void Classify_PartialInjection_OnlyOneOverrideMissingOrigin_ReturnsConflictCritical()
+    {
+        // B.esp has originPlugin in masters (not injected), C.esp doesn't (injected).
+        // Any()=true (C.esp injected), All()=false (B.esp is not) → kills the Any→All mutant.
+        var master = new RecordDetail("000001:Origin.esm", "Origin.esm", 0, false, null,
+            [new FieldValue(Meta("name"), "Alice")]);
+        var override1 = new RecordDetail("000001:Origin.esm", "B.esp", 1, false, null,
+            [new FieldValue(Meta("name"), "Bob")]);
+        var override2 = new RecordDetail("000001:Origin.esm", "C.esp", 2, true, null,
+            [new FieldValue(Meta("name"), "Charlie")]);
+        var masters = new Dictionary<string, IReadOnlyList<string>>
+        {
+            ["Origin.esm"] = [],
+            ["B.esp"] = ["Origin.esm"],      // has origin → not injected
+            ["C.esp"] = ["SomeOther.esm"],   // missing origin → injected
+        };
+        var result = Classify([master, override1, override2], masters: masters);
+        Assert.Equal(ConflictAll.ConflictCritical, result.ConflictAll);
+    }
+
+    [Fact]
+    public void Classify_InvalidFormKey_TreatedAsNotInjected()
+    {
+        // FormKey.TryFactory fails for "INVALID" → IsInjectedRecord returns false (defensive guard).
+        var master = new RecordDetail("INVALID", "A.esm", 0, false, null,
+            [new FieldValue(Meta("name"), "Alice")]);
+        var override1 = new RecordDetail("INVALID", "B.esp", 1, true, null,
+            [new FieldValue(Meta("name"), "Bob")]);
+        var masters = new Dictionary<string, IReadOnlyList<string>>
+        {
+            ["A.esm"] = [],
+            ["B.esp"] = ["SomeOther.esm"],  // would be injected if FormKey were valid
+        };
+        var result = Classify([master, override1], masters: masters);
+        Assert.NotEqual(ConflictAll.ConflictCritical, result.ConflictAll);
+    }
+
+    [Fact]
+    public void Classify_NonInjectedRecord_DoesNotBumpToCritical()
+    {
+        var master = new RecordDetail("000001:Origin.esm", "A.esm", 0, false, null,
+            [new FieldValue(Meta("name"), "Alice")]);
+        var override1 = new RecordDetail("000001:Origin.esm", "B.esp", 1, true, null,
+            [new FieldValue(Meta("name"), "Bob")]);
+        var masters = new Dictionary<string, IReadOnlyList<string>>
+        {
+            ["A.esm"] = ["Origin.esm"],
+            ["B.esp"] = ["A.esm", "Origin.esm"],  // Origin.esm IS in masters → not injected
+        };
+        var result = Classify([master, override1], masters: masters);
+        Assert.NotEqual(ConflictAll.ConflictCritical, result.ConflictAll);
+    }
+
+    // --- Sorted array comparison ---
+
+    [Fact]
+    public void Classify_SortedArraySameElementsDifferentOrder_ReturnsNoConflict()
+    {
+        var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\",\"c\"]");
+        var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"c\",\"a\",\"b\"]");
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
+            [SortedArrayField("scriptProperties", (object?)arrayA)]);
+        var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
+            [SortedArrayField("scriptProperties", (object?)arrayB)]);
+        var result = Classify([master, override1]);
+        Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
+    }
+
+    [Fact]
+    public void Classify_SortedArrayDifferentLengths_ReturnsOverride()
+    {
+        // Length check (line 155): [a] vs [a,b] differ in count → not equal → Override.
+        var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\"]");
+        var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\"]");
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
+            [SortedArrayField("scriptProperties", (object?)arrayA)]);
+        var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
+            [SortedArrayField("scriptProperties", (object?)arrayB)]);
+        var result = Classify([master, override1]);
+        Assert.Equal(ConflictAll.Override, result.ConflictAll);
+    }
+
+    [Fact]
+    public void Classify_SortedArrayDifferentElements_ReturnsOverride()
+    {
+        var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\"]");
+        var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"c\"]");
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
+            [SortedArrayField("scriptProperties", (object?)arrayA)]);
+        var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
+            [SortedArrayField("scriptProperties", (object?)arrayB)]);
+        var result = Classify([master, override1]);
+        Assert.Equal(ConflictAll.Override, result.ConflictAll);
+    }
+
+    [Fact]
+    public void Classify_UnsortedArraySameElementsDifferentOrder_ReturnsOverride()
+    {
+        // isSortedArray=false: [1,2] vs [2,1] differ by raw JSON text → Override, not NoConflict.
+        // Logical mutants (|| instead of && in ValuesEqual) would sort-compare them and return NoConflict.
+        var arrayA = JsonSerializer.Deserialize<JsonElement>("[1,2]");
+        var arrayB = JsonSerializer.Deserialize<JsonElement>("[2,1]");
+        var master = MakeOverride("A.esp", 0, false, ("keywords", (object?)arrayA));
+        var override1 = MakeOverride("B.esp", 1, true, ("keywords", (object?)arrayB));
+        var result = Classify([master, override1]);
+        Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
 }
