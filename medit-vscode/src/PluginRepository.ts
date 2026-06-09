@@ -41,6 +41,9 @@ export interface PluginRepository {
   getPlugins(): Promise<PluginMetadata[]>;
   getRecordTypes(plugin: string): Promise<{ type: string; count: number }[]>;
   getRecords(plugin: string, type: string, offset: number, limit: number): Promise<RecordPage>;
+  setFilter(sql: string): Promise<string | null>; // returns error message or null on success
+  clearFilter(): Promise<void>;
+  getActiveFilter(): Promise<string | null>;
 }
 
 export class ApiPluginRepository implements PluginRepository {
@@ -88,5 +91,37 @@ export class ApiPluginRepository implements PluginRepository {
       this.log(`[PluginRepository] getRecords(${plugin}, ${type}) failed: ${e instanceof Error ? e.message : String(e)}`);
       return { items: [], total: 0 };
     }
+  }
+
+  async setFilter(sql: string): Promise<string | null> {
+    try {
+      const { response } = await this.client.POST('/session/filter', { body: { sql } });
+      if (!response.ok) {
+        const text = await response.text();
+        this.log(`[PluginRepository] setFilter failed (${response.status}): ${text}`);
+        return text;
+      }
+      return null;
+    } catch (e) {
+      this.log(`[PluginRepository] setFilter failed: ${e instanceof Error ? e.message : String(e)}`);
+      return e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async clearFilter(): Promise<void> {
+    try {
+      const { response } = await this.client.DELETE('/session/filter', {});
+      if (!response.ok) {
+        const text = await response.text();
+        this.log(`[PluginRepository] clearFilter failed (${response.status}): ${text}`);
+      }
+    } catch (e) {
+      this.log(`[PluginRepository] clearFilter failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  async getActiveFilter(): Promise<string | null> {
+    const { data } = await this.client.GET('/session/filter', {});
+    return data?.sql ?? null;
   }
 }

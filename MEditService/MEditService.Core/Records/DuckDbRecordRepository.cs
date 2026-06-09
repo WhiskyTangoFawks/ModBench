@@ -18,6 +18,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     private readonly ILogger _logger;
     private readonly DuckDBConnection _connection;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
+    private bool _filterActive;
 
     public DuckDBConnection Connection => _connection;
 
@@ -115,7 +116,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset)
     {
-        var (where, paramValues) = BuildWhere(plugin, search);
+        var (where, paramValues) = BuildWhere(plugin, search, _filterActive);
 
         var countSql = $"SELECT COUNT(*) FROM \"{tableName}\"{where}";
         using var countCmd = _connection.CreateCommand();
@@ -190,9 +191,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     public int CountRecordsForPlugin(string tableName, string plugin)
     {
+        var (where, paramValues) = BuildWhere(plugin, null, _filterActive);
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = $"SELECT COUNT(*) FROM \"{tableName}\" WHERE plugin = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.CommandText = $"SELECT COUNT(*) FROM \"{tableName}\"{where}";
+        AddParams(cmd, paramValues);
         return (int)(long)cmd.ExecuteScalar()!;
     }
 
@@ -214,7 +216,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         if (tableNames.Count == 0)
             return new PagedResult<RecordSummary>([], 0);
 
-        var (where, paramValues) = BuildWhere(plugin, search);
+        var (where, paramValues) = BuildWhere(plugin, search, _filterActive);
         const string cols = "form_key, plugin, load_order_idx, is_winner, editor_id";
         var union = string.Join("\nUNION ALL\n",
             tableNames.Select(t => $"SELECT {cols} FROM \"{t}\"{where}"));
@@ -278,7 +280,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             ? ""
             : ", " + string.Join(", ", schema.RecordColumns.Select(c => $"\"{c.Name}\""));
 
-    private static (string where, List<string> paramValues) BuildWhere(string? plugin, string? search)
+    private static (string where, List<string> paramValues) BuildWhere(string? plugin, string? search, bool filterActive = false)
     {
         var conditions = new List<string>();
         var values = new List<string>();
@@ -293,6 +295,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             conditions.Add($"editor_id ILIKE ${values.Count + 1}");
             values.Add($"%{search}%");
         }
+        if (filterActive)
+            conditions.Add("form_key IN (SELECT form_key FROM _filter)");
 
         var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
         return (where, values);
@@ -335,6 +339,49 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     private IReadOnlyDictionary<string, RecordTableSchema> RequireSchemas() =>
         _schemas ?? throw new InvalidOperationException("Call Initialize before using the repository.");
+
+    public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
+    {
+        var tables = tableNames.ToList();
+        if (tables.Count == 0 || !_filterActive)
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var union = string.Join("\nUNION ALL\n",
+            tables.Select(t => $"SELECT plugin FROM \"{t}\" WHERE form_key IN (SELECT form_key FROM _filter)"));
+
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = $"SELECT DISTINCT plugin FROM ({union})";
+        using var reader = cmd.ExecuteReader();
+
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (reader.Read())
+            result.Add(reader.GetString(0));
+        return result;
+    }
+
+    public void SetFilter(string? sql)
+    {
+        if (sql is null)
+        {
+            Execute("DROP TABLE IF EXISTS _filter");
+            _filterActive = false;
+            return;
+        }
+
+        using var probeCmd = _connection.CreateCommand();
+        probeCmd.CommandText = $"SELECT * FROM ({sql}) __probe LIMIT 0";
+        using var probeReader = probeCmd.ExecuteReader();
+        bool hasFormKey = false;
+        for (int i = 0; i < probeReader.FieldCount; i++)
+            if (string.Equals(probeReader.GetName(i), "form_key", StringComparison.OrdinalIgnoreCase))
+            { hasFormKey = true; break; }
+
+        if (!hasFormKey)
+            throw new ArgumentException("Filter SQL must return a form_key column");
+
+        Execute($"CREATE OR REPLACE TABLE _filter AS ({sql})");
+        _filterActive = true;
+    }
 
     public void Dispose() => _connection.Dispose();
 }

@@ -29,4 +29,17 @@ public interface ISessionManager
     /// Throws <see cref="KeyNotFoundException"/> if the plugin is not found in the current session.
     /// </summary>
     Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes);
+
+    /// <summary>
+    /// Materializes the filter SQL into the _filter table and records the active SQL on the session.
+    /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
+    /// Throws <see cref="ArgumentException"/> if the SQL does not return a form_key column.
+    /// </summary>
+    void SetFilter(string sql);
+
+    /// <summary>
+    /// Drops the _filter table and clears the active SQL on the session.
+    /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
+    /// </summary>
+    void ClearFilter();
 }

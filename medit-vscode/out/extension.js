@@ -34,8 +34,10 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode2 = __toESM(require("vscode"));
+var vscode3 = __toESM(require("vscode"));
 var path2 = __toESM(require("path"));
+var os2 = __toESM(require("os"));
+var fs2 = __toESM(require("fs"));
 
 // src/BackendManager.ts
 var import_node_events = require("node:events");
@@ -749,6 +751,25 @@ var SessionController = class {
     this.deps.setStatusText("$(check) mEdit: Ready");
     this.deps.refreshTree();
   }
+  async setFilter(sql) {
+    const error = await this.deps.repository.setFilter(sql);
+    if (error) {
+      this.deps.showError(`mEdit: Filter failed \u2014 ${error}`);
+      return false;
+    }
+    this.deps.setFilterActive(true, sql);
+    this.deps.refreshTree();
+    return true;
+  }
+  async clearFilter() {
+    await this.deps.repository.clearFilter();
+    this.deps.setFilterActive(false);
+    this.deps.refreshTree();
+  }
+  async syncFilterState() {
+    const sql = await this.deps.repository.getActiveFilter();
+    this.deps.setFilterActive(sql !== null, sql ?? void 0);
+  }
   async onBackendConnected() {
     const loaded = await this.deps.makeWizard().run();
     if (!loaded) {
@@ -981,6 +1002,51 @@ var ApiPluginRepository = class {
       return { items: [], total: 0 };
     }
   }
+  async setFilter(sql) {
+    const { response } = await this.client.POST("/session/filter", { body: { sql } });
+    if (!response.ok) {
+      const text = await response.text();
+      this.log(`[PluginRepository] setFilter failed (${response.status}): ${text}`);
+      return text;
+    }
+    return null;
+  }
+  async clearFilter() {
+    await this.client.DELETE("/session/filter", {});
+  }
+  async getActiveFilter() {
+    const { data } = await this.client.GET("/session/filter", {});
+    return data?.sql ?? null;
+  }
+};
+
+// src/FilterCodeLensProvider.ts
+var vscode2 = __toESM(require("vscode"));
+var FilterCodeLensProvider = class {
+  constructor(scriptsPath) {
+    this.scriptsPath = scriptsPath;
+  }
+  scriptsPath;
+  activeFilterSql = null;
+  setActiveSql(sql) {
+    this.activeFilterSql = sql;
+  }
+  provideCodeLenses(document) {
+    if (!document.uri.fsPath.startsWith(this.scriptsPath)) return [];
+    const range = new vscode2.Range(new vscode2.Position(0, 0), new vscode2.Position(0, 0));
+    const docSql = document.getText().trim();
+    const isActive = this.activeFilterSql !== null && docSql === this.activeFilterSql.trim();
+    if (isActive) {
+      return [new vscode2.CodeLens(range, {
+        title: "\u2713 Active \u2014 click to clear",
+        command: "mEdit.clearFilter"
+      })];
+    }
+    return [new vscode2.CodeLens(range, {
+      title: "\u25B6 Apply as Filter",
+      command: "mEdit.setFilterFromDocument"
+    })];
+  }
 };
 
 // src/webviewHtml.ts
@@ -1014,12 +1080,12 @@ var WEBVIEW_TO_EXTENSION = {
 // src/extension.ts
 var backendManager;
 async function activate(context) {
-  const cfg = vscode2.workspace.getConfiguration("mEdit");
+  const cfg = vscode3.workspace.getConfiguration("mEdit");
   const port = cfg.get("backendPort") ?? 5172;
-  const outputChannel = vscode2.window.createOutputChannel("mEdit");
+  const outputChannel = vscode3.window.createOutputChannel("mEdit");
   context.subscriptions.push(outputChannel);
   const log = (msg) => outputChannel.appendLine(`[${(/* @__PURE__ */ new Date()).toISOString()}] ${msg}`);
-  const statusBarItem = vscode2.window.createStatusBarItem(vscode2.StatusBarAlignment.Left, 100);
+  const statusBarItem = vscode3.window.createStatusBarItem(vscode3.StatusBarAlignment.Left, 100);
   context.subscriptions.push(statusBarItem);
   backendManager = new BackendManager({
     port,
@@ -1033,10 +1099,24 @@ async function activate(context) {
     }
   });
   const client = createApiClient(port);
-  const treeProvider = new PluginTreeProvider(new ApiPluginRepository(client, log), log);
+  const repository = new ApiPluginRepository(client, log);
+  const treeProvider = new PluginTreeProvider(repository, log);
   const openPanels = /* @__PURE__ */ new Map();
+  const scriptsPathCfg = cfg.get("scriptsPath") ?? "";
+  const scriptsPath = scriptsPathCfg || path2.join(os2.homedir(), ".medit", "scripts");
+  fs2.mkdirSync(scriptsPath, { recursive: true });
+  const pendingChangesSql = path2.join(scriptsPath, "pending-changes.sql");
+  const presetSrc = path2.join(__dirname, "..", "extension", "scripts", "pending-changes.sql");
+  if (!fs2.existsSync(pendingChangesSql) && fs2.existsSync(presetSrc))
+    fs2.copyFileSync(presetSrc, pendingChangesSql);
+  const filterProvider = new FilterCodeLensProvider(scriptsPath);
+  const setFilterActive = (active, sql) => {
+    void vscode3.commands.executeCommand("setContext", "mEdit.filterActive", active);
+    filterProvider.setActiveSql(active ? sql ?? null : null);
+  };
   const controller = new SessionController({
     client,
+    repository,
     log,
     makeWizard: () => new SessionWizard({
       client,
@@ -1048,10 +1128,10 @@ async function activate(context) {
         }
         return detectGamePaths();
       },
-      showQuickPick: (items) => vscode2.window.showQuickPick(items, { placeHolder: "Select game path" }),
-      showInputBox: (opts) => vscode2.window.showInputBox({ prompt: opts.prompt, value: opts.value }),
+      showQuickPick: (items) => vscode3.window.showQuickPick(items, { placeHolder: "Select game path" }),
+      showInputBox: (opts) => vscode3.window.showInputBox({ prompt: opts.prompt, value: opts.value }),
       showErrorMessage: (msg) => {
-        void vscode2.window.showErrorMessage(msg);
+        void vscode3.window.showErrorMessage(msg);
       }
     }),
     refreshTree: () => treeProvider.refresh(),
@@ -1059,39 +1139,66 @@ async function activate(context) {
       statusBarItem.text = t;
     },
     showWarning: (msg) => {
-      void vscode2.window.showWarningMessage(msg);
+      void vscode3.window.showWarningMessage(msg);
     },
     showError: (msg) => {
-      void vscode2.window.showErrorMessage(msg);
-    }
+      void vscode3.window.showErrorMessage(msg);
+    },
+    setFilterActive
   });
   context.subscriptions.push(
-    vscode2.window.registerTreeDataProvider("mEdit.pluginTree", treeProvider),
-    vscode2.commands.registerCommand("mEdit.refreshTree", () => treeProvider.refresh()),
-    vscode2.commands.registerCommand("mEdit.loadSession", () => controller.loadSession()),
-    vscode2.commands.registerCommand("mEdit.reloadSession", () => treeProvider.refresh()),
-    vscode2.commands.registerCommand("mEdit.openEditor", (args) => {
+    vscode3.languages.registerCodeLensProvider({ language: "sql" }, filterProvider),
+    vscode3.window.registerTreeDataProvider("mEdit.pluginTree", treeProvider),
+    vscode3.commands.registerCommand("mEdit.refreshTree", () => treeProvider.refresh()),
+    vscode3.commands.registerCommand("mEdit.loadSession", () => controller.loadSession()),
+    vscode3.commands.registerCommand("mEdit.reloadSession", () => treeProvider.refresh()),
+    vscode3.commands.registerCommand("mEdit.openEditor", (args) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? "mEdit", args?.formKey, port);
     }),
-    vscode2.commands.registerCommand("mEdit.openCompare", () => {
+    vscode3.commands.registerCommand("mEdit.openCompare", () => {
       openRecordPanel(context, openPanels, "mEdit", void 0, port);
     }),
-    vscode2.commands.registerCommand("mEdit.loadMore", (node) => treeProvider.loadMore(node)),
-    vscode2.commands.registerCommand("mEdit.newPlugin", async () => {
+    vscode3.commands.registerCommand("mEdit.loadMore", (node) => treeProvider.loadMore(node)),
+    vscode3.commands.registerCommand("mEdit.newPlugin", async () => {
       const name = await promptPluginName();
       if (name) await controller.createPlugin(name);
     }),
-    vscode2.commands.registerCommand("mEdit.copyAsOverrideInto", async (node) => {
+    vscode3.commands.registerCommand("mEdit.setFilter", async () => {
+      const files = fs2.existsSync(scriptsPath) ? fs2.readdirSync(scriptsPath).filter((f) => f.endsWith(".sql")) : [];
+      const NEW_FILTER_LABEL = "$(add) New filter\u2026";
+      const items = [
+        ...files.map((f) => ({ label: f, description: scriptsPath })),
+        { label: NEW_FILTER_LABEL }
+      ];
+      const picked = await vscode3.window.showQuickPick(items, { placeHolder: "Select .sql filter file" });
+      if (!picked) return;
+      if (picked.label === NEW_FILTER_LABEL) {
+        const doc = await vscode3.workspace.openTextDocument({ language: "sql" });
+        await vscode3.window.showTextDocument(doc);
+        return;
+      }
+      const filePath = path2.join(scriptsPath, picked.label);
+      const sql = fs2.readFileSync(filePath, "utf8");
+      await controller.setFilter(sql);
+    }),
+    vscode3.commands.registerCommand("mEdit.setFilterFromDocument", async () => {
+      const editor = vscode3.window.activeTextEditor;
+      if (!editor) return;
+      const sql = editor.document.getText();
+      await controller.setFilter(sql);
+    }),
+    vscode3.commands.registerCommand("mEdit.clearFilter", () => controller.clearFilter()),
+    vscode3.commands.registerCommand("mEdit.copyAsOverrideInto", async (node) => {
       const formKey = node?.record?.formKey;
       if (!formKey) {
-        vscode2.window.showErrorMessage("mEdit: No record selected.");
+        vscode3.window.showErrorMessage("mEdit: No record selected.");
         return;
       }
       let allPlugins;
       try {
         allPlugins = await controller.getPlugins();
       } catch {
-        vscode2.window.showErrorMessage("mEdit: Failed to fetch plugins.");
+        vscode3.window.showErrorMessage("mEdit: Failed to fetch plugins.");
         return;
       }
       const mutablePlugins = allPlugins.filter((p) => !p.isImmutable);
@@ -1100,7 +1207,7 @@ async function activate(context) {
         { label: NEW_PLUGIN_LABEL, description: "Create a new plugin and copy into it" },
         ...mutablePlugins.map((p) => ({ label: p.name, description: `[${p.loadOrderIndex}]` }))
       ];
-      const picked = await vscode2.window.showQuickPick(items, { placeHolder: "Select target plugin" });
+      const picked = await vscode3.window.showQuickPick(items, { placeHolder: "Select target plugin" });
       if (!picked) return;
       let targetPlugin = picked.label;
       if (picked.label === NEW_PLUGIN_LABEL) {
@@ -1114,18 +1221,18 @@ async function activate(context) {
   );
   backendManager.on("status", (status) => {
     if (status === "attached") {
-      void controller.onBackendConnected();
+      void controller.onBackendConnected().then(() => controller.syncFilterState());
     }
   });
   await backendManager.connect().catch((err) => {
-    vscode2.window.showErrorMessage(`mEdit: Backend failed to start \u2014 ${err instanceof Error ? err.message : String(err)}`);
+    vscode3.window.showErrorMessage(`mEdit: Backend failed to start \u2014 ${err instanceof Error ? err.message : String(err)}`);
   });
 }
 function deactivate() {
   backendManager?.dispose();
 }
 function promptPluginName() {
-  return vscode2.window.showInputBox({
+  return vscode3.window.showInputBox({
     prompt: "Enter new plugin name (e.g. MyPatch.esp)",
     validateInput: (v) => {
       if (!v) return "Name is required";
@@ -1145,9 +1252,9 @@ function openRecordPanel(context, openPanels, title, formKey, port) {
     }
     return;
   }
-  const panel = vscode2.window.createWebviewPanel("mEdit", title, vscode2.ViewColumn.One, {
+  const panel = vscode3.window.createWebviewPanel("mEdit", title, vscode3.ViewColumn.One, {
     enableScripts: true,
-    localResourceRoots: [vscode2.Uri.file(path2.join(context.extensionPath, "out", "webview"))]
+    localResourceRoots: [vscode3.Uri.file(path2.join(context.extensionPath, "out", "webview"))]
   });
   openPanels.set(RECORD_PANEL_KEY, panel);
   panel.onDidDispose(() => openPanels.delete(RECORD_PANEL_KEY));
@@ -1155,12 +1262,12 @@ function openRecordPanel(context, openPanels, title, formKey, port) {
     if (typeof msg === "object" && msg !== null && "type" in msg) {
       const m = msg;
       if (m.type === WEBVIEW_TO_EXTENSION.OPEN_RECORD && m.formKey) {
-        vscode2.commands.executeCommand("mEdit.openEditor", { formKey: m.formKey, label: m.formKey });
+        vscode3.commands.executeCommand("mEdit.openEditor", { formKey: m.formKey, label: m.formKey });
       }
     }
   });
   const scriptUri = panel.webview.asWebviewUri(
-    vscode2.Uri.file(path2.join(context.extensionPath, "out", "webview", "assets", "main.js"))
+    vscode3.Uri.file(path2.join(context.extensionPath, "out", "webview", "assets", "main.js"))
   );
   panel.webview.html = buildWebviewHtml({
     formKey,

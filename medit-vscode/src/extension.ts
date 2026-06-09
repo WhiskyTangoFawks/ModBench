@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs';
 import { BackendManager } from './BackendManager';
 import { createApiClient, type PluginMetadata } from './ApiClient';
 import { detectGamePaths } from './GamePathDetector';
@@ -7,6 +9,7 @@ import { SessionWizard } from './SessionWizard';
 import { SessionController } from './SessionController';
 import { LoadMoreNode, PluginTreeProvider, RecordNode } from './PluginTreeProvider';
 import { ApiPluginRepository } from './PluginRepository';
+import { FilterCodeLensProvider } from './FilterCodeLensProvider';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 
@@ -34,11 +37,30 @@ export async function activate(context: vscode.ExtensionContext) {
   });
 
   const client = createApiClient(port);
-  const treeProvider = new PluginTreeProvider(new ApiPluginRepository(client, log), log);
+  const repository = new ApiPluginRepository(client, log);
+  const treeProvider = new PluginTreeProvider(repository, log);
   const openPanels = new Map<string, vscode.WebviewPanel>();
+
+  // Resolve scripts path (config or ~/.medit/scripts)
+  const scriptsPathCfg: string = cfg.get('scriptsPath') ?? '';
+  const scriptsPath = scriptsPathCfg || path.join(os.homedir(), '.medit', 'scripts');
+  fs.mkdirSync(scriptsPath, { recursive: true });
+
+  const pendingChangesSql = path.join(scriptsPath, 'pending-changes.sql');
+  const presetSrc = path.join(__dirname, '..', 'extension', 'scripts', 'pending-changes.sql');
+  if (!fs.existsSync(pendingChangesSql) && fs.existsSync(presetSrc))
+    fs.copyFileSync(presetSrc, pendingChangesSql);
+
+  const filterProvider = new FilterCodeLensProvider(scriptsPath);
+
+  const setFilterActive = (active: boolean, sql?: string) => {
+    void vscode.commands.executeCommand('setContext', 'mEdit.filterActive', active);
+    filterProvider.setActiveSql(active ? (sql ?? null) : null);
+  };
 
   const controller = new SessionController({
     client,
+    repository,
     log,
     makeWizard: () => new SessionWizard({
       client,
@@ -60,9 +82,11 @@ export async function activate(context: vscode.ExtensionContext) {
     setStatusText: (t) => { statusBarItem.text = t; },
     showWarning: (msg) => { void vscode.window.showWarningMessage(msg); },
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
+    setFilterActive,
   });
 
   context.subscriptions.push(
+    vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     vscode.window.registerTreeDataProvider('mEdit.pluginTree', treeProvider),
     vscode.commands.registerCommand('mEdit.refreshTree', () => treeProvider.refresh()),
     vscode.commands.registerCommand('mEdit.loadSession', () => controller.loadSession()),
@@ -78,6 +102,33 @@ export async function activate(context: vscode.ExtensionContext) {
       const name = await promptPluginName();
       if (name) await controller.createPlugin(name);
     }),
+    vscode.commands.registerCommand('mEdit.setFilter', async () => {
+      const files = fs.existsSync(scriptsPath)
+        ? fs.readdirSync(scriptsPath).filter(f => f.endsWith('.sql'))
+        : [];
+      const NEW_FILTER_LABEL = '$(add) New filter…';
+      const items: vscode.QuickPickItem[] = [
+        ...files.map(f => ({ label: f, description: scriptsPath })),
+        { label: NEW_FILTER_LABEL },
+      ];
+      const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Select .sql filter file' });
+      if (!picked) return;
+      if (picked.label === NEW_FILTER_LABEL) {
+        const doc = await vscode.workspace.openTextDocument({ language: 'sql' });
+        await vscode.window.showTextDocument(doc);
+        return;
+      }
+      const filePath = path.join(scriptsPath, picked.label);
+      const sql = fs.readFileSync(filePath, 'utf8');
+      await controller.setFilter(sql);
+    }),
+    vscode.commands.registerCommand('mEdit.setFilterFromDocument', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+      const sql = editor.document.getText();
+      await controller.setFilter(sql);
+    }),
+    vscode.commands.registerCommand('mEdit.clearFilter', () => controller.clearFilter()),
     vscode.commands.registerCommand('mEdit.copyAsOverrideInto', async (node?: RecordNode) => {
       const formKey = node?.record?.formKey;
       if (!formKey) {
@@ -117,7 +168,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
   backendManager.on('status', (status) => {
     if (status === 'attached') {
-      void controller.onBackendConnected();
+      void controller.onBackendConnected()
+        .then(() => controller.syncFilterState())
+        .catch((err: unknown) => log(`[extension] onBackendConnected failed: ${err instanceof Error ? err.message : String(err)}`));
     }
   });
 

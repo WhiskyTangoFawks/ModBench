@@ -99,6 +99,14 @@ A per-field modifier that changes how conflict detection behaves for that field.
 A record with the `IsPartialForm` header flag set. It intentionally omits fields it doesn't override — the absent fields are not "null" overrides, they are out-of-scope. In the compare grid, absent fields in a partial-form column are omitted entirely, not shown as blank cells. In conflict detection, absent partial-form fields are treated as `cpIgnore`.
 _Avoid_: sparse record, incomplete override.
 
+**Record filter**:
+A DuckDB SQL SELECT stored on the backend session that narrows the record tree to a subset of FormKeys. While active, plugins and record types with no matching records are hidden. Cleared to restore the full tree. Stored as a plain `.sql` file in `mEdit.scriptsPath`; applied via Code Lens or `mEdit.setFilter`. A record filter is a degenerate script — a selection query with no Python body.
+_Avoid_: search filter, query filter
+
+**Filter file**:
+A `.sql` file in `mEdit.scriptsPath` containing a DuckDB SELECT that returns a `form_key` column. VS Code provides syntax highlighting; a Code Lens provides the apply/clear affordance. Filter files and scripts share the same folder and the same file-based UX surface.
+_Avoid_: filter script (scripts have a Python body; filter files do not)
+
 **Script**:
 A Python file with a YAML frontmatter block that declares a SQL query (selecting which records to operate on) and a Python body that iterates those records and calls `edit()` to stage changes. Scripts are the preferred agent output for complex multi-record operations — they are reviewable, rerunnable, and deterministic. All `edit()` calls route through `PendingChangeService`, the same as manual edits. See Phase 15.
 _Avoid_: macro, automation

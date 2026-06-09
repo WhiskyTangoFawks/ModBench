@@ -97,3 +97,69 @@ describe('ApiPluginRepository.getRecords', () => {
     expect(result).toEqual({ items: [], total: 0 });
   });
 });
+
+describe('ApiPluginRepository.setFilter', () => {
+  it('calls POST /session/filter and returns null on success', async () => {
+    const client = {
+      POST: vi.fn().mockResolvedValue({ response: { ok: true } }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const error = await repo.setFilter('SELECT form_key FROM "npc_"');
+
+    expect(error).toBeNull();
+    expect(client.POST).toHaveBeenCalledWith(
+      '/session/filter',
+      expect.objectContaining({ body: { sql: 'SELECT form_key FROM "npc_"' } }),
+    );
+  });
+
+  it('returns error text when response is not ok', async () => {
+    const client = {
+      POST: vi.fn().mockResolvedValue({
+        response: { ok: false, text: () => Promise.resolve('Filter SQL must return a form_key column') },
+      }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const error = await repo.setFilter('SELECT editor_id FROM "npc_"');
+
+    expect(error).toBe('Filter SQL must return a form_key column');
+  });
+});
+
+describe('ApiPluginRepository.clearFilter', () => {
+  it('calls DELETE /session/filter', async () => {
+    const client = {
+      DELETE: vi.fn().mockResolvedValue({ response: { ok: true } }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    await repo.clearFilter();
+
+    expect(client.DELETE).toHaveBeenCalledWith('/session/filter', expect.anything());
+  });
+});
+
+describe('ApiPluginRepository.getActiveFilter', () => {
+  it('calls GET /session/filter and returns sql', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({ data: { sql: 'SELECT form_key FROM "npc_"' } }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const sql = await repo.getActiveFilter();
+
+    expect(sql).toBe('SELECT form_key FROM "npc_"');
+    expect(client.GET).toHaveBeenCalledWith('/session/filter', expect.anything());
+  });
+
+  it('returns null when sql is null', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({ data: { sql: null } }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    expect(await repo.getActiveFilter()).toBeNull();
+  });
+});

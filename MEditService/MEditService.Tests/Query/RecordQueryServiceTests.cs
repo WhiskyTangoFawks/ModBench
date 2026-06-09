@@ -688,6 +688,43 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         Assert.Equal(TestPluginFixture.RecordCount, result.Items.Count);
     }
 
+    // --- GetPlugins: filter pruning (A4) ---
+
+    [Fact]
+    public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
+    {
+        _manager.SetFilter($"SELECT form_key FROM \"NPC_\"");
+        try
+        {
+            var plugins = _svc.GetPlugins();
+            Assert.Contains(plugins, p => p.Name == TestPluginFixture.PluginName);
+        }
+        finally { _manager.ClearFilter(); }
+    }
+
+    [Fact]
+    public void GetPlugins_WithFilterMatchingNoRecords_HidesPlugin()
+    {
+        _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key");
+        try
+        {
+            var plugins = _svc.GetPlugins();
+            Assert.Empty(plugins);
+        }
+        finally { _manager.ClearFilter(); }
+    }
+
+    [Fact]
+    public void GetPlugins_AfterClearFilter_RestoresAllPlugins()
+    {
+        _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key");
+        _manager.ClearFilter();
+
+        var plugins = _svc.GetPlugins();
+        Assert.Single(plugins);
+        Assert.Equal(TestPluginFixture.PluginName, plugins[0].Name);
+    }
+
     private sealed class SpyRecordReader(IRecordReader inner) : IRecordReader
     {
         public int FindRecordTypeCalls { get; private set; }
@@ -720,6 +757,9 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
 
         public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset) =>
             inner.SearchRecords(tableNames, plugin, search, limit, offset);
+
+        public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
+            inner.GetPluginsWithMatchingRecords(tableNames);
     }
 
     private sealed class StubSessionManager(IRecordReader repository, GameRelease release) : ISessionManager
@@ -731,6 +771,8 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
+        public void SetFilter(string sql) => throw new NotSupportedException();
+        public void ClearFilter() => throw new NotSupportedException();
     }
 
     private sealed class StubGameSession(GameRelease release) : IGameSession
@@ -739,6 +781,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         public GameRelease GameRelease => release;
         public IReadOnlyList<PluginMetadata> Plugins => [];
         public Mutagen.Bethesda.Plugins.Cache.ILinkCache LinkCache => throw new NotSupportedException();
+        public string? FilterSql { get; set; }
         public Mutagen.Bethesda.Plugins.Records.IModGetter? GetMod(string pluginName) => null;
         public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();
         public void Dispose() { }

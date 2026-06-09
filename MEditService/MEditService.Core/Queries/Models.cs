@@ -74,3 +74,6 @@ public record CompareResult(
     ConflictAll ConflictAll);
 
 public record PluginRecordTypeCount(string Type, int Count);
+
+public record SessionFilterRequest(string Sql);
+public record SessionFilterResponse(string? Sql);

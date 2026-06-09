@@ -1,13 +1,16 @@
 import type { ApiClient, PluginMetadata } from './ApiClient';
+import type { PluginRepository } from './PluginRepository';
 import type { SessionWizard } from './SessionWizard';
 
 export interface SessionControllerDeps {
   client: ApiClient;
+  repository?: PluginRepository;
   makeWizard: () => SessionWizard;
   refreshTree: () => void;
   setStatusText: (text: string) => void;
   showWarning: (msg: string) => void;
   showError: (msg: string) => void;
+  setFilterActive: (active: boolean, sql?: string) => void;
   log?: (msg: string) => void;
 }
 
@@ -52,6 +55,28 @@ export class SessionController {
     if (!loaded) return;
     this.deps.setStatusText('$(check) mEdit: Ready');
     this.deps.refreshTree();
+  }
+
+  async setFilter(sql: string): Promise<boolean> {
+    const error = await this.deps.repository!.setFilter(sql);
+    if (error) {
+      this.deps.showError(`mEdit: Filter failed — ${error}`);
+      return false;
+    }
+    this.deps.setFilterActive(true, sql);
+    this.deps.refreshTree();
+    return true;
+  }
+
+  async clearFilter(): Promise<void> {
+    await this.deps.repository!.clearFilter();
+    this.deps.setFilterActive(false);
+    this.deps.refreshTree();
+  }
+
+  async syncFilterState(): Promise<void> {
+    const sql = await this.deps.repository!.getActiveFilter();
+    this.deps.setFilterActive(sql !== null, sql ?? undefined);
   }
 
   async onBackendConnected(): Promise<void> {

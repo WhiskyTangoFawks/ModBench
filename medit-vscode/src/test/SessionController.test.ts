@@ -50,6 +50,20 @@ function makeWizardFactory(result: boolean): () => SessionWizard {
   return () => ({ run: vi.fn().mockResolvedValue(result) } as any);
 }
 
+function makeRepository({
+  setFilterError = null as string | null,
+  activeFilter = null as string | null,
+} = {}) {
+  return {
+    setFilter: vi.fn().mockResolvedValue(setFilterError),
+    clearFilter: vi.fn().mockResolvedValue(undefined),
+    getActiveFilter: vi.fn().mockResolvedValue(activeFilter),
+    getPlugins: vi.fn().mockResolvedValue([]),
+    getRecordTypes: vi.fn().mockResolvedValue([]),
+    getRecords: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  } as any;
+}
+
 function makeDeps(overrides: Partial<SessionControllerDeps> = {}): SessionControllerDeps {
   return {
     client: makeClient(),
@@ -58,6 +72,7 @@ function makeDeps(overrides: Partial<SessionControllerDeps> = {}): SessionContro
     setStatusText: vi.fn(),
     showWarning: vi.fn(),
     showError: vi.fn(),
+    setFilterActive: vi.fn(),
     ...overrides,
   };
 }
@@ -207,5 +222,82 @@ describe('SessionController.onBackendConnected', () => {
     expect(deps.setStatusText).toHaveBeenCalledWith(expect.stringContaining('No session'));
     expect(deps.refreshTree).toHaveBeenCalledOnce();
     expect(deps.showWarning).not.toHaveBeenCalled();
+  });
+});
+
+// ── setFilter ─────────────────────────────────────────────────────────────────
+
+describe('SessionController.setFilter', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('calls repository.setFilter and sets filter active + refreshes tree on success', async () => {
+    const repository = makeRepository();
+    const deps = makeDeps({ repository });
+    const ctrl = new SessionController(deps);
+
+    const ok = await ctrl.setFilter('SELECT form_key FROM "npc_"');
+
+    expect(ok).toBe(true);
+    expect(repository.setFilter).toHaveBeenCalledWith('SELECT form_key FROM "npc_"');
+    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"');
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+    expect(deps.showError).not.toHaveBeenCalled();
+  });
+
+  it('shows error and returns false when repository returns an error message', async () => {
+    const repository = makeRepository({ setFilterError: 'Filter SQL must return a form_key column' });
+    const deps = makeDeps({ repository });
+    const ctrl = new SessionController(deps);
+
+    const ok = await ctrl.setFilter('SELECT editor_id FROM "npc_"');
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('form_key'));
+    expect(deps.setFilterActive).not.toHaveBeenCalled();
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+});
+
+// ── clearFilter ───────────────────────────────────────────────────────────────
+
+describe('SessionController.clearFilter', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('calls repository.clearFilter and sets filter inactive + refreshes tree', async () => {
+    const repository = makeRepository();
+    const deps = makeDeps({ repository });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.clearFilter();
+
+    expect(repository.clearFilter).toHaveBeenCalledOnce();
+    expect(deps.setFilterActive).toHaveBeenCalledWith(false);
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+  });
+});
+
+// ── syncFilterState ───────────────────────────────────────────────────────────
+
+describe('SessionController.syncFilterState', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('sets filter active true when a filter is returned', async () => {
+    const repository = makeRepository({ activeFilter: 'SELECT form_key FROM "npc_"' });
+    const deps = makeDeps({ repository });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.syncFilterState();
+
+    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"');
+  });
+
+  it('sets filter active false when no filter is returned', async () => {
+    const repository = makeRepository({ activeFilter: null });
+    const deps = makeDeps({ repository });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.syncFilterState();
+
+    expect(deps.setFilterActive).toHaveBeenCalledWith(false, undefined);
   });
 });

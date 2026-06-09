@@ -61,6 +61,9 @@ describe('mEdit command registration', () => {
     'mEdit.refreshTree',
     'mEdit.newPlugin',
     'mEdit.copyAsOverrideInto',
+    'mEdit.setFilter',
+    'mEdit.clearFilter',
+    'mEdit.setFilterFromDocument',
   ];
 
   it('registers all expected commands on activation', async () => {

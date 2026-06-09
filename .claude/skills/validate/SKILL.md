@@ -77,6 +77,9 @@ Triage survivors per /mutation-test.
 When all steps pass:
 1. Update task files listed above
 2. `rm validation-plan.md`
+
+## Git Commit
+Create a commit with a message referencing the task and summarizing the work, e.g. "Implement X feature [Task-123]". If multiple tasks, list them all. If no explicit tasks, write "no task file". Prompt the user to review and edit the commit message before finalizing. Then commit the changes.
 ```
 
 ## Step 5 — Hand off

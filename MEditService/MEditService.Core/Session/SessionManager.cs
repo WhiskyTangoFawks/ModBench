@@ -153,6 +153,20 @@ public sealed class SessionManager : ISessionManager, IDisposable
         return result;
     }
 
+    public void SetFilter(string sql) => ApplyFilter(sql);
+    public void ClearFilter() => ApplyFilter(null);
+
+    private void ApplyFilter(string? sql)
+    {
+        lock (_lock)
+        {
+            if (_session is null)
+                throw new InvalidOperationException("No session loaded.");
+            _repository!.SetFilter(sql);
+            _session.FilterSql = sql;
+        }
+    }
+
     public void Unload()
     {
         lock (_lock)

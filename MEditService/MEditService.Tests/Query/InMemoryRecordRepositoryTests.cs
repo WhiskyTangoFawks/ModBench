@@ -260,6 +260,24 @@ public class InMemoryRecordRepositoryTests : IClassFixture<TestPluginFixture>
         Assert.Equal(TestPluginFixture.RecordCount, count);
     }
 
+    // --- GetPluginsWithMatchingRecords ---
+
+    [Fact]
+    public void GetPluginsWithMatchingRecords_ExistingTableWithRecords_ReturnsPlugins()
+    {
+        using var repo = LoadedRepository();
+        var result = repo.GetPluginsWithMatchingRecords(["npc_"]);
+        Assert.Contains(TestPluginFixture.PluginName, result);
+    }
+
+    [Fact]
+    public void GetPluginsWithMatchingRecords_UnknownTable_ReturnsEmpty()
+    {
+        using var repo = LoadedRepository();
+        var result = repo.GetPluginsWithMatchingRecords(["unknowntable"]);
+        Assert.Empty(result);
+    }
+
     // --- Connection ---
 
     [Fact]

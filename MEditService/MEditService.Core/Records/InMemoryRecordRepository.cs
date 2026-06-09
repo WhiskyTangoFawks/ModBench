@@ -139,5 +139,17 @@ public sealed class InMemoryRecordRepository : IRecordRepository
         return new PagedResult<RecordSummary>(allItems.Skip(offset).Take(limit).ToList(), total);
     }
 
+    public void SetFilter(string? sql) { /* filter unsupported in InMemory; no-op */ }
+
+    public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var tableName in tableNames)
+            if (_tables.TryGetValue(tableName, out var table))
+                foreach (var r in table)
+                    result.Add(r.Plugin);
+        return result;
+    }
+
     public void Dispose() { }
 }

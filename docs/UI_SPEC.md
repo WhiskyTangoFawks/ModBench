@@ -96,15 +96,40 @@ Context menu (`contextValue: "record"`):
 | Show Referenced By | Opens record editor on the "Referenced By" tab (Phase 11) |
 | Run Script… | Context is this record; QuickPick from `GET /scripts` (Phase 15) |
 
-### 2.5 Filter Toolbar (Phase 9)
+### 2.5 Record Filter (Phase 9.6)
 
-Above the tree, a compact toolbar row:
+The record tree is filtered by a **filter file** — a plain `.sql` file containing a DuckDB SELECT that returns `form_key`. While a filter is active, the tree is pruned: plugins and record types with no matching records are hidden.
 
-- Free-text search box: filters by EditorID prefix or exact FormKey; debounced; maps to `editorId` query param on `GET /records`
-- Conflict state toggle buttons: "All" / "Conflicts" / "Overrides" / "Clean"
-- Record type dropdown (optional; narrows to one record type)
+**Entry points:**
 
-Filters compose as AND. Clearing all filters returns to the full tree.
+- Tree view title bar: funnel icon button (always visible) → opens `mEdit.setFilter` QuickPick; funnel-slash icon (visible only when filter active) → `mEdit.clearFilter`
+- Command palette: `mEdit.setFilter`, `mEdit.clearFilter`
+- Code Lens on open `.sql` files in `mEdit.scriptsPath` (see below)
+
+**`mEdit.setFilter` QuickPick:**
+
+Lists all `.sql` files in `mEdit.scriptsPath` plus a "New filter…" option. Selecting a file POSTs its SQL to the backend and refreshes the tree. "New filter…" opens a new untitled `.sql` editor tab.
+
+**Code Lens on `.sql` files:**
+
+Two inline lenses appear at the top of every `.sql` file under `mEdit.scriptsPath`:
+
+- `▶ Apply as Filter` — when the file's content does not match the currently active filter SQL
+- `✓ Active — click to clear` — when this file is the active filter
+
+An editor title bar funnel-slash button is also shown when any filter is active.
+
+**Active filter indicator:** the tree title bar funnel icon and the editor title bar button both reflect active/inactive state via the `mEdit.filterActive` VS Code context key.
+
+**Clearing the filter** restores the full unfiltered tree.
+
+**Built-in presets** (copied to `mEdit.scriptsPath` on first use):
+
+| File | SQL |
+|------|-----|
+| `pending-changes.sql` | `SELECT DISTINCT form_key FROM pending_changes` |
+
+Conflict-status filtering, EditorID search, and record-type narrowing are all expressed as user-written SQL against the per-type DuckDB tables. No structured toggle UI is provided. See ADR-0018.
 
 ### 2.6 Worldspace/Interior Cell Tree (Phase 16)
 

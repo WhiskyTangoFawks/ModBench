@@ -1,4 +1,5 @@
 using MEditService.Core.Session;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -237,5 +238,27 @@ public sealed class GameSessionPluginMetadataTests
 
         var ex = Record.Exception(() => session.Dispose());
         Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Constructor_WithLogger_LogsToProvidedLogger()
+    {
+        using var data = new PluginFixtureBuilder("gs-logger")
+            .WithPlugin("LogTest.esp")
+            .Build();
+        var logger = new CapturingLogger();
+
+        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4, logger);
+
+        Assert.True(logger.WasCalled);
+    }
+
+    private sealed class CapturingLogger : ILogger
+    {
+        public bool WasCalled { get; private set; }
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            => WasCalled = true;
     }
 }

@@ -10,6 +10,7 @@ public interface IGameSession : IDisposable
     GameRelease GameRelease { get; }
     IReadOnlyList<PluginMetadata> Plugins { get; }
     ILinkCache LinkCache { get; }
+    string? FilterSql { get; set; }
     IModGetter? GetMod(string pluginName);
     PluginMetadata AddPlugin(string filePath);
 }

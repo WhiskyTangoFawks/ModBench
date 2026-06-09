@@ -27,7 +27,14 @@ public sealed class RecordQueryService : IRecordQueryService
     public IReadOnlyList<PluginResponse> GetPlugins()
     {
         var s = RequireSession();
-        return s.Plugins.Select(PluginResponse.FromMetadata).ToList();
+        if (s.FilterSql is null)
+            return s.Plugins.Select(PluginResponse.FromMetadata).ToList();
+
+        var matchingPlugins = RequireRepository().GetPluginsWithMatchingRecords(RequireSchemas().Keys);
+        return s.Plugins
+            .Where(p => matchingPlugins.Contains(p.Name))
+            .Select(PluginResponse.FromMetadata)
+            .ToList();
     }
 
     public IReadOnlyList<string> GetRecordTypes() =>

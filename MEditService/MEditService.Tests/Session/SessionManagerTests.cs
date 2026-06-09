@@ -192,6 +192,41 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
         }
     }
 
+    // --- SetFilter / ClearFilter ---
+
+    [Fact]
+    public void SetFilter_NoSession_ThrowsInvalidOperationException()
+    {
+        using var manager = MakeManager();
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.SetFilter("SELECT form_key FROM \"NPC_\""));
+        Assert.Contains("No session", ex.Message);
+    }
+
+    [Fact]
+    public void ClearFilter_NoSession_ThrowsInvalidOperationException()
+    {
+        using var manager = MakeManager();
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.ClearFilter());
+        Assert.Contains("No session", ex.Message);
+    }
+
+    [Fact]
+    public void SetFilter_ValidSql_SetsSqlOnSession()
+    {
+        using var manager = MakeLoadedManager();
+        manager.SetFilter("SELECT form_key FROM \"NPC_\"");
+        Assert.Equal("SELECT form_key FROM \"NPC_\"", manager.Session!.FilterSql);
+    }
+
+    [Fact]
+    public void ClearFilter_AfterSetFilter_ClearsSqlOnSession()
+    {
+        using var manager = MakeLoadedManager();
+        manager.SetFilter("SELECT form_key FROM \"NPC_\"");
+        manager.ClearFilter();
+        Assert.Null(manager.Session!.FilterSql);
+    }
+
     // --- helpers ---
 
     private sealed class SpyRepositoryFactory : IRecordRepositoryFactory

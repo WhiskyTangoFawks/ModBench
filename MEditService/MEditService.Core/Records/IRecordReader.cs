@@ -10,4 +10,5 @@ public interface IRecordReader
     int CountRecordsForPlugin(string tableName, string plugin);
     string? FindRecordType(string formKey);
     PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset);
+    IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames);
 }

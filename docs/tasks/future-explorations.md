@@ -34,9 +34,12 @@
 - Vector DB for semantic lookup with standalone MCP server → this work is inherently template based, so being able to do a lookup is going to be fairly critical for a more automated agent → need to dump the FO4 wiki here too...
 
 ## MO2 Functionality
-- 2nd Tree view of the left hand window
-    * Opt 1 - use native MO2 folder structure viewer
-    * Opt 2 - some sort of tree viewer -> tree viewer is bad for editting
-    * Req: Archive parsing
-- Drag and Drop Plugin Ordering in plugin tree
-- Launch Game --> vscode run configuration
+
+Full spec: [docs/mod-manager.md](../mod-manager.md)
+
+- Sidebar mod list view (enable/disable, drag-and-drop priority ordering) → plugin list view on launch
+- VFS via VS Code run config (Linux: fuse-overlayfs, Windows: ProjFS) — BA2s treated as opaque files, no extraction
+- File conflict index (winner-per-path map, rebuilt on reorder/toggle)
+- Status badges: conflicts, missing masters, update available
+- nxm:// Nexus download integration
+- Manual archive install with SharpCompress

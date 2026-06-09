@@ -19,6 +19,7 @@ public sealed class GameSession : IGameSession
     public GameRelease GameRelease { get; }
     public IReadOnlyList<PluginMetadata> Plugins => _plugins;
     public ILinkCache LinkCache => _linkCache;
+    public string? FilterSql { get; set; }
 
     public IModGetter? GetMod(string pluginName) =>
         _modsByName.TryGetValue(pluginName, out var mod) ? mod : null;

@@ -360,6 +360,8 @@ public sealed class EditOrchestratorTests
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) =>
             throw new NotSupportedException();
+        public void SetFilter(string sql) => _inner.SetFilter(sql);
+        public void ClearFilter() => _inner.ClearFilter();
 
         public void Dispose() => _inner.Dispose();
     }
@@ -383,6 +385,7 @@ public sealed class EditOrchestratorTests
         public GameRelease GameRelease => _inner.GameRelease;
         public IReadOnlyList<PluginMetadata> Plugins => _plugins;
         public ILinkCache LinkCache => _inner.LinkCache;
+        public string? FilterSql { get => _inner.FilterSql; set => _inner.FilterSql = value; }
         public IModGetter? GetMod(string pluginName) => _inner.GetMod(pluginName);
         public PluginMetadata AddPlugin(string filePath) => _inner.AddPlugin(filePath);
         public void Dispose() { } // inner managed by StubSessionManagerWithImmutablePlugin

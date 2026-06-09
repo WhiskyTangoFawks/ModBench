@@ -29,6 +29,11 @@
           "type": "string",
           "default": "",
           "description": "Override: absolute path to Plugins.txt. Leave blank for auto-detect."
+        },
+        "mEdit.scriptsPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to folder containing .sql filter files and .py scripts. Defaults to ~/.medit/scripts."
         }
       }
     },
@@ -79,6 +84,20 @@
       {
         "command": "mEdit.copyAsOverrideInto",
         "title": "mEdit: Copy as Override Into…"
+      },
+      {
+        "command": "mEdit.setFilter",
+        "title": "mEdit: Filter Records…",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "mEdit.clearFilter",
+        "title": "mEdit: Clear Filter",
+        "icon": "$(filter-filled)"
+      },
+      {
+        "command": "mEdit.setFilterFromDocument",
+        "title": "mEdit: Apply SQL File as Filter"
       }
     ],
     "menus": {
@@ -91,6 +110,23 @@
         {
           "command": "mEdit.newPlugin",
           "when": "view == mEdit.pluginTree",
+          "group": "navigation"
+        },
+        {
+          "command": "mEdit.setFilter",
+          "when": "view == mEdit.pluginTree",
+          "group": "navigation"
+        },
+        {
+          "command": "mEdit.clearFilter",
+          "when": "view == mEdit.pluginTree && mEdit.filterActive",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "mEdit.clearFilter",
+          "when": "mEdit.filterActive",
           "group": "navigation"
         }
       ],
