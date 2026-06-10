@@ -58,6 +58,20 @@ ProjFS (Windows Projected File System) requires an optional Windows feature that
 
 **Same-drive constraint**: `mods/` and `Data/` must be on the same partition. Checked at first deploy; if violated, the user is prompted to move the staging folder or use the symlink fallback (requires admin on Windows).
 
+### Why not deploy to a local folder instead of Data/?
+
+An alternative model: create a local `~/.medit/deploy/GameName/` folder, hardlink vanilla game files in, overlay mod files on top, and redirect the game to use it. Appeal: mod files never touch the Steam directory; Steam verify works unimpeded; purge is a single folder delete with no manifest.
+
+The redirect is the hard part. Bethesda games read `Data/` relative to the executable with no launch argument to change it. The only viable redirect is replacing the real `Data/` with a junction pointing to the local folder — but a Steam update silently restores `Data/`, breaking the junction without warning. The `sResourceDataDirsFinal` INI setting adds extra data paths but cannot replace the primary one. Linux bind-mount wrappers work but reintroduce the mount lifecycle complexity (dangling mounts on crash) that made ProjFS/fuse-overlayfs unattractive.
+
+Bootstrapping is also expensive: vanilla `Data/` contains thousands of files that must be hardlinked into the deploy folder on first setup and re-hardlinked after every game update. If the deploy folder is on a different drive than the game (the main motivation for the approach), hardlinking is impossible and full copies are required — equivalent to NMA's direct-copy model.
+
+**Decision**: deploy mod files directly into the game's `Data/` as the spec describes. It is simpler, update-safe, and avoids the redirect and bootstrapping problems entirely.
+
+### Hardlinks vs. symlinks — decision summary
+
+Symlinks are simpler to implement (.NET 6 `File.CreateSymbolicLink()`, no `DllImport`; trivially detectable on purge without a manifest) and easier to debug (visible in any file manager). On Linux they require no special permissions and are strictly preferable. On Windows, however, file symlinks require either admin rights or Developer Mode — there is no workaround for file-level links. Junction points avoid the elevation requirement but are directory-only and cannot represent a per-file merged view. **Hardlinks are therefore the primary deployment mechanism**: same semantics, no elevation, no Developer Mode, works on any Windows user account. Symlinks are used as an explicit fallback only when `mods/` and `Data/` are on different drives, with a clear user warning about the Windows permission requirement.
+
 ---
 
 ## Architecture Overview

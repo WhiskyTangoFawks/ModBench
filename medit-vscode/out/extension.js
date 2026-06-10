@@ -35,7 +35,7 @@ __export(extension_exports, {
 });
 module.exports = __toCommonJS(extension_exports);
 var vscode3 = __toESM(require("vscode"));
-var path2 = __toESM(require("path"));
+var path3 = __toESM(require("path"));
 var os2 = __toESM(require("os"));
 var fs2 = __toESM(require("fs"));
 
@@ -1003,16 +1003,29 @@ var ApiPluginRepository = class {
     }
   }
   async setFilter(sql) {
-    const { response } = await this.client.POST("/session/filter", { body: { sql } });
-    if (!response.ok) {
-      const text = await response.text();
-      this.log(`[PluginRepository] setFilter failed (${response.status}): ${text}`);
-      return text;
+    try {
+      const { response } = await this.client.POST("/session/filter", { body: { sql } });
+      if (!response.ok) {
+        const text = await response.text();
+        this.log(`[PluginRepository] setFilter failed (${response.status}): ${text}`);
+        return text;
+      }
+      return null;
+    } catch (e) {
+      this.log(`[PluginRepository] setFilter failed: ${e instanceof Error ? e.message : String(e)}`);
+      return e instanceof Error ? e.message : String(e);
     }
-    return null;
   }
   async clearFilter() {
-    await this.client.DELETE("/session/filter", {});
+    try {
+      const { response } = await this.client.DELETE("/session/filter", {});
+      if (!response.ok) {
+        const text = await response.text();
+        this.log(`[PluginRepository] clearFilter failed (${response.status}): ${text}`);
+      }
+    } catch (e) {
+      this.log(`[PluginRepository] clearFilter failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
   async getActiveFilter() {
     const { data } = await this.client.GET("/session/filter", {});
@@ -1022,17 +1035,22 @@ var ApiPluginRepository = class {
 
 // src/FilterCodeLensProvider.ts
 var vscode2 = __toESM(require("vscode"));
+var path2 = __toESM(require("path"));
 var FilterCodeLensProvider = class {
   constructor(scriptsPath) {
     this.scriptsPath = scriptsPath;
   }
   scriptsPath;
   activeFilterSql = null;
+  _onDidChangeCodeLenses = new vscode2.EventEmitter();
+  onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
   setActiveSql(sql) {
     this.activeFilterSql = sql;
+    this._onDidChangeCodeLenses.fire();
   }
   provideCodeLenses(document) {
-    if (!document.uri.fsPath.startsWith(this.scriptsPath)) return [];
+    const dir = this.scriptsPath.endsWith(path2.sep) ? this.scriptsPath : this.scriptsPath + path2.sep;
+    if (!document.uri.fsPath.startsWith(dir)) return [];
     const range = new vscode2.Range(new vscode2.Position(0, 0), new vscode2.Position(0, 0));
     const docSql = document.getText().trim();
     const isActive = this.activeFilterSql !== null && docSql === this.activeFilterSql.trim();
@@ -1103,10 +1121,10 @@ async function activate(context) {
   const treeProvider = new PluginTreeProvider(repository, log);
   const openPanels = /* @__PURE__ */ new Map();
   const scriptsPathCfg = cfg.get("scriptsPath") ?? "";
-  const scriptsPath = scriptsPathCfg || path2.join(os2.homedir(), ".medit", "scripts");
+  const scriptsPath = scriptsPathCfg || path3.join(os2.homedir(), ".medit", "scripts");
   fs2.mkdirSync(scriptsPath, { recursive: true });
-  const pendingChangesSql = path2.join(scriptsPath, "pending-changes.sql");
-  const presetSrc = path2.join(__dirname, "..", "extension", "scripts", "pending-changes.sql");
+  const pendingChangesSql = path3.join(scriptsPath, "pending-changes.sql");
+  const presetSrc = path3.join(__dirname, "..", "extension", "scripts", "pending-changes.sql");
   if (!fs2.existsSync(pendingChangesSql) && fs2.existsSync(presetSrc))
     fs2.copyFileSync(presetSrc, pendingChangesSql);
   const filterProvider = new FilterCodeLensProvider(scriptsPath);
@@ -1177,7 +1195,7 @@ async function activate(context) {
         await vscode3.window.showTextDocument(doc);
         return;
       }
-      const filePath = path2.join(scriptsPath, picked.label);
+      const filePath = path3.join(scriptsPath, picked.label);
       const sql = fs2.readFileSync(filePath, "utf8");
       await controller.setFilter(sql);
     }),
@@ -1221,7 +1239,7 @@ async function activate(context) {
   );
   backendManager.on("status", (status) => {
     if (status === "attached") {
-      void controller.onBackendConnected().then(() => controller.syncFilterState());
+      void controller.onBackendConnected().then(() => controller.syncFilterState()).catch((err) => log(`[extension] onBackendConnected failed: ${err instanceof Error ? err.message : String(err)}`));
     }
   });
   await backendManager.connect().catch((err) => {
@@ -1254,7 +1272,7 @@ function openRecordPanel(context, openPanels, title, formKey, port) {
   }
   const panel = vscode3.window.createWebviewPanel("mEdit", title, vscode3.ViewColumn.One, {
     enableScripts: true,
-    localResourceRoots: [vscode3.Uri.file(path2.join(context.extensionPath, "out", "webview"))]
+    localResourceRoots: [vscode3.Uri.file(path3.join(context.extensionPath, "out", "webview"))]
   });
   openPanels.set(RECORD_PANEL_KEY, panel);
   panel.onDidDispose(() => openPanels.delete(RECORD_PANEL_KEY));
@@ -1267,7 +1285,7 @@ function openRecordPanel(context, openPanels, title, formKey, port) {
     }
   });
   const scriptUri = panel.webview.asWebviewUri(
-    vscode3.Uri.file(path2.join(context.extensionPath, "out", "webview", "assets", "main.js"))
+    vscode3.Uri.file(path3.join(context.extensionPath, "out", "webview", "assets", "main.js"))
   );
   panel.webview.html = buildWebviewHtml({
     formKey,

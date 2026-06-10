@@ -43,3 +43,11 @@ Full spec: [docs/mod-manager.md](../mod-manager.md)
 - Status badges: conflicts, missing masters, update available
 - nxm:// Nexus download integration
 - Manual archive install with SharpCompress
+
+
+## Nifskope in VSCode
+
+### Shortcut A: The Python Bridge (PyFFI)
+The NifTools team maintains PyFFI (Python File Format Interface), a Python library capable of reading and editing NIF blocks.  The Glue: Instead of compiling C++ to WASM, bundle a lightweight Python script with your extension. Your TypeScript code calls the Python script headlessly via standard child processes (child_process.spawn). Python reads the NIF, turns it into JSON for your Agent, and edits it on command. This completely eliminates C++ compilation headaches.
+### Shortcut B: The CLI Bridge via Blender
+Blender has an incredibly robust, community-maintained Blender NIF Plugin.  The Glue: You could use a headless instance of Blender as your background processor. Your extension triggers background Python scripts inside Blender to import the NIF, alter a transform or material via the Blender API, and re-export it.
