@@ -35,6 +35,10 @@ Clicking the item when the backend is not running shows a notification with inst
 
 The sidebar tree is the primary navigation surface. It is a VS Code `TreeView` registered under the `mEdit` view container.
 
+### 2.0 Multi-Select
+
+The tree view has `canSelectMany: true`. Ctrl+click and Shift+click select multiple nodes. Context menu commands that support batch operation (currently: Remove Record) receive the full selection as their second argument. Selection may span different plugins and record types.
+
 ### 2.1 Top-Level Nodes
 
 When no session is loaded:
@@ -92,7 +96,7 @@ Context menu (`contextValue: "record"`):
 | Open Record | Default action (also triggered by single click); runs `mEdit.openEditor` |
 | Copy as Override Into… | Plugin picker; calls copy-to |
 | Copy as New Record Into… | Plugin picker; calls `POST /plugins/{plugin}/records` with template (Phase 10) |
-| Remove Record | Plugin picker (which plugin's override to delete); confirmation; calls `POST /records/delete` (Phase 10) |
+| Remove Record | Confirmation dialog listing all selected records; calls `POST /records/delete` with all selected `(FormKey, Plugin)` pairs as one batch (Phase 10); Delete key also triggers this when record nodes are selected |
 | Show Referenced By | Opens record editor on the "Referenced By" tab (Phase 11) |
 | Run Script… | Context is this record; QuickPick from `GET /scripts` (Phase 15) |
 
@@ -158,8 +162,9 @@ The record editor is a VS Code webview panel opened by `mEdit.openEditor`. One p
 ### 3.1 Panel Header
 
 - Record identity: `{RecordType} / {EditorID}` (or FormKey if no EditorID)
-- FormKey display: `{FormID}:{OriginPlugin}`
-- Tab bar: "Fields" | "Referenced By" (Phase 11)
+- FormKey display: `{FormID}:{OriginPlugin}` — always visible in view mode as plain text
+
+**FormID rename (Phase 10.4):** In edit mode, the FormID portion (`{FormID}`) becomes an `<input type="text">` constrained to 6 hex characters. The `:{OriginPlugin}` suffix is displayed adjacent, non-editable. A "Renumber" button appears beside the input; it is disabled until the hex value differs from the current FormID and enabled only when the record belongs to a mutable plugin. Clicking "Renumber" calls `POST /records/{formKey}/renumber` and stages a ChangeGroup. On 422 (FormID in use), an inline error appears below the input: "FormID `{value}` is already in use". On 409 (immutable reference blocks rename), a notification lists the blocking plugins.
 
 ### 3.2 Fields Tab — Compare Grid
 
@@ -234,17 +239,30 @@ Absent fields (null value in a non-master plugin — PartialForm absent-field ru
 
 Column headers use the per-record ConflictThis aggregate (the worst ConflictThis across all fields for that plugin) as a quick summary; individual cell colors are the authoritative per-field states.
 
-### 3.3 Referenced By Tab (Phase 11)
+### 3.3 Referenced By Panel (Phase 11)
 
-Lazy-loaded on tab click. Calls `GET /records/{formKey}/references`.
+A separate VS Code webview panel — not a tab inside the record editor. Title: `"Referenced By: {EditorID}"` (or FormKey if no EditorID).
 
-Displays a list of records that hold a FormLink pointing to this record:
+**How to open:** right-click a record node in the sidebar tree → "Show Referenced By"; or a button in the record editor panel header. Opens alongside the record panel (`ViewColumn.Beside`).
 
+Calls `GET /records/{formKey}/references` on mount (lazy — only when the panel is first opened).
+
+Displays a grouped list of records that hold a FormLink pointing to this record. Results are grouped by `(FormKey, RecordType)` — multiple plugin overrides of the same record collapse into one group.
+
+**Group header** (one per unique referencing record):
 ```
-{PluginName}   {RecordType} / {EditorID}   field: {FieldPath}
+▶  {RecordType} / {EditorID}   (N plugins)
 ```
+- Collapsed by default; expand/collapse toggle per group
+- Count omitted when only one plugin holds the reference
+- **Left-click**: opens that record in the currently active record panel (`ViewColumn.Active`)
+- **Right-click**: context menu → "Open to the Side" (`ViewColumn.Beside`)
 
-Each row is clickable — opens that referencing record in the editor.
+**Expanded child rows** (one per plugin override that holds the reference):
+```
+    {PluginName}   field: {FieldPath}
+```
+- Indented; informational only — not clickable
 
 Empty state: "No references found."
 
@@ -264,11 +282,41 @@ Per-field revert (×) button appears on each pending cell.
 
 ---
 
-## 4. Pending Changes Panel (Phase B design)
+## 4. Change Groups Panel (Phase 10.5)
 
-> Design not yet finalized. See Phase B open questions in TASKS.md.
+A second VS Code tree view registered in the mEdit view container, below the plugin/record tree. Displays all in-flight ChangeGroups (create, delete, renumber operations). Always visible; shows an empty state when no groups are active.
 
-Intent: a sidebar or bottom panel showing all staged changes across all records, grouped by plugin and optionally by `ChangeGroup`. Supports per-field revert, per-record revert, per-group revert, and save. This is the primary control surface for multi-record operations (delete, renumber).
+### 4.1 Title Bar
+
+Two title bar icon buttons:
+
+| Button | Action |
+|--------|--------|
+| Save All | Calls `POST /change-groups/{id}/save` for each group in sequence; refreshes tree on completion |
+| Revert All | Calls `DELETE /changes/group/{id}` for each group; refreshes tree |
+
+Both buttons are hidden (or disabled) when there are no active groups.
+
+### 4.2 Group Rows
+
+One tree item per ChangeGroup. Label format: `{operation} — {description}` (description omitted if null). Detail line: `{N} changes · {P} plugins`.
+
+Inline action buttons on each row (VS Code tree item buttons):
+
+| Button | Action |
+|--------|--------|
+| Save | `POST /change-groups/{id}/save`; refreshes tree and plugin/record tree on success |
+| Revert | `DELETE /changes/group/{id}`; refreshes tree |
+
+Group rows are not expandable in Phase 10.5. Individual change detail is a future enhancement.
+
+### 4.3 Empty State
+
+When no groups are active: single informational node — "No pending group changes."
+
+### 4.4 Error State
+
+If `POST /change-groups/{id}/save` returns a partial failure (some plugins saved, some did not): show a VS Code error notification naming which plugins saved and which failed. The group row remains in the tree with its re-queued changes intact. See phase-10.5.md for the partial-save failure contract.
 
 ---
 

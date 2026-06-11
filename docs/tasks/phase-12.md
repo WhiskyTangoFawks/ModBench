@@ -7,6 +7,18 @@
 WE ALSO NEED TO FIGURE OUT VMAD
 
 ## Backend
+
+### Pending changes — element-level granularity
+
+Currently `pending_changes` stores one row per column (`field_path = "Packages"`), with the entire serialized column as `new_value`. This makes individual element revert impossible and creates a granularity mismatch with `form_references` (which tracks element paths like `"Packages[1].Reference"`). Array editing requires element-level storage.
+
+- [ ] Change `pending_changes` primary key and storage so that array element edits are stored at element granularity: `field_path = "Packages[1]"`, `new_value = '{"Reference":"..."}'` — one row per touched element, not one row per column
+- [ ] Define and implement array operations as first-class change types: element insert, element delete, element field edit — each stored as a separate row
+- [ ] Update `DuckDbPendingChangeService.Upsert()` to accept element-path keys (e.g. `"Packages[1].Reference"`) in addition to column-level keys; deprecate column-level array writes
+- [ ] Update `PluginWriter` apply logic to merge element-level changes back into the full array on save
+- [ ] Update `GetReferences` SQL in `DuckDbRecordRepository` — with element-level pending changes the granularity mismatch disappears; the `LIKE field_path || '[%'` workaround can be replaced with direct `field_path = pc.field_path` matching
+
+### Schema & serialization
 - [ ] `SchemaGenerator`: serialize `IReadOnlyList<T>` / `ExtendedList<T>` as JSON `VARCHAR`; emit `type: 'array'` in field metadata; element type recursively reflected
 - [ ] `SchemaGenerator`: for nested struct properties (getter interfaces, C# value types), walk the type's own properties recursively via reflection to produce a `fields: FieldMetadata[]` sub-schema — same shape as top-level field metadata, so the frontend gets `name`, `type`, `enumValues`, `validFormKeyTypes` at every nesting level
 - [ ] Sub-schema generation is recursive (structs can contain FormLinks, enums, further structs); stop at primitives and known leaf types
