@@ -1,6 +1,6 @@
 # Phase 11.3 — "Referenced By" Panel
 
-**Status: Not Started**
+**Status: Complete**
 
 *Goal: surface reference data as a separate VS Code webview panel. Users can see every record that references the current FormKey, with click-to-open navigation. No tab bar inside the record editor — this is its own panel.*
 

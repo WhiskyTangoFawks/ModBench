@@ -2,6 +2,12 @@ using System.Text.Json;
 
 namespace MEditService.Core.Edits;
 
+public record PendingFormRef(string StagedField, string FieldPath, string TargetFormKey);
+
+public sealed record DrainResult(
+    IReadOnlyList<PendingChange> Changes,
+    ILookup<string, PendingFormRef> FormRefsByFormKey);
+
 public interface IPendingChangeService
 {
     IReadOnlyList<PendingChange> Upsert(
@@ -11,7 +17,8 @@ public interface IPendingChangeService
         Dictionary<string, JsonElement> fields,
         string source,
         string? description,
-        Dictionary<string, JsonElement> oldValues);
+        Dictionary<string, JsonElement> oldValues,
+        IReadOnlyList<PendingFormRef>? formRefs = null);
 
     IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null);
 
@@ -21,7 +28,7 @@ public interface IPendingChangeService
 
     int Revert(string? plugin, string? formKey);
 
-    IReadOnlyList<PendingChange> DrainForPlugin(string plugin);
+    DrainResult DrainForPlugin(string plugin);
 
     IReadOnlyList<(string FormKey, string RecordType)> GetStagedFormKeys(string plugin, string? recordType = null);
 }

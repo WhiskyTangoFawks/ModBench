@@ -150,6 +150,9 @@ public sealed class RecordQueryService : IRecordQueryService
             .ToList();
     }
 
+    public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
+        RequireRepository().GetReferences(targetFormKey);
+
     private IGameSession RequireSession() =>
         _session.Session ?? throw new InvalidOperationException("No session loaded.");
 

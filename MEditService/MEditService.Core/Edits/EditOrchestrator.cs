@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Queries;
+using MEditService.Core.Schema;
 using MEditService.Core.Session;
 
 namespace MEditService.Core.Edits;
@@ -10,17 +11,20 @@ public sealed class EditOrchestrator : IEditOrchestrator
     private readonly IRecordQueryService _query;
     private readonly IPluginWriter _writer;
     private readonly IPendingChangeService _changes;
+    private readonly ISchemaReflector _schemaReflector;
 
     public EditOrchestrator(
         ISessionManager sessionManager,
         IRecordQueryService query,
         IPluginWriter writer,
-        IPendingChangeService changes)
+        IPendingChangeService changes,
+        ISchemaReflector schemaReflector)
     {
         _sessionManager = sessionManager;
         _query = query;
         _writer = writer;
         _changes = changes;
+        _schemaReflector = schemaReflector;
     }
 
     public StageEditResult StageEdit(
@@ -47,13 +51,15 @@ public sealed class EditOrchestrator : IEditOrchestrator
                 oldValues[fv.Metadata.Name] = JsonSerializer.SerializeToElement(fv.Value);
         }
 
-        var staged = _changes.Upsert(formKey, plugin, recordType!, fields, source, description, oldValues);
+        var schemas = _schemaReflector.GetSchemas(session!.GameRelease);
+        var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!);
+        var staged = _changes.Upsert(formKey, plugin, recordType!, fields, source, description, oldValues, formRefs);
         return new StageEditResult.Staged(staged);
     }
 
     public StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source)
     {
-        var (earlyOut, _, recordType) = ValidateEditContext(formKey, targetPlugin);
+        var (earlyOut, session, recordType) = ValidateEditContext(formKey, targetPlugin);
         if (earlyOut != null) return earlyOut;
 
         var winner = _query.GetRecord(formKey);
@@ -71,8 +77,76 @@ public sealed class EditOrchestrator : IEditOrchestrator
                 oldValues[fv.Metadata.Name] = JsonSerializer.SerializeToElement(fv.Value);
         }
 
-        var staged = _changes.Upsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues);
+        var schemas = _schemaReflector.GetSchemas(session!.GameRelease);
+        var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!);
+        var staged = _changes.Upsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues, formRefs);
         return new StageEditResult.Staged(staged);
+    }
+
+    private static List<PendingFormRef> ExtractFormKeyRefs(
+        Dictionary<string, JsonElement> fields,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        string recordType)
+    {
+        var result = new List<PendingFormRef>();
+        if (!schemas.TryGetValue(recordType, out var schema)) return result;
+        var colsByName = schema.RecordColumns.ToDictionary(c => c.Name);
+        foreach (var (fieldPath, newValue) in fields)
+        {
+            if (colsByName.TryGetValue(fieldPath, out var col))
+                result.AddRange(ExtractRefsForColumn(fieldPath, newValue, col));
+        }
+        return result;
+    }
+
+    private static IEnumerable<PendingFormRef> ExtractRefsForColumn(
+        string fieldPath, JsonElement newValue, ColumnSpec col)
+    {
+        if (col.ApiType == "formKey")
+        {
+            if (newValue.ValueKind == JsonValueKind.String)
+            {
+                var val = newValue.GetString();
+                if (val != null && val != "Null")
+                    yield return new PendingFormRef(fieldPath, fieldPath, val);
+            }
+        }
+        else if (col.ApiType == "array" && col.ElementType?.Type == "formKey"
+                 && newValue.ValueKind == JsonValueKind.Array)
+        {
+            var idx = 0;
+            foreach (var elem in newValue.EnumerateArray())
+            {
+                if (elem.ValueKind == JsonValueKind.String)
+                {
+                    var val = elem.GetString();
+                    if (val != null && val != "Null")
+                        yield return new PendingFormRef(fieldPath, $"{fieldPath}[{idx}]", val);
+                }
+                idx++;
+            }
+        }
+        else if (col.ApiType == "array" && col.ElementType?.Type == "struct"
+                 && newValue.ValueKind == JsonValueKind.Array)
+        {
+            var idx = 0;
+            foreach (var elem in newValue.EnumerateArray())
+            {
+                if (elem.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var subField in col.ElementType.Fields ?? [])
+                    {
+                        if (subField.Type != "formKey"
+                            || !elem.TryGetProperty(subField.Name, out var prop)
+                            || prop.ValueKind != JsonValueKind.String) continue;
+                        var val = prop.GetString();
+                        if (val == null || val == "Null") continue;
+                        yield return new PendingFormRef(fieldPath, $"{fieldPath}[{idx}].{subField.Name}", val);
+                    }
+                }
+                idx++;
+            }
+        }
     }
 
     private (StageEditResult? earlyOut, IGameSession? session, string? recordType) ValidateEditContext(

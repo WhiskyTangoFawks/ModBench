@@ -52,7 +52,17 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 changed_at  TIMESTAMP   NOT NULL,
                 group_id    VARCHAR,
                 PRIMARY KEY (form_key, plugin, field_path)
-            )
+            );
+            CREATE TABLE IF NOT EXISTS pending_form_references (
+                source_form_key VARCHAR NOT NULL,
+                source_plugin   VARCHAR NOT NULL,
+                target_form_key VARCHAR NOT NULL,
+                field_path      VARCHAR NOT NULL,
+                staged_field    VARCHAR NOT NULL,
+                record_type     VARCHAR NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_pfr_target
+                ON pending_form_references(target_form_key);
             """;
         cmd.ExecuteNonQuery();
     }
@@ -60,7 +70,10 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
     private static void DropTable(DuckDBConnection connection)
     {
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "DROP TABLE IF EXISTS pending_changes";
+        cmd.CommandText = """
+            DROP TABLE IF EXISTS pending_form_references;
+            DROP TABLE IF EXISTS pending_changes;
+            """;
         cmd.ExecuteNonQuery();
     }
 
@@ -84,11 +97,14 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         Dictionary<string, JsonElement> fields,
         string source,
         string? description,
-        Dictionary<string, JsonElement> oldValues)
+        Dictionary<string, JsonElement> oldValues,
+        IReadOnlyList<PendingFormRef>? formRefs = null)
     {
         lock (_lock)
         {
+            formRefs ??= [];
             var conn = RequireConnection();
+            var refsByField = formRefs.ToLookup(r => r.StagedField);
             var result = new List<PendingChange>(fields.Count);
             var now = DateTime.UtcNow;
 
@@ -124,6 +140,34 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 using var reader = cmd.ExecuteReader();
                 if (reader.Read())
                     result.Add(ReadChange(reader));
+
+                // Replace pending form refs for this field
+                using var del = conn.CreateCommand();
+                del.CommandText = """
+                    DELETE FROM pending_form_references
+                    WHERE source_form_key = $1 AND source_plugin = $2 AND staged_field = $3
+                    """;
+                del.Parameters.Add(new DuckDBParameter { Value = formKey });
+                del.Parameters.Add(new DuckDBParameter { Value = plugin });
+                del.Parameters.Add(new DuckDBParameter { Value = field });
+                del.ExecuteNonQuery();
+
+                foreach (var r in refsByField[field])
+                {
+                    using var ins = conn.CreateCommand();
+                    ins.CommandText = """
+                        INSERT INTO pending_form_references
+                            (source_form_key, source_plugin, target_form_key, field_path, staged_field, record_type)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        """;
+                    ins.Parameters.Add(new DuckDBParameter { Value = formKey });
+                    ins.Parameters.Add(new DuckDBParameter { Value = plugin });
+                    ins.Parameters.Add(new DuckDBParameter { Value = r.TargetFormKey });
+                    ins.Parameters.Add(new DuckDBParameter { Value = r.FieldPath });
+                    ins.Parameters.Add(new DuckDBParameter { Value = field });
+                    ins.Parameters.Add(new DuckDBParameter { Value = recordType });
+                    ins.ExecuteNonQuery();
+                }
             }
             txn.Commit();
 
@@ -190,7 +234,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "SELECT DISTINCT form_key, record_type FROM pending_changes WHERE plugin = $1 AND ($2 IS NULL OR record_type = $2)";
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-            cmd.Parameters.Add(new DuckDBParameter { Value = (object?)recordType ?? DBNull.Value });
+            cmd.Parameters.Add(new DuckDBParameter { Value = (object?)recordType });
 
             var result = new List<(string, string)>();
             using var reader = cmd.ExecuteReader();
@@ -205,10 +249,30 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         lock (_lock)
         {
             var conn = RequireConnection();
+            using var txn = conn.BeginTransaction();
+
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = "DELETE FROM pending_changes WHERE id = $1";
+            cmd.CommandText = "DELETE FROM pending_changes WHERE id = $1 RETURNING form_key, plugin, field_path";
             cmd.Parameters.Add(new DuckDBParameter { Value = changeId.ToString() });
-            return cmd.ExecuteNonQuery() > 0;
+
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read()) return false;
+            var fk = reader.GetString(0);
+            var pl = reader.GetString(1);
+            var fp = reader.GetString(2);
+
+            using var del = conn.CreateCommand();
+            del.CommandText = """
+                DELETE FROM pending_form_references
+                WHERE source_form_key = $1 AND source_plugin = $2 AND staged_field = $3
+                """;
+            del.Parameters.Add(new DuckDBParameter { Value = fk });
+            del.Parameters.Add(new DuckDBParameter { Value = pl });
+            del.Parameters.Add(new DuckDBParameter { Value = fp });
+            del.ExecuteNonQuery();
+
+            txn.Commit();
+            return true;
         }
     }
 
@@ -218,20 +282,67 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         {
             var conn = RequireConnection();
             var (where, paramValues) = BuildFilter(plugin, formKey);
+            var (refWhere, refParams) = BuildPendingRefFilter(plugin, formKey);
+
+            using var txn = conn.BeginTransaction();
+
+            using var del = conn.CreateCommand();
+            del.CommandText = $"DELETE FROM pending_form_references{refWhere}";
+            foreach (var v in refParams)
+                del.Parameters.Add(new DuckDBParameter { Value = v });
+            del.ExecuteNonQuery();
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = $"DELETE FROM pending_changes{where}";
             foreach (var v in paramValues)
                 cmd.Parameters.Add(new DuckDBParameter { Value = v });
-            return cmd.ExecuteNonQuery();
+            var count = cmd.ExecuteNonQuery();
+
+            txn.Commit();
+            return count;
         }
     }
 
-    public IReadOnlyList<PendingChange> DrainForPlugin(string plugin)
+    private static (string Where, List<object> Params) BuildPendingRefFilter(string? plugin, string? formKey)
+    {
+        var conditions = new List<string>();
+        var paramValues = new List<object>();
+        if (plugin != null) { conditions.Add($"source_plugin = ${paramValues.Count + 1}"); paramValues.Add(plugin); }
+        if (formKey != null) { conditions.Add($"source_form_key = ${paramValues.Count + 1}"); paramValues.Add(formKey); }
+        var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
+        return (where, paramValues);
+    }
+
+    public DrainResult DrainForPlugin(string plugin)
     {
         lock (_lock)
         {
             var conn = RequireConnection();
+
+            // Snapshot form refs before atomically removing both tables
+            var refsList = new List<(string SourceFormKey, PendingFormRef Ref)>();
+            using (var refCmd = conn.CreateCommand())
+            {
+                refCmd.CommandText = """
+                    SELECT source_form_key, staged_field, field_path, target_form_key
+                    FROM pending_form_references
+                    WHERE source_plugin = $1
+                    """;
+                refCmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+                using var refReader = refCmd.ExecuteReader();
+                while (refReader.Read())
+                    refsList.Add((
+                        refReader.GetString(0),
+                        new PendingFormRef(refReader.GetString(1), refReader.GetString(2), refReader.GetString(3))));
+            }
+
+            using var txn = conn.BeginTransaction();
+
+            using var del = conn.CreateCommand();
+            del.CommandText = "DELETE FROM pending_form_references WHERE source_plugin = $1";
+            del.Parameters.Add(new DuckDBParameter { Value = plugin });
+            del.ExecuteNonQuery();
+
             using var cmd = conn.CreateCommand();
             cmd.CommandText = """
                 DELETE FROM pending_changes
@@ -244,7 +355,9 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
                 drained.Add(ReadChange(reader));
-            return drained;
+
+            txn.Commit();
+            return new DrainResult(drained, refsList.ToLookup(x => x.SourceFormKey, x => x.Ref));
         }
     }
 

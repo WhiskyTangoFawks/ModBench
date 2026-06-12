@@ -4,8 +4,10 @@ namespace MEditService.Api.Endpoints;
 
 public static class RecordEndpoints
 {
-    public static IEndpointRouteBuilder MapRecordEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapRecordEndpoints(this IEndpointRouteBuilder app, ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger(nameof(RecordEndpoints));
+
         app.MapGet("/records", (
             IRecordQueryService svc,
             string? plugin,
@@ -42,6 +44,25 @@ public static class RecordEndpoints
         .WithTags("Records")
         .Produces<CompareResult>()
         .ProducesProblem(404);
+
+        app.MapGet("/records/{formKey}/references", (string formKey, IRecordQueryService svc) =>
+        {
+            var decoded = Uri.UnescapeDataString(formKey);
+            try
+            {
+                var results = svc.GetReferences(decoded);
+                return Results.Ok(results);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to get references for {FormKey}", decoded);
+                return Results.Problem(ex.Message);
+            }
+        })
+        .WithName("GetReferences")
+        .WithTags("Records")
+        .Produces<IReadOnlyList<ReferenceResult>>()
+        .ProducesProblem(500);
 
         return app;
     }

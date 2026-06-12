@@ -68,7 +68,7 @@ try
 
     app.MapSessionEndpoints();
     app.MapPluginEndpoints();
-    app.MapRecordEndpoints();
+    app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapChangeEndpoints();
 
     var cliArgs = CliArgs.Parse(args);

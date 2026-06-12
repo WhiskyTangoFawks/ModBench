@@ -139,6 +139,8 @@ public sealed class InMemoryRecordRepository : IRecordRepository
         return new PagedResult<RecordSummary>(allItems.Skip(offset).Take(limit).ToList(), total);
     }
 
+    public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => [];
+
     public void SetFilter(string? sql) { /* filter unsupported in InMemory; no-op */ }
 
     public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)

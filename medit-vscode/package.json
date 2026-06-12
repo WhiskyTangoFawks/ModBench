@@ -98,6 +98,10 @@
       {
         "command": "mEdit.setFilterFromDocument",
         "title": "mEdit: Apply SQL File as Filter"
+      },
+      {
+        "command": "mEdit.showReferencedBy",
+        "title": "mEdit: Show Referenced By"
       }
     ],
     "menus": {
@@ -135,6 +139,11 @@
           "command": "mEdit.copyAsOverrideInto",
           "when": "view == mEdit.pluginTree && viewItem == record",
           "group": "mEdit@1"
+        },
+        {
+          "command": "mEdit.showReferencedBy",
+          "when": "view == mEdit.pluginTree && viewItem == record",
+          "group": "mEdit@2"
         }
       ]
     }

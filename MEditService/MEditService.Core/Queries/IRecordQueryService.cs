@@ -10,4 +10,5 @@ public interface IRecordQueryService
     string? GetRecordType(string formKey);
     CompareResult? GetCompare(string formKey);
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin);
+    IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
 }

@@ -47,6 +47,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         var schemas = RequireSchemas();
         var plugin = pluginMod.ModKey.FileName.ToString();
 
+        var refs = new List<FormRef>();
+
         foreach (var (tableName, schema) in schemas)
         {
             List<IMajorRecordGetter> records;
@@ -85,6 +87,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                         AppendTyped(row, col.Extract(record), col.DuckDbType);
 
                     row.EndRow();
+                    CollectFormRefs(refs, record, tableName, schema);
                 }
                 catch (Exception ex)
                 {
@@ -93,6 +96,28 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                         tableName, record.FormKey, record.EditorID, plugin);
                     throw;
                 }
+            }
+        }
+
+        // Delete stale refs only after the loop succeeds — an exception mid-loop now leaves
+        // existing form_references intact rather than permanently empty.
+        DeleteFormReferencesForPlugin(plugin);
+        if (refs.Count > 0)
+        {
+            using var refAppender = _connection.CreateAppender("form_references");
+            foreach (var r in refs)
+            {
+                var row = refAppender.CreateRow();
+                row.AppendValue(r.SourceFormKey);
+                row.AppendValue(plugin);
+                row.AppendValue(r.TargetFormKey);
+                row.AppendValue(r.FieldPath);
+                row.AppendValue(r.RecordType);
+                if (r.EditorId is { } eid)
+                    row.AppendValue(eid);
+                else
+                    row.AppendNullValue();
+                row.EndRow();
             }
         }
     }
@@ -316,6 +341,73 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.ExecuteNonQuery();
     }
 
+    private void DeleteFormReferencesForPlugin(string plugin)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM form_references WHERE source_plugin = $1";
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.ExecuteNonQuery();
+    }
+
+    private static void CollectFormRefs(
+        List<FormRef> refs,
+        IMajorRecordGetter record,
+        string tableName,
+        RecordTableSchema schema)
+    {
+        var sourceFormKey = record.FormKey.ToString();
+        var sourceEditorId = record.EditorID;
+        foreach (var col in schema.RecordColumns)
+        {
+            if (col.ApiType == "formKey")
+            {
+                var value = col.Extract(record);
+                if (value is string target && target != "Null")
+                    refs.Add(new FormRef(sourceFormKey, target, col.Name, tableName, sourceEditorId));
+            }
+            else if (col.ApiType == "array" && col.ElementType?.Type == "formKey")
+            {
+                foreach (var (idx, elem) in EnumerateJsonArray(col.Extract(record)))
+                {
+                    var s = elem.ValueKind == JsonValueKind.Null ? null : elem.GetString();
+                    if (s != null && s != "Null")
+                        refs.Add(new FormRef(sourceFormKey, s, $"{col.Name}[{idx}]", tableName, sourceEditorId));
+                }
+            }
+            else if (col.ApiType == "array" && col.ElementType?.Type == "struct")
+            {
+                foreach (var (idx, elem) in EnumerateJsonArray(col.Extract(record)))
+                {
+                    foreach (var subField in col.ElementType.Fields ?? [])
+                    {
+                        if (subField.Type != "formKey") continue;
+                        var prop = elem.GetProperty(subField.Name);
+                        if (prop.ValueKind == JsonValueKind.Null) continue;
+                        var s = prop.GetString();
+                        if (s == null || s == "Null") continue;
+                        refs.Add(new FormRef(sourceFormKey, s, $"{col.Name}[{idx}].{subField.Name}", tableName, sourceEditorId));
+                    }
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<(int idx, JsonElement elem)> EnumerateJsonArray(object? value)
+    {
+        if (value == null) yield break;
+        var arr = JsonSerializer.Deserialize<JsonElement>((string)value);
+        var idx = 0;
+        foreach (var elem in arr.EnumerateArray())
+            yield return (idx++, elem);
+    }
+
+    private record struct FormRef(
+        string SourceFormKey,
+        string TargetFormKey,
+        string FieldPath,
+        string RecordType,
+        string? EditorId);
+
     private void Execute(string sql)
     {
         using var cmd = _connection.CreateCommand();
@@ -340,6 +432,45 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     private IReadOnlyDictionary<string, RecordTableSchema> RequireSchemas() =>
         _schemas ?? throw new InvalidOperationException("Call Initialize before using the repository.");
 
+    public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey)
+    {
+        var sql = """
+            SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id
+            FROM form_references fr
+            WHERE fr.target_form_key = $1
+              AND NOT EXISTS (
+                SELECT 1 FROM pending_changes pc
+                WHERE pc.form_key = fr.source_form_key
+                  AND pc.plugin   = fr.source_plugin
+                  AND (
+                    fr.field_path = pc.field_path
+                    OR fr.field_path LIKE pc.field_path || '[%'
+                  )
+              )
+
+            UNION ALL
+
+            SELECT pfr.source_form_key, pfr.source_plugin, pfr.field_path, pfr.record_type, NULL
+            FROM pending_form_references pfr
+            WHERE pfr.target_form_key = $1
+            """;
+
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = sql;
+        AddParams(cmd, [targetFormKey]);
+
+        var results = new List<ReferenceResult>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            results.Add(new ReferenceResult(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4)));
+        return results;
+    }
+
     public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
     {
         var tables = tableNames.ToList();
@@ -363,7 +494,6 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     {
         if (sql is null)
         {
-            Execute("DROP TABLE IF EXISTS _filter");
             _filterActive = false;
             return;
         }

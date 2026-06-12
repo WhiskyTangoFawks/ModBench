@@ -1,6 +1,6 @@
 # Phase 11.2 — `GetReferences` Repository Method & API Endpoint
 
-**Status: Not Started**
+**Status: Complete**
 
 *Goal: expose reference data through a typed repository method and a REST endpoint. `GetReferences()` unions committed rows from `form_references` with in-flight pending changes so that Phase 10.3 (delete safety) and Phase 10.4 (renumber cascade) see accurate reference state without waiting for a save.*
 

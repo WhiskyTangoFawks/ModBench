@@ -7,7 +7,8 @@
     "concurrency": 10,
     "mutation-level": "Standard",
     "reporters": [
-      "json"
+      "json",
+      "progress"
     ],
     "thresholds": {
       "high": 80,

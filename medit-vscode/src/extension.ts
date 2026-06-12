@@ -12,6 +12,7 @@ import { ApiPluginRepository } from './PluginRepository';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
+import { openReferencedByPanel } from './ReferencedByPanel';
 
 let backendManager: BackendManager | undefined;
 
@@ -129,6 +130,15 @@ export async function activate(context: vscode.ExtensionContext) {
       await controller.setFilter(sql);
     }),
     vscode.commands.registerCommand('mEdit.clearFilter', () => controller.clearFilter()),
+    vscode.commands.registerCommand('mEdit.showReferencedBy', (node?: RecordNode) => {
+      if (!node?.record?.formKey) return;
+      openReferencedByPanel(
+        context, openPanels,
+        node.record.formKey, node.record.editorId, port,
+        (fk) => { void vscode.commands.executeCommand('mEdit.openEditor', { formKey: fk, label: fk }); },
+        (fk) => { openRecordPanel(context, openPanels, fk, fk, port, vscode.ViewColumn.Beside); },
+      );
+    }),
     vscode.commands.registerCommand('mEdit.copyAsOverrideInto', async (node?: RecordNode) => {
       const formKey = node?.record?.formKey;
       if (!formKey) {
@@ -202,24 +212,29 @@ function openRecordPanel(
   title: string,
   formKey: string | undefined,
   port: number,
+  viewColumn: vscode.ViewColumn = vscode.ViewColumn.One,
 ) {
-  const existing = openPanels.get(RECORD_PANEL_KEY);
-  if (existing) {
-    existing.title = title;
-    existing.reveal();
-    if (formKey) {
-      existing.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey });
+  if (viewColumn !== vscode.ViewColumn.Beside) {
+    const existing = openPanels.get(RECORD_PANEL_KEY);
+    if (existing) {
+      existing.title = title;
+      existing.reveal();
+      if (formKey) {
+        existing.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey });
+      }
+      return;
     }
-    return;
   }
 
-  const panel = vscode.window.createWebviewPanel('mEdit', title, vscode.ViewColumn.One, {
+  const panel = vscode.window.createWebviewPanel('mEdit', title, viewColumn, {
     enableScripts: true,
     localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'out', 'webview'))],
   });
 
-  openPanels.set(RECORD_PANEL_KEY, panel);
-  panel.onDidDispose(() => openPanels.delete(RECORD_PANEL_KEY));
+  if (viewColumn !== vscode.ViewColumn.Beside) {
+    openPanels.set(RECORD_PANEL_KEY, panel);
+    panel.onDidDispose(() => openPanels.delete(RECORD_PANEL_KEY));
+  }
 
   panel.webview.onDidReceiveMessage((msg: unknown) => {
     if (typeof msg === 'object' && msg !== null && 'type' in msg) {

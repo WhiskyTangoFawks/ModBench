@@ -79,3 +79,5 @@ public record PluginRecordTypeCount(string Type, int Count);
 
 public record SessionFilterRequest(string Sql);
 public record SessionFilterResponse(string? Sql);
+
+public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId);

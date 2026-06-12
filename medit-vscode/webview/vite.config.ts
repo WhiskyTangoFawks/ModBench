@@ -9,9 +9,12 @@ export default defineConfig({
     outDir: resolve(__dirname, "../out/webview"),
     emptyOutDir: true,
     rollupOptions: {
-      input: resolve(__dirname, "src/index.html"),
+      input: {
+        main: resolve(__dirname, "src/index.html"),
+        referencedBy: resolve(__dirname, "src/referenced-by.html"),
+      },
       output: {
-        entryFileNames: "assets/main.js",
+        entryFileNames: "assets/[name].js",
         chunkFileNames: "assets/[name].js",
         assetFileNames: "assets/[name][extname]",
       },

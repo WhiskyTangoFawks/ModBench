@@ -19,6 +19,7 @@ public sealed class TableDdlBuilder : ITableDdlBuilder
     {
         CreatePluginsTable(connection);
         CreateIndexStateTable(connection);
+        CreateFormReferencesTable(connection);
         foreach (var schema in _reflector.GetSchemas(release).Values)
             CreateRecordTable(connection, schema);
     }
@@ -44,6 +45,24 @@ public sealed class TableDdlBuilder : ITableDdlBuilder
                 load_order_hash VARCHAR
             )
             """);
+
+    internal static void CreateFormReferencesTable(DuckDBConnection connection)
+    {
+        Execute(connection, """
+            CREATE TABLE IF NOT EXISTS form_references (
+                source_form_key VARCHAR NOT NULL,
+                source_plugin   VARCHAR NOT NULL,
+                target_form_key VARCHAR NOT NULL,
+                field_path      VARCHAR NOT NULL,
+                record_type     VARCHAR NOT NULL,
+                editor_id       VARCHAR
+            )
+            """);
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_form_references_target
+                ON form_references(target_form_key)
+            """);
+    }
 
     private static void CreateRecordTable(DuckDBConnection connection, RecordTableSchema schema)
     {

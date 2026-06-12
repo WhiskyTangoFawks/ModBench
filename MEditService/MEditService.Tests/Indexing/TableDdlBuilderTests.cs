@@ -1,4 +1,5 @@
 using DuckDB.NET.Data;
+using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using Mutagen.Bethesda;
@@ -75,5 +76,27 @@ public class TableDdlBuilderTests
         using var conn = OpenMemory();
         _builder.CreateTables(conn, GameRelease.Fallout4);
         _builder.CreateTables(conn, GameRelease.Fallout4); // should not throw
+    }
+
+    [Fact]
+    public void CreateFormReferencesTable_CreatesTargetFormKeyIndex()
+    {
+        using var conn = OpenMemory();
+        TableDdlBuilder.CreateFormReferencesTable(conn);
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM duckdb_indexes() WHERE index_name = 'idx_form_references_target'";
+        Assert.Equal(1L, cmd.ExecuteScalar());
+    }
+
+    [Fact]
+    public void EnsureTable_CreatesPendingRefTargetIndex()
+    {
+        using var conn = OpenMemory();
+        DuckDbPendingChangeService.EnsureTable(conn);
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM duckdb_indexes() WHERE index_name = 'idx_pfr_target'";
+        Assert.Equal(1L, cmd.ExecuteScalar());
     }
 }

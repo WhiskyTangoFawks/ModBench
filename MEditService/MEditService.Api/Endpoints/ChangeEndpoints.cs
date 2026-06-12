@@ -133,25 +133,29 @@ public static class ChangeEndpoints
             if (metadata.IsImmutable)
                 return Results.Problem($"'{decodedPlugin}' is a base-game plugin and cannot be saved.", statusCode: 409);
 
-            var pending = changes.DrainForPlugin(decodedPlugin);
-            if (pending.Count == 0)
+            var drained = changes.DrainForPlugin(decodedPlugin);
+            if (drained.Changes.Count == 0)
                 return Results.Ok(new SaveResult(string.Empty, [], [], []));
 
             try
             {
-                var result = await session.SavePlugin(decodedPlugin, pending);
+                var result = await session.SavePlugin(decodedPlugin, drained.Changes);
                 return Results.Ok(result);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to save plugin {Plugin} — re-queuing {Count} changes", decodedPlugin, pending.Count);
-                // Re-queue the drained changes so they are not lost on error
-                foreach (var c in pending)
+                logger.LogError(ex, "Failed to save plugin {Plugin} — re-queuing {Count} changes", decodedPlugin, drained.Changes.Count);
+                foreach (var c in drained.Changes)
+                {
+                    var refsForField = drained.FormRefsByFormKey[c.FormKey]
+                        .Where(r => r.StagedField == c.FieldPath)
+                        .ToList();
                     changes.Upsert(c.FormKey, c.Plugin, c.RecordType,
                         new Dictionary<string, JsonElement> { [c.FieldPath] = c.NewValue },
                         c.Source, c.Description,
-                        new Dictionary<string, JsonElement> { [c.FieldPath] = c.OldValue });
-
+                        new Dictionary<string, JsonElement> { [c.FieldPath] = c.OldValue },
+                        refsForField);
+                }
                 return Results.Problem(ex.Message);
             }
         })

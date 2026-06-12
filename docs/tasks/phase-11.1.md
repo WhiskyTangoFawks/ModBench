@@ -1,6 +1,6 @@
 # Phase 11.1 — `form_references` Table & Indexing
 
-**Status: Not Started**
+**Status: Complete**
 
 *Goal: add the `form_references` DuckDB table and populate it during `Index()` by walking `RecordColumns` for FormKey fields. No API surface yet — pure data infrastructure that Phase 11.2 builds on.*
 

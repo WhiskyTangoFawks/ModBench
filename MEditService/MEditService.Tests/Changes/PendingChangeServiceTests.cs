@@ -151,8 +151,8 @@ public sealed class PendingChangeServiceTests : IDisposable
 
         var drained = _svc.DrainForPlugin("A.esp");
 
-        Assert.Single(drained);
-        Assert.Equal("A.esp", drained[0].Plugin);
+        Assert.Single(drained.Changes);
+        Assert.Equal("A.esp", drained.Changes[0].Plugin);
         Assert.Empty(_svc.GetChanges(plugin: "A.esp"));
         Assert.Single(_svc.GetChanges(plugin: "B.esp"));
     }
@@ -264,5 +264,95 @@ public sealed class PendingChangeServiceTests : IDisposable
     {
         var result = _svc.GetStagedFormKeys("Override.esp");
         Assert.Empty(result);
+    }
+
+    [Fact]
+    public void GetStagedFormKeys_NullRecordType_ReturnsAllFormKeys()
+    {
+        _svc.Upsert("FK1", "A.esp", "npc_", new() { ["name"] = J("\"X\"") }, "user", null, new());
+        _svc.Upsert("FK2", "A.esp", "weap", new() { ["damage"] = J("10") }, "user", null, new());
+
+        var result = _svc.GetStagedFormKeys("A.esp", recordType: null);
+
+        Assert.Equal(2, result.Count);
+        Assert.Contains(result, r => r.FormKey == "FK1");
+        Assert.Contains(result, r => r.FormKey == "FK2");
+    }
+
+    // --- pending form refs ---
+
+    private static readonly PendingFormRef RaceRef = new("race", "race", "000001:Fallout4.esm");
+
+    [Fact]
+    public void Revert_ByChangeId_ClearsPendingFormRefs()
+    {
+        var changes = _svc.Upsert("FK1", "A.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(),
+            [RaceRef]);
+
+        _svc.Revert(changes[0].Id);
+
+        // Re-stage without form refs so DrainForPlugin has a change to return
+        _svc.Upsert("FK1", "A.esp", "npc_", new() { ["name"] = J("\"Bob\"") }, "user", null, new());
+        var drained = _svc.DrainForPlugin("A.esp");
+        Assert.Empty(drained.FormRefsByFormKey["FK1"]);
+    }
+
+    [Fact]
+    public void RevertBulk_ByPlugin_ClearsPendingFormRefsForThatPluginOnly()
+    {
+        _svc.Upsert("FK1", "A.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]);
+        _svc.Upsert("FK2", "B.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]);
+
+        _svc.Revert(plugin: "A.esp", formKey: null);
+
+        // A.esp form refs gone — re-stage so drain has something
+        _svc.Upsert("FK1", "A.esp", "npc_", new() { ["name"] = J("\"Bob\"") }, "user", null, new());
+        var drainedA = _svc.DrainForPlugin("A.esp");
+        Assert.Empty(drainedA.FormRefsByFormKey["FK1"]);
+
+        // B.esp form refs intact
+        var drainedB = _svc.DrainForPlugin("B.esp");
+        var bRefs = drainedB.FormRefsByFormKey["FK2"].ToList();
+        Assert.Single(bRefs);
+        Assert.Equal("000001:Fallout4.esm", bRefs[0].TargetFormKey);
+    }
+
+    [Fact]
+    public void RevertBulk_ByFormKey_CleansUpOnlyMatchingFormRefs()
+    {
+        _svc.Upsert("FK1", "P.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]);
+        _svc.Upsert("FK2", "P.esp", "npc_",
+            new() { ["race"] = J("\"000002:Fallout4.esm\"") }, "user", null, new(),
+            [new PendingFormRef("race", "race", "000002:Fallout4.esm")]);
+
+        _svc.Revert(plugin: "P.esp", formKey: "FK1");
+
+        // Verify FK1 refs removed and FK2 refs untouched via direct DB query
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT source_form_key FROM pending_form_references ORDER BY source_form_key";
+        using var reader = cmd.ExecuteReader();
+        var remaining = new List<string>();
+        while (reader.Read()) remaining.Add(reader.GetString(0));
+        Assert.Equal(["FK2"], remaining);
+    }
+
+    [Fact]
+    public void DrainForPlugin_FormRefsIncludedInResult()
+    {
+        _svc.Upsert("FK1", "A.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(),
+            [RaceRef]);
+
+        var drained = _svc.DrainForPlugin("A.esp");
+
+        var refs = drained.FormRefsByFormKey["FK1"].ToList();
+        Assert.Single(refs);
+        Assert.Equal("race", refs[0].StagedField);
+        Assert.Equal("race", refs[0].FieldPath);
+        Assert.Equal("000001:Fallout4.esm", refs[0].TargetFormKey);
     }
 }

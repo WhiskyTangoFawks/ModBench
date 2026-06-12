@@ -1,4 +1,3 @@
-using DuckDB.NET.Data;
 using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -22,7 +21,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         _manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
         _manager.Load(fixture.DataFolder, fixture.PluginsTxtPath, GameRelease.Fallout4);
-        _svc = new RecordQueryService(_manager, MakePendingChangeService(), reflector, new ConflictClassifier());
+        _svc = new RecordQueryService(_manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
     }
 
     public void Dispose() => _manager.Dispose();
@@ -270,7 +269,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         var fk = all.Items[0].FormKey;
 
         // Stage a pending change for this record
-        var changes = MakePendingChangeService();
+        var changes = DuckDbTestFactory.MakePendingChangeService();
         var newVal = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement;
         changes.Upsert(fk, TestPluginFixture.PluginName, "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = newVal },
@@ -320,7 +319,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, MakePendingChangeService(), reflector, new ConflictClassifier());
+            var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
 
             var result = svc.GetRecords(type: null, plugin: null, search: null, limit: 10, offset: 0);
 
@@ -346,7 +345,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, MakePendingChangeService(), reflector, new ConflictClassifier());
+            var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
 
             var result = svc.GetPluginRecordTypes("MultiType.esp");
             var types = result.Select(r => r.Type).ToList();
@@ -356,50 +355,48 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         }
     }
 
-    private static DuckDbPendingChangeService MakePendingChangeService()
-    {
-        var conn = new DuckDBConnection("DataSource=:memory:");
-        conn.Open();
-        return new DuckDbPendingChangeService(conn);
-    }
-
     private static RecordQueryService MakeUnloadedService()
     {
         var reflector = new SchemaReflector();
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
-        return new RecordQueryService(manager, MakePendingChangeService(), reflector, new ConflictClassifier());
+        return new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
     }
 
     // --- GetRecord / GetRecordForPlugin use FindRecordType, not table scan ---
 
-    [Fact]
-    public void GetRecord_UsesFindRecordTypeNotTableScan()
+    private (RecordQueryService Svc, SpyRecordReader Spy, IDisposable Mod) MakeSpySvc()
     {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var fk = all.Items[0].FormKey;
-
         var reflector = new SchemaReflector();
         var inner = new InMemoryRecordRepository(reflector);
         inner.Initialize(GameRelease.Fallout4);
-        using var mod = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
+        var mod = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
             new Mutagen.Bethesda.Plugins.ModPath(
                 Mutagen.Bethesda.Plugins.ModKey.FromFileName(TestPluginFixture.PluginName),
                 Path.Combine(_manager.Session!.DataFolderPath, TestPluginFixture.PluginName)),
             Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
         inner.Index(mod, 0);
         inner.UpdateWinners();
-
         var spy = new SpyRecordReader(inner);
         var stubSession = new StubSessionManager(spy, GameRelease.Fallout4);
-        var svc = new RecordQueryService(stubSession, MakePendingChangeService(), reflector, new ConflictClassifier());
+        var svc = new RecordQueryService(stubSession, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+        return (svc, spy, mod);
+    }
 
-        spy.Reset();
-        var detail = svc.GetRecord(fk);
-
-        Assert.NotNull(detail);
-        Assert.Equal(1, spy.FindRecordTypeCalls);
-        Assert.Equal(1, spy.GetRecordCalls);
+    [Fact]
+    public void GetRecord_UsesFindRecordTypeNotTableScan()
+    {
+        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
+        var fk = all.Items[0].FormKey;
+        var (svc, spy, mod) = MakeSpySvc();
+        using (mod)
+        {
+            spy.Reset();
+            var detail = svc.GetRecord(fk);
+            Assert.NotNull(detail);
+            Assert.Equal(1, spy.FindRecordTypeCalls);
+            Assert.Equal(1, spy.GetRecordCalls);
+        }
     }
 
     [Fact]
@@ -407,28 +404,15 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
     {
         var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
         var fk = all.Items[0].FormKey;
-
-        var reflector = new SchemaReflector();
-        var inner = new InMemoryRecordRepository(reflector);
-        inner.Initialize(GameRelease.Fallout4);
-        using var mod = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
-            new Mutagen.Bethesda.Plugins.ModPath(
-                Mutagen.Bethesda.Plugins.ModKey.FromFileName(TestPluginFixture.PluginName),
-                Path.Combine(_manager.Session!.DataFolderPath, TestPluginFixture.PluginName)),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        inner.Index(mod, 0);
-        inner.UpdateWinners();
-
-        var spy = new SpyRecordReader(inner);
-        var stubSession = new StubSessionManager(spy, GameRelease.Fallout4);
-        var svc = new RecordQueryService(stubSession, MakePendingChangeService(), reflector, new ConflictClassifier());
-
-        spy.Reset();
-        var detail = svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName);
-
-        Assert.NotNull(detail);
-        Assert.Equal(1, spy.FindRecordTypeCalls);
-        Assert.Equal(1, spy.GetRecordCalls);
+        var (svc, spy, mod) = MakeSpySvc();
+        using (mod)
+        {
+            spy.Reset();
+            var detail = svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName);
+            Assert.NotNull(detail);
+            Assert.Equal(1, spy.FindRecordTypeCalls);
+            Assert.Equal(1, spy.GetRecordCalls);
+        }
     }
 
     [Fact]
@@ -436,25 +420,12 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
     {
         var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
         var fk = all.Items[0].FormKey;
-
-        var reflector = new SchemaReflector();
-        var inner = new InMemoryRecordRepository(reflector);
-        inner.Initialize(GameRelease.Fallout4);
-        using var mod = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
-            new Mutagen.Bethesda.Plugins.ModPath(
-                Mutagen.Bethesda.Plugins.ModKey.FromFileName(TestPluginFixture.PluginName),
-                Path.Combine(_manager.Session!.DataFolderPath, TestPluginFixture.PluginName)),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        inner.Index(mod, 0);
-        inner.UpdateWinners();
-
-        var spy = new SpyRecordReader(inner);
-        var stubSession = new StubSessionManager(spy, GameRelease.Fallout4);
-        var svc = new RecordQueryService(stubSession, MakePendingChangeService(), reflector, new ConflictClassifier());
-
-        svc.GetRecord(fk);
-
-        Assert.True(spy.LastWinnerOnly);
+        var (svc, spy, mod) = MakeSpySvc();
+        using (mod)
+        {
+            svc.GetRecord(fk);
+            Assert.True(spy.LastWinnerOnly);
+        }
     }
 
     [Fact]
@@ -462,25 +433,12 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
     {
         var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
         var fk = all.Items[0].FormKey;
-
-        var reflector = new SchemaReflector();
-        var inner = new InMemoryRecordRepository(reflector);
-        inner.Initialize(GameRelease.Fallout4);
-        using var mod = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
-            new Mutagen.Bethesda.Plugins.ModPath(
-                Mutagen.Bethesda.Plugins.ModKey.FromFileName(TestPluginFixture.PluginName),
-                Path.Combine(_manager.Session!.DataFolderPath, TestPluginFixture.PluginName)),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        inner.Index(mod, 0);
-        inner.UpdateWinners();
-
-        var spy = new SpyRecordReader(inner);
-        var stubSession = new StubSessionManager(spy, GameRelease.Fallout4);
-        var svc = new RecordQueryService(stubSession, MakePendingChangeService(), reflector, new ConflictClassifier());
-
-        svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName);
-
-        Assert.False(spy.LastWinnerOnly);
+        var (svc, spy, mod) = MakeSpySvc();
+        using (mod)
+        {
+            svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName);
+            Assert.False(spy.LastWinnerOnly);
+        }
     }
 
     // --- GetPluginRecordTypes — staged records ---
@@ -499,7 +457,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var changes = MakePendingChangeService();
+            var changes = DuckDbTestFactory.MakePendingChangeService();
             changes.Upsert(npcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
                 "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
@@ -532,7 +490,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var changes = MakePendingChangeService();
+            var changes = DuckDbTestFactory.MakePendingChangeService();
             // stage npcKey2 into Override.esp (not yet committed)
             changes.Upsert(npcKey2.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
@@ -552,31 +510,18 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         // Override.esp has a committed NPC override that is NOT the winner (Winner.esp comes later).
         // Staging a pending edit to that committed key must not double-count it.
         FormKey baseNpcKey = default;
-        var dataFolder = Path.Combine(Path.GetTempPath(), $"rqs-staged-types-dedup-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(dataFolder);
-        try
+        var data = new PluginFixtureBuilder("rqs-staged-types-dedup")
+            .WithPlugin("Base.esp", mod => baseNpcKey = mod.Npcs.AddNew("BaseNPC").FormKey)
+            .WithPlugin("Override.esp", (mod, prev) => { mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).EditorID = "OverrideNPC"; })
+            .WithPlugin("Winner.esp", (mod, prev) => { mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).EditorID = "WinnerNPC"; })
+            .Build();
+        using (data)
         {
-            var baseMod = new Fallout4Mod(ModKey.FromFileName("Base.esp"), Fallout4Release.Fallout4);
-            baseNpcKey = baseMod.Npcs.AddNew("BaseNPC").FormKey;
-            baseMod.WriteToBinary(Path.Combine(dataFolder, "Base.esp"));
-
-            var overrideMod = new Fallout4Mod(ModKey.FromFileName("Override.esp"), Fallout4Release.Fallout4);
-            var overrideNpc = overrideMod.Npcs.GetOrAddAsOverride(baseMod.Npcs.First());
-            overrideNpc.EditorID = "OverrideNPC";
-            overrideMod.WriteToBinary(Path.Combine(dataFolder, "Override.esp"));
-
-            var winnerMod = new Fallout4Mod(ModKey.FromFileName("Winner.esp"), Fallout4Release.Fallout4);
-            var winnerNpc = winnerMod.Npcs.GetOrAddAsOverride(baseMod.Npcs.First());
-            winnerNpc.EditorID = "WinnerNPC";
-            winnerMod.WriteToBinary(Path.Combine(dataFolder, "Winner.esp"));
-
-            File.WriteAllText(Path.Combine(dataFolder, "Plugins.txt"), "*Base.esp\n*Override.esp\n*Winner.esp\n");
-
             var reflector = new SchemaReflector();
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
-            manager.Load(dataFolder, Path.Combine(dataFolder, "Plugins.txt"), GameRelease.Fallout4);
-            var changes = MakePendingChangeService();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var changes = DuckDbTestFactory.MakePendingChangeService();
             changes.Upsert(baseNpcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
                 "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
@@ -586,10 +531,6 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
 
             var npc = Assert.Single(result, r => r.Type == "npc_");
             Assert.Equal(1, npc.Count);
-        }
-        finally
-        {
-            Directory.Delete(dataFolder, recursive: true);
         }
     }
 
@@ -609,7 +550,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var changes = MakePendingChangeService();
+            var changes = DuckDbTestFactory.MakePendingChangeService();
             changes.Upsert(npcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
                 "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
@@ -640,7 +581,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var changes = MakePendingChangeService();
+            var changes = DuckDbTestFactory.MakePendingChangeService();
             changes.Upsert(npcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
                 "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
@@ -657,7 +598,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
     {
         // "Unknown.esp" is not in _manager's Plugins list → FirstOrDefault returns null → ?? -1 fires.
         var fk = FormKey.Factory("000001:Fallout4.esm");
-        var changes = MakePendingChangeService();
+        var changes = DuckDbTestFactory.MakePendingChangeService();
         changes.Upsert(fk.ToString(), "Unknown.esp", "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
             "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
@@ -677,7 +618,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         var committed = _svc.GetRecords(type: "npc_", plugin: TestPluginFixture.PluginName, search: "TestNPC01", limit: 1, offset: 0);
         var fk = committed.Items[0].FormKey;
 
-        var changes = MakePendingChangeService();
+        var changes = DuckDbTestFactory.MakePendingChangeService();
         changes.Upsert(fk, TestPluginFixture.PluginName, "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
             "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
@@ -761,6 +702,9 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
 
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
             inner.GetPluginsWithMatchingRecords(tableNames);
+
+        public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
+            inner.GetReferences(targetFormKey);
     }
 
     private sealed class StubSessionManager(IRecordReader repository, GameRelease release) : ISessionManager
