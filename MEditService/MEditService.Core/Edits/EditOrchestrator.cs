@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Queries;
+using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
 
@@ -94,59 +95,10 @@ public sealed class EditOrchestrator : IEditOrchestrator
         foreach (var (fieldPath, newValue) in fields)
         {
             if (colsByName.TryGetValue(fieldPath, out var col))
-                result.AddRange(ExtractRefsForColumn(fieldPath, newValue, col));
+                FormRefPathBuilder.Walk(col, _ => (object?)newValue, (path, fk) =>
+                    result.Add(new PendingFormRef(fieldPath, path, fk)));
         }
         return result;
-    }
-
-    private static IEnumerable<PendingFormRef> ExtractRefsForColumn(
-        string fieldPath, JsonElement newValue, ColumnSpec col)
-    {
-        if (col.ApiType == "formKey")
-        {
-            if (newValue.ValueKind == JsonValueKind.String)
-            {
-                var val = newValue.GetString();
-                if (val != null && val != "Null")
-                    yield return new PendingFormRef(fieldPath, fieldPath, val);
-            }
-        }
-        else if (col.ApiType == "array" && col.ElementType?.Type == "formKey"
-                 && newValue.ValueKind == JsonValueKind.Array)
-        {
-            var idx = 0;
-            foreach (var elem in newValue.EnumerateArray())
-            {
-                if (elem.ValueKind == JsonValueKind.String)
-                {
-                    var val = elem.GetString();
-                    if (val != null && val != "Null")
-                        yield return new PendingFormRef(fieldPath, $"{fieldPath}[{idx}]", val);
-                }
-                idx++;
-            }
-        }
-        else if (col.ApiType == "array" && col.ElementType?.Type == "struct"
-                 && newValue.ValueKind == JsonValueKind.Array)
-        {
-            var idx = 0;
-            foreach (var elem in newValue.EnumerateArray())
-            {
-                if (elem.ValueKind == JsonValueKind.Object)
-                {
-                    foreach (var subField in col.ElementType.Fields ?? [])
-                    {
-                        if (subField.Type != "formKey"
-                            || !elem.TryGetProperty(subField.Name, out var prop)
-                            || prop.ValueKind != JsonValueKind.String) continue;
-                        var val = prop.GetString();
-                        if (val == null || val == "Null") continue;
-                        yield return new PendingFormRef(fieldPath, $"{fieldPath}[{idx}].{subField.Name}", val);
-                    }
-                }
-                idx++;
-            }
-        }
     }
 
     private (StageEditResult? earlyOut, IGameSession? session, string? recordType) ValidateEditContext(

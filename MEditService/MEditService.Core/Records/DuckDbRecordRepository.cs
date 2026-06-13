@@ -359,46 +359,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         var sourceEditorId = record.EditorID;
         foreach (var col in schema.RecordColumns)
         {
-            if (col.ApiType == "formKey")
-            {
-                var value = col.Extract(record);
-                if (value is string target && target != "Null")
-                    refs.Add(new FormRef(sourceFormKey, target, col.Name, tableName, sourceEditorId));
-            }
-            else if (col.ApiType == "array" && col.ElementType?.Type == "formKey")
-            {
-                foreach (var (idx, elem) in EnumerateJsonArray(col.Extract(record)))
-                {
-                    var s = elem.ValueKind == JsonValueKind.Null ? null : elem.GetString();
-                    if (s != null && s != "Null")
-                        refs.Add(new FormRef(sourceFormKey, s, $"{col.Name}[{idx}]", tableName, sourceEditorId));
-                }
-            }
-            else if (col.ApiType == "array" && col.ElementType?.Type == "struct")
-            {
-                foreach (var (idx, elem) in EnumerateJsonArray(col.Extract(record)))
-                {
-                    foreach (var subField in col.ElementType.Fields ?? [])
-                    {
-                        if (subField.Type != "formKey") continue;
-                        var prop = elem.GetProperty(subField.Name);
-                        if (prop.ValueKind == JsonValueKind.Null) continue;
-                        var s = prop.GetString();
-                        if (s == null || s == "Null") continue;
-                        refs.Add(new FormRef(sourceFormKey, s, $"{col.Name}[{idx}].{subField.Name}", tableName, sourceEditorId));
-                    }
-                }
-            }
+            FormRefPathBuilder.Walk(col, c => c.Extract(record), (path, fk) =>
+                refs.Add(new FormRef(sourceFormKey, fk, path, tableName, sourceEditorId)));
         }
-    }
-
-    private static IEnumerable<(int idx, JsonElement elem)> EnumerateJsonArray(object? value)
-    {
-        if (value == null) yield break;
-        var arr = JsonSerializer.Deserialize<JsonElement>((string)value);
-        var idx = 0;
-        foreach (var elem in arr.EnumerateArray())
-            yield return (idx++, elem);
     }
 
     private record struct FormRef(

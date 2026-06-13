@@ -32,7 +32,7 @@ Each phase has its own spec file in [docs/tasks/](docs/tasks/). Completed phases
 | **9.7** | ✓ | Per-cell CellStates conflict coloring — per-plugin `ConflictThis` cell backgrounds in the compare grid | [phase-9.7](docs/tasks/phase-9.7.md) |
 | **9.8** | ✓ | Struct sub-row display — `FieldDiff.Children`, expand/collapse toggle, per-sub-field conflict coloring and editing | [phase-9.8](docs/tasks/phase-9.8.md) |
 | **10** | Not Started | Record lifecycle — create, delete, renumber; `ChangeGroup`; atomic multi-plugin save | [phase-10](docs/tasks/phase-10.md) |
-| **11** | Not Started | Referenced By / record graph — `form_references` DuckDB table, "Referenced By" tab in record panel | [phase-11](docs/tasks/phase-11.md) |
+| **11** | ✓ POC | Referenced By / record graph — `form_references` DuckDB table, "Referenced By" tab in record panel | [phase-11](docs/tasks/phase-11.md) |
 | **12** | Not Started | Struct/array field types — recursive sub-schema, `<ArrayRowGroup>`, `<StructRowGroup>`, enum/flag cells | [phase-12](docs/tasks/phase-12.md) |
 | **14** | Not Started | Plugin file management — compact FormIDs, ESL convert, master clean/sort/add, merge, inject-to-master | [phase-14](docs/tasks/phase-14.md) |
 | **15** | Not Started | Scripting engine — Python scripts with YAML frontmatter + SQL query; `edit()` API; built-in scripts | [phase-15](docs/tasks/phase-15.md) |
