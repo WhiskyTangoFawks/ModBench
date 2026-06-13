@@ -12,5 +12,7 @@ public record PendingChange(
     JsonElement NewValue,
     string Source,           // "user" | "agent"
     string? Description,
-    DateTime ChangedAt
+    DateTime ChangedAt,
+    string ChangeType,       // "field_edit" | "create" | "delete" | "renumber"
+    Guid? GroupId
 );

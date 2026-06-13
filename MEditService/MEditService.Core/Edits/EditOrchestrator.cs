@@ -38,6 +38,10 @@ public sealed class EditOrchestrator : IEditOrchestrator
         var (earlyOut, session, recordType) = ValidateEditContext(formKey, plugin);
         if (earlyOut != null) return earlyOut;
 
+        var groupId = _changes.GetGroupIdForRecord(formKey, plugin);
+        if (groupId is not null)
+            return new StageEditResult.BlockedByGroup(groupId.Value);
+
         var readOnlyFields = fields.Keys
             .Where(f => _writer.IsReadOnly(session!.GameRelease, recordType!, f))
             .ToList();
@@ -62,6 +66,10 @@ public sealed class EditOrchestrator : IEditOrchestrator
     {
         var (earlyOut, session, recordType) = ValidateEditContext(formKey, targetPlugin);
         if (earlyOut != null) return earlyOut;
+
+        var groupId = _changes.GetGroupIdForRecord(formKey, targetPlugin);
+        if (groupId is not null)
+            return new StageEditResult.BlockedByGroup(groupId.Value);
 
         var winner = _query.GetRecord(formKey);
         if (winner == null) return new StageEditResult.RecordNotFound();

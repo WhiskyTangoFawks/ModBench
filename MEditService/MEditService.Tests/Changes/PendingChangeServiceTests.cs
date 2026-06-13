@@ -97,14 +97,14 @@ public sealed class PendingChangeServiceTests : IDisposable
 
         var removed = _svc.Revert(changes[0].Id);
 
-        Assert.True(removed);
+        Assert.IsType<RevertChangeResult.Reverted>(removed);
         Assert.Empty(_svc.GetChanges());
     }
 
     [Fact]
     public void Revert_UnknownId_ReturnsFalse()
     {
-        Assert.False(_svc.Revert(Guid.NewGuid()));
+        Assert.IsType<RevertChangeResult.NotFound>(_svc.Revert(Guid.NewGuid()));
     }
 
     [Fact]
@@ -341,6 +341,21 @@ public sealed class PendingChangeServiceTests : IDisposable
     }
 
     [Fact]
+    public void Upsert_ReupsertSameField_ReplacesFormRefs()
+    {
+        var ref1 = new PendingFormRef("race", "race", "000001:Fallout4.esm");
+        var ref2 = new PendingFormRef("race", "race", "000002:Fallout4.esm");
+
+        _svc.Upsert("FK1", "A.esp", "npc_", new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [ref1]);
+        _svc.Upsert("FK1", "A.esp", "npc_", new() { ["race"] = J("\"000002:Fallout4.esm\"") }, "user", null, new(), [ref2]);
+
+        var drained = _svc.DrainForPlugin("A.esp");
+        var refs = drained.FormRefsByFormKey["FK1"].ToList();
+        Assert.Single(refs);
+        Assert.Equal("000002:Fallout4.esm", refs[0].TargetFormKey);
+    }
+
+    [Fact]
     public void DrainForPlugin_FormRefsIncludedInResult()
     {
         _svc.Upsert("FK1", "A.esp", "npc_",
@@ -354,5 +369,220 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Equal("race", refs[0].StagedField);
         Assert.Equal("race", refs[0].FieldPath);
         Assert.Equal("000001:Fallout4.esm", refs[0].TargetFormKey);
+    }
+
+    [Fact]
+    public void DrainForPlugin_RemovesFormRefsFromTable()
+    {
+        _svc.Upsert("FK1", "A.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]);
+
+        _svc.DrainForPlugin("A.esp");
+
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM pending_form_references WHERE source_plugin = 'A.esp'";
+        Assert.Equal(0L, cmd.ExecuteScalar());
+    }
+
+    // --- ChangeGroup ---
+
+    private static GroupMember MakeMember(string formKey, string plugin, string fieldPath) =>
+        new(formKey, plugin, "npc_", "create", fieldPath, J("null"), J("\"x\""));
+
+    [Fact]
+    public void GetChangeGroups_WhenNoGroups_ReturnsEmptyList()
+    {
+        var result = _svc.GetChangeGroups();
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void StageGroup_ReturnsGroupWithCorrectCount()
+    {
+        var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK1", "P.esp", "level"), MakeMember("FK2", "P.esp", "name") };
+
+        var group = _svc.StageGroup("create", "test group", members);
+
+        Assert.Equal("create", group.Operation);
+        Assert.Equal("test group", group.Description);
+        Assert.Equal(3, group.ChangeCount);
+    }
+
+    [Fact]
+    public void GetChangeGroups_AfterStageGroup_ReturnsGroupWithCorrectChangeCount()
+    {
+        var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK1", "P.esp", "level"), MakeMember("FK2", "P.esp", "name") };
+        _svc.StageGroup("create", null, members);
+
+        var groups = _svc.GetChangeGroups();
+
+        Assert.Single(groups);
+        Assert.Equal("create", groups[0].Operation);
+        Assert.Equal(3, groups[0].ChangeCount);
+    }
+
+    [Fact]
+    public void GetChangeGroups_WithDescription_PreservesDescription()
+    {
+        _svc.StageGroup("rename", "my description", [MakeMember("FK1", "P.esp", "name")]);
+
+        var groups = _svc.GetChangeGroups();
+
+        Assert.Single(groups);
+        Assert.Equal("my description", groups[0].Description);
+    }
+
+    [Fact]
+    public void GetChanges_FilteredByGroupId_ReturnsOnlyGroupChanges()
+    {
+        var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK2", "P.esp", "name") };
+        var group = _svc.StageGroup("create", null, members);
+        // standalone change
+        _svc.Upsert("FK3", "P.esp", "npc_", new() { ["level"] = J("5") }, "user", null, new());
+
+        var grouped = _svc.GetChanges(groupId: group.Id);
+
+        Assert.Equal(2, grouped.Count);
+        Assert.All(grouped, c => Assert.Equal(group.Id, c.GroupId));
+    }
+
+    [Fact]
+    public void RevertGroup_RemovesAllChangesAndGroup()
+    {
+        var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK2", "P.esp", "name") };
+        var group = _svc.StageGroup("create", null, members);
+
+        var result = _svc.RevertGroup(group.Id);
+
+        Assert.True(result);
+        Assert.Empty(_svc.GetChanges(groupId: group.Id));
+        Assert.Empty(_svc.GetChangeGroups());
+    }
+
+    [Fact]
+    public void RevertGroup_NotFound_ReturnsFalse()
+    {
+        Assert.False(_svc.RevertGroup(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void Revert_GroupOwned_ReturnsGroupOwned()
+    {
+        var members = new[] { MakeMember("FK1", "P.esp", "name") };
+        _svc.StageGroup("create", null, members);
+        var changeId = _svc.GetChanges(formKey: "FK1")[0].Id;
+
+        var result = _svc.Revert(changeId);
+
+        var owned = Assert.IsType<RevertChangeResult.GroupOwned>(result);
+        Assert.NotEqual(Guid.Empty, owned.GroupId);
+    }
+
+    [Fact]
+    public void GetGroupIdForRecord_WhenGroupOwned_ReturnsGroupId()
+    {
+        var members = new[] { MakeMember("FK1", "P.esp", "name") };
+        var group = _svc.StageGroup("create", null, members);
+
+        var gid = _svc.GetGroupIdForRecord("FK1", "P.esp");
+
+        Assert.Equal(group.Id, gid);
+    }
+
+    [Fact]
+    public void GetGroupIdForRecord_WhenStandalone_ReturnsNull()
+    {
+        _svc.Upsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"x\"") }, "user", null, new());
+
+        Assert.Null(_svc.GetGroupIdForRecord("FK1", "P.esp"));
+    }
+
+    // --- Finding 2: Upsert accepts explicit changeType ---
+
+    [Fact]
+    public void Upsert_WithExplicitChangeType_StoresCorrectChangeType()
+    {
+        _svc.Upsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"x\"") }, "user", null, new(), changeType: "create");
+
+        var changes = _svc.GetChanges();
+        Assert.Single(changes);
+        Assert.Equal("create", changes[0].ChangeType);
+    }
+
+    [Fact]
+    public void Upsert_DefaultChangeType_IsFieldEdit()
+    {
+        _svc.Upsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"x\"") }, "user", null, new());
+
+        var changes = _svc.GetChanges();
+        Assert.Single(changes);
+        Assert.Equal("field_edit", changes[0].ChangeType);
+    }
+
+    // --- Finding 3: StageGroup returns actual DB count ---
+
+    [Fact]
+    public void StageGroup_DuplicateMembers_ReturnsActualDbCount()
+    {
+        var members = new[]
+        {
+            MakeMember("FK1", "P.esp", "name"),
+            MakeMember("FK1", "P.esp", "name"),  // duplicate PK — collapses to one row
+        };
+
+        var group = _svc.StageGroup("create", null, members);
+
+        Assert.Equal(1, group.ChangeCount);
+    }
+
+    // --- Finding 4: StageGroup ON CONFLICT updates source and description ---
+
+    [Fact]
+    public void StageGroup_OnConflict_UpdatesSourceAndDescription()
+    {
+        // Manual edit on the field first
+        _svc.Upsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"manual\"") }, "user", "user note", new());
+
+        // Stage group on the same field
+        var members = new[] { new GroupMember("FK1", "P.esp", "npc_", "field_edit", "name", J("null"), J("\"group\""), "system") };
+        _svc.StageGroup("rename", "group note", members);
+
+        var changes = _svc.GetChanges(formKey: "FK1");
+        Assert.Single(changes);
+        Assert.Equal("system", changes[0].Source);
+        Assert.Equal("group note", changes[0].Description);
+    }
+
+    // --- Finding 5: RevertGroup cleans up pending_form_references ---
+
+    [Fact]
+    public void RevertGroup_ClearsPendingFormRefsForGroupOwnedChanges()
+    {
+        // Upsert with form refs (writes pending_form_references rows)
+        _svc.Upsert("FK1", "A.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]);
+
+        // StageGroup on same field — ON CONFLICT takes ownership (group_id set)
+        var members = new[] { new GroupMember("FK1", "A.esp", "npc_", "field_edit", "race", J("null"), J("\"000002:Fallout4.esm\"")) };
+        var group = _svc.StageGroup("rename", null, members);
+
+        _svc.RevertGroup(group.Id);
+
+        using var cmd = _conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM pending_form_references WHERE source_form_key = 'FK1'";
+        Assert.Equal(0L, cmd.ExecuteScalar());
+    }
+
+    // --- Finding 8: StageGroup uses Source from GroupMember ---
+
+    [Fact]
+    public void StageGroup_UsesSourceFromGroupMember()
+    {
+        var members = new[] { new GroupMember("FK1", "P.esp", "npc_", "create", "name", J("null"), J("\"x\""), "agent") };
+        _svc.StageGroup("create", null, members);
+
+        var changes = _svc.GetChanges(formKey: "FK1");
+        Assert.Single(changes);
+        Assert.Equal("agent", changes[0].Source);
     }
 }

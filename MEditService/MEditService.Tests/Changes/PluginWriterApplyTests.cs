@@ -149,11 +149,11 @@ public class PluginWriterApplyTests
 
     private static PendingChange MakeChange(FormKey formKey, string fieldPath, string json) =>
         new(Guid.NewGuid(), formKey.ToString(), "TestPlugin.esp", fieldPath, "npc_",
-            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow);
+            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null);
 
     private static PendingChange MakeChangeRaw(string rawFormKey, string fieldPath, string json) =>
         new(Guid.NewGuid(), rawFormKey, "TestPlugin.esp", fieldPath, "npc_",
-            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow);
+            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null);
 
     private static (string pluginPath, FormKey npcKey) BuildFixture()
     {

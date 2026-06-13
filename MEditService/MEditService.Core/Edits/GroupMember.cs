@@ -1,0 +1,13 @@
+using System.Text.Json;
+
+namespace MEditService.Core.Edits;
+
+public record GroupMember(
+    string FormKey,
+    string Plugin,
+    string RecordType,
+    string ChangeType,
+    string FieldPath,
+    JsonElement OldValue,
+    JsonElement NewValue,
+    string Source = "system");

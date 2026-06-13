@@ -51,6 +51,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 description VARCHAR,
                 changed_at  TIMESTAMP   NOT NULL,
                 group_id    VARCHAR,
+                change_type VARCHAR     NOT NULL DEFAULT 'field_edit',
                 PRIMARY KEY (form_key, plugin, field_path)
             );
             CREATE TABLE IF NOT EXISTS pending_form_references (
@@ -63,6 +64,12 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             );
             CREATE INDEX IF NOT EXISTS idx_pfr_target
                 ON pending_form_references(target_form_key);
+            CREATE TABLE IF NOT EXISTS change_groups (
+                id          VARCHAR   PRIMARY KEY,
+                operation   VARCHAR   NOT NULL,
+                description VARCHAR,
+                created_at  TIMESTAMP NOT NULL
+            );
             """;
         cmd.ExecuteNonQuery();
     }
@@ -73,6 +80,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         cmd.CommandText = """
             DROP TABLE IF EXISTS pending_form_references;
             DROP TABLE IF EXISTS pending_changes;
+            DROP TABLE IF EXISTS change_groups;
             """;
         cmd.ExecuteNonQuery();
     }
@@ -80,12 +88,13 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
     private DuckDBConnection RequireConnection() =>
         _connection ?? throw new InvalidOperationException("No session loaded.");
 
-    private static (string Where, List<object> Params) BuildFilter(string? plugin, string? formKey)
+    private static (string Where, List<object> Params) BuildFilter(string? plugin, string? formKey, Guid? groupId = null)
     {
         var conditions = new List<string>();
         var paramValues = new List<object>();
         if (plugin != null) { conditions.Add($"plugin = ${paramValues.Count + 1}"); paramValues.Add(plugin); }
         if (formKey != null) { conditions.Add($"form_key = ${paramValues.Count + 1}"); paramValues.Add(formKey); }
+        if (groupId != null) { conditions.Add($"group_id = ${paramValues.Count + 1}"); paramValues.Add(groupId.Value.ToString()); }
         var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
         return (where, paramValues);
     }
@@ -98,7 +107,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         string source,
         string? description,
         Dictionary<string, JsonElement> oldValues,
-        IReadOnlyList<PendingFormRef>? formRefs = null)
+        IReadOnlyList<PendingFormRef>? formRefs = null,
+        string changeType = "field_edit")
     {
         lock (_lock)
         {
@@ -117,14 +127,15 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = """
                     INSERT INTO pending_changes
-                        (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                        (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                     ON CONFLICT (form_key, plugin, field_path) DO UPDATE SET
                         new_value   = excluded.new_value,
                         changed_at  = excluded.changed_at,
                         source      = excluded.source,
-                        description = excluded.description
-                    RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at
+                        description = excluded.description,
+                        change_type = excluded.change_type
+                    RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id
                     """;
                 cmd.Parameters.Add(new DuckDBParameter { Value = id });
                 cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
@@ -136,6 +147,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 cmd.Parameters.Add(new DuckDBParameter { Value = source });
                 cmd.Parameters.Add(new DuckDBParameter { Value = description });
                 cmd.Parameters.Add(new DuckDBParameter { Value = now });
+                cmd.Parameters.Add(new DuckDBParameter { Value = changeType });
 
                 using var reader = cmd.ExecuteReader();
                 if (reader.Read())
@@ -175,16 +187,16 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         }
     }
 
-    public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null)
+    public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? groupId = null)
     {
         lock (_lock)
         {
             var conn = RequireConnection();
-            var (where, paramValues) = BuildFilter(plugin, formKey);
+            var (where, paramValues) = BuildFilter(plugin, formKey, groupId);
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = $"""
-                SELECT id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at
+                SELECT id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id
                 FROM pending_changes{where}
                 ORDER BY changed_at
                 """;
@@ -244,22 +256,35 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         }
     }
 
-    public bool Revert(Guid changeId)
+    public RevertChangeResult Revert(Guid changeId)
     {
         lock (_lock)
         {
             var conn = RequireConnection();
+            var changeIdStr = changeId.ToString();
+
             using var txn = conn.BeginTransaction();
 
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "DELETE FROM pending_changes WHERE id = $1 RETURNING form_key, plugin, field_path";
-            cmd.Parameters.Add(new DuckDBParameter { Value = changeId.ToString() });
+            using var check = conn.CreateCommand();
+            check.CommandText = "SELECT group_id, form_key, plugin, field_path FROM pending_changes WHERE id = $1";
+            check.Parameters.Add(new DuckDBParameter { Value = changeIdStr });
 
-            using var reader = cmd.ExecuteReader();
-            if (!reader.Read()) return false;
-            var fk = reader.GetString(0);
-            var pl = reader.GetString(1);
-            var fp = reader.GetString(2);
+            string? fk, pl, fp;
+            using (var checkReader = check.ExecuteReader())
+            {
+                if (!checkReader.Read())
+                    return new RevertChangeResult.NotFound();
+                if (!checkReader.IsDBNull(0))
+                    return new RevertChangeResult.GroupOwned(Guid.Parse(checkReader.GetString(0)));
+                fk = checkReader.GetString(1);
+                pl = checkReader.GetString(2);
+                fp = checkReader.GetString(3);
+            }
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM pending_changes WHERE id = $1";
+            cmd.Parameters.Add(new DuckDBParameter { Value = changeIdStr });
+            cmd.ExecuteNonQuery();
 
             using var del = conn.CreateCommand();
             del.CommandText = """
@@ -272,7 +297,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             del.ExecuteNonQuery();
 
             txn.Commit();
-            return true;
+            return new RevertChangeResult.Reverted();
         }
     }
 
@@ -347,7 +372,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             cmd.CommandText = """
                 DELETE FROM pending_changes
                 WHERE plugin = $1
-                RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at
+                RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id
                 """;
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
 
@@ -358,6 +383,165 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
 
             txn.Commit();
             return new DrainResult(drained, refsList.ToLookup(x => x.SourceFormKey, x => x.Ref));
+        }
+    }
+
+    public IReadOnlyList<ChangeGroup> GetChangeGroups()
+    {
+        lock (_lock)
+        {
+            var conn = RequireConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                SELECT cg.id, cg.operation, cg.description, cg.created_at,
+                       CAST(COUNT(pc.id) AS INTEGER) AS change_count
+                FROM change_groups cg
+                LEFT JOIN pending_changes pc ON pc.group_id = cg.id
+                GROUP BY cg.id, cg.operation, cg.description, cg.created_at
+                """;
+
+            var result = new List<ChangeGroup>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var id = Guid.Parse(reader.GetString(0));
+                var operation = reader.GetString(1);
+                var description = reader.IsDBNull(2) ? null : reader.GetString(2);
+                var createdAt = reader.GetDateTime(3);
+                var changeCount = reader.GetInt32(4);
+                result.Add(new ChangeGroup(id, operation, description, createdAt, changeCount));
+            }
+            return result;
+        }
+    }
+
+    public bool RevertGroup(Guid groupId)
+    {
+        lock (_lock)
+        {
+            var conn = RequireConnection();
+            var groupIdStr = groupId.ToString();
+
+            // Collect (form_key, plugin, field_path) for form-ref cleanup before we delete them
+            var groupFields = new List<(string FormKey, string Plugin, string FieldPath)>();
+            using (var selectCmd = conn.CreateCommand())
+            {
+                selectCmd.CommandText = "SELECT form_key, plugin, field_path FROM pending_changes WHERE group_id = $1";
+                selectCmd.Parameters.Add(new DuckDBParameter { Value = groupIdStr });
+                using var selectReader = selectCmd.ExecuteReader();
+                while (selectReader.Read())
+                    groupFields.Add((selectReader.GetString(0), selectReader.GetString(1), selectReader.GetString(2)));
+            }
+
+            using var txn = conn.BeginTransaction();
+
+            foreach (var (fk, pl, fp) in groupFields)
+            {
+                using var delRef = conn.CreateCommand();
+                delRef.CommandText = """
+                    DELETE FROM pending_form_references
+                    WHERE source_form_key = $1 AND source_plugin = $2 AND staged_field = $3
+                    """;
+                delRef.Parameters.Add(new DuckDBParameter { Value = fk });
+                delRef.Parameters.Add(new DuckDBParameter { Value = pl });
+                delRef.Parameters.Add(new DuckDBParameter { Value = fp });
+                delRef.ExecuteNonQuery();
+            }
+
+            using var delChanges = conn.CreateCommand();
+            delChanges.CommandText = "DELETE FROM pending_changes WHERE group_id = $1";
+            delChanges.Parameters.Add(new DuckDBParameter { Value = groupIdStr });
+            delChanges.ExecuteNonQuery();
+
+            using var delGroup = conn.CreateCommand();
+            delGroup.CommandText = "DELETE FROM change_groups WHERE id = $1";
+            delGroup.Parameters.Add(new DuckDBParameter { Value = groupIdStr });
+            var deleted = delGroup.ExecuteNonQuery();
+
+            txn.Commit();
+            return deleted > 0;
+        }
+    }
+
+    public Guid? GetGroupIdForRecord(string formKey, string plugin)
+    {
+        lock (_lock)
+        {
+            var conn = RequireConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                SELECT group_id FROM pending_changes
+                WHERE form_key = $1 AND plugin = $2 AND group_id IS NOT NULL
+                ORDER BY group_id
+                LIMIT 1
+                """;
+            cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read()) return null;
+            return Guid.Parse(reader.GetString(0));
+        }
+    }
+
+    public ChangeGroup StageGroup(string operation, string? description, IReadOnlyList<GroupMember> members)
+    {
+        lock (_lock)
+        {
+            var conn = RequireConnection();
+            var groupId = Guid.NewGuid();
+            var createdAt = DateTime.UtcNow;
+
+            using var txn = conn.BeginTransaction();
+
+            using var insGroup = conn.CreateCommand();
+            insGroup.CommandText = """
+                INSERT INTO change_groups (id, operation, description, created_at)
+                VALUES ($1, $2, $3, $4)
+                """;
+            insGroup.Parameters.Add(new DuckDBParameter { Value = groupId.ToString() });
+            insGroup.Parameters.Add(new DuckDBParameter { Value = operation });
+            insGroup.Parameters.Add(new DuckDBParameter { Value = description });
+            insGroup.Parameters.Add(new DuckDBParameter { Value = createdAt });
+            insGroup.ExecuteNonQuery();
+
+            foreach (var m in members)
+            {
+                using var ins = conn.CreateCommand();
+                ins.CommandText = """
+                    INSERT INTO pending_changes
+                        (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, group_id, change_type)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                    ON CONFLICT (form_key, plugin, field_path) DO UPDATE SET
+                        new_value   = excluded.new_value,
+                        changed_at  = excluded.changed_at,
+                        group_id    = excluded.group_id,
+                        change_type = excluded.change_type,
+                        source      = excluded.source,
+                        description = excluded.description
+                    """;
+                ins.Parameters.Add(new DuckDBParameter { Value = Guid.NewGuid().ToString() });
+                ins.Parameters.Add(new DuckDBParameter { Value = m.FormKey });
+                ins.Parameters.Add(new DuckDBParameter { Value = m.Plugin });
+                ins.Parameters.Add(new DuckDBParameter { Value = m.FieldPath });
+                ins.Parameters.Add(new DuckDBParameter { Value = m.RecordType });
+                ins.Parameters.Add(new DuckDBParameter { Value = m.OldValue.GetRawText() });
+                ins.Parameters.Add(new DuckDBParameter { Value = m.NewValue.GetRawText() });
+                ins.Parameters.Add(new DuckDBParameter { Value = m.Source });
+                ins.Parameters.Add(new DuckDBParameter { Value = description });
+                ins.Parameters.Add(new DuckDBParameter { Value = createdAt });
+                ins.Parameters.Add(new DuckDBParameter { Value = groupId.ToString() });
+                ins.Parameters.Add(new DuckDBParameter { Value = m.ChangeType });
+                ins.ExecuteNonQuery();
+            }
+
+            txn.Commit();
+
+            using var countCmd = conn.CreateCommand();
+            countCmd.CommandText = "SELECT CAST(COUNT(*) AS INTEGER) FROM pending_changes WHERE group_id = $1";
+            countCmd.Parameters.Add(new DuckDBParameter { Value = groupId.ToString() });
+            var actualCount = Convert.ToInt32(countCmd.ExecuteScalar()!, System.Globalization.CultureInfo.InvariantCulture);
+            return new ChangeGroup(groupId, operation, description, createdAt, actualCount);
         }
     }
 
@@ -373,12 +557,14 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         var source = reader.GetString(7);
         var description = reader.IsDBNull(8) ? null : reader.GetString(8);
         var changedAt = reader.GetDateTime(9);
+        var changeType = reader.GetString(10);
+        var groupId = reader.IsDBNull(11) ? (Guid?)null : Guid.Parse(reader.GetString(11));
 
         using var oldDoc = JsonDocument.Parse(oldValueJson);
         var oldValue = oldDoc.RootElement.Clone();
         using var newDoc = JsonDocument.Parse(newValueJson);
         var newValue = newDoc.RootElement.Clone();
 
-        return new PendingChange(id, formKey, plugin, fieldPath, recordType, oldValue, newValue, source, description, changedAt);
+        return new PendingChange(id, formKey, plugin, fieldPath, recordType, oldValue, newValue, source, description, changedAt, changeType, groupId);
     }
 }

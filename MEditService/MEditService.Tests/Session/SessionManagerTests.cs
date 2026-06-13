@@ -21,7 +21,7 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
 
     private static PendingChange MakePendingChange(string formKey, string plugin, string fieldPath, string recordType, string json) =>
         new(Guid.NewGuid(), formKey, plugin, fieldPath, recordType,
-            J("null"), J(json), "user", null, DateTime.UtcNow);
+            J("null"), J(json), "user", null, DateTime.UtcNow, "field_edit", null);
 
     private static SessionManager MakeManager()
     {

@@ -18,17 +18,26 @@ public interface IPendingChangeService
         string source,
         string? description,
         Dictionary<string, JsonElement> oldValues,
-        IReadOnlyList<PendingFormRef>? formRefs = null);
+        IReadOnlyList<PendingFormRef>? formRefs = null,
+        string changeType = "field_edit");
 
-    IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null);
+    IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? groupId = null);
 
     Dictionary<string, JsonElement>? GetPendingFields(string formKey, string plugin);
 
-    bool Revert(Guid changeId);
+    RevertChangeResult Revert(Guid changeId);
 
     int Revert(string? plugin, string? formKey);
 
     DrainResult DrainForPlugin(string plugin);
 
     IReadOnlyList<(string FormKey, string RecordType)> GetStagedFormKeys(string plugin, string? recordType = null);
+
+    IReadOnlyList<ChangeGroup> GetChangeGroups();
+
+    bool RevertGroup(Guid groupId);
+
+    Guid? GetGroupIdForRecord(string formKey, string plugin);
+
+    ChangeGroup StageGroup(string operation, string? description, IReadOnlyList<GroupMember> members);
 }

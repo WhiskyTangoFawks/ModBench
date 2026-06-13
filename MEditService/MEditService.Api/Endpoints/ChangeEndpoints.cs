@@ -26,6 +26,8 @@ public static class ChangeEndpoints
                 StageEditResult.NoSession => Results.Problem("No session loaded."),
                 StageEditResult.PluginImmutable i => Results.Problem(
                     $"'{i.Plugin}' is a base-game plugin and cannot be edited.", statusCode: 409),
+                StageEditResult.BlockedByGroup g => Results.Problem(
+                    $"This record has a pending group change — revert group {g.GroupId} first.", statusCode: 409),
                 StageEditResult.RecordNotFound => Results.NotFound(),
                 StageEditResult.ReadOnlyFields r => Results.Problem(
                     detail: $"The following fields are read-only and cannot be edited: {string.Join(", ", r.Fields)}",
@@ -41,30 +43,55 @@ public static class ChangeEndpoints
         .ProducesProblem(409)
         .ProducesProblem(422);
 
+        app.MapGet("/change-groups", (IPendingChangeService changes) =>
+            Results.Ok(changes.GetChangeGroups()))
+        .WithName("GetChangeGroups")
+        .WithTags("Changes")
+        .Produces<IReadOnlyList<ChangeGroup>>();
+
         app.MapGet("/changes", (
             [FromQuery] string? plugin,
             [FromQuery] string? formKey,
+            [FromQuery] Guid? groupId,
             IPendingChangeService changes) =>
         {
             var decodedPlugin = plugin != null ? Uri.UnescapeDataString(plugin) : null;
             var decodedFormKey = formKey != null ? Uri.UnescapeDataString(formKey) : null;
-            return Results.Ok(changes.GetChanges(decodedPlugin, decodedFormKey));
+            return Results.Ok(changes.GetChanges(decodedPlugin, decodedFormKey, groupId));
         })
         .WithName("GetChanges")
         .WithTags("Changes")
         .Produces<IReadOnlyList<PendingChange>>();
 
+        app.MapDelete("/changes/group/{groupId}", (
+            Guid groupId,
+            IPendingChangeService changes) =>
+        {
+            return changes.RevertGroup(groupId) ? Results.NoContent() : Results.NotFound();
+        })
+        .WithName("DeleteChangeGroup")
+        .WithTags("Changes")
+        .Produces(204)
+        .ProducesProblem(404);
+
         app.MapDelete("/changes/{changeId}", (
             Guid changeId,
             IPendingChangeService changes) =>
         {
-            var removed = changes.Revert(changeId);
-            return removed ? Results.NoContent() : Results.NotFound();
+            return changes.Revert(changeId) switch
+            {
+                RevertChangeResult.Reverted => Results.NoContent(),
+                RevertChangeResult.NotFound => Results.NotFound(),
+                RevertChangeResult.GroupOwned g => Results.Problem(
+                    $"Change belongs to group {g.GroupId} — revert the group first.", statusCode: 409),
+                var r => throw new InvalidOperationException($"Unhandled RevertChangeResult: {r.GetType().Name}")
+            };
         })
         .WithName("DeleteChange")
         .WithTags("Changes")
         .Produces(204)
-        .ProducesProblem(404);
+        .ProducesProblem(404)
+        .ProducesProblem(409);
 
         app.MapDelete("/changes", (
             [FromQuery] string? plugin,
@@ -103,9 +130,11 @@ public static class ChangeEndpoints
                 StageEditResult.NoSession => Results.Problem("No session loaded."),
                 StageEditResult.PluginImmutable i => Results.Problem(
                     $"'{i.Plugin}' is a base-game plugin and cannot be edited.", statusCode: 409),
+                StageEditResult.BlockedByGroup g => Results.Problem(
+                    $"This record has a pending group change — revert group {g.GroupId} first.", statusCode: 409),
                 StageEditResult.RecordNotFound => Results.NotFound(),
                 StageEditResult.Staged staged => Results.Ok(staged.Changes),
-                _ => Results.Problem("Unexpected error.")
+                var r => throw new InvalidOperationException($"Unhandled StageEditResult: {r.GetType().Name}")
             };
         })
         .WithName("CopyRecordTo")
@@ -154,7 +183,8 @@ public static class ChangeEndpoints
                         new Dictionary<string, JsonElement> { [c.FieldPath] = c.NewValue },
                         c.Source, c.Description,
                         new Dictionary<string, JsonElement> { [c.FieldPath] = c.OldValue },
-                        refsForField);
+                        refsForField,
+                        c.ChangeType);
                 }
                 return Results.Problem(ex.Message);
             }

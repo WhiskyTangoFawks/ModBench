@@ -526,7 +526,13 @@ export function RecordPanel() {
       body: JSON.stringify({ plugin, fields: { [fieldName]: value }, source: 'user' }),
     });
     if (!resp.ok) {
-      setActionError(resp.status === 409 ? 'Plugin is read-only' : `Error: ${resp.statusText}`);
+      if (resp.status === 409) {
+        const body = await resp.json().catch(() => ({})) as Record<string, unknown>;
+        const detail = typeof body?.detail === 'string' ? body.detail : '';
+        setActionError(detail.toLowerCase().includes('group') ? detail : 'Plugin is read-only');
+      } else {
+        setActionError(`Error: ${resp.statusText}`);
+      }
       return;
     }
     await refresh(formKey);
@@ -536,7 +542,13 @@ export function RecordPanel() {
     setActionError(null);
     const resp = await fetch(`http://localhost:${port}/changes/${changeId}`, { method: 'DELETE' });
     if (!resp.ok) {
-      setActionError(`Revert failed: ${resp.statusText}`);
+      if (resp.status === 409) {
+        const body = await resp.json().catch(() => ({})) as Record<string, unknown>;
+        const detail = typeof body?.detail === 'string' ? body.detail : '';
+        setActionError(detail || `Revert failed: ${resp.statusText}`);
+      } else {
+        setActionError(`Revert failed: ${resp.statusText}`);
+      }
       return;
     }
     await refresh(formKey);

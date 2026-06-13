@@ -320,6 +320,32 @@ public sealed class EditOrchestratorTests
         }
     }
 
+    [Fact]
+    public void CopyRecordTo_TargetRecordGroupOwned_ReturnsBlockedByGroup()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-copy-group-owned")
+            .WithPlugin("Source.esp", mod =>
+                npcKey = mod.Npcs.AddNew("TestNPC_CopyGroupOwned").FormKey)
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var members = new[] { new GroupMember(npcKey.ToString(), "Target.esp", "npc_", "create", "name", J("null"), J("\"x\"")) };
+                changes.StageGroup("create", null, members);
+
+                var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user");
+
+                Assert.IsType<StageEditResult.BlockedByGroup>(result);
+            }
+        }
+    }
+
     // --- StageEdit form-ref tests ---
 
     private static (EditOrchestrator orchestrator, SessionManager manager, DuckDbPendingChangeService changes)
