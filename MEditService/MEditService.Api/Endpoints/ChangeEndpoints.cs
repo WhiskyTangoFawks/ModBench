@@ -110,38 +110,39 @@ public static class ChangeEndpoints
         .Produces<int>()
         .ProducesProblem(400);
 
-        app.MapPost("/records/{formKey}/copy-to/{targetPlugin}", (
-            [FromRoute] string formKey,
-            [FromRoute] string targetPlugin,
-            [FromQuery] string? source,
+        app.MapPost("/plugins/{plugin}/records", (
+            [FromRoute] string plugin,
+            [FromBody] CreateRecordRequest req,
             ISessionManager session,
             IEditOrchestrator orchestrator) =>
         {
             var s = session.Session;
             if (s == null) return Results.Problem("No session loaded.");
 
-            var decoded = Uri.UnescapeDataString(formKey);
-            var decodedTarget = Uri.UnescapeDataString(targetPlugin);
+            var decodedPlugin = Uri.UnescapeDataString(plugin);
 
-            var result = orchestrator.CopyRecordTo(decoded, decodedTarget, source ?? "user");
+            var pluginMeta = s.Plugins.FirstOrDefault(p =>
+                p.Name.Equals(decodedPlugin, StringComparison.OrdinalIgnoreCase));
+            if (pluginMeta == null) return Results.NotFound();
+            if (pluginMeta.IsImmutable)
+                return Results.Problem($"'{decodedPlugin}' is a base-game plugin and cannot be edited.", statusCode: 409);
 
-            return result switch
+            try
             {
-                StageEditResult.NoSession => Results.Problem("No session loaded."),
-                StageEditResult.PluginImmutable i => Results.Problem(
-                    $"'{i.Plugin}' is a base-game plugin and cannot be edited.", statusCode: 409),
-                StageEditResult.BlockedByGroup g => Results.Problem(
-                    $"This record has a pending group change — revert group {g.GroupId} first.", statusCode: 409),
-                StageEditResult.RecordNotFound => Results.NotFound(),
-                StageEditResult.Staged staged => Results.Ok(staged.Changes),
-                var r => throw new InvalidOperationException($"Unhandled StageEditResult: {r.GetType().Name}")
-            };
+                var result = orchestrator.CreateRecord(pluginMeta.Name, req.RecordType, req.TemplateFormKey, req.Source ?? "user");
+                return Results.Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.Problem(ex.Message, statusCode: 422);
+            }
         })
-        .WithName("CopyRecordTo")
+        .WithName("CreateRecord")
         .WithTags("Changes")
-        .Produces<IReadOnlyList<PendingChange>>()
+        .Produces<MEditService.Core.Queries.CreateRecordResult>()
         .ProducesProblem(404)
-        .ProducesProblem(409);
+        .ProducesProblem(409)
+        .ProducesProblem(422);
 
         app.MapPost("/plugins/{plugin}/save", async (
             [FromRoute] string plugin,
@@ -164,7 +165,7 @@ public static class ChangeEndpoints
 
             var drained = changes.DrainForPlugin(decodedPlugin);
             if (drained.Changes.Count == 0)
-                return Results.Ok(new SaveResult(string.Empty, [], [], []));
+                return Results.Ok(new SaveResult(string.Empty, [], [], [], []));
 
             try
             {
@@ -204,3 +205,8 @@ public record PatchRecordRequest(
     Dictionary<string, JsonElement> Fields,
     string? Source,
     string? Description);
+
+public record CreateRecordRequest(
+    string RecordType,
+    string? TemplateFormKey,
+    string? Source);

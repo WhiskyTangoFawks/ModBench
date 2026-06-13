@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Queries;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
@@ -26,4 +27,10 @@ public sealed class RecordTableSchema
     public required string TableName { get; init; }
     public required Type RecordType { get; init; }
     public required IReadOnlyList<ColumnSpec> RecordColumns { get; init; }
+
+    /// <summary>
+    /// Adds a new blank record with the given FormKey to the correct group on <paramref name="mod"/>.
+    /// Null when the group property could not be resolved via reflection.
+    /// </summary>
+    public Action<IMod, FormKey>? AddNew { get; init; }
 }

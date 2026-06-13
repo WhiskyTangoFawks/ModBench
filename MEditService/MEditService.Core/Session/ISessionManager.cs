@@ -31,6 +31,14 @@ public interface ISessionManager
     Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes);
 
     /// <summary>
+    /// Reserves and returns the next available FormKey string for <paramref name="plugin"/>,
+    /// atomically incrementing the internal counter.
+    /// Throws <see cref="ArgumentException"/> if the plugin has no reservation counter (not loaded or immutable).
+    /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
+    /// </summary>
+    string ReserveFormKey(string plugin);
+
+    /// <summary>
     /// Materializes the filter SQL into the _filter table and records the active SQL on the session.
     /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
     /// Throws <see cref="ArgumentException"/> if the SQL does not return a form_key column.

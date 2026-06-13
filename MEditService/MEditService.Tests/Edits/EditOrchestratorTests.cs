@@ -605,6 +605,295 @@ public sealed class EditOrchestratorTests
         }
     }
 
+    // --- CreateRecord ---
+
+    [Fact]
+    public void CreateRecord_NoTemplate_ChangeHasCorrectShape()
+    {
+        var data = new PluginFixtureBuilder("cr-shape")
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.CreateRecord("Target.esp", "npc_", null, "user");
+
+                var staged = changes.GetChanges(formKey: result.FormKey);
+                Assert.Single(staged);
+                Assert.Equal("$create", staged[0].FieldPath);
+                Assert.Equal("create", staged[0].ChangeType);
+                Assert.Equal(JsonValueKind.Null, staged[0].NewValue.ValueKind);
+                Assert.Equal(result.GroupId, staged[0].GroupId);
+                Assert.Equal(result.FormKey, staged[0].FormKey);
+            }
+        }
+    }
+
+    [Fact]
+    public void CreateRecord_WithTemplate_StagesSeparateFieldEditChanges()
+    {
+        FormKey templateKey = default;
+        var data = new PluginFixtureBuilder("cr-template")
+            .WithPlugin("Source.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("TemplateNPC");
+                npc.Aggression = Npc.AggressionType.Frenzied;
+                templateKey = npc.FormKey;
+            })
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.CreateRecord("Target.esp", "npc_", templateKey.ToString(), "user");
+
+                var staged = changes.GetChanges(formKey: result.FormKey);
+                // $create sentinel + N field_edit changes from template
+                Assert.True(staged.Count > 1, "Expected $create plus at least one field_edit from template");
+                var createChange = staged.Single(c => c.FieldPath == "$create");
+                Assert.Equal(JsonValueKind.Null, createChange.NewValue.ValueKind);
+                Assert.Equal(result.GroupId, createChange.GroupId);
+                var fieldEdits = staged.Where(c => c.FieldPath != "$create").ToList();
+                Assert.All(fieldEdits, c =>
+                {
+                    Assert.Equal("field_edit", c.ChangeType);
+                    Assert.Equal(result.GroupId, c.GroupId);
+                });
+            }
+        }
+    }
+
+    [Fact]
+    public void CreateRecord_UnknownRecordType_ThrowsArgumentException()
+    {
+        var data = new PluginFixtureBuilder("cr-unknown-type")
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                Assert.Throws<ArgumentException>(() =>
+                    orchestrator.CreateRecord("Target.esp", "not_a_real_type", null, "user"));
+            }
+        }
+    }
+
+    [Fact]
+    public void CreateRecord_WithTemplate_TemplateNotFound_ThrowsArgumentException()
+    {
+        var data = new PluginFixtureBuilder("cr-template-missing")
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                Assert.Throws<ArgumentException>(() =>
+                    orchestrator.CreateRecord("Target.esp", "npc_", "FFFFFF:NotReal.esp", "user"));
+            }
+        }
+    }
+
+    // --- Dependent change grouping ---
+
+    [Fact]
+    public void StageEdit_ReferencesCreatedFormKey_JoinsCreationGroup()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("dep-group-join")
+            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("SourceNPC").FormKey)
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                // Create a new NPC in Target.esp
+                var createResult = orchestrator.CreateRecord("Target.esp", "npc_", null, "user");
+                var newFormKey = createResult.FormKey;
+
+                // Stage an edit on SourceNPC that references the newly-created FormKey via factions
+                var factionList = JsonSerializer.SerializeToElement(
+                    new[] { new { faction = newFormKey, rank = 0 } });
+                var fields = new Dictionary<string, JsonElement> { ["factions"] = factionList };
+
+                orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
+
+                var allChanges = changes.GetChanges();
+                var dependentChange = allChanges.FirstOrDefault(c =>
+                    c.FormKey == npcKey.ToString() && c.FieldPath == "factions");
+                Assert.NotNull(dependentChange);
+                Assert.Equal(createResult.GroupId, dependentChange.GroupId);
+            }
+        }
+    }
+
+    [Fact]
+    public void StageEdit_NoCreatedFormKeyRefs_GroupIdIsNull()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("dep-group-null")
+            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("SourceNPC").FormKey)
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var fields = new Dictionary<string, JsonElement>
+                {
+                    ["aggression"] = JsonSerializer.SerializeToElement("Frenzied")
+                };
+                orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
+
+                var allChanges = changes.GetChanges();
+                var change = allChanges.Single(c => c.FieldPath == "aggression");
+                Assert.Null(change.GroupId);
+            }
+        }
+    }
+
+    [Fact]
+    public void RevertGroup_RemovesCreateAndDependentEdits()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("dep-group-revert")
+            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("SourceNPC").FormKey)
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var createResult = orchestrator.CreateRecord("Target.esp", "npc_", null, "user");
+                var factionList = JsonSerializer.SerializeToElement(
+                    new[] { new { faction = createResult.FormKey, rank = 0 } });
+                var fields = new Dictionary<string, JsonElement> { ["factions"] = factionList };
+                orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
+
+                changes.RevertGroup(createResult.GroupId);
+
+                Assert.Empty(changes.GetChanges());
+            }
+        }
+    }
+
+    [Fact]
+    public void CreateRecord_NoSession_ThrowsInvalidOperationException()
+    {
+        var (orchestrator, manager) = MakeOrchestrator();
+        using (manager)
+        {
+            Assert.Throws<InvalidOperationException>(() =>
+                orchestrator.CreateRecord("Target.esp", "npc_", null, "user"));
+        }
+    }
+
+    [Fact]
+    public void CreateRecord_NoTemplate_GroupAppearsInGetChangeGroups()
+    {
+        var data = new PluginFixtureBuilder("cr-group-db")
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.CreateRecord("Target.esp", "npc_", null, "user");
+
+                var groups = changes.GetChangeGroups();
+                Assert.Single(groups);
+                Assert.Equal(result.GroupId, groups[0].Id);
+            }
+        }
+    }
+
+    [Fact]
+    public void CreateRecord_WithTemplate_ExcludesReadOnlyFields()
+    {
+        FormKey templateKey = default;
+        var data = new PluginFixtureBuilder("cr-template-ro")
+            .WithPlugin("Source.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("TemplateNPC_RO");
+                npc.Aggression = Npc.AggressionType.Frenzied;
+                templateKey = npc.FormKey;
+            })
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.CreateRecord("Target.esp", "npc_", templateKey.ToString(), "user");
+
+                var staged = changes.GetChanges(formKey: result.FormKey);
+                var fieldEdits = staged.Where(c => c.FieldPath != "$create").ToList();
+                IPluginWriter writer = new PluginWriter(new SchemaReflector(), NullLogger<PluginWriter>.Instance);
+                Assert.DoesNotContain(fieldEdits, c => writer.IsReadOnly(GameRelease.Fallout4, "npc_", c.FieldPath));
+                Assert.Contains(fieldEdits, c => c.FieldPath == "aggression");
+            }
+        }
+    }
+
+    [Fact]
+    public void StageGroup_TargetsCreateSentinel_PreservesCreateGroupId()
+    {
+        var data = new PluginFixtureBuilder("sg-coalesce")
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var createResult = orchestrator.CreateRecord("Target.esp", "npc_", null, "user");
+
+                // StageGroup targeting the same $create sentinel should NOT overwrite its groupId
+                var members = new[] { new GroupMember(
+                    createResult.FormKey, "Target.esp", "npc_", "create",
+                    "$create", J("null"), J("null")) };
+                changes.StageGroup("some_op", null, members);
+
+                var staged = changes.GetChanges(formKey: createResult.FormKey);
+                var createChange = staged.Single(c => c.FieldPath == "$create");
+                Assert.Equal(createResult.GroupId, createChange.GroupId);
+            }
+        }
+    }
+
     // --- helpers ---
 
     /// <summary>
@@ -635,6 +924,7 @@ public sealed class EditOrchestratorTests
             throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
+        public string ReserveFormKey(string plugin) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) =>
             throw new NotSupportedException();
         public void SetFilter(string sql) => _inner.SetFilter(sql);

@@ -76,9 +76,43 @@ public sealed class SchemaReflector : ISchemaReflector
 
         var getterTypeToTable = discovered.ToDictionary(d => d.getterType, d => d.tableName);
 
+        var modType = assembly.GetType($"Mutagen.Bethesda.{category}.{category}Mod");
+        var iGroupOpenGeneric = typeof(IGroup<>);
+
         var schemas = new Dictionary<string, RecordTableSchema>();
         foreach (var (tableName, getterType) in discovered)
-            schemas[tableName] = BuildSchema(tableName, getterType, getterTypeToTable, logger);
+        {
+            var schema = BuildSchema(tableName, getterType, getterTypeToTable, logger);
+
+            Action<IMod, FormKey>? addNew = null;
+            if (modType != null)
+            {
+                var setterType = GetSetterType(getterType);
+                if (setterType != null)
+                {
+                    var targetGroupType = iGroupOpenGeneric.MakeGenericType(setterType);
+                    var groupProp = modType
+                        .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                        .FirstOrDefault(p => targetGroupType.IsAssignableFrom(p.PropertyType));
+                    if (groupProp != null)
+                    {
+                        addNew = (mod, fk) =>
+                        {
+                            var group = (IGroup)groupProp.GetValue(mod)!;
+                            group.AddNew(fk);
+                        };
+                    }
+                }
+            }
+
+            schemas[tableName] = addNew == null ? schema : new RecordTableSchema
+            {
+                TableName = schema.TableName,
+                RecordType = schema.RecordType,
+                RecordColumns = schema.RecordColumns,
+                AddNew = addNew,
+            };
+        }
 
         return new GameSchemaCache(schemas, getterTypeToTable);
     }
@@ -174,7 +208,6 @@ public sealed class SchemaReflector : ISchemaReflector
         typeof(ITranslatedStringGetter).IsAssignableFrom(type);
 
     private static bool IsFormLink(Type type) =>
-        type.IsInterface && type.IsGenericType &&
         typeof(IFormLinkGetter).IsAssignableFrom(type);
 
     // IReadOnlyList<T> only — that's what Mutagen getter interfaces expose for collections.
@@ -487,11 +520,7 @@ public sealed class SchemaReflector : ISchemaReflector
 
             Func<IMajorRecordGetter, object?> extractor = r =>
             {
-                try
-                {
-                    var list = TryGet(r, prop) as IEnumerable;
-                    return list == null ? null : SerializeListItems(list, elementType, elemSubFields);
-                }
+                try { return SerializeListItems((TryGet(r, prop) as IEnumerable)!, elementType, elemSubFields); }
                 catch { return null; }
             };
 

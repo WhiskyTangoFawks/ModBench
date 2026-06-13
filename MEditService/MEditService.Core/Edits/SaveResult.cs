@@ -4,4 +4,5 @@ public sealed record SaveResult(
     string BackupPath,
     IReadOnlyList<string> Applied,
     IReadOnlyList<string> ReadOnly,
-    IReadOnlyList<string> NotFound);
+    IReadOnlyList<string> NotFound,
+    IReadOnlyList<string> CreateFailed);

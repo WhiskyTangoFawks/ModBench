@@ -21,6 +21,9 @@
     "ignore-methods": [
       "Log*"
     ],
+    "ignore-mutants": [
+      { "mutant": "StringLiteral", "description": "Exception message text is not behavioral; string values in logic are covered by behavior-level tests" }
+    ],
     "since": {
       "enabled": true,
       "target": "main"

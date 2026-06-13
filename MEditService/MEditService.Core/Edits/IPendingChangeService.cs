@@ -19,7 +19,14 @@ public interface IPendingChangeService
         string? description,
         Dictionary<string, JsonElement> oldValues,
         IReadOnlyList<PendingFormRef>? formRefs = null,
-        string changeType = "field_edit");
+        string changeType = "field_edit",
+        Guid? groupId = null);
+
+    /// <summary>
+    /// Returns the GroupId of the first pending <c>$create</c> change whose FormKey is in <paramref name="formKeys"/>,
+    /// or null if none match. Returns null immediately when the list is empty.
+    /// </summary>
+    Guid? GetCreateGroupIdForAny(IReadOnlyList<string> formKeys);
 
     IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? groupId = null);
 

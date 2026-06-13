@@ -49,23 +49,54 @@ public sealed class PluginWriter : IPluginWriter
         var applied = new List<string>();
         var readOnly = new List<string>();
         var notFound = new List<string>();
+        var createFailed = new List<string>();
 
+        // Pass 1: materialise new records from $create changes.
+        uint maxReservedId = 0;
         foreach (var group in byFormKey)
         {
+            var createChange = group.FirstOrDefault(c => c.ChangeType == PendingChangeConstants.CreateChangeType);
+            if (createChange == null) continue;
+
             if (!FormKey.TryFactory(group.Key, out var formKey))
             {
-                notFound.AddRange(group.Select(c => c.FieldPath));
+                notFound.Add(createChange.FieldPath);
+                continue;
+            }
+
+            if (!schemas.TryGetValue(createChange.RecordType, out var schema) || schema.AddNew == null)
+            {
+                createFailed.Add(createChange.RecordType);
+                continue;
+            }
+
+            schema.AddNew(mod, formKey);
+            if (formKey.ID > maxReservedId) maxReservedId = formKey.ID;
+            applied.Add(createChange.FieldPath);
+        }
+
+        if (maxReservedId > 0 && mod.NextFormID <= maxReservedId)
+            mod.NextFormID = maxReservedId + 1;
+
+        // Pass 2: apply regular field edits.
+        foreach (var group in byFormKey)
+        {
+            var fieldChanges = group.Where(c => c.ChangeType != PendingChangeConstants.CreateChangeType).ToList();
+
+            if (!FormKey.TryFactory(group.Key, out var formKey))
+            {
+                notFound.AddRange(fieldChanges.Select(c => c.FieldPath));
                 continue;
             }
 
             var record = mod.EnumerateMajorRecords().FirstOrDefault(r => r.FormKey == formKey);
             if (record == null)
             {
-                notFound.AddRange(group.Select(c => c.FieldPath));
+                notFound.AddRange(fieldChanges.Select(c => c.FieldPath));
                 continue;
             }
 
-            foreach (var change in group)
+            foreach (var change in fieldChanges)
             {
                 switch (TryApplyField(record, change, schemas))
                 {
@@ -84,7 +115,7 @@ public sealed class PluginWriter : IPluginWriter
 
         PruneOldBackups(pluginPath);
 
-        return new SaveResult(backupPath, applied, readOnly, notFound);
+        return new SaveResult(backupPath, applied, readOnly, notFound, createFailed);
     }
 
     public bool IsReadOnly(GameRelease release, string recordType, string fieldPath)

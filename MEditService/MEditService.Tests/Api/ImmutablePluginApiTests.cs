@@ -48,7 +48,6 @@ public sealed class ImmutablePluginApiTests : IClassFixture<ImmutablePluginFixtu
     [Theory]
     [InlineData("patch")]
     [InlineData("save")]
-    [InlineData("copy")]
     public async Task Write_ImmutablePlugin_Returns409(string op)
     {
         var client = await LoadedClient();
@@ -64,7 +63,7 @@ public sealed class ImmutablePluginApiTests : IClassFixture<ImmutablePluginFixtu
                 source = "user",
             }),
             "save" => await client.PostAsync($"/plugins/{plugin}/save", null),
-            _ => await client.PostAsync($"/records/{formKey}/copy-to/{plugin}", null),
+            var unknown => throw new InvalidOperationException($"Unknown op: {unknown}")
         };
 
         Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
@@ -114,5 +113,20 @@ public sealed class ImmutablePluginApiTests : IClassFixture<ImmutablePluginFixtu
         var resp = await client.PostAsJsonAsync("/plugins/create", new { name = "BadMod.txt" });
 
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostPluginRecords_ImmutablePlugin_Returns409()
+    {
+        var client = await LoadedClient();
+        var plugin = Uri.EscapeDataString(ImmutablePluginFixture.ImmutablePluginName);
+
+        var resp = await client.PostAsJsonAsync($"/plugins/{plugin}/records", new
+        {
+            recordType = "npc_",
+            source = "user",
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
     }
 }

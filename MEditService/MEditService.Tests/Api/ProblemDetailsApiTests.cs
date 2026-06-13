@@ -90,7 +90,7 @@ public sealed class ProblemDetailsApiTests : IClassFixture<TestPluginFixture>
                 plugin = TestPluginFixture.PluginName,
                 fields = new Dictionary<string, object?> { ["editor_id"] = "x" },
             }),
-            "copy" => await client.PostAsync($"/records/{formKey}/copy-to/{plugin}", null),
+            "copy" => await client.PostAsJsonAsync($"/plugins/{plugin}/records", new { recordType = "npc_" }),
             _ => await client.PostAsync($"/plugins/{plugin}/save", null),
         };
 

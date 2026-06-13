@@ -227,6 +227,117 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
         Assert.Null(manager.Session!.FilterSql);
     }
 
+    // --- ReserveFormKey ---
+
+    [Fact]
+    public void ReserveFormKey_LoadedPlugin_ReturnsValidFormKeyAndIncrements()
+    {
+        using var manager = MakeLoadedManager();
+
+        var fk1 = manager.ReserveFormKey(TestPluginFixture.PluginName);
+        var fk2 = manager.ReserveFormKey(TestPluginFixture.PluginName);
+
+        Assert.True(FormKey.TryFactory(fk1, out var parsed1));
+        Assert.Equal(TestPluginFixture.PluginName, parsed1.ModKey.FileName.ToString());
+        Assert.NotEqual(fk1, fk2);
+    }
+
+    [Fact]
+    public void ReserveFormKey_NoSession_ThrowsInvalidOperationException()
+    {
+        using var manager = MakeManager();
+        Assert.Throws<InvalidOperationException>(() => manager.ReserveFormKey("TestPlugin.esp"));
+    }
+
+    [Fact]
+    public void ReserveFormKey_UnknownPlugin_ThrowsArgumentException()
+    {
+        using var manager = MakeLoadedManager();
+
+        Assert.Throws<ArgumentException>(() => manager.ReserveFormKey("NotLoaded.esp"));
+    }
+
+    [Fact]
+    public void ReserveFormKey_ConcurrentCalls_ReturnDistinctFormKeys()
+    {
+        using var manager = MakeLoadedManager();
+        var results = new System.Collections.Concurrent.ConcurrentBag<string>();
+
+        Parallel.For(0, 50, _ => results.Add(manager.ReserveFormKey(TestPluginFixture.PluginName)));
+
+        Assert.Equal(50, results.Distinct().Count());
+    }
+
+    [Fact]
+    public void ReserveFormKey_ExhaustedSpace_ThrowsInvalidOperationException()
+    {
+        var data = new PluginFixtureBuilder("fk-exhausted")
+            .WithPlugin("Full.esp")
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            // Manually exhaust by stuffing a large seed via reflection
+            var field = typeof(SessionManager)
+                .GetField("_nextFormIds", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            var dict = (Dictionary<string, uint>)field.GetValue(manager)!;
+            dict["Full.esp"] = 0x1000000u;
+
+            Assert.Throws<InvalidOperationException>(() => manager.ReserveFormKey("Full.esp"));
+        }
+    }
+
+    [Fact]
+    public async Task SavePlugin_WithCreateChange_ReloadPicksUpBumpedNextFormID()
+    {
+        var data = new PluginFixtureBuilder("sm-create-nfid")
+            .WithPlugin("TestPlugin.esp", mod => mod.Npcs.AddNew("SeedNPC"))
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            var reservedFk = manager.ReserveFormKey("TestPlugin.esp");
+            FormKey.TryFactory(reservedFk, out var parsedFk);
+
+            var createChange = new PendingChange(
+                Guid.NewGuid(), reservedFk, "TestPlugin.esp", "$create", "npc_",
+                J("null"), J("null"), "user", null, DateTime.UtcNow, "create", null);
+
+            await manager.SavePlugin("TestPlugin.esp", [createChange]);
+
+            // Reload so _nextFormIds picks up the updated NextFormID written by SaveAsync
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var nextFk = manager.ReserveFormKey("TestPlugin.esp");
+            FormKey.TryFactory(nextFk, out var nextParsed);
+
+            Assert.True(nextParsed.ID > parsedFk.ID,
+                $"Expected NextFormID > {parsedFk.ID:X6} after save with create change; got {nextParsed.ID:X6}");
+        }
+    }
+
+    [Fact]
+    public void CreatePlugin_SeedsNextFormIds_PluginIsImmediatelyReservable()
+    {
+        var data = new PluginFixtureBuilder("cp-seed-fk")
+            .WithPlugin("Base.esp")
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.CreatePlugin("Fresh.esp");
+
+            var fk = manager.ReserveFormKey("Fresh.esp");
+
+            Assert.True(FormKey.TryFactory(fk, out var parsed));
+            Assert.Equal("Fresh.esp", parsed.ModKey.FileName.ToString());
+        }
+    }
+
     // --- helpers ---
 
     private sealed class SpyRepositoryFactory : IRecordRepositoryFactory

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -58,7 +59,11 @@ public sealed class EditOrchestrator : IEditOrchestrator
 
         var schemas = _schemaReflector.GetSchemas(session!.GameRelease);
         var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!);
-        var staged = _changes.Upsert(formKey, plugin, recordType!, fields, source, description, oldValues, formRefs);
+
+        var distinctRefs = formRefs.Select(r => r.TargetFormKey).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var createGroupId = _changes.GetCreateGroupIdForAny(distinctRefs);
+
+        var staged = _changes.Upsert(formKey, plugin, recordType!, fields, source, description, oldValues, formRefs, groupId: createGroupId);
         return new StageEditResult.Staged(staged);
     }
 
@@ -90,6 +95,48 @@ public sealed class EditOrchestrator : IEditOrchestrator
         var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!);
         var staged = _changes.Upsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues, formRefs);
         return new StageEditResult.Staged(staged);
+    }
+
+    public CreateRecordResult CreateRecord(string plugin, string recordType, string? templateFormKey, string source)
+    {
+        var session = _sessionManager.Session
+            ?? throw new InvalidOperationException("No session loaded.");
+
+        var schemas = _schemaReflector.GetSchemas(session.GameRelease);
+        if (!schemas.ContainsKey(recordType))
+            throw new ArgumentException($"Unknown record type '{recordType}'.", nameof(recordType));
+
+        var reservedFormKey = _sessionManager.ReserveFormKey(plugin);
+
+        var groupId = Guid.NewGuid();
+        _changes.Upsert(
+            reservedFormKey, plugin, recordType,
+            new Dictionary<string, JsonElement> { [PendingChangeConstants.CreateFieldPath] = JsonSerializer.SerializeToElement<object?>(null) },
+            source, null,
+            new Dictionary<string, JsonElement>(),
+            formRefs: null,
+            changeType: PendingChangeConstants.CreateChangeType,
+            groupId: groupId);
+
+        if (templateFormKey != null)
+        {
+            var winner = _query.GetRecord(templateFormKey)
+                ?? throw new ArgumentException($"Template record '{templateFormKey}' not found.", nameof(templateFormKey));
+
+            var templateFields = winner.Fields
+                .Where(fv => !_writer.IsReadOnly(session.GameRelease, recordType, fv.Metadata.Name))
+                .ToDictionary(fv => fv.Metadata.Name, fv => JsonSerializer.SerializeToElement(fv.Value));
+            var templateRefs = ExtractFormKeyRefs(templateFields, schemas, recordType);
+            _changes.Upsert(
+                reservedFormKey, plugin, recordType,
+                templateFields, source, null,
+                new Dictionary<string, JsonElement>(),
+                templateRefs,
+                changeType: "field_edit",
+                groupId: groupId);
+        }
+
+        return new CreateRecordResult(reservedFormKey, groupId);
     }
 
     private static List<PendingFormRef> ExtractFormKeyRefs(

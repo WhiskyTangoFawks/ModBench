@@ -18,6 +18,7 @@ public sealed class SessionManager : ISessionManager, IDisposable
     private readonly IPendingChangeLifecycle? _changeLifecycle;
     private GameSession? _session;
     private IRecordRepository? _repository;
+    private readonly Dictionary<string, uint> _nextFormIds = new(StringComparer.OrdinalIgnoreCase);
 
     private string? _dataFolderPath;
     private string? _pluginsTxtPath;
@@ -58,6 +59,7 @@ public sealed class SessionManager : ISessionManager, IDisposable
                 _logger.LogInformation("Initializing DuckDB record repository");
                 var repository = _repositoryFactory.Create(gameRelease);
 
+                _nextFormIds.Clear();
                 foreach (var plugin in session.Plugins)
                 {
                     var mod = session.GetMod(plugin.Name)!;
@@ -65,6 +67,9 @@ public sealed class SessionManager : ISessionManager, IDisposable
                     _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
                     repository.Index(mod, plugin.LoadOrderIndex);
                     _logger.LogInformation("Indexed {Plugin}", plugin.Name);
+
+                    if (!plugin.IsImmutable)
+                        _nextFormIds[plugin.Name] = mod.NextFormID;
                 }
 
                 _logger.LogInformation("Computing winners");
@@ -115,6 +120,7 @@ public sealed class SessionManager : ISessionManager, IDisposable
             File.AppendAllText(_pluginsTxtPath!, $"*{name}\n");
 
             var metadata = _session.AddPlugin(filePath);
+            _nextFormIds[name] = ModFactory.Activator(modKey, _gameRelease).NextFormID;
             return PluginResponse.FromMetadata(metadata);
         }
     }
@@ -151,6 +157,22 @@ public sealed class SessionManager : ISessionManager, IDisposable
         }
 
         return result;
+    }
+
+    public string ReserveFormKey(string plugin)
+    {
+        lock (_lock)
+        {
+            if (_session == null)
+                throw new InvalidOperationException("No session loaded.");
+            if (!_nextFormIds.TryGetValue(plugin, out var nextId))
+                throw new ArgumentException($"Plugin '{plugin}' has no reservation counter (not loaded or immutable).", nameof(plugin));
+            if (nextId > 0xFFFFFF)
+                throw new InvalidOperationException($"Plugin '{plugin}' has exhausted its FormKey space (NextFormID 0x{nextId:X} exceeds 0xFFFFFF).");
+            var formKey = Mutagen.Bethesda.Plugins.FormKey.Factory($"{nextId:X6}:{plugin}");
+            _nextFormIds[plugin] = nextId + 1;
+            return formKey.ToString();
+        }
     }
 
     public void SetFilter(string sql) => ApplyFilter(sql);

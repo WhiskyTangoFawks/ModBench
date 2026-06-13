@@ -108,7 +108,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         string? description,
         Dictionary<string, JsonElement> oldValues,
         IReadOnlyList<PendingFormRef>? formRefs = null,
-        string changeType = "field_edit")
+        string changeType = "field_edit",
+        Guid? groupId = null)
     {
         lock (_lock)
         {
@@ -119,6 +120,20 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             var now = DateTime.UtcNow;
 
             using var txn = conn.BeginTransaction();
+
+            if (groupId != null)
+            {
+                using var insGroup = conn.CreateCommand();
+                insGroup.CommandText = """
+                    INSERT INTO change_groups (id, operation, description, created_at)
+                    VALUES ($1, 'create', NULL, $2)
+                    ON CONFLICT DO NOTHING
+                    """;
+                insGroup.Parameters.Add(new DuckDBParameter { Value = groupId.Value.ToString() });
+                insGroup.Parameters.Add(new DuckDBParameter { Value = now });
+                insGroup.ExecuteNonQuery();
+            }
+
             foreach (var (field, newValue) in fields)
             {
                 var id = Guid.NewGuid().ToString();
@@ -127,14 +142,15 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = """
                     INSERT INTO pending_changes
-                        (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                        (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                     ON CONFLICT (form_key, plugin, field_path) DO UPDATE SET
                         new_value   = excluded.new_value,
                         changed_at  = excluded.changed_at,
                         source      = excluded.source,
                         description = excluded.description,
-                        change_type = excluded.change_type
+                        change_type = excluded.change_type,
+                        group_id    = COALESCE(pending_changes.group_id, excluded.group_id)
                     RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id
                     """;
                 cmd.Parameters.Add(new DuckDBParameter { Value = id });
@@ -148,6 +164,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 cmd.Parameters.Add(new DuckDBParameter { Value = description });
                 cmd.Parameters.Add(new DuckDBParameter { Value = now });
                 cmd.Parameters.Add(new DuckDBParameter { Value = changeType });
+                cmd.Parameters.Add(new DuckDBParameter { Value = groupId.HasValue ? (object)groupId.Value.ToString() : DBNull.Value });
 
                 using var reader = cmd.ExecuteReader();
                 if (reader.Read())
@@ -484,6 +501,28 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         }
     }
 
+    public Guid? GetCreateGroupIdForAny(IReadOnlyList<string> formKeys)
+    {
+        if (formKeys.Count == 0) return null;
+        lock (_lock)
+        {
+            var conn = RequireConnection();
+            using var cmd = conn.CreateCommand();
+            var placeholders = string.Join(", ", Enumerable.Range(1, formKeys.Count).Select(i => $"${i}"));
+            cmd.CommandText = $"""
+                SELECT group_id FROM pending_changes
+                WHERE field_path = '{PendingChangeConstants.CreateFieldPath}' AND change_type = '{PendingChangeConstants.CreateChangeType}'
+                AND form_key IN ({placeholders})
+                LIMIT 1
+                """;
+            foreach (var key in formKeys)
+                cmd.Parameters.Add(new DuckDBParameter { Value = key });
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read() || reader.IsDBNull(0)) return null;
+            return Guid.Parse(reader.GetString(0));
+        }
+    }
+
     public ChangeGroup StageGroup(string operation, string? description, IReadOnlyList<GroupMember> members)
     {
         lock (_lock)
@@ -515,7 +554,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                     ON CONFLICT (form_key, plugin, field_path) DO UPDATE SET
                         new_value   = excluded.new_value,
                         changed_at  = excluded.changed_at,
-                        group_id    = excluded.group_id,
+                        group_id    = COALESCE(pending_changes.group_id, excluded.group_id),
                         change_type = excluded.change_type,
                         source      = excluded.source,
                         description = excluded.description

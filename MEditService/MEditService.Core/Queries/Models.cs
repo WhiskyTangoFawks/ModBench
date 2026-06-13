@@ -81,3 +81,5 @@ public record SessionFilterRequest(string Sql);
 public record SessionFilterResponse(string? Sql);
 
 public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId);
+
+public record CreateRecordResult(string FormKey, Guid GroupId);

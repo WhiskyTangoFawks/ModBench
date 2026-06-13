@@ -265,4 +265,83 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
         }
         Assert.True(hasPendingFields);
     }
+
+    [Fact]
+    public async Task PostPluginRecords_NoTemplate_Returns200WithCreateRecordResult()
+    {
+        var client = await LoadedClient();
+        var plugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
+
+        var resp = await client.PostAsJsonAsync($"/plugins/{plugin}/records", new
+        {
+            recordType = "npc_",
+            source = "user",
+        });
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.TryGetProperty("formKey", out _));
+        Assert.True(body.TryGetProperty("groupId", out _));
+    }
+
+    [Fact]
+    public async Task PostPluginRecords_WithTemplate_Returns200()
+    {
+        var client = await LoadedClient();
+        var plugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
+
+        var resp = await client.PostAsJsonAsync($"/plugins/{plugin}/records", new
+        {
+            recordType = "npc_",
+            templateFormKey = _fixture.Npc1FormKey.ToString(),
+            source = "user",
+        });
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.TryGetProperty("formKey", out _));
+    }
+
+    [Fact]
+    public async Task PostPluginRecords_UnknownRecordType_Returns422()
+    {
+        var client = await LoadedClient();
+        var plugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
+
+        var resp = await client.PostAsJsonAsync($"/plugins/{plugin}/records", new
+        {
+            recordType = "not_a_real_type",
+            source = "user",
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostPluginRecords_TemplateNotFound_Returns422()
+    {
+        var client = await LoadedClient();
+        var plugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
+
+        var resp = await client.PostAsJsonAsync($"/plugins/{plugin}/records", new
+        {
+            recordType = "npc_",
+            templateFormKey = "FFFFFF:NotReal.esp",
+            source = "user",
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task CopyRecordTo_OldEndpoint_Returns404()
+    {
+        var client = await LoadedClient();
+        var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
+        var targetPlugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
+
+        var resp = await client.PostAsync($"/records/{formKey}/copy-to/{targetPlugin}", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+    }
 }
