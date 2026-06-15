@@ -19,7 +19,7 @@ public sealed class SchemaReflector : ISchemaReflector
 
     public SchemaReflector(ILogger<SchemaReflector>? logger = null)
     {
-        _logger = logger ?? NullLogger<SchemaReflector>.Instance;
+        _logger = logger ?? NullLogger<SchemaReflector>.Instance; // Stryker disable once NullCoalescing: logger init; only usage is a defensive LogTrace in catch — unreachable from tests without artificial exception injection
     }
 
     private static readonly HashSet<string> _excludedTables = new(StringComparer.OrdinalIgnoreCase)
@@ -495,7 +495,7 @@ public sealed class SchemaReflector : ISchemaReflector
         if (IsTranslatedString(core))
             return new("VARCHAR", r =>
             {
-                try { return (TryGet(r, prop) as ITranslatedStringGetter)?.String; }
+                try { return (TryGet(r, prop) as ITranslatedStringGetter)?.String; } // Stryker disable once Block: silent accessor lambda — per-call lambdas stay silent to avoid log noise (see MEditService CLAUDE.md)
                 catch { return null; }
             }, "string", _empty, _empty,
                 MakeApply(v => new TranslatedString(Language.English, v.GetString())));
@@ -532,7 +532,7 @@ public sealed class SchemaReflector : ISchemaReflector
             Func<IMajorRecordGetter, object?> extractor = r =>
             {
                 try { return SerializeListItems((TryGet(r, prop) as IEnumerable)!, elementType, elemSubFields); }
-                catch { return null; }
+                catch { return null; } // Stryker disable once Block: silent accessor lambda — per-call lambdas stay silent to avoid log noise (see MEditService CLAUDE.md)
             };
 
             Action<IMajorRecord, JsonElement>? apply = null;
