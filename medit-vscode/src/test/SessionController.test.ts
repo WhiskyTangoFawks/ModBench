@@ -301,3 +301,59 @@ describe('SessionController.syncFilterState', () => {
     expect(deps.setFilterActive).toHaveBeenCalledWith(false, undefined);
   });
 });
+
+// ── deleteRecords ─────────────────────────────────────────────────────────────
+
+describe('SessionController.deleteRecords', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs to /records/delete and refreshes tree on success', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: true, status: 200 } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    const ok = await ctrl.deleteRecords([{ formKey: '000001:Test.esp', plugin: 'Test.esp' }]);
+
+    expect(ok).toBe(true);
+    expect(client.POST).toHaveBeenCalledWith('/records/delete', expect.objectContaining({
+      body: { records: [{ formKey: '000001:Test.esp', plugin: 'Test.esp' }] },
+    }));
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+    expect(deps.showError).not.toHaveBeenCalled();
+  });
+
+  it('shows error and returns false on 409 conflict', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({
+        response: { ok: false, status: 409, text: () => Promise.resolve('blocked') },
+      }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    const ok = await ctrl.deleteRecords([{ formKey: '000001:Test.esp', plugin: 'Test.esp' }]);
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('blocked'));
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  it('shows error and returns false on network failure', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockRejectedValue(new Error('network error')),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    const ok = await ctrl.deleteRecords([{ formKey: '000001:Test.esp', plugin: 'Test.esp' }]);
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalled();
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+});

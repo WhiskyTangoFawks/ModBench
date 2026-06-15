@@ -33,4 +33,10 @@ public sealed class RecordTableSchema
     /// Null when the group property could not be resolved via reflection.
     /// </summary>
     public Action<IMod, FormKey>? AddNew { get; init; }
+
+    /// <summary>
+    /// Removes the record with the given FormKey from the correct group on <paramref name="mod"/>.
+    /// Returns true when removed, false when not found. Null when the group property could not be resolved via reflection.
+    /// </summary>
+    public Func<IMod, FormKey, bool>? Remove { get; init; }
 }

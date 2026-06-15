@@ -21,4 +21,6 @@ public interface IEditOrchestrator
     /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
     /// </summary>
     CreateRecordResult CreateRecord(string plugin, string recordType, string? templateFormKey, string source);
+
+    DeleteRecordsResult DeleteRecords(IReadOnlyList<(string FormKey, string Plugin)> targets, string source);
 }

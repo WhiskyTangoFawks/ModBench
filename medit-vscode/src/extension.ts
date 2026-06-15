@@ -86,9 +86,14 @@ export async function activate(context: vscode.ExtensionContext) {
     setFilterActive,
   });
 
+  const treeView = vscode.window.createTreeView('mEdit.pluginTree', {
+    treeDataProvider: treeProvider,
+    canSelectMany: true,
+  });
+
   context.subscriptions.push(
+    treeView,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
-    vscode.window.registerTreeDataProvider('mEdit.pluginTree', treeProvider),
     vscode.commands.registerCommand('mEdit.refreshTree', () => treeProvider.refresh()),
     vscode.commands.registerCommand('mEdit.loadSession', () => controller.loadSession()),
     vscode.commands.registerCommand('mEdit.reloadSession', () => treeProvider.refresh()),
@@ -138,6 +143,24 @@ export async function activate(context: vscode.ExtensionContext) {
         (fk) => { void vscode.commands.executeCommand('mEdit.openEditor', { formKey: fk, label: fk }); },
         (fk) => { openRecordPanel(context, openPanels, fk, fk, port, vscode.ViewColumn.Beside); },
       );
+    }),
+    vscode.commands.registerCommand('mEdit.deleteRecord', async (item?: RecordNode, allSelected?: RecordNode[]) => {
+      let targets: RecordNode[];
+      if (allSelected?.length) {
+        targets = allSelected;
+      } else {
+        const sel = treeView.selection.filter((n): n is RecordNode => n instanceof RecordNode);
+        targets = sel.length ? sel : item ? [item] : [];
+      }
+      if (targets.length === 0) {
+        vscode.window.showErrorMessage('mEdit: Select one or more records in the tree first.');
+        return;
+      }
+      const names = targets.map(n => n.record.editorId ?? n.record.formKey).join(', ');
+      const label = targets.length === 1 ? `Delete "${names}"?` : `Delete ${targets.length} records?`;
+      const answer = await vscode.window.showWarningMessage(label, { modal: true }, 'Delete');
+      if (answer !== 'Delete') return;
+      await controller.deleteRecords(targets.map(n => ({ formKey: n.record.formKey, plugin: n.record.plugin })));
     }),
     vscode.commands.registerCommand('mEdit.copyAsOverrideInto', async (node?: RecordNode) => {
       const formKey = node?.record?.formKey;

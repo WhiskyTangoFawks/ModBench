@@ -33,47 +33,19 @@ public sealed class GameSessionTests : IClassFixture<GameSessionImplicitFixture>
         => _fixture = fixture;
 
     [Fact]
-    public void ImplicitPlugin_PresentInDataFolder_IsLoaded()
-    {
-        using var session = new GameSession(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
-
-        Assert.Contains(session.Plugins, p =>
-            string.Equals(p.Name, "Fallout4.esm", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void ImplicitPlugin_IsMarkedImmutable()
+    public void LoadSession_ImplicitPlugin_LoadedImmutableAndOrdered()
     {
         using var session = new GameSession(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
 
         var fo4 = session.Plugins.Single(p =>
             string.Equals(p.Name, "Fallout4.esm", StringComparison.OrdinalIgnoreCase));
+        var user = session.Plugins.Single(p =>
+            string.Equals(p.Name, GameSessionImplicitFixture.UserPluginName, StringComparison.OrdinalIgnoreCase));
 
+        Assert.NotNull(fo4);
         Assert.True(fo4.IsImmutable);
-    }
-
-    [Fact]
-    public void ImplicitPlugin_HasLowerLoadOrderIndex_ThanUserPlugin()
-    {
-        using var session = new GameSession(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
-
-        var fo4 = session.Plugins.Single(p =>
-            string.Equals(p.Name, "Fallout4.esm", StringComparison.OrdinalIgnoreCase));
-        var user = session.Plugins.Single(p =>
-            string.Equals(p.Name, GameSessionImplicitFixture.UserPluginName, StringComparison.OrdinalIgnoreCase));
-
-        Assert.True(fo4.LoadOrderIndex < user.LoadOrderIndex);
-    }
-
-    [Fact]
-    public void UserPlugin_IsNotImmutable()
-    {
-        using var session = new GameSession(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
-
-        var user = session.Plugins.Single(p =>
-            string.Equals(p.Name, GameSessionImplicitFixture.UserPluginName, StringComparison.OrdinalIgnoreCase));
-
         Assert.False(user.IsImmutable);
+        Assert.True(fo4.LoadOrderIndex < user.LoadOrderIndex);
     }
 
     [Fact]

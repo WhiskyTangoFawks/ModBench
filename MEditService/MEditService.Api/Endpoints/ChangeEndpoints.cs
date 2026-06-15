@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Queries;
 using MEditService.Core.Session;
 using Microsoft.AspNetCore.Mvc;
 
@@ -42,6 +43,66 @@ public static class ChangeEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422);
+
+        app.MapPost("/records/{formKey}/copy-to/{targetPlugin}",
+            ([FromRoute] string formKey,
+             [FromRoute] string targetPlugin,
+             [FromBody] CopyRecordRequest req,
+             IEditOrchestrator orchestrator) =>
+        {
+            var decodedFormKey = Uri.UnescapeDataString(formKey);
+            var decodedTarget = Uri.UnescapeDataString(targetPlugin);
+            return orchestrator.CopyRecordTo(decodedFormKey, decodedTarget, req.Source ?? "user") switch
+            {
+                StageEditResult.NoSession => Results.Problem("No session loaded."),
+                StageEditResult.PluginImmutable i => Results.Problem(
+                    $"'{i.Plugin}' is a base-game plugin and cannot be edited.", statusCode: 409),
+                StageEditResult.BlockedByGroup g => Results.Problem(
+                    $"This record has a pending group change — revert group {g.GroupId} first.", statusCode: 409),
+                StageEditResult.RecordNotFound => Results.NotFound(),
+                StageEditResult.ReadOnlyFields r => Results.Problem(
+                    detail: $"The following fields are read-only: {string.Join(", ", r.Fields)}", statusCode: 422),
+                StageEditResult.Staged staged => Results.Ok(staged.Changes),
+                _ => Results.Problem("Unexpected error.")
+            };
+        })
+        .WithName("CopyRecordTo")
+        .WithTags("Changes")
+        .Produces<IReadOnlyList<PendingChange>>()
+        .ProducesProblem(404)
+        .ProducesProblem(409)
+        .ProducesProblem(422);
+
+        app.MapPost("/records/delete",
+            ([FromBody] DeleteRecordsRequest req,
+             IEditOrchestrator orchestrator) =>
+        {
+            var targets = (req.Records ?? []).Select(r => (r.FormKey, r.Plugin)).ToList();
+            if (targets.Count == 0)
+                return Results.Problem("At least one record must be specified.", statusCode: 400);
+            return orchestrator.DeleteRecords(targets, "user") switch
+            {
+                DeleteRecordsResult.NoSession =>
+                    Results.Problem("No session loaded."),
+                DeleteRecordsResult.PluginImmutable i =>
+                    Results.Problem($"'{i.Plugin}' is a base-game plugin and cannot be edited.", statusCode: 409),
+                DeleteRecordsResult.BlockedByPendingGroup =>
+                    Results.Problem("Records have active group changes — revert groups first.", statusCode: 409),
+                DeleteRecordsResult.BlockedByReferences b =>
+                    Results.Problem(
+                        detail: "One or more records are referenced by immutable plugins and cannot be deleted.",
+                        extensions: new Dictionary<string, object?> { ["blockedBy"] = b.BlockedBy },
+                        statusCode: 409),
+                DeleteRecordsResult.Staged s =>
+                    Results.Ok(s.Group),
+                _ => Results.Problem("Unexpected error.")
+            };
+        })
+        .WithName("DeleteRecords")
+        .WithTags("Changes")
+        .Produces<ChangeGroup>()
+        .ProducesProblem(400)
+        .ProducesProblem(409);
 
         app.MapGet("/change-groups", (IPendingChangeService changes) =>
             Results.Ok(changes.GetChangeGroups()))
@@ -210,3 +271,5 @@ public record CreateRecordRequest(
     string RecordType,
     string? TemplateFormKey,
     string? Source);
+
+public record CopyRecordRequest(string? Source);

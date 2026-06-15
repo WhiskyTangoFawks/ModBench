@@ -334,14 +334,18 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     }
 
     [Fact]
-    public async Task CopyRecordTo_OldEndpoint_Returns404()
+    public async Task CopyRecordTo_ValidRecord_Returns200WithChanges()
     {
         var client = await LoadedClient();
         var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
         var targetPlugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
 
-        var resp = await client.PostAsync($"/records/{formKey}/copy-to/{targetPlugin}", null);
+        var resp = await client.PostAsJsonAsync(
+            $"/records/{formKey}/copy-to/{targetPlugin}",
+            new { });
 
-        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.ValueKind == JsonValueKind.Array, "Response should be an array of pending changes");
     }
 }

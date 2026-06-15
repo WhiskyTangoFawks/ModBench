@@ -137,14 +137,6 @@ public class PluginWriterApplyTests
         Assert.Null(col.Apply);
     }
 
-    [Fact]
-    public void Apply_FormLink_TryApplyField_ReturnsFalse()
-    {
-        var col = Col("npc_", "race");
-        // Apply == null means TryApplyField in PluginWriter will skip this field
-        Assert.False(col.Apply != null);
-    }
-
     // --- SaveResult outcome tests ---
 
     private static PendingChange MakeChange(FormKey formKey, string fieldPath, string json) =>
@@ -226,18 +218,13 @@ public class PluginWriterApplyTests
         Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "npc_", "aggro_radius_behavior_enabled"));
     }
 
-    [Fact]
-    public void IsReadOnly_UnknownRecordType_ReturnsTrue()
+    [Theory]
+    [InlineData("nonexistent_type", "some_field")]
+    [InlineData("npc_", "nonexistent_field")]
+    public void IsReadOnly_UnknownInput_ReturnsTrue(string recordType, string field)
     {
         var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
-        Assert.True(writer.IsReadOnly(GameRelease.Fallout4, "nonexistent_type", "some_field"));
-    }
-
-    [Fact]
-    public void IsReadOnly_UnknownField_ReturnsTrue()
-    {
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
-        Assert.True(writer.IsReadOnly(GameRelease.Fallout4, "npc_", "nonexistent_field"));
+        Assert.True(writer.IsReadOnly(GameRelease.Fallout4, recordType, field));
     }
 
     // --- FormKey validation: malformed FormKey string goes to notFound (mutants 125, 126) ---
@@ -464,5 +451,164 @@ public class PluginWriterApplyTests
         var npc = saved.EnumerateMajorRecords().FirstOrDefault(r => r.FormKey == newFormKey);
         Assert.NotNull(npc);
         Assert.Equal("Frenzied", (npc as Mutagen.Bethesda.Fallout4.INpcGetter)?.Aggression.ToString());
+    }
+
+    // --- $create: FormKey validation ---
+
+    [Fact]
+    public async Task SaveAsync_CreateChange_MalformedFormKey_AppearsInNotFound()
+    {
+        var data = new PluginFixtureBuilder("pw-create-bad-fk")
+            .WithPlugin("TestPlugin.esp", mod => mod.Npcs.AddNew("ExistingNPC"))
+            .Build();
+        var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
+
+        var createChange = new PendingChange(
+            Guid.NewGuid(), "NOT_A_VALID_FORMKEY", "TestPlugin.esp",
+            "$create", "npc_",
+            J("null"), J("null"),
+            "user", null, DateTime.UtcNow, "create", null);
+
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var result = await writer.SaveAsync(pluginPath, [createChange], GameRelease.Fallout4);
+
+        Assert.Contains("$create", result.NotFound);
+        Assert.Empty(result.Applied);
+        Assert.Empty(result.CreateFailed);
+    }
+
+    // --- $create: NextFormID tracking ---
+
+    [Fact]
+    public async Task SaveAsync_CreateChange_FormKeyIdAtOrAboveNextFormID_BumpsNextFormID()
+    {
+        var data = new PluginFixtureBuilder("pw-create-bump-nextid")
+            .WithPlugin("TestPlugin.esp", mod => mod.Npcs.AddNew("ExistingNPC"))
+            .Build();
+        var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
+        var modPath = new Mutagen.Bethesda.Plugins.ModPath(
+            Mutagen.Bethesda.Plugins.ModKey.FromFileName("TestPlugin.esp"), pluginPath);
+
+        using var existing = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
+        var reservedId = existing.NextFormID;
+        var newFormKey = Mutagen.Bethesda.Plugins.FormKey.Factory($"{reservedId:X6}:TestPlugin.esp");
+
+        var createChange = new PendingChange(
+            Guid.NewGuid(), newFormKey.ToString(), "TestPlugin.esp",
+            "$create", "npc_",
+            J("null"), J("null"),
+            "user", null, DateTime.UtcNow, "create", null);
+
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        await writer.SaveAsync(pluginPath, [createChange], GameRelease.Fallout4);
+
+        using var saved = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
+        Assert.True(saved.NextFormID > reservedId,
+            $"NextFormID should have been bumped above {reservedId:X6}, but was {saved.NextFormID:X6}");
+    }
+
+    [Fact]
+    public async Task SaveAsync_CreateChange_FormKeyIdBelowNextFormID_NextFormIDUnchanged()
+    {
+        var data = new PluginFixtureBuilder("pw-create-no-bump-nextid")
+            .WithPlugin("TestPlugin.esp", mod => mod.Npcs.AddNew("ExistingNPC"))
+            .Build();
+        var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
+        var modPath = new Mutagen.Bethesda.Plugins.ModPath(
+            Mutagen.Bethesda.Plugins.ModKey.FromFileName("TestPlugin.esp"), pluginPath);
+
+        using var existing = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
+        var originalNextFormID = existing.NextFormID;
+
+        // Use a FormKey ID strictly below the current NextFormID so the mod needs no update
+        var lowId = originalNextFormID > 1 ? originalNextFormID - 1 : 1u;
+        var lowFormKey = Mutagen.Bethesda.Plugins.FormKey.Factory($"{lowId:X6}:TestPlugin.esp");
+
+        var createChange = new PendingChange(
+            Guid.NewGuid(), lowFormKey.ToString(), "TestPlugin.esp",
+            "$create", "npc_",
+            J("null"), J("null"),
+            "user", null, DateTime.UtcNow, "create", null);
+
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        await writer.SaveAsync(pluginPath, [createChange], GameRelease.Fallout4);
+
+        using var saved = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
+        Assert.Equal(originalNextFormID, saved.NextFormID);
+    }
+
+    // --- Delete pass tests ---
+
+    private static PendingChange MakeDeleteChange(FormKey formKey) =>
+        new(Guid.NewGuid(), formKey.ToString(), "TestPlugin.esp",
+            "$delete", "npc_",
+            JsonDocument.Parse("null").RootElement, JsonDocument.Parse("null").RootElement,
+            "user", null, DateTime.UtcNow, "delete", null);
+
+    [Fact]
+    public async Task SaveAsync_DeleteChange_RecordRemovedAndApplied()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("pw-delete")
+            .WithPlugin("TestPlugin.esp", mod => npcKey = mod.Npcs.AddNew("ToDeleteNPC").FormKey)
+            .Build();
+        var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
+        var modKey = ModKey.FromFileName("TestPlugin.esp");
+        var modPath = new ModPath(modKey, pluginPath);
+
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var result = await writer.SaveAsync(pluginPath, [MakeDeleteChange(npcKey)], GameRelease.Fallout4);
+
+        Assert.Contains("$delete", result.Applied);
+        Assert.Empty(result.NotFound);
+        Assert.Empty(result.ReadOnly);
+        using var saved = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
+        Assert.DoesNotContain(saved.EnumerateMajorRecords(), r => r.FormKey == npcKey);
+    }
+
+    [Fact]
+    public async Task SaveAsync_DeleteChange_UnknownFormKey_AppearsInNotFound()
+    {
+        var data = new PluginFixtureBuilder("pw-delete-notfound")
+            .WithPlugin("TestPlugin.esp")
+            .Build();
+        var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
+        var absentKey = FormKey.Factory("FFFFFF:TestPlugin.esp");
+
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var result = await writer.SaveAsync(pluginPath, [MakeDeleteChange(absentKey)], GameRelease.Fallout4);
+
+        Assert.Contains("$delete", result.NotFound);
+        Assert.Empty(result.Applied);
+    }
+
+    [Fact]
+    public async Task SaveAsync_DeleteAndFieldEdit_BothHandledCorrectly()
+    {
+        FormKey npcToDelete = default;
+        FormKey npcToEdit = default;
+        var data = new PluginFixtureBuilder("pw-delete-and-edit")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                npcToDelete = mod.Npcs.AddNew("NPC_ToDelete").FormKey;
+                npcToEdit = mod.Npcs.AddNew("NPC_ToEdit").FormKey;
+            })
+            .Build();
+        var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
+        var modKey = ModKey.FromFileName("TestPlugin.esp");
+        var modPath = new ModPath(modKey, pluginPath);
+
+        var deleteChange = MakeDeleteChange(npcToDelete);
+        var editChange = MakeChange(npcToEdit, "aggression", "\"Frenzied\"");
+
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var result = await writer.SaveAsync(pluginPath, [deleteChange, editChange], GameRelease.Fallout4);
+
+        Assert.Contains("$delete", result.Applied);
+        Assert.Contains("aggression", result.Applied);
+
+        using var saved = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
+        Assert.DoesNotContain(saved.EnumerateMajorRecords(), r => r.FormKey == npcToDelete);
+        Assert.Contains(saved.EnumerateMajorRecords(), r => r.FormKey == npcToEdit);
     }
 }

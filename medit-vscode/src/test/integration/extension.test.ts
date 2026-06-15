@@ -65,6 +65,7 @@ describe('mEdit command registration', () => {
     'mEdit.clearFilter',
     'mEdit.setFilterFromDocument',
     'mEdit.showReferencedBy',
+    'mEdit.deleteRecord',
   ];
 
   it('registers all expected commands on activation', async () => {

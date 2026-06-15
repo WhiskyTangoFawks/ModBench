@@ -83,3 +83,15 @@ public record SessionFilterResponse(string? Sql);
 public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId);
 
 public record CreateRecordResult(string FormKey, Guid GroupId);
+
+public record BlockedReference(
+    string TargetFormKey,
+    string SourceFormKey,
+    string SourcePlugin,
+    string FieldPath,
+    string RecordType,
+    string? EditorId);
+
+public record DeleteRecordTarget(string FormKey, string Plugin);
+
+public record DeleteRecordsRequest(IReadOnlyList<DeleteRecordTarget> Records);

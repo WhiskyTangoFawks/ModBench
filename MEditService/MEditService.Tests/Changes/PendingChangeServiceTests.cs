@@ -356,7 +356,7 @@ public sealed class PendingChangeServiceTests : IDisposable
     }
 
     [Fact]
-    public void DrainForPlugin_FormRefsIncludedInResult()
+    public void DrainForPlugin_ReturnsAndClearsFormRefs()
     {
         _svc.Upsert("FK1", "A.esp", "npc_",
             new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(),
@@ -369,15 +369,6 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Equal("race", refs[0].StagedField);
         Assert.Equal("race", refs[0].FieldPath);
         Assert.Equal("000001:Fallout4.esm", refs[0].TargetFormKey);
-    }
-
-    [Fact]
-    public void DrainForPlugin_RemovesFormRefsFromTable()
-    {
-        _svc.Upsert("FK1", "A.esp", "npc_",
-            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]);
-
-        _svc.DrainForPlugin("A.esp");
 
         using var cmd = _conn.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM pending_form_references WHERE source_plugin = 'A.esp'";
@@ -397,7 +388,7 @@ public sealed class PendingChangeServiceTests : IDisposable
     }
 
     [Fact]
-    public void StageGroup_ReturnsGroupWithCorrectCount()
+    public void StageGroup_ReturnsGroupAndAppearsInGetChangeGroups()
     {
         var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK1", "P.esp", "level"), MakeMember("FK2", "P.esp", "name") };
 
@@ -406,16 +397,8 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Equal("create", group.Operation);
         Assert.Equal("test group", group.Description);
         Assert.Equal(3, group.ChangeCount);
-    }
-
-    [Fact]
-    public void GetChangeGroups_AfterStageGroup_ReturnsGroupWithCorrectChangeCount()
-    {
-        var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK1", "P.esp", "level"), MakeMember("FK2", "P.esp", "name") };
-        _svc.StageGroup("create", null, members);
 
         var groups = _svc.GetChangeGroups();
-
         Assert.Single(groups);
         Assert.Equal("create", groups[0].Operation);
         Assert.Equal(3, groups[0].ChangeCount);
@@ -497,26 +480,16 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Null(_svc.GetGroupIdForRecord("FK1", "P.esp"));
     }
 
-    // --- Finding 2: Upsert accepts explicit changeType ---
+    // --- Finding 2: Upsert changeType ---
 
     [Fact]
-    public void Upsert_WithExplicitChangeType_StoresCorrectChangeType()
-    {
-        _svc.Upsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"x\"") }, "user", null, new(), changeType: "create");
-
-        var changes = _svc.GetChanges();
-        Assert.Single(changes);
-        Assert.Equal("create", changes[0].ChangeType);
-    }
-
-    [Fact]
-    public void Upsert_DefaultChangeType_IsFieldEdit()
+    public void Upsert_ChangeType_DefaultIsFieldEditExplicitOverrides()
     {
         _svc.Upsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"x\"") }, "user", null, new());
+        Assert.Equal("field_edit", _svc.GetChanges()[0].ChangeType);
 
-        var changes = _svc.GetChanges();
-        Assert.Single(changes);
-        Assert.Equal("field_edit", changes[0].ChangeType);
+        _svc.Upsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"y\"") }, "user", null, new(), changeType: "create");
+        Assert.Equal("create", _svc.GetChanges()[0].ChangeType);
     }
 
     // --- Finding 3: StageGroup returns actual DB count ---

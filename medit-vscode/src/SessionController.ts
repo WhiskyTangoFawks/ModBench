@@ -39,7 +39,7 @@ export class SessionController {
   async copyRecordTo(formKey: string, target: string): Promise<void> {
     const { response } = await this.deps.client.POST(
       '/records/{formKey}/copy-to/{targetPlugin}',
-      { params: { path: { formKey, targetPlugin: target } } },
+      { params: { path: { formKey, targetPlugin: target } }, body: {} },
     );
     if (!response.ok) {
       const text = await response.text();
@@ -77,6 +77,24 @@ export class SessionController {
   async syncFilterState(): Promise<void> {
     const sql = await this.deps.repository!.getActiveFilter();
     this.deps.setFilterActive(sql !== null, sql ?? undefined);
+  }
+
+  async deleteRecords(records: { formKey: string; plugin: string }[]): Promise<boolean> {
+    try {
+      const { response } = await this.deps.client.POST('/records/delete', { body: { records } });
+      if (!response.ok) {
+        const text = await response.text();
+        this.log(`[SessionController] deleteRecords failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Delete failed — ${text}`);
+        return false;
+      }
+      this.deps.refreshTree();
+      return true;
+    } catch (e) {
+      this.log(`[SessionController] deleteRecords threw: ${e instanceof Error ? e.message : String(e)}`);
+      this.deps.showError(`mEdit: Delete failed — ${e instanceof Error ? e.message : String(e)}`);
+      return false;
+    }
   }
 
   async onBackendConnected(): Promise<void> {

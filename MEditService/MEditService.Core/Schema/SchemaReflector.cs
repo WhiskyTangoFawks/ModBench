@@ -85,6 +85,7 @@ public sealed class SchemaReflector : ISchemaReflector
             var schema = BuildSchema(tableName, getterType, getterTypeToTable, logger);
 
             Action<IMod, FormKey>? addNew = null;
+            Func<IMod, FormKey, bool>? remove = null;
             if (modType != null)
             {
                 var setterType = GetSetterType(getterType);
@@ -101,6 +102,16 @@ public sealed class SchemaReflector : ISchemaReflector
                             var group = (IGroup)groupProp.GetValue(mod)!;
                             group.AddNew(fk);
                         };
+                        // Remove(FormKey) is on IGroup<T>, not the non-generic IGroup; resolve MethodInfo
+                        // once at schema-build time and close over it to avoid per-call reflection.
+                        var removeMethod = targetGroupType
+                            .GetMethod("Remove", BindingFlags.Public | BindingFlags.Instance, [typeof(FormKey)]);
+                        if (removeMethod != null)
+                            remove = (mod, fk) =>
+                            {
+                                var grp = groupProp.GetValue(mod)!;
+                                return removeMethod.Invoke(grp, [fk]) is true;
+                            };
                     }
                 }
             }
@@ -111,6 +122,7 @@ public sealed class SchemaReflector : ISchemaReflector
                 RecordType = schema.RecordType,
                 RecordColumns = schema.RecordColumns,
                 AddNew = addNew,
+                Remove = remove,
             };
         }
 
@@ -438,8 +450,7 @@ public sealed class SchemaReflector : ISchemaReflector
     private static string? SerializeListItems(
         IEnumerable items, Type elementType, IReadOnlyList<SubFieldSpec>? subFields)
     {
-        var core = Nullable.GetUnderlyingType(elementType) ?? elementType;
-        var isFl = IsFormLink(core);
+        var isFl = IsFormLink(elementType);
         var result = new List<object?>();
         foreach (var item in items)
         {

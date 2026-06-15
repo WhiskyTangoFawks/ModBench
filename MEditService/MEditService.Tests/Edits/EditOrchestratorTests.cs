@@ -548,13 +548,15 @@ public sealed class EditOrchestratorTests
         }
     }
 
-    [Fact]
-    public void StageEdit_FactionsField_NullStringFactionValue_YieldsNoRef()
+    [Theory]
+    [InlineData("[{\"faction\":\"Null\",\"rank\":0}]")]
+    [InlineData("[{\"faction\":42,\"rank\":0}]")]
+    public void StageEdit_FactionsField_InvalidFactionValue_YieldsNoRef(string factionsRaw)
     {
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("eo-stage-struct-fk-null")
+        var data = new PluginFixtureBuilder("eo-stage-struct-fk-invalid")
             .WithPlugin("Source.esp", mod =>
-                npcKey = mod.Npcs.AddNew("TestNPC_StageNull").FormKey)
+                npcKey = mod.Npcs.AddNew("TestNPC_StageInvalid").FormKey)
             .Build();
         using (data)
         {
@@ -562,37 +564,7 @@ public sealed class EditOrchestratorTests
             using (manager)
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-                var factionsJson = J("[{\"faction\":\"Null\",\"rank\":0}]");
-                var fields = new Dictionary<string, JsonElement> { ["factions"] = factionsJson };
-
-                var result = orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
-
-                Assert.IsType<StageEditResult.Staged>(result);
-                var drained = changes.DrainForPlugin("Source.esp");
-                var factionRefs = drained.FormRefsByFormKey[npcKey.ToString()]
-                    .Where(r => r.FieldPath.StartsWith("factions", StringComparison.Ordinal)).ToList();
-                Assert.Empty(factionRefs);
-            }
-        }
-    }
-
-    [Fact]
-    public void StageEdit_FactionsField_NonStringFactionValue_YieldsNoRef()
-    {
-        FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("eo-stage-struct-fk-nonstr")
-            .WithPlugin("Source.esp", mod =>
-                npcKey = mod.Npcs.AddNew("TestNPC_StageNonStr").FormKey)
-            .Build();
-        using (data)
-        {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
-            using (manager)
-            {
-                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-                // faction value is a JSON number, not a string
-                var factionsJson = J("[{\"faction\":42,\"rank\":0}]");
-                var fields = new Dictionary<string, JsonElement> { ["factions"] = factionsJson };
+                var fields = new Dictionary<string, JsonElement> { ["factions"] = J(factionsRaw) };
 
                 var result = orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
 
@@ -608,7 +580,7 @@ public sealed class EditOrchestratorTests
     // --- CreateRecord ---
 
     [Fact]
-    public void CreateRecord_NoTemplate_ChangeHasCorrectShape()
+    public void CreateRecord_NoTemplate_StagedWithCorrectShapeAndGroup()
     {
         var data = new PluginFixtureBuilder("cr-shape")
             .WithPlugin("Target.esp")
@@ -629,6 +601,10 @@ public sealed class EditOrchestratorTests
                 Assert.Equal(JsonValueKind.Null, staged[0].NewValue.ValueKind);
                 Assert.Equal(result.GroupId, staged[0].GroupId);
                 Assert.Equal(result.FormKey, staged[0].FormKey);
+
+                var groups = changes.GetChangeGroups();
+                Assert.Single(groups);
+                Assert.Equal(result.GroupId, groups[0].Id);
             }
         }
     }
@@ -814,28 +790,6 @@ public sealed class EditOrchestratorTests
     }
 
     [Fact]
-    public void CreateRecord_NoTemplate_GroupAppearsInGetChangeGroups()
-    {
-        var data = new PluginFixtureBuilder("cr-group-db")
-            .WithPlugin("Target.esp")
-            .Build();
-        using (data)
-        {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
-            using (manager)
-            {
-                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-
-                var result = orchestrator.CreateRecord("Target.esp", "npc_", null, "user");
-
-                var groups = changes.GetChangeGroups();
-                Assert.Single(groups);
-                Assert.Equal(result.GroupId, groups[0].Id);
-            }
-        }
-    }
-
-    [Fact]
     public void CreateRecord_WithTemplate_ExcludesReadOnlyFields()
     {
         FormKey templateKey = default;
@@ -903,7 +857,6 @@ public sealed class EditOrchestratorTests
     private sealed class StubSessionManagerWithImmutablePlugin : ISessionManager, IDisposable
     {
         private readonly SessionManager _inner;
-        private readonly string _immutablePlugin;
         private readonly IGameSession? _stubSession;
 
         public StubSessionManagerWithImmutablePlugin(
@@ -912,7 +865,6 @@ public sealed class EditOrchestratorTests
             var reflector = new SchemaReflector();
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             _inner = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
-            _immutablePlugin = immutablePlugin;
             _inner.Load(dataFolder, pluginsTxtPath, gameRelease);
             _stubSession = new ImmutableOverrideSession(_inner.Session!, immutablePlugin);
         }

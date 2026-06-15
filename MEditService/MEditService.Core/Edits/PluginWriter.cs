@@ -51,61 +51,9 @@ public sealed class PluginWriter : IPluginWriter
         var notFound = new List<string>();
         var createFailed = new List<string>();
 
-        // Pass 1: materialise new records from $create changes.
-        uint maxReservedId = 0;
-        foreach (var group in byFormKey)
-        {
-            var createChange = group.FirstOrDefault(c => c.ChangeType == PendingChangeConstants.CreateChangeType);
-            if (createChange == null) continue;
-
-            if (!FormKey.TryFactory(group.Key, out var formKey))
-            {
-                notFound.Add(createChange.FieldPath);
-                continue;
-            }
-
-            if (!schemas.TryGetValue(createChange.RecordType, out var schema) || schema.AddNew == null)
-            {
-                createFailed.Add(createChange.RecordType);
-                continue;
-            }
-
-            schema.AddNew(mod, formKey);
-            if (formKey.ID > maxReservedId) maxReservedId = formKey.ID;
-            applied.Add(createChange.FieldPath);
-        }
-
-        if (maxReservedId > 0 && mod.NextFormID <= maxReservedId)
-            mod.NextFormID = maxReservedId + 1;
-
-        // Pass 2: apply regular field edits.
-        foreach (var group in byFormKey)
-        {
-            var fieldChanges = group.Where(c => c.ChangeType != PendingChangeConstants.CreateChangeType).ToList();
-
-            if (!FormKey.TryFactory(group.Key, out var formKey))
-            {
-                notFound.AddRange(fieldChanges.Select(c => c.FieldPath));
-                continue;
-            }
-
-            var record = mod.EnumerateMajorRecords().FirstOrDefault(r => r.FormKey == formKey);
-            if (record == null)
-            {
-                notFound.AddRange(fieldChanges.Select(c => c.FieldPath));
-                continue;
-            }
-
-            foreach (var change in fieldChanges)
-            {
-                switch (TryApplyField(record, change, schemas))
-                {
-                    case ApplyOutcome.Applied: applied.Add(change.FieldPath); break;
-                    case ApplyOutcome.ReadOnly: readOnly.Add(change.FieldPath); break;
-                    case ApplyOutcome.NotFound: notFound.Add(change.FieldPath); break;
-                }
-            }
-        }
+        ApplyCreateChanges(byFormKey, mod, schemas, applied, notFound, createFailed);
+        ApplyFieldChanges(byFormKey, mod, schemas, applied, readOnly, notFound);
+        ApplyDeleteChanges(byFormKey, mod, schemas, applied, notFound);
 
         await mod.BeginWrite
             .ToPath(pluginPath)
@@ -124,6 +72,100 @@ public sealed class PluginWriter : IPluginWriter
         if (!schemas.TryGetValue(recordType, out var schema)) return true;
         var col = schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath);
         return col?.Apply == null;
+    }
+
+    private static void ApplyCreateChanges(
+        IEnumerable<IGrouping<string, PendingChange>> byFormKey,
+        IMod mod,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        List<string> applied,
+        List<string> notFound,
+        List<string> createFailed)
+    {
+        foreach (var group in byFormKey)
+        {
+            var createChange = group.FirstOrDefault(c => c.ChangeType == PendingChangeConstants.CreateChangeType);
+            if (createChange == null) continue;
+
+            if (!FormKey.TryFactory(group.Key, out var formKey))
+            {
+                notFound.Add(createChange.FieldPath);
+                continue;
+            }
+
+            if (!schemas.TryGetValue(createChange.RecordType, out var schema) || schema.AddNew == null)
+            {
+                createFailed.Add(createChange.RecordType);
+                continue;
+            }
+
+            schema.AddNew(mod, formKey);
+            applied.Add(createChange.FieldPath);
+        }
+    }
+
+    private static void ApplyFieldChanges(
+        IEnumerable<IGrouping<string, PendingChange>> byFormKey,
+        IMod mod,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        List<string> applied,
+        List<string> readOnly,
+        List<string> notFound)
+    {
+        foreach (var group in byFormKey)
+        {
+            var fieldChanges = group.Where(c => c.ChangeType == PendingChangeConstants.FieldEditChangeType).ToList();
+
+            if (!FormKey.TryFactory(group.Key, out var formKey))
+            {
+                notFound.AddRange(fieldChanges.Select(c => c.FieldPath));
+                continue;
+            }
+
+            var record = mod.EnumerateMajorRecords().OfType<IMajorRecord>().FirstOrDefault(r => r.FormKey == formKey);
+            if (record == null)
+            {
+                notFound.AddRange(fieldChanges.Select(c => c.FieldPath));
+                continue;
+            }
+
+            foreach (var change in fieldChanges)
+            {
+                switch (TryApplyField(record, change, schemas))
+                {
+                    case ApplyOutcome.Applied: applied.Add(change.FieldPath); break;
+                    case ApplyOutcome.ReadOnly: readOnly.Add(change.FieldPath); break;
+                    case ApplyOutcome.NotFound: notFound.Add(change.FieldPath); break;
+                }
+            }
+        }
+    }
+
+    private static void ApplyDeleteChanges(
+        IEnumerable<IGrouping<string, PendingChange>> byFormKey,
+        IMod mod,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        List<string> applied,
+        List<string> notFound)
+    {
+        foreach (var group in byFormKey)
+        {
+            var deleteChange = group.FirstOrDefault(c => c.ChangeType == PendingChangeConstants.DeleteChangeType);
+            if (deleteChange == null) continue;
+
+            if (!FormKey.TryFactory(group.Key, out var formKey) ||
+                !schemas.TryGetValue(deleteChange.RecordType, out var schema) ||
+                schema.Remove == null)
+            {
+                notFound.Add(deleteChange.FieldPath);
+                continue;
+            }
+
+            if (schema.Remove(mod, formKey))
+                applied.Add(deleteChange.FieldPath);
+            else
+                notFound.Add(deleteChange.FieldPath);
+        }
     }
 
     private enum ApplyOutcome { Applied, ReadOnly, NotFound }

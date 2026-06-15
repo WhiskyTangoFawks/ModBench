@@ -80,14 +80,17 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
     }
 
     [Fact]
-    public void Unload_ClearsSessionAndRepository()
+    public void Unload_ClearsReferencesAndDisposesRepository()
     {
         using var manager = MakeManager();
         manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        var oldRepo = manager.Repository;
         manager.Unload();
 
         Assert.Null(manager.Session);
         Assert.Null(manager.Repository);
+        Assert.ThrowsAny<Exception>(() =>
+            oldRepo!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName));
     }
 
     [Fact]
@@ -139,10 +142,10 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
     // --- CreatePlugin ---
 
     [Fact]
-    public void CreatePlugin_DoesNotReplaceRepository()
+    public void CreatePlugin_UpdatesSessionState()
     {
-        var data = new PluginFixtureBuilder("cp-no-replace")
-            .WithPlugin("Base.esp")
+        var data = new PluginFixtureBuilder("cp-state")
+            .WithPlugin("Base.esp", mod => mod.Npcs.AddNew("ExistingNPC"))
             .Build();
         using (data)
         {
@@ -153,42 +156,9 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
             manager.CreatePlugin("NewPlugin.esp");
 
             Assert.Same(repositoryBefore, manager.Repository);
-        }
-    }
-
-    [Fact]
-    public void CreatePlugin_NewPluginAppearsInSession()
-    {
-        var data = new PluginFixtureBuilder("cp-appears")
-            .WithPlugin("Base.esp")
-            .Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-
-            manager.CreatePlugin("NewPlugin.esp");
-
             Assert.Contains(manager.Session!.Plugins, p => p.Name == "NewPlugin.esp");
-        }
-    }
-
-    [Fact]
-    public void CreatePlugin_ExistingPluginRecordsStillPresent()
-    {
-        FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("cp-existing-records")
-            .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("ExistingNPC").FormKey)
-            .Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-
-            manager.CreatePlugin("NewPlugin.esp");
-
-            var count = manager.Repository!.CountRecordsForPlugin("npc_", "Base.esp");
-            Assert.Equal(1, count);
+            Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "Base.esp"));
+            Assert.Contains("*NewPlugin.esp", File.ReadAllText(data.PluginsTxtPath));
         }
     }
 
@@ -408,24 +378,6 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
     }
 
     [Fact]
-    public void CreatePlugin_NewPlugin_AddedToPluginsTxt()
-    {
-        var data = new PluginFixtureBuilder("cp-plugins-txt")
-            .WithPlugin("Base.esp")
-            .Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-
-            manager.CreatePlugin("NewPlugin.esp");
-
-            var pluginsTxtContent = File.ReadAllText(data.PluginsTxtPath);
-            Assert.Contains("*NewPlugin.esp", pluginsTxtContent);
-        }
-    }
-
-    [Fact]
     public void CreatePlugin_NoSession_ThrowsInvalidOperationException()
     {
         using var manager = MakeManager(); // not loaded
@@ -536,18 +488,6 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
             oldRepo!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName));
     }
 
-    [Fact]
-    public void Unload_RepositoryBecomesUnusable()
-    {
-        using var manager = MakeManager();
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
-        var oldRepo = manager.Repository;
-
-        manager.Unload();
-
-        Assert.ThrowsAny<Exception>(() =>
-            oldRepo!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName));
-    }
 
     [Fact]
     public void Dispose_RepositoryBecomesUnusable()
@@ -563,21 +503,6 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
     }
 
     // --- Load disposes previous session ---
-
-    [Fact]
-    public void Load_SecondCall_PreviousRepositoryIsDisposed()
-    {
-        using var manager = MakeManager();
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
-        var firstRepo = manager.Repository as IDisposable;
-
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
-
-        // DuckDbRecordRepository.Dispose sets its connection to null; a subsequent query throws.
-        // Simply verifying that the repo reference has been replaced is sufficient to show
-        // the old one was released.
-        Assert.NotSame(firstRepo, manager.Repository);
-    }
 
     // --- helpers ---
 

@@ -51,26 +51,15 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
         Assert.Equal("TestNPC_WithKw", match.GetProperty("editorId").GetString());
     }
 
-    [Fact]
-    public async Task GetReferences_UnknownFormKey_Returns200WithEmptyArray()
+    [Theory]
+    [InlineData("FFFFFF:Unknown.esp")]
+    [InlineData("not-a-formkey")]
+    public async Task GetReferences_UnresolvableFormKey_Returns200WithEmptyArray(string rawFormKey)
     {
         var client = await LoadedClient();
-        var unknown = Uri.EscapeDataString("FFFFFF:Unknown.esp");
+        var encoded = Uri.EscapeDataString(rawFormKey);
 
-        var resp = await client.GetAsync($"/records/{unknown}/references");
-
-        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-        var results = await resp.Content.ReadFromJsonAsync<JsonElement[]>();
-        Assert.NotNull(results);
-        Assert.Empty(results);
-    }
-
-    [Fact]
-    public async Task GetReferences_MalformedFormKey_Returns200WithEmptyArray()
-    {
-        var client = await LoadedClient();
-
-        var resp = await client.GetAsync("/records/not-a-formkey/references");
+        var resp = await client.GetAsync($"/records/{encoded}/references");
 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var results = await resp.Content.ReadFromJsonAsync<JsonElement[]>();

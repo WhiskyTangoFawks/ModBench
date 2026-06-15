@@ -76,24 +76,16 @@ public sealed class SessionFilterApiTests : IClassFixture<TestPluginFixture>
     // --- DELETE /session/filter ---
 
     [Fact]
-    public async Task DeleteFilter_AfterPostFilter_Returns204()
+    public async Task DeleteFilter_Returns204AndClearsFilter()
     {
         var client = await LoadedClient();
         await client.PostAsJsonAsync("/session/filter", new { sql = "SELECT form_key FROM \"NPC_\"" });
 
-        var resp = await client.DeleteAsync("/session/filter");
-        Assert.Equal(HttpStatusCode.NoContent, resp.StatusCode);
-    }
+        var del = await client.DeleteAsync("/session/filter");
+        Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
 
-    [Fact]
-    public async Task DeleteFilter_ThenGetFilter_ReturnsSqlNull()
-    {
-        var client = await LoadedClient();
-        await client.PostAsJsonAsync("/session/filter", new { sql = "SELECT form_key FROM \"NPC_\"" });
-        await client.DeleteAsync("/session/filter");
-
-        var resp = await client.GetAsync("/session/filter");
-        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        var get = await client.GetAsync("/session/filter");
+        var body = await get.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(JsonValueKind.Null, body.GetProperty("sql").ValueKind);
     }
 

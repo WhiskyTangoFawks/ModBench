@@ -102,6 +102,10 @@
       {
         "command": "mEdit.showReferencedBy",
         "title": "mEdit: Show Referenced By"
+      },
+      {
+        "command": "mEdit.deleteRecord",
+        "title": "mEdit: Delete Record"
       }
     ],
     "menus": {
@@ -144,9 +148,21 @@
           "command": "mEdit.showReferencedBy",
           "when": "view == mEdit.pluginTree && viewItem == record",
           "group": "mEdit@2"
+        },
+        {
+          "command": "mEdit.deleteRecord",
+          "when": "view == mEdit.pluginTree && viewItem == record",
+          "group": "mEdit@3"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "mEdit.deleteRecord",
+        "key": "Delete",
+        "when": "focusedView == mEdit.pluginTree && viewItem == record"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run build",

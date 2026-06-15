@@ -1,5 +1,7 @@
 using MEditService.Core.Schema;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Indexing;
 
@@ -488,6 +490,67 @@ public class SchemaReflectorTests
         var subField = subFields!.FirstOrDefault(f => f.Name == subFieldName);
         Assert.NotNull(subField);
         Assert.Equal(expectedApiType, subField!.Type);
+    }
+
+    [Fact]
+    public void Extract_NullableListProperty_ReturnsNullInsteadOfThrowing()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var perksCol = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "perks");
+        Assert.NotNull(perksCol);
+
+        var npc = new Npc(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
+
+        var result = perksCol!.Extract(npc);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void Extract_ScalarListProperty_ReturnsJsonArray()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["must"].RecordColumns.FirstOrDefault(c => c.Name == "cue_points");
+        Assert.NotNull(col);
+
+        var track = new MusicTrack(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
+        track.CuePoints = [1.0f, 2.5f];
+
+        var result = col!.Extract(track) as string;
+
+        Assert.NotNull(result);
+        Assert.Contains("1", result);
+        Assert.Contains("2.5", result);
+    }
+
+    [Fact]
+    public void Extract_StructProperty_NullValue_ReturnsNull()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "weight");
+        Assert.NotNull(col);
+
+        var npc = new Npc(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
+
+        var result = col!.Extract(npc);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void Extract_StructProperty_NonNullValue_ReturnsJsonString()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "weight");
+        Assert.NotNull(col);
+
+        var npc = new Npc(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
+        npc.Weight = new NpcWeight { Thin = 0.1f, Muscular = 0.2f, Fat = 0.3f };
+
+        var result = col!.Extract(npc) as string;
+
+        Assert.NotNull(result);
+        Assert.Contains("thin", result);
     }
 
 }

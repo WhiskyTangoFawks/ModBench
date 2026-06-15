@@ -17,7 +17,7 @@ public sealed class SessionApiTests : IClassFixture<TestPluginFixture>
     }
 
     [Fact]
-    public async Task PostSessionLoad_WithRealPlugin_Returns200()
+    public async Task PostSessionLoad_Returns200AndLoadsPlugin()
     {
         var client = _app.CreateClient();
 
@@ -29,23 +29,7 @@ public sealed class SessionApiTests : IClassFixture<TestPluginFixture>
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task PostSessionLoad_ThenGetPlugins_ReturnsLoadedPlugin()
-    {
-        var client = _app.CreateClient();
-
-        var load = await client.PostAsJsonAsync("/session/load", new
-        {
-            dataFolderPath = _fixture.DataFolder,
-            pluginsTxtPath = _fixture.PluginsTxtPath,
-            gameRelease = "Fallout4",
-        });
-        load.EnsureSuccessStatusCode();
-
         var plugins = await client.GetFromJsonAsync<List<dynamic>>("/plugins");
-
         Assert.NotNull(plugins);
         Assert.Single(plugins);
     }
