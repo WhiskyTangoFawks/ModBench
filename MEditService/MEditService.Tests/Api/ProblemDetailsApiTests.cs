@@ -5,18 +5,17 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
 
-[Collection("ApiTests")]
-public sealed class ProblemDetailsApiTests : IClassFixture<TestPluginFixture>
+public sealed class ProblemDetailsApiTests : IClassFixture<LoadedNpcApiFixture>
 {
     private const string ProblemContentType = "application/problem+json";
 
+    private readonly HttpClient _client;
     private readonly TestPluginFixture _fixture;
-    private readonly WebApplicationFactory<Program> _app;
 
-    public ProblemDetailsApiTests(TestPluginFixture fixture, ApiWebAppFixture webApp)
+    public ProblemDetailsApiTests(LoadedNpcApiFixture loaded)
     {
-        _fixture = fixture;
-        _app = webApp.App;
+        _client = loaded.Client;
+        _fixture = loaded.Plugin;
     }
 
     private static void AssertIsProblemDetails(HttpResponseMessage response, int expectedStatus)
@@ -38,8 +37,7 @@ public sealed class ProblemDetailsApiTests : IClassFixture<TestPluginFixture>
     public async Task SessionLoad_InvalidInput_ReturnsProblemDetails400(
         string? badFolder, string? badPlugins, string gameRelease)
     {
-        var client = _app.CreateClient();
-        var resp = await client.PostAsJsonAsync("/session/load", new
+        var resp = await _client.PostAsJsonAsync("/session/load", new
         {
             dataFolderPath = badFolder ?? _fixture.DataFolder,
             pluginsTxtPath = badPlugins ?? _fixture.PluginsTxtPath,
@@ -58,10 +56,7 @@ public sealed class ProblemDetailsApiTests : IClassFixture<TestPluginFixture>
     [InlineData(TestPluginFixture.PluginName, 409)]
     public async Task CreatePlugin_InvalidInput_ReturnsProblemDetails(string name, int expectedStatus)
     {
-        var client = _app.CreateClient();
-        await LoadSession(client);
-
-        var resp = await client.PostAsJsonAsync("/plugins/create", new { name });
+        var resp = await _client.PostAsJsonAsync("/plugins/create", new { name });
 
         Assert.Equal((HttpStatusCode)expectedStatus, resp.StatusCode);
         AssertIsProblemDetails(resp, expectedStatus);
@@ -95,16 +90,5 @@ public sealed class ProblemDetailsApiTests : IClassFixture<TestPluginFixture>
         };
 
         AssertIsProblemDetails(resp, expectedStatus);
-    }
-
-    private async Task LoadSession(HttpClient client)
-    {
-        var resp = await client.PostAsJsonAsync("/session/load", new
-        {
-            dataFolderPath = _fixture.DataFolder,
-            pluginsTxtPath = _fixture.PluginsTxtPath,
-            gameRelease = "Fallout4",
-        });
-        resp.EnsureSuccessStatusCode();
     }
 }

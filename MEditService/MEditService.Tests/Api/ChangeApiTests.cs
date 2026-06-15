@@ -2,43 +2,47 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Core.Edits;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.Api;
 
-[Collection("ApiTests")]
-public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
+public sealed class ChangeApiTests : IClassFixture<LoadedNpcApiFixture>
 {
+    private readonly HttpClient _client;
     private readonly TestPluginFixture _fixture;
-    private readonly WebApplicationFactory<Program> _app;
+    private readonly IServiceProvider _services;
 
-    public ChangeApiTests(TestPluginFixture fixture, ApiWebAppFixture webApp)
+    public ChangeApiTests(LoadedNpcApiFixture loaded)
     {
-        _fixture = fixture;
-        _app = webApp.App;
+        _client = loaded.Client;
+        _fixture = loaded.Plugin;
+        _services = loaded.Services;
     }
 
-    private async Task<HttpClient> LoadedClient()
+    private IPendingChangeService GetService() =>
+        _services.GetRequiredService<IPendingChangeService>();
+
+    private async Task ClearChangesAsync()
     {
-        var client = _app.CreateClient();
-        var resp = await client.PostAsJsonAsync("/session/load", new
-        {
-            dataFolderPath = _fixture.DataFolder,
-            pluginsTxtPath = _fixture.PluginsTxtPath,
-            gameRelease = "Fallout4",
-        });
-        resp.EnsureSuccessStatusCode();
-        return client;
+        var groups = await _client.GetFromJsonAsync<JsonElement[]>("/change-groups") ?? [];
+        foreach (var g in groups)
+            await _client.DeleteAsync($"/changes/group/{g.GetProperty("id").GetString()}");
+        var changes = await _client.GetFromJsonAsync<JsonElement[]>("/changes") ?? [];
+        foreach (var c in changes)
+            await _client.DeleteAsync($"/changes/{c.GetProperty("id").GetString()}");
     }
+
+    private static GroupMember ApiMember(string formKey, string plugin, string fieldPath) =>
+        new(formKey, plugin, "npc_", "create", fieldPath,
+            JsonDocument.Parse("null").RootElement.Clone(),
+            JsonDocument.Parse("\"x\"").RootElement.Clone());
 
     [Fact]
     public async Task Patch_ValidField_Returns200()
     {
-        var client = await LoadedClient();
         var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
 
-        var resp = await client.PatchAsJsonAsync($"/records/{formKey}", new
+        var resp = await _client.PatchAsJsonAsync($"/records/{formKey}", new
         {
             plugin = TestPluginFixture.PluginName,
             fields = new Dictionary<string, object?> { ["aggression"] = "Frenzied" },
@@ -51,17 +55,16 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task Patch_ThenGetChanges_ReturnsStoredChange()
     {
-        var client = await LoadedClient();
         var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
 
-        await client.PatchAsJsonAsync($"/records/{formKey}", new
+        await _client.PatchAsJsonAsync($"/records/{formKey}", new
         {
             plugin = TestPluginFixture.PluginName,
             fields = new Dictionary<string, object?> { ["aggression"] = "Frenzied" },
             source = "user",
         });
 
-        var changes = await client.GetFromJsonAsync<JsonElement[]>("/changes");
+        var changes = await _client.GetFromJsonAsync<JsonElement[]>("/changes");
         Assert.NotNull(changes);
         Assert.NotEmpty(changes);
     }
@@ -69,22 +72,21 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task GetChanges_FilteredByPlugin_ReturnsMatchingOnly()
     {
-        var client = await LoadedClient();
         var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
 
-        await client.PatchAsJsonAsync($"/records/{formKey}", new
+        await _client.PatchAsJsonAsync($"/records/{formKey}", new
         {
             plugin = TestPluginFixture.PluginName,
             fields = new Dictionary<string, object?> { ["aggression"] = "Frenzied" },
             source = "user",
         });
 
-        var matching = await client.GetFromJsonAsync<JsonElement[]>(
+        var matching = await _client.GetFromJsonAsync<JsonElement[]>(
             $"/changes?plugin={Uri.EscapeDataString(TestPluginFixture.PluginName)}");
         Assert.NotNull(matching);
         Assert.NotEmpty(matching);
 
-        var noMatch = await client.GetFromJsonAsync<JsonElement[]>("/changes?plugin=NonExistent.esp");
+        var noMatch = await _client.GetFromJsonAsync<JsonElement[]>("/changes?plugin=NonExistent.esp");
         Assert.NotNull(noMatch);
         Assert.Empty(noMatch);
     }
@@ -92,56 +94,55 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task DeleteChange_ById_Returns204AndRemovesChange()
     {
-        var client = await LoadedClient();
+        await ClearChangesAsync();
         var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
 
-        await client.PatchAsJsonAsync($"/records/{formKey}", new
+        await _client.PatchAsJsonAsync($"/records/{formKey}", new
         {
             plugin = TestPluginFixture.PluginName,
             fields = new Dictionary<string, object?> { ["aggression"] = "Frenzied" },
             source = "user",
         });
 
-        var changesJson = await client.GetStringAsync("/changes");
+        var changesJson = await _client.GetStringAsync("/changes");
         var changes = JsonSerializer.Deserialize<JsonElement[]>(changesJson)!;
         var id = changes[0].GetProperty("id").GetString();
 
-        var del = await client.DeleteAsync($"/changes/{id}");
+        var del = await _client.DeleteAsync($"/changes/{id}");
         Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
 
-        var after = await client.GetFromJsonAsync<JsonElement[]>("/changes");
+        var after = await _client.GetFromJsonAsync<JsonElement[]>("/changes");
         Assert.Empty(after!);
     }
 
     [Fact]
     public async Task BulkDeleteChanges_ByFormKeyAndPlugin_ClearsRecord()
     {
-        var client = await LoadedClient();
+        await ClearChangesAsync();
         var rawFormKey = _fixture.Npc1FormKey.ToString();
         var formKey = Uri.EscapeDataString(rawFormKey);
 
-        await client.PatchAsJsonAsync($"/records/{formKey}", new
+        await _client.PatchAsJsonAsync($"/records/{formKey}", new
         {
             plugin = TestPluginFixture.PluginName,
             fields = new Dictionary<string, object?> { ["aggression"] = "Frenzied" },
             source = "user",
         });
 
-        var del = await client.DeleteAsync(
+        var del = await _client.DeleteAsync(
             $"/changes?plugin={Uri.EscapeDataString(TestPluginFixture.PluginName)}&formKey={formKey}");
         Assert.Equal(HttpStatusCode.OK, del.StatusCode);
 
-        var after = await client.GetFromJsonAsync<JsonElement[]>("/changes");
+        var after = await _client.GetFromJsonAsync<JsonElement[]>("/changes");
         Assert.Empty(after!);
     }
 
     [Fact]
     public async Task Compare_ConflictEnums_SerializedAsStrings()
     {
-        var client = await LoadedClient();
         var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
 
-        var compareJson = await client.GetStringAsync($"/records/{formKey}/compare");
+        var compareJson = await _client.GetStringAsync($"/records/{formKey}/compare");
         var compare = JsonSerializer.Deserialize<JsonElement>(compareJson);
 
         var conflictAll = compare.GetProperty("conflictAll");
@@ -156,24 +157,12 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
         }
     }
 
-    private async Task<(HttpClient client, IPendingChangeService svc)> LoadedClientWithService()
-    {
-        var client = await LoadedClient();
-        var svc = _app.Services.GetRequiredService<IPendingChangeService>();
-        return (client, svc);
-    }
-
-    private static GroupMember ApiMember(string formKey, string plugin, string fieldPath) =>
-        new(formKey, plugin, "npc_", "create", fieldPath,
-            JsonDocument.Parse("null").RootElement.Clone(),
-            JsonDocument.Parse("\"x\"").RootElement.Clone());
-
     [Fact]
     public async Task GetChangeGroups_WhenNoGroups_ReturnsEmptyList()
     {
-        var client = await LoadedClient();
+        await ClearChangesAsync();
 
-        var resp = await client.GetFromJsonAsync<JsonElement[]>("/change-groups");
+        var resp = await _client.GetFromJsonAsync<JsonElement[]>("/change-groups");
 
         Assert.NotNull(resp);
         Assert.Empty(resp);
@@ -182,9 +171,7 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task DeleteChangeGroup_NotFound_Returns404()
     {
-        var client = await LoadedClient();
-
-        var resp = await client.DeleteAsync($"/changes/group/{Guid.NewGuid()}");
+        var resp = await _client.DeleteAsync($"/changes/group/{Guid.NewGuid()}");
 
         Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
     }
@@ -192,28 +179,29 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task DeleteChangeGroup_RevokesAllChangesAtomically()
     {
-        var (client, svc) = await LoadedClientWithService();
+        await ClearChangesAsync();
+        var svc = GetService();
         var members = new[] { ApiMember("FK-G1", "Test.esp", "name"), ApiMember("FK-G2", "Test.esp", "name") };
         var group = svc.StageGroup("create", null, members);
 
-        var del = await client.DeleteAsync($"/changes/group/{group.Id}");
+        var del = await _client.DeleteAsync($"/changes/group/{group.Id}");
         Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
 
-        var changes = await client.GetFromJsonAsync<JsonElement[]>($"/changes?groupId={group.Id}");
+        var changes = await _client.GetFromJsonAsync<JsonElement[]>($"/changes?groupId={group.Id}");
         Assert.Empty(changes!);
-        var groups = await client.GetFromJsonAsync<JsonElement[]>("/change-groups");
+        var groups = await _client.GetFromJsonAsync<JsonElement[]>("/change-groups");
         Assert.Empty(groups!);
     }
 
     [Fact]
     public async Task DeleteChange_GroupOwned_Returns409WithGroupIdInDetail()
     {
-        var (client, svc) = await LoadedClientWithService();
+        var svc = GetService();
         var members = new[] { ApiMember("FK-GO", "Test.esp", "name") };
         var group = svc.StageGroup("create", null, members);
         var changeId = svc.GetChanges(formKey: "FK-GO")[0].Id;
 
-        var resp = await client.DeleteAsync($"/changes/{changeId}");
+        var resp = await _client.DeleteAsync($"/changes/{changeId}");
 
         Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
         var body = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
@@ -223,12 +211,13 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task Patch_RecordWithPendingGroupChange_Returns409WithGroupInDetail()
     {
-        var (client, svc) = await LoadedClientWithService();
+        await ClearChangesAsync();
+        var svc = GetService();
         var rawFormKey = _fixture.Npc1FormKey.ToString();
         var members = new[] { ApiMember(rawFormKey, TestPluginFixture.PluginName, "name") };
         svc.StageGroup("create", null, members);
 
-        var resp = await client.PatchAsJsonAsync($"/records/{Uri.EscapeDataString(rawFormKey)}", new
+        var resp = await _client.PatchAsJsonAsync($"/records/{Uri.EscapeDataString(rawFormKey)}", new
         {
             plugin = TestPluginFixture.PluginName,
             fields = new Dictionary<string, object?> { ["aggression"] = "Frenzied" },
@@ -243,17 +232,16 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task Compare_AfterPatch_IncludesPendingFields()
     {
-        var client = await LoadedClient();
         var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
 
-        await client.PatchAsJsonAsync($"/records/{formKey}", new
+        await _client.PatchAsJsonAsync($"/records/{formKey}", new
         {
             plugin = TestPluginFixture.PluginName,
             fields = new Dictionary<string, object?> { ["aggression"] = "Frenzied" },
             source = "user",
         });
 
-        var compareJson = await client.GetStringAsync($"/records/{formKey}/compare");
+        var compareJson = await _client.GetStringAsync($"/records/{formKey}/compare");
         var compare = JsonSerializer.Deserialize<JsonElement>(compareJson);
         var overrides = compare.GetProperty("overrides");
 
@@ -269,10 +257,9 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task PostPluginRecords_NoTemplate_Returns200WithCreateRecordResult()
     {
-        var client = await LoadedClient();
         var plugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
 
-        var resp = await client.PostAsJsonAsync($"/plugins/{plugin}/records", new
+        var resp = await _client.PostAsJsonAsync($"/plugins/{plugin}/records", new
         {
             recordType = "npc_",
             source = "user",
@@ -287,10 +274,9 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task PostPluginRecords_WithTemplate_Returns200()
     {
-        var client = await LoadedClient();
         var plugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
 
-        var resp = await client.PostAsJsonAsync($"/plugins/{plugin}/records", new
+        var resp = await _client.PostAsJsonAsync($"/plugins/{plugin}/records", new
         {
             recordType = "npc_",
             templateFormKey = _fixture.Npc1FormKey.ToString(),
@@ -305,10 +291,9 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task PostPluginRecords_UnknownRecordType_Returns422()
     {
-        var client = await LoadedClient();
         var plugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
 
-        var resp = await client.PostAsJsonAsync($"/plugins/{plugin}/records", new
+        var resp = await _client.PostAsJsonAsync($"/plugins/{plugin}/records", new
         {
             recordType = "not_a_real_type",
             source = "user",
@@ -320,10 +305,9 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task PostPluginRecords_TemplateNotFound_Returns422()
     {
-        var client = await LoadedClient();
         var plugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
 
-        var resp = await client.PostAsJsonAsync($"/plugins/{plugin}/records", new
+        var resp = await _client.PostAsJsonAsync($"/plugins/{plugin}/records", new
         {
             recordType = "npc_",
             templateFormKey = "FFFFFF:NotReal.esp",
@@ -336,11 +320,10 @@ public sealed class ChangeApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task CopyRecordTo_ValidRecord_Returns200WithChanges()
     {
-        var client = await LoadedClient();
         var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
         var targetPlugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
 
-        var resp = await client.PostAsJsonAsync(
+        var resp = await _client.PostAsJsonAsync(
             $"/records/{formKey}/copy-to/{targetPlugin}",
             new { });
 

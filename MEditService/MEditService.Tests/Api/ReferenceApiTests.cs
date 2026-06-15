@@ -5,29 +5,25 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
 
-[Collection("ApiTests")]
-public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
+public sealed class ReferenceApiTests : IClassFixture<LoadedReferenceApiFixture>
 {
+    private readonly HttpClient _client;
     private readonly ReferencePluginFixture _fixture;
-    private readonly WebApplicationFactory<Program> _app;
 
-    public ReferenceApiTests(ReferencePluginFixture fixture, ApiWebAppFixture webApp)
+    public ReferenceApiTests(LoadedReferenceApiFixture loaded)
     {
-        _fixture = fixture;
-        _app = webApp.App;
+        _client = loaded.Client;
+        _fixture = loaded.Plugin;
     }
 
-    private async Task<HttpClient> LoadedClient()
+    private async Task ClearChangesAsync()
     {
-        var client = _app.CreateClient();
-        var resp = await client.PostAsJsonAsync("/session/load", new
-        {
-            dataFolderPath = _fixture.DataFolder,
-            pluginsTxtPath = _fixture.PluginsTxtPath,
-            gameRelease = "Fallout4",
-        });
-        resp.EnsureSuccessStatusCode();
-        return client;
+        var groups = await _client.GetFromJsonAsync<JsonElement[]>("/change-groups") ?? [];
+        foreach (var g in groups)
+            await _client.DeleteAsync($"/changes/group/{g.GetProperty("id").GetString()}");
+        var changes = await _client.GetFromJsonAsync<JsonElement[]>("/changes") ?? [];
+        foreach (var c in changes)
+            await _client.DeleteAsync($"/changes/{c.GetProperty("id").GetString()}");
     }
 
     // --- Committed references ---
@@ -35,10 +31,10 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
     [Fact]
     public async Task GetReferences_CommittedReferenceExists_ReturnsNpcThatReferencesKeyword()
     {
-        var client = await LoadedClient();
+        await ClearChangesAsync();
         var kwKey = Uri.EscapeDataString(_fixture.KeywordFormKey.ToString());
 
-        var resp = await client.GetAsync($"/records/{kwKey}/references");
+        var resp = await _client.GetAsync($"/records/{kwKey}/references");
 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var results = await resp.Content.ReadFromJsonAsync<JsonElement[]>();
@@ -56,10 +52,9 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
     [InlineData("not-a-formkey")]
     public async Task GetReferences_UnresolvableFormKey_Returns200WithEmptyArray(string rawFormKey)
     {
-        var client = await LoadedClient();
         var encoded = Uri.EscapeDataString(rawFormKey);
 
-        var resp = await client.GetAsync($"/records/{encoded}/references");
+        var resp = await _client.GetAsync($"/records/{encoded}/references");
 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var results = await resp.Content.ReadFromJsonAsync<JsonElement[]>();
@@ -72,11 +67,11 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
     [Fact]
     public async Task GetReferences_PendingAddition_AppearsInResults()
     {
-        var client = await LoadedClient();
+        await ClearChangesAsync();
         var kwKey = Uri.EscapeDataString(_fixture.KeywordFormKey.ToString());
         var npcKey = Uri.EscapeDataString(_fixture.NpcWithoutKeywordFormKey.ToString());
 
-        var patch = await client.PatchAsJsonAsync($"/records/{npcKey}", new
+        var patch = await _client.PatchAsJsonAsync($"/records/{npcKey}", new
         {
             plugin = ReferencePluginFixture.PluginName,
             fields = new Dictionary<string, object?> { ["keywords"] = new[] { _fixture.KeywordFormKey.ToString() } },
@@ -84,7 +79,7 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
         });
         patch.EnsureSuccessStatusCode();
 
-        var resp = await client.GetAsync($"/records/{kwKey}/references");
+        var resp = await _client.GetAsync($"/records/{kwKey}/references");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var results = await resp.Content.ReadFromJsonAsync<JsonElement[]>();
         Assert.NotNull(results);
@@ -98,12 +93,11 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
     [Fact]
     public async Task GetReferences_PendingRemoval_DisappearsFromResults()
     {
-        var client = await LoadedClient();
+        await ClearChangesAsync();
         var kwKey = Uri.EscapeDataString(_fixture.KeywordFormKey.ToString());
         var npcKey = Uri.EscapeDataString(_fixture.NpcWithKeywordFormKey.ToString());
 
-        // Replace keyword list with an empty array — the committed reference disappears
-        var patch = await client.PatchAsJsonAsync($"/records/{npcKey}", new
+        var patch = await _client.PatchAsJsonAsync($"/records/{npcKey}", new
         {
             plugin = ReferencePluginFixture.PluginName,
             fields = new Dictionary<string, object?> { ["keywords"] = Array.Empty<string>() },
@@ -111,7 +105,7 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
         });
         patch.EnsureSuccessStatusCode();
 
-        var resp = await client.GetAsync($"/records/{kwKey}/references");
+        var resp = await _client.GetAsync($"/records/{kwKey}/references");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var results = await resp.Content.ReadFromJsonAsync<JsonElement[]>();
         Assert.NotNull(results);
@@ -125,12 +119,11 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
     [Fact]
     public async Task GetReferences_UnrelatedPendingChange_CommittedReferenceStillAppears()
     {
-        var client = await LoadedClient();
+        await ClearChangesAsync();
         var kwKey = Uri.EscapeDataString(_fixture.KeywordFormKey.ToString());
         var npcKey = Uri.EscapeDataString(_fixture.NpcWithKeywordFormKey.ToString());
 
-        // Patch an unrelated field (aggression) — keyword reference must still show up
-        var patch = await client.PatchAsJsonAsync($"/records/{npcKey}", new
+        var patch = await _client.PatchAsJsonAsync($"/records/{npcKey}", new
         {
             plugin = ReferencePluginFixture.PluginName,
             fields = new Dictionary<string, object?> { ["aggression"] = "Frenzied" },
@@ -138,7 +131,7 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
         });
         patch.EnsureSuccessStatusCode();
 
-        var resp = await client.GetAsync($"/records/{kwKey}/references");
+        var resp = await _client.GetAsync($"/records/{kwKey}/references");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var results = await resp.Content.ReadFromJsonAsync<JsonElement[]>();
         Assert.NotNull(results);
@@ -152,11 +145,11 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
     [Fact]
     public async Task GetReferences_PendingAddition_ReturnsElementLevelFieldPath()
     {
-        var client = await LoadedClient();
+        await ClearChangesAsync();
         var kwKey = Uri.EscapeDataString(_fixture.KeywordFormKey.ToString());
         var npcKey = Uri.EscapeDataString(_fixture.NpcWithoutKeywordFormKey.ToString());
 
-        var patch = await client.PatchAsJsonAsync($"/records/{npcKey}", new
+        var patch = await _client.PatchAsJsonAsync($"/records/{npcKey}", new
         {
             plugin = ReferencePluginFixture.PluginName,
             fields = new Dictionary<string, object?> { ["keywords"] = new[] { _fixture.KeywordFormKey.ToString() } },
@@ -164,7 +157,7 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
         });
         patch.EnsureSuccessStatusCode();
 
-        var resp = await client.GetAsync($"/records/{kwKey}/references");
+        var resp = await _client.GetAsync($"/records/{kwKey}/references");
         var results = await resp.Content.ReadFromJsonAsync<JsonElement[]>();
         Assert.NotNull(results);
 
@@ -179,13 +172,11 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
     [Fact]
     public async Task GetReferences_PendingFreeTextField_DoesNotProduceFalsePositive()
     {
-        var client = await LoadedClient();
+        await ClearChangesAsync();
         var kwKey = Uri.EscapeDataString(_fixture.KeywordFormKey.ToString());
         var npcKey = Uri.EscapeDataString(_fixture.NpcWithoutKeywordFormKey.ToString());
 
-        // Stage a free-text field whose value happens to contain the FormKey string verbatim.
-        // With a LIKE-based scan this would be a false positive; with pending_form_references it must not be.
-        var patch = await client.PatchAsJsonAsync($"/records/{npcKey}", new
+        var patch = await _client.PatchAsJsonAsync($"/records/{npcKey}", new
         {
             plugin = ReferencePluginFixture.PluginName,
             fields = new Dictionary<string, object?> { ["name"] = _fixture.KeywordFormKey.ToString() },
@@ -193,7 +184,7 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
         });
         patch.EnsureSuccessStatusCode();
 
-        var resp = await client.GetAsync($"/records/{kwKey}/references");
+        var resp = await _client.GetAsync($"/records/{kwKey}/references");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var results = await resp.Content.ReadFromJsonAsync<JsonElement[]>();
         Assert.NotNull(results);
@@ -206,7 +197,6 @@ public sealed class ReferenceApiTests : IClassFixture<ReferencePluginFixture>
     [Fact]
     public async Task GetReferences_NoSessionLoaded_ReturnsProblem()
     {
-        // Fresh isolated app — no session loaded
         await using var app = new WebApplicationFactory<Program>();
         var client = app.CreateClient();
         var resp = await client.GetAsync("/records/000001:Anything.esp/references");

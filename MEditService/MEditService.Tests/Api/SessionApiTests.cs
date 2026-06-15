@@ -1,27 +1,23 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
 
-[Collection("ApiTests")]
-public sealed class SessionApiTests : IClassFixture<TestPluginFixture>
+public sealed class SessionApiTests : IClassFixture<LoadedNpcApiFixture>
 {
+    private readonly HttpClient _client;
     private readonly TestPluginFixture _fixture;
-    private readonly WebApplicationFactory<Program> _app;
 
-    public SessionApiTests(TestPluginFixture fixture, ApiWebAppFixture webApp)
+    public SessionApiTests(LoadedNpcApiFixture loaded)
     {
-        _fixture = fixture;
-        _app = webApp.App;
+        _client = loaded.Client;
+        _fixture = loaded.Plugin;
     }
 
     [Fact]
     public async Task PostSessionLoad_Returns200AndLoadsPlugin()
     {
-        var client = _app.CreateClient();
-
-        var response = await client.PostAsJsonAsync("/session/load", new
+        var response = await _client.PostAsJsonAsync("/session/load", new
         {
             dataFolderPath = _fixture.DataFolder,
             pluginsTxtPath = _fixture.PluginsTxtPath,
@@ -29,7 +25,7 @@ public sealed class SessionApiTests : IClassFixture<TestPluginFixture>
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var plugins = await client.GetFromJsonAsync<List<dynamic>>("/plugins");
+        var plugins = await _client.GetFromJsonAsync<List<dynamic>>("/plugins");
         Assert.NotNull(plugins);
         Assert.Single(plugins);
     }
@@ -37,9 +33,7 @@ public sealed class SessionApiTests : IClassFixture<TestPluginFixture>
     [Fact]
     public async Task PostSessionLoad_ThenGetRecords_ReturnsIndexedRecords()
     {
-        var client = _app.CreateClient();
-
-        var load = await client.PostAsJsonAsync("/session/load", new
+        var load = await _client.PostAsJsonAsync("/session/load", new
         {
             dataFolderPath = _fixture.DataFolder,
             pluginsTxtPath = _fixture.PluginsTxtPath,
@@ -47,7 +41,7 @@ public sealed class SessionApiTests : IClassFixture<TestPluginFixture>
         });
         load.EnsureSuccessStatusCode();
 
-        var records = await client.GetFromJsonAsync<dynamic>($"/records?type=NPC_&limit=10");
+        var records = await _client.GetFromJsonAsync<dynamic>($"/records?type=NPC_&limit=10");
 
         Assert.NotNull(records);
     }
