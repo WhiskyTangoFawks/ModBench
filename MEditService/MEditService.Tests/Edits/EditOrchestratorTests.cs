@@ -551,8 +551,10 @@ public sealed class EditOrchestratorTests
     [Theory]
     [InlineData("[{\"faction\":\"Null\",\"rank\":0}]")]
     [InlineData("[{\"faction\":42,\"rank\":0}]")]
-    public void StageEdit_FactionsField_InvalidFactionValue_YieldsNoRef(string factionsRaw)
+    public void StageEdit_FactionsField_InvalidFactionValue_ReturnsInvalidReferences(string factionsRaw)
     {
+        // RankPlacement.Faction is a non-nullable FormLink<IFactionGetter> — a null/malformed
+        // value is now rejected at stage time instead of silently staging with no ref.
         FormKey npcKey = default;
         var data = new PluginFixtureBuilder("eo-stage-struct-fk-invalid")
             .WithPlugin("Source.esp", mod =>
@@ -560,7 +562,7 @@ public sealed class EditOrchestratorTests
             .Build();
         using (data)
         {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            var (orchestrator, manager) = MakeOrchestrator();
             using (manager)
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -568,11 +570,122 @@ public sealed class EditOrchestratorTests
 
                 var result = orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
 
+                var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
+                Assert.Single(invalid.Errors);
+                Assert.Equal("factions[0].faction", invalid.Errors[0].FieldPath);
+                Assert.Equal("null_not_allowed", invalid.Errors[0].Reason);
+            }
+        }
+    }
+
+    [Fact]
+    public void StageEdit_FormLink_TargetNotInSession_ReturnsInvalidReferences()
+    {
+        // RankPlacement.Faction is a non-nullable FormLink<IFactionGetter>; pointing it at a
+        // well-formed FormKey that doesn't resolve to any record in the session is a data error.
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-stage-faction-missing")
+            .WithPlugin("Source.esp", mod =>
+                npcKey = mod.Npcs.AddNew("TestNPC_FactionMissing").FormKey)
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+                var fields = new Dictionary<string, JsonElement> { ["factions"] = J("[{\"faction\":\"0000FF:Source.esp\",\"rank\":0}]") };
+
+                var result = orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
+
+                var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
+                Assert.Single(invalid.Errors);
+                Assert.Equal("factions[0].faction", invalid.Errors[0].FieldPath);
+                Assert.Equal("not_in_session", invalid.Errors[0].Reason);
+            }
+        }
+    }
+
+    [Fact]
+    public void StageEdit_FormLink_TypeMismatch_ReturnsInvalidReferences()
+    {
+        FormKey npcKey = default;
+        FormKey otherNpcKey = default;
+        var data = new PluginFixtureBuilder("eo-stage-faction-mismatch")
+            .WithPlugin("Source.esp", mod =>
+            {
+                otherNpcKey = mod.Npcs.AddNew("TestNPC_WrongType").FormKey;
+                npcKey = mod.Npcs.AddNew("TestNPC_FactionMismatch").FormKey;
+            })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+                var fields = new Dictionary<string, JsonElement> { ["factions"] = J($"[{{\"faction\":\"{otherNpcKey}\",\"rank\":0}}]") };
+
+                var result = orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
+
+                var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
+                Assert.Single(invalid.Errors);
+                Assert.Equal("factions[0].faction", invalid.Errors[0].FieldPath);
+                Assert.Equal("type_mismatch", invalid.Errors[0].Reason);
+            }
+        }
+    }
+
+    [Fact]
+    public void StageEdit_FormLink_ValidReference_Stages()
+    {
+        FormKey npcKey = default;
+        FormKey factionKey = default;
+        var data = new PluginFixtureBuilder("eo-stage-faction-valid")
+            .WithPlugin("Source.esp", mod =>
+            {
+                factionKey = mod.Factions.AddNew("TestFaction_Valid").FormKey;
+                npcKey = mod.Npcs.AddNew("TestNPC_FactionValid").FormKey;
+            })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+                var fields = new Dictionary<string, JsonElement> { ["factions"] = J($"[{{\"faction\":\"{factionKey}\",\"rank\":0}}]") };
+
+                var result = orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
+
                 Assert.IsType<StageEditResult.Staged>(result);
-                var drained = changes.DrainForPlugin("Source.esp");
-                var factionRefs = drained.FormRefsByFormKey[npcKey.ToString()]
-                    .Where(r => r.FieldPath.StartsWith("factions", StringComparison.Ordinal)).ToList();
-                Assert.Empty(factionRefs);
+            }
+        }
+    }
+
+    [Fact]
+    public void StageEdit_NullableFormLinkArrayElement_SetToNull_Stages()
+    {
+        // Keywords elements are declared as the ambiguous base IFormLinkGetter<IKeywordGetter>
+        // (neither IFormLink<T> nor IFormLinkNullable<T>) — treated as nullable since nothing
+        // in the type forbids it. Covered structurally by StageEdit_KeywordsField_NullStringElement_YieldsNoRef;
+        // this asserts the same input is still accepted now that reference validation runs.
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-stage-keyword-null")
+            .WithPlugin("Source.esp", mod =>
+                npcKey = mod.Npcs.AddNew("TestNPC_KeywordNull").FormKey)
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+                var fields = new Dictionary<string, JsonElement> { ["keywords"] = J("[\"Null\"]") };
+
+                var result = orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
+
+                Assert.IsType<StageEditResult.Staged>(result);
             }
         }
     }
@@ -592,7 +705,8 @@ public sealed class EditOrchestratorTests
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-                var result = orchestrator.CreateRecord("Target.esp", "npc_", null, "user");
+                var result = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", "npc_", null, "user"));
 
                 var staged = changes.GetChanges(formKey: result.FormKey);
                 Assert.Single(staged);
@@ -629,7 +743,8 @@ public sealed class EditOrchestratorTests
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-                var result = orchestrator.CreateRecord("Target.esp", "npc_", templateKey.ToString(), "user");
+                var result = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", "npc_", templateKey.ToString(), "user"));
 
                 var staged = changes.GetChanges(formKey: result.FormKey);
                 // $create sentinel + N field_edit changes from template
@@ -702,8 +817,9 @@ public sealed class EditOrchestratorTests
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-                // Create a new NPC in Target.esp
-                var createResult = orchestrator.CreateRecord("Target.esp", "npc_", null, "user");
+                // Create a new Faction in Target.esp (factions[].faction requires a Faction-typed reference)
+                var createResult = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", "fact", null, "user"));
                 var newFormKey = createResult.FormKey;
 
                 // Stage an edit on SourceNPC that references the newly-created FormKey via factions
@@ -765,7 +881,8 @@ public sealed class EditOrchestratorTests
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-                var createResult = orchestrator.CreateRecord("Target.esp", "npc_", null, "user");
+                var createResult = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", "npc_", null, "user"));
                 var factionList = JsonSerializer.SerializeToElement(
                     new[] { new { faction = createResult.FormKey, rank = 0 } });
                 var fields = new Dictionary<string, JsonElement> { ["factions"] = factionList };
@@ -790,6 +907,42 @@ public sealed class EditOrchestratorTests
     }
 
     [Fact]
+    public void CreateRecord_WithTemplate_InvalidArrayReference_ReturnsInvalidReferences_WithoutStagingAnything()
+    {
+        // Set factions[0].faction to another NPC's FormKey (type_mismatch): factions is an array
+        // of structs with a non-nullable FormLink<IFactionGetter>, so pointing it at an NPC
+        // triggers a type_mismatch validation error. Array fields ARE copied from the template
+        // (they have an Apply lambda), so this exercises the validation gap.
+        FormKey templateKey = default;
+        FormKey wrongTypeKey = default;
+        var data = new PluginFixtureBuilder("cr-template-invalid-array-ref")
+            .WithPlugin("Source.esp", mod =>
+            {
+                wrongTypeKey = mod.Npcs.AddNew("OtherNPC_NotAFaction").FormKey;
+                var npc = mod.Npcs.AddNew("TemplateNPC_InvalidArrayRef");
+                npc.Factions.Add(new RankPlacement { Faction = new FormLink<IFactionGetter>(wrongTypeKey) });
+                templateKey = npc.FormKey;
+            })
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var outcome = orchestrator.CreateRecord("Target.esp", "npc_", templateKey.ToString(), "user");
+
+                var inv = Assert.IsType<CreateRecordOutcome.InvalidReferences>(outcome);
+                Assert.Contains(inv.Errors, e => e.FieldPath == "factions[0].faction" && e.Reason == "type_mismatch");
+                // Nothing should have been staged — not even the $create sentinel
+                Assert.Empty(changes.GetChanges());
+            }
+        }
+    }
+
+    [Fact]
     public void CreateRecord_WithTemplate_ExcludesReadOnlyFields()
     {
         FormKey templateKey = default;
@@ -809,7 +962,8 @@ public sealed class EditOrchestratorTests
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-                var result = orchestrator.CreateRecord("Target.esp", "npc_", templateKey.ToString(), "user");
+                var result = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", "npc_", templateKey.ToString(), "user"));
 
                 var staged = changes.GetChanges(formKey: result.FormKey);
                 var fieldEdits = staged.Where(c => c.FieldPath != "$create").ToList();
@@ -833,7 +987,8 @@ public sealed class EditOrchestratorTests
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-                var createResult = orchestrator.CreateRecord("Target.esp", "npc_", null, "user");
+                var createResult = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", "npc_", null, "user"));
 
                 // StageGroup targeting the same $create sentinel should NOT overwrite its groupId
                 var members = new[] { new GroupMember(

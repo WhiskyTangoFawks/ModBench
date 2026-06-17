@@ -501,6 +501,25 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         }
     }
 
+    public string? GetPendingCreateRecordType(string formKey)
+    {
+        lock (_lock)
+        {
+            var conn = RequireConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"""
+                SELECT record_type FROM pending_changes
+                WHERE form_key = $1 AND field_path = '{PendingChangeConstants.CreateFieldPath}' AND change_type = '{PendingChangeConstants.CreateChangeType}'
+                LIMIT 1
+                """;
+            cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read()) return null;
+            return reader.GetString(0);
+        }
+    }
+
     public Guid? GetCreateGroupIdForAny(IReadOnlyList<string> formKeys)
     {
         if (formKeys.Count == 0) return null;

@@ -12,6 +12,7 @@ export interface FieldMetadata {
 export interface FieldValue {
   metadata: FieldMetadata;
   value: unknown;
+  checkError?: string | null;
 }
 
 export type ConflictAll = 'OnlyOne' | 'NoConflict' | 'Override' | 'Conflict' | 'ConflictCritical';

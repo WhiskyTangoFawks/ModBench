@@ -191,7 +191,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.CommandText = sql;
         AddParams(cmd, values);
         using var reader = cmd.ExecuteReader();
-        return reader.Read() ? ReadDetail(reader, schema) : null;
+        return reader.Read() ? ReadDetail(reader, schema, FindRecordType) : null;
     }
 
     public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey)
@@ -210,7 +210,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         var list = new List<RecordDetail>();
         while (reader.Read())
-            list.Add(ReadDetail(reader, schema));
+            list.Add(ReadDetail(reader, schema, FindRecordType));
         return list;
     }
 
@@ -273,7 +273,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         new(reader.GetString(0), reader.GetString(1), reader.GetInt32(2),
             reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4));
 
-    private static RecordDetail ReadDetail(DuckDBDataReader reader, RecordTableSchema schema)
+    private static RecordDetail ReadDetail(DuckDBDataReader reader, RecordTableSchema schema, Func<string, string?> getRecordType)
     {
         var formKey = reader.GetString(0);
         var plugin = reader.GetString(1);
@@ -294,7 +294,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             {
                 value = reader.IsDBNull(5 + i) ? null : reader.GetValue(5 + i);
             }
-            fields.Add(new FieldValue(col.ToFieldMetadata(), value));
+            var meta = col.ToFieldMetadata();
+            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, getRecordType)));
         }
 
         return new RecordDetail(formKey, plugin, loadOrderIndex, isWinner, editorId, fields);

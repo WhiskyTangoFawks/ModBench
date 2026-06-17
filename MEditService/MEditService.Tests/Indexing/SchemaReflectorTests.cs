@@ -78,6 +78,38 @@ public class SchemaReflectorTests
     }
 
     [Fact]
+    public void GetSchemas_Npc_Race_IsNonNullableFormLink()
+    {
+        // Race is IFormLink<IRaceGetter> — non-nullable; AllowsNull must be false.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "race");
+        Assert.NotNull(col);
+        Assert.False(col!.AllowsNull);
+    }
+
+    [Fact]
+    public void GetSchemas_Npc_Voice_IsNullableFormLink()
+    {
+        // Voice is IFormLinkNullable<IVoiceTypeGetter> — AllowsNull must be true.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "voice");
+        Assert.NotNull(col);
+        Assert.True(col!.AllowsNull);
+    }
+
+    [Fact]
+    public void GetSchemas_Npc_Factions_Faction_SubField_IsNonNullableFormLink()
+    {
+        // RankPlacement.Faction is IFormLink<IFactionGetter> — non-nullable sub-field.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "factions");
+        Assert.NotNull(col);
+        var faction = col!.ElementType?.Fields?.FirstOrDefault(f => f.Name == "faction");
+        Assert.NotNull(faction);
+        Assert.False(faction!.AllowsNull);
+    }
+
+    [Fact]
     public void GetSchemas_Npc_FormLinkColumn_HasNullApply()
     {
         // FormLink fields are read-only in the index; Apply must be null so writes are no-ops.

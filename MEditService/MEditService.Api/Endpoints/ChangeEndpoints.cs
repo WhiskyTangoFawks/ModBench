@@ -33,6 +33,7 @@ public static class ChangeEndpoints
                 StageEditResult.ReadOnlyFields r => Results.Problem(
                     detail: $"The following fields are read-only and cannot be edited: {string.Join(", ", r.Fields)}",
                     statusCode: 422),
+                StageEditResult.InvalidReferences inv => Results.UnprocessableEntity(inv.Errors),
                 StageEditResult.Staged staged => Results.Ok(staged.Changes),
                 _ => Results.Problem("Unexpected error.")
             };
@@ -40,9 +41,9 @@ public static class ChangeEndpoints
         .WithName("PatchRecord")
         .WithTags("Changes")
         .Produces<IReadOnlyList<PendingChange>>()
+        .Produces<IReadOnlyList<ReferenceValidationError>>(422)
         .ProducesProblem(404)
-        .ProducesProblem(409)
-        .ProducesProblem(422);
+        .ProducesProblem(409);
 
         app.MapPost("/records/{formKey}/copy-to/{targetPlugin}",
             ([FromRoute] string formKey,
@@ -190,8 +191,12 @@ public static class ChangeEndpoints
 
             try
             {
-                var result = orchestrator.CreateRecord(pluginMeta.Name, req.RecordType, req.TemplateFormKey, req.Source ?? "user");
-                return Results.Ok(result);
+                return orchestrator.CreateRecord(pluginMeta.Name, req.RecordType, req.TemplateFormKey, req.Source ?? "user") switch
+                {
+                    CreateRecordOutcome.Success ok => Results.Ok(new MEditService.Core.Queries.CreateRecordResult(ok.FormKey, ok.GroupId)),
+                    CreateRecordOutcome.InvalidReferences inv => Results.UnprocessableEntity(inv.Errors),
+                    _ => Results.Problem("Unexpected error.")
+                };
             }
             catch (ArgumentException ex)
             {
@@ -201,9 +206,9 @@ public static class ChangeEndpoints
         .WithName("CreateRecord")
         .WithTags("Changes")
         .Produces<MEditService.Core.Queries.CreateRecordResult>()
+        .Produces<IReadOnlyList<ReferenceValidationError>>(422)
         .ProducesProblem(404)
-        .ProducesProblem(409)
-        .ProducesProblem(422);
+        .ProducesProblem(409);
 
         app.MapPost("/plugins/{plugin}/save", async (
             [FromRoute] string plugin,

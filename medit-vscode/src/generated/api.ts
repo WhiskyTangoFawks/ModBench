@@ -388,10 +388,12 @@ export interface components {
             elementType?: components["schemas"]["FieldMetadata"];
             fields?: components["schemas"]["FieldMetadata"][] | null;
             isSortable?: boolean;
+            allowsNull?: boolean;
         };
         FieldValue: {
             metadata?: components["schemas"]["FieldMetadata"];
             value?: unknown;
+            checkError?: string | null;
         };
         PatchRecordRequest: {
             plugin?: string | null;
@@ -476,6 +478,12 @@ export interface components {
             fieldPath?: string | null;
             recordType?: string | null;
             editorId?: string | null;
+        };
+        ReferenceValidationError: {
+            fieldPath?: string | null;
+            value?: string | null;
+            reason?: string | null;
+            expectedTypes?: string[] | null;
         };
         SaveResult: {
             backupPath?: string | null;
@@ -583,7 +591,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                    "application/json": components["schemas"]["ReferenceValidationError"][];
                 };
             };
         };
@@ -662,6 +670,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChangeGroup"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Conflict */
@@ -866,7 +883,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                    "application/json": components["schemas"]["ReferenceValidationError"][];
                 };
             };
         };

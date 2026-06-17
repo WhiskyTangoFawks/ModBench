@@ -159,7 +159,8 @@ public sealed class SchemaReflector : ISchemaReflector
                 info.ValidFormKeyTypes, info.EnumValues, info.Apply,
                 IsArray: info.ApiType == "array",
                 ElementType: info.ElementMeta,
-                SubFields: info.SubFieldMetas));
+                SubFields: info.SubFieldMetas,
+                AllowsNull: info.AllowsNull));
         }
 
         return new RecordTableSchema
@@ -180,7 +181,8 @@ public sealed class SchemaReflector : ISchemaReflector
         string[] EnumValues,
         Action<IMajorRecord, JsonElement>? Apply,
         FieldMetadata? ElementMeta = null,
-        IReadOnlyList<FieldMetadata>? SubFieldMetas = null);
+        IReadOnlyList<FieldMetadata>? SubFieldMetas = null,
+        bool AllowsNull = false);
 
     // ── SubFieldSpec (sub-record / array element reflection) ─────────────────
 
@@ -192,12 +194,14 @@ public sealed class SchemaReflector : ISchemaReflector
         Func<object, object?> Extract,
         Action<object, JsonElement>? Apply,
         IReadOnlyList<SubFieldSpec>? SubFields = null,
-        SubFieldSpec? ElementSpec = null)
+        SubFieldSpec? ElementSpec = null,
+        bool AllowsNull = false)
     {
         public FieldMetadata ToFieldMetadata() =>
             new(Name, ApiType, false, ValidFormKeyTypes, EnumValues,
                 ElementSpec?.ToFieldMetadata(),
-                SubFields?.Select(s => s.ToFieldMetadata()).ToList());
+                SubFields?.Select(s => s.ToFieldMetadata()).ToList(),
+                AllowsNull: AllowsNull);
     }
 
     // ── Type-detection helpers ────────────────────────────────────────────────
@@ -221,6 +225,14 @@ public sealed class SchemaReflector : ISchemaReflector
 
     private static bool IsFormLink(Type type) =>
         typeof(IFormLinkGetter).IsAssignableFrom(type);
+
+    // On *Getter interfaces (what SchemaReflector walks), a non-nullable FormLink property is exposed
+    // as the ambiguous base IFormLinkGetter<T> — the same static type a nullable property would have
+    // if Mutagen didn't bother marking it. Only explicitly-nullable properties get the distinct marker
+    // interface IFormLinkNullableGetter<T>, so that's the only type-level signal we can trust.
+    private static bool IsNullableFormLink(Type type) =>
+        type.GetInterfaces().Prepend(type).Any(i =>
+            i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IFormLinkNullableGetter<>));
 
     // IReadOnlyList<T> only — that's what Mutagen getter interfaces expose for collections.
     private static bool IsListType(Type type, out Type elementType)
@@ -288,9 +300,12 @@ public sealed class SchemaReflector : ISchemaReflector
         var core = Nullable.GetUnderlyingType(elementType) ?? elementType;
 
         if (IsFormLink(core))
+            // Array elements are commonly sparse (a "Null" slot is a tolerated placeholder, not a
+            // data error) — getter interfaces can't statically distinguish this from a non-nullable
+            // scalar anyway (see IsNullableFormLink), so default permissive here regardless.
             return new FieldMetadata("", "formKey", false,
                 GetFormLinkValidTypes(core, getterTypeToTable), _empty,
-                IsSortable: true);
+                IsSortable: true, AllowsNull: true);
 
         if (IsLoquiInterface(core))
         {
@@ -420,7 +435,7 @@ public sealed class SchemaReflector : ISchemaReflector
             };
             return new(colName, "formKey", GetFormLinkValidTypes(core, getterTypeToTable), _empty,
                 obj => (g(obj) as IFormLinkGetter)?.FormKeyNullable?.ToString(),
-                flApply);
+                flApply, AllowsNull: IsNullableFormLink(core));
         }
 
         if (IsLoquiInterface(core))
@@ -512,7 +527,7 @@ public sealed class SchemaReflector : ISchemaReflector
             var validTypes = GetFormLinkValidTypes(core, getterTypeToTable);
             return new("VARCHAR",
                 r => (TryGet(r, prop) as IFormLinkGetter)?.FormKeyNullable?.ToString(),
-                "formKey", validTypes, _empty, null);
+                "formKey", validTypes, _empty, null, AllowsNull: IsNullableFormLink(core));
         }
 
         // ── IReadOnlyList<T> ──────────────────────────────────────────────────

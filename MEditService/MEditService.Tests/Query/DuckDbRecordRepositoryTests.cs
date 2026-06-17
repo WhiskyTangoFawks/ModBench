@@ -499,4 +499,67 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
         Assert.NotNull(floatField);
         Assert.NotNull(floatField.Value); // float value type is never null
     }
+
+    // --- CheckError ---
+
+    [Fact]
+    public void GetRecord_DanglingKeywordReference_CheckErrorOnKeywordsField()
+    {
+        FormKey npcFormKey = default;
+        using var fixture = new PluginFixtureBuilder("medit-checkerror-dangling")
+            .WithPlugin("Dangling.esm", mod =>
+            {
+                var npc = mod.Npcs.AddNew("DanglingRefNPC");
+                npcFormKey = npc.FormKey;
+                npc.Keywords = [new FormLink<IKeywordGetter>(FormKey.Factory("FFFFFF:Dangling.esm"))];
+            })
+            .Build();
+
+        var loaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("Dangling.esm"),
+                Path.Combine(fixture.DataFolder, "Dangling.esm")),
+            Fallout4Release.Fallout4);
+
+        using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        repo.Index(loaded, 0);
+        repo.UpdateWinners();
+
+        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, winnerOnly: true);
+        Assert.NotNull(record);
+        var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
+        Assert.NotNull(keywordsField);
+        Assert.Equal("[0]: [FFFFFF:Dangling.esm] <Error: Could not be resolved>", keywordsField.CheckError);
+    }
+
+    [Fact]
+    public void GetRecord_KeywordReferenceResolvesInSession_CheckErrorIsNull()
+    {
+        FormKey npcFormKey = default;
+        using var fixture = new PluginFixtureBuilder("medit-checkerror-clean")
+            .WithPlugin("Clean.esm", mod =>
+            {
+                var keyword = mod.Keywords.AddNew("TestKeyword");
+                var npc = mod.Npcs.AddNew("CleanRefNPC");
+                npcFormKey = npc.FormKey;
+                npc.Keywords = [new FormLink<IKeywordGetter>(keyword.FormKey)];
+            })
+            .Build();
+
+        var loaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("Clean.esm"),
+                Path.Combine(fixture.DataFolder, "Clean.esm")),
+            Fallout4Release.Fallout4);
+
+        using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        repo.Index(loaded, 0);
+        repo.UpdateWinners();
+
+        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, winnerOnly: true);
+        Assert.NotNull(record);
+        var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
+        Assert.NotNull(keywordsField);
+        Assert.Null(keywordsField.CheckError);
+    }
 }

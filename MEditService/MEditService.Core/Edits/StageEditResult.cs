@@ -8,4 +8,5 @@ public abstract record StageEditResult
     public sealed record ReadOnlyFields(IReadOnlyList<string> Fields) : StageEditResult;
     public sealed record NoSession() : StageEditResult;
     public sealed record BlockedByGroup(Guid GroupId) : StageEditResult;
+    public sealed record InvalidReferences(IReadOnlyList<ReferenceValidationError> Errors) : StageEditResult;
 }

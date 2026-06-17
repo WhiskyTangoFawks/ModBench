@@ -16,10 +16,11 @@ public sealed record ColumnSpec(
     Action<IMajorRecord, JsonElement>? Apply,
     bool IsArray = false,
     FieldMetadata? ElementType = null,
-    IReadOnlyList<FieldMetadata>? SubFields = null)
+    IReadOnlyList<FieldMetadata>? SubFields = null,
+    bool AllowsNull = false)
 {
     public FieldMetadata ToFieldMetadata() =>
-        new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumValues, ElementType, SubFields);
+        new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumValues, ElementType, SubFields, AllowsNull: AllowsNull);
 }
 
 public sealed class RecordTableSchema

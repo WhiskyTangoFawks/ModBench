@@ -237,12 +237,60 @@ public sealed class DeleteRecordsTests
                 var staged = Assert.IsType<DeleteRecordsResult.Staged>(result);
                 var nullifyChange = changes.GetChanges()
                     .Single(c => c.ChangeType == "field_edit" && c.FormKey == npcKey.ToString());
-                Assert.Equal(JsonValueKind.Null, nullifyChange.NewValue.ValueKind);
+                // TD-001: the referencing element is removed from the array, leaving it empty
+                // (not the whole field nullified) — the only element was the deleted reference.
+                Assert.Equal(JsonValueKind.Array, nullifyChange.NewValue.ValueKind);
+                Assert.Empty(nullifyChange.NewValue.EnumerateArray());
                 // Field path should be top-level column (e.g. "keywords"), not "keywords[0]"
                 Assert.Equal("keywords", nullifyChange.FieldPath);
                 // Old value must be the actual keywords array, not a different field's value
                 Assert.Equal(JsonValueKind.Array, nullifyChange.OldValue.ValueKind);
                 Assert.Equal(staged.Group.Id, nullifyChange.GroupId);
+            }
+        }
+    }
+
+    [Fact]
+    public void DeleteRecords_EditableRefInArray_RemovesOnlyThatElement_NotWholeArray()
+    {
+        // TD-001: deleting a record referenced by one element of an array should remove that
+        // element, leaving the other elements of the array intact — not wipe the whole field.
+        FormKey kwKey = default;
+        FormKey otherKwKey = default;
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("dr-array-element")
+            .WithPlugin("Source.esp", mod =>
+            {
+                kwKey = mod.Keywords.AddNew("DeletedKeyword").FormKey;
+                otherKwKey = mod.Keywords.AddNew("KeptKeyword").FormKey;
+            })
+            .WithPlugin("Referencing.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("ReferencingNPC_DrArrayElement");
+                npc.Keywords =
+                [
+                    new FormLink<IKeywordGetter>(otherKwKey),
+                    new FormLink<IKeywordGetter>(kwKey),
+                ];
+                npcKey = npc.FormKey;
+            })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.DeleteRecords([(kwKey.ToString(), "Source.esp")], "user");
+
+                Assert.IsType<DeleteRecordsResult.Staged>(result);
+                var editChange = changes.GetChanges()
+                    .Single(c => c.ChangeType == "field_edit" && c.FormKey == npcKey.ToString());
+                Assert.Equal("keywords", editChange.FieldPath);
+                Assert.Equal(JsonValueKind.Array, editChange.NewValue.ValueKind);
+                var remaining = editChange.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
+                Assert.Equal([otherKwKey.ToString()], remaining);
             }
         }
     }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StructRowGroup } from './StructRowGroup';
+import { NewStructElementDialog } from './NewStructElementDialog';
 import { toStr } from './recordUtils';
 import type { FieldMetadata } from './types';
 
@@ -15,11 +16,13 @@ interface ArrayRowGroupProps {
   onOpen: (fk: string) => void;
   onCommit: (v: unknown[]) => void;
   storageKey: string;
+  checkError?: string | null;
 }
 
-export function ArrayRowGroup({ value, meta, editMode, port, onOpen, onCommit, storageKey }: ArrayRowGroupProps) {
+export function ArrayRowGroup({ value, meta, editMode, port, onOpen, onCommit, storageKey, checkError }: ArrayRowGroupProps) {
   const stored = sessionStorage.getItem(storageKey);
   const [expanded, setExpanded] = useState(stored === 'true');
+  const [addingElement, setAddingElement] = useState(false);
   const items: unknown[] = Array.isArray(value) ? value : [];
   const elemMeta = meta.elementType;
 
@@ -37,8 +40,16 @@ export function ArrayRowGroup({ value, meta, editMode, port, onOpen, onCommit, s
   }
 
   function handleAdd() {
-    const empty = elemMeta?.type === 'struct' ? {} : null;
-    onCommit([...items, empty]);
+    if (elemMeta?.type === 'struct' && elemMeta.fields) {
+      setAddingElement(true);
+      return;
+    }
+    onCommit([...items, null]);
+  }
+
+  function handleConfirmAdd(newElement: Record<string, unknown>) {
+    setAddingElement(false);
+    onCommit([...items, newElement]);
   }
 
   function handleRemove(idx: number) {
@@ -67,6 +78,12 @@ export function ArrayRowGroup({ value, meta, editMode, port, onOpen, onCommit, s
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
       <button onClick={toggle} style={linkStyle}>{`[${items.length}]`}</button>
+      {checkError && (
+        <span
+          title={checkError}
+          style={{ color: 'var(--vscode-errorForeground, #f88)', fontSize: '11px', cursor: 'default' }}
+        >⚠</span>
+      )}
       {editMode && elemMeta?.isSortable && (
         <button onClick={handleSort} title="Sort by FormKey" style={btnStyle}>↑↓</button>
       )}
@@ -76,11 +93,21 @@ export function ArrayRowGroup({ value, meta, editMode, port, onOpen, onCommit, s
     </div>
   );
 
-  if (!expanded) return header;
+  const dialog = addingElement && elemMeta?.fields ? (
+    <NewStructElementDialog
+      fields={elemMeta.fields}
+      port={port}
+      onConfirm={handleConfirmAdd}
+      onCancel={() => setAddingElement(false)}
+    />
+  ) : null;
+
+  if (!expanded) return <>{header}{dialog}</>;
 
   return (
     <div>
       {header}
+      {dialog}
       <table style={{ borderCollapse: 'collapse', width: '100%', marginTop: 4 }}>
         <tbody>
           {items.map((item, idx) => (

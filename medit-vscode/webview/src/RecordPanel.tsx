@@ -138,6 +138,23 @@ export function ScalarCell({ value, meta, editMode, onCommit }: ScalarCellProps)
   );
 }
 
+// ── CheckErrorIcon ───────────────────────────────────────────────────────────
+
+export function CheckErrorIcon({ checkError }: { checkError?: string | null }) {
+  if (!checkError) return null;
+  return (
+    <span
+      title={checkError}
+      style={{
+        color: 'var(--vscode-errorForeground, #f88)',
+        fontSize: '11px',
+        marginLeft: 4,
+        cursor: 'default',
+      }}
+    >⚠</span>
+  );
+}
+
 // ── FormKeyCell ───────────────────────────────────────────────────────────────
 
 interface FormKeyCellProps {
@@ -147,9 +164,10 @@ interface FormKeyCellProps {
   port: number;
   onOpen: (fk: string) => void;
   onCommit: (fk: string) => void;
+  checkError?: string | null;
 }
 
-export function FormKeyCell({ value, meta, editMode, port, onOpen, onCommit }: FormKeyCellProps) {
+export function FormKeyCell({ value, meta, editMode, port, onOpen, onCommit, checkError }: FormKeyCellProps) {
   const [picking, setPicking] = useState(false);
 
   if (editMode) {
@@ -164,45 +182,58 @@ export function FormKeyCell({ value, meta, editMode, port, onOpen, onCommit }: F
       );
     }
     return (
-      <button
-        onClick={() => setPicking(true)}
-        style={{
-          background: 'var(--vscode-input-background, #3c3c3c)',
-          border: '1px solid var(--vscode-input-border, #555)',
-          color: typeof value === 'string' && value ? 'var(--vscode-textLink-foreground, #3794ff)' : fg,
-          cursor: 'pointer',
-          fontFamily: mono,
-          fontSize: '12px',
-          padding: '1px 4px',
-          textAlign: 'left',
-          width: '100%',
-        }}
-      >
-        {typeof value === 'string' && value
-          ? value
-          : <span style={{ opacity: 0.5 }}>— click to pick</span>}
-      </button>
+      <span style={{ display: 'inline-flex', alignItems: 'center', width: '100%' }}>
+        <button
+          onClick={() => setPicking(true)}
+          style={{
+            background: 'var(--vscode-input-background, #3c3c3c)',
+            border: '1px solid var(--vscode-input-border, #555)',
+            color: typeof value === 'string' && value ? 'var(--vscode-textLink-foreground, #3794ff)' : fg,
+            cursor: 'pointer',
+            fontFamily: mono,
+            fontSize: '12px',
+            padding: '1px 4px',
+            textAlign: 'left',
+            width: '100%',
+          }}
+        >
+          {typeof value === 'string' && value
+            ? value
+            : <span style={{ opacity: 0.5 }}>— click to pick</span>}
+        </button>
+        <CheckErrorIcon checkError={checkError} />
+      </span>
     );
   }
 
-  if (typeof value !== 'string' || !value) return <span style={{ opacity: 0.35 }}>—</span>;
+  if (typeof value !== 'string' || !value) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+        <span style={{ opacity: 0.35 }}>—</span>
+        <CheckErrorIcon checkError={checkError} />
+      </span>
+    );
+  }
   return (
-    <button
-      onClick={() => onOpen(value)}
-      style={{
-        background: 'none',
-        border: 'none',
-        color: 'var(--vscode-textLink-foreground, #3794ff)',
-        cursor: 'pointer',
-        fontFamily: mono,
-        fontSize: '12px',
-        padding: 0,
-        textDecoration: 'underline',
-        textAlign: 'left',
-      }}
-    >
-      {value}
-    </button>
+    <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+      <button
+        onClick={() => onOpen(value)}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: 'var(--vscode-textLink-foreground, #3794ff)',
+          cursor: 'pointer',
+          fontFamily: mono,
+          fontSize: '12px',
+          padding: 0,
+          textDecoration: 'underline',
+          textAlign: 'left',
+        }}
+      >
+        {value}
+      </button>
+      <CheckErrorIcon checkError={checkError} />
+    </span>
   );
 }
 
@@ -215,12 +246,13 @@ function renderCell(
   port: number,
   onOpen: (fk: string) => void,
   onCommit: (v: unknown) => void,
+  checkError?: string | null,
 ): React.ReactNode {
   if (meta.type === 'formKey') {
     return (
       <FormKeyCell
         value={value} meta={meta} editMode={editMode} port={port}
-        onOpen={onOpen} onCommit={fk => onCommit(fk)}
+        onOpen={onOpen} onCommit={fk => onCommit(fk)} checkError={checkError}
       />
     );
   }
@@ -229,12 +261,17 @@ function renderCell(
       <ArrayRowGroup
         value={value as unknown[]} meta={meta} editMode={editMode} port={port}
         onOpen={onOpen} onCommit={v => onCommit(v)} storageKey={`array:${meta.name}`}
+        checkError={checkError}
       />
     );
   }
   // struct fields in the diff table are handled via sub-rows; StructRowGroup is used by ArrayRowGroup
   if (meta.type === 'struct') {
-    return <span style={{ opacity: 0.5 }}>{'{…}'}</span>;
+    return (
+      <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
+        {'{…}'}<CheckErrorIcon checkError={checkError} />
+      </span>
+    );
   }
   return <ScalarCell value={value} meta={meta} editMode={editMode} onCommit={onCommit} />;
 }
@@ -377,17 +414,24 @@ function DiffRow({
         if (col.kind === 'disk') {
           const { override: o } = col;
           const cellStyle = { ...baseCell, ...getCellStyle(diff.cellStates?.[o.plugin]), userSelect: 'text' as const };
+          const checkErrorFieldName = parentFieldName ?? diff.fieldName;
+          const checkError = overrideMap[o.plugin]?.fields
+            .find(f => f.metadata.name === checkErrorFieldName)?.checkError;
           if (hasChildren) {
             return (
               <td key={`disk:${o.plugin}`} style={cellStyle}>
-                {isExpanded ? null : <span style={{ opacity: 0.5 }}>{'{…}'}</span>}
+                {isExpanded ? null : (
+                  <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
+                    {'{…}'}<CheckErrorIcon checkError={checkError} />
+                  </span>
+                )}
               </td>
             );
           }
           return (
             <td key={`disk:${o.plugin}`} style={cellStyle}>
               {renderCell(diff.values[o.plugin], meta, editMode, port, onOpen,
-                v => onEdit(o.plugin, diff.fieldName, v))}
+                v => onEdit(o.plugin, diff.fieldName, v), checkError)}
             </td>
           );
         }
@@ -530,6 +574,19 @@ export function RecordPanel() {
         const body = await resp.json().catch(() => ({})) as Record<string, unknown>;
         const detail = typeof body?.detail === 'string' ? body.detail : '';
         setActionError(detail.toLowerCase().includes('group') ? detail : 'Plugin is read-only');
+      } else if (resp.status === 422) {
+        const errors = await resp.json().catch(() => []) as Array<{ fieldPath?: string; reason?: string; expectedTypes?: string[] }>;
+        if (Array.isArray(errors) && errors.length > 0) {
+          setActionError(errors.map(e => {
+            const path = e.fieldPath ?? '?';
+            if (e.reason === 'not_in_session') return `${path}: reference not found in session`;
+            if (e.reason === 'type_mismatch') return `${path}: expected ${(e.expectedTypes ?? []).join('/')}`;
+            if (e.reason === 'null_not_allowed') return `${path}: cannot be null`;
+            return `${path}: ${e.reason ?? 'invalid'}`;
+          }).join('; '));
+        } else {
+          setActionError('Invalid reference');
+        }
       } else {
         setActionError(`Error: ${resp.statusText}`);
       }

@@ -49,6 +49,11 @@ public sealed class EditOrchestrator : IEditOrchestrator
         if (readOnlyFields.Count > 0)
             return new StageEditResult.ReadOnlyFields(readOnlyFields);
 
+        var schemasForValidation = _schemaReflector.GetSchemas(session!.GameRelease);
+        var referenceErrors = ValidateReferences(fields, schemasForValidation, recordType!);
+        if (referenceErrors.Count > 0)
+            return new StageEditResult.InvalidReferences(referenceErrors);
+
         var currentRecord = _query.GetRecordForPlugin(formKey, plugin);
         var oldValues = new Dictionary<string, JsonElement>();
         if (currentRecord != null)
@@ -57,8 +62,7 @@ public sealed class EditOrchestrator : IEditOrchestrator
                 oldValues[fv.Metadata.Name] = JsonSerializer.SerializeToElement(fv.Value);
         }
 
-        var schemas = _schemaReflector.GetSchemas(session!.GameRelease);
-        var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!);
+        var formRefs = ExtractFormKeyRefs(fields, schemasForValidation, recordType!);
 
         var distinctRefs = formRefs.Select(r => r.TargetFormKey).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var createGroupId = _changes.GetCreateGroupIdForAny(distinctRefs);
@@ -97,7 +101,7 @@ public sealed class EditOrchestrator : IEditOrchestrator
         return new StageEditResult.Staged(staged);
     }
 
-    public CreateRecordResult CreateRecord(string plugin, string recordType, string? templateFormKey, string source)
+    public CreateRecordOutcome CreateRecord(string plugin, string recordType, string? templateFormKey, string source)
     {
         var session = _sessionManager.Session
             ?? throw new InvalidOperationException("No session loaded.");
@@ -106,8 +110,22 @@ public sealed class EditOrchestrator : IEditOrchestrator
         if (!schemas.ContainsKey(recordType))
             throw new ArgumentException($"Unknown record type '{recordType}'.", nameof(recordType));
 
-        var reservedFormKey = _sessionManager.ReserveFormKey(plugin);
+        Dictionary<string, JsonElement>? templateFields = null;
+        if (templateFormKey != null)
+        {
+            var winner = _query.GetRecord(templateFormKey)
+                ?? throw new ArgumentException($"Template record '{templateFormKey}' not found.", nameof(templateFormKey));
 
+            templateFields = winner.Fields
+                .Where(fv => !_writer.IsReadOnly(session.GameRelease, recordType, fv.Metadata.Name))
+                .ToDictionary(fv => fv.Metadata.Name, fv => JsonSerializer.SerializeToElement(fv.Value));
+
+            var referenceErrors = ValidateReferences(templateFields, schemas, recordType);
+            if (referenceErrors.Count > 0)
+                return new CreateRecordOutcome.InvalidReferences(referenceErrors);
+        }
+
+        var reservedFormKey = _sessionManager.ReserveFormKey(plugin);
         var groupId = Guid.NewGuid();
         _changes.Upsert(
             reservedFormKey, plugin, recordType,
@@ -118,14 +136,8 @@ public sealed class EditOrchestrator : IEditOrchestrator
             changeType: PendingChangeConstants.CreateChangeType,
             groupId: groupId);
 
-        if (templateFormKey != null)
+        if (templateFields != null)
         {
-            var winner = _query.GetRecord(templateFormKey)
-                ?? throw new ArgumentException($"Template record '{templateFormKey}' not found.", nameof(templateFormKey));
-
-            var templateFields = winner.Fields
-                .Where(fv => !_writer.IsReadOnly(session.GameRelease, recordType, fv.Metadata.Name))
-                .ToDictionary(fv => fv.Metadata.Name, fv => JsonSerializer.SerializeToElement(fv.Value));
             var templateRefs = ExtractFormKeyRefs(templateFields, schemas, recordType);
             _changes.Upsert(
                 reservedFormKey, plugin, recordType,
@@ -136,7 +148,7 @@ public sealed class EditOrchestrator : IEditOrchestrator
                 groupId: groupId);
         }
 
-        return new CreateRecordResult(reservedFormKey, groupId);
+        return new CreateRecordOutcome.Success(reservedFormKey, groupId);
     }
 
     public DeleteRecordsResult DeleteRecords(IReadOnlyList<(string FormKey, string Plugin)> targets, string source)
@@ -204,19 +216,31 @@ public sealed class EditOrchestrator : IEditOrchestrator
                 source));
         }
 
-        foreach (var (sourceFormKey, sourcePlugin, fieldPath, recordType) in toNullify)
+        // Group by (record, field) first: two deleted targets can each be referenced by a
+        // different element of the *same* array field on the same source record, and staging
+        // one GroupMember per reference would have the second overwrite the first's removal
+        // (StageGroup upserts on (form_key, plugin, field_path)).
+        foreach (var fieldGroup in toNullify.GroupBy(t => (t.SourceFormKey, t.SourcePlugin, TopLevelFieldName(t.FieldPath))))
         {
-            var topLevelField = TopLevelFieldName(fieldPath);
+            var (sourceFormKey, sourcePlugin, topLevelField) = fieldGroup.Key;
+            var recordType = fieldGroup.First().RecordType;
             var currentRecord = _query.GetRecordForPlugin(sourceFormKey, sourcePlugin)!;
             var oldValue = JsonSerializer.SerializeToElement(
-                currentRecord.Fields.ToDictionary(fv => fv.Metadata.Name)[topLevelField].Value);
+                currentRecord.Fields.First(fv => fv.Metadata.Name == topLevelField).Value);
+
+            // TD-001: a reference inside an array element is removed by dropping that element,
+            // not by nullifying the whole array. Only a scalar field reference is nullified.
+            var indices = fieldGroup.Select(t => ParseArrayIndex(t.FieldPath)).Where(i => i is int).Select(i => i!.Value).ToList();
+            var newValue = indices.Count > 0 && oldValue.ValueKind == JsonValueKind.Array
+                ? RemoveArrayElements(oldValue, indices)
+                : PendingChangeConstants.NullElement;
 
             members.Add(new GroupMember(
                 sourceFormKey, sourcePlugin, recordType,
                 PendingChangeConstants.FieldEditChangeType,
                 topLevelField,
                 oldValue,
-                PendingChangeConstants.NullElement,
+                newValue,
                 source));
         }
 
@@ -226,6 +250,43 @@ public sealed class EditOrchestrator : IEditOrchestrator
 
     private static string TopLevelFieldName(string fieldPath) =>
         fieldPath.Split(['.', '['], 2)[0];
+
+    private static int? ParseArrayIndex(string fieldPath)
+    {
+        var start = fieldPath.IndexOf('[');
+        if (start < 0) return null;
+        var end = fieldPath.IndexOf(']', start);
+        if (end < 0) return null;
+        return int.TryParse(fieldPath.AsSpan(start + 1, end - start - 1), out var idx) ? idx : null;
+    }
+
+    private static JsonElement RemoveArrayElements(JsonElement array, IReadOnlyList<int> indices)
+    {
+        var items = array.EnumerateArray().ToList();
+        foreach (var index in indices.Distinct().OrderByDescending(i => i))
+        {
+            if (index < 0 || index >= items.Count) continue;
+            items.RemoveAt(index);
+        }
+        return JsonSerializer.SerializeToElement(items);
+    }
+
+    private List<ReferenceValidationError> ValidateReferences(
+        Dictionary<string, JsonElement> fields,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        string recordType)
+    {
+        var errors = new List<ReferenceValidationError>();
+        if (!schemas.TryGetValue(recordType, out var schema)) return errors;
+        var colsByName = schema.RecordColumns.ToDictionary(c => c.Name);
+        string? LookupRecordType(string fk) => _query.GetRecordType(fk) ?? _changes.GetPendingCreateRecordType(fk);
+        foreach (var (fieldPath, newValue) in fields)
+        {
+            if (colsByName.TryGetValue(fieldPath, out var col))
+                errors.AddRange(ReferenceValidator.Validate(col, _ => (object?)newValue, LookupRecordType));
+        }
+        return errors;
+    }
 
     private static List<PendingFormRef> ExtractFormKeyRefs(
         Dictionary<string, JsonElement> fields,

@@ -77,4 +77,58 @@ describe('ArrayRowGroup', () => {
     // At minimum the row group for element 0 is rendered
     expect(screen.getByText('{…}')).toBeInTheDocument();
   });
+
+  it('shows no warning icon when checkError is absent', () => {
+    const value = ['000010:Fallout4.esm'];
+    render(<ArrayRowGroup value={value} meta={fkArrayMeta} editMode={false} port={5172}
+      onOpen={vi.fn()} onCommit={vi.fn()} storageKey="test:keywords5" />);
+    expect(screen.queryByText('⚠')).not.toBeInTheDocument();
+  });
+
+  it('shows a warning icon with the checkError as its title when present', () => {
+    const value = ['FFFFFF:Dangling.esm'];
+    render(<ArrayRowGroup value={value} meta={fkArrayMeta} editMode={false} port={5172}
+      onOpen={vi.fn()} onCommit={vi.fn()} storageKey="test:keywords6"
+      checkError="[0]: [FFFFFF:Dangling.esm] <Error: Could not be resolved>" />);
+    expect(screen.getByText('⚠')).toHaveAttribute('title', '[0]: [FFFFFF:Dangling.esm] <Error: Could not be resolved>');
+  });
+
+  it('immediately commits a null element for non-struct arrays', () => {
+    const value = ['000010:Fallout4.esm'];
+    const onCommit = vi.fn();
+    render(<ArrayRowGroup value={value} meta={fkArrayMeta} editMode={true} port={5172}
+      onOpen={vi.fn()} onCommit={onCommit} storageKey="test:keywords7" />);
+    fireEvent.click(screen.getByTitle('Add element'));
+    expect(onCommit).toHaveBeenCalledWith(['000010:Fallout4.esm', null]);
+    expect(screen.queryByText('Cancel')).not.toBeInTheDocument();
+  });
+
+  it('opens the new-element dialog instead of committing immediately for struct arrays', () => {
+    const onCommit = vi.fn();
+    render(<ArrayRowGroup value={[]} meta={structArrayMeta} editMode={true} port={5172}
+      onOpen={vi.fn()} onCommit={onCommit} storageKey="test:factions2" />);
+    fireEvent.click(screen.getByTitle('Add element'));
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(screen.getByText('faction')).toBeInTheDocument();
+    expect(screen.getByText('rank')).toBeInTheDocument();
+  });
+
+  it('commits a fully-populated element in one shot when the dialog is confirmed', () => {
+    const onCommit = vi.fn();
+    render(<ArrayRowGroup value={[]} meta={structArrayMeta} editMode={true} port={5172}
+      onOpen={vi.fn()} onCommit={onCommit} storageKey="test:factions3" />);
+    fireEvent.click(screen.getByTitle('Add element'));
+    fireEvent.click(screen.getByText('Add', { selector: 'button' }));
+    expect(onCommit).toHaveBeenCalledWith([{ faction: null, rank: 0 }]);
+  });
+
+  it('stages nothing when the dialog is cancelled', () => {
+    const onCommit = vi.fn();
+    render(<ArrayRowGroup value={[]} meta={structArrayMeta} editMode={true} port={5172}
+      onOpen={vi.fn()} onCommit={onCommit} storageKey="test:factions4" />);
+    fireEvent.click(screen.getByTitle('Add element'));
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(screen.queryByText('faction')).not.toBeInTheDocument();
+  });
 });

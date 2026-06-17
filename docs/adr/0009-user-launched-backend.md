@@ -1,4 +1,10 @@
+---
+status: superseded by ADR-0022
+---
+
 # Backend is always user-launched; the extension only connects
+
+> **Superseded by [ADR-0022](./0022-extension-owns-backend-lifecycle.md).** The mod-manager work makes mEdit reconstruct MO2's view from physical paths rather than running inside its VFS, so the extension now owns the backend lifecycle. Retained for history.
 
 The VS Code extension and the C# backend service are started independently by the user. The extension never spawns the backend — on activation it polls `GET /health` until the backend is up, then emits `attached`. If no backend is found, the status bar says so and the user starts it manually.
 

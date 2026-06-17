@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
-import { ScalarCell, FormKeyCell, RecordPanel } from './RecordPanel';
+import { ScalarCell, FormKeyCell, CheckErrorIcon, RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 import type { FieldMetadata } from './types';
@@ -142,6 +142,40 @@ describe('FormKeyCell — edit mode', () => {
     render(<FormKeyCell value={null} meta={fkMeta} editMode={true} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByRole('button'));
     expect(screen.getByPlaceholderText('Search EditorID…')).toBeInTheDocument();
+  });
+});
+
+// ── CheckErrorIcon ───────────────────────────────────────────────────────────
+
+describe('CheckErrorIcon', () => {
+  it('renders nothing when checkError is null or undefined', () => {
+    const { container: a } = render(<CheckErrorIcon checkError={null} />);
+    expect(a.textContent).toBe('');
+    const { container: b } = render(<CheckErrorIcon checkError={undefined} />);
+    expect(b.textContent).toBe('');
+  });
+
+  it('renders a warning icon with the message as its title', () => {
+    render(<CheckErrorIcon checkError="[FFFFFF:Dangling.esm] <Error: Could not be resolved>" />);
+    const icon = screen.getByText('⚠');
+    expect(icon).toHaveAttribute('title', '[FFFFFF:Dangling.esm] <Error: Could not be resolved>');
+  });
+});
+
+describe('FormKeyCell — checkError', () => {
+  it('shows no warning icon when checkError is absent', () => {
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editMode={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    expect(screen.queryByText('⚠')).not.toBeInTheDocument();
+  });
+
+  it('shows a warning icon with the checkError as its title in view mode', () => {
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editMode={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} checkError="dangling reference" />);
+    expect(screen.getByText('⚠')).toHaveAttribute('title', 'dangling reference');
+  });
+
+  it('shows a warning icon in edit mode too', () => {
+    render(<FormKeyCell value={null} meta={fkMeta} editMode={true} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} checkError="null not allowed" />);
+    expect(screen.getByText('⚠')).toHaveAttribute('title', 'null not allowed');
   });
 });
 

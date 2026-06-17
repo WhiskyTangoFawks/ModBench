@@ -28,6 +28,13 @@ public interface IPendingChangeService
     /// </summary>
     Guid? GetCreateGroupIdForAny(IReadOnlyList<string> formKeys);
 
+    /// <summary>
+    /// Returns the RecordType of a pending <c>$create</c> change for <paramref name="formKey"/>,
+    /// or null if it isn't a pending-create target. Used to recognize reference targets that
+    /// exist in the current session but aren't committed to the record index yet.
+    /// </summary>
+    string? GetPendingCreateRecordType(string formKey);
+
     IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? groupId = null);
 
     Dictionary<string, JsonElement>? GetPendingFields(string formKey, string plugin);

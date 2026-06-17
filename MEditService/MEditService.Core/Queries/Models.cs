@@ -33,9 +33,10 @@ public record FieldMetadata(
     IReadOnlyList<string> EnumValues,
     FieldMetadata? ElementType = null,          // for 'array': element schema
     IReadOnlyList<FieldMetadata>? Fields = null, // for 'struct': sub-field schemas
-    bool IsSortable = false);                    // true when element is a pure FormLink
+    bool IsSortable = false,                     // true when element is a pure FormLink
+    bool AllowsNull = false);                    // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
 
-public record FieldValue(FieldMetadata Metadata, object? Value);
+public record FieldValue(FieldMetadata Metadata, object? Value, string? CheckError = null);
 
 public record RecordDetail(
     string FormKey,

@@ -11,13 +11,7 @@ internal static class FormRefPathBuilder
     {
         if (col.ApiType == "formKey")
         {
-            var raw = getValue(col);
-            var s = raw switch
-            {
-                string str => str,
-                JsonElement { ValueKind: JsonValueKind.String } je => je.GetString(),
-                _ => null
-            };
+            var s = ExtractString(getValue(col));
             if (IsRealRef(s))
                 visitor(col.Name, s!);
         }
@@ -49,7 +43,14 @@ internal static class FormRefPathBuilder
 
     private static bool IsRealRef(string? s) => s is not null && s != "Null";
 
-    private static void ForEachElement(object? value, Action<int, JsonElement> callback)
+    internal static string? ExtractString(object? raw) => raw switch
+    {
+        string str => str,
+        JsonElement { ValueKind: JsonValueKind.String } je => je.GetString(),
+        _ => null
+    };
+
+    internal static void ForEachElement(object? value, Action<int, JsonElement> callback)
     {
         if (value is string s)
         {
