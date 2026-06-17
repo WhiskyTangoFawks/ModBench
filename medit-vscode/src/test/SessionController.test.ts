@@ -53,12 +53,13 @@ function makeWizardFactory(result: boolean): () => SessionWizard {
 function makeRepository({
   setFilterError = null as string | null,
   activeFilter = null as string | null,
+  plugins = [] as PluginMetadata[],
 } = {}) {
   return {
     setFilter: vi.fn().mockResolvedValue(setFilterError),
     clearFilter: vi.fn().mockResolvedValue(undefined),
     getActiveFilter: vi.fn().mockResolvedValue(activeFilter),
-    getPlugins: vi.fn().mockResolvedValue([]),
+    getPlugins: vi.fn().mockResolvedValue(plugins),
     getRecordTypes: vi.fn().mockResolvedValue([]),
     getRecords: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   } as any;
@@ -67,6 +68,7 @@ function makeRepository({
 function makeDeps(overrides: Partial<SessionControllerDeps> = {}): SessionControllerDeps {
   return {
     client: makeClient(),
+    repository: makeRepository(),
     makeWizard: makeWizardFactory(true),
     refreshTree: vi.fn(),
     setStatusText: vi.fn(),
@@ -137,23 +139,6 @@ describe('SessionController.copyRecordTo', () => {
   });
 });
 
-// ── getPlugins ────────────────────────────────────────────────────────────────
-
-describe('SessionController.getPlugins', () => {
-  beforeEach(() => vi.resetAllMocks());
-
-  it('returns the typed plugin array from GET /plugins', async () => {
-    const plugins = makePlugins(3);
-    const deps = makeDeps({ client: makeClient({ plugins }) });
-    const ctrl = new SessionController(deps);
-
-    const result = await ctrl.getPlugins();
-
-    expect(result).toEqual(plugins);
-    expect(deps.client.GET).toHaveBeenCalledWith('/plugins', expect.anything());
-  });
-});
-
 // ── loadSession ───────────────────────────────────────────────────────────────
 
 describe('SessionController.loadSession', () => {
@@ -186,9 +171,8 @@ describe('SessionController.onBackendConnected', () => {
   beforeEach(() => vi.resetAllMocks());
 
   it('sets Ready status with plugin count and refreshes tree', async () => {
-    const plugins = makePlugins(3);
     const deps = makeDeps({
-      client: makeClient({ plugins }),
+      repository: makeRepository({ plugins: makePlugins(3) }),
       makeWizard: makeWizardFactory(true),
     });
     const ctrl = new SessionController(deps);
@@ -202,7 +186,6 @@ describe('SessionController.onBackendConnected', () => {
 
   it('shows warning when no plugins are loaded', async () => {
     const deps = makeDeps({
-      client: makeClient({ plugins: [] }),
       makeWizard: makeWizardFactory(true),
     });
     const ctrl = new SessionController(deps);

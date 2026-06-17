@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import { BackendManager } from './BackendManager';
-import { createApiClient, type PluginMetadata } from './ApiClient';
+import { createApiClient } from './ApiClient';
 import { detectGamePaths } from './GamePathDetector';
 import { SessionWizard } from './SessionWizard';
 import { SessionController } from './SessionController';
@@ -169,14 +169,7 @@ export async function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      let allPlugins: PluginMetadata[];
-      try {
-        allPlugins = await controller.getPlugins();
-      } catch {
-        vscode.window.showErrorMessage('mEdit: Failed to fetch plugins.');
-        return;
-      }
-
+      const allPlugins = await repository.getPlugins();
       const mutablePlugins = allPlugins.filter(p => !p.isImmutable);
       const NEW_PLUGIN_LABEL = '$(add) New Plugin…';
       const items: vscode.QuickPickItem[] = [

@@ -1,10 +1,10 @@
-import type { ApiClient, PluginMetadata } from './ApiClient';
+import type { ApiClient } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
 import type { SessionWizard } from './SessionWizard';
 
 export interface SessionControllerDeps {
   client: ApiClient;
-  repository?: PluginRepository;
+  repository: PluginRepository;
   makeWizard: () => SessionWizard;
   refreshTree: () => void;
   setStatusText: (text: string) => void;
@@ -18,11 +18,6 @@ export class SessionController {
   private readonly log: (msg: string) => void;
   constructor(private readonly deps: SessionControllerDeps) {
     this.log = deps.log ?? (() => {});
-  }
-
-  async getPlugins(): Promise<PluginMetadata[]> {
-    const { data } = await this.deps.client.GET('/plugins', {});
-    return (data as PluginMetadata[] | undefined) ?? [];
   }
 
   async createPlugin(name: string): Promise<void> {
@@ -58,7 +53,7 @@ export class SessionController {
   }
 
   async setFilter(sql: string): Promise<boolean> {
-    const error = await this.deps.repository!.setFilter(sql);
+    const error = await this.deps.repository.setFilter(sql);
     if (error) {
       this.deps.showError(`mEdit: Filter failed — ${error}`);
       return false;
@@ -69,13 +64,13 @@ export class SessionController {
   }
 
   async clearFilter(): Promise<void> {
-    await this.deps.repository!.clearFilter();
+    await this.deps.repository.clearFilter();
     this.deps.setFilterActive(false);
     this.deps.refreshTree();
   }
 
   async syncFilterState(): Promise<void> {
-    const sql = await this.deps.repository!.getActiveFilter();
+    const sql = await this.deps.repository.getActiveFilter();
     this.deps.setFilterActive(sql !== null, sql ?? undefined);
   }
 
@@ -104,7 +99,7 @@ export class SessionController {
       this.deps.refreshTree();
       return;
     }
-    const plugins = await this.getPlugins();
+    const plugins = await this.deps.repository.getPlugins();
     const count = plugins.length;
     if (count === 0) {
       this.deps.showWarning(

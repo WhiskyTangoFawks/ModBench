@@ -45,7 +45,7 @@ npm run generate-api     # regenerate src/generated/api.ts from live backend at 
 ## Adding a New Command (End-to-End)
 
 1. **Backend** — add C# endpoint with `.Produces<T>()` and `.ProducesProblem(status)`; run `npm run generate-api`
-2. **Frontend logic** — data reads → `PluginRepository`; mutations → `SessionController`
+2. **Frontend logic** — HTTP data access → `PluginRepository` (injectable, testable without VS Code); orchestration + side effects → `SessionController`
 3. **VS Code wiring** — register in `package.json` under `contributes.commands`; add to `contributes.menus["view/item/context"]` with matching `contextValue` if tree action; register handler in `extension.ts`
 4. **Tests** — `npm run test:unit` green; add command ID to `EXPECTED_COMMANDS`; `npm run test:integration` green
 
