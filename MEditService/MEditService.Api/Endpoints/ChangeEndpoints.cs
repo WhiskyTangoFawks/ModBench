@@ -21,22 +21,7 @@ public static class ChangeEndpoints
 
             var decoded = Uri.UnescapeDataString(formKey);
             var result = orchestrator.StageEdit(decoded, req.Plugin, req.Fields, req.Source ?? "user", req.Description);
-
-            return result switch
-            {
-                StageEditResult.NoSession => Results.Problem("No session loaded."),
-                StageEditResult.PluginImmutable i => Results.Problem(
-                    $"'{i.Plugin}' is a base-game plugin and cannot be edited.", statusCode: 409),
-                StageEditResult.BlockedByGroup g => Results.Problem(
-                    $"This record has a pending group change — revert group {g.GroupId} first.", statusCode: 409),
-                StageEditResult.RecordNotFound => Results.NotFound(),
-                StageEditResult.ReadOnlyFields r => Results.Problem(
-                    detail: $"The following fields are read-only and cannot be edited: {string.Join(", ", r.Fields)}",
-                    statusCode: 422),
-                StageEditResult.InvalidReferences inv => Results.UnprocessableEntity(inv.Errors),
-                StageEditResult.Staged staged => Results.Ok(staged.Changes),
-                _ => Results.Problem("Unexpected error.")
-            };
+            return result.ToHttpResult();
         })
         .WithName("PatchRecord")
         .WithTags("Changes")
@@ -53,26 +38,14 @@ public static class ChangeEndpoints
         {
             var decodedFormKey = Uri.UnescapeDataString(formKey);
             var decodedTarget = Uri.UnescapeDataString(targetPlugin);
-            return orchestrator.CopyRecordTo(decodedFormKey, decodedTarget, req.Source ?? "user") switch
-            {
-                StageEditResult.NoSession => Results.Problem("No session loaded."),
-                StageEditResult.PluginImmutable i => Results.Problem(
-                    $"'{i.Plugin}' is a base-game plugin and cannot be edited.", statusCode: 409),
-                StageEditResult.BlockedByGroup g => Results.Problem(
-                    $"This record has a pending group change — revert group {g.GroupId} first.", statusCode: 409),
-                StageEditResult.RecordNotFound => Results.NotFound(),
-                StageEditResult.ReadOnlyFields r => Results.Problem(
-                    detail: $"The following fields are read-only: {string.Join(", ", r.Fields)}", statusCode: 422),
-                StageEditResult.Staged staged => Results.Ok(staged.Changes),
-                _ => Results.Problem("Unexpected error.")
-            };
+            return orchestrator.CopyRecordTo(decodedFormKey, decodedTarget, req.Source ?? "user").ToHttpResult();
         })
         .WithName("CopyRecordTo")
         .WithTags("Changes")
         .Produces<IReadOnlyList<PendingChange>>()
+        .Produces<IReadOnlyList<ReferenceValidationError>>(422)
         .ProducesProblem(404)
-        .ProducesProblem(409)
-        .ProducesProblem(422);
+        .ProducesProblem(409);
 
         app.MapPost("/records/delete",
             ([FromBody] DeleteRecordsRequest req,
@@ -81,23 +54,7 @@ public static class ChangeEndpoints
             var targets = (req.Records ?? []).Select(r => (r.FormKey, r.Plugin)).ToList();
             if (targets.Count == 0)
                 return Results.Problem("At least one record must be specified.", statusCode: 400);
-            return orchestrator.DeleteRecords(targets, "user") switch
-            {
-                DeleteRecordsResult.NoSession =>
-                    Results.Problem("No session loaded."),
-                DeleteRecordsResult.PluginImmutable i =>
-                    Results.Problem($"'{i.Plugin}' is a base-game plugin and cannot be edited.", statusCode: 409),
-                DeleteRecordsResult.BlockedByPendingGroup =>
-                    Results.Problem("Records have active group changes — revert groups first.", statusCode: 409),
-                DeleteRecordsResult.BlockedByReferences b =>
-                    Results.Problem(
-                        detail: "One or more records are referenced by immutable plugins and cannot be deleted.",
-                        extensions: new Dictionary<string, object?> { ["blockedBy"] = b.BlockedBy },
-                        statusCode: 409),
-                DeleteRecordsResult.Staged s =>
-                    Results.Ok(s.Group),
-                _ => Results.Problem("Unexpected error.")
-            };
+            return orchestrator.DeleteRecords(targets, "user").ToHttpResult();
         })
         .WithName("DeleteRecords")
         .WithTags("Changes")
