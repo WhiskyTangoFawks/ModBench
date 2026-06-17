@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { buildWebviewHtml } from './webviewHtml';
-import { WEBVIEW_TO_EXTENSION } from './messages';
+import { WEBVIEW_TO_EXTENSION, type WebviewToExtension } from './messages';
 
 export function openReferencedByPanel(
   context: vscode.ExtensionContext,
@@ -30,10 +30,14 @@ export function openReferencedByPanel(
 
   panel.webview.onDidReceiveMessage((msg: unknown) => {
     if (typeof msg === 'object' && msg !== null && 'type' in msg) {
-      const m = msg as { type: string; formKey?: string };
-      if (m.formKey) {
-        if (m.type === WEBVIEW_TO_EXTENSION.OPEN_RECORD) onOpenRecord(m.formKey);
-        else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_RECORD_BESIDE) onOpenRecordBeside(m.formKey);
+      const m = msg as WebviewToExtension;
+      switch (m.type) {
+        case WEBVIEW_TO_EXTENSION.OPEN_RECORD:
+          onOpenRecord(m.formKey);
+          break;
+        case WEBVIEW_TO_EXTENSION.OPEN_RECORD_BESIDE:
+          onOpenRecordBeside(m.formKey);
+          break;
       }
     }
   });

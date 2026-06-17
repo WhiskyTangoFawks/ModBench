@@ -11,7 +11,7 @@ import { LoadMoreNode, PluginTreeProvider, RecordNode } from './PluginTreeProvid
 import { ApiPluginRepository } from './PluginRepository';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
 import { buildWebviewHtml } from './webviewHtml';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from './messages';
 import { openReferencedByPanel } from './ReferencedByPanel';
 
 let backendManager: BackendManager | undefined;
@@ -243,7 +243,7 @@ function openRecordPanel(
       existing.title = title;
       existing.reveal();
       if (formKey) {
-        existing.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey });
+        existing.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey } satisfies ExtensionToWebview);
       }
       return;
     }
@@ -261,8 +261,8 @@ function openRecordPanel(
 
   panel.webview.onDidReceiveMessage((msg: unknown) => {
     if (typeof msg === 'object' && msg !== null && 'type' in msg) {
-      const m = msg as { type: string; formKey?: string; label?: string };
-      if (m.type === WEBVIEW_TO_EXTENSION.OPEN_RECORD && m.formKey) {
+      const m = msg as WebviewToExtension;
+      if (m.type === WEBVIEW_TO_EXTENSION.OPEN_RECORD) {
         vscode.commands.executeCommand('mEdit.openEditor', { formKey: m.formKey, label: m.formKey });
       }
     }

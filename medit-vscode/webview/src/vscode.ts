@@ -1,5 +1,7 @@
+import { type WebviewToExtension } from './messages';
+
 interface VsCodeApi {
-  postMessage(msg: unknown): void;
+  postMessage(msg: WebviewToExtension): void;
 }
 
 declare function acquireVsCodeApi(): VsCodeApi;

@@ -5,7 +5,7 @@ import { buildColumns, toStr } from './recordUtils';
 import type { Column } from './recordUtils';
 import type { CompareOverride, CompareResult, ConflictAll, ConflictThis, FieldDiff, FieldMetadata, PendingChange, RecordDetail } from './types';
 import { vscode } from './vscode';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './messages';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey: string;
@@ -534,8 +534,8 @@ export function RecordPanel() {
   // Listen for loadRecord messages from extension (panel reuse)
   useEffect(() => {
     const handler = (event: MessageEvent) => {
-      const msg = event.data as { type?: string; formKey?: string };
-      if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD && msg.formKey) {
+      const msg = event.data as ExtensionToWebview;
+      if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) {
         if (msg.formKey !== prevFormKeyRef.current) {
           // formKey will change → [formKey, port] effect will fire; skip it.
           skipNextRefreshEffect.current = true;

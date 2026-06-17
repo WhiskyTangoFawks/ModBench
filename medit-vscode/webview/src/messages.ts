@@ -1,8 +1,1 @@
-export const EXTENSION_TO_WEBVIEW = {
-  LOAD_RECORD: 'loadRecord',
-} as const;
-
-export const WEBVIEW_TO_EXTENSION = {
-  OPEN_RECORD: 'openRecord',
-  OPEN_RECORD_BESIDE: 'openRecordBeside',
-} as const;
+export { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type WebviewToExtension, type ExtensionToWebview } from '../../src/messages';
