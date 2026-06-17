@@ -1,76 +1,120 @@
 # mEdit Mod Manager — Feature Specification
 
-A full MO2 replacement built into the VS Code extension, unified with the existing record editor.
+A full MO2-compatible mod manager built into the VS Code extension, unified with the existing record editor.
+
+This spec belongs to the **Mod Management** bounded context (see [CONTEXT-MAP.md](../CONTEXT-MAP.md)). Architecture is fixed by:
+- [ADR-0021](adr/0021-mod-manager-in-extension.md) — mod manager lives in the extension, not the backend
+- [ADR-0022](adr/0022-extension-owns-backend-lifecycle.md) — the extension owns the editing backend's lifecycle; MO2 compat is by file import, not VFS
+- [Mod-Management ADR-0001](../medit-vscode/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md) — medit's modlist format **is** MO2's format, behind a source adapter
 
 ---
 
 ## Vision
 
-One tool handles the entire modding workflow: install → manual sort → launch → inspect conflicts → edit records → patch. The sidebar switches between **Mod List** (install/sort/enable) and **Plugin List** (load order/edit) depending on context. A deploy/purge step via VS Code run configuration writes the merged mod view into the game's `Data/` folder using hardlinks.
+One tool handles the entire modding workflow: install → manual sort → launch → inspect conflicts → edit records → patch. The sidebar switches between **Mod List** (install/sort/enable) and **Plugin List** (load order/edit). Deploy/purge writes the merged mod view into the game directory using hardlinks so the game can run; **editing never requires a deploy** (see "Editing vs deploying" below).
+
+The mod manager is a subsystem of the VS Code extension (`medit-vscode/src/modmanager/`). It is file/HTTP/JSON work and never parses plugin binaries. The C# backend remains a pure Mutagen + DuckDB record-editing service.
+
+---
+
+## Editing vs deploying — the central decoupling
+
+These are two independent operations against the same physical mod files:
+
+| | **Deploy** (Build) | **Edit** |
+|---|---|---|
+| Purpose | Let the *game* run with mods | Inspect/modify records |
+| Mechanism | Hardlink enabled mods' files into the game directory's `Data/` | Backend loads plugins by **physical path** (`load-explicit`) and writes them in place |
+| Needs the other? | No | No — never needs a deployed `Data/` |
+| Reads vanilla masters from | n/a | the game directory |
+
+Because edits write to the physical mod file directly (which a hardlink in `Data/` would share by inode anyway), **mEdit and an external manager like MO2 coexist at the filesystem level**: mEdit edits a mod's plugin in place, MO2 deploys it on its next run. No process handoff, no VFS.
+
+---
+
+## Game directory & stock game folder
+
+The **game directory** is where mEdit reads vanilla masters from and (in standalone mode) deploys into. It is configurable, with autodetection as fallback:
+
+- **Configured** via `medit.gameDirectory` — point at the Steam install *or* a stock game folder.
+- **Autodetected** otherwise — `GamePathDetector` already resolves the Steam install via `libraryfolders.vdf` (Linux) / registry (Windows). This becomes the fallback when no override is set.
+
+A **stock game folder** is a copy of the vanilla game kept outside Steam's management (the Wabbajack pattern): it pins a known-compatible game version and keeps the real Steam install clean. To the deployer it is just another game directory — identical code path, different target.
+
+Stock-folder setup is a one-time copy of the game tree; offered as an explicit option for users who hit the real blockers (cross-volume hardlinks, Steam-dir write permissions, or Steam update/verify clobbering a deployed `Data/`).
 
 ---
 
 ## Deployment Model: Hardlinks (Vortex approach)
 
-Rather than a live VFS mount, mEdit uses the same strategy as Vortex: **deploy** creates hardlinks from `Data/` into mod staging folders; **purge** removes them. The game sees real files — no kernel features, no admin rights, no mount lifecycle.
+Standalone deploy creates hardlinks from `mods/` into the game directory's `Data/`; purge removes them. The game sees real files — no kernel features, no admin rights, no mount lifecycle. **Node provides hardlinks natively (`fs.link` / `fs.symlink`)** — no P/Invoke.
 
-A hardlink is a second directory entry pointing to the same inode. No data is duplicated. Deleting the link in `Data/` leaves the source mod file intact. The source mod file is the single copy of the data; `Data/` entries are just pointers to it.
+A hardlink is a second directory entry pointing to the same inode. No data is duplicated. Deleting the link in `Data/` leaves the source mod file intact. The source mod file is the single copy; `Data/` entries are pointers to it.
+
+> **When MO2 (or Vortex) owns deployment**, mEdit does *not* deploy — its deployer UI is hidden and the external manager remains the deployer. mEdit only edits the mod files in place.
 
 ### How MO2 does it: USVFS
 
-MO2 uses **USVFS** (User Space Virtual File System) — a technique called API hooking. A native DLL is injected into the game process at launch, intercepting Windows file I/O calls (CreateFile, FindFirstFile, etc.) before they reach the kernel. The game sees a virtual merged view of all mod folders, but only that process does; nothing is written to `Data/`. Mods enabled/disabled instantly with no redeploy step.
+MO2 uses **USVFS** (User Space Virtual File System) — API hooking. A native DLL injected into the game process intercepts Windows file I/O, presenting a virtual merged view of all mod folders to that process only; nothing is written to `Data/`. Mods toggle instantly with no redeploy. USVFS is complex native C++, Windows-only, conflicts with some anti-cheat, and is sensitive to Windows API changes.
 
-USVFS is complex native C++, Windows-only, and not trivially reusable. The hooking approach can also conflict with anti-cheat software and is sensitive to Windows API changes.
+**Why mEdit does not run inside USVFS:** mEdit reconstructs MO2's *effective* merged view from the physical mod folders plus load order itself — the same priority merge USVFS performs. So it never needs to run inside MO2's process. See [ADR-0022](adr/0022-extension-owns-backend-lifecycle.md).
 
 ### How Vortex does it: hardlinks
 
-**Tannin** (Tannin42) wrote USVFS for MO2, then joined Nexus Mods as lead developer of Vortex — their official successor tool. Despite having written a working VFS himself, he explicitly chose **not** to use VFS for Vortex. His stated reasons, published in Vortex's documentation:
+**Tannin** wrote USVFS for MO2, then chose **not** to use a VFS for Vortex. His published reasons:
 
 > - There is no stable high-quality VFS with a free-to-use licence
-> - VFS methods require extensive customisation to work with different tools whereas hard links are supported natively
+> - VFS methods require extensive customisation per tool whereas hard links are supported natively
 > - Diagnosing errors in VFS deployment is considerably more difficult
 > - USVFS is Windows-only whereas hard links are supported on all platforms
 
-Vortex deploys by creating hardlinks from a staging folder into `Data/`, tracked by a manifest. Purge deletes the hardlinks. The same developer, given a clean slate, chose the simpler approach — that carries weight.
+Vortex deploys by hardlinking from a staging folder into `Data/`, tracked by a manifest; purge deletes the hardlinks. The same developer, given a clean slate, chose the simpler approach — that carries weight.
 
 ### How the Nexus Mods App does it: direct copy + event sourcing
 
-The Nexus Mods App (NMA) is Nexus's third-generation official tool, built in C#. It uses a fourth paradigm — no VFS, no hardlinks. Instead:
-
-- Deployment is described as a `DeploymentData` struct: two dictionaries mapping archive source paths → game directory targets
-- On "Apply," those instructions are executed by **copying files directly** into the game folder
-- Reversibility comes from **event sourcing** — an undo log of every file operation, replayed to restore prior state
-
-This is more durable than hardlinks (no same-drive constraint, no dangling links) but requires a substantial event sourcing infrastructure. Their whole deployment pipeline is built on a custom `DataModel`, `Loadout`, and undo system — none of it is published as a NuGet package, and everything is tightly coupled.
-
-**Why not use NMA's code directly?** Two reasons:
-
-1. **License: GPL-3.0.** Incorporating their code requires GPL-ing mEdit. Hard blocker.
-2. **Not extractable.** The interesting pieces (deployment pipeline, FOMOD installer, undo log) are deeply coupled to NMA's internal infrastructure. There is no standalone library to pull in.
-
-NMA's event sourcing model is elegant but the complexity is not justified for what mEdit needs. The hardlink approach covers the same ground with a fraction of the infrastructure.
+NMA (Nexus's C# tool) copies files directly into the game folder and gets reversibility from an event-sourced undo log. More durable than hardlinks (no same-drive constraint) but requires substantial infrastructure. Not reusable for mEdit: **GPL-3.0** (would force-GPL mEdit) and the deployment/undo pipeline is deeply coupled to NMA internals — no standalone library. The hardlink approach covers the same ground with a fraction of the infrastructure.
 
 ### Why not ProjFS / fuse-overlayfs?
 
-ProjFS (Windows Projected File System) requires an optional Windows feature that is not enabled by default, adds kernel-level callback complexity, and is Windows-only. fuse-overlayfs on Linux is closer to viable but introduces a mount lifecycle (dangling mounts on crash, teardown ordering) that hardlinks avoid entirely. Neither offers meaningful advantages over hardlinks for this use case.
+ProjFS requires an off-by-default Windows feature, kernel-callback complexity, Windows-only. fuse-overlayfs introduces a mount lifecycle (dangling mounts on crash) that hardlinks avoid. Neither beats hardlinks here.
 
-**Write-through behavior**: because both paths share an inode, a write through `Data/foo.nif` also modifies `mods/MyMod/foo.nif`. For read-only assets (textures, meshes, BA2s) this is a non-issue. For the mEdit use case it is actually desirable — edits made through the record editor go directly to the source mod file, with no extra sync step.
+**Write-through behavior**: both paths share an inode, so a write through `Data/foo.esp` also modifies `mods/MyMod/foo.esp`. For the mEdit use case this is *desirable* — record edits go straight to the source mod file, no sync step.
 
-**Same-drive constraint**: `mods/` and `Data/` must be on the same partition. Checked at first deploy; if violated, the user is prompted to move the staging folder or use the symlink fallback (requires admin on Windows).
+**Same-drive constraint**: `mods/` and the game directory must be on the same volume. Checked at first deploy; if violated, prompt to move the staging folder, create a stock game folder on the mods volume, or use the symlink fallback.
 
-### Why not deploy to a local folder instead of Data/?
+### Why not deploy to a local folder instead of the game's `Data/`?
 
-An alternative model: create a local `~/.medit/deploy/GameName/` folder, hardlink vanilla game files in, overlay mod files on top, and redirect the game to use it. Appeal: mod files never touch the Steam directory; Steam verify works unimpeded; purge is a single folder delete with no manifest.
+A redirect model (local deploy folder + junction over `Data/`) is fragile: Bethesda reads `Data/` relative to the executable with no launch argument to change it, a Steam update silently restores `Data/` breaking the junction, and `sResourceDataDirsFinal` can add but not replace the primary data path. The **stock game folder** achieves the same isolation goal without a redirect — you launch the stock copy's own executable, so `Data/` resolves naturally. **Decision**: deploy directly into the configured game directory's `Data/` (Steam install or stock folder).
 
-The redirect is the hard part. Bethesda games read `Data/` relative to the executable with no launch argument to change it. The only viable redirect is replacing the real `Data/` with a junction pointing to the local folder — but a Steam update silently restores `Data/`, breaking the junction without warning. The `sResourceDataDirsFinal` INI setting adds extra data paths but cannot replace the primary one. Linux bind-mount wrappers work but reintroduce the mount lifecycle complexity (dangling mounts on crash) that made ProjFS/fuse-overlayfs unattractive.
+### Hardlinks vs. symlinks
 
-Bootstrapping is also expensive: vanilla `Data/` contains thousands of files that must be hardlinked into the deploy folder on first setup and re-hardlinked after every game update. If the deploy folder is on a different drive than the game (the main motivation for the approach), hardlinking is impossible and full copies are required — equivalent to NMA's direct-copy model.
+Hardlinks are the primary mechanism: same semantics, no elevation, no Developer Mode, any Windows account. Symlinks (`fs.symlink`) are the explicit fallback only when `mods/` and the game directory are on different volumes — on Linux no special permission; on Windows they require admin or Developer Mode (warn the user).
 
-**Decision**: deploy mod files directly into the game's `Data/` as the spec describes. It is simpler, update-safe, and avoids the redirect and bootstrapping problems entirely.
+---
 
-### Hardlinks vs. symlinks — decision summary
+## Modlist format & source adapters
 
-Symlinks are simpler to implement (.NET 6 `File.CreateSymbolicLink()`, no `DllImport`; trivially detectable on purge without a manifest) and easier to debug (visible in any file manager). On Linux they require no special permissions and are strictly preferable. On Windows, however, file symlinks require either admin rights or Developer Mode — there is no workaround for file-level links. Junction points avoid the elevation requirement but are directory-only and cannot represent a per-file merged view. **Hardlinks are therefore the primary deployment mechanism**: same semantics, no elevation, no Developer Mode, works on any Windows user account. Symlinks are used as an explicit fallback only when `mods/` and `Data/` are on different drives, with a clear user warning about the Windows permission requirement.
+medit does not invent a modlist format — its format **is** MO2's (see [MM ADR-0001](../medit-vscode/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md)). Persistence goes through an `IModlistSource` over an in-memory modlist model:
+
+| Adapter | Status | Behaviour |
+|---|---|---|
+| **MO2** | First-class | Read/write an instance in place: `mods/<name>/`, the active profile's `modlist.txt` (`+`/`-`, top = highest priority) and `plugins.txt`, per-mod `meta.ini` (Nexus id/version). Preserves separators/categories/metadata verbatim. |
+| **Native** | First-class | Fresh setups; writes MO2-format instances so they open in MO2 too. No separate format. |
+| **Vortex** | Deferred (afterthought) | Read-only snapshot via the `vortex.deployment.json` deployment manifest. No simple text modlist exists; full management is out of scope. |
+
+**Profiles**: MO2's active profile is read from `ModOrganizer.ini` (`[General] selected_profile`); each profile has its own `modlist.txt`/`plugins.txt`. The **session boundary is the active profile's modlist** — switching profiles is a new session.
+
+---
+
+## Backend lifecycle (Editing integration)
+
+The extension owns the editing backend process ([ADR-0022](adr/0022-extension-owns-backend-lifecycle.md)). `BackendManager` gains spawn/teardown (it previously only health-polled — see the now-reversed "Never spawns backend process" rule in `medit-vscode/CLAUDE.md`).
+
+- **Spawn**: lazily, on first entry into Plugin (editing) mode for the active modlist.
+- **Warm**: stays alive across Mod List ⇄ Plugin List toggles for the lifetime of that profile's modlist (one backend, one session — ADR-0015 preserved) to avoid re-indexing churn.
+- **Teardown**: on switching profile/modlist, closing the workspace, or explicit close. Restarted on crash.
+
+The backend gains a **`load-explicit`** session source: an ordered `{name, physicalPath}` list (the active modlist's enabled plugins + vanilla masters), alongside the existing single-data-folder scan. `GameSession.AddPlugin(filePath)` already loads a plugin from an arbitrary path; `load-explicit` generalises that to construct the whole ordered session from scattered physical paths. This is also the foundation for loading an arbitrary overriding-plugin set (the future "delta" comparison feature).
 
 ---
 
@@ -78,23 +122,24 @@ Symlinks are simpler to implement (.NET 6 `File.CreateSymbolicLink()`, no `DllIm
 
 ```
 medit-vscode (extension)
-  ├── ModListProvider          TreeDataProvider — sidebar mod view
-  ├── PluginListProvider       TreeDataProvider — sidebar plugin view (existing, extended)
-  ├── DownloadManager          nxm:// handler + queue UI
-  └── DeployRunConfig          preLaunchTask / postDebugTask wiring
+  ├── modmanager/
+  │   ├── ModlistSource          IModlistSource: MO2 | Native | Vortex(read) adapters
+  │   ├── ModListProvider        TreeDataProvider — sidebar mod view
+  │   ├── FileConflictIndex      winner[] map over enabled mods' files
+  │   ├── Deployer               fs.link deploy/purge + manifest (standalone only)
+  │   ├── StatusChecker          conflict/missing/dirty status per mod
+  │   ├── GameDirectory          config + GamePathDetector fallback + stock-folder setup
+  │   └── MasterReader           tiny TES4-header read for master lists (no Mutagen)
+  ├── downloads/
+  │   └── NexusDownloader        nxm:// handler, API-key downloads, extraction, staging
+  ├── PluginListProvider         TreeDataProvider — plugin view (existing, extended)
+  └── BackendManager             spawn/teardown editing backend; load-explicit session
 
-MEditService (C# backend, unified)
-  ├── ModManager/
-  │   ├── ModList              ordered, persisted mod registry
-  │   ├── FileConflictIndex    winner[] map built from ModList
-  │   ├── Deployer             hardlink create/purge + manifest
-  │   ├── PluginOrderService   load order with missing-master detection
-  │   └── StatusChecker        conflict/missing/dirty status per mod
-  └── Downloads/
-      └── NexusDownloader      API-key downloads, extraction, staging
+MEditService (C# backend) — unchanged role: Mutagen + DuckDB record editing,
+  now also accepts a load-explicit ordered physical-path session.
 ```
 
-Mod data lives in a `mods/` folder next to the game's `Data/` directory. Each mod occupies `mods/<name>/` as a flat folder mirroring the `Data/` layout.
+Mod data lives in a `mods/` folder per the MO2 instance layout. Each mod is `mods/<name>/` mirroring `Data/`.
 
 ---
 
@@ -102,14 +147,12 @@ Mod data lives in a `mods/` folder next to the game's `Data/` directory. Each mo
 
 ### View Switching
 
-The sidebar panel has two tree views registered under the `medit` view container:
+Two tree views under the `medit` view container; a header toggle switches them (both registered, one visible via `when` clause):
 
 | View | Shown when |
 |---|---|
-| **Mod List** | Default; workspace open, game not running |
-| **Plugin List** | User clicks "Manage Load Order" or opens a plugin for editing |
-
-A toggle button in the panel header switches between views. Both are always registered; only one is visible at a time (`when` clause in `package.json`).
+| **Mod List** | Default; managed game workspace open |
+| **Plugin List** | User enters editing (Manage Load Order / open a plugin) — triggers lazy backend spawn |
 
 ### Mod List Tree
 
@@ -118,22 +161,19 @@ MODS (247 active / 312 installed)  [Deploy] [Purge]
 ├── [✓] Unofficial Fallout 4 Patch     v2.1.4  [no conflicts]
 ├── [✓] Armor Keywords Community Res…  v9.0    [⚠ 3 conflicts]
 ├── [✓] Sim Settlements 2              v2.2.1  [no conflicts]
-├── [ ] (disabled) Old Abandoned Mod   v1.0    
+├── [ ] (disabled) Old Abandoned Mod   v1.0
 └── [+] Install Mod…
 ```
 
-- Checkbox toggles enabled/disabled (persisted to `modlist.json`; requires redeploy to take effect)
+- Checkbox toggles enabled/disabled (written through the active `IModlistSource`; requires redeploy to affect `Data/`)
 - Status badge: `[no conflicts]` | `[⚠ N conflicts]` | `[✗ missing master]` | `[↓ update available]`
 - Drag-and-drop reordering (`TreeDragAndDropController`; requires redeploy)
 - Context menu: Enable, Disable, Open Folder, Uninstall, View on Nexus
-- Deploy/Purge buttons in tree header; also wired to run config tasks
+- Deploy/Purge in header (standalone mode only; hidden when an external manager owns deployment)
 
 ### Plugin List Tree
 
-Existing tree extended with:
-- Load order index shown inline
-- Missing master warning badge
-- Drag-and-drop reordering (same controller pattern)
+Existing tree extended with: load-order index inline, missing-master badge, drag-and-drop reordering (writes `plugins.txt`).
 
 ---
 
@@ -141,167 +181,84 @@ Existing tree extended with:
 
 ### 1. Mod Installation
 
-**Sources:**
-- Nexus Mods via `nxm://` protocol (see §6)
-- Manual install: "Install from Archive…" command picks a `.zip`/`.7z`/`.rar`
-- Manual folder: "Install from Folder…" copies an already-extracted directory
+**Sources:** Nexus `nxm://` (§6); "Install from Archive…" (`.zip`/`.7z`/`.rar`); "Install from Folder…".
 
-**Install flow:**
-1. Extract archive to a temp staging directory
-2. Detect root type (does it contain a `Data/` subfolder, or are `.esp`/meshes at root?) — auto-normalize to flat mod folder layout
-3. Copy to `mods/<name>/`
-4. Append entry to `modlist.json` as disabled
-5. User enables and deploys
-
-**modlist.json format:**
-```json
-{
-  "mods": [
-    { "name": "Unofficial Fallout 4 Patch", "folder": "unofficial_fo4_patch", "enabled": true, "priority": 0, "nexusId": 4598, "version": "2.1.4" }
-  ]
-}
-```
-
-Priority = position in array (index 0 = lowest, last = highest). Reorder = re-index.
-
----
+**Flow:**
+1. Extract archive to a temp staging directory (`.NET`-free: shell `7z`, or a Node archive lib)
+2. Detect root type (`Data/` subfolder vs `.esp`/meshes at root) — normalise to flat mod folder
+3. Write `mods/<name>/` and a `meta.ini` (Nexus id/version if known) via the active `IModlistSource`
+4. Append to the profile's `modlist.txt` as disabled
+5. User enables and (standalone) deploys
 
 ### 2. Enable / Disable Mods
 
-Toggle sets `enabled` in `modlist.json` and rebuilds the FileConflictIndex so status badges update immediately. Changes take effect in `Data/` on the next deploy.
-
----
+Toggle writes the `+`/`-` prefix in `modlist.txt` and rebuilds the `FileConflictIndex` so status badges update immediately. Effective in `Data/` on next deploy.
 
 ### 3. Manual Mod Ordering
 
-Drag-and-drop in the tree view reorders `modlist.json` and rebuilds the conflict index. Priority rule: **higher index = higher priority** (later entry wins). Matches MO2's left-panel semantics. Changes take effect in `Data/` on the next deploy.
+Drag-and-drop reorders the mod's line in `modlist.txt` (top = highest priority, matching MO2) and rebuilds the conflict index. Effective on next deploy.
 
----
-
-### 4. Deploy / Purge
+### 4. Deploy / Purge (standalone mode)
 
 #### Conflict Index
 
-Built once on load, rebuilt on any enable/disable/reorder. This is the deploy manifest source:
+Built on load, rebuilt on enable/disable/reorder; the deploy manifest source:
 
-```csharp
-// winner[relativePath] = absolute path in highest-priority mod folder
-Dictionary<string, string> _winner = new();
-
-foreach (var mod in modList.Where(m => m.Enabled).OrderBy(m => m.Priority))
-    foreach (var file in Directory.EnumerateFiles(mod.Folder, "*", SearchOption.AllDirectories))
-        _winner[RelativePath(file, mod.Folder)] = file;
+```ts
+// winner[relativePath] = absolute path in highest-priority enabled mod folder
+const winner = new Map<string, string>();
+for (const mod of modlist.filter(m => m.enabled))        // ascending priority
+  for (const file of walk(mod.folder))
+    winner.set(relativePath(file, mod.folder), file);     // later wins
 ```
 
-BA2/BSA files are entries in this index like any other file — no special handling. The game's own archive loader handles extraction.
+BA2/BSA files are ordinary entries — the game's archive loader handles them.
 
 #### Deploy
 
-1. Verify `mods/` and `Data/` are on the same volume; abort with message if not
-2. For each entry in `_winner`: create a hardlink at `Data/<relativePath>` pointing to the source file
-   - Skip if `Data/<relativePath>` already exists and is not a hardlink from a previous deploy (vanilla game file — do not overwrite)
-3. Write `mods/.manifest.json` listing every hardlink created
+1. Verify `mods/` and the game directory are on the same volume; else offer stock-folder / symlink fallback
+2. For each `winner` entry: `fs.link(source, Data/<relativePath>)`
+   - Skip if `Data/<relativePath>` exists and is not a prior-deploy hardlink (vanilla file — never overwrite)
+3. Write `mods/.medit-manifest.json` listing every link created
 
-```csharp
-// Windows
-[DllImport("kernel32.dll")]
-static extern bool CreateHardLink(string lpFileName, string lpExistingFileName, IntPtr reserved);
-
-// Linux
-[DllImport("libc")]
-static extern int link(string oldpath, string newpath);
+```ts
+await fs.link(sourcePath, targetPath);        // hardlink, cross-platform
+// fallback (different volumes): await fs.symlink(sourcePath, targetPath);
 ```
 
 #### Purge
 
-1. Read `mods/.manifest.json`
-2. Delete each hardlink listed (only hardlinks — manifest prevents touching vanilla files)
-3. Scan `Data/` for files not in the manifest and not original game files → move to `mods/Overwrite/` (game-generated files: F4SE outputs, MCM INI writes, etc.)
-4. Delete manifest
+1. Read `.medit-manifest.json`
+2. Delete each listed hardlink (manifest prevents touching vanilla files)
+3. Move `Data/` files not in the manifest and not vanilla → `mods/overwrite/` (F4SE outputs, MCM INI writes)
+4. Delete the manifest
 
-#### VS Code Run Configurations
+#### Launch wiring
 
-```json
-{
-  "version": "2.0.0",
-  "tasks": [
-    { "label": "medit: Deploy",  "type": "shell", "command": "curl -X POST http://localhost:5172/deploy" },
-    { "label": "medit: Purge",   "type": "shell", "command": "curl -X POST http://localhost:5172/purge" }
-  ]
-}
-```
-
-```json
-{
-  "configurations": [
-    {
-      "name": "Launch Fallout 4",
-      "type": "medit-game",
-      "request": "launch",
-      "executable": "${config:medit.gameExecutable}",
-      "preLaunchTask": "medit: Deploy",
-      "postDebugTask": "medit: Purge"
-    }
-  ]
-}
-```
-
-`preLaunchTask` deploys and switches the sidebar to Plugin List view. `postDebugTask` purges (collecting Overwrite files) and switches back to Mod List view.
-
-#### Fallback: Symlinks
-
-If `mods/` and `Data/` are on different drives, offer symlinks. On Linux these require no special permissions. On Windows they require either admin rights or Developer Mode. Warn the user and offer a "Run as Administrator" re-launch if needed. Symlinks have the same deploy/purge semantics; only the link creation call differs.
-
----
+A "Launch Game" command (and optional VS Code task) deploys, switches the sidebar to Plugin List, launches the configured executable from the game directory, then purges on exit. (No `medit-game` debug type needed — a command suffices.)
 
 ### 5. Status Checks
 
-Displayed as inline badges in the mod tree. Computed by `StatusChecker` on index build.
+Inline badges, computed by `StatusChecker` on index build:
 
 | Status | Condition |
 |---|---|
-| No conflicts | Mod's files are all winners — nothing overrides them |
+| No conflicts | All this mod's files are winners |
 | ⚠ N conflicts | N of this mod's files are overridden by a higher-priority mod |
 | ⚠ Overrides N | This mod overrides N files from lower-priority mods |
-| ✗ Missing master | A plugin in this mod depends on a master not in the load order |
-| ✗ Missing mod | `modlist.json` references a folder that doesn't exist on disk |
-| ↓ Update available | Nexus version > installed version (requires Nexus API key) |
+| ✗ Missing master | A plugin depends on a master not in the load order (via `MasterReader`) |
+| ✗ Missing mod | `modlist.txt` references a folder absent on disk |
+| ↓ Update available | Nexus version > installed (`meta.ini`), requires API key |
 
-Hover tooltip on conflict badge: lists the specific files conflicting and which mod wins.
-
-The existing `IConflictClassifier` (record-level conflicts) is distinct from this file-level conflict index — both surface in their respective views.
-
----
+Hover tooltip lists the conflicting files and the winner. File-level conflicts (here) are distinct from record-level conflicts (`IConflictClassifier`, Editing context) — both surface in their own views.
 
 ### 6. Nexus Download Integration
 
-#### nxm:// Protocol
-
-Nexus "Mod Manager Download" button fires `nxm://fallout4/mods/4598/files/123456`. The extension registers as the OS-level handler at install time (platform-specific, handled by the VSIX installer).
-
-Flow:
-1. nxm:// URI received → extension activates if needed → `DownloadManager.Enqueue(uri)`
-2. Exchange nxm URI for a CDN URL via Nexus API (`/v1/games/{game}/mods/{modId}/files/{fileId}/download_link`)
-3. Download to `downloads/` with progress in VS Code status bar notification
-4. On completion: prompt "Install now?" → run install flow (§1)
-
-Requires a Nexus API key stored in VS Code secrets (`vscode.SecretStorage`). First use prompts for the key.
-
-#### Download Queue UI
-
-Status bar item shows `↓ 2 downloading`. Clicking opens a quick pick with active downloads and progress. No separate panel needed.
-
----
+`nxm://fallout4/mods/4598/files/123456` → extension registers as OS handler at install. Flow: receive URI → `DownloadManager.Enqueue` → exchange for CDN URL via Nexus API → download to `downloads/` with status-bar progress → "Install now?" → install flow (§1). API key in `vscode.SecretStorage`. Queue UI: a status-bar item (`↓ 2 downloading`) opening a quick pick.
 
 ### 7. Plugin Load Order
 
-The Plugin List view extends the existing tree with load order management:
-
-- Index number shown left of plugin name
-- Drag-and-drop reorder (writes `plugins.txt`)
-- Auto-sort command: topological sort by master dependencies (simplified LOOT — dependency ordering only, no rule-based sorting)
-- Missing master shown as `✗` badge on the plugin entry
-- "Deploy load order" writes `plugins.txt` to the game's AppData folder
+Plugin List view extends the existing tree: index inline; drag-and-drop reorder writes `plugins.txt`; auto-sort = topological sort by master dependencies (simplified LOOT, dependency ordering only); missing-master `✗` badge.
 
 ---
 
@@ -309,22 +266,26 @@ The Plugin List view extends the existing tree with load order management:
 
 | Phase | Scope | Effort |
 |---|---|---|
-| **M-1** | modlist.json CRUD, ModListProvider tree, enable/disable, manual ordering | ~1 week |
-| **M-2** | FileConflictIndex, status badges (conflict/missing), conflict hover tooltip | ~3 days |
-| **M-3** | Deployer: hardlink deploy/purge, manifest, Overwrite collection, run config wiring (cross-platform) | ~1 week |
-| **M-4** | Manual install from archive (zip/7z), FOMOD detection (flag, don't implement) | ~1 week |
-| **M-5** | nxm:// handler, Nexus API download, API key storage | ~1 week |
-| **M-6** | Nexus version check, update available badge | ~2 days |
-| **M-7** | Plugin auto-sort, deploy load order to AppData | ~3 days |
+| **M-1** | `GameDirectory` (config + detect + stock-folder setup); MO2 `IModlistSource` (read `mods/`, active profile `modlist.txt`/`plugins.txt`); `ModListProvider` tree; enable/disable + manual ordering writing MO2 format | ~1.5 wk |
+| **M-2** | `FileConflictIndex`, status badges (conflict/missing), `MasterReader`, conflict hover tooltip | ~3 days |
+| **M-3** | `Deployer`: `fs.link` deploy/purge, manifest, overwrite collection, same-volume/symlink fallback, launch wiring (standalone mode) | ~1 wk |
+| **M-4** | Editing integration: backend `load-explicit` session; `BackendManager` spawn/teardown; Mod List ⇄ Plugin List toggle wiring the active modlist into a session | ~1 wk |
+| **M-5** | Manual install from archive (zip/7z) writing MO2-format mod folders + `meta.ini`; FOMOD detection (flag, don't implement) | ~1 wk |
+| **M-6** | `nxm://` handler, Nexus API download, API key storage | ~1 wk |
+| **M-7** | Nexus version check, update-available badge | ~2 days |
+| **M-8** | Plugin auto-sort, write `plugins.txt` | ~3 days |
 
-M-1 through M-3 is the coherent usable slice: a working mod manager with conflict detection and game launch on both platforms, no platform-specific VFS code required.
+**M-1 → M-3** is a working MO2-compatible mod manager with conflict detection and game launch, no editor coupling. **M-4** unifies it with the record editor. No platform-specific VFS code anywhere.
 
 ---
 
 ## Open Questions
 
-- **FOMOD installers** — many mods ship with `fomod/ModuleConfig.xml`. Implementing a FOMOD UI is a significant sub-project; M-4 skips it and flags FOMOD mods for manual setup.
-- **Profile system** — MO2 profiles (separate modlist + plugins.txt per profile) deferred until after M-7.
-- **7z/RAR extraction** — .NET has no native 7z/RAR support; use `SharpCompress` NuGet (handles most cases) or shell out to `7z`.
-- **Nexus premium vs. free** — CDN download links return faster servers for premium; free accounts get a redirect. The API response differs slightly; handle both.
-- **Overwrite folder UX** — files moved to `mods/Overwrite/` on purge need a UI: show them in the tree so the user can assign them to a mod or discard them.
+- **FOMOD installers** — `fomod/ModuleConfig.xml` scripted installers are a significant sub-project; M-5 flags FOMOD mods for manual setup.
+- **MO2 round-trip fidelity** — writing `modlist.txt`/`meta.ini` must preserve unmodelled constructs (separators, categories) verbatim. Needs a fidelity test corpus from real MO2 instances.
+- **Vortex** — read-only snapshot via `vortex.deployment.json` only; confirm the manifest format is stable enough to bother.
+- **Archive extraction** — Node has no native 7z/RAR; shell out to `7z` or use a Node lib. Decide at M-5.
+- **Nexus premium vs. free** — download-link API differs (premium gets direct CDN, free a redirect); handle both.
+- **Overwrite folder UX** — files moved to `mods/overwrite/` on purge need a tree surface to reassign or discard.
+- **Delta / overlay editing** — load an arbitrary overriding-plugin set side-by-side (xEdit-like). Builds on `load-explicit`; deferred until after the editor integration lands.
+```

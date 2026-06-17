@@ -14,7 +14,13 @@
 
 **FormID**: 3-byte integer part of a FormKey; local to one load-order slot. Not portable. _Avoid: FormKey._
 
-**FormLink**: Typed reference field on a record holding another record's FormKey. FormLinks form the reference graph for "Referenced By" and delete/renumber safety checks.
+**FormLink**: Typed reference field on a record holding another record's FormKey. FormLinks form the reference graph for "Referenced By" and delete/renumber safety checks. Some FormLink fields permit a null FormKey (Mutagen `IFormLinkNullable<T>`); others require a non-null target (`IFormLink<T>`).
+
+**Null FormLink**: A FormLink holding `FormKey.Null`. Valid on fields that permit null; a data error on fields that don't.
+
+**Dangling FormLink**: A FormLink holding a well-formed FormKey that does not resolve to any record in the current session. Always a data error — creation is blocked at stage time; existing occurrences in loaded plugins are flagged, not hidden. _Avoid: missing reference, broken link._
+
+**Type-Mismatched FormLink**: A FormLink that resolves to a record of a type other than the field's declared valid types (e.g. a weapon-typed field pointing to an NPC). Always a data error, handled the same way as a Dangling FormLink. _Avoid: wrong-type reference._
 
 **EditorID (EDID)**: Human-readable string identifier (e.g. `NordRace`). Stable across load orders; not guaranteed unique. _Avoid: name, label._
 

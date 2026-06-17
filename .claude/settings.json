@@ -15,7 +15,8 @@
       "Skill(simplify)",
       "Skill(simplify:*)",
       "Skill(code-review)",
-      "Skill(code-review:*)"
+      "Skill(code-review:*)",
+      "Read(//home/wayne/.claude/skills/improve-codebase-architecture/**)"
     ]
   }
 }

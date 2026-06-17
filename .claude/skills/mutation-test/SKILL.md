@@ -44,6 +44,7 @@ Don't fix survivors directly. Analyze → plan → get approval → fix inline.
 **Propose an action for each survivor** using this triage order (stop at first that applies):
 
 - **Delete** — code guards impossible state; remove it
+- **Refactor duplicate** If code is duplicated, refactor so code is reusable, and can be covered by single test
 - **Simplify** — overcomplicated (e.g. `?? ""` on non-nullable); simplify so mutant ceases to exist
 - **Write a test** — necessary logic; write a test that fails on the mutant
 - **Refactor** — no test writable (hidden dependency, unreachable branch); expose the seam
