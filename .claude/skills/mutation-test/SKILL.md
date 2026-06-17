@@ -46,7 +46,7 @@ Don't fix survivors directly. Analyze → plan → get approval → fix inline.
 - **Delete** — code guards impossible state; remove it
 - **Refactor duplicate** If code is duplicated, refactor so code is reusable, and can be covered by single test
 - **Simplify** — overcomplicated (e.g. `?? ""` on non-nullable); simplify so mutant ceases to exist
-- **Write a test** — necessary logic; write a test that fails on the mutant
+- **Write a test** — necessary logic; identify the feature, identify what part of the feature is untested, and write a test for the feature.
 - **Refactor** — no test writable (hidden dependency, unreachable branch); expose the seam
 - **Suppression** — last resort; flag explicitly for developer approval
 

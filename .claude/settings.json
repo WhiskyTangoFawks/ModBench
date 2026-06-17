@@ -16,7 +16,15 @@
       "Skill(simplify:*)",
       "Skill(code-review)",
       "Skill(code-review:*)",
-      "Read(//home/wayne/.claude/skills/improve-codebase-architecture/**)"
+      "Read(//home/wayne/.claude/skills/improve-codebase-architecture/**)",
+      "Bash(grep \"\\\\.cs$\")",
+      "Bash(xargs ls -l)",
+      "Bash(find /home/wayne -path \"*/.nuget*\" -name \"DuckDBCommand*\" 2>/dev/null | head -10; find /home/wayne -path \"*/.nuget*\" -path \"*DuckDB*\" -name \"*.cs\" 2>/dev/null | head -20)",
+      "Read(//home/wayne/**)",
+      "Bash(find /home/wayne -path \"*/.nuget*\" -path \"*DuckDB*\" 2>/dev/null | head -30)",
+      "Bash(dotnet tool *)",
+      "Bash(dotnet decompile *)",
+      "Bash(which dotnet-ildasm *)"
     ]
   }
 }

@@ -80,8 +80,23 @@ When all steps pass:
 1. Update task files listed above
 2. `rm validation-plan.md`
 
-## Git Commit
+## Git Workflow
+
+### Branch
+If the current branch is `main`, create a feature branch before committing:
+```bash
+git checkout -b <short-slug-describing-the-work>
+```
+This also enables `--since` in the mutation test step — Stryker compares `HEAD` against `main` and scopes automatically to changed files.
+
+### Commit
 Create a commit with a message referencing the task and summarizing the work, e.g. "Implement X feature [Task-123]". If multiple tasks, list them all. If no explicit tasks, write "no task file". Prompt the user to review and edit the commit message before finalizing. Then commit the changes.
+
+### Merge
+After the commit is approved, merge the feature branch back to `main`:
+```bash
+git checkout main && git merge --no-ff <branch>
+```
 ```
 
 ## Step 5 — Hand off
