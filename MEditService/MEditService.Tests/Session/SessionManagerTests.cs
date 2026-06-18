@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Session;
 
@@ -23,11 +24,12 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
         new(Guid.NewGuid(), formKey, plugin, fieldPath, recordType,
             J("null"), J(json), "user", null, DateTime.UtcNow, "field_edit", null);
 
-    private static SessionManager MakeManager()
+    private static SessionManager MakeManager(IModImporter? modImporter = null)
     {
         var reflector = new SchemaReflector();
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-        return new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        return new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance),
+            modImporter: modImporter);
     }
 
     [Fact]
@@ -538,6 +540,70 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
             oldRepo!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName));
     }
 
+    // --- ReindexPlugins ---
+
+    [Fact]
+    public async Task ReindexPlugins_DisposesLoadedMods()
+    {
+        var data = new PluginFixtureBuilder("reindex-dispose")
+            .WithPlugin("Plugin.esp", mod => mod.Npcs.AddNew("DisposeNPC"))
+            .Build();
+        using (data)
+        {
+            var spy = new SpyModImporter();
+            using var manager = MakeManager(modImporter: spy);
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            await manager.ReindexPlugins(["Plugin.esp"]);
+
+            Assert.NotEmpty(spy.LoadedMods);
+            Assert.All(spy.LoadedMods, m =>
+            {
+                Assert.True(m.IsDisposed);
+                Assert.NotNull(m.Getter);
+            });
+        }
+    }
+
+    [Fact]
+    public async Task ReindexPlugins_AfterBinaryChange_UpdatesRepositoryAndWinners()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("reindex-plugins-batch")
+            .WithPlugin("Plugin.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("BatchReindexNPC");
+                npc.Aggression = Npc.AggressionType.Unaggressive;
+                npcKey = npc.FormKey;
+            })
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            // Write the change to disk bypassing ReindexPlugin
+            var change = MakePendingChange(npcKey.ToString(), "Plugin.esp", "aggression", "npc_", "\"Frenzied\"");
+            using var prepared = await manager.PreparePluginSave("Plugin.esp", [change]);
+            prepared.Commit();
+
+            await manager.ReindexPlugins(["Plugin.esp"]);
+
+            var detail = manager.Repository!.GetRecord("npc_", npcKey.ToString(), "Plugin.esp", winnerOnly: false)!;
+            var aggressionValue = detail.Fields.First(f => f.Metadata.Name == "aggression").Value?.ToString();
+            Assert.Equal("Frenzied", aggressionValue);
+            Assert.True(detail.IsWinner);
+        }
+    }
+
+    [Fact]
+    public async Task ReindexPlugins_EmptyList_Succeeds()
+    {
+        using var manager = MakeLoadedManager();
+        var ex = await Record.ExceptionAsync(() => manager.ReindexPlugins([]));
+        Assert.Null(ex);
+    }
+
     // --- Load disposes previous session ---
 
     // --- helpers ---
@@ -547,5 +613,26 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
         var m = MakeManager();
         m.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
         return m;
+    }
+
+    private sealed class SpyModImporter : IModImporter
+    {
+        private readonly List<SpyLoadedMod> _mods = [];
+        public IReadOnlyList<SpyLoadedMod> LoadedMods => _mods;
+
+        public ILoadedMod Import(ModPath modPath, GameRelease gameRelease)
+        {
+            var real = ModFactory.ImportGetter(modPath, gameRelease);
+            var spy = new SpyLoadedMod(real);
+            _mods.Add(spy);
+            return spy;
+        }
+    }
+
+    private sealed class SpyLoadedMod(IModDisposeGetter inner) : ILoadedMod
+    {
+        public bool IsDisposed { get; private set; }
+        public IModGetter Getter => inner;
+        public void Dispose() { IsDisposed = true; inner.Dispose(); }
     }
 }

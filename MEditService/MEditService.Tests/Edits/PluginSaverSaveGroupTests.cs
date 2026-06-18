@@ -62,6 +62,9 @@ public sealed class PluginSaverSaveGroupTests
         await saver.Save(group.Id);
 
         Assert.Empty(changes.GetChanges(groupId: group.Id));
+        Assert.Equal("committed-marker", await File.ReadAllTextAsync(session.LastDestPath!)); // Commit() moved content to dest
+        Assert.False(Directory.Exists(session.LastTmpDir!)); // Dispose() cleaned up the tmp dir
+        File.Delete(session.LastDestPath!);
     }
 
     // C4
@@ -120,7 +123,7 @@ public sealed class PluginSaverSaveGroupTests
 
     // C6
     [Fact]
-    public async Task Save_MultiPlugin_BothReindexed()
+    public async Task Save_MultiPlugin_ReindexedAsBatch()
     {
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var groupId = Guid.NewGuid();
@@ -138,7 +141,9 @@ public sealed class PluginSaverSaveGroupTests
 
         await saver.Save(groupId);
 
-        Assert.Equal(2, session.ReindexedPlugins.Count);
+        var call = Assert.Single(session.BatchReindexCalls);
+        Assert.Contains("A.esp", call);
+        Assert.Contains("B.esp", call);
     }
 
     // C7
@@ -168,10 +173,12 @@ public sealed class PluginSaverSaveGroupTests
     private sealed class StubSession : ISessionManager, IDisposable
     {
         private readonly Queue<Func<Task<PreparedPluginSave>>> _prepareQueue = new();
-        private readonly List<string> _reindexed = [];
+        private readonly List<IReadOnlyList<string>> _batchReindexed = [];
         private IGameSession _session = new StubGameSession([]);
 
-        public IReadOnlyList<string> ReindexedPlugins => _reindexed;
+        public IReadOnlyList<IReadOnlyList<string>> BatchReindexCalls => _batchReindexed;
+        public string? LastTmpDir { get; private set; }
+        public string? LastDestPath { get; private set; }
 
         public void SetPrepareResponse(Func<Task<PreparedPluginSave>> fn) => _prepareQueue.Enqueue(fn);
         public void SetSession(IGameSession session) => _session = session;
@@ -182,11 +189,15 @@ public sealed class PluginSaverSaveGroupTests
             var dir = Path.Combine(Path.GetTempPath(), ".medit_tmp_" + Path.GetRandomFileName());
             Directory.CreateDirectory(dir);
             var tmp = Path.Combine(dir, plugin);
-            File.WriteAllText(tmp, string.Empty);
-            return Task.FromResult(new PreparedPluginSave(tmp, Path.GetTempFileName(), EmptySaveResult()));
+            File.WriteAllText(tmp, "committed-marker");
+            var dest = Path.GetTempFileName();
+            LastTmpDir = dir;
+            LastDestPath = dest;
+            return Task.FromResult(new PreparedPluginSave(tmp, dest, EmptySaveResult()));
         }
 
-        public Task ReindexPlugin(string plugin) { _reindexed.Add(plugin); return Task.CompletedTask; }
+        public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
+        public Task ReindexPlugins(IReadOnlyList<string> plugins) { _batchReindexed.Add(plugins); return Task.CompletedTask; }
 
         public void Dispose() => _session.Dispose();
 

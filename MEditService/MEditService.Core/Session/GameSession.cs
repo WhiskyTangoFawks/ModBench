@@ -129,5 +129,6 @@ public sealed class GameSession : IGameSession
         foreach (var mod in _mods)
             // Stryker disable once Statement : verifying per-mod disposal requires OS-level resource checks beyond the public API
             mod.Dispose();
+        (_linkCache as IDisposable)?.Dispose();
     }
 }

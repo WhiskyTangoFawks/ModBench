@@ -47,6 +47,15 @@ public interface ISessionManager
     Task ReindexPlugin(string plugin);
 
     /// <summary>
+    /// Re-reads each plugin in <paramref name="plugins"/> from disk and re-indexes them, then
+    /// recomputes winners once after all plugins are indexed. Prefer over multiple
+    /// <see cref="ReindexPlugin"/> calls when re-indexing more than one plugin at a time.
+    /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
+    /// Throws <see cref="KeyNotFoundException"/> if any plugin is not found in the current session.
+    /// </summary>
+    Task ReindexPlugins(IReadOnlyList<string> plugins);
+
+    /// <summary>
     /// Reserves and returns the next available FormKey string for <paramref name="plugin"/>,
     /// atomically incrementing the internal counter.
     /// Throws <see cref="ArgumentException"/> if the plugin has no reservation counter (not loaded or immutable).

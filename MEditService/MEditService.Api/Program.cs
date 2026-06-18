@@ -46,6 +46,7 @@ try
     builder.Services.AddSingleton<IRecordRepositoryFactory, DuckDbRecordRepositoryFactory>();
     builder.Services.AddSingleton<IConflictClassifier, ConflictClassifier>();
     builder.Services.AddSingleton<IPluginWriter, PluginWriter>();
+    builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
     builder.Services.AddSingleton<ISessionManager, SessionManager>();
     builder.Services.AddSingleton<DuckDbPendingChangeService>();
     builder.Services.AddSingleton<IPendingChangeService>(sp => sp.GetRequiredService<DuckDbPendingChangeService>());

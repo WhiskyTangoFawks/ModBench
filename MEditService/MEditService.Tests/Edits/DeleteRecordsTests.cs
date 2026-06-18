@@ -470,6 +470,7 @@ public sealed class DeleteRecordsTests
         public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes) =>
             throw new NotSupportedException();
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
+        public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new NotSupportedException();
         public void SetFilter(string sql) => _inner.SetFilter(sql);
         public void ClearFilter() => _inner.ClearFilter();
         public void Dispose() => _inner.Dispose();

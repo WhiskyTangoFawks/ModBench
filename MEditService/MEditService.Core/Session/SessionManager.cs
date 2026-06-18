@@ -16,6 +16,7 @@ public sealed class SessionManager : ISessionManager, IDisposable
     private readonly IRecordRepositoryFactory _repositoryFactory;
     private readonly IPluginWriter _writer;
     private readonly IPendingChangeLifecycle? _changeLifecycle;
+    private readonly IModImporter _modImporter;
     private GameSession? _session;
     private IRecordRepository? _repository;
     private readonly Dictionary<string, uint> _nextFormIds = new(StringComparer.OrdinalIgnoreCase);
@@ -30,12 +31,14 @@ public sealed class SessionManager : ISessionManager, IDisposable
         IRecordRepositoryFactory repositoryFactory,
         IPluginWriter writer,
         IPendingChangeService? pendingChanges = null,
-        ILogger<SessionManager>? logger = null)
+        ILogger<SessionManager>? logger = null,
+        IModImporter? modImporter = null)
     {
         _repositoryFactory = repositoryFactory;
         _writer = writer;
         _changeLifecycle = pendingChanges as IPendingChangeLifecycle;
         _logger = logger ?? NullLogger<SessionManager>.Instance;
+        _modImporter = modImporter ?? new DefaultModImporter();
     }
 
     public IGameSession? Session { get { lock (_lock) return _session; } }
@@ -147,12 +150,42 @@ public sealed class SessionManager : ISessionManager, IDisposable
 
         var modKey = ModKey.FromFileName(Path.GetFileName(metadata.Path));
         var modPath = new ModPath(modKey, metadata.Path);
-        using var mod = ModFactory.ImportGetter(modPath, gameRelease);
+        using var loaded = _modImporter.Import(modPath, gameRelease);
 
         lock (_lock)
         {
-            repository.Index(mod, metadata.LoadOrderIndex);
+            repository.Index(loaded.Getter, metadata.LoadOrderIndex);
             repository.UpdateWinners();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task ReindexPlugins(IReadOnlyList<string> plugins)
+    {
+        var loaded = new List<(PluginMetadata Metadata, IRecordRepository Repository, ILoadedMod Loaded)>(plugins.Count);
+        try
+        {
+            foreach (var plugin in plugins)
+            {
+                var (metadata, repository, gameRelease) = RequirePlugin(plugin);
+                var modKey = ModKey.FromFileName(Path.GetFileName(metadata.Path));
+                var modPath = new ModPath(modKey, metadata.Path);
+                loaded.Add((metadata, repository, _modImporter.Import(modPath, gameRelease)));
+            }
+
+            lock (_lock)
+            {
+                foreach (var (metadata, repository, item) in loaded)
+                    repository.Index(item.Getter, metadata.LoadOrderIndex);
+                if (loaded.Count > 0)
+                    loaded[0].Repository.UpdateWinners();
+            }
+        }
+        finally
+        {
+            foreach (var (_, _, item) in loaded)
+                item.Dispose();
         }
 
         return Task.CompletedTask;
