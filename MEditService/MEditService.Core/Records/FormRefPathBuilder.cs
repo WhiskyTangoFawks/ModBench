@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Queries;
 using MEditService.Core.Schema;
 
 namespace MEditService.Core.Records;
@@ -7,38 +8,39 @@ internal static class FormRefPathBuilder
 {
     public delegate void RefVisitor(string fieldPath, string targetFormKey);
 
-    public static void Walk(ColumnSpec col, Func<ColumnSpec, object?> getValue, RefVisitor visitor)
+    public static void Walk(ColumnSpec col, Func<ColumnSpec, object?> getValue, RefVisitor visitor) =>
+        Walk(col.ToFieldMetadata(), getValue(col), col.Name,
+            (path, raw, _, _) => { if (IsRealRef(raw)) visitor(path, raw!); });
+
+    internal static void Walk(
+        FieldMetadata meta, object? value, string path,
+        Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
     {
-        if (col.ApiType == "formKey")
-        {
-            var s = ExtractString(getValue(col));
-            if (IsRealRef(s))
-                visitor(col.Name, s!);
-        }
-        else if (col.ApiType == "array")
-        {
-            var elemType = col.ElementType?.Type;
-            ForEachElement(getValue(col), (idx, elem) =>
-            {
-                if (elemType == "formKey")
-                {
-                    var s = elem.ValueKind == JsonValueKind.String ? elem.GetString() : null;
-                    if (IsRealRef(s)) visitor($"{col.Name}[{idx}]", s!);
-                }
-                else if (elemType == "struct")
-                {
-                    if (elem.ValueKind != JsonValueKind.Object) return;
-                    foreach (var subField in col.ElementType!.Fields ?? [])
-                    {
-                        if (subField.Type != "formKey") continue;
-                        if (!elem.TryGetProperty(subField.Name, out var prop)) continue;
-                        if (prop.ValueKind != JsonValueKind.String) continue;
-                        var s = prop.GetString();
-                        if (IsRealRef(s)) visitor($"{col.Name}[{idx}].{subField.Name}", s!);
-                    }
-                }
-            });
-        }
+        if (meta.Type == "formKey")
+            onFormKeyLeaf(path, ExtractString(value), meta.AllowsNull, meta.ValidFormKeyTypes);
+        else if (meta.Type == "struct")
+            WalkStruct(meta, value, path, onFormKeyLeaf);
+        else if (meta.Type == "array")
+            WalkArray(meta, value, path, onFormKeyLeaf);
+    }
+
+    private static void WalkStruct(
+        FieldMetadata meta, object? value, string path,
+        Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
+    {
+        if (meta.Fields == null || value is not JsonElement { ValueKind: JsonValueKind.Object } obj) return;
+        foreach (var field in meta.Fields)
+            if (obj.TryGetProperty(field.Name, out var prop))
+                Walk(field, prop, path.Length > 0 ? $"{path}.{field.Name}" : field.Name, onFormKeyLeaf);
+    }
+
+    private static void WalkArray(
+        FieldMetadata meta, object? value, string path,
+        Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
+    {
+        if (meta.ElementType == null) return;
+        ForEachElement(value, (idx, elem) =>
+            Walk(meta.ElementType, elem, $"{path}[{idx}]", onFormKeyLeaf));
     }
 
     private static bool IsRealRef(string? s) => s is not null && s != "Null";

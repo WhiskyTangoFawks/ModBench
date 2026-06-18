@@ -203,4 +203,22 @@ public class FormRefPathBuilderTests
         var json = "[{\"rank\":1}]";
         Assert.Empty(Collect(col, json));
     }
+
+    // --- Depth-2: struct sub-field that is itself a struct containing a formKey ---
+
+    [Fact]
+    public void Walk_ArrayStruct_NestedStructSubField_FormKeyReached()
+    {
+        var innerFk = new FieldMetadata("target", "formKey", false, [], []);
+        var innerStruct = new FieldMetadata("inner", "struct", false, [], [], Fields: [innerFk]);
+        var elemMeta = new FieldMetadata("", "struct", false, [], [], Fields: [innerStruct]);
+        var col = new ColumnSpec("links", "links", "JSON", _ => null, "array", [], [], null,
+            IsArray: true, ElementType: elemMeta);
+
+        var json = "[{\"inner\":{\"target\":\"000001:Plugin.esp\"}}]";
+        var hits = Collect(col, json);
+
+        Assert.Single(hits);
+        Assert.Equal(("links[0].inner.target", "000001:Plugin.esp"), hits[0]);
+    }
 }

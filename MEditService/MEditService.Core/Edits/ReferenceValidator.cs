@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -13,33 +12,9 @@ internal static class ReferenceValidator
         Func<string, string?> getRecordType)
     {
         var errors = new List<ReferenceValidationError>();
-
-        if (col.ApiType == "formKey")
-        {
-            CheckValue(col.Name, FormRefPathBuilder.ExtractString(getValue(col)), col.AllowsNull, col.ValidFormKeyTypes, getRecordType, errors);
-        }
-        else if (col.ApiType == "array")
-        {
-            var elemMeta = col.ElementType;
-            FormRefPathBuilder.ForEachElement(getValue(col), (idx, elem) =>
-            {
-                if (elemMeta?.Type == "formKey")
-                {
-                    CheckValue($"{col.Name}[{idx}]", FormRefPathBuilder.ExtractString(elem), elemMeta.AllowsNull, elemMeta.ValidFormKeyTypes, getRecordType, errors);
-                }
-                else if (elemMeta?.Type == "struct")
-                {
-                    if (elem.ValueKind != JsonValueKind.Object) return;
-                    foreach (var subField in elemMeta.Fields ?? [])
-                    {
-                        if (subField.Type != "formKey") continue;
-                        if (!elem.TryGetProperty(subField.Name, out var prop)) continue;
-                        CheckValue($"{col.Name}[{idx}].{subField.Name}", FormRefPathBuilder.ExtractString(prop), subField.AllowsNull, subField.ValidFormKeyTypes, getRecordType, errors);
-                    }
-                }
-            });
-        }
-
+        FormRefPathBuilder.Walk(col.ToFieldMetadata(), getValue(col), col.Name,
+            (path, raw, allowsNull, validTypes) =>
+                CheckValue(path, raw, allowsNull, validTypes, getRecordType, errors));
         return errors;
     }
 

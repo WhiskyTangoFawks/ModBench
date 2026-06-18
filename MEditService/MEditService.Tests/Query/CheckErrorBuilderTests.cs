@@ -78,4 +78,18 @@ public class CheckErrorBuilderTests
         var err = CheckErrorBuilder.Build(meta, 1.5, _ => null);
         Assert.Null(err);
     }
+
+    [Fact]
+    public void Build_NestedStructInsideArrayStruct_FormKeyReached()
+    {
+        var innerFk = new FieldMetadata("target", "formKey", false, ["kywd"], [], AllowsNull: false);
+        var innerStruct = new FieldMetadata("inner", "struct", false, [], [], Fields: [innerFk]);
+        var elemMeta = new FieldMetadata("", "struct", false, [], [], Fields: [innerStruct]);
+        var meta = new FieldMetadata("links", "array", true, [], [], ElementType: elemMeta);
+        var value = J("""[{"inner":{"target":null}}]""");
+
+        var err = CheckErrorBuilder.Build(meta, value, _ => null);
+
+        Assert.Equal("[0].inner.target: Found a NULL reference, expected: kywd", err);
+    }
 }
