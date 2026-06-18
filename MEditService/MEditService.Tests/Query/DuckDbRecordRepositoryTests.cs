@@ -562,4 +562,47 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
         Assert.NotNull(keywordsField);
         Assert.Null(keywordsField.CheckError);
     }
+
+    [Fact]
+    public void GetAllOverrides_SharedKeywordRef_CheckErrorConsistentAcrossOverrides()
+    {
+        FormKey npcFormKey = default;
+        using var fixture = new PluginFixtureBuilder("medit-checkerror-shared")
+            .WithPlugin("Base.esm", mod =>
+            {
+                var keyword = mod.Keywords.AddNew("SharedKw");
+                var npc = mod.Npcs.AddNew("SharedNPC");
+                npcFormKey = npc.FormKey;
+                npc.Keywords = [new FormLink<IKeywordGetter>(keyword.FormKey)];
+            })
+            .WithPlugin("Patch.esp", (mod, built) =>
+            {
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esm") });
+                mod.Npcs.Set(built[0].Npcs.First().DeepCopy());
+            })
+            .Build();
+
+        var baseMod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(fixture.DataFolder, "Base.esm")),
+            Fallout4Release.Fallout4);
+        var patchMod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("Patch.esp"), Path.Combine(fixture.DataFolder, "Patch.esp")),
+            Fallout4Release.Fallout4);
+
+        using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        repo.Index(baseMod, 0);
+        repo.Index(patchMod, 1);
+        repo.UpdateWinners();
+
+        var overrides = repo.GetAllOverrides("npc_", npcFormKey.ToString());
+
+        Assert.Equal(2, overrides.Count);
+        var baseKw = overrides[0].Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
+        var patchKw = overrides[1].Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
+        Assert.NotNull(baseKw);
+        Assert.NotNull(patchKw);
+        Assert.Null(baseKw.CheckError);
+        Assert.Null(patchKw.CheckError);
+    }
 }

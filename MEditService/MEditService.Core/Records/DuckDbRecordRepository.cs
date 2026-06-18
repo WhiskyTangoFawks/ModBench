@@ -191,7 +191,15 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.CommandText = sql;
         AddParams(cmd, values);
         using var reader = cmd.ExecuteReader();
-        return reader.Read() ? ReadDetail(reader, schema, FindRecordType) : null;
+        if (!reader.Read()) return null;
+        var cache = new Dictionary<string, string?>();
+        return ReadDetail(reader, schema, fk =>
+        {
+            if (cache.TryGetValue(fk, out var t)) return t;
+            var resolved = FindRecordType(fk);
+            cache[fk] = resolved;
+            return resolved;
+        });
     }
 
     public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey)
@@ -209,8 +217,15 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         using var reader = cmd.ExecuteReader();
 
         var list = new List<RecordDetail>();
+        var cache = new Dictionary<string, string?>();
         while (reader.Read())
-            list.Add(ReadDetail(reader, schema, FindRecordType));
+            list.Add(ReadDetail(reader, schema, fk =>
+            {
+                if (cache.TryGetValue(fk, out var t)) return t;
+                var resolved = FindRecordType(fk);
+                cache[fk] = resolved;
+                return resolved;
+            }));
         return list;
     }
 

@@ -4,6 +4,8 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Session;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins.Cache;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
@@ -139,17 +141,40 @@ public sealed class PluginSaverSaveGroupTests
         Assert.Equal(2, session.ReindexedPlugins.Count);
     }
 
+    // C7
+    [Fact]
+    public async Task Save_ImmutablePlugin_ReturnsImmutablePluginResult()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        var group = StageGroupChange(changes, "Immutable.esm");
+        var session = new StubSession();
+        session.SetSession(new StubGameSession([MakeImmutablePlugin("Immutable.esm")]));
+        var saver = new PluginSaver(changes, session);
+
+        var result = await saver.Save(group.Id);
+
+        var immutable = Assert.IsType<SaveGroupResult.ImmutablePlugin>(result);
+        Assert.Equal("Immutable.esm", immutable.Plugin);
+        Assert.NotEmpty(changes.GetChanges(groupId: group.Id)); // early exit preserves pending changes
+    }
+
     // --- helpers ---
 
     private static SaveResult EmptySaveResult() => new(string.Empty, [], [], [], []);
 
-    private sealed class StubSession : ISessionManager
+    private static PluginMetadata MakeImmutablePlugin(string name) =>
+        new(name, string.Empty, 0, false, true, [], 0, IsImmutable: true);
+
+    private sealed class StubSession : ISessionManager, IDisposable
     {
         private readonly Queue<Func<Task<PreparedPluginSave>>> _prepareQueue = new();
         private readonly List<string> _reindexed = [];
+        private IGameSession _session = new StubGameSession([]);
+
         public IReadOnlyList<string> ReindexedPlugins => _reindexed;
 
         public void SetPrepareResponse(Func<Task<PreparedPluginSave>> fn) => _prepareQueue.Enqueue(fn);
+        public void SetSession(IGameSession session) => _session = session;
 
         public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes)
         {
@@ -163,7 +188,9 @@ public sealed class PluginSaverSaveGroupTests
 
         public Task ReindexPlugin(string plugin) { _reindexed.Add(plugin); return Task.CompletedTask; }
 
-        public IGameSession? Session => throw new NotSupportedException();
+        public void Dispose() => _session.Dispose();
+
+        public IGameSession? Session => _session;
         public IRecordReader? Repository => throw new NotSupportedException();
         public void Load(string d, string p, GameRelease g) => throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
@@ -172,5 +199,17 @@ public sealed class PluginSaverSaveGroupTests
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public void SetFilter(string sql) => throw new NotSupportedException();
         public void ClearFilter() => throw new NotSupportedException();
+    }
+
+    private sealed class StubGameSession(IReadOnlyList<PluginMetadata> plugins) : IGameSession
+    {
+        public IReadOnlyList<PluginMetadata> Plugins => plugins;
+        public string DataFolderPath => throw new NotSupportedException();
+        public GameRelease GameRelease => throw new NotSupportedException();
+        public ILinkCache LinkCache => throw new NotSupportedException();
+        public string? FilterSql { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public IModGetter? GetMod(string pluginName) => throw new NotSupportedException();
+        public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();
+        public void Dispose() { }
     }
 }
