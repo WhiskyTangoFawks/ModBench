@@ -248,6 +248,93 @@ public sealed class EditOrchestrator : IEditOrchestrator
         return new DeleteRecordsResult.Staged(group);
     }
 
+    public RenumberResult Renumber(string formKey, uint newFormId, string plugin, string source)
+    {
+        var session = _sessionManager.Session;
+        if (session == null) return new RenumberResult.NoSession();
+
+        var pluginMeta = session.Plugins.FirstOrDefault(p =>
+            p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase));
+        if (pluginMeta?.IsImmutable == true)
+            return new RenumberResult.PluginImmutable(plugin);
+
+        var recordType = _query.GetRecordType(formKey);
+        if (recordType == null) return new RenumberResult.RecordNotFound();
+
+        var newFormKey = $"{newFormId:X6}:{plugin}";
+
+        var immutablePlugins = session.Plugins
+            .Where(p => p.IsImmutable)
+            .Select(p => p.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var allRefs = _query.GetReferences(formKey).ToList();
+
+        var immutableBlockers = allRefs
+            .Where(r => immutablePlugins.Contains(r.Plugin))
+            .ToList();
+        if (immutableBlockers.Count > 0)
+            return new RenumberResult.ImmutableReferences(immutableBlockers);
+
+        if (_query.GetRecordType(newFormKey) != null)
+            return new RenumberResult.FormIdInUse();
+
+        var members = new List<GroupMember>();
+
+        // The renumber change for the record itself
+        members.Add(new GroupMember(
+            formKey, plugin, recordType,
+            PendingChangeConstants.RenumberChangeType,
+            PendingChangeConstants.RenumberFieldPath,
+            JsonSerializer.SerializeToElement(formKey),
+            JsonSerializer.SerializeToElement(newFormKey),
+            source));
+
+        // FieldEdit changes for cross-plugin editable references only
+        var crossPluginRefs = allRefs
+            .Where(r => !r.Plugin.Equals(plugin, StringComparison.OrdinalIgnoreCase) &&
+                        !immutablePlugins.Contains(r.Plugin))
+            .ToList();
+
+        foreach (var fieldGroup in crossPluginRefs.GroupBy(r => (r.FormKey, r.Plugin, TopLevelFieldName(r.FieldPath))))
+        {
+            var (sourceFormKey, sourcePlugin, topLevelField) = fieldGroup.Key;
+            var refRecordType = fieldGroup.First().RecordType;
+            var currentRecord = _query.GetRecordForPlugin(sourceFormKey, sourcePlugin)!;
+            var fieldValue = currentRecord.Fields.First(fv => fv.Metadata.Name == topLevelField).Value;
+            var oldValue = JsonSerializer.SerializeToElement(fieldValue);
+            var newValue = ReplaceFormKey(oldValue, formKey, newFormKey);
+
+            members.Add(new GroupMember(
+                sourceFormKey, sourcePlugin, refRecordType,
+                PendingChangeConstants.FieldEditChangeType,
+                topLevelField,
+                oldValue,
+                newValue,
+                source));
+        }
+
+        var group = _changes.StageGroup("renumber", null, members);
+        return new RenumberResult.Staged(group);
+    }
+
+    private static JsonElement ReplaceFormKey(JsonElement element, string oldFormKey, string newFormKey) =>
+        element.ValueKind switch
+        {
+            JsonValueKind.String when element.GetString()!.Equals(oldFormKey, StringComparison.OrdinalIgnoreCase) =>
+                JsonSerializer.SerializeToElement(newFormKey),
+            JsonValueKind.Array =>
+                JsonSerializer.SerializeToElement(
+                    element.EnumerateArray()
+                        .Select(e => ReplaceFormKey(e, oldFormKey, newFormKey))
+                        .ToList()),
+            JsonValueKind.Object =>
+                JsonSerializer.SerializeToElement(
+                    element.EnumerateObject()
+                        .ToDictionary(p => p.Name, p => ReplaceFormKey(p.Value, oldFormKey, newFormKey))),
+            _ => element
+        };
+
     private static string TopLevelFieldName(string fieldPath) =>
         fieldPath.Split(['.', '['], 2)[0];
 

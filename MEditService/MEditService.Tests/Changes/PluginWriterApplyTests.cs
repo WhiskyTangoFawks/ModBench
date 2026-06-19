@@ -611,4 +611,77 @@ public class PluginWriterApplyTests
         Assert.DoesNotContain(saved.EnumerateMajorRecords(), r => r.FormKey == npcToDelete);
         Assert.Contains(saved.EnumerateMajorRecords(), r => r.FormKey == npcToEdit);
     }
+
+    // --- $renumber changes ---
+
+    private static PendingChange MakeRenumber(FormKey oldKey, string plugin, uint newId, string recordType)
+    {
+        var oldStr = oldKey.ToString();
+        var newStr = $"{newId:X6}:{plugin}";
+        return new(
+            Guid.NewGuid(), oldStr, plugin, "$renumber", recordType,
+            JsonSerializer.SerializeToElement(oldStr),
+            JsonSerializer.SerializeToElement(newStr),
+            "user", null, DateTime.UtcNow, "renumber", null);
+    }
+
+    [Fact]
+    public async Task SaveAsync_Renumber_OldFormKeyGoneNewFormKeyPresent()
+    {
+        FormKey kwKey = default;
+        using var data = new PluginFixtureBuilder("pw-renumber")
+            .WithPlugin("Source.esp", mod => kwKey = mod.Keywords.AddNew().FormKey)
+            .Build();
+
+        var pluginPath = Path.Combine(data.DataFolder, "Source.esp");
+        var modPath = new Mutagen.Bethesda.Plugins.ModPath(
+            Mutagen.Bethesda.Plugins.ModKey.FromFileName("Source.esp"), pluginPath);
+
+        const uint newId = 0x999990;
+        var newFormKey = FormKey.Factory($"{newId:X6}:Source.esp");
+        var change = MakeRenumber(kwKey, "Source.esp", newId, "kywd");
+
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var result = await writer.SaveAsync(pluginPath, [change], GameRelease.Fallout4);
+
+        Assert.Contains("$renumber", result.Applied);
+        Assert.Empty(result.NotFound);
+
+        using var saved = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
+        Assert.DoesNotContain(saved.EnumerateMajorRecords(), r => r.FormKey == kwKey);
+        Assert.Contains(saved.EnumerateMajorRecords(), r => r.FormKey == newFormKey);
+    }
+
+    [Fact]
+    public async Task SaveAsync_Renumber_RemapLinksUpdatesIntraPluginReference()
+    {
+        FormKey kwKey = default;
+        FormKey npcKey = default;
+        using var data = new PluginFixtureBuilder("pw-renumber-remap")
+            .WithPlugin("Source.esp", mod =>
+            {
+                kwKey = mod.Keywords.AddNew().FormKey;
+                var npc = mod.Npcs.AddNew("RenumberRefNpc");
+                npc.Keywords = [new FormLink<IKeywordGetter>(kwKey)];
+                npcKey = npc.FormKey;
+            })
+            .Build();
+
+        var pluginPath = Path.Combine(data.DataFolder, "Source.esp");
+        var modPath = new Mutagen.Bethesda.Plugins.ModPath(
+            Mutagen.Bethesda.Plugins.ModKey.FromFileName("Source.esp"), pluginPath);
+
+        const uint newId = 0x999991;
+        var newFormKey = FormKey.Factory($"{newId:X6}:Source.esp");
+        var change = MakeRenumber(kwKey, "Source.esp", newId, "kywd");
+
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        await writer.SaveAsync(pluginPath, [change], GameRelease.Fallout4);
+
+        using var saved = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
+        var npc = saved.EnumerateMajorRecords().OfType<INpcGetter>().Single(n => n.FormKey == npcKey);
+        Assert.NotNull(npc.Keywords);
+        Assert.Contains(npc.Keywords!, kw => kw.FormKey == newFormKey);
+        Assert.DoesNotContain(npc.Keywords!, kw => kw.FormKey == kwKey);
+    }
 }

@@ -59,6 +59,7 @@ public sealed class PluginWriter : IPluginWriter
         ApplyCreateChanges(byFormKey, mod, schemas, applied, notFound, createFailed);
         ApplyFieldChanges(byFormKey, mod, schemas, applied, readOnly, notFound);
         ApplyDeleteChanges(byFormKey, mod, schemas, applied, notFound);
+        ApplyRenumberChanges(byFormKey, mod, schemas, applied, notFound);
 
         var dir = Path.GetDirectoryName(pluginPath)!;
         var tmpDir = Path.Combine(dir, ".medit_tmp_" + Path.GetRandomFileName());
@@ -185,6 +186,60 @@ public sealed class PluginWriter : IPluginWriter
             else
                 notFound.Add(deleteChange.FieldPath);
         }
+    }
+
+    private static void ApplyRenumberChanges(
+        IEnumerable<IGrouping<string, PendingChange>> byFormKey,
+        IMod mod,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        List<string> applied,
+        List<string> notFound)
+    {
+        var allMappings = new Dictionary<FormKey, FormKey>();
+
+        foreach (var group in byFormKey)
+        {
+            var renumberChange = group.FirstOrDefault(c => c.ChangeType == PendingChangeConstants.RenumberChangeType);
+            if (renumberChange == null) continue;
+
+            var oldFormKeyStr = renumberChange.OldValue.GetString()!;
+            var newFormKeyStr = renumberChange.NewValue.GetString()!;
+
+            if (!FormKey.TryFactory(oldFormKeyStr, out var oldFormKey) ||
+                !FormKey.TryFactory(newFormKeyStr, out var newFormKey))
+            {
+                notFound.Add(renumberChange.FieldPath);
+                continue;
+            }
+
+            if (!schemas.TryGetValue(renumberChange.RecordType, out var schema) ||
+                schema.AddExisting == null || schema.Remove == null)
+            {
+                notFound.Add(renumberChange.FieldPath);
+                continue;
+            }
+
+            var oldRecord = mod.EnumerateMajorRecords()
+                .FirstOrDefault(r => r.FormKey == oldFormKey);
+            if (oldRecord == null)
+            {
+                notFound.Add(renumberChange.FieldPath);
+                continue;
+            }
+
+            var newRecord = (IMajorRecord)oldRecord.Duplicate(newFormKey);
+            schema.AddExisting(mod, newRecord);
+            schema.Remove(mod, oldFormKey);
+            allMappings[oldFormKey] = newFormKey;
+            applied.Add(renumberChange.FieldPath);
+        }
+
+        // Single pass: remap all intra-plugin FormLinks across all renumber operations.
+        // IMod.RemapLinks() is an explicit interface impl on AMod that throws; iterate
+        // records directly so each concrete type's public override is dispatched.
+        if (allMappings.Count > 0)
+            foreach (var rec in mod.EnumerateMajorRecords())
+                rec.RemapLinks(allMappings);
     }
 
     private enum ApplyOutcome { Applied, ReadOnly, NotFound }

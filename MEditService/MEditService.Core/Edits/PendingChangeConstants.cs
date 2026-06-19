@@ -9,6 +9,8 @@ internal static class PendingChangeConstants
     internal const string DeleteFieldPath = "$delete";
     internal const string DeleteChangeType = "delete";
     internal const string FieldEditChangeType = "field_edit";
+    internal const string RenumberChangeType = "renumber";
+    internal const string RenumberFieldPath = "$renumber";
 
     internal static readonly JsonElement NullElement =
         JsonSerializer.SerializeToElement<object?>(null);

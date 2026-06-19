@@ -9,6 +9,7 @@ namespace MEditService.Api.Endpoints;
 public static class ChangeEndpoints
 {
     private const string Tag = "Changes";
+    private const string NoSessionMessage = "No session loaded.";
 
     public static IEndpointRouteBuilder MapChangeEndpoints(this IEndpointRouteBuilder app)
     {
@@ -34,6 +35,15 @@ public static class ChangeEndpoints
             .Produces<ChangeGroup>()
             .ProducesProblem(400)
             .ProducesProblem(409);
+
+        app.MapPost("/records/{formKey}/renumber", RenumberRecord)
+            .WithName("RenumberRecord")
+            .WithTags(Tag)
+            .Produces<ChangeGroup>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(409)
+            .ProducesProblem(422);
 
         app.MapGet("/change-groups", (IPendingChangeService changes) => Results.Ok(changes.GetChangeGroups()))
             .WithName("GetChangeGroups")
@@ -91,7 +101,7 @@ public static class ChangeEndpoints
         IEditOrchestrator orchestrator)
     {
         var s = session.Session;
-        if (s == null) return Results.Problem("No session loaded.");
+        if (s == null) return Results.Problem(NoSessionMessage);
 
         var decoded = Uri.UnescapeDataString(formKey);
         return orchestrator.StageEdit(decoded, req.Plugin, req.Fields, req.Source ?? "user", req.Description).ToHttpResult();
@@ -161,7 +171,7 @@ public static class ChangeEndpoints
         IEditOrchestrator orchestrator)
     {
         var s = session.Session;
-        if (s == null) return Results.Problem("No session loaded.");
+        if (s == null) return Results.Problem(NoSessionMessage);
 
         var decodedPlugin = Uri.UnescapeDataString(plugin);
 
@@ -196,7 +206,7 @@ public static class ChangeEndpoints
 
         if (groupIds == null) return Results.Problem("Request body is required.", statusCode: 400);
 
-        if (session.Session == null) return Results.Problem("No session loaded.");
+        if (session.Session == null) return Results.Problem(NoSessionMessage);
 
         var allResults = new Dictionary<string, SaveResult>();
         try
@@ -218,6 +228,29 @@ public static class ChangeEndpoints
 
         return Results.Ok(allResults);
     }
+
+    private static IResult RenumberRecord(
+        [FromRoute] string formKey,
+        [FromBody] RenumberRecordRequest req,
+        IEditOrchestrator orchestrator)
+    {
+        var decoded = Uri.UnescapeDataString(formKey);
+        return orchestrator.Renumber(decoded, req.NewFormId, req.Plugin, req.Source ?? "user") switch
+        {
+            RenumberResult.Staged ok => Results.Ok(ok.Group),
+            RenumberResult.RecordNotFound => Results.NotFound(),
+            RenumberResult.PluginImmutable p => Results.Problem(
+                $"'{p.Plugin}' is immutable and cannot be edited.", statusCode: 409),
+            RenumberResult.ImmutableReferences blocked => Results.Problem(
+                title: "Immutable plugin holds a reference to this record.",
+                statusCode: 409,
+                extensions: new Dictionary<string, object?> { { "blockers", blocked.Blockers } }),
+            RenumberResult.FormIdInUse => Results.Problem(
+                "The requested FormID is already in use.", statusCode: 422),
+            RenumberResult.NoSession => Results.Problem(NoSessionMessage, statusCode: 400),
+            var r => throw new InvalidOperationException($"Unhandled RenumberResult: {r.GetType().Name}")
+        };
+    }
 }
 
 public record PatchRecordRequest(
@@ -232,3 +265,5 @@ public record CreateRecordRequest(
     string? Source);
 
 public record CopyRecordRequest(string? Source);
+
+public record RenumberRecordRequest(uint NewFormId, string Plugin, string? Source);

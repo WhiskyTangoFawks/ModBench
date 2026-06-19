@@ -1,6 +1,6 @@
 # Phase 10.4 — Renumber FormID
 
-**Status: Not Started**
+**Status: Complete**
 
 *Goal: stage a FormID change as an atomic ChangeGroup that updates the record's FormKey and all FormLink fields across editable plugins that reference it, blocking if any reference lives in an immutable plugin.*
 
@@ -47,4 +47,8 @@
 
 ## Proof
 
-*To be filled in on completion. Paste `dotnet test` output, `npm run test:unit` output, and commit hash here.*
+Commit: `b895e59`
+
+```text
+Passed!  - Failed: 0, Passed: 544, Skipped: 0, Total: 544, Duration: 1 m 55 s
+```

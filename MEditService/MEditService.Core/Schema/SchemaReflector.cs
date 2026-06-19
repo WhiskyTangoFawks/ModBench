@@ -86,6 +86,7 @@ public sealed class SchemaReflector : ISchemaReflector
 
             Action<IMod, FormKey>? addNew = null;
             Func<IMod, FormKey, bool>? remove = null;
+            Action<IMod, IMajorRecord>? addExisting = null;
             if (modType != null)
             {
                 var setterType = GetSetterType(getterType);
@@ -101,6 +102,11 @@ public sealed class SchemaReflector : ISchemaReflector
                         {
                             var group = (IGroup)groupProp.GetValue(mod)!;
                             group.AddNew(fk);
+                        };
+                        addExisting = (mod, rec) =>
+                        {
+                            var group = (IGroup)groupProp.GetValue(mod)!;
+                            group.AddUntyped(rec);
                         };
                         // Remove(FormKey) is on IGroup<T>, not the non-generic IGroup; resolve MethodInfo
                         // once at schema-build time and close over it to avoid per-call reflection.
@@ -123,6 +129,7 @@ public sealed class SchemaReflector : ISchemaReflector
                 RecordColumns = schema.RecordColumns,
                 AddNew = addNew,
                 Remove = remove,
+                AddExisting = addExisting,
             };
         }
 

@@ -24,4 +24,6 @@ public interface IEditOrchestrator
     CreateRecordOutcome CreateRecord(string plugin, string recordType, string? templateFormKey, string source);
 
     DeleteRecordsResult DeleteRecords(IReadOnlyList<(string FormKey, string Plugin)> targets, string source);
+
+    RenumberResult Renumber(string formKey, uint newFormId, string plugin, string source);
 }

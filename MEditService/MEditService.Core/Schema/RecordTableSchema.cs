@@ -40,4 +40,10 @@ public sealed class RecordTableSchema
     /// Returns true when removed, false when not found. Null when the group property could not be resolved via reflection.
     /// </summary>
     public Func<IMod, FormKey, bool>? Remove { get; init; }
+
+    /// <summary>
+    /// Adds an already-constructed record to the correct group on <paramref name="mod"/>.
+    /// Null when the group property could not be resolved via reflection.
+    /// </summary>
+    public Action<IMod, IMajorRecord>? AddExisting { get; init; }
 }
