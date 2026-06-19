@@ -7,6 +7,7 @@ export interface SessionControllerDeps {
   repository: PluginRepository;
   makeWizard: () => SessionWizard;
   refreshTree: () => void;
+  refreshGroupTree: () => void;
   setStatusText: (text: string) => void;
   showWarning: (msg: string) => void;
   showError: (msg: string) => void;
@@ -89,6 +90,62 @@ export class SessionController {
       this.log(`[SessionController] deleteRecords threw: ${e instanceof Error ? e.message : String(e)}`);
       this.deps.showError(`mEdit: Delete failed — ${e instanceof Error ? e.message : String(e)}`);
       return false;
+    }
+  }
+
+  async saveGroup(groupId: string): Promise<void> {
+    const { response } = await this.deps.client.POST('/change-groups/{groupId}/save', {
+      params: { path: { groupId } },
+    });
+    if (response.ok || response.status === 404) {
+      this.deps.refreshGroupTree();
+      this.deps.refreshTree();
+      return;
+    }
+    const text = await response.text();
+    this.log(`[SessionController] saveGroup failed (${response.status}): ${text}`);
+    this.deps.showError(`mEdit: Save failed — ${text}`);
+  }
+
+  async revertGroup(groupId: string): Promise<void> {
+    const { response } = await this.deps.client.DELETE('/changes/group/{groupId}', {
+      params: { path: { groupId } },
+    });
+    if (response.ok) {
+      this.deps.refreshGroupTree();
+      return;
+    }
+    const text = await response.text();
+    this.log(`[SessionController] revertGroup failed (${response.status}): ${text}`);
+    this.deps.showError(`mEdit: Revert failed — ${text}`);
+  }
+
+  async saveAllGroups(groups: { id: string }[]): Promise<void> {
+    const failed: string[] = [];
+    let anySucceeded = false;
+    for (const { id } of groups) {
+      const { response } = await this.deps.client.POST('/change-groups/{groupId}/save', {
+        params: { path: { groupId: id } },
+      });
+      if (response.ok || response.status === 404) {
+        anySucceeded = true;
+      } else {
+        failed.push(id);
+        this.log(`[SessionController] saveAllGroups: group ${id} failed (${response.status})`);
+      }
+    }
+    if (anySucceeded) {
+      this.deps.refreshGroupTree();
+      this.deps.refreshTree();
+    }
+    if (failed.length > 0) {
+      this.deps.showError(`mEdit: Failed to save groups: ${failed.join(', ')}`);
+    }
+  }
+
+  async revertAllGroups(groups: { id: string }[]): Promise<void> {
+    for (const { id } of groups) {
+      await this.revertGroup(id);
     }
   }
 

@@ -8,6 +8,7 @@ import { detectGamePaths } from './GamePathDetector';
 import { SessionWizard } from './SessionWizard';
 import { SessionController } from './SessionController';
 import { LoadMoreNode, PluginTreeProvider, RecordNode } from './PluginTreeProvider';
+import { ChangeGroupNode, ChangeGroupsTreeProvider } from './ChangeGroupsTreeProvider';
 import { ApiPluginRepository } from './PluginRepository';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
 import { buildWebviewHtml } from './webviewHtml';
@@ -40,6 +41,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const client = createApiClient(port);
   const repository = new ApiPluginRepository(client, log);
   const treeProvider = new PluginTreeProvider(repository, log);
+  const changeGroupTreeProvider = new ChangeGroupsTreeProvider(client, log);
   const openPanels = new Map<string, vscode.WebviewPanel>();
 
   // Resolve scripts path (config or ~/.medit/scripts)
@@ -80,6 +82,7 @@ export async function activate(context: vscode.ExtensionContext) {
       showErrorMessage: (msg) => { void vscode.window.showErrorMessage(msg); },
     }),
     refreshTree: () => treeProvider.refresh(),
+    refreshGroupTree: () => changeGroupTreeProvider.refresh(),
     setStatusText: (t) => { statusBarItem.text = t; },
     showWarning: (msg) => { void vscode.window.showWarningMessage(msg); },
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
@@ -91,8 +94,13 @@ export async function activate(context: vscode.ExtensionContext) {
     canSelectMany: true,
   });
 
+  const changeGroupTreeView = vscode.window.createTreeView('mEdit.changeGroupTree', {
+    treeDataProvider: changeGroupTreeProvider,
+  });
+
   context.subscriptions.push(
     treeView,
+    changeGroupTreeView,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     vscode.commands.registerCommand('mEdit.refreshTree', () => treeProvider.refresh()),
     vscode.commands.registerCommand('mEdit.loadSession', () => controller.loadSession()),
@@ -162,6 +170,22 @@ export async function activate(context: vscode.ExtensionContext) {
       if (answer !== 'Delete') return;
       await controller.deleteRecords(targets.map(n => ({ formKey: n.record.formKey, plugin: n.record.plugin })));
     }),
+    vscode.commands.registerCommand('mEdit.saveGroup', async (node: ChangeGroupNode) => {
+      if (!node?.groupId) return;
+      await controller.saveGroup(node.groupId);
+    }),
+    vscode.commands.registerCommand('mEdit.revertGroup', async (node: ChangeGroupNode) => {
+      if (!node?.groupId) return;
+      await controller.revertGroup(node.groupId);
+    }),
+    vscode.commands.registerCommand('mEdit.saveAllGroups', async () => {
+      const groups = changeGroupTreeProvider.getCachedGroups().flatMap(g => g.id ? [{ id: g.id }] : []);
+      await controller.saveAllGroups(groups);
+    }),
+    vscode.commands.registerCommand('mEdit.revertAllGroups', async () => {
+      const groups = changeGroupTreeProvider.getCachedGroups().flatMap(g => g.id ? [{ id: g.id }] : []);
+      await controller.revertAllGroups(groups);
+    }),
     vscode.commands.registerCommand('mEdit.copyAsOverrideInto', async (node?: RecordNode) => {
       const formKey = node?.record?.formKey;
       if (!formKey) {
@@ -196,6 +220,7 @@ export async function activate(context: vscode.ExtensionContext) {
     if (status === 'attached') {
       void controller.onBackendConnected()
         .then(() => controller.syncFilterState())
+        .then(() => changeGroupTreeProvider.refresh())
         .catch((err: unknown) => log(`[extension] onBackendConnected failed: ${err instanceof Error ? err.message : String(err)}`));
     }
   });

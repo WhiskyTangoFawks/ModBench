@@ -71,6 +71,7 @@ function makeDeps(overrides: Partial<SessionControllerDeps> = {}): SessionContro
     repository: makeRepository(),
     makeWizard: makeWizardFactory(true),
     refreshTree: vi.fn(),
+    refreshGroupTree: vi.fn(),
     setStatusText: vi.fn(),
     showWarning: vi.fn(),
     showError: vi.fn(),
@@ -282,6 +283,173 @@ describe('SessionController.syncFilterState', () => {
     await ctrl.syncFilterState();
 
     expect(deps.setFilterActive).toHaveBeenCalledWith(false, undefined);
+  });
+});
+
+// ── saveGroup ─────────────────────────────────────────────────────────────────
+
+describe('SessionController.saveGroup', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs to save endpoint and refreshes both trees on success', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: true, status: 200 } }),
+      DELETE: vi.fn(),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveGroup('abc-123');
+
+    expect(client.POST).toHaveBeenCalledWith(
+      '/change-groups/{groupId}/save',
+      expect.objectContaining({ params: { path: { groupId: 'abc-123' } } }),
+    );
+    expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+  });
+
+  it('treats 404 as success and refreshes both trees', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: false, status: 404, text: () => Promise.resolve('Not found') } }),
+      DELETE: vi.fn(),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveGroup('abc-123');
+
+    expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+    expect(deps.showError).not.toHaveBeenCalled();
+  });
+
+  it('shows error on 409 and does not refresh', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: false, status: 409, text: () => Promise.resolve('immutable') } }),
+      DELETE: vi.fn(),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveGroup('abc-123');
+
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('immutable'));
+    expect(deps.refreshGroupTree).not.toHaveBeenCalled();
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+});
+
+// ── revertGroup ───────────────────────────────────────────────────────────────
+
+describe('SessionController.revertGroup', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('DELETEs the group and refreshes group tree only on success', async () => {
+    const client = {
+      ...makeClient(),
+      DELETE: vi.fn().mockResolvedValue({ response: { ok: true, status: 204 } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.revertGroup('abc-123');
+
+    expect(client.DELETE).toHaveBeenCalledWith(
+      '/changes/group/{groupId}',
+      expect.objectContaining({ params: { path: { groupId: 'abc-123' } } }),
+    );
+    expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  it('shows error on failure and does not refresh', async () => {
+    const client = {
+      ...makeClient(),
+      DELETE: vi.fn().mockResolvedValue({ response: { ok: false, status: 500, text: () => Promise.resolve('server error') } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.revertGroup('abc-123');
+
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('server error'));
+    expect(deps.refreshGroupTree).not.toHaveBeenCalled();
+  });
+});
+
+// ── saveAllGroups ─────────────────────────────────────────────────────────────
+
+describe('SessionController.saveAllGroups', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('saves each group sequentially and refreshes both trees', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: true, status: 200 } }),
+      DELETE: vi.fn(),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveAllGroups([{ id: 'g1' }, { id: 'g2' }]);
+
+    expect(client.POST).toHaveBeenCalledTimes(2);
+    expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
+    expect(deps.showError).not.toHaveBeenCalled();
+  });
+
+  it('shows error naming failed groups when one save fails', async () => {
+    let calls = 0;
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockImplementation(() => {
+        calls++;
+        if (calls === 2) return Promise.resolve({ response: { ok: false, status: 500, text: () => Promise.resolve('disk full') } });
+        return Promise.resolve({ response: { ok: true, status: 200 } });
+      }),
+      DELETE: vi.fn(),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveAllGroups([{ id: 'g1' }, { id: 'g2' }]);
+
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('g2'));
+  });
+
+  it('does nothing with empty group list', async () => {
+    const client = { ...makeClient(), POST: vi.fn(), DELETE: vi.fn() };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveAllGroups([]);
+
+    expect(client.POST).not.toHaveBeenCalled();
+    expect(deps.refreshGroupTree).not.toHaveBeenCalled();
+  });
+});
+
+// ── revertAllGroups ───────────────────────────────────────────────────────────
+
+describe('SessionController.revertAllGroups', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('reverts each group sequentially', async () => {
+    const client = {
+      ...makeClient(),
+      DELETE: vi.fn().mockResolvedValue({ response: { ok: true, status: 204 } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.revertAllGroups([{ id: 'g1' }, { id: 'g2' }]);
+
+    expect(client.DELETE).toHaveBeenCalledTimes(2);
+    expect(deps.refreshGroupTree).toHaveBeenCalledTimes(2);
   });
 });
 

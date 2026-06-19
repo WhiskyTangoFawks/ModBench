@@ -91,6 +91,15 @@ public static class ChangeEndpoints
             .ProducesProblem(409)
             .ProducesProblem(500);
 
+        app.MapPost("/change-groups/{groupId}/save", SaveSingleGroup)
+            .WithName("SaveChangeGroup")
+            .WithTags(Tag)
+            .Produces<Dictionary<string, SaveResult>>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(409)
+            .ProducesProblem(500);
+
         return app;
     }
 
@@ -227,6 +236,33 @@ public static class ChangeEndpoints
         }
 
         return Results.Ok(allResults);
+    }
+
+    private static async Task<IResult> SaveSingleGroup(
+        Guid groupId,
+        PluginSaver saver,
+        ISessionManager session,
+        ILoggerFactory loggerFactory)
+    {
+        if (session.Session == null) return Results.Problem(NoSessionMessage, statusCode: 400);
+
+        var logger = loggerFactory.CreateLogger(nameof(ChangeEndpoints));
+        try
+        {
+            return await saver.Save(groupId) switch
+            {
+                SaveGroupResult.NoChanges => Results.Problem("Change group not found.", statusCode: 404),
+                SaveGroupResult.ImmutablePlugin im => Results.Problem(
+                    $"'{im.Plugin}' is a base-game plugin and cannot be saved.", statusCode: 409),
+                SaveGroupResult.Saved saved => Results.Ok(saved.ByPlugin),
+                var r => throw new InvalidOperationException($"Unhandled SaveGroupResult: {r.GetType().Name}")
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to save change group {GroupId}", groupId);
+            return Results.Problem(ex.Message);
+        }
     }
 
     private static IResult RenumberRecord(

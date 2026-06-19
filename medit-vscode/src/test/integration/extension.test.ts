@@ -66,6 +66,10 @@ describe('mEdit command registration', () => {
     'mEdit.setFilterFromDocument',
     'mEdit.showReferencedBy',
     'mEdit.deleteRecord',
+    'mEdit.saveGroup',
+    'mEdit.revertGroup',
+    'mEdit.saveAllGroups',
+    'mEdit.revertAllGroups',
   ];
 
   it('registers all expected commands on activation', async () => {
