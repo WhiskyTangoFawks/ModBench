@@ -51,6 +51,10 @@
         {
           "id": "mEdit.pluginTree",
           "name": "Plugins"
+        },
+        {
+          "id": "mEdit.changeGroupTree",
+          "name": "Change Groups"
         }
       ]
     },
@@ -106,6 +110,26 @@
       {
         "command": "mEdit.deleteRecord",
         "title": "mEdit: Delete Record"
+      },
+      {
+        "command": "mEdit.saveGroup",
+        "title": "mEdit: Save Group",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "mEdit.revertGroup",
+        "title": "mEdit: Revert Group",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "mEdit.saveAllGroups",
+        "title": "mEdit: Save All Groups",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "mEdit.revertAllGroups",
+        "title": "mEdit: Revert All Groups",
+        "icon": "$(discard)"
       }
     ],
     "menus": {
@@ -128,6 +152,16 @@
         {
           "command": "mEdit.clearFilter",
           "when": "view == mEdit.pluginTree && mEdit.filterActive",
+          "group": "navigation"
+        },
+        {
+          "command": "mEdit.saveAllGroups",
+          "when": "view == mEdit.changeGroupTree",
+          "group": "navigation"
+        },
+        {
+          "command": "mEdit.revertAllGroups",
+          "when": "view == mEdit.changeGroupTree",
           "group": "navigation"
         }
       ],
@@ -153,6 +187,16 @@
           "command": "mEdit.deleteRecord",
           "when": "view == mEdit.pluginTree && viewItem == record",
           "group": "mEdit@3"
+        },
+        {
+          "command": "mEdit.saveGroup",
+          "when": "view == mEdit.changeGroupTree && viewItem == changeGroup",
+          "group": "inline"
+        },
+        {
+          "command": "mEdit.revertGroup",
+          "when": "view == mEdit.changeGroupTree && viewItem == changeGroup",
+          "group": "inline"
         }
       ]
     },

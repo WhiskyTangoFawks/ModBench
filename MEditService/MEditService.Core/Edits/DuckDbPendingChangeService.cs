@@ -433,7 +433,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             using var cmd = conn.CreateCommand();
             cmd.CommandText = """
                 SELECT cg.id, cg.operation, cg.description, cg.created_at,
-                       CAST(COUNT(pc.id) AS INTEGER) AS change_count
+                       CAST(COUNT(pc.id) AS INTEGER) AS change_count,
+                       CAST(COUNT(DISTINCT pc.plugin) AS INTEGER) AS plugin_count
                 FROM change_groups cg
                 LEFT JOIN pending_changes pc ON pc.group_id = cg.id
                 GROUP BY cg.id, cg.operation, cg.description, cg.created_at
@@ -448,7 +449,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 var description = reader.IsDBNull(2) ? null : reader.GetString(2);
                 var createdAt = reader.GetDateTime(3);
                 var changeCount = reader.GetInt32(4);
-                result.Add(new ChangeGroup(id, operation, description, createdAt, changeCount));
+                var pluginCount = reader.GetInt32(5);
+                result.Add(new ChangeGroup(id, operation, description, createdAt, changeCount, pluginCount));
             }
             return result;
         }
@@ -631,7 +633,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             countCmd.CommandText = "SELECT CAST(COUNT(*) AS INTEGER) FROM pending_changes WHERE group_id = $1";
             countCmd.Parameters.Add(new DuckDBParameter { Value = groupId.ToString() });
             var actualCount = Convert.ToInt32(countCmd.ExecuteScalar()!, System.Globalization.CultureInfo.InvariantCulture);
-            return new ChangeGroup(groupId, operation, description, createdAt, actualCount);
+            var pluginCount = members.Select(m => m.Plugin).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+            return new ChangeGroup(groupId, operation, description, createdAt, actualCount, pluginCount);
         }
         finally { _sem.Release(); }
     }

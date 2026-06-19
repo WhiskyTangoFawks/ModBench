@@ -158,6 +158,23 @@ public sealed class ChangeApiTests : IClassFixture<LoadedNpcApiFixture>
     }
 
     [Fact]
+    public async Task GetChangeGroups_ReturnsPluginCount()
+    {
+        await ClearChangesAsync();
+        var svc = GetService();
+        svc.StageGroup("create", null, new[]
+        {
+            ApiMember("FK-PC1", "A.esp", "$create"),
+            ApiMember("FK-PC2", "B.esp", "$create"),
+        });
+
+        var groups = await _client.GetFromJsonAsync<JsonElement[]>("/change-groups");
+        Assert.NotNull(groups);
+        var group = Assert.Single(groups);
+        Assert.Equal(2, group.GetProperty("pluginCount").GetInt32());
+    }
+
+    [Fact]
     public async Task GetChangeGroups_WhenNoGroups_ReturnsEmptyList()
     {
         await ClearChangesAsync();
