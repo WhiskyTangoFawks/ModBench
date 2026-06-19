@@ -24,7 +24,8 @@
       "Bash(find /home/wayne -path \"*/.nuget*\" -path \"*DuckDB*\" 2>/dev/null | head -30)",
       "Bash(dotnet tool *)",
       "Bash(dotnet decompile *)",
-      "Bash(which dotnet-ildasm *)"
+      "Bash(which dotnet-ildasm *)",
+      "Bash(bash .claude/skills/validate/run-gates.sh --backend)"
     ]
   }
 }
