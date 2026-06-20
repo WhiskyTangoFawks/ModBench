@@ -41,28 +41,34 @@ Write to the project root:
 > **Check off each item in this file as you complete it — do not wait until the end.**
 
 ## Work Summary
+
 <1–3 sentences describing what was implemented or changed>
 
 ## Files Changed
+
 <file list from git diff>
 
 ## Scope
+
 - [ ] Backend: yes/no
 - [ ] Frontend: yes/no
 - [ ] Core CS (mutation eligible): yes/no
 - [ ] Config/docs only: yes/no
 
 ## Task Files
+
 <list of paths and what to mark complete, or "none">
 
 ## Execution
 
 ### Step 1 — Mechanical gates
+
 - [ ] Run: `<exact command from Step 2 above>`
 
 All scope failures reported together — fix all, then rerun. With TDD, expect pass on first run.
 
 ### Step 2 — Simplify (LLM)
+
 - [ ] Run `/simplify`
 - [ ] Review findings with developer, propose which to accept/reject, and wait for decision
 - [ ] If simplify changes logic (not just style), rerun Step 1
@@ -70,32 +76,33 @@ All scope failures reported together — fix all, then rerun. With TDD, expect p
 If you're unsure or if something seems low priority, use /rubber-duck. Larger architectural refactors out of scope of the current task require the creation of a td-xxx.md file in tech-debt.
 
 ### Step 3 — Code review (LLM)
+
 - [ ] Run `/code-review`
 - [ ] Review findings with developer, propose which to accept/reject, and wait for decision
 - [ ] If any changes are made, rerun Step 1
 
 Any larger findings requiring architectural refactoring should be prompted to the developer for potential creation of a /handoff document to address the finding.
 
-### Step 4 — Mutation tests (only if Core CS changed)
-- [ ] Run: `cd MEditService && bash ../.claude/skills/mutation-test/run.sh`
-- [ ] Triage survivors per /mutation-test
+### Step 4 — Branch & commit (required before mutation tests)
 
-## Git Workflow
-
-### Branch
-- [ ] If current branch is `main`, create feature branch: `git checkout -b <short-slug-describing-the-work>` and commit changes.
-
-This also enables `--since` in the mutation test step — Stryker compares `HEAD` against `main` and scopes automatically to changed files.
-
-### Commit
+- [ ] If current branch is `main`, create feature branch: `git checkout -b <short-slug-describing-the-work>`
 - [ ] Stage and commit with message referencing the task. If multiple tasks, list them all. If no explicit tasks, write "no task file".
 - [ ] Prompt the user to review and edit the commit message before finalizing.
 
-### Merge
-- [ ] After the commit is approved, merge the feature branch back to `main`: `git checkout main && git merge --no-ff <branch>`
+The commit must exist on a feature branch before running mutation tests — Stryker's `--since` flag diffs `HEAD` against `main` to scope mutations to changed files only.
+
+### Step 5 — Mutation tests (only if Core CS changed)
+
+- [ ] Run: `cd MEditService && bash ../.claude/skills/mutation-test/run.sh`
+- [ ] Triage survivors per /mutation-test
+
+### Step 6 — Merge
+
+- [ ] After mutation tests pass and any survivors are triaged, merge back to `main`: `git checkout main && git merge --no-ff <branch>`
 
 ## Completion
-- [ ] Update task files listed above
+
+- [ ] For each task file listed above: set Status to complete, fill in Proof section with test output and commit hash, then move to `docs/tasks/completed-tasks/`
 - [ ] `rm validation-plan.md`
 ```
 

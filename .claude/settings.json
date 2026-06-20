@@ -28,7 +28,10 @@
       "Bash(bash .claude/skills/validate/run-gates.sh --backend)",
       "Bash(git checkout *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(grep -E \"0x[0-9a-fA-F]{9,}|: ulong|: long\")",
+      "Bash(python3 -c ' *)",
+      "Bash(node -e ' *)"
     ]
   }
 }
