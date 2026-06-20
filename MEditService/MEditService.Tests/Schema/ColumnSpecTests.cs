@@ -55,4 +55,21 @@ public class ColumnSpecTests
         var meta = col.ToFieldMetadata();
         Assert.Equal(types, meta.ValidFormKeyTypes);
     }
+
+    [Fact]
+    public void ToFieldMetadata_PassesThroughEnumBitValues()
+    {
+        var bits = new long[] { 1L, 2L, 4L };
+        var col = new ColumnSpec("flags", "Flags", "BIGINT", _ => null, "enum",
+            [], ["A", "B", "C"], null,
+            IsBitmask: true, EnumBitValues: bits);
+        Assert.Equal(bits, col.ToFieldMetadata().EnumBitValues);
+    }
+
+    [Fact]
+    public void ToFieldMetadata_NonBitmask_EnumBitValuesIsNull()
+    {
+        var col = MakeColumn(apiType: "enum", enumValues: ["X", "Y"]);
+        Assert.Null(col.ToFieldMetadata().EnumBitValues);
+    }
 }

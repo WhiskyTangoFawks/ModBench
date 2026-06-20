@@ -44,6 +44,27 @@ describe('StructRowGroup', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
   });
 
+  it('renders FlagCell checkboxes (not a select) for bitmask enum sub-field (V3)', () => {
+    const structWithFlagsMeta: FieldMetadata = {
+      name: 'struct_with_flags', type: 'struct', isArray: false,
+      validFormKeyTypes: [], enumValues: [],
+      fields: [{
+        name: 'mode_flags', type: 'enum', isArray: false,
+        validFormKeyTypes: [], enumValues: ['A', 'B', 'C'],
+        enumBitValues: [1, 2, 4], isBitmask: true,
+      }],
+    };
+    render(<StructRowGroup value={{ mode_flags: 5 }}
+      meta={structWithFlagsMeta} editMode={true} port={5172}
+      onOpen={vi.fn()} onCommit={vi.fn()} storageKey="test:struct-flags" />);
+    fireEvent.click(screen.getByText('{…}'));
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes[0].checked).toBe(true);   // A: 5 & 1 !== 0
+    expect(checkboxes[1].checked).toBe(false);  // B: 5 & 2 === 0
+    expect(checkboxes[2].checked).toBe(true);   // C: 5 & 4 !== 0
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
   it('calls onCommit with merged struct when sub-field changes', () => {
     const onCommit = vi.fn();
     render(<StructRowGroup value={{ faction: '000010:Fallout4.esm', rank: 1 }}

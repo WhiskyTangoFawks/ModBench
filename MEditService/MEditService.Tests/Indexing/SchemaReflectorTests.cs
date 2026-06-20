@@ -585,4 +585,73 @@ public class SchemaReflectorTests
         Assert.Contains("thin", result);
     }
 
+    // ── Phase 12.1: bitmask / [Flags] enum support ────────────────────────────
+
+    [Fact]
+    public void GetSchemas_Npc_FlagColumn_IsBitmaskTrue()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "flags");
+        Assert.NotNull(col);
+        Assert.True(col!.IsBitmask);
+        Assert.Equal("BIGINT", col.DuckDbType);
+    }
+
+    [Fact]
+    public void GetSchemas_Npc_EnumColumn_IsBitmaskFalse()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "aggression");
+        Assert.NotNull(col);
+        Assert.False(col!.IsBitmask);
+    }
+
+    [Fact]
+    public void GetSchemas_Npc_FlagColumn_HasEnumBitValues()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "flags");
+        Assert.NotNull(col);
+        Assert.NotNull(col!.EnumBitValues);
+        Assert.Equal(col.EnumValues.Count, col.EnumBitValues!.Count);
+        Assert.All(col.EnumBitValues, v => Assert.True(v > 0 && (v & (v - 1)) == 0));
+    }
+
+    [Fact]
+    public void GetSchemas_Npc_EnumColumn_EnumBitValuesIsNull()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "aggression");
+        Assert.NotNull(col);
+        Assert.Null(col!.EnumBitValues);
+    }
+
+    [Fact]
+    public void GetSchemas_FlagColumn_EnumBitValues_ContainsOnlyPowerOfTwo()
+    {
+        // GetEnumMeta must filter out None=0 and composite values — only atomic power-of-two
+        // bits should appear. The Npc.Flag enum has only clean power-of-two values, so this
+        // test guards against regressions that re-introduce 0 or composite entries.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "flags");
+        Assert.NotNull(col);
+        Assert.NotNull(col!.EnumBitValues);
+        Assert.DoesNotContain(0L, col.EnumBitValues!);
+        Assert.All(col.EnumBitValues, v => Assert.True(v > 0 && (v & (v - 1)) == 0,
+            $"Expected a power-of-two bit value, got {v}"));
+    }
+
+    [Fact]
+    public void GetSchemas_Misc_CompositeFlagsEnum_IsNotBitmask()
+    {
+        // MiscItem.MajorFlag has [Flags] but CalcFromComponents=11 and PackInUseOnly=13 —
+        // both non-power-of-two. GetEnumMeta must fall back to plain-enum treatment.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        Assert.True(schemas.ContainsKey("misc"), "misc schema must be present");
+        var col = schemas["misc"].RecordColumns.FirstOrDefault(c => c.Name == "major_flags");
+        Assert.NotNull(col);
+        Assert.False(col!.IsBitmask);
+        Assert.Null(col.EnumBitValues);
+    }
+
 }

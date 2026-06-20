@@ -17,10 +17,13 @@ public sealed record ColumnSpec(
     bool IsArray = false,
     FieldMetadata? ElementType = null,
     IReadOnlyList<FieldMetadata>? SubFields = null,
-    bool AllowsNull = false)
+    bool AllowsNull = false,
+    bool IsBitmask = false,
+    IReadOnlyList<long>? EnumBitValues = null)
 {
     public FieldMetadata ToFieldMetadata() =>
-        new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumValues, ElementType, SubFields, AllowsNull: AllowsNull);
+        new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumValues, ElementType, SubFields,
+            AllowsNull: AllowsNull, IsBitmask: IsBitmask, EnumBitValues: EnumBitValues);
 }
 
 public sealed class RecordTableSchema

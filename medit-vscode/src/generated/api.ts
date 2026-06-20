@@ -423,6 +423,8 @@ export interface components {
             fields?: components["schemas"]["FieldMetadata"][] | null;
             isSortable?: boolean;
             allowsNull?: boolean;
+            isBitmask?: boolean;
+            enumBitValues?: number[] | null;
         };
         FieldValue: {
             metadata?: components["schemas"]["FieldMetadata"];
