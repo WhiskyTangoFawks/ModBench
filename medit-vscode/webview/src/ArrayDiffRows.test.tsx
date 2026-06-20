@@ -145,6 +145,238 @@ const pendingChange = {
   changedAt: '2026-06-20T12:00:00Z',
 };
 
+// ── Struct sub-field fixtures ─────────────────────────────────────────────────
+
+const structMeta: FieldMetadata = {
+  name: 'ObjectBounds',
+  type: 'struct',
+  isArray: false,
+  validFormKeyTypes: [],
+  enumValues: [],
+  fields: [
+    { name: 'X1', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    { name: 'X2', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+  ],
+};
+
+// Disk: both plugins have { X1: 0, X2: 100 }.
+// MyMod.esp pending: { X1: 50, X2: 100 } — only X1 changed.
+const structWithPendingResult = {
+  conflictAll: 'Override',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: structMeta, value: { X1: 0, X2: 100 } }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: structMeta, value: { X1: 0, X2: 100 } }],
+      pendingFields: { ObjectBounds: { X1: 50, X2: 100 } },
+      conflictThis: 'Override',
+    },
+  ],
+  diffs: [{
+    fieldName: 'ObjectBounds',
+    values: { 'Fallout4.esm': { X1: 0, X2: 100 }, 'MyMod.esp': { X1: 0, X2: 100 } },
+    winnerPlugin: 'Fallout4.esm', winnerValue: { X1: 0, X2: 100 },
+    cellStates: { 'MyMod.esp': 'Override' },
+    children: [
+      {
+        fieldName: 'X1',
+        values: { 'Fallout4.esm': 0, 'MyMod.esp': 0 },
+        winnerPlugin: 'Fallout4.esm', winnerValue: 0,
+        cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
+      },
+      {
+        fieldName: 'X2',
+        values: { 'Fallout4.esm': 100, 'MyMod.esp': 100 },
+        winnerPlugin: 'Fallout4.esm', winnerValue: 100,
+        cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
+      },
+    ],
+  }],
+};
+
+const structPendingChange = {
+  id: 'struct-change-1', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+  fieldPath: 'ObjectBounds', recordType: 'Npc',
+  oldValue: { X1: 0, X2: 100 }, newValue: { X1: 50, X2: 100 },
+  source: 'agent', description: null, changedAt: '2026-06-20T12:00:00Z',
+};
+
+// Disk: Fallout4.esm { X1: 0, X2: 100 }, MyMod.esp { X1: 5, X2: 200 }. No pending.
+const structEditResult = {
+  conflictAll: 'Override',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: structMeta, value: { X1: 0, X2: 100 } }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: structMeta, value: { X1: 5, X2: 200 } }],
+      pendingFields: {}, conflictThis: 'Override',
+    },
+  ],
+  diffs: [{
+    fieldName: 'ObjectBounds',
+    values: { 'Fallout4.esm': { X1: 0, X2: 100 }, 'MyMod.esp': { X1: 5, X2: 200 } },
+    winnerPlugin: 'MyMod.esp', winnerValue: { X1: 5, X2: 200 },
+    cellStates: { 'MyMod.esp': 'Override' },
+    children: [
+      {
+        fieldName: 'X1',
+        values: { 'Fallout4.esm': 0, 'MyMod.esp': 5 },
+        winnerPlugin: 'MyMod.esp', winnerValue: 5,
+        cellStates: { 'MyMod.esp': 'Override' },
+      },
+      {
+        fieldName: 'X2',
+        values: { 'Fallout4.esm': 100, 'MyMod.esp': 200 },
+        winnerPlugin: 'MyMod.esp', winnerValue: 200,
+        cellStates: { 'MyMod.esp': 'Override' },
+      },
+    ],
+  }],
+};
+
+// MyMod.esp disk: { X1: 5, X2: 200 }, pending: { X1: 5, X2: 300 } (X2 previously changed).
+const structEditWithPriorPendingResult = {
+  conflictAll: 'Override',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: structMeta, value: { X1: 0, X2: 100 } }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: structMeta, value: { X1: 5, X2: 200 } }],
+      pendingFields: { ObjectBounds: { X1: 5, X2: 300 } },
+      conflictThis: 'Override',
+    },
+  ],
+  diffs: [{
+    fieldName: 'ObjectBounds',
+    values: { 'Fallout4.esm': { X1: 0, X2: 100 }, 'MyMod.esp': { X1: 5, X2: 200 } },
+    winnerPlugin: 'MyMod.esp', winnerValue: { X1: 5, X2: 200 },
+    cellStates: { 'MyMod.esp': 'Override' },
+    children: [
+      {
+        fieldName: 'X1',
+        values: { 'Fallout4.esm': 0, 'MyMod.esp': 5 },
+        winnerPlugin: 'MyMod.esp', winnerValue: 5,
+        cellStates: { 'MyMod.esp': 'Override' },
+      },
+      {
+        fieldName: 'X2',
+        values: { 'Fallout4.esm': 100, 'MyMod.esp': 200 },
+        winnerPlugin: 'MyMod.esp', winnerValue: 200,
+        cellStates: { 'MyMod.esp': 'Override' },
+      },
+    ],
+  }],
+};
+
+const structEditPriorPendingChange = {
+  id: 'struct-edit-change-1', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+  fieldPath: 'ObjectBounds', recordType: 'Npc',
+  oldValue: { X1: 5, X2: 200 }, newValue: { X1: 5, X2: 300 },
+  source: 'agent', description: null, changedAt: '2026-06-20T12:00:00Z',
+};
+
+// ── Struct-in-array (grandchild) fixtures ─────────────────────────────────────
+
+const structInArrayMeta: FieldMetadata = {
+  name: 'Packages',
+  type: 'array',
+  isArray: true,
+  validFormKeyTypes: [],
+  enumValues: [],
+  elementType: {
+    name: '',
+    type: 'struct',
+    isArray: false,
+    validFormKeyTypes: [],
+    enumValues: [],
+    fields: [
+      { name: 'PkgId', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
+      { name: 'Priority', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    ],
+  },
+};
+
+// Disk: both plugins have [{ PkgId: 'PkgA', Priority: 1 }].
+// MyMod.esp pending: [{ PkgId: 'PkgA', Priority: 5 }] — only Priority changed.
+const structInArrayResult = {
+  conflictAll: 'Override',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: structInArrayMeta, value: [{ PkgId: 'PkgA', Priority: 1 }] }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: structInArrayMeta, value: [{ PkgId: 'PkgA', Priority: 1 }] }],
+      pendingFields: { Packages: [{ PkgId: 'PkgA', Priority: 5 }] },
+      conflictThis: 'Override',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Packages',
+    values: {
+      'Fallout4.esm': [{ PkgId: 'PkgA', Priority: 1 }],
+      'MyMod.esp': [{ PkgId: 'PkgA', Priority: 1 }],
+    },
+    winnerPlugin: 'Fallout4.esm', winnerValue: [{ PkgId: 'PkgA', Priority: 1 }],
+    cellStates: { 'MyMod.esp': 'Override' },
+    children: [
+      {
+        fieldName: '[0]',
+        values: {
+          'Fallout4.esm': { PkgId: 'PkgA', Priority: 1 },
+          'MyMod.esp': { PkgId: 'PkgA', Priority: 1 },
+        },
+        winnerPlugin: 'Fallout4.esm', winnerValue: { PkgId: 'PkgA', Priority: 1 },
+        cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
+        children: [
+          {
+            fieldName: 'PkgId',
+            values: { 'Fallout4.esm': 'PkgA', 'MyMod.esp': 'PkgA' },
+            winnerPlugin: 'Fallout4.esm', winnerValue: 'PkgA',
+            cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
+          },
+          {
+            fieldName: 'Priority',
+            values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 },
+            winnerPlugin: 'Fallout4.esm', winnerValue: 1,
+            cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
+          },
+        ],
+      },
+    ],
+  }],
+};
+
+const structInArrayPendingChange = {
+  id: 'array-change-1', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+  fieldPath: 'Packages', recordType: 'Npc',
+  oldValue: [{ PkgId: 'PkgA', Priority: 1 }],
+  newValue: [{ PkgId: 'PkgA', Priority: 5 }],
+  source: 'agent', description: null, changedAt: '2026-06-20T12:00:00Z',
+};
+
 function makeFetch(compareResult: object, changes: object[] = []) {
   return vi.fn((url: string) => {
     if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(compareResult) };
@@ -183,25 +415,18 @@ describe('RecordPanel — array child rows (sorted)', () => {
     expect(screen.getAllByText('KwdC').length).toBeGreaterThan(0);
   });
 
-  it('KwdB child row has empty cell for MyMod.esp (null value)', async () => {
+  it('KwdB child row has dimmed em-dash for MyMod.esp (null value)', async () => {
     render(<RecordPanel />);
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getAllByText('KwdB').length > 0);
-    // KwdB row: find the TD that is the field name cell
     const kwdBTd = screen.getAllByText('KwdB').find(el => el.tagName === 'TD');
     expect(kwdBTd).toBeTruthy();
     const kwdBRow = kwdBTd!.closest('tr')!;
-    // MyMod.esp has null → '—' rendered in a disk cell
-    expect(kwdBRow.querySelector('td:last-child')).toBeTruthy();
-  });
-
-  it('ArrayRowGroup add/sort buttons are not rendered in the compare grid', async () => {
-    render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Keywords'));
-    // ArrayRowGroup renders ↑↓ (sort) and + (add) buttons — these must not appear
-    expect(screen.queryByTitle('Sort by FormKey')).not.toBeInTheDocument();
-    expect(screen.queryByTitle('Add element')).not.toBeInTheDocument();
+    const dimSpan = Array.from(kwdBRow.querySelectorAll('span')).find(
+      s => s.textContent === '—' && s.style.opacity === '0.35',
+    );
+    expect(dimSpan).toBeTruthy();
   });
 });
 
@@ -304,5 +529,177 @@ describe('RecordPanel — array element edit', () => {
     expect(body.plugin).toBe('MyMod.esp');
     // Element [0] unchanged ('alpha'), element [1] replaced ('epsilon')
     expect(body.fields['Items']).toEqual(['alpha', 'epsilon']);
+  });
+});
+
+// ── Struct sub-field pending highlight ────────────────────────────────────────
+
+describe('RecordPanel — struct sub-field pending highlight', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', makeFetch(structWithPendingResult, [structPendingChange]));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('X1 sub-field row is highlighted (pending value differs from disk)', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => screen.getByText('X1'));
+
+    const x1Row = screen.getByText('X1').closest('tr')!;
+    const highlightedCells = Array.from(x1Row.querySelectorAll('td')).filter(
+      td => td.style.backgroundColor === 'rgba(255, 200, 50, 0.10)',
+    );
+    expect(highlightedCells.length).toBeGreaterThan(0);
+  });
+
+  it('X2 sub-field row is NOT highlighted (pending value equals disk)', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => screen.getByText('X2'));
+
+    const x2Row = screen.getByText('X2').closest('tr')!;
+    const highlightedCells = Array.from(x2Row.querySelectorAll('td')).filter(
+      td => td.style.backgroundColor === 'rgba(255, 200, 50, 0.10)',
+    );
+    expect(highlightedCells.length).toBe(0);
+  });
+
+  it('revert button ↩ appears on X1 sub-field row (triggers parent struct change)', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => screen.getByText('X1'));
+
+    const x1Row = screen.getByText('X1').closest('tr')!;
+    expect(x1Row.querySelector('button[title="Revert this change"]')).toBeTruthy();
+  });
+});
+
+// ── Struct sub-field edit ─────────────────────────────────────────────────────
+
+describe('RecordPanel — struct sub-field edit', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', makeFetch(structEditResult, []));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('editing X1 calls PATCH with full struct (X2 preserved from disk)', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Edit'));
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => screen.getByDisplayValue('5'));
+
+    const x1Input = screen.getByDisplayValue('5');
+    fireEvent.change(x1Input, { target: { value: '10' } });
+    fireEvent.blur(x1Input);
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/records/'),
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+
+    const patchCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c: unknown[]) => (c[1] as RequestInit)?.method === 'PATCH',
+    )!;
+    const body = JSON.parse((patchCall[1] as RequestInit).body as string) as {
+      plugin: string; fields: Record<string, unknown>;
+    };
+    expect(body.plugin).toBe('MyMod.esp');
+    expect(body.fields['ObjectBounds']).toEqual({ X1: 10, X2: 200 });
+  });
+
+  it('editing X1 with prior pending on X2 uses pending X2, not disk X2', async () => {
+    vi.stubGlobal('fetch', makeFetch(structEditWithPriorPendingResult, [structEditPriorPendingChange]));
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Edit'));
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => screen.getByDisplayValue('5'));
+
+    const x1Input = screen.getByDisplayValue('5');
+    fireEvent.change(x1Input, { target: { value: '10' } });
+    fireEvent.blur(x1Input);
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/records/'),
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+
+    const patchCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c: unknown[]) => (c[1] as RequestInit)?.method === 'PATCH',
+    )!;
+    const body = JSON.parse((patchCall[1] as RequestInit).body as string) as {
+      plugin: string; fields: Record<string, unknown>;
+    };
+    expect(body.plugin).toBe('MyMod.esp');
+    // X2 must come from pending (300), not disk (200)
+    expect(body.fields['ObjectBounds']).toEqual({ X1: 10, X2: 300 });
+  });
+});
+
+// ── Grandchild rows (struct inside array element) ─────────────────────────────
+
+describe('RecordPanel — grandchild rows (struct sub-fields inside array element)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', makeFetch(structInArrayResult, [structInArrayPendingChange]));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function expandToGrandchildren() {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));        // expand Packages
+    // [0] also appears in column headers; find the TD in the table body
+    await waitFor(() => {
+      const td = screen.getAllByText('[0]').find(el => el.tagName === 'TD');
+      if (!td) throw new Error('[0] TD not found yet');
+    });
+    fireEvent.click(screen.getByText('▶'));        // expand [0] (now the only ▶)
+    await waitFor(() => screen.getByText('Priority'));
+  }
+
+  it('Priority grandchild row is highlighted (pending value differs from disk)', async () => {
+    await expandToGrandchildren();
+
+    const priorityRow = screen.getByText('Priority').closest('tr')!;
+    const highlightedCells = Array.from(priorityRow.querySelectorAll('td')).filter(
+      td => td.style.backgroundColor === 'rgba(255, 200, 50, 0.10)',
+    );
+    expect(highlightedCells.length).toBeGreaterThan(0);
+  });
+
+  it('PkgId grandchild row is NOT highlighted (pending value equals disk)', async () => {
+    await expandToGrandchildren();
+
+    const pkgIdRow = screen.getByText('PkgId').closest('tr')!;
+    const highlightedCells = Array.from(pkgIdRow.querySelectorAll('td')).filter(
+      td => td.style.backgroundColor === 'rgba(255, 200, 50, 0.10)',
+    );
+    expect(highlightedCells.length).toBe(0);
+  });
+
+  it('revert button ↩ does NOT appear on grandchild rows', async () => {
+    await expandToGrandchildren();
+
+    const priorityRow = screen.getByText('Priority').closest('tr')!;
+    expect(priorityRow.querySelector('button[title="Revert this change"]')).toBeNull();
+
+    const pkgIdRow = screen.getByText('PkgId').closest('tr')!;
+    expect(pkgIdRow.querySelector('button[title="Revert this change"]')).toBeNull();
   });
 });

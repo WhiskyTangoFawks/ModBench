@@ -1,6 +1,6 @@
 # Phase 12.4 — Struct Edit Verification & Fixes
 
-Status: Not Started
+Status: Completed
 
 *Goal: verify the existing struct sub-row edit path works end-to-end, and fix any gaps found. Struct fields already produce `diff.children` and the merge logic exists — this phase confirms it and hardens it.*
 
@@ -83,4 +83,9 @@ This path assumes `rawPending` is a `Record<string, unknown>`. If the pending va
 
 ## Proof
 
-*To be filled in on completion. Paste `dotnet test` output, `npm run test:unit` output, and commit hash here.*
+```text
+Test Files  18 passed (18)
+Tests  207 passed (207)
+```
+
+Branch: phase-12.3-12.4-struct-array-child-rows

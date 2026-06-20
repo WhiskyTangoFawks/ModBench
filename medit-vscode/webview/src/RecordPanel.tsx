@@ -379,6 +379,13 @@ function parseElementIndex(fieldName: string): number {
   return Number.parseInt(fieldName.slice(1, -1), 10);
 }
 
+function pendingIfChanged(pending: unknown, disk: unknown): unknown {
+  if (pending === undefined) return undefined;
+  if (pending === disk) return undefined;
+  if (JSON.stringify(pending) === JSON.stringify(disk)) return undefined;
+  return pending;
+}
+
 function extractPendingElementValue(
   rawPending: unknown,
   fieldName: string,
@@ -395,8 +402,7 @@ function extractPendingElementValue(
     if (idx >= (rawPending as unknown[]).length) return undefined;
     pending = (rawPending as unknown[])[idx];
   }
-  if (JSON.stringify(pending) === JSON.stringify(diskValue)) return undefined;
-  return pending;
+  return pendingIfChanged(pending, diskValue);
 }
 
 function updateArrayAtKey(
@@ -493,11 +499,15 @@ function DiffRow({
         let pendingValue: unknown;
         if (isArrayElement) {
           pendingValue = extractPendingElementValue(rawPending, diff.fieldName, overrideMeta?.isSortable ?? false, diff.values[col.plugin]);
-        } else if (isGrandchild) {
-          const pendingElem = Array.isArray(rawPending) ? (rawPending as unknown[])[parentFieldIndex] : undefined;
-          pendingValue = (pendingElem as Record<string, unknown> | undefined)?.[diff.fieldName];
-        } else if (parentFieldName !== undefined) {
-          pendingValue = (rawPending as Record<string, unknown> | undefined)?.[diff.fieldName];
+        } else if (isGrandchild || parentFieldName !== undefined) {
+          let obj: unknown;
+          if (isGrandchild) {
+            obj = Array.isArray(rawPending) ? (rawPending as unknown[])[parentFieldIndex] : undefined;
+          } else {
+            obj = rawPending;
+          }
+          const sub = (obj as Record<string, unknown> | undefined)?.[diff.fieldName];
+          pendingValue = pendingIfChanged(sub, diff.values[col.plugin]);
         } else {
           pendingValue = rawPending;
         }
@@ -516,7 +526,7 @@ function DiffRow({
             {hasPending && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span>{toStr(pendingValue)}</span>
-                {change && !isArrayElement && (
+                {change && !isArrayElement && !isGrandchild && (
                   <button
                     onClick={() => onRevert(change.id)}
                     title="Revert this change"

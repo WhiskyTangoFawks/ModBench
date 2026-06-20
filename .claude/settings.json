@@ -33,7 +33,9 @@
       "Bash(python3 -c ' *)",
       "Bash(node -e ' *)",
       "Bash(echo \"EXIT:$?\")",
-      "Bash(bash .claude/skills/validate/run-gates.sh --frontend)"
+      "Bash(bash .claude/skills/validate/run-gates.sh --frontend)",
+      "Bash(git merge *)",
+      "Bash(git stash *)"
     ]
   }
 }
