@@ -31,7 +31,9 @@
       "Bash(git commit -m ' *)",
       "Bash(grep -E \"0x[0-9a-fA-F]{9,}|: ulong|: long\")",
       "Bash(python3 -c ' *)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(bash .claude/skills/validate/run-gates.sh --frontend)"
     ]
   }
 }

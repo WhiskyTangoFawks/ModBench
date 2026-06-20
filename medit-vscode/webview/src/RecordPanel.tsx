@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrayRowGroup } from './ArrayRowGroup';
 import { FlagCell } from './FlagCell';
 import { FormKeyPicker } from './FormKeyPicker';
 import { buildColumns, toStr } from './recordUtils';
@@ -259,11 +258,9 @@ function renderCell(
   }
   if (meta.type === 'array') {
     return (
-      <ArrayRowGroup
-        value={value as unknown[]} meta={meta} editMode={editMode} port={port}
-        onOpen={onOpen} onCommit={v => onCommit(v)} storageKey={`array:${meta.name}`}
-        checkError={checkError}
-      />
+      <span style={{ opacity: 0.5 }}>
+        {Array.isArray(value) ? `[${(value as unknown[]).length}]` : '[…]'}
+      </span>
     );
   }
   // struct fields in the diff table are handled via sub-rows; StructRowGroup is used by ArrayRowGroup
@@ -376,6 +373,45 @@ function PluginHeader({
   );
 }
 
+// ── Array child helpers ───────────────────────────────────────────────────────
+
+function parseElementIndex(fieldName: string): number {
+  return Number.parseInt(fieldName.slice(1, -1), 10);
+}
+
+function extractPendingElementValue(
+  rawPending: unknown,
+  fieldName: string,
+  isSortable: boolean,
+  diskValue: unknown,
+): unknown {
+  if (!Array.isArray(rawPending)) return undefined;
+  let pending: unknown;
+  if (isSortable) {
+    if (!(rawPending as unknown[]).includes(fieldName)) return undefined;
+    pending = fieldName;
+  } else {
+    const idx = parseElementIndex(fieldName);
+    if (idx >= (rawPending as unknown[]).length) return undefined;
+    pending = (rawPending as unknown[])[idx];
+  }
+  if (JSON.stringify(pending) === JSON.stringify(diskValue)) return undefined;
+  return pending;
+}
+
+function updateArrayAtKey(
+  array: unknown[],
+  elementKey: string,
+  newValue: unknown,
+  isSortable: boolean,
+): unknown[] {
+  if (isSortable) {
+    return array.map(e => (e === elementKey ? newValue : e));
+  }
+  const idx = parseElementIndex(elementKey);
+  return array.map((e, i) => (i === idx ? newValue : e));
+}
+
 // ── DiffRow ───────────────────────────────────────────────────────────────────
 
 interface DiffRowProps {
@@ -396,15 +432,20 @@ interface DiffRowProps {
   onToggle?: () => void;
   overrideMeta?: FieldMetadata;
   parentFieldName?: string;
+  parentFieldIndex?: number;
+  parentMeta?: FieldMetadata;
 }
 
 function DiffRow({
   diff, conflictAll, columns, overrideMap, fieldMetaMap, editMode, port,
   pendingChangeMap, onOpen, onEdit, onRevert,
-  depth = 0, hasChildren, isExpanded, onToggle, overrideMeta, parentFieldName,
+  depth = 0, hasChildren, isExpanded, onToggle, overrideMeta, parentFieldName, parentFieldIndex, parentMeta,
 }: DiffRowProps) {
   const meta = overrideMeta ?? fieldMetaMap[diff.fieldName];
   if (!meta) return null;
+
+  const isArrayElement = depth > 0 && parentMeta?.type === 'array';
+  const isGrandchild = parentFieldIndex !== undefined;
 
   return (
     <tr style={{ backgroundColor: getRowBg(conflictAll) }}>
@@ -419,14 +460,19 @@ function DiffRow({
           const { override: o } = col;
           const cellStyle = { ...baseCell, ...getCellStyle(diff.cellStates?.[o.plugin]), userSelect: 'text' as const };
           const checkErrorFieldName = parentFieldName ?? diff.fieldName;
-          const checkError = overrideMap[o.plugin]?.fields
-            .find(f => f.metadata.name === checkErrorFieldName)?.checkError;
+          const checkError = isArrayElement || isGrandchild
+            ? undefined
+            : overrideMap[o.plugin]?.fields.find(f => f.metadata.name === checkErrorFieldName)?.checkError;
           if (hasChildren) {
+            const len = meta.type === 'array' && Array.isArray(diff.values[o.plugin])
+              ? (diff.values[o.plugin] as unknown[]).length
+              : '…';
+            const collapsedLabel = meta.type === 'array' ? `[${len}]` : '{…}';
             return (
               <td key={`disk:${o.plugin}`} style={cellStyle}>
                 {isExpanded ? null : (
                   <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
-                    {'{…}'}<CheckErrorIcon checkError={checkError} />
+                    {collapsedLabel}<CheckErrorIcon checkError={checkError} />
                   </span>
                 )}
               </td>
@@ -444,9 +490,17 @@ function DiffRow({
         const override = overrideMap[col.plugin];
         const pendingLookupField = parentFieldName ?? diff.fieldName;
         const rawPending = override?.pendingFields?.[pendingLookupField];
-        const pendingValue = parentFieldName !== undefined
-          ? (rawPending as Record<string, unknown> | undefined)?.[diff.fieldName]
-          : rawPending;
+        let pendingValue: unknown;
+        if (isArrayElement) {
+          pendingValue = extractPendingElementValue(rawPending, diff.fieldName, overrideMeta?.isSortable ?? false, diff.values[col.plugin]);
+        } else if (isGrandchild) {
+          const pendingElem = Array.isArray(rawPending) ? (rawPending as unknown[])[parentFieldIndex] : undefined;
+          pendingValue = (pendingElem as Record<string, unknown> | undefined)?.[diff.fieldName];
+        } else if (parentFieldName !== undefined) {
+          pendingValue = (rawPending as Record<string, unknown> | undefined)?.[diff.fieldName];
+        } else {
+          pendingValue = rawPending;
+        }
         const change = pendingChangeMap[`${col.plugin}:${pendingLookupField}`];
         const hasPending = pendingValue !== undefined;
         return (
@@ -462,7 +516,7 @@ function DiffRow({
             {hasPending && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span>{toStr(pendingValue)}</span>
-                {change && (
+                {change && !isArrayElement && (
                   <button
                     onClick={() => onRevert(change.id)}
                     title="Revert this change"
@@ -785,32 +839,110 @@ export function RecordPanel() {
                 />,
               ];
               if (hasChildren && isExpanded) {
+                const parentMeta = fieldMetaMap[diff.fieldName];
+                const elementType = parentMeta?.type === 'array' ? parentMeta.elementType : undefined;
                 for (const child of diff.children ?? []) {
-                  const subFieldMeta = fieldMetaMap[diff.fieldName]?.fields?.find(f => f.name === child.fieldName);
-                  rows.push(
-                    <DiffRow
-                      key={`${diff.fieldName}.${child.fieldName}`}
-                      diff={child}
-                      conflictAll={conflictAll}
-                      columns={columns}
-                      overrideMap={overrideMap}
-                      fieldMetaMap={fieldMetaMap}
-                      editMode={editMode}
-                      port={port}
-                      pendingChangeMap={pendingChangeMap}
-                      onOpen={handleOpen}
-                      onEdit={(plugin, subField, subValue) => {
-                        const disk = (diff.values[plugin] as Record<string, unknown>) ?? {};
-                        const pending = overrideMap[plugin]?.pendingFields?.[diff.fieldName] as Record<string, unknown> | undefined;
-                        const cur = pending !== undefined ? { ...disk, ...pending } : disk;
-                        void handleEdit(plugin, diff.fieldName, { ...cur, [subField]: subValue });
-                      }}
-                      onRevert={changeId => { void handleRevert(changeId); }}
-                      depth={1}
-                      overrideMeta={subFieldMeta}
-                      parentFieldName={diff.fieldName}
-                    />,
-                  );
+                  if (elementType != null) {
+                    const elementMeta = elementType;
+                    const childKey = `${diff.fieldName}.${child.fieldName}`;
+                    const elemExpanded = expandedStructs.has(childKey);
+                    const elemIdx = parseElementIndex(child.fieldName);
+                    const resolveCurrentArr = (plugin: string): unknown[] => {
+                      const diskArr = (diff.values[plugin] as unknown[]) ?? [];
+                      const pendingArr = overrideMap[plugin]?.pendingFields?.[diff.fieldName] as unknown[] | undefined;
+                      return pendingArr ?? diskArr;
+                    };
+                    rows.push(
+                      <DiffRow
+                        key={childKey}
+                        diff={child}
+                        conflictAll={conflictAll}
+                        columns={columns}
+                        overrideMap={overrideMap}
+                        fieldMetaMap={fieldMetaMap}
+                        editMode={editMode}
+                        port={port}
+                        pendingChangeMap={pendingChangeMap}
+                        onOpen={handleOpen}
+                        onEdit={(plugin, elemKey, newValue) => {
+                          void handleEdit(plugin, diff.fieldName, updateArrayAtKey(resolveCurrentArr(plugin), elemKey, newValue, elementMeta.isSortable ?? false));
+                        }}
+                        onRevert={changeId => { void handleRevert(changeId); }}
+                        depth={1}
+                        overrideMeta={elementMeta}
+                        parentFieldName={diff.fieldName}
+                        parentMeta={parentMeta}
+                        hasChildren={(child.children?.length ?? 0) > 0}
+                        isExpanded={elemExpanded}
+                        onToggle={() => setExpandedStructs(prev => {
+                          const next = new Set(prev);
+                          if (next.has(childKey)) next.delete(childKey); else next.add(childKey);
+                          return next;
+                        })}
+                      />,
+                    );
+                    // Grandchild rows: struct sub-fields of struct-typed array elements
+                    if ((child.children?.length ?? 0) > 0 && elemExpanded) {
+                      for (const grandchild of child.children ?? []) {
+                        const subFieldMeta = elementMeta.fields?.find(f => f.name === grandchild.fieldName);
+                        rows.push(
+                          <DiffRow
+                            key={`${childKey}.${grandchild.fieldName}`}
+                            diff={grandchild}
+                            conflictAll={conflictAll}
+                            columns={columns}
+                            overrideMap={overrideMap}
+                            fieldMetaMap={fieldMetaMap}
+                            editMode={editMode}
+                            port={port}
+                            pendingChangeMap={pendingChangeMap}
+                            onOpen={handleOpen}
+                            onEdit={(plugin, subField, subValue) => {
+                              const cur = resolveCurrentArr(plugin);
+                              const curElem = (cur[elemIdx] as Record<string, unknown>) ?? {};
+                              const updatedArr = [...cur];
+                              updatedArr[elemIdx] = { ...curElem, [subField]: subValue };
+                              void handleEdit(plugin, diff.fieldName, updatedArr);
+                            }}
+                            onRevert={changeId => { void handleRevert(changeId); }}
+                            depth={2}
+                            overrideMeta={subFieldMeta}
+                            parentFieldName={diff.fieldName}
+                            parentFieldIndex={elemIdx}
+                            parentMeta={elementMeta}
+                          />,
+                        );
+                      }
+                    }
+                  } else {
+                    // Struct children
+                    const subFieldMeta = parentMeta?.fields?.find(f => f.name === child.fieldName);
+                    rows.push(
+                      <DiffRow
+                        key={`${diff.fieldName}.${child.fieldName}`}
+                        diff={child}
+                        conflictAll={conflictAll}
+                        columns={columns}
+                        overrideMap={overrideMap}
+                        fieldMetaMap={fieldMetaMap}
+                        editMode={editMode}
+                        port={port}
+                        pendingChangeMap={pendingChangeMap}
+                        onOpen={handleOpen}
+                        onEdit={(plugin, subField, subValue) => {
+                          const disk = (diff.values[plugin] as Record<string, unknown>) ?? {};
+                          const pending = overrideMap[plugin]?.pendingFields?.[diff.fieldName] as Record<string, unknown> | undefined;
+                          const cur = pending !== undefined ? { ...disk, ...pending } : disk;
+                          void handleEdit(plugin, diff.fieldName, { ...cur, [subField]: subValue });
+                        }}
+                        onRevert={changeId => { void handleRevert(changeId); }}
+                        depth={1}
+                        overrideMeta={subFieldMeta}
+                        parentFieldName={diff.fieldName}
+                        parentMeta={parentMeta}
+                      />,
+                    );
+                  }
                 }
               }
               return rows;

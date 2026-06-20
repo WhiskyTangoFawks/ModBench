@@ -1,6 +1,6 @@
 # Phase 12.3 — Array Child Rows (Frontend)
 
-**Status: Not Started**
+**Status: Completed**
 
 *Goal: array fields display as expandable rows in the compare grid — element sub-rows aligned across plugin columns, pending changes visible at element granularity, revert on the parent row. `ArrayRowGroup` is retired from the compare grid. Depends on Phase 12.2.*
 
@@ -76,4 +76,9 @@ The pending display change is key for agentic review: element rows where the pen
 
 ## Proof
 
-*To be filled in on completion. Paste `npm run test:unit` output and commit hash here.*
+```text
+Test Files  18 passed (18)
+Tests  200 passed (200)
+```
+
+Commit: 80f3976 (pre-commit — changes staged, not yet committed)
