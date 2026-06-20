@@ -88,4 +88,4 @@ Test Files  18 passed (18)
 Tests  207 passed (207)
 ```
 
-Branch: phase-12.3-12.4-struct-array-child-rows
+Commit: a1fbb5e
