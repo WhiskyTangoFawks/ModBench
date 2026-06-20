@@ -597,11 +597,12 @@ public class ConflictClassifierTests
     }
 
     [Fact]
-    public void Classify_StructField_ArraySubFieldSkipped_NotIncludedInChildren()
+    public void Classify_StructField_ArraySubFieldIncluded_ProducesChildRows()
     {
-        // Kills the || → && mutant on line 133: array sub-fields must be skipped.
+        // Phase 12.2 removed the depth guard: array sub-fields inside structs are now recursed into.
         var subX = Meta("X", "int");
-        var subYArray = new FieldMetadata("Y", "array", true, [], []);
+        var subYArray = new FieldMetadata("Y", "array", true, [], [],
+            ElementType: new FieldMetadata("", "int", false, [], []));
         var structMeta = new FieldMetadata("Bounds", "struct", false, [], [], Fields: [subX, subYArray]);
 
         var masterVal = JsonSerializer.Deserialize<JsonElement>("{\"X\": 10, \"Y\": [1,2]}");
@@ -614,8 +615,13 @@ public class ConflictClassifierTests
 
         var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
         Assert.NotNull(boundsDiff.Children);
-        Assert.DoesNotContain(boundsDiff.Children!, c => c.FieldName == "Y");
         Assert.Contains(boundsDiff.Children!, c => c.FieldName == "X");
+
+        // Y is now recursed into, not skipped — its elements become sub-children
+        var yChild = boundsDiff.Children!.FirstOrDefault(c => c.FieldName == "Y");
+        Assert.NotNull(yChild);
+        Assert.NotNull(yChild!.Children);
+        Assert.Equal(2, yChild.Children!.Count);
     }
 
     [Fact]

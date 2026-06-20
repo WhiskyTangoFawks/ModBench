@@ -1,6 +1,6 @@
 # Phase 12.2 — Array Child Rows (Backend)
 
-**Status: Not Started**
+**Status: Complete**
 
 *Goal: the compare endpoint returns element-level child diffs for array fields, using xEdit's unified tree model — sorted arrays aligned by sort key across plugins, unsorted arrays aligned by position. See ADR-0019.*
 
@@ -84,4 +84,8 @@ New file: `MEditService.Tests/Queries/ArrayChildDiffTests.cs`
 
 ## Proof
 
-*To be filled in on completion. Paste `dotnet test` output and commit hash here.*
+```text
+Passed!  - Failed: 0, Passed: 560, Skipped: 0, Total: 560, Duration: ~2m
+```
+
+Commit: see `phase-12.2-array-child-rows` branch.

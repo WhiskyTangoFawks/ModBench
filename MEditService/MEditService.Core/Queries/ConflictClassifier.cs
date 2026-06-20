@@ -1,9 +1,16 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Queries;
 
 public sealed class ConflictClassifier : IConflictClassifier
 {
+    private readonly ILogger _logger;
+
+    public ConflictClassifier(ILogger<ConflictClassifier>? logger = null)
+        => _logger = (ILogger?)logger ?? NullLogger.Instance;
+
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters)
@@ -97,7 +104,9 @@ public sealed class ConflictClassifier : IConflictClassifier
             !masters.Contains(originPlugin, StringComparer.OrdinalIgnoreCase));
     }
 
-    private static List<FieldDiff> BuildDiffs(
+    private const int MaxArrayChildCount = 500;
+
+    private List<FieldDiff> BuildDiffs(
         IReadOnlyList<string> fieldNames,
         IReadOnlyList<RecordDetail> records,
         RecordDetail winner,
@@ -115,31 +124,136 @@ public sealed class ConflictClassifier : IConflictClassifier
                 var winnerValue = values.GetValueOrDefault(winner.Plugin);
                 var cellStates = ComputeCellStates(fieldName, values, masterPlugin, records, sortedArrays);
                 var meta = masterFieldMeta.GetValueOrDefault(fieldName);
-                var children = meta?.Fields != null
-                    ? BuildStructChildren(meta.Fields, values, masterPlugin, records)
-                    : null;
+                List<FieldDiff>? children = null;
+                if (meta?.Fields != null)
+                    children = BuildStructChildren(meta.Fields, values, masterPlugin, records, _logger);
+                else if (meta?.ElementType != null)
+                    children = BuildArrayChildren(meta.ElementType, values, masterPlugin, records, _logger, MaxArrayChildCount, fieldName);
                 return new FieldDiff(fieldName, values, winner.Plugin, winnerValue, cellStates, children);
             })
             .Where(d => d.Values.Values.Any(v => v != null))
             .ToList();
     }
 
+    private static List<FieldDiff>? BuildArrayChildren(
+        FieldMetadata elementMeta,
+        Dictionary<string, object?> parentValues,
+        string masterPlugin,
+        IReadOnlyList<RecordDetail> records,
+        ILogger logger,
+        int maxChildren,
+        string parentFieldName)
+    {
+        var arrays = parentValues.ToDictionary(
+            kv => kv.Key,
+            kv => kv.Value is System.Text.Json.JsonElement je &&
+                  je.ValueKind == System.Text.Json.JsonValueKind.Array
+                ? (System.Text.Json.JsonElement?)je : null);
+
+        var children = new List<FieldDiff>();
+
+        FieldDiff MakeChild(string label, Dictionary<string, object?> subValues)
+        {
+            var fieldWinner = records
+                .Where(r => subValues.GetValueOrDefault(r.Plugin) != null)
+                .MaxBy(r => r.LoadOrderIndex)!;
+            var winnerValue = subValues[fieldWinner.Plugin];
+            var cellStates = ComputeCellStates(label, subValues, masterPlugin, records, []);
+            var childChildren = elementMeta.Fields != null
+                ? BuildStructChildren(elementMeta.Fields, subValues, masterPlugin, records, logger)
+                : null;
+            return new FieldDiff(label, subValues, fieldWinner.Plugin, winnerValue, cellStates, childChildren);
+        }
+
+        void WarnTooLarge(int count) => logger.LogWarning(
+            "Array field {Field} on {FormKey} has {Count} elements across plugins — exceeding MaxArrayChildCount ({Max}), falling back to opaque display",
+            parentFieldName, records[0].FormKey, count, maxChildren);
+
+        if (elementMeta.IsSortable)
+        {
+            var union = records
+                .Where(r => arrays.GetValueOrDefault(r.Plugin) != null)
+                .SelectMany(r => arrays[r.Plugin]!.Value.EnumerateArray()
+                    .Select(e => e.GetString()).OfType<string>())
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (union.Count > maxChildren)
+            {
+                WarnTooLarge(union.Count);
+                return null;
+            }
+
+            foreach (var key in union)
+            {
+                var subValues = arrays.ToDictionary(
+                    kv => kv.Key,
+                    kv =>
+                    {
+                        if (kv.Value == null) return (object?)null;
+                        return kv.Value.Value.EnumerateArray()
+                            .Where(e => e.GetString() == key)
+                            .Select(e => (object?)e)
+                            .FirstOrDefault();
+                    });
+
+                children.Add(MakeChild(key, subValues));
+            }
+        }
+        else
+        {
+            var maxLen = arrays.Values
+                .Where(v => v != null)
+                .Select(v => v!.Value.GetArrayLength())
+                .DefaultIfEmpty(0)
+                .Max();
+            if (maxLen == 0) return null;
+
+            if (maxLen > maxChildren)
+            {
+                WarnTooLarge(maxLen);
+                return null;
+            }
+
+            for (var i = 0; i < maxLen; i++)
+            {
+                var subValues = arrays.ToDictionary(
+                    kv => kv.Key,
+                    kv =>
+                    {
+                        if (kv.Value == null) return (object?)null;
+                        var arr = kv.Value.Value;
+                        return arr.GetArrayLength() > i ? (object?)arr[i] : null;
+                    });
+
+                children.Add(MakeChild($"[{i}]", subValues));
+            }
+        }
+
+        return children.Count > 0 ? children : null;
+    }
+
     private static List<FieldDiff>? BuildStructChildren(
         IReadOnlyList<FieldMetadata> subFields,
         Dictionary<string, object?> parentValues,
         string masterPlugin,
-        IReadOnlyList<RecordDetail> records)
+        IReadOnlyList<RecordDetail> records,
+        ILogger logger)
     {
         var children = new List<FieldDiff>();
         foreach (var subField in subFields)
         {
-            if (subField.IsArray || subField.Fields?.Count > 0) continue;
-
             var subValues = parentValues.ToDictionary(
                 kv => kv.Key,
                 kv => (object?)ExtractSubFieldValue(kv.Value, subField.Name));
 
             if (subValues.Values.All(v => v == null)) continue;
+
+            List<FieldDiff>? subChildren = null;
+            if (subField.IsArray && subField.ElementType != null)
+                subChildren = BuildArrayChildren(subField.ElementType, subValues, masterPlugin, records, logger, MaxArrayChildCount, subField.Name);
+            else if (subField.Fields != null)
+                subChildren = BuildStructChildren(subField.Fields, subValues, masterPlugin, records, logger);
 
             var fieldWinner = records
                 .Where(r => subValues.GetValueOrDefault(r.Plugin) != null)
@@ -147,7 +261,7 @@ public sealed class ConflictClassifier : IConflictClassifier
 
             var winnerValue = subValues[fieldWinner.Plugin];
             var cellStates = ComputeCellStates(subField.Name, subValues, masterPlugin, records, []);
-            children.Add(new FieldDiff(subField.Name, subValues, fieldWinner.Plugin, winnerValue, cellStates));
+            children.Add(new FieldDiff(subField.Name, subValues, fieldWinner.Plugin, winnerValue, cellStates, subChildren));
         }
         return children.Count > 0 ? children : null;
     }
