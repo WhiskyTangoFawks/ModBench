@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { toStr } from './recordUtils';
 import type { FieldMetadata } from './types';
+import { FlagCell } from './FlagCell';
 
 const mono = 'var(--vscode-editor-font-family, "Consolas", monospace)';
 const fg   = 'var(--vscode-editor-foreground, #ccc)';
@@ -147,6 +148,9 @@ function renderSubCell(
         checked={value === true}
         onChange={e => onCommit(e.target.checked)} />
     );
+  }
+  if (meta.type === 'enum' && meta.isBitmask && meta.enumBitValues) {
+    return <FlagCell value={value} meta={meta} editMode={editMode} onCommit={onCommit} />;
   }
   if (meta.type === 'enum' && meta.enumValues.length > 0) {
     return (

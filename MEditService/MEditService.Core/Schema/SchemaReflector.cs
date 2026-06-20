@@ -167,7 +167,9 @@ public sealed class SchemaReflector : ISchemaReflector
                 IsArray: info.ApiType == "array",
                 ElementType: info.ElementMeta,
                 SubFields: info.SubFieldMetas,
-                AllowsNull: info.AllowsNull));
+                AllowsNull: info.AllowsNull,
+                IsBitmask: info.IsBitmask,
+                EnumBitValues: info.EnumBitValues));
         }
 
         return new RecordTableSchema
@@ -189,7 +191,9 @@ public sealed class SchemaReflector : ISchemaReflector
         Action<IMajorRecord, JsonElement>? Apply,
         FieldMetadata? ElementMeta = null,
         IReadOnlyList<FieldMetadata>? SubFieldMetas = null,
-        bool AllowsNull = false);
+        bool AllowsNull = false,
+        bool IsBitmask = false,
+        long[]? EnumBitValues = null);
 
     // ── SubFieldSpec (sub-record / array element reflection) ─────────────────
 
@@ -202,13 +206,17 @@ public sealed class SchemaReflector : ISchemaReflector
         Action<object, JsonElement>? Apply,
         IReadOnlyList<SubFieldSpec>? SubFields = null,
         SubFieldSpec? ElementSpec = null,
-        bool AllowsNull = false)
+        bool AllowsNull = false,
+        bool IsBitmask = false,
+        long[]? EnumBitValues = null)
     {
         public FieldMetadata ToFieldMetadata() =>
             new(Name, ApiType, false, ValidFormKeyTypes, EnumValues,
                 ElementSpec?.ToFieldMetadata(),
                 SubFields?.Select(s => s.ToFieldMetadata()).ToList(),
-                AllowsNull: AllowsNull);
+                AllowsNull: AllowsNull,
+                IsBitmask: IsBitmask,
+                EnumBitValues: EnumBitValues);
     }
 
     // ── Type-detection helpers ────────────────────────────────────────────────
@@ -366,6 +374,27 @@ public sealed class SchemaReflector : ISchemaReflector
         return false;
     }
 
+    private static (string[] Names, long[]? BitValues) GetEnumMeta(Type enumType)
+    {
+        var allNames = Enum.GetNames(enumType);
+        if (enumType.GetCustomAttribute<FlagsAttribute>() == null)
+            return (allNames, null);
+
+        var allValues = Enum.GetValues(enumType);
+        var names = new List<string>();
+        var bits = new List<long>();
+        for (int i = 0; i < allValues.Length; i++)
+        {
+            long v = Convert.ToInt64(allValues.GetValue(i), System.Globalization.CultureInfo.InvariantCulture);
+            if (v > 0 && (v & (v - 1)) == 0)   // atomic power-of-two only; excludes None=0 and composite values
+            {
+                names.Add(allNames[i]);
+                bits.Add(v);
+            }
+        }
+        return bits.Count > 0 ? (names.ToArray(), bits.ToArray()) : (allNames, null);
+    }
+
     // ── Per-sub-field reflection (operates on object, not IMajorRecordGetter) ─
 
     private static SubFieldSpec? GetSubFieldInfo(
@@ -417,7 +446,13 @@ public sealed class SchemaReflector : ISchemaReflector
         if (core.IsEnum)
         {
             var g = Getter();
-            return new(colName, "enum", _empty, Enum.GetNames(core),
+            var (names, bits) = GetEnumMeta(core);
+            if (bits != null)
+                return new(colName, "enum", _empty, names,
+                    obj => g(obj) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
+                    Applier(v => Enum.ToObject(core, v.GetInt64())),
+                    IsBitmask: true, EnumBitValues: bits);
+            return new(colName, "enum", _empty, names,
                 obj => g(obj)?.ToString(),
                 Applier(v => Enum.Parse(core, v.GetString() ?? "", ignoreCase: true)));
         }
@@ -524,8 +559,14 @@ public sealed class SchemaReflector : ISchemaReflector
 
         if (core.IsEnum)
         {
-            var enumValues = Enum.GetNames(core);
-            return new("VARCHAR", r => TryGet(r, prop)?.ToString(), "enum", _empty, enumValues,
+            var (names, bits) = GetEnumMeta(core);
+            if (bits != null)
+                return new("BIGINT",
+                    r => TryGet(r, prop) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
+                    "enum", _empty, names,
+                    MakeApply(v => Enum.ToObject(core, v.GetInt64())),
+                    IsBitmask: true, EnumBitValues: bits);
+            return new("VARCHAR", r => TryGet(r, prop)?.ToString(), "enum", _empty, names,
                 MakeApply(v => Enum.Parse(core, v.GetString()!, ignoreCase: true)));
         }
 
@@ -661,7 +702,7 @@ public sealed class SchemaReflector : ISchemaReflector
     private static object? TryGet(IMajorRecordGetter record, PropertyInfo prop)
     {
         try { return prop.GetValue(record); }
-        catch { return null; }
+        catch { return null; } // Stryker disable once Block: silent accessor lambda — per-call lambdas stay silent to avoid log noise (see MEditService CLAUDE.md)
     }
 
     internal static string ToSnakeCase(string name) =>

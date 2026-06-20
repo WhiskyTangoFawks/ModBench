@@ -34,7 +34,9 @@ public record FieldMetadata(
     FieldMetadata? ElementType = null,          // for 'array': element schema
     IReadOnlyList<FieldMetadata>? Fields = null, // for 'struct': sub-field schemas
     bool IsSortable = false,                     // true when element is a pure FormLink
-    bool AllowsNull = false);                    // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
+    bool AllowsNull = false,                     // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
+    bool IsBitmask = false,                      // for 'enum': true when the C# enum has [Flags]
+    IReadOnlyList<long>? EnumBitValues = null);  // for 'enum' + IsBitmask: actual integer values aligned with EnumValues
 
 public record FieldValue(FieldMetadata Metadata, object? Value, string? CheckError = null);
 

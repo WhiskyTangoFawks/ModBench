@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrayRowGroup } from './ArrayRowGroup';
+import { FlagCell } from './FlagCell';
 import { FormKeyPicker } from './FormKeyPicker';
 import { buildColumns, toStr } from './recordUtils';
 import type { Column } from './recordUtils';
@@ -272,6 +273,9 @@ function renderCell(
         {'{…}'}<CheckErrorIcon checkError={checkError} />
       </span>
     );
+  }
+  if (meta.type === 'enum' && meta.isBitmask) {
+    return <FlagCell value={value} meta={meta} editMode={editMode} onCommit={onCommit} />;
   }
   return <ScalarCell value={value} meta={meta} editMode={editMode} onCommit={onCommit} />;
 }
