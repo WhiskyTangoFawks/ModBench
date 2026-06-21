@@ -70,18 +70,15 @@ All scope failures reported together — fix all, then rerun. With TDD, expect p
 ### Step 2 — Simplify (LLM)
 
 - [ ] Run `/simplify`
-- [ ] Review findings with developer, propose which to accept/reject, and wait for decision
+- [ ] Review findings, decide whether to accept, reject, or surface to developer for further analysis. Small but unrelated findings should be addressed. Significant findings requiring larger refactoring should be surfaced to the developer or addressed immediately if serious.
 - [ ] If simplify changes logic (not just style), rerun Step 1
-
-If you're unsure or if something seems low priority, use /rubber-duck. Larger architectural refactors out of scope of the current task require the creation of a td-xxx.md file in tech-debt.
 
 ### Step 3 — Code review (LLM)
 
 - [ ] Run `/code-review`
-- [ ] Review findings with developer, propose which to accept/reject, and wait for decision
+- [ ] Review findings, decide whether to accept, reject, or surface to developer for further analysis. Small but unrelated findings should be addressed. Significant findings requiring larger refactoring should be surfaced to the developer or addressed immediately if serious.
 - [ ] If any changes are made, rerun Step 1
 
-Any larger findings requiring architectural refactoring should be prompted to the developer for potential creation of a /handoff document to address the finding.
 
 ### Step 4 — Branch & commit (required before mutation tests)
 

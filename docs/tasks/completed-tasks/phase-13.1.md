@@ -1,6 +1,6 @@
 # Phase 13.1 — VMAD Backend Index
 
-**Status: Not Started** · Parent: [phase-13](phase-13.md) · Depends on: — · **Model: Sonnet** *(well-specified schema + `SFRecordCompareEngine` reference impl; introduces the shared `VmadJson` serializer reused by 13.2/13.7 — get its shape right)*
+**Status: Complete** · Parent: [phase-13](phase-13.md) · Depends on: — · **Model: Sonnet** *(well-specified schema + `SFRecordCompareEngine` reference impl; introduces the shared `VmadJson` serializer reused by 13.2/13.7 — get its shape right)*
 
 *Goal: indexing a plugin populates dedicated DuckDB tables with its VMAD scripts and properties (scalars, scalar-arrays, and structs-as-JSON), and registers Object-property FormKeys in `form_references`. Re-indexing the same plugin does not duplicate rows.*
 
@@ -119,4 +119,14 @@ Use a real FO4 fixture plugin with a known scripted record (an ACTI or NPC_ with
 
 ## Proof
 
-*To be filled in on completion. Paste `dotnet test` output and commit hash.*
+```text
+Passed!  - Failed: 0, Passed: 586, Skipped: 0, Total: 586, Duration: 2 m 19 s
+```
+
+Implementation commit: `ca5fca4`  
+Mutation triage commit: `a00c979`  
+Merge commit: `36c7f65`
+
+Variable/VariableList NoCoverage accepted: Mutagen throws `NotImplementedException` during binary
+parsing for these property types; the switch arms are structurally unreachable through real plugin
+data. Documented in commit message.
