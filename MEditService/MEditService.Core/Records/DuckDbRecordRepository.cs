@@ -7,6 +7,7 @@ using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging;
 
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
@@ -99,7 +100,12 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             }
         }
 
-        // Delete stale refs only after the loop succeeds — an exception mid-loop now leaves
+        // Walk VMAD after the per-type loop so both generic and VMAD Object refs land in `refs`
+        // before the single form_references flush below.
+        DeleteVmadForPlugin(plugin);
+        IndexVmad(pluginMod, plugin, refs);
+
+        // Delete stale refs only after both loops succeed — an exception mid-loop now leaves
         // existing form_references intact rather than permanently empty.
         DeleteFormReferencesForPlugin(plugin);
         if (refs.Count > 0)
@@ -369,6 +375,49 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.ExecuteNonQuery();
     }
 
+    private void IndexVmad(IModGetter pluginMod, string plugin, List<FormRef> refs)
+    {
+        using var scriptAppender = _connection.CreateAppender("vmad_scripts");
+        using var propAppender = _connection.CreateAppender("vmad_properties");
+        using var itemAppender = _connection.CreateAppender("vmad_property_list_items");
+        var indexer = new VmadIndexer(scriptAppender, propAppender, itemAppender, refs, _logger);
+
+        var vmadCount = 0;
+        foreach (var record in pluginMod.EnumerateMajorRecords<IHaveVirtualMachineAdapterGetter>(
+                     throwIfUnknown: false))
+        {
+            if (record.VirtualMachineAdapter is not { } vmad) continue;
+            var recordType = ResolveRecordType(record);
+            try
+            {
+                indexer.IndexRecord(record.FormKey.ToString(), plugin, recordType, vmad);
+                vmadCount++;
+            }
+            catch (NotImplementedException ex)
+            {
+                _logger.LogWarning(ex,
+                    "Skipping VMAD for {FormKey} — property type not implemented in Mutagen",
+                    record.FormKey);
+            }
+        }
+        _logger.LogInformation("Indexed VMAD for {Count} records in {Plugin}", vmadCount, plugin);
+    }
+
+    private void DeleteVmadForPlugin(string plugin)
+    {
+        foreach (var table in (string[])["vmad_scripts", "vmad_properties", "vmad_property_list_items"])
+            DeleteExisting(table, plugin);
+    }
+
+    private string ResolveRecordType(IMajorRecordGetter record)
+    {
+        var schemas = RequireSchemas();
+        foreach (var (tableName, schema) in schemas)
+            if (schema.RecordType.IsInstanceOfType(record))
+                return tableName;
+        return record.GetType().Name.ToLowerInvariant();
+    }
+
     private static void CollectFormRefs(
         List<FormRef> refs,
         IMajorRecordGetter record,
@@ -384,12 +433,6 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         }
     }
 
-    private record struct FormRef(
-        string SourceFormKey,
-        string TargetFormKey,
-        string FieldPath,
-        string RecordType,
-        string? EditorId);
 
     private void Execute(string sql)
     {

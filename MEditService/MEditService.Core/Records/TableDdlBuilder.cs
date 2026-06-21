@@ -20,6 +20,7 @@ public sealed class TableDdlBuilder : ITableDdlBuilder
         CreatePluginsTable(connection);
         CreateIndexStateTable(connection);
         CreateFormReferencesTable(connection);
+        CreateVmadTables(connection);
         foreach (var schema in _reflector.GetSchemas(release).Values)
             CreateRecordTable(connection, schema);
     }
@@ -61,6 +62,71 @@ public sealed class TableDdlBuilder : ITableDdlBuilder
         Execute(connection, """
             CREATE INDEX IF NOT EXISTS idx_form_references_target
                 ON form_references(target_form_key)
+            """);
+    }
+
+    internal static void CreateVmadTables(DuckDBConnection connection)
+    {
+        Execute(connection, """
+            CREATE TABLE IF NOT EXISTS vmad_scripts (
+                form_key     VARCHAR NOT NULL,
+                plugin       VARCHAR NOT NULL,
+                script_name  VARCHAR NOT NULL,
+                script_index INTEGER NOT NULL,
+                flags        VARCHAR NOT NULL,
+                record_type  VARCHAR NOT NULL
+            )
+            """);
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_vmad_scripts_fk
+                ON vmad_scripts(form_key, plugin)
+            """);
+
+        Execute(connection, """
+            CREATE TABLE IF NOT EXISTS vmad_properties (
+                form_key       VARCHAR NOT NULL,
+                plugin         VARCHAR NOT NULL,
+                script_name    VARCHAR NOT NULL,
+                property_name  VARCHAR NOT NULL,
+                property_index INTEGER NOT NULL,
+                record_type    VARCHAR NOT NULL,
+                type           VARCHAR NOT NULL,
+                flags          VARCHAR NOT NULL,
+                bool_value     BOOLEAN,
+                int_value      INTEGER,
+                float_value    FLOAT,
+                string_value   VARCHAR,
+                form_key_value VARCHAR,
+                alias_value    SMALLINT,
+                struct_json    VARCHAR
+            )
+            """);
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_vmad_props_fk
+                ON vmad_properties(form_key, plugin)
+            """);
+
+        Execute(connection, """
+            CREATE TABLE IF NOT EXISTS vmad_property_list_items (
+                form_key        VARCHAR NOT NULL,
+                plugin          VARCHAR NOT NULL,
+                script_name     VARCHAR NOT NULL,
+                property_name   VARCHAR NOT NULL,
+                property_index  INTEGER NOT NULL,
+                list_item_index INTEGER NOT NULL,
+                record_type     VARCHAR NOT NULL,
+                type            VARCHAR NOT NULL,
+                bool_value      BOOLEAN,
+                int_value       INTEGER,
+                float_value     FLOAT,
+                string_value    VARCHAR,
+                form_key_value  VARCHAR,
+                alias_value     SMALLINT
+            )
+            """);
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_vmad_items_fk
+                ON vmad_property_list_items(form_key, plugin)
             """);
     }
 
