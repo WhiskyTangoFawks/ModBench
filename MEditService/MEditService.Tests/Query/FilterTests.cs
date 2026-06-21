@@ -39,6 +39,13 @@ public class FilterTests : IClassFixture<TestPluginFixture>
     }
 
     [Fact]
+    public void SetFilter_ValidSqlWithExtraColumns_DoesNotThrow()
+    {
+        using var repo = LoadedRepository();
+        Assert.Null(Record.Exception(() => repo.SetFilter("SELECT form_key, plugin FROM \"NPC_\"")));
+    }
+
+    [Fact]
     public void SetFilter_SqlWithoutFormKeyColumn_ThrowsArgumentException()
     {
         using var repo = LoadedRepository();

@@ -55,13 +55,33 @@ public sealed class VmadIndexerTests : IDisposable
         intList.Data.Add(30);
         script.Properties.Add(intList);
 
+        var boolList = new ScriptBoolListProperty { Name = "Flags" };
+        boolList.Data.Add(true);
+        boolList.Data.Add(false);
+        script.Properties.Add(boolList);
+
         var structProp = new ScriptStructProperty { Name = "Config" };
         var member = new ScriptEntry { Name = "SubScript" };
         member.Properties.Add(new ScriptFloatProperty { Name = "Factor", Data = 1.5f });
         structProp.Members.Add(member);
         script.Properties.Add(structProp);
 
+        script.Properties.Add(new ScriptStringProperty
+        {
+            Name = "ZeroFlagsTest",
+            Data = "x",
+            Flags = (ScriptProperty.Flag)0
+        });
+
         vmad.Scripts.Add(script);
+
+        var inheritedScript = new ScriptEntry
+        {
+            Name = "InheritedScript",
+            Flags = ScriptEntry.Flag.InheritedAndRemoved
+        };
+        vmad.Scripts.Add(inheritedScript);
+
         return vmad;
     }
 
@@ -120,7 +140,7 @@ public sealed class VmadIndexerTests : IDisposable
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT type, bool_value, int_value, float_value, string_value, form_key_value, struct_json
+            SELECT type, bool_value, int_value, float_value, string_value, form_key_value, struct_json, flags
             FROM vmad_properties
             WHERE form_key = $1 AND property_name = 'IsActive'
             """;
@@ -135,6 +155,7 @@ public sealed class VmadIndexerTests : IDisposable
         Assert.True(reader.IsDBNull(4));
         Assert.True(reader.IsDBNull(5));
         Assert.True(reader.IsDBNull(6));
+        Assert.Equal("Edited", reader.GetString(7));
     }
 
     [Fact]
@@ -204,12 +225,72 @@ public sealed class VmadIndexerTests : IDisposable
         Assert.True(reader.Read());
         Assert.Equal("Struct", reader.GetString(0));
         Assert.False(reader.IsDBNull(1));
-        Assert.NotEmpty(reader.GetString(1));
+        var json = reader.GetString(1);
+        Assert.Contains("Factor", json);
         Assert.True(reader.IsDBNull(2));
         Assert.True(reader.IsDBNull(3));
         Assert.True(reader.IsDBNull(4));
         Assert.True(reader.IsDBNull(5));
         Assert.True(reader.IsDBNull(6));
+    }
+
+    [Fact]
+    public void VmadPropertyListItems_BoolArray_HasCorrectValues()
+    {
+        using var repo = LoadedRepository();
+        var conn = repo.Connection;
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT list_item_index, bool_value
+            FROM vmad_property_list_items
+            WHERE form_key = $1 AND property_name = 'Flags'
+            ORDER BY list_item_index
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = _npc1FormKey.ToString() });
+        using var reader = cmd.ExecuteReader();
+
+        var rows = new List<(int idx, bool val)>();
+        while (reader.Read())
+            rows.Add((reader.GetInt32(0), reader.GetBoolean(1)));
+
+        Assert.Equal(2, rows.Count);
+        Assert.Equal((0, true), rows[0]);
+        Assert.Equal((1, false), rows[1]);
+    }
+
+    [Fact]
+    public void VmadProperties_BoolArray_HasPropRow()
+    {
+        using var repo = LoadedRepository();
+        var count = CountRows(repo.Connection, "vmad_properties",
+            "form_key = $1 AND property_name = 'Flags' AND type = 'ArrayOfBool'",
+            _npc1FormKey.ToString());
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public void VmadProperties_ZeroFlags_StoresEmptyString()
+    {
+        using var repo = LoadedRepository();
+        var conn = repo.Connection;
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT flags FROM vmad_properties WHERE form_key = $1 AND property_name = 'ZeroFlagsTest'";
+        cmd.Parameters.Add(new DuckDBParameter { Value = _npc1FormKey.ToString() });
+        Assert.Equal("", (string?)cmd.ExecuteScalar());
+    }
+
+    [Fact]
+    public void VmadScripts_InheritedAndRemovedFlag_StoresReadableString()
+    {
+        using var repo = LoadedRepository();
+        var conn = repo.Connection;
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT flags FROM vmad_scripts WHERE form_key = $1 AND script_name = 'InheritedScript'";
+        cmd.Parameters.Add(new DuckDBParameter { Value = _npc1FormKey.ToString() });
+        Assert.Equal("Inherited and Removed", (string?)cmd.ExecuteScalar());
     }
 
     [Fact]
