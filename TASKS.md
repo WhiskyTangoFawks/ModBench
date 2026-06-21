@@ -34,7 +34,7 @@ Each phase has its own spec file in [docs/tasks/](docs/tasks/). Completed phases
 | **10** | Not Started | Record lifecycle — create, delete, renumber; `ChangeGroup`; atomic multi-plugin save | [phase-10](docs/tasks/phase-10.md) |
 | **11** | ✓ POC | Referenced By / record graph — `form_references` DuckDB table, "Referenced By" tab in record panel | [phase-11](docs/tasks/phase-11.md) |
 | **12** | Not Started | Complex field display — xEdit unified tree model for arrays, flag enum cells, struct edit verification | [phase-12](docs/tasks/phase-12.md) |
-| **13** | Not Started | VMAD (Papyrus script data) — dedicated DuckDB tables, separate import/hydration, Scripts/Properties in compare grid | [phase-13](docs/tasks/phase-13.md) |
+| **13** | Not Started | VMAD (Papyrus script data) — dedicated DuckDB tables, separate import/hydration, Scripts/Properties in compare grid, **fully editable to TES5Edit parity** (8 sub-phases) | [phase-13](docs/tasks/phase-13.md) |
 | **14** | Not Started | Plugin file management — compact FormIDs, ESL convert, master clean/sort/add, merge, inject-to-master | [phase-14](docs/tasks/phase-14.md) |
 | **15** | Not Started | Scripting engine — Python scripts with YAML frontmatter + SQL query; `edit()` API; built-in scripts | [phase-15](docs/tasks/phase-15.md) |
 | **16** | Not Started | Worldspace/Cell tree — WRLD block hierarchy, CELL nodes with XCLC coords, REFR persistent/temporary split | [phase-16](docs/tasks/phase-16.md) |
