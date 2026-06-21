@@ -420,6 +420,12 @@ function updateArrayAtKey(
 
 // ── DiffRow ───────────────────────────────────────────────────────────────────
 
+type RowContext =
+  | { kind: 'top-level' }
+  | { kind: 'array-element'; overrideMeta: FieldMetadata; parentFieldName: string }
+  | { kind: 'struct-child';  overrideMeta: FieldMetadata; parentFieldName: string }
+  | { kind: 'grandchild';    overrideMeta: FieldMetadata; parentFieldName: string; parentFieldIndex: number };
+
 interface DiffRowProps {
   diff: FieldDiff;
   conflictAll: ConflictAll;
@@ -432,30 +438,26 @@ interface DiffRowProps {
   onOpen: (fk: string) => void;
   onEdit: (plugin: string, fieldName: string, value: unknown) => void;
   onRevert: (changeId: string) => void;
-  depth?: number;
+  context: RowContext;
   hasChildren?: boolean;
   isExpanded?: boolean;
   onToggle?: () => void;
-  overrideMeta?: FieldMetadata;
-  parentFieldName?: string;
-  parentFieldIndex?: number;
-  parentMeta?: FieldMetadata;
 }
 
 function DiffRow({
   diff, conflictAll, columns, overrideMap, fieldMetaMap, editMode, port,
   pendingChangeMap, onOpen, onEdit, onRevert,
-  depth = 0, hasChildren, isExpanded, onToggle, overrideMeta, parentFieldName, parentFieldIndex, parentMeta,
+  context, hasChildren, isExpanded, onToggle,
 }: DiffRowProps) {
-  const meta = overrideMeta ?? fieldMetaMap[diff.fieldName];
+  const meta = context.kind === 'top-level' ? fieldMetaMap[diff.fieldName] : context.overrideMeta;
   if (!meta) return null;
 
-  const isArrayElement = depth > 0 && parentMeta?.type === 'array';
-  const isGrandchild = parentFieldIndex !== undefined;
+  const pendingLookupField = context.kind === 'top-level' ? diff.fieldName : context.parentFieldName;
+  const showActions = context.kind === 'top-level' || context.kind === 'struct-child';
 
   return (
     <tr style={{ backgroundColor: getRowBg(conflictAll) }}>
-      <td style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: depth > 0 ? 24 : undefined }}>
+      <td style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.kind !== 'top-level' ? 24 : undefined }}>
         {hasChildren && (
           <button style={toggleBtnStyle} onClick={onToggle}>{isExpanded ? '▼' : '▶'}</button>
         )}
@@ -465,10 +467,9 @@ function DiffRow({
         if (col.kind === 'disk') {
           const { override: o } = col;
           const cellStyle = { ...baseCell, ...getCellStyle(diff.cellStates?.[o.plugin]), userSelect: 'text' as const };
-          const checkErrorFieldName = parentFieldName ?? diff.fieldName;
-          const checkError = isArrayElement || isGrandchild
-            ? undefined
-            : overrideMap[o.plugin]?.fields.find(f => f.metadata.name === checkErrorFieldName)?.checkError;
+          const checkError = showActions
+            ? overrideMap[o.plugin]?.fields.find(f => f.metadata.name === pendingLookupField)?.checkError
+            : undefined;
           if (hasChildren) {
             const len = meta.type === 'array' && Array.isArray(diff.values[o.plugin])
               ? (diff.values[o.plugin] as unknown[]).length
@@ -494,22 +495,26 @@ function DiffRow({
 
         // pending companion column
         const override = overrideMap[col.plugin];
-        const pendingLookupField = parentFieldName ?? diff.fieldName;
         const rawPending = override?.pendingFields?.[pendingLookupField];
         let pendingValue: unknown;
-        if (isArrayElement) {
-          pendingValue = extractPendingElementValue(rawPending, diff.fieldName, overrideMeta?.isSortable ?? false, diff.values[col.plugin]);
-        } else if (isGrandchild || parentFieldName !== undefined) {
-          let obj: unknown;
-          if (isGrandchild) {
-            obj = Array.isArray(rawPending) ? (rawPending as unknown[])[parentFieldIndex] : undefined;
-          } else {
-            obj = rawPending;
+        switch (context.kind) {
+          case 'top-level':
+            pendingValue = pendingIfChanged(rawPending, diff.values[col.plugin]);
+            break;
+          case 'array-element':
+            pendingValue = extractPendingElementValue(rawPending, diff.fieldName, context.overrideMeta.isSortable ?? false, diff.values[col.plugin]);
+            break;
+          case 'struct-child': {
+            const sub = (rawPending as Record<string, unknown> | undefined)?.[diff.fieldName];
+            pendingValue = pendingIfChanged(sub, diff.values[col.plugin]);
+            break;
           }
-          const sub = (obj as Record<string, unknown> | undefined)?.[diff.fieldName];
-          pendingValue = pendingIfChanged(sub, diff.values[col.plugin]);
-        } else {
-          pendingValue = rawPending;
+          case 'grandchild': {
+            const elem = Array.isArray(rawPending) ? (rawPending as unknown[])[context.parentFieldIndex] : undefined;
+            const sub = (elem as Record<string, unknown> | undefined)?.[diff.fieldName];
+            pendingValue = pendingIfChanged(sub, diff.values[col.plugin]);
+            break;
+          }
         }
         const change = pendingChangeMap[`${col.plugin}:${pendingLookupField}`];
         const hasPending = pendingValue !== undefined;
@@ -526,7 +531,7 @@ function DiffRow({
             {hasPending && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span>{toStr(pendingValue)}</span>
-                {change && !isArrayElement && !isGrandchild && (
+                {change && showActions && (
                   <button
                     onClick={() => onRevert(change.id)}
                     title="Revert this change"
@@ -838,6 +843,7 @@ export function RecordPanel() {
                   onOpen={handleOpen}
                   onEdit={(plugin, fieldName, value) => { void handleEdit(plugin, fieldName, value); }}
                   onRevert={changeId => { void handleRevert(changeId); }}
+                  context={{ kind: 'top-level' }}
                   hasChildren={hasChildren}
                   isExpanded={isExpanded}
                   onToggle={() => setExpandedStructs(prev => {
@@ -878,10 +884,7 @@ export function RecordPanel() {
                           void handleEdit(plugin, diff.fieldName, updateArrayAtKey(resolveCurrentArr(plugin), elemKey, newValue, elementMeta.isSortable ?? false));
                         }}
                         onRevert={changeId => { void handleRevert(changeId); }}
-                        depth={1}
-                        overrideMeta={elementMeta}
-                        parentFieldName={diff.fieldName}
-                        parentMeta={parentMeta}
+                        context={{ kind: 'array-element', overrideMeta: elementMeta, parentFieldName: diff.fieldName }}
                         hasChildren={(child.children?.length ?? 0) > 0}
                         isExpanded={elemExpanded}
                         onToggle={() => setExpandedStructs(prev => {
@@ -915,11 +918,7 @@ export function RecordPanel() {
                               void handleEdit(plugin, diff.fieldName, updatedArr);
                             }}
                             onRevert={changeId => { void handleRevert(changeId); }}
-                            depth={2}
-                            overrideMeta={subFieldMeta}
-                            parentFieldName={diff.fieldName}
-                            parentFieldIndex={elemIdx}
-                            parentMeta={elementMeta}
+                            context={{ kind: 'grandchild', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName, parentFieldIndex: elemIdx }}
                           />,
                         );
                       }
@@ -946,10 +945,7 @@ export function RecordPanel() {
                           void handleEdit(plugin, diff.fieldName, { ...cur, [subField]: subValue });
                         }}
                         onRevert={changeId => { void handleRevert(changeId); }}
-                        depth={1}
-                        overrideMeta={subFieldMeta}
-                        parentFieldName={diff.fieldName}
-                        parentMeta={parentMeta}
+                        context={{ kind: 'struct-child', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName }}
                       />,
                     );
                   }

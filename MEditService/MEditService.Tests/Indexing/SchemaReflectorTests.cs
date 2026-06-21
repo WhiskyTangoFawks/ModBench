@@ -133,6 +133,31 @@ public class SchemaReflectorTests
     }
 
     [Fact]
+    public void GetSchemas_Npc_Name_Extract_ReturnsStringValue()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.First(c => c.Name == "name");
+        var npc = new Mutagen.Bethesda.Fallout4.Npc(
+            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Test.esp"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        npc.Name = new Mutagen.Bethesda.Strings.TranslatedString(
+            Mutagen.Bethesda.Strings.Language.English, "Testname");
+        Assert.Equal("Testname", col.Extract(npc));
+    }
+
+    [Fact]
+    public void GetSchemas_Npc_Name_Extract_WhenNull_ReturnsNull()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.First(c => c.Name == "name");
+        var npc = new Mutagen.Bethesda.Fallout4.Npc(
+            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Test.esp"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        npc.Name = null;
+        Assert.Null(col.Extract(npc));
+    }
+
+    [Fact]
     public void GetSchemas_IsCachedAcrossCalls()
     {
         var first = _reflector.GetSchemas(GameRelease.Fallout4);
@@ -205,6 +230,18 @@ public class SchemaReflectorTests
         Assert.Equal(2, parsed.Count);
         Assert.Contains(kw1.ToString(), parsed);
         Assert.Contains(kw2.ToString(), parsed);
+    }
+
+    [Fact]
+    public void GetSchemas_Npc_Keywords_Extract_WhenNull_ReturnsNull()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.First(c => c.Name == "keywords");
+        var npc = new Mutagen.Bethesda.Fallout4.Npc(
+            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Test.esp"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        npc.Keywords = null;
+        Assert.Null(col.Extract(npc));
     }
 
     // ── ToSnakeCase ────────────────────────────────────────────────────────────
@@ -614,7 +651,11 @@ public class SchemaReflectorTests
         Assert.NotNull(col);
         Assert.NotNull(col!.EnumBitValues);
         Assert.Equal(col.EnumValues.Count, col.EnumBitValues!.Count);
-        Assert.All(col.EnumBitValues, v => Assert.True(v > 0 && (v & (v - 1)) == 0));
+        Assert.All(col.EnumBitValues, s =>
+        {
+            long v = long.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+            Assert.True(v > 0 && (v & (v - 1)) == 0);
+        });
     }
 
     [Fact]
@@ -636,9 +677,62 @@ public class SchemaReflectorTests
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "flags");
         Assert.NotNull(col);
         Assert.NotNull(col!.EnumBitValues);
-        Assert.DoesNotContain(0L, col.EnumBitValues!);
-        Assert.All(col.EnumBitValues, v => Assert.True(v > 0 && (v & (v - 1)) == 0,
-            $"Expected a power-of-two bit value, got {v}"));
+        Assert.DoesNotContain("0", col.EnumBitValues!);
+        Assert.All(col.EnumBitValues, s =>
+        {
+            long v = long.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+            Assert.True(v > 0 && (v & (v - 1)) == 0, $"Expected a power-of-two bit value, got {s}");
+        });
+    }
+
+    [Fact]
+    public void GetSchemas_Race_FlagColumn_HighBitEnumBitValues_SerializedAsStrings()
+    {
+        // Race.Flag is ulong-backed with LowPriorityPushable = 2^53 and
+        // CannotUsePlayableItems = 2^54 — both beyond JS Number MAX_SAFE_INTEGER.
+        // EnumBitValues must be string so the frontend can parse them as BigInt.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["race"].RecordColumns.Single(c => c.Name == "flags");
+        Assert.NotNull(col.EnumBitValues);
+        Assert.Contains("9007199254740992", col.EnumBitValues!);   // LowPriorityPushable = 2^53
+        Assert.Contains("18014398509481984", col.EnumBitValues!);  // CannotUsePlayableItems = 2^54
+        Assert.Contains("1", col.EnumBitValues!);                   // Playable (low-bit sanity check)
+    }
+
+    [Fact]
+    public void GetSchemas_Race_FlagColumn_Apply_AcceptsHighBitDecimalString()
+    {
+        // Bitmask edits arrive from the frontend as decimal strings so values above 2^53
+        // survive JSON. Apply must parse the string token, not throw on it (GetInt64 would).
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["race"].RecordColumns.Single(c => c.Name == "flags");
+        Assert.NotNull(col.Apply);
+
+        var race = new Mutagen.Bethesda.Fallout4.Race(
+            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+
+        col.Apply!(race, System.Text.Json.JsonDocument.Parse("\"9007199254740993\"").RootElement);
+
+        Assert.Equal(9007199254740993UL, (ulong)race.Flags);
+    }
+
+    [Fact]
+    public void GetSchemas_Npc_FlagColumn_Apply_AcceptsNumberToken()
+    {
+        // Legacy numeric tokens (values below 2^53) must still apply.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.Single(c => c.Name == "flags");
+        Assert.NotNull(col.Apply);
+
+        var npc = new Mutagen.Bethesda.Fallout4.Npc(
+            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        var bit = long.Parse(col.EnumBitValues![0], System.Globalization.CultureInfo.InvariantCulture);
+
+        col.Apply!(npc, System.Text.Json.JsonDocument.Parse(bit.ToString(System.Globalization.CultureInfo.InvariantCulture)).RootElement);
+
+        Assert.Equal((ulong)bit, (ulong)npc.Flags);
     }
 
     [Fact]

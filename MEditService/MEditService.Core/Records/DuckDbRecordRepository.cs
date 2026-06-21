@@ -309,6 +309,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             {
                 value = reader.IsDBNull(5 + i) ? null : reader.GetValue(5 + i);
             }
+            // Bitmask flag values can exceed 2^53 (e.g. FO4 Race.Flag bits 53/54). Surface them as
+            // decimal strings so they survive JSON round-tripping without IEEE 754 precision loss.
+            if (value != null && col.IsBitmask)
+                value = Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
             var meta = col.ToFieldMetadata();
             fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, getRecordType)));
         }
@@ -480,10 +484,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         using var probeCmd = _connection.CreateCommand();
         probeCmd.CommandText = $"SELECT * FROM ({sql}) __probe LIMIT 0";
         using var probeReader = probeCmd.ExecuteReader();
-        bool hasFormKey = false;
-        for (int i = 0; i < probeReader.FieldCount; i++)
-            if (string.Equals(probeReader.GetName(i), "form_key", StringComparison.OrdinalIgnoreCase))
-            { hasFormKey = true; break; }
+        bool hasFormKey = Enumerable.Range(0, probeReader.FieldCount)
+            .Any(i => string.Equals(probeReader.GetName(i), "form_key", StringComparison.OrdinalIgnoreCase));
 
         if (!hasFormKey)
             throw new ArgumentException("Filter SQL must return a form_key column");

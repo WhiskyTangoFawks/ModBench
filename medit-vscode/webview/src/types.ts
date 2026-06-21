@@ -8,7 +8,7 @@ export interface FieldMetadata {
   fields?: FieldMetadata[];       // present when type === 'struct'
   isSortable?: boolean;           // on elementType: true for pure FormLink arrays
   isBitmask?: boolean;            // true when the C# enum has [Flags]
-  enumBitValues?: number[];       // present iff isBitmask; actual integer values aligned with enumValues
+  enumBitValues?: string[];       // present iff isBitmask; decimal string bit values aligned with enumValues
 }
 
 export interface FieldValue {

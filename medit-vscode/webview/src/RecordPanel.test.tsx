@@ -663,6 +663,60 @@ describe('RecordPanel — struct sub-rows', () => {
   });
 });
 
+// ── Top-level pending no-op suppression ──────────────────────────────────────
+
+describe('RecordPanel — top-level pending suppressed when identical to disk', () => {
+  // Pending value for Name is 'Override Name' — identical to the disk value.
+  // DiffRow should treat this as no change and NOT yellow-highlight the pending cell.
+  const noOpPendingResult = {
+    conflictAll: 'Override',
+    overrides: [
+      {
+        formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+        loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+        fields: [{ metadata: strMeta, value: 'Original Name' }],
+        pendingFields: {}, conflictThis: 'Master',
+      },
+      {
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+        loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: strMeta, value: 'Override Name' }],
+        pendingFields: { Name: 'Override Name' },
+        conflictThis: 'Override',
+      },
+    ],
+    diffs: [{
+      fieldName: 'Name',
+      values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
+      winnerPlugin: 'MyMod.esp', winnerValue: 'Override Name',
+      cellStates: { 'MyMod.esp': 'Override' },
+    }],
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(noOpPendingResult) };
+      if (String(url).includes('/changes'))  return { ok: true, json: () => Promise.resolve([]) };
+      if (String(url).includes('/plugins'))  return { ok: true, json: () => Promise.resolve(pluginsResponse) };
+      return { ok: false, status: 404, statusText: 'Not Found' };
+    }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('does not yellow-highlight the pending cell when pending value equals disk value', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Name'));
+
+    const nameRow = screen.getByText('Name').closest('tr')!;
+    const yellowCells = Array.from(nameRow.querySelectorAll('td')).filter(
+      td => td.style.backgroundColor === 'rgba(255, 200, 50, 0.10)',
+    );
+    expect(yellowCells.length).toBe(0);
+  });
+});
+
 describe('RecordPanel — LOAD_RECORD state management', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');

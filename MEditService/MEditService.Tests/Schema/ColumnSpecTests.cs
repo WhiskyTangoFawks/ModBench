@@ -59,7 +59,7 @@ public class ColumnSpecTests
     [Fact]
     public void ToFieldMetadata_PassesThroughEnumBitValues()
     {
-        var bits = new long[] { 1L, 2L, 4L };
+        var bits = new string[] { "1", "2", "4" };
         var col = new ColumnSpec("flags", "Flags", "BIGINT", _ => null, "enum",
             [], ["A", "B", "C"], null,
             IsBitmask: true, EnumBitValues: bits);

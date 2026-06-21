@@ -193,7 +193,7 @@ public sealed class SchemaReflector : ISchemaReflector
         IReadOnlyList<FieldMetadata>? SubFieldMetas = null,
         bool AllowsNull = false,
         bool IsBitmask = false,
-        long[]? EnumBitValues = null);
+        string[]? EnumBitValues = null);
 
     // ── SubFieldSpec (sub-record / array element reflection) ─────────────────
 
@@ -208,7 +208,7 @@ public sealed class SchemaReflector : ISchemaReflector
         SubFieldSpec? ElementSpec = null,
         bool AllowsNull = false,
         bool IsBitmask = false,
-        long[]? EnumBitValues = null)
+        string[]? EnumBitValues = null)
     {
         public FieldMetadata ToFieldMetadata() =>
             new(Name, ApiType, false, ValidFormKeyTypes, EnumValues,
@@ -374,7 +374,7 @@ public sealed class SchemaReflector : ISchemaReflector
         return false;
     }
 
-    private static (string[] Names, long[]? BitValues) GetEnumMeta(Type enumType)
+    private static (string[] Names, string[]? BitValues) GetEnumMeta(Type enumType)
     {
         var allNames = Enum.GetNames(enumType);
         if (enumType.GetCustomAttribute<FlagsAttribute>() == null)
@@ -382,18 +382,25 @@ public sealed class SchemaReflector : ISchemaReflector
 
         var allValues = Enum.GetValues(enumType);
         var names = new List<string>();
-        var bits = new List<long>();
+        var bits = new List<string>();
         for (int i = 0; i < allValues.Length; i++)
         {
             long v = Convert.ToInt64(allValues.GetValue(i), System.Globalization.CultureInfo.InvariantCulture);
             if (v > 0 && (v & (v - 1)) == 0)   // atomic power-of-two only; excludes None=0 and composite values
             {
                 names.Add(allNames[i]);
-                bits.Add(v);
+                bits.Add(v.ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
         }
         return bits.Count > 0 ? (names.ToArray(), bits.ToArray()) : (allNames, null);
     }
+
+    // Bitmask flag values travel as decimal strings (to survive JSON above 2^53) but legacy
+    // callers may still send numbers. Accept either JSON token kind.
+    private static long ReadBitmaskLong(JsonElement v) =>
+        v.ValueKind == JsonValueKind.String
+            ? long.Parse(v.GetString()!, System.Globalization.CultureInfo.InvariantCulture)
+            : v.GetInt64();
 
     // ── Per-sub-field reflection (operates on object, not IMajorRecordGetter) ─
 
@@ -450,7 +457,7 @@ public sealed class SchemaReflector : ISchemaReflector
             if (bits != null)
                 return new(colName, "enum", _empty, names,
                     obj => g(obj) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
-                    Applier(v => Enum.ToObject(core, v.GetInt64())),
+                    Applier(v => Enum.ToObject(core, ReadBitmaskLong(v))),
                     IsBitmask: true, EnumBitValues: bits);
             return new(colName, "enum", _empty, names,
                 obj => g(obj)?.ToString(),
@@ -550,11 +557,13 @@ public sealed class SchemaReflector : ISchemaReflector
                 MakeApply(primConv));
 
         if (IsTranslatedString(core))
-            return new("VARCHAR", r =>
-            {
-                try { return (TryGet(r, prop) as ITranslatedStringGetter)?.String; } // Stryker disable once Block: silent accessor lambda — per-call lambdas stay silent to avoid log noise (see MEditService CLAUDE.md)
-                catch { return null; }
-            }, "string", _empty, _empty,
+            return new("VARCHAR",
+                r =>
+                {
+                    try { return (TryGet(r, prop) as ITranslatedStringGetter)?.String; } // Stryker disable once Block: per-call accessor lambda stays silent per MEditService CLAUDE.md; lookup-backed strings throw when game strings files are absent
+                    catch { return null; }
+                },
+                "string", _empty, _empty,
                 MakeApply(v => new TranslatedString(Language.English, v.GetString())));
 
         if (core.IsEnum)
@@ -564,7 +573,7 @@ public sealed class SchemaReflector : ISchemaReflector
                 return new("BIGINT",
                     r => TryGet(r, prop) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
                     "enum", _empty, names,
-                    MakeApply(v => Enum.ToObject(core, v.GetInt64())),
+                    MakeApply(v => Enum.ToObject(core, ReadBitmaskLong(v))),
                     IsBitmask: true, EnumBitValues: bits);
             return new("VARCHAR", r => TryGet(r, prop)?.ToString(), "enum", _empty, names,
                 MakeApply(v => Enum.Parse(core, v.GetString()!, ignoreCase: true)));
@@ -594,8 +603,13 @@ public sealed class SchemaReflector : ISchemaReflector
 
             Func<IMajorRecordGetter, object?> extractor = r =>
             {
-                try { return SerializeListItems((TryGet(r, prop) as IEnumerable)!, elementType, elemSubFields); }
-                catch { return null; } // Stryker disable once Block: silent accessor lambda — per-call lambdas stay silent to avoid log noise (see MEditService CLAUDE.md)
+                try // Stryker disable once Block: per-call accessor lambda stays silent per MEditService CLAUDE.md; SerializeListItems can throw on unusual record types in real game data
+                {
+                    return TryGet(r, prop) is IEnumerable list
+                        ? SerializeListItems(list, elementType, elemSubFields)
+                        : null;
+                }
+                catch { return null; }
             };
 
             Action<IMajorRecord, JsonElement>? apply = null;

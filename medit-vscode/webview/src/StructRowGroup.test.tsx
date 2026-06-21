@@ -51,7 +51,7 @@ describe('StructRowGroup', () => {
       fields: [{
         name: 'mode_flags', type: 'enum', isArray: false,
         validFormKeyTypes: [], enumValues: ['A', 'B', 'C'],
-        enumBitValues: [1, 2, 4], isBitmask: true,
+        enumBitValues: ['1', '2', '4'], isBitmask: true,
       }],
     };
     render(<StructRowGroup value={{ mode_flags: 5 }}

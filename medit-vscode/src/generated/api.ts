@@ -424,7 +424,7 @@ export interface components {
             isSortable?: boolean;
             allowsNull?: boolean;
             isBitmask?: boolean;
-            enumBitValues?: number[] | null;
+            enumBitValues?: string[] | null;
         };
         FieldValue: {
             metadata?: components["schemas"]["FieldMetadata"];

@@ -184,18 +184,25 @@ public sealed class ConflictClassifier : IConflictClassifier
                 return null;
             }
 
+            // One EnumerateArray pass per plugin; avoids O(u×p×e) scan per key below.
+            var lookups = new Dictionary<string, Dictionary<string, object?>>();
+            foreach (var kv in arrays.Where(kv => kv.Value != null))
+            {
+                var pluginLookup = new Dictionary<string, object?>(StringComparer.Ordinal);
+                foreach (var el in kv.Value!.Value.EnumerateArray())
+                {
+                    var k = el.GetString();
+                    if (k != null) pluginLookup.TryAdd(k, el); // keep first on dup key, matching original FirstOrDefault
+                }
+                lookups[kv.Key] = pluginLookup;
+            }
+
             foreach (var key in union)
             {
                 var subValues = arrays.ToDictionary(
                     kv => kv.Key,
-                    kv =>
-                    {
-                        if (kv.Value == null) return (object?)null;
-                        return kv.Value.Value.EnumerateArray()
-                            .Where(e => e.GetString() == key)
-                            .Select(e => (object?)e)
-                            .FirstOrDefault();
-                    });
+                    kv => lookups.TryGetValue(kv.Key, out var lk) && lk.TryGetValue(key, out var el)
+                        ? el : null);
 
                 children.Add(MakeChild(key, subValues));
             }

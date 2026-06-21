@@ -112,6 +112,44 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
     }
 
     [Fact]
+    public void GetRecord_BitmaskField_AboveSafeInteger_SerializesAsDecimalString()
+    {
+        var dataFolder = Path.Combine(Path.GetTempPath(), $"medit-bitmask-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dataFolder);
+        try
+        {
+            // 2^53 + 1 — not exactly representable as an IEEE 754 float64.
+            // Race.Flag is a [Flags] ulong split across two 32-bit DATA fields, so bit 53 survives binary round-trip.
+            const long combined = 9007199254740993;
+            var mod = new Fallout4Mod(ModKey.FromFileName("Flags.esp"), Fallout4Release.Fallout4);
+            var race = mod.Races.AddNew("HighBitRace");
+            race.Flags = (Race.Flag)(ulong)combined;
+            var formKey = race.FormKey.ToString();
+            mod.WriteToBinary(Path.Combine(dataFolder, "Flags.esp"));
+
+            var loaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+                new ModPath(ModKey.FromFileName("Flags.esp"), Path.Combine(dataFolder, "Flags.esp")),
+                Fallout4Release.Fallout4);
+
+            using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+            repo.Initialize(GameRelease.Fallout4);
+            repo.Index(loaded, 0);
+            repo.UpdateWinners();
+
+            var record = repo.GetRecord("race", formKey, null, winnerOnly: false);
+
+            Assert.NotNull(record);
+            var flags = record.Fields.Single(f => f.Metadata.Name == "flags");
+            Assert.True(flags.Metadata.IsBitmask);
+            Assert.Equal("9007199254740993", flags.Value);
+        }
+        finally
+        {
+            Directory.Delete(dataFolder, recursive: true);
+        }
+    }
+
+    [Fact]
     public void GetRecord_UnknownFormKey_ReturnsNull()
     {
         using var repo = LoadedRepository();

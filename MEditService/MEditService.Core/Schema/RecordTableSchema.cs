@@ -19,7 +19,7 @@ public sealed record ColumnSpec(
     IReadOnlyList<FieldMetadata>? SubFields = null,
     bool AllowsNull = false,
     bool IsBitmask = false,
-    IReadOnlyList<long>? EnumBitValues = null)
+    IReadOnlyList<string>? EnumBitValues = null)
 {
     public FieldMetadata ToFieldMetadata() =>
         new(Name, ApiType, IsArray, ValidFormKeyTypes, EnumValues, ElementType, SubFields,
