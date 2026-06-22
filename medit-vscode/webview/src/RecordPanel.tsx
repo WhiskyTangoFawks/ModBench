@@ -3,6 +3,9 @@ import { FlagCell } from './FlagCell';
 import { FormKeyPicker } from './FormKeyPicker';
 import { buildColumns, toStr } from './recordUtils';
 import type { Column } from './recordUtils';
+import { mono, fg, baseCell, headerCell, toggleBtnStyle, getConflictBg, getCellStyle } from './gridStyles';
+import { FormKeyLink } from './FormKeyLink';
+import { VmadSection } from './VmadSection';
 import type { CompareOverride, CompareResult, ConflictAll, ConflictThis, FieldDiff, FieldMetadata, PendingChange, RecordDetail } from './types';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './messages';
@@ -12,61 +15,14 @@ const mEditWindow = window as Window & typeof globalThis & {
   mEditBackendPort: number;
 };
 
-const mono = 'var(--vscode-editor-font-family, "Consolas", monospace)';
-const fg = 'var(--vscode-editor-foreground, #ccc)';
-const borderColor = 'var(--vscode-editorGroup-border, #444)';
-
-const baseCell: React.CSSProperties = {
-  border: `1px solid ${borderColor}`,
-  padding: '3px 8px',
-  verticalAlign: 'top',
-  fontFamily: mono,
-  fontSize: '12px',
-  color: fg,
-  maxWidth: '260px',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-};
-
-const toggleBtnStyle: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  color: fg,
-  fontFamily: mono,
-  fontSize: '11px',
-  padding: '0 3px 0 0',
-  lineHeight: 1,
-};
-
 const ROW_BG: Partial<Record<ConflictAll, string>> = {
   Override:        'rgba(76,175,80,0.20)',
   Conflict:        'rgba(255,152,0,0.20)',
   ConflictCritical: 'rgba(244,67,54,0.20)',
 };
 
-const CONFLICT_RGB: Partial<Record<ConflictThis, string>> = {
-  IdenticalToMaster: '150,150,150',
-  Override:          '76,175,80',
-  ConflictWins:      '255,152,0',
-  ConflictLoses:     '244,67,54',
-};
-
-const getConflictBg = (c: ConflictThis | undefined, alpha: number): string | undefined => {
-  const rgb = c !== undefined ? CONFLICT_RGB[c] : undefined;
-  return rgb ? `rgba(${rgb},${alpha})` : undefined;
-};
-
 const getRowBg = (c: ConflictAll): string | undefined => ROW_BG[c];
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
-
-function getCellStyle(cellState: ConflictThis | undefined): React.CSSProperties {
-  const bg = getConflictBg(cellState, 0.18);
-  if (!bg) return {};
-  if (cellState === 'ConflictLoses') return { backgroundColor: bg, color: 'rgba(244,67,54,1)' };
-  return { backgroundColor: bg };
-}
 
 // ── ScalarCell ────────────────────────────────────────────────────────────────
 
@@ -216,22 +172,7 @@ export function FormKeyCell({ value, meta, editMode, port, onOpen, onCommit, che
   }
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-      <button
-        onClick={() => onOpen(value)}
-        style={{
-          background: 'none',
-          border: 'none',
-          color: 'var(--vscode-textLink-foreground, #3794ff)',
-          cursor: 'pointer',
-          fontFamily: mono,
-          fontSize: '12px',
-          padding: 0,
-          textDecoration: 'underline',
-          textAlign: 'left',
-        }}
-      >
-        {value}
-      </button>
+      <FormKeyLink value={value} onOpen={onOpen} />
       <CheckErrorIcon checkError={checkError} />
     </span>
   );
@@ -796,11 +737,11 @@ export function RecordPanel() {
         <table style={{ borderCollapse: 'collapse', tableLayout: 'auto' }}>
           <thead>
             <tr>
-              <th style={{ ...baseCell, fontWeight: 600, textAlign: 'left', minWidth: '160px' }}>Field</th>
+              <th style={{ ...headerCell, textAlign: 'left', minWidth: '160px' }}>Field</th>
               {columns.map(col => {
                 if (col.kind === 'disk') {
                   return (
-                    <th key={`disk:${col.override.plugin}`} style={{ ...baseCell, fontWeight: 600, textAlign: 'left', minWidth: '200px', backgroundColor: getHeaderBg(col.override.conflictThis) }}>
+                    <th key={`disk:${col.override.plugin}`} style={{ ...headerCell, textAlign: 'left', minWidth: '200px', backgroundColor: getHeaderBg(col.override.conflictThis) }}>
                       <PluginHeader
                         override={col.override}
                         isImmutable={immutableSet.has(col.override.plugin)}
@@ -953,6 +894,7 @@ export function RecordPanel() {
               }
               return rows;
             })}
+            <VmadSection vmad={result.vmad} columns={columns} onOpen={handleOpen} />
           </tbody>
         </table>
       </div>

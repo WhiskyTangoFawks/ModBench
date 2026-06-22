@@ -39,7 +39,7 @@ cd MEditService && python ../.claude/skills/mutation-test/parse-report.py Stryke
 
 ## Handling survivors
 
-Don't fix survivors directly. Analyze → plan → get approval → fix inline.
+Analyze the survivors. Obvious fixes can be dealt with directly. Complexity or architectural refactors should be surfaced to the developer, along with analysis and a recommendation.
 
 **Propose an action for each survivor** using this triage order (stop at first that applies):
 
@@ -51,11 +51,6 @@ Don't fix survivors directly. Analyze → plan → get approval → fix inline.
 - **Refactor** — no test writable (hidden dependency, unreachable branch); expose the seam
 - **Suppression** — last resort; flag explicitly for developer approval
 
-**Group survivors** that would be resolved by the same change (same file/method, same new test case).
-
-**Present the plan to the developer** — per group: which survivors, proposed action, one-sentence rationale. Wait for approval before continuing. If any proposal is for suppression, explicit developer yes is required before that group proceeds.
-
-**Fix each approved group inline**, one at a time. After all groups are done, rerun `run.sh`. Repeat from the top for any new survivors.
 
 **Never suppress without explicit developer approval.** Only logging may go untested — handled via `stryker-config.json`, never comment annotations.
 

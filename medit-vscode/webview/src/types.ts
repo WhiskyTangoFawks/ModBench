@@ -43,10 +43,35 @@ export interface FieldDiff {
   children?: FieldDiff[] | null;
 }
 
+export type VmadKind = 'scalar' | 'object' | 'array' | 'struct' | 'structList' | 'variable';
+
+export interface VmadPropertyDiff {
+  name: string;
+  kind: VmadKind;
+  values: Record<string, unknown>;        // leaf; "FormKey [Alias]" for object; null when has children/absent
+  types: Record<string, string>;          // per-plugin property Type (can differ → conflict)
+  winnerPlugin: string;
+  cellStates: Record<string, ConflictThis>;
+  children?: VmadPropertyDiff[] | null;    // struct members (by name) / array elements (by index)
+}
+
+export interface VmadScriptDiff {
+  name: string;
+  flags: Record<string, string | null>;   // per-plugin script flags; null = script absent in that plugin
+  winnerPlugin: string;
+  cellStates: Record<string, ConflictThis>;
+  properties: VmadPropertyDiff[];
+}
+
+export interface VmadCompare {
+  scripts: VmadScriptDiff[];
+}
+
 export interface CompareResult {
   overrides: CompareOverride[];
   diffs: FieldDiff[];
   conflictAll: ConflictAll;
+  vmad?: VmadCompare | null;
 }
 
 export interface PendingChange {
