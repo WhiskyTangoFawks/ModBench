@@ -53,8 +53,4 @@ npm run generate-api     # regenerate src/generated/api.ts from live backend at 
 
 Run `/validate` at end of any task.
 
-Always use `/tdd` when fixing bugs or developing new features.
-
-Never add suppressions without user approval.
-
 Solving pre-existing problems is always in scope.

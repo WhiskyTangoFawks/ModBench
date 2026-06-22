@@ -210,6 +210,38 @@ Conflict color coding applied to the entire row background and to individual cel
 
 Pending-change cells show the new value with a yellow background and a revert (×) button.
 
+#### VMAD Section (Phase 13.3)
+
+When the record's compare response includes VMAD (Papyrus script) data, a read-only **Scripts (VMAD)** section is rendered below the field rows, inside the same `<tbody>`. It is absent for record types with no VMAD.
+
+**Structure** — two levels of rows, both expandable:
+
+- **Script rows** — bold script name in the label column; per-plugin script flag (e.g. `Local`) per value column; blank for plugins that lack the script. Collapsed by default.
+- **Property rows** — indented property name (85% opacity) in the label column; per-plugin property value per value column. Hidden when the parent script is collapsed.
+
+Properties of container kind (array, struct, structList) are themselves collapsible; their collapsed cell shows a summary badge. Expanding reveals child rows for elements or members.
+
+**Property kinds:**
+
+| Kind         | Collapsed cell   | Expanded         |
+|--------------|------------------|------------------|
+| `scalar`     | leaf value       | —                |
+| `object`     | FormKey link     | —                |
+| `array`      | `[N items]`      | N element rows   |
+| `struct`     | `{…}`            | N member rows    |
+| `structList` | `[N structs]`    | N struct rows    |
+| `variable`   | `(Variable)`     | —                |
+
+A plugin column cell is blank (no em-dash) when the plugin has no value for that property. An em-dash `—` (opacity 0.35) is shown when the property exists in the record but has no value for that plugin.
+
+**Object-kind FormKey links:** rendered as underlined text buttons (same style as `formKey` field cells). Clicking opens the referenced record in the record editor panel.
+
+**Type cues:** when property types differ across plugins (e.g. one plugin declares `Int32`, another declares `Float`), each cell appends `(TypeName)` in dimmed text.
+
+**Conflict coloring:** follows the same ConflictThis rules as §3.3 — cell background and text color driven by the per-plugin `cellStates` value for each property.
+
+**Read-only:** the VMAD section never renders edit inputs. Editing Papyrus script data is out of scope.
+
 **Drag-drop (Phase 17):** In edit mode, cells can be dragged between plugin columns. Dropping copies the source value as a pending field change into the target column's plugin. Target must be editable.
 
 #### Conflict Color Coding (Phase 9 / Phase 9.7)

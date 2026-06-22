@@ -93,14 +93,10 @@ The commit must exist on a feature branch before running mutation tests — Stry
 - [ ] Run: `cd MEditService && bash ../.claude/skills/mutation-test/run.sh`
 - [ ] Triage survivors per /mutation-test
 
-### Step 6 — Merge
-
-- [ ] After mutation tests pass and any survivors are triaged, merge back to `main`: `git checkout main && git merge --no-ff <branch>`
-
-## Completion
-
+### Step 6 — Completion & Merge
 - [ ] For each task file listed above: set Status to complete, fill in Proof section with test output and commit hash, then move to `docs/tasks/completed-tasks/`
 - [ ] `rm validation-plan.md`
+- [ ] After mutation tests pass and any survivors are triaged, merge back to `main`: `git checkout main && git merge --no-ff <branch>`
 ```
 
 ## Step 5 — Hand off
