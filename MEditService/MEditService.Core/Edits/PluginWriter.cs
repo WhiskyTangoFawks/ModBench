@@ -3,6 +3,7 @@ using System.Text.Json;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -88,6 +89,7 @@ public sealed class PluginWriter : IPluginWriter
 
     public bool IsReadOnly(GameRelease release, string recordType, string fieldPath)
     {
+        if (VmadPath.IsVmadPath(fieldPath)) return false;
         var schemas = _schemaReflector.GetSchemas(release);
         if (!schemas.TryGetValue(recordType, out var schema)) return true;
         var col = schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath);
@@ -249,6 +251,9 @@ public sealed class PluginWriter : IPluginWriter
         PendingChange change,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
+        if (VmadPath.IsVmadPath(change.FieldPath))
+            return ApplyVmadField(record, change);
+
         if (!schemas.TryGetValue(change.RecordType, out var schema))
             return ApplyOutcome.NotFound;
         var col = schema.RecordColumns.FirstOrDefault(c => c.Name == change.FieldPath);
@@ -257,6 +262,61 @@ public sealed class PluginWriter : IPluginWriter
         if (col.Apply == null)
             return ApplyOutcome.ReadOnly;
         col.Apply(record, change.NewValue);
+        return ApplyOutcome.Applied;
+    }
+
+    private static ApplyOutcome ApplyVmadField(IMajorRecord record, PendingChange change)
+    {
+        if (record is not IHaveVirtualMachineAdapter vmadRecord)
+            return ApplyOutcome.NotFound;
+
+        var vmad = vmadRecord.VirtualMachineAdapter;
+        if (vmad == null)
+            return ApplyOutcome.NotFound;
+
+        if (!VmadPath.TryParse(change.FieldPath, out var scriptName, out var propName))
+            return ApplyOutcome.NotFound;
+
+        var script = vmad.Scripts.FirstOrDefault(s =>
+            string.Equals(s.Name, scriptName, StringComparison.OrdinalIgnoreCase));
+        if (script == null)
+            return ApplyOutcome.NotFound;
+
+        var prop = script.Properties.FirstOrDefault(p =>
+            string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase));
+        if (prop == null)
+            return ApplyOutcome.NotFound;
+
+        switch (prop)
+        {
+            case ScriptBoolProperty p:
+                p.Data = change.NewValue.GetBoolean();
+                break;
+            case ScriptIntProperty p:
+                p.Data = change.NewValue.GetInt32();
+                break;
+            case ScriptFloatProperty p:
+                p.Data = change.NewValue.GetSingle();
+                break;
+            case ScriptStringProperty p:
+                p.Data = change.NewValue.GetString()!;
+                break;
+            case ScriptObjectProperty p:
+                if (!change.NewValue.TryGetProperty("formKey", out var fkEl) ||
+                    fkEl.GetString() is not string fkStr ||
+                    !FormKey.TryFactory(fkStr, out var newFk) ||
+                    !change.NewValue.TryGetProperty("alias", out var aliasEl))
+                    return ApplyOutcome.NotFound;
+                p.Object.SetTo(newFk);
+                p.Alias = aliasEl.GetInt16();
+                break;
+            case ScriptVariableProperty:
+            case ScriptVariableListProperty:
+                return ApplyOutcome.ReadOnly;
+            default:
+                return ApplyOutcome.NotFound;
+        }
+
         return ApplyOutcome.Applied;
     }
 

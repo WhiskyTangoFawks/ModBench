@@ -179,6 +179,9 @@ public sealed class RecordQueryService : IRecordQueryService
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
         RequireRepository().GetReferences(targetFormKey);
 
+    public VmadData? GetVmad(string formKey, string plugin) =>
+        RequireRepository().GetVmad(formKey, plugin);
+
     private IGameSession RequireSession() =>
         _session.Session ?? throw new InvalidOperationException("No session loaded.");
 
