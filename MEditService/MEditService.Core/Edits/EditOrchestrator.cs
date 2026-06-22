@@ -47,6 +47,11 @@ public sealed class EditOrchestrator : IEditOrchestrator
         var readOnlyFields = fields.Keys
             .Where(f => _writer.IsReadOnly(session!.GameRelease, recordType!, f))
             .ToList();
+
+        var vmadFields = fields.Keys.Where(VmadPath.IsVmadPath).ToList();
+        VmadData? vmadData = vmadFields.Count > 0 ? _query.GetVmad(formKey, plugin) : null;
+        CollectVmadReadOnlyFields(vmadFields, vmadData, readOnlyFields);
+
         if (readOnlyFields.Count > 0)
             return new StageEditResult.ReadOnlyFields(readOnlyFields);
 
@@ -63,6 +68,8 @@ public sealed class EditOrchestrator : IEditOrchestrator
                 oldValues[fv.Metadata.Name] = JsonSerializer.SerializeToElement(fv.Value);
         }
 
+        CaptureVmadOldValues(vmadFields, vmadData, oldValues);
+
         var formRefs = ExtractFormKeyRefs(fields, schemasForValidation, recordType!);
 
         var distinctRefs = formRefs.Select(r => r.TargetFormKey).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -71,6 +78,42 @@ public sealed class EditOrchestrator : IEditOrchestrator
         var staged = _changes.Upsert(formKey, plugin, recordType!, fields, source, description, oldValues, formRefs, groupId: createGroupId);
         return new StageEditResult.Staged(staged);
     }
+
+    // VMAD fields: check for Variable/ArrayOfVariable types which are read-only.
+    // IsReadOnly returns false for all VMAD paths (it can't know the type without a DB lookup),
+    // so we do the type check here using GetVmad.
+    private static void CollectVmadReadOnlyFields(
+        List<string> vmadFields, VmadData? vmadData, List<string> readOnlyFields)
+    {
+        foreach (var path in vmadFields)
+        {
+            if (!VmadPath.TryParse(path, out var scriptName, out var propName) ||
+                FindVmadProperty(vmadData, scriptName, propName) is { Value.Type: not ("Bool" or "Int" or "Float" or "String" or "Object") })
+                readOnlyFields.Add(path);
+        }
+    }
+
+    private static void CaptureVmadOldValues(
+        List<string> vmadFields, VmadData? vmadData, Dictionary<string, JsonElement> oldValues)
+    {
+        foreach (var path in vmadFields)
+        {
+            if (!VmadPath.TryParse(path, out var scriptName, out var propName)
+                || FindVmadProperty(vmadData, scriptName, propName) is not { } prop) continue;
+            oldValues[path] = SerializeVmadOldValue(prop.Value);
+        }
+    }
+
+    private static VmadNamedValue? FindVmadProperty(VmadData? vmadData, string scriptName, string propName) =>
+        vmadData?.Scripts
+            .FirstOrDefault(s => string.Equals(s.Name, scriptName, StringComparison.OrdinalIgnoreCase))
+            ?.Properties.FirstOrDefault(p => string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase));
+
+    private static JsonElement SerializeVmadOldValue(VmadPropertyValue v) => v.Type switch
+    {
+        "Object" => JsonSerializer.SerializeToElement(new { formKey = (string?)v.Value, alias = v.Alias }),
+        _ => JsonSerializer.SerializeToElement(v.Value),
+    };
 
     public StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source)
     {
@@ -383,7 +426,18 @@ public sealed class EditOrchestrator : IEditOrchestrator
         var colsByName = schema.RecordColumns.ToDictionary(c => c.Name);
         foreach (var (fieldPath, newValue) in fields)
         {
-            if (colsByName.TryGetValue(fieldPath, out var col))
+            if (VmadPath.IsVmadPath(fieldPath))
+            {
+                // VMAD Object property: { "formKey": "...", "alias": n }
+                if (newValue.ValueKind == JsonValueKind.Object &&
+                    newValue.TryGetProperty("formKey", out var fkEl) &&
+                    fkEl.ValueKind == JsonValueKind.String &&
+                    fkEl.GetString() is string fk)
+                {
+                    result.Add(new PendingFormRef(fieldPath, fieldPath, fk));
+                }
+            }
+            else if (colsByName.TryGetValue(fieldPath, out var col))
                 FormRefPathBuilder.Walk(col, _ => (object?)newValue, (path, fk) =>
                     result.Add(new PendingFormRef(fieldPath, path, fk)));
         }

@@ -1,3 +1,5 @@
+using MEditService.Core.Records;
+
 namespace MEditService.Core.Queries;
 
 public interface IRecordQueryService
@@ -11,4 +13,5 @@ public interface IRecordQueryService
     CompareResult? GetCompare(string formKey);
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
+    VmadData? GetVmad(string formKey, string plugin);
 }
