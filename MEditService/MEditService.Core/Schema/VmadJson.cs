@@ -16,11 +16,13 @@ public static class VmadJson
     public static string SerializeStructList(VmadStructInstance[] instances) =>
         JsonSerializer.Serialize(instances, Options);
 
+    // struct_json is always a serialized array written by Serialize* (never the literal "null"),
+    // so Deserialize never returns null here.
     public static VmadStructEntry[] DeserializeStruct(string json) =>
-        JsonSerializer.Deserialize<VmadStructEntry[]>(json, Options) ?? [];
+        JsonSerializer.Deserialize<VmadStructEntry[]>(json, Options)!;
 
     public static VmadStructInstance[] DeserializeStructList(string json) =>
-        JsonSerializer.Deserialize<VmadStructInstance[]>(json, Options) ?? [];
+        JsonSerializer.Deserialize<VmadStructInstance[]>(json, Options)!;
 }
 
 // struct_json payload for ScriptStructProperty: each member is a named ScriptEntry with its own properties.

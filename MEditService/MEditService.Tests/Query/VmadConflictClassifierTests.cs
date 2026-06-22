@@ -10,6 +10,17 @@ public sealed class VmadConflictClassifierTests
     private static VmadPropertyValue StructVal(params VmadNamedValue[] members) =>
         new("Struct", "", null, Members: members);
 
+    private static VmadPropertyValue Arr(string elemType, params object?[] values) =>
+        new("ArrayOf" + elemType, "", null,
+            ListItems: values.Select(v => new VmadPropertyValue(elemType, "", v)).ToList());
+
+    private static VmadPropertyValue ObjVal(string formKey, short alias) =>
+        new("Object", "", formKey, alias);
+
+    private static VmadPropertyValue StructListVal(params VmadNamedValue[][] instances) =>
+        new("ArrayOfStruct", "", null,
+            StructList: instances.Select(m => (IReadOnlyList<VmadNamedValue>)m).ToList());
+
     private static VmadNamedValue Prop(string name, VmadPropertyValue value) => new(name, value);
 
     private static VmadScriptData Script(string name, string flags, params VmadNamedValue[] props) =>
@@ -113,5 +124,135 @@ public sealed class VmadConflictClassifierTests
             Assert.All(s.Properties, p =>
                 Assert.True(p.CellStates.Values.All(c => c == ConflictThis.IdenticalToMaster)));
         });
+    }
+
+    [Fact]
+    public void Classify_ArrayElementDiffers_ConflictsAtElementIndex()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Arr", Arr("Int", 1, 2))));
+        var b = Input("B.esp", 1, Script("S", "Local", Prop("Arr", Arr("Int", 1, 9))));
+
+        var result = VmadConflictClassifier.Classify([a, b]);
+
+        var arr = result.Compare.Scripts[0].Properties.First(p => p.Name == "Arr");
+        Assert.Equal("array", arr.Kind);
+        Assert.Equal(ConflictThis.Override, arr.CellStates["B.esp"]);   // parent reflects element diff
+        Assert.NotNull(arr.Children);
+        Assert.Equal(ConflictThis.IdenticalToMaster, arr.Children![0].CellStates["B.esp"]); // [0] same
+        Assert.Equal(ConflictThis.Override, arr.Children![1].CellStates["B.esp"]);          // [1] differs
+    }
+
+    [Fact]
+    public void Classify_DifferingScriptFlags_ClassifiesScriptRowConflict()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local"));
+        var b = Input("B.esp", 1, Script("S", "Inherited"));
+
+        var result = VmadConflictClassifier.Classify([a, b]);
+
+        var script = Assert.Single(result.Compare.Scripts);
+        Assert.Equal(ConflictThis.Override, script.CellStates["B.esp"]);
+        Assert.Equal(ConflictAll.Override, result.ConflictContribution);
+    }
+
+    [Fact]
+    public void Classify_NonWinnerEqualToWinner_IsUncontestedOverrideNotConflict()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("P", Scalar("Int", 1))));
+        var b = Input("B.esp", 1, Script("S", "Local", Prop("P", Scalar("Int", 2))));
+        var c = Input("C.esp", 2, Script("S", "Local", Prop("P", Scalar("Int", 2))));
+
+        var result = VmadConflictClassifier.Classify([a, b, c]);
+
+        var p = result.Compare.Scripts[0].Properties.First(x => x.Name == "P");
+        Assert.Equal(ConflictThis.Override, p.CellStates["B.esp"]); // differs from master, equals winner
+        Assert.Equal(ConflictThis.Override, p.CellStates["C.esp"]); // winner, uncontested
+        Assert.Equal(ConflictAll.Override, result.ConflictContribution);
+    }
+
+    [Fact]
+    public void Classify_DisjointPropertiesWithinScript_AlignsBothByPresence()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("P1", Scalar("Int", 1))));
+        var b = Input("B.esp", 1, Script("S", "Local", Prop("P2", Scalar("Int", 2))));
+
+        var result = VmadConflictClassifier.Classify([a, b]);
+
+        var props = result.Compare.Scripts[0].Properties;
+        var p1 = props.First(p => p.Name == "P1");
+        var p2 = props.First(p => p.Name == "P2");
+        Assert.Equal(1, p1.Values["A.esp"]);
+        Assert.Null(p1.Values["B.esp"]);                    // B's script lacks P1
+        Assert.Equal(ConflictThis.Override, p2.CellStates["B.esp"]); // B adds P2 over absent master
+    }
+
+    [Fact]
+    public void Classify_DisjointStructMembers_AlignsBothByPresence()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local",
+            Prop("Config", StructVal(Prop("X", Scalar("Int", 1))))));
+        var b = Input("B.esp", 1, Script("S", "Local",
+            Prop("Config", StructVal(Prop("Y", Scalar("Int", 2))))));
+
+        var result = VmadConflictClassifier.Classify([a, b]);
+
+        var config = result.Compare.Scripts[0].Properties.First(p => p.Name == "Config");
+        Assert.Contains(config.Children!, c => c.Name == "X");
+        Assert.Contains(config.Children!, c => c.Name == "Y");
+    }
+
+    [Fact]
+    public void Classify_AlignsScriptsPropertiesAndMembers_InSortedOrder()
+    {
+        var a = Input("A.esp", 0,
+            Script("Beta", "Local"),
+            Script("Alpha", "Local",
+                Prop("Zeta", Scalar("Int", 1)),
+                Prop("Config", StructVal(Prop("Mid", Scalar("Int", 2)), Prop("Aaa", Scalar("Int", 3))))));
+        var b = Input("B.esp", 1,
+            Script("Beta", "Local"),
+            Script("Alpha", "Local",
+                Prop("Zeta", Scalar("Int", 1)),
+                Prop("Config", StructVal(Prop("Mid", Scalar("Int", 2)), Prop("Aaa", Scalar("Int", 3))))));
+
+        var result = VmadConflictClassifier.Classify([a, b]);
+
+        Assert.Equal(new[] { "Alpha", "Beta" }, result.Compare.Scripts.Select(s => s.Name));
+        var alpha = result.Compare.Scripts.First(s => s.Name == "Alpha");
+        Assert.Equal(new[] { "Config", "Zeta" }, alpha.Properties.Select(p => p.Name));
+        var config = alpha.Properties.First(p => p.Name == "Config");
+        Assert.Equal(new[] { "Aaa", "Mid" }, config.Children!.Select(c => c.Name));
+    }
+
+    [Fact]
+    public void Classify_ObjectProperty_ExposesFormKeyAliasLeafValue()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Ref", ObjVal("000800:Base.esp", 1))));
+        var b = Input("B.esp", 1, Script("S", "Local", Prop("Ref", ObjVal("000900:Base.esp", 2))));
+
+        var result = VmadConflictClassifier.Classify([a, b]);
+
+        var refProp = result.Compare.Scripts[0].Properties.First(p => p.Name == "Ref");
+        Assert.Equal("object", refProp.Kind);
+        Assert.Equal("000800:Base.esp [1]", refProp.Values["A.esp"]);
+        Assert.Equal("000900:Base.esp [2]", refProp.Values["B.esp"]);
+        Assert.Equal(ConflictThis.Override, refProp.CellStates["B.esp"]);
+    }
+
+    [Fact]
+    public void Classify_ArrayOfStructMemberDiffers_ConflictsWithinInstance()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local",
+            Prop("Items", StructListVal([Prop("Qty", Scalar("Int", 1))]))));
+        var b = Input("B.esp", 1, Script("S", "Local",
+            Prop("Items", StructListVal([Prop("Qty", Scalar("Int", 9))]))));
+
+        var result = VmadConflictClassifier.Classify([a, b]);
+
+        var items = result.Compare.Scripts[0].Properties.First(p => p.Name == "Items");
+        Assert.Equal("structList", items.Kind);
+        Assert.Equal(ConflictThis.Override, items.CellStates["B.esp"]);          // parent reflects diff
+        var qty = items.Children![0].Children!.First(c => c.Name == "Qty");
+        Assert.Equal(ConflictThis.Override, qty.CellStates["B.esp"]);
     }
 }

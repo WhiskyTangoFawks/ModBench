@@ -39,7 +39,7 @@ public static class VmadConflictClassifier
                 conflict.Add(cellStates);
 
                 var properties = BuildPropertyDiffs(inputs, masterPlugin, perPlugin, conflict);
-                return new VmadScriptDiff(scriptName, flags, winner ?? masterPlugin, cellStates, properties);
+                return new VmadScriptDiff(scriptName, flags, winner, cellStates, properties);
             })
             .ToList();
 
@@ -78,7 +78,8 @@ public static class VmadConflictClassifier
         string masterPlugin,
         ConflictAccumulator conflict)
     {
-        var kind = Kind(perPlugin.Values.FirstOrDefault(v => v != null)?.Type);
+        // A diff is only built for a name present in ≥1 plugin, so a non-null value always exists.
+        var kind = Kind(perPlugin.Values.First(v => v != null)!.Type);
         var types = perPlugin
             .Where(kv => kv.Value != null)
             .ToDictionary(kv => kv.Key, kv => kv.Value!.Type);
@@ -88,7 +89,7 @@ public static class VmadConflictClassifier
         conflict.Add(cellStates);
 
         var children = BuildChildren(kind, perPlugin, inputs, masterPlugin, conflict);
-        return new VmadPropertyDiff(name, kind, values, types, winner ?? masterPlugin, cellStates, children);
+        return new VmadPropertyDiff(name, kind, values, types, winner, cellStates, children);
     }
 
     private static List<VmadPropertyDiff>? BuildChildren(
@@ -159,8 +160,9 @@ public static class VmadConflictClassifier
     }
 
     // Mirrors ConflictClassifier.ComputeCellStates: master omitted; winner = highest load-order
-    // plugin with a non-null value.
-    private static (Dictionary<string, ConflictThis> States, string? Winner) ComputeCellStates(
+    // plugin with a non-null value. Callers only ever align names drawn from the union of plugins
+    // that have the value, so at least one canonical value is always non-null and a winner exists.
+    private static (Dictionary<string, ConflictThis> States, string Winner) ComputeCellStates(
         IReadOnlyList<VmadPluginInput> inputs, string masterPlugin, Func<string, string?> valueOf)
     {
         // Materialize each plugin's canonical value once — valueOf can recurse through a struct subtree.
@@ -170,9 +172,7 @@ public static class VmadConflictClassifier
             .Where(i => canon[i.Plugin] != null)
             .OrderByDescending(i => i.LoadOrderIndex)
             .Select(i => i.Plugin)
-            .FirstOrDefault();
-        if (winner == null)
-            return (new Dictionary<string, ConflictThis>(), null);
+            .First();
 
         var ctx = new CellContext(masterPlugin, winner, canon[masterPlugin], canon[winner], canon);
 

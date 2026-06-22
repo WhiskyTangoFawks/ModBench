@@ -199,6 +199,76 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         Assert.Null(compare!.Vmad);
     }
 
+    [Fact]
+    public void GetCompare_OnlyOverrideHasVmad_PopulatesVmad()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-vmad-added")
+            .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("PlainNpc").FormKey) // no VMAD
+            .WithPlugin("Over.esp", (mod, prev) =>
+                mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(5))
+            .Build();
+        using (data)
+            WithCompareService(data, svc =>
+            {
+                var compare = svc.GetCompare(npcKey.ToString());
+                Assert.NotNull(compare);
+                Assert.NotNull(compare!.Vmad); // master lacks VMAD, override adds it → still present
+                Assert.Equal(ConflictAll.Override, compare.ConflictAll);
+            });
+    }
+
+    [Fact]
+    public void GetCompare_FieldOverrideAndVmadOverride_StaysOverride()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-vmad-field-override")
+            .WithPlugin("Base.esp", mod => npcKey = MakeScriptedNpc(mod, 10))
+            .WithPlugin("Over.esp", (mod, prev) =>
+            {
+                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
+                o.EditorID = "Changed";           // generic field override
+                o.VirtualMachineAdapter = ScriptVmad(20); // VMAD override (2 plugins)
+            })
+            .Build();
+        using (data)
+            WithCompareService(data, svc =>
+                Assert.Equal(ConflictAll.Override, svc.GetCompare(npcKey.ToString())!.ConflictAll));
+    }
+
+    [Fact]
+    public void GetCompare_FieldOverrideAndVmadConflict_EscalatesToConflict()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-vmad-field-conflict")
+            .WithPlugin("Base.esp", mod => npcKey = MakeScriptedNpc(mod, 10))
+            .WithPlugin("Mid.esp", (mod, prev) =>
+            {
+                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
+                o.EditorID = "Same";              // non-masters agree on the field → generic Override
+                o.VirtualMachineAdapter = ScriptVmad(20);
+            })
+            .WithPlugin("Top.esp", (mod, prev) =>
+            {
+                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
+                o.EditorID = "Same";
+                o.VirtualMachineAdapter = ScriptVmad(30); // VMAD differs among non-masters → Conflict
+            })
+            .Build();
+        using (data)
+            WithCompareService(data, svc =>
+                Assert.Equal(ConflictAll.Conflict, svc.GetCompare(npcKey.ToString())!.ConflictAll));
+    }
+
+    private static void WithCompareService(PluginFixtureData data, Action<RecordQueryService> test)
+    {
+        var reflector = new SchemaReflector();
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        test(new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier()));
+    }
+
     private static FormKey MakeScriptedNpc(IFallout4Mod mod, int power)
     {
         var npc = mod.Npcs.AddNew("ScriptedNPC");
