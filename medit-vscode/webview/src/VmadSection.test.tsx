@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { VmadSection } from './VmadSection';
 import type { Column } from './recordUtils';
-import type { CompareOverride, VmadCompare, VmadScriptDiff, VmadPropertyDiff } from './types';
+import type { CompareOverride, PendingChange, VmadCompare, VmadScriptDiff, VmadPropertyDiff } from './types';
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -20,9 +20,6 @@ function override(plugin: string): CompareOverride {
     conflictThis: 'Master',
   };
 }
-
-const diskCols = (plugins: string[]): Column[] =>
-  plugins.map(p => ({ kind: 'disk', override: override(p) }));
 
 function script(partial: Partial<VmadScriptDiff> & Pick<VmadScriptDiff, 'name'>): VmadScriptDiff {
   return {
@@ -45,12 +42,49 @@ function prop(partial: Partial<VmadPropertyDiff> & Pick<VmadPropertyDiff, 'name'
   };
 }
 
-function renderSection(vmad: VmadCompare | null, plugins: string[], onOpen = vi.fn()) {
-  const cols = diskCols(plugins);
+function pendingChange(plugin: string, fieldPath: string, newValue: unknown): PendingChange {
+  return {
+    id: `chg:${plugin}:${fieldPath}`,
+    formKey: `000800:${plugin}`,
+    plugin,
+    fieldPath,
+    recordType: 'NPC_',
+    oldValue: null,
+    newValue,
+    source: 'user',
+    description: null,
+    changedAt: '2026-01-01T00:00:00Z',
+  };
+}
+
+type RenderOpts = {
+  onOpen?: ReturnType<typeof vi.fn>;
+  editMode?: boolean;
+  onEdit?: ReturnType<typeof vi.fn>;
+  onRevert?: ReturnType<typeof vi.fn>;
+  pendingChangeMap?: Record<string, PendingChange>;
+  withPendingCol?: string; // plugin to add a pending column for
+};
+
+function renderSection(vmad: VmadCompare | null, plugins: string[], opts: RenderOpts = {}) {
+  const onOpen = opts.onOpen ?? vi.fn();
+  const cols: Column[] = plugins.flatMap(p => {
+    const dc: Column = { kind: 'disk', override: override(p) };
+    return opts.withPendingCol === p ? [dc, { kind: 'pending', plugin: p }] : [dc];
+  });
   const utils = render(
     <table>
       <tbody>
-        <VmadSection vmad={vmad} columns={cols} onOpen={onOpen} />
+        <VmadSection
+          vmad={vmad}
+          columns={cols}
+          onOpen={onOpen}
+          editMode={opts.editMode}
+          onEdit={opts.onEdit}
+          onRevert={opts.onRevert}
+          pendingChangeMap={opts.pendingChangeMap}
+          port={5172}
+        />
       </tbody>
     </table>,
   );
@@ -62,7 +96,7 @@ function toggle(label: string) {
   fireEvent.click(btn);
 }
 
-// ── tests ─────────────────────────────────────────────────────────────────────
+// ── read-only display (13.3) ───────────────────────────────────────────────────
 
 describe('VmadSection', () => {
   it('renders a script-name row and, when expanded, its property sub-rows', () => {
@@ -210,5 +244,171 @@ describe('VmadSection', () => {
 
     expect(container.querySelectorAll('input, select, textarea')).toHaveLength(0);
     expect(screen.getByText('false').closest('td')!.style.backgroundColor).toBe('rgba(244, 67, 54, 0.18)');
+  });
+});
+
+// ── edit mode (13.5) ──────────────────────────────────────────────────────────
+
+const boolVmad = (): VmadCompare => ({
+  scripts: [script({
+    name: 'MyScript',
+    properties: [prop({
+      name: 'Enabled',
+      kind: 'scalar',
+      values: { 'A.esm': false },
+      types: { 'A.esm': 'Bool' },
+      winnerPlugin: 'A.esm',
+    })],
+  })],
+});
+
+describe('VmadSection edit mode', () => {
+  it('Bool property renders a checkbox in edit mode', () => {
+    const { container } = renderSection(boolVmad(), ['A.esm'], { editMode: true, onEdit: vi.fn() });
+    toggle('MyScript');
+
+    expect(container.querySelector('input[type="checkbox"]')).toBeInTheDocument();
+  });
+
+  it('toggling Bool checkbox calls onEdit with VMAD path and boolean value', () => {
+    const onEdit = vi.fn();
+    renderSection(boolVmad(), ['A.esm'], { editMode: true, onEdit });
+    toggle('MyScript');
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(onEdit).toHaveBeenCalledWith('A.esm', 'VMAD\\MyScript\\Enabled', true);
+  });
+
+  it('Int property edit stages VMAD path with numeric value', () => {
+    const onEdit = vi.fn();
+    const vmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [prop({
+          name: 'Count',
+          kind: 'scalar',
+          values: { 'A.esm': 5 },
+          types: { 'A.esm': 'Int' },
+          winnerPlugin: 'A.esm',
+        })],
+      })],
+    };
+    renderSection(vmad, ['A.esm'], { editMode: true, onEdit });
+    toggle('S');
+
+    const input = screen.getByRole('spinbutton');
+    fireEvent.change(input, { target: { value: '42' } });
+    fireEvent.blur(input);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esm', 'VMAD\\S\\Count', 42);
+  });
+
+  it('String property edit stages VMAD path with string value', () => {
+    const onEdit = vi.fn();
+    const vmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [prop({
+          name: 'Name',
+          kind: 'scalar',
+          values: { 'A.esm': 'old' },
+          types: { 'A.esm': 'String' },
+          winnerPlugin: 'A.esm',
+        })],
+      })],
+    };
+    renderSection(vmad, ['A.esm'], { editMode: true, onEdit });
+    toggle('S');
+
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'new' } });
+    fireEvent.blur(input);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esm', 'VMAD\\S\\Name', 'new');
+  });
+
+  it('Object property renders FK button and alias input in edit mode', () => {
+    const vmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [prop({
+          name: 'Target',
+          kind: 'object',
+          values: { 'A.esm': '000123:Foo.esp [2]' },
+          types: { 'A.esm': 'Object' },
+          winnerPlugin: 'A.esm',
+        })],
+      })],
+    };
+    const { container } = renderSection(vmad, ['A.esm'], { editMode: true, onEdit: vi.fn() });
+    toggle('S');
+
+    expect(container.querySelector('input[type="number"][aria-label="Alias"]')).toBeInTheDocument();
+    expect((container.querySelector('input[type="number"][aria-label="Alias"]') as HTMLInputElement).value).toBe('2');
+  });
+
+  it('Object alias change + blur stages VMAD path with { formKey, alias }', () => {
+    const onEdit = vi.fn();
+    const vmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [prop({
+          name: 'Target',
+          kind: 'object',
+          values: { 'A.esm': '000123:Foo.esp [2]' },
+          types: { 'A.esm': 'Object' },
+          winnerPlugin: 'A.esm',
+        })],
+      })],
+    };
+    renderSection(vmad, ['A.esm'], { editMode: true, onEdit });
+    toggle('S');
+
+    const aliasInput = screen.getByRole('spinbutton', { name: 'Alias' });
+    fireEvent.change(aliasInput, { target: { value: '5' } });
+    fireEvent.blur(aliasInput);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esm', 'VMAD\\S\\Target', { formKey: '000123:Foo.esp', alias: 5 });
+  });
+
+  it('pending VMAD change shows new value and revert button; clicking revert calls onRevert', () => {
+    const onRevert = vi.fn();
+    const chg = pendingChange('A.esm', 'VMAD\\MyScript\\Enabled', true);
+    renderSection(boolVmad(), ['A.esm'], {
+      editMode: true,
+      onRevert,
+      withPendingCol: 'A.esm',
+      pendingChangeMap: { ['A.esm:VMAD\\MyScript\\Enabled']: chg },
+    });
+    toggle('MyScript');
+
+    expect(screen.getByText('true')).toBeInTheDocument();
+    const revertBtn = screen.getByTitle('Revert this change');
+    expect(revertBtn).toBeInTheDocument();
+    fireEvent.click(revertBtn);
+    expect(onRevert).toHaveBeenCalledWith(chg.id);
+  });
+
+  it('Variable, array, and struct properties show no edit widget in edit mode', () => {
+    const vmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [
+          prop({ name: 'V', kind: 'variable', types: { 'A.esm': 'Variable' }, winnerPlugin: 'A.esm' }),
+          prop({ name: 'Arr', kind: 'array', children: [], types: { 'A.esm': 'ArrayOfInt' }, winnerPlugin: 'A.esm' }),
+          prop({
+            name: 'St',
+            kind: 'struct',
+            children: [prop({ name: 'X', kind: 'scalar', values: { 'A.esm': 1 } })],
+            types: { 'A.esm': 'Struct' },
+            winnerPlugin: 'A.esm',
+          }),
+        ],
+      })],
+    };
+    const { container } = renderSection(vmad, ['A.esm'], { editMode: true, onEdit: vi.fn() });
+    toggle('S');
+
+    expect(container.querySelectorAll('input, select, textarea')).toHaveLength(0);
   });
 });

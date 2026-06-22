@@ -894,7 +894,16 @@ export function RecordPanel() {
               }
               return rows;
             })}
-            <VmadSection vmad={result.vmad} columns={columns} onOpen={handleOpen} />
+            <VmadSection
+                        vmad={result.vmad}
+                        columns={columns}
+                        onOpen={handleOpen}
+                        editMode={editMode}
+                        pendingChangeMap={pendingChangeMap}
+                        onEdit={(plugin, vmadPath, value) => { void handleEdit(plugin, vmadPath, value); }}
+                        onRevert={changeId => { void handleRevert(changeId); }}
+                        port={port}
+                      />
           </tbody>
         </table>
       </div>

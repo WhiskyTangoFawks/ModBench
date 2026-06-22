@@ -1,6 +1,6 @@
 # Phase 13.4 — VMAD Scalar Editing (Backend)
 
-**Status: Not Started** · Parent: [phase-13](phase-13.md) · Depends on: 13.2 · **Model: Sonnet** *(foundational addressing/apply scheme that 13.6/13.7/13.8 inherit, but decisions already made in this doc; bump to Opus if you want extra care on the scheme)*
+**Status: Complete** · Parent: [phase-13](phase-13.md) · Depends on: 13.2 · **Model: Sonnet** *(foundational addressing/apply scheme that 13.6/13.7/13.8 inherit, but decisions already made in this doc; bump to Opus if you want extra care on the scheme)*
 
 *Goal: a staged change addressing a single VMAD scalar property (Bool/Int/Float/String/Object) is applied to the plugin's VirtualMachineAdapter on save. This establishes the VMAD pending-change addressing scheme and apply path that 13.6/13.7/13.8 extend.*
 
@@ -77,4 +77,16 @@ In [PluginWriter.cs](../../MEditService/MEditService.Core/Edits/PluginWriter.cs)
 
 ## Proof
 
-*To be filled in on completion. Paste `dotnet test` output and commit hash.*
+Commit: `d9f00d4` (branch `phase-13.4-vmad-scalar-editing`)
+
+```text
+Passed!  - Failed: 0, Passed: 647, Skipped: 0, Total: 647, Duration: 2m 18s
+```
+
+Mutation tests: exit 0, no survivors, no NoCoverage.
+
+New tests (647 − 638 baseline = 9 new):
+
+- `PluginWriterVmadTests`: 8 writer-level tests (Bool/String/Object/sibling/NotFound cases)
+- `EditOrchestratorVmadTests`: 7 orchestrator tests (Variable rejected, Bool old-value, Object form-ref, Array rejected, unknown script, unknown property, malformed path)
+- `VmadPathTests`: 5 path parsing tests (valid, non-VMAD prefix, empty script/prop, no separator)
