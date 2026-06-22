@@ -204,6 +204,17 @@ public class FormRefPathBuilderTests
         Assert.Empty(Collect(col, json));
     }
 
+    // --- Array with null ElementType (SchemaReflector can produce this for opaque Loqui elements) ---
+
+    [Fact]
+    public void Walk_ArrayWithNullElementType_DoesNotCallVisitor()
+    {
+        var col = new ColumnSpec("items", "items", "JSON", _ => null, "array", [], [], null,
+            IsArray: true, ElementType: null);
+        var hits = Collect(col, "[\"000001:Fallout4.esm\"]");
+        Assert.Empty(hits);
+    }
+
     // --- Depth-2: struct sub-field that is itself a struct containing a formKey ---
 
     [Fact]

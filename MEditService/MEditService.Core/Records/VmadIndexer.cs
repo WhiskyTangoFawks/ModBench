@@ -125,14 +125,6 @@ internal sealed class VmadIndexer(
                     new VmadValue(StructJson: SerializeStructList(p.Structs)));
                 break;
 
-            case IScriptVariablePropertyGetter p:
-                AppendPropRow(ctx, p, "Variable");
-                break;
-
-            case IScriptVariableListPropertyGetter p:
-                AppendPropRow(ctx, p, "ArrayOfVariable");
-                break;
-
             default:
                 logger.LogWarning("Unknown VMAD property type {Type} on {FormKey}\\{Script}\\{Prop}",
                     property.GetType().Name, ctx.FormKey, ctx.ScriptName, property.Name);

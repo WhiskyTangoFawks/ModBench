@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -220,16 +221,15 @@ public sealed class EditOrchestrator : IEditOrchestrator
         // different element of the *same* array field on the same source record, and staging
         // one GroupMember per reference would have the second overwrite the first's removal
         // (StageGroup upserts on (form_key, plugin, field_path)).
-        foreach (var fieldGroup in toNullify.GroupBy(t => (t.SourceFormKey, t.SourcePlugin, TopLevelFieldName(t.FieldPath))))
+        foreach (var fieldGroup in toNullify.GroupBy(t => (t.SourceFormKey, t.SourcePlugin, TopLevelFieldName(t.FieldPath), t.RecordType)))
         {
-            var (sourceFormKey, sourcePlugin, topLevelField) = fieldGroup.Key;
-            var recordType = fieldGroup.First().RecordType;
+            var (sourceFormKey, sourcePlugin, topLevelField, recordType) = fieldGroup.Key;
             var currentRecord = _query.GetRecordForPlugin(sourceFormKey, sourcePlugin)!;
-            var oldValue = JsonSerializer.SerializeToElement(
-                currentRecord.Fields.First(fv => fv.Metadata.Name == topLevelField).Value);
+            var fieldMap = currentRecord.Fields.ToDictionary(fv => fv.Metadata.Name, fv => fv.Value);
+            var oldValue = JsonSerializer.SerializeToElement(fieldMap[topLevelField]);
 
             var indices = fieldGroup.Select(t => ParseArrayIndex(t.FieldPath)).Where(i => i is int).Select(i => i!.Value).ToList();
-            var newValue = indices.Count > 0 && oldValue.ValueKind == JsonValueKind.Array
+            var newValue = indices.Count > 0
                 ? RemoveArrayElements(oldValue, indices)
                 : PendingChangeConstants.NullElement;
 
@@ -294,13 +294,12 @@ public sealed class EditOrchestrator : IEditOrchestrator
                         !immutablePlugins.Contains(r.Plugin))
             .ToList();
 
-        foreach (var fieldGroup in crossPluginRefs.GroupBy(r => (r.FormKey, r.Plugin, TopLevelFieldName(r.FieldPath))))
+        foreach (var fieldGroup in crossPluginRefs.GroupBy(r => (r.FormKey, r.Plugin, TopLevelFieldName(r.FieldPath), r.RecordType)))
         {
-            var (sourceFormKey, sourcePlugin, topLevelField) = fieldGroup.Key;
-            var refRecordType = fieldGroup.First().RecordType;
+            var (sourceFormKey, sourcePlugin, topLevelField, refRecordType) = fieldGroup.Key;
             var currentRecord = _query.GetRecordForPlugin(sourceFormKey, sourcePlugin)!;
-            var fieldValue = currentRecord.Fields.First(fv => fv.Metadata.Name == topLevelField).Value;
-            var oldValue = JsonSerializer.SerializeToElement(fieldValue);
+            var fieldMap = currentRecord.Fields.ToDictionary(fv => fv.Metadata.Name, fv => fv.Value);
+            var oldValue = JsonSerializer.SerializeToElement(fieldMap[topLevelField]);
             var newValue = ReplaceFormKey(oldValue, formKey, newFormKey);
 
             members.Add(new GroupMember(
@@ -336,13 +335,12 @@ public sealed class EditOrchestrator : IEditOrchestrator
     private static string TopLevelFieldName(string fieldPath) =>
         fieldPath.Split(['.', '['], 2)[0];
 
+    private static readonly Regex BracketIndex = new(@"\[(\d+)\]", RegexOptions.Compiled);
+
     private static int? ParseArrayIndex(string fieldPath)
     {
-        var start = fieldPath.IndexOf('[');
-        if (start < 0) return null;
-        var end = fieldPath.IndexOf(']', start);
-        if (end < 0) return null;
-        return int.TryParse(fieldPath.AsSpan(start + 1, end - start - 1), out var idx) ? idx : null;
+        var m = BracketIndex.Match(fieldPath);
+        return m.Success ? int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : null;
     }
 
     private static JsonElement RemoveArrayElements(JsonElement array, IReadOnlyList<int> indices)
@@ -361,7 +359,12 @@ public sealed class EditOrchestrator : IEditOrchestrator
         var errors = new List<ReferenceValidationError>();
         if (!schemas.TryGetValue(recordType, out var schema)) return errors;
         var colsByName = schema.RecordColumns.ToDictionary(c => c.Name);
-        string? LookupRecordType(string fk) => _query.GetRecordType(fk) ?? _changes.GetPendingCreateRecordType(fk);
+        string? LookupRecordType(string fk)
+        {
+            var committed = _query.GetRecordType(fk);
+            if (committed != null) return committed;
+            return _changes.GetPendingCreateRecordType(fk);
+        }
         foreach (var (fieldPath, newValue) in fields)
         {
             if (colsByName.TryGetValue(fieldPath, out var col))

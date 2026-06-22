@@ -72,6 +72,15 @@ public class CheckErrorBuilderTests
     }
 
     [Fact]
+    public void Build_EmptyValidTypes_AnyResolvedTypeAccepted()
+    {
+        // validTypes.Count > 0 guard: when validTypes is empty, no type_mismatch check runs.
+        var meta = new FieldMetadata("link", "formKey", false, [], [], AllowsNull: false);
+        var err = CheckErrorBuilder.Build(meta, "000001:Test.esp", _ => "npc_");
+        Assert.Null(err);
+    }
+
+    [Fact]
     public void Build_NonFormKeyField_ReturnsNull()
     {
         var meta = new FieldMetadata("height", "float", false, [], []);

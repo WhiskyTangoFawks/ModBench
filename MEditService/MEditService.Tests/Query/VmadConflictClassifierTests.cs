@@ -255,4 +255,101 @@ public sealed class VmadConflictClassifierTests
         var qty = items.Children![0].Children!.First(c => c.Name == "Qty");
         Assert.Equal(ConflictThis.Override, qty.CellStates["B.esp"]);
     }
+
+    [Fact]
+    public void Classify_ArraysDifferentLength_AlignsByMaxLength()
+    {
+        // A has 3 elements, B has 2 — alignment must use Max not Min.
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Scores", Arr("Int", 1, 2, 3))));
+        var b = Input("B.esp", 1, Script("S", "Local", Prop("Scores", Arr("Int", 1, 9))));
+
+        var result = VmadConflictClassifier.Classify([a, b]);
+
+        var scores = result.Compare.Scripts[0].Properties.First(p => p.Name == "Scores");
+        Assert.Equal(3, scores.Children!.Count);                                            // max(3,2) not min
+        Assert.Equal(ConflictThis.IdenticalToMaster, scores.Children[0].CellStates["B.esp"]); // [0] same
+        Assert.Equal(ConflictThis.Override, scores.Children[1].CellStates["B.esp"]);          // [1] differs
+        Assert.Empty(scores.Children[2].CellStates);                                          // [2] absent in B → no state
+    }
+
+    [Fact]
+    public void Classify_ArrayPropertyAbsentInOnePlugin_AlignedWithPresentPlugin()
+    {
+        // B has the script but not the "Scores" property at all (null in perPlugin dict).
+        // IndexedChildren must handle the null entry without throwing.
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Scores", Arr("Int", 1, 2))));
+        var b = Input("B.esp", 1, Script("S", "Local"));
+
+        var result = VmadConflictClassifier.Classify([a, b]);
+
+        var scores = result.Compare.Scripts[0].Properties.First(p => p.Name == "Scores");
+        Assert.Equal(2, scores.Children!.Count);
+        Assert.All(scores.Children, c => Assert.False(c.CellStates.ContainsKey("B.esp")));
+    }
+
+    [Fact]
+    public void Classify_StructPropertyAbsentInOnePlugin_MemberChildrenPropagateNull()
+    {
+        // B has the script but not the "Config" struct property (null in perPlugin dict).
+        // ChildDiff must propagate null for missing plugin without throwing.
+        var a = Input("A.esp", 0, Script("S", "Local",
+            Prop("Config", StructVal(Prop("X", Scalar("Int", 1))))));
+        var b = Input("B.esp", 1, Script("S", "Local"));
+
+        var result = VmadConflictClassifier.Classify([a, b]);
+
+        var config = result.Compare.Scripts[0].Properties.First(p => p.Name == "Config");
+        Assert.NotNull(config.Children);
+        var x = config.Children!.First(c => c.Name == "X");
+        Assert.False(x.CellStates.ContainsKey("B.esp")); // absent in B → no cell state
+    }
+
+    [Fact]
+    public void Classify_ObjectProperty_SameFormKeyDifferentAlias_IsConflict()
+    {
+        // Alias is part of the canonical value; same FormKey + different alias must register as a difference.
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Ref", ObjVal("000800:Base.esp", 1))));
+        var b = Input("B.esp", 1, Script("S", "Local", Prop("Ref", ObjVal("000800:Base.esp", 2))));
+
+        var result = VmadConflictClassifier.Classify([a, b]);
+
+        var refProp = result.Compare.Scripts[0].Properties.First(p => p.Name == "Ref");
+        Assert.Equal(ConflictThis.Override, refProp.CellStates["B.esp"]);
+        Assert.Equal(ConflictAll.Override, result.ConflictContribution);
+    }
+
+    // --- Canon unit tests (Canon is internal) ---
+
+    [Fact]
+    public void Canon_StructMembers_SortedAlphabeticallyRegardlessOfInputOrder()
+    {
+        // Verifies OrderBy(Name) not OrderByDescending: members stored as [Z, A] must produce
+        // "Struct{A=...,Z=...}" not "Struct{Z=...,A=...}".
+        var v = new VmadPropertyValue("Struct", "", null,
+            Members: [new VmadNamedValue("Z", Scalar("Int", 1)), new VmadNamedValue("A", Scalar("Int", 2))]);
+        Assert.Equal("Struct{A=Int|2,Z=Int|1}", VmadConflictClassifier.Canon(v));
+    }
+
+    [Fact]
+    public void Canon_StructListInstances_MembersSortedAlphabetically()
+    {
+        // Verifies OrderBy(Name) in struct-list instances: [Z, A] → {A=...,Z=...}.
+        var inst = new VmadNamedValue[] {
+            new("Z", Scalar("Int", 9)), new("A", Scalar("Int", 7))
+        };
+        var v = new VmadPropertyValue("ArrayOfStruct", "", null,
+            StructList: [(IReadOnlyList<VmadNamedValue>)inst]);
+        Assert.Equal("ArrayOfStruct[{A=Int|7,Z=Int|9}]", VmadConflictClassifier.Canon(v));
+    }
+
+    [Fact]
+    public void Canon_ScalarTypes_DoNotGetAliasSuffix()
+    {
+        // Verifies the conditional is v.Type == "Object" (not always-true): non-Object scalars
+        // must produce "Type|value" not "Type|value []".
+        Assert.Equal("Int|42", VmadConflictClassifier.Canon(Scalar("Int", 42)));
+        Assert.Equal("Bool|True", VmadConflictClassifier.Canon(Scalar("Bool", true)));
+        Assert.Equal("Float|1.5", VmadConflictClassifier.Canon(Scalar("Float", 1.5f)));
+        Assert.Equal("String|hello", VmadConflictClassifier.Canon(Scalar("String", "hello")));
+    }
 }

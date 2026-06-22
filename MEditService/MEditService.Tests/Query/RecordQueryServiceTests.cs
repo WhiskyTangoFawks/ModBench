@@ -260,6 +260,39 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
                 Assert.Equal(ConflictAll.Conflict, svc.GetCompare(npcKey.ToString())!.ConflictAll));
     }
 
+    [Fact]
+    public void GetCompare_UncontestedFieldOverrideWithVmadConflict_EscalatesToConflict()
+    {
+        // Verifies EscalateConflict(Override, Conflict) = Conflict (not Override).
+        // Both Mid and Top set aggression to the same non-master value → generic = Override (not Conflict).
+        // But their VMAD values differ → vmad = Conflict.
+        // So EscalateConflict(Override, Conflict) must return Conflict.
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-escalate-override")
+            .WithPlugin("Base.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("EscalateTest");
+                npc.Aggression = Npc.AggressionType.Unaggressive;
+                npcKey = npc.FormKey;
+            })
+            .WithPlugin("Mid.esp", (mod, prev) =>
+            {
+                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
+                o.Aggression = Npc.AggressionType.Frenzied; // both non-masters agree on Frenzied → Override
+                o.VirtualMachineAdapter = ScriptVmad(10);
+            })
+            .WithPlugin("Top.esp", (mod, prev) =>
+            {
+                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
+                o.Aggression = Npc.AggressionType.Frenzied; // same as Mid → no generic conflict
+                o.VirtualMachineAdapter = ScriptVmad(20); // differs from Mid → VMAD Conflict
+            })
+            .Build();
+        using (data)
+            WithCompareService(data, svc =>
+                Assert.Equal(ConflictAll.Conflict, svc.GetCompare(npcKey.ToString())!.ConflictAll));
+    }
+
     private static void WithCompareService(PluginFixtureData data, Action<RecordQueryService> test)
     {
         var reflector = new SchemaReflector();

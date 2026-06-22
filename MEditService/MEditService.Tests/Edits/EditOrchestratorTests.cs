@@ -181,6 +181,40 @@ public sealed class EditOrchestratorTests
     }
 
     [Fact]
+    public void StageEdit_KeywordsArrayReferencingCommittedRecord_Passes()
+    {
+        // Verifies LookupRecordType checks the committed store first.
+        // keywords is a writable array-of-formKey field — ValidateReferences walks it and calls
+        // LookupRecordType for each element. With the mutation (committed != null → committed == null),
+        // LookupRecordType skips the committed store and returns null → InvalidReferences.
+        FormKey kwKey = default;
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-kw-ref-committed")
+            .WithPlugin("Source.esp", mod =>
+            {
+                kwKey = mod.Keywords.AddNew("TestKw_EoFkRef").FormKey;
+                npcKey = mod.Npcs.AddNew("TestNPC_EoFkRef").FormKey;
+            })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+                var fields = new Dictionary<string, JsonElement>
+                {
+                    ["keywords"] = J($"[\"{kwKey}\"]")
+                };
+
+                var result = orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
+
+                Assert.IsType<StageEditResult.Staged>(result);
+            }
+        }
+    }
+
+    [Fact]
     public void StageEdit_NoSession_ReturnsNoSession()
     {
         var (orchestrator, manager) = MakeOrchestrator();

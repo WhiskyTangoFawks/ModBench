@@ -393,6 +393,55 @@ public sealed class DeleteRecordsTests
         }
     }
 
+    [Fact]
+    public void DeleteRecords_TwoDeletedRecordsInSameArray_RemovesBothIndicesHighestFirst()
+    {
+        // OrderByDescending on indices is required: removing lower index first shifts remaining
+        // indices, so the higher-index removal would target the wrong element.
+        // Setup: [kw0, kw1, kw2]. Delete kw0 (index 0) and kw2 (index 2). kw1 must survive.
+        FormKey kw0Key = default;
+        FormKey kw1Key = default;
+        FormKey kw2Key = default;
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("dr-two-indices")
+            .WithPlugin("Source.esp", mod =>
+            {
+                kw0Key = mod.Keywords.AddNew("Kw0_DrTwoIndices").FormKey;
+                kw1Key = mod.Keywords.AddNew("Kw1_DrTwoIndices").FormKey;
+                kw2Key = mod.Keywords.AddNew("Kw2_DrTwoIndices").FormKey;
+            })
+            .WithPlugin("Referencing.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("RefNPC_DrTwoIndices");
+                npc.Keywords =
+                [
+                    new FormLink<IKeywordGetter>(kw0Key),
+                    new FormLink<IKeywordGetter>(kw1Key),
+                    new FormLink<IKeywordGetter>(kw2Key),
+                ];
+                npcKey = npc.FormKey;
+            })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                // Delete both kw0 and kw2 in one batch — their references sit at indices [0] and [2].
+                var result = orchestrator.DeleteRecords(
+                    [(kw0Key.ToString(), "Source.esp"), (kw2Key.ToString(), "Source.esp")], "user");
+
+                Assert.IsType<DeleteRecordsResult.Staged>(result);
+                var editChange = changes.GetChanges()
+                    .Single(c => c.ChangeType == "field_edit" && c.FormKey == npcKey.ToString());
+                var remaining = editChange.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
+                Assert.Equal([kw1Key.ToString()], remaining);
+            }
+        }
+    }
+
     // --- PluginImmutable (target plugin is immutable) ---
 
     [Fact]

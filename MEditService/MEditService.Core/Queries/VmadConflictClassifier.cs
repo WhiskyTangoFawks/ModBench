@@ -78,7 +78,6 @@ public static class VmadConflictClassifier
         string masterPlugin,
         ConflictAccumulator conflict)
     {
-        // A diff is only built for a name present in ≥1 plugin, so a non-null value always exists.
         var kind = Kind(perPlugin.Values.First(v => v != null)!.Type);
         var types = perPlugin
             .Where(kv => kv.Value != null)
@@ -170,9 +169,8 @@ public static class VmadConflictClassifier
 
         var winner = inputs
             .Where(i => canon[i.Plugin] != null)
-            .OrderByDescending(i => i.LoadOrderIndex)
-            .Select(i => i.Plugin)
-            .First();
+            .MaxBy(i => i.LoadOrderIndex)!
+            .Plugin;
 
         var ctx = new CellContext(masterPlugin, winner, canon[masterPlugin], canon[winner], canon);
 
@@ -220,15 +218,13 @@ public static class VmadConflictClassifier
     {
         if (v == null) return null;
         if (v.Type == "Object") return $"{v.Value} [{v.Alias}]";
-        if (v.Type is "Struct" or "ArrayOfStruct" ||
-            v.Type.StartsWith("ArrayOf", StringComparison.Ordinal)) return null;
-        return v.Value;
+        return v.Value; // null for Struct/ArrayOf* — their data lives in Members/ListItems/StructList
     }
 
     // Canonical comparison string for a property value (null = absent). Prefixed with Type so a
     // property whose Type differs across plugins registers as a conflict, not just a value change.
     // Recurses into containers so a difference anywhere in the subtree flags the parent cell.
-    private static string? Canon(VmadPropertyValue? v)
+    internal static string? Canon(VmadPropertyValue? v)
     {
         if (v == null) return null;
         if (v.Members != null)

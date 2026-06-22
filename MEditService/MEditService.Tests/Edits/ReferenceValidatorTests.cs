@@ -99,6 +99,26 @@ public class ReferenceValidatorTests
         Assert.Equal("null_not_allowed", errors[0].Reason);
     }
 
+    [Fact]
+    public void Validate_ScalarFormKey_EmptyString_NonNullable_ErrorValueIsEmptyNotNullLiteral()
+    {
+        // value ?? "Null" must preserve the actual value ("") not always substitute "Null".
+        var col = FormKeyCol("race", ["race"], allowsNull: false);
+        var errors = Validate(col, "", _ => null);
+        Assert.Single(errors);
+        Assert.Equal("null_not_allowed", errors[0].Reason);
+        Assert.Equal("", errors[0].Value);
+    }
+
+    [Fact]
+    public void Validate_ScalarFormKey_EmptyValidTypes_AnyResolvedTypeAccepted()
+    {
+        // validTypes.Count > 0 guard: when validTypes is empty, no type_mismatch check runs.
+        var col = FormKeyCol("link", [], allowsNull: false);
+        var errors = Validate(col, "000001:Test.esp", _ => "npc_");
+        Assert.Empty(errors);
+    }
+
     // --- Depth-2: struct sub-field that is itself a struct containing a formKey ---
 
     [Fact]

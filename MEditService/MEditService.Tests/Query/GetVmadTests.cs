@@ -226,4 +226,43 @@ public sealed class GetVmadTests : IDisposable
 
         Assert.Null(repo.GetVmad(_plainNpcFormKey.ToString(), "VmadQuery.esp"));
     }
+
+    [Fact]
+    public void GetVmad_EmptyArrayProperty_ReturnsEmptyListItems()
+    {
+        // MapVmadItems(null): when a list-type property has 0 items in DB,
+        // GetValueOrDefault returns null → MapVmadItems must return [] not throw.
+        FormKey emptyListFk = default;
+        using var emptyListFixture = new PluginFixtureBuilder()
+            .WithPlugin("VmadEmptyList.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("EmptyListNpc");
+                emptyListFk = npc.FormKey;
+                var vmad = new VirtualMachineAdapter();
+                var script = new ScriptEntry { Name = "S", Flags = ScriptEntry.Flag.Local };
+                script.Properties.Add(new ScriptIntListProperty { Name = "Empty" }); // 0 items
+                vmad.Scripts.Add(script);
+                npc.VirtualMachineAdapter = vmad;
+            })
+            .Build();
+
+        var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        var modPath = new ModPath(
+            ModKey.FromFileName("VmadEmptyList.esp"),
+            Path.Combine(emptyListFixture.DataFolder, "VmadEmptyList.esp"));
+        var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
+        repo.Index(mod, 0);
+        repo.UpdateWinners();
+
+        using (repo)
+        {
+            var vmad = repo.GetVmad(emptyListFk.ToString(), "VmadEmptyList.esp");
+            Assert.NotNull(vmad);
+            var emptyProp = vmad!.Scripts[0].Properties.First(p => p.Name == "Empty").Value;
+            Assert.Equal("ArrayOfInt", emptyProp.Type);
+            Assert.NotNull(emptyProp.ListItems);
+            Assert.Empty(emptyProp.ListItems!);
+        }
+    }
 }
