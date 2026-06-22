@@ -141,6 +141,8 @@ public sealed class InMemoryRecordRepository : IRecordRepository
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => [];
 
+    public VmadData? GetVmad(string formKey, string plugin) => null; // VMAD not indexed in-memory
+
     public void SetFilter(string? sql) { /* filter unsupported in InMemory; no-op */ }
 
     public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)

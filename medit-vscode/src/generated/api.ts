@@ -373,6 +373,7 @@ export interface components {
             overrides?: components["schemas"]["CompareOverride"][] | null;
             diffs?: components["schemas"]["FieldDiff"][] | null;
             conflictAll?: components["schemas"]["ConflictAll"];
+            vmad?: components["schemas"]["VmadCompare"];
         };
         /** @enum {string} */
         ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictCritical";
@@ -544,6 +545,35 @@ export interface components {
             dataFolderPath?: string | null;
             pluginsTxtPath?: string | null;
             gameRelease?: string | null;
+        };
+        VmadCompare: {
+            scripts?: components["schemas"]["VmadScriptDiff"][] | null;
+        };
+        VmadPropertyDiff: {
+            name?: string | null;
+            kind?: string | null;
+            values?: {
+                [key: string]: unknown;
+            } | null;
+            types?: {
+                [key: string]: string;
+            } | null;
+            winnerPlugin?: string | null;
+            cellStates?: {
+                [key: string]: components["schemas"]["ConflictThis"];
+            } | null;
+            children?: components["schemas"]["VmadPropertyDiff"][] | null;
+        };
+        VmadScriptDiff: {
+            name?: string | null;
+            flags?: {
+                [key: string]: string | null;
+            } | null;
+            winnerPlugin?: string | null;
+            cellStates?: {
+                [key: string]: components["schemas"]["ConflictThis"];
+            } | null;
+            properties?: components["schemas"]["VmadPropertyDiff"][] | null;
         };
     };
     responses: never;

@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using DuckDB.NET.Data;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging;
@@ -17,10 +15,6 @@ internal sealed class VmadIndexer(
     // Groups the 5 repeated identity fields shared by both vmad_properties and vmad_property_list_items rows.
     private readonly record struct PropContext(
         string FormKey, string Plugin, string RecordType, string ScriptName, int PropIndex);
-
-    // Groups the optional value columns for vmad_properties / vmad_property_list_items rows.
-    private static readonly JsonSerializerOptions _jsonOptions =
-        new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
 
     private readonly record struct VmadValue(
         bool? Bool = null,
@@ -213,7 +207,7 @@ internal sealed class VmadIndexer(
             var m = members[i];
             entries[i] = new VmadStructEntry(m.Name, FlagsString(m.Flags), ToPropertyNodes(m.Properties));
         }
-        return JsonSerializer.Serialize(entries, _jsonOptions);
+        return VmadJson.SerializeStruct(entries);
     }
 
     private static string SerializeStructList(IReadOnlyList<IScriptEntryStructsGetter> structs)
@@ -221,7 +215,7 @@ internal sealed class VmadIndexer(
         var instances = new VmadStructInstance[structs.Count];
         for (int i = 0; i < structs.Count; i++)
             instances[i] = new VmadStructInstance(ToPropertyNodes(structs[i].Members));
-        return JsonSerializer.Serialize(instances, _jsonOptions);
+        return VmadJson.SerializeStructList(instances);
     }
 
     private static VmadPropertyNode[] ToPropertyNodes(IReadOnlyList<IScriptPropertyGetter> properties)
@@ -234,12 +228,12 @@ internal sealed class VmadIndexer(
 
     private static VmadPropertyNode ToPropertyNode(IScriptPropertyGetter p) => p switch
     {
-        IScriptBoolPropertyGetter b   => new(b.Name, "Bool",   FlagsString(b.Flags), BoolValue: b.Data),
-        IScriptIntPropertyGetter n    => new(n.Name, "Int",    FlagsString(n.Flags), IntValue: n.Data),
-        IScriptFloatPropertyGetter f  => new(f.Name, "Float",  FlagsString(f.Flags), FloatValue: f.Data),
+        IScriptBoolPropertyGetter b => new(b.Name, "Bool", FlagsString(b.Flags), BoolValue: b.Data),
+        IScriptIntPropertyGetter n => new(n.Name, "Int", FlagsString(n.Flags), IntValue: n.Data),
+        IScriptFloatPropertyGetter f => new(f.Name, "Float", FlagsString(f.Flags), FloatValue: f.Data),
         IScriptStringPropertyGetter s => new(s.Name, "String", FlagsString(s.Flags), StringValue: s.Data),
         IScriptObjectPropertyGetter o => new(o.Name, "Object", FlagsString(o.Flags), FormKeyValue: o.Object.FormKey.ToString(), AliasValue: o.Alias),
-        _                             => new(p.Name, p.GetType().Name, FlagsString(p.Flags))
+        _ => new(p.Name, p.GetType().Name, FlagsString(p.Flags))
     };
 
     private static string FlagsString(ScriptEntry.Flag flags) =>

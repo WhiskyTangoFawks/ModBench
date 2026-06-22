@@ -75,10 +75,30 @@ public record ClassifyResult(
     IReadOnlyDictionary<string, ConflictThis> PluginStates,
     IReadOnlyList<FieldDiff> Diffs);
 
+// VMAD aligned diff — mirrors FieldDiff so the frontend reuses the same per-plugin cell + CellStates rendering.
+public record VmadPropertyDiff(
+    string Name,                                       // sort key = propertyName / member name / "[i]"
+    string Kind,                                       // "scalar"|"object"|"array"|"struct"|"structList"|"variable"
+    Dictionary<string, object?> Values,                // per-plugin leaf value (scalar / "FormKey [Alias]" / null when absent or has children)
+    Dictionary<string, string> Types,                  // per-plugin property Type (types differing across plugins → a conflict)
+    string WinnerPlugin,
+    IReadOnlyDictionary<string, ConflictThis> CellStates,
+    IReadOnlyList<VmadPropertyDiff>? Children);        // struct members (by name) / array elements (by index), aligned & recursive
+
+public record VmadScriptDiff(
+    string Name,                                       // sort key = ScriptName
+    Dictionary<string, string?> Flags,                 // per-plugin script flags; null = script absent in that plugin
+    string WinnerPlugin,
+    IReadOnlyDictionary<string, ConflictThis> CellStates,
+    IReadOnlyList<VmadPropertyDiff> Properties);
+
+public record VmadCompare(IReadOnlyList<VmadScriptDiff> Scripts);
+
 public record CompareResult(
     IReadOnlyList<CompareOverride> Overrides,
     IReadOnlyList<FieldDiff> Diffs,
-    ConflictAll ConflictAll);
+    ConflictAll ConflictAll,
+    VmadCompare? Vmad = null);
 
 public record PluginRecordTypeCount(string Type, int Count);
 

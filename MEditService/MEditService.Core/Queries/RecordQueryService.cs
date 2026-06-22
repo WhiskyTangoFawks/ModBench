@@ -122,10 +122,36 @@ public sealed class RecordQueryService : IRecordQueryService
                     o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields, o.PendingFields,
                     classification.PluginStates.GetValueOrDefault(o.Plugin, ConflictThis.OnlyOne)))
                 .ToList();
-            return new CompareResult(annotated, classification.Diffs, classification.ConflictAll);
+
+            // VMAD is outside the generic reflection pipeline, so classify it separately and fold
+            // its conflict contribution into the record-level ConflictAll (computed on demand, never stored).
+            var vmadInputs = withPending
+                .Select(o => new VmadPluginInput(o.Plugin, o.LoadOrderIndex, repository.GetVmad(formKey, o.Plugin)))
+                .ToList();
+            VmadCompare? vmad = null;
+            var conflictAll = classification.ConflictAll;
+            if (vmadInputs.Any(i => i.Vmad != null))
+            {
+                var vmadResult = VmadConflictClassifier.Classify(vmadInputs);
+                vmad = vmadResult.Compare;
+                conflictAll = EscalateConflict(conflictAll, vmadResult.ConflictContribution);
+            }
+
+            return new CompareResult(annotated, classification.Diffs, conflictAll, vmad);
         }
         return null;
     }
+
+    // Folds a VMAD conflict contribution (NoConflict/Override/Conflict) into the generic record-level
+    // result, taking the more severe of the two. OnlyOne (single override) and ConflictCritical
+    // (injected) are preserved as-is. Explicit so it does not depend on enum declaration order.
+    private static ConflictAll EscalateConflict(ConflictAll generic, ConflictAll vmad) => generic switch
+    {
+        ConflictAll.OnlyOne or ConflictAll.ConflictCritical => generic,
+        ConflictAll.Conflict => ConflictAll.Conflict,
+        ConflictAll.Override => vmad == ConflictAll.Conflict ? ConflictAll.Conflict : ConflictAll.Override,
+        _ => vmad, // generic == NoConflict: the VMAD contribution wins
+    };
 
     public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin)
     {

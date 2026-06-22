@@ -235,6 +235,181 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return list;
     }
 
+    public VmadData? GetVmad(string formKey, string plugin)
+    {
+        var scripts = ReadVmadScriptRows(formKey, plugin);
+        if (scripts.Count == 0) return null;
+
+        var propRows = ReadVmadPropertyRows(formKey, plugin);
+        var propsByScript = propRows
+            .GroupBy(r => r.ScriptName, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.OrderBy(r => r.PropertyIndex).ToList(), StringComparer.Ordinal);
+
+        var itemRows = ReadVmadListItemRows(formKey, plugin);
+        var itemsByProp = itemRows
+            .GroupBy(r => (r.ScriptName, r.PropertyIndex))
+            .ToDictionary(g => g.Key, g => g.OrderBy(r => r.ListItemIndex).ToList());
+
+        var scriptData = scripts
+            .Select(s =>
+            {
+                var props = propsByScript.TryGetValue(s.Name, out var rows)
+                    ? rows.Select(r =>
+                    {
+                        var items = itemsByProp.GetValueOrDefault((r.ScriptName, r.PropertyIndex));
+                        return new VmadNamedValue(r.PropertyName, MapVmadProperty(r, items));
+                    }).ToList()
+                    : new List<VmadNamedValue>();
+                return new VmadScriptData(s.Name, s.Flags, props);
+            })
+            .ToList();
+
+        return new VmadData(scriptData);
+    }
+
+    private readonly record struct VmadScriptRow(string Name, string Flags);
+
+    private readonly record struct VmadPropertyRow(
+        string ScriptName, string PropertyName, int PropertyIndex, string Type, string Flags,
+        bool? Bool, int? Int, float? Float, string? String, string? FormKey, short? Alias, string? StructJson);
+
+    private readonly record struct VmadListItemRow(
+        string ScriptName, int PropertyIndex, int ListItemIndex, string Type,
+        bool? Bool, int? Int, float? Float, string? String, string? FormKey, short? Alias);
+
+    private List<VmadScriptRow> ReadVmadScriptRows(string formKey, string plugin)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT script_name, flags FROM vmad_scripts
+            WHERE form_key = $1 AND plugin = $2
+            ORDER BY script_index
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        using var reader = cmd.ExecuteReader();
+
+        var rows = new List<VmadScriptRow>();
+        while (reader.Read())
+            rows.Add(new VmadScriptRow(reader.GetString(0), reader.GetString(1)));
+        return rows;
+    }
+
+    private List<VmadPropertyRow> ReadVmadPropertyRows(string formKey, string plugin)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT script_name, property_name, property_index, type, flags,
+                   bool_value, int_value, float_value, string_value, form_key_value, alias_value, struct_json
+            FROM vmad_properties
+            WHERE form_key = $1 AND plugin = $2
+            ORDER BY property_index
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        using var reader = cmd.ExecuteReader();
+
+        var rows = new List<VmadPropertyRow>();
+        while (reader.Read())
+            rows.Add(new VmadPropertyRow(
+                reader.GetString(0), reader.GetString(1), reader.GetInt32(2), reader.GetString(3), reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetBoolean(5),
+                reader.IsDBNull(6) ? null : reader.GetInt32(6),
+                reader.IsDBNull(7) ? null : reader.GetFloat(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9),
+                reader.IsDBNull(10) ? null : reader.GetInt16(10),
+                reader.IsDBNull(11) ? null : reader.GetString(11)));
+        return rows;
+    }
+
+    private List<VmadListItemRow> ReadVmadListItemRows(string formKey, string plugin)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT script_name, property_index, list_item_index, type,
+                   bool_value, int_value, float_value, string_value, form_key_value, alias_value
+            FROM vmad_property_list_items
+            WHERE form_key = $1 AND plugin = $2
+            ORDER BY property_index, list_item_index
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        using var reader = cmd.ExecuteReader();
+
+        var rows = new List<VmadListItemRow>();
+        while (reader.Read())
+            rows.Add(new VmadListItemRow(
+                reader.GetString(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetBoolean(4),
+                reader.IsDBNull(5) ? null : reader.GetInt32(5),
+                reader.IsDBNull(6) ? null : reader.GetFloat(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetInt16(9)));
+        return rows;
+    }
+
+    private static VmadPropertyValue MapVmadProperty(VmadPropertyRow r, List<VmadListItemRow>? items) => r.Type switch
+    {
+        "Bool" => new VmadPropertyValue(r.Type, r.Flags, r.Bool),
+        "Int" => new VmadPropertyValue(r.Type, r.Flags, r.Int),
+        "Float" => new VmadPropertyValue(r.Type, r.Flags, r.Float),
+        "String" => new VmadPropertyValue(r.Type, r.Flags, r.String),
+        "Object" => new VmadPropertyValue(r.Type, r.Flags, r.FormKey, r.Alias),
+        "ArrayOfBool" or "ArrayOfInt" or "ArrayOfFloat" or "ArrayOfString" or "ArrayOfObject" =>
+            new VmadPropertyValue(r.Type, r.Flags, null, ListItems: MapVmadItems(items)),
+        "Struct" => new VmadPropertyValue(r.Type, r.Flags, null, Members: MapStructMembers(r.StructJson)),
+        "ArrayOfStruct" => new VmadPropertyValue(r.Type, r.Flags, null, StructList: MapStructList(r.StructJson)),
+        _ => new VmadPropertyValue(r.Type, r.Flags, null),
+    };
+
+    private static List<VmadNamedValue>? MapStructMembers(string? structJson)
+    {
+        if (structJson is null) return null;
+        // A Struct's fields live inside a single unnamed ScriptEntry wrapper in the binary format,
+        // so flatten that wrapper to surface struct fields directly as named members.
+        return VmadJson.DeserializeStruct(structJson)
+            .SelectMany(e => e.Properties)
+            .Select(n => new VmadNamedValue(n.Name, MapNode(n)))
+            .ToList();
+    }
+
+    private static List<IReadOnlyList<VmadNamedValue>>? MapStructList(string? structJson)
+    {
+        if (structJson is null) return null;
+        return VmadJson.DeserializeStructList(structJson)
+            .Select(inst => (IReadOnlyList<VmadNamedValue>)MapNodes(inst.Members))
+            .ToList();
+    }
+
+    private static List<VmadNamedValue> MapNodes(VmadPropertyNode[] nodes) =>
+        nodes.Select(n => new VmadNamedValue(n.Name, MapNode(n))).ToList();
+
+    private static VmadPropertyValue MapNode(VmadPropertyNode n) => n.Type switch
+    {
+        "Bool" => new VmadPropertyValue(n.Type, n.Flags, n.BoolValue),
+        "Int" => new VmadPropertyValue(n.Type, n.Flags, n.IntValue),
+        "Float" => new VmadPropertyValue(n.Type, n.Flags, n.FloatValue),
+        "String" => new VmadPropertyValue(n.Type, n.Flags, n.StringValue),
+        "Object" => new VmadPropertyValue(n.Type, n.Flags, n.FormKeyValue, n.AliasValue),
+        _ => new VmadPropertyValue(n.Type, n.Flags, null),
+    };
+
+    // Array elements carry no per-element flags (flags live at the property level only), hence "".
+    private static List<VmadPropertyValue> MapVmadItems(List<VmadListItemRow>? items) =>
+        items is null
+            ? []
+            : items.Select(i => i.Type switch
+            {
+                "ArrayOfBool" => new VmadPropertyValue("Bool", "", i.Bool),
+                "ArrayOfInt" => new VmadPropertyValue("Int", "", i.Int),
+                "ArrayOfFloat" => new VmadPropertyValue("Float", "", i.Float),
+                "ArrayOfString" => new VmadPropertyValue("String", "", i.String),
+                "ArrayOfObject" => new VmadPropertyValue("Object", "", i.FormKey, i.Alias),
+                _ => new VmadPropertyValue(i.Type, "", null),
+            }).ToList();
+
     public int CountRecordsForPlugin(string tableName, string plugin)
     {
         var (where, paramValues) = BuildWhere(plugin, null, _filterActive);
