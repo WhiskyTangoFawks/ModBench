@@ -1,6 +1,6 @@
 # Phase 13.6 — VMAD Scalar-Array Editing
 
-**Status: Not Started** · Parent: [phase-13](phase-13.md) · Depends on: 13.5 · **Model: Sonnet** *(bounded full stack; mirrors Phase 12 generic array editing)*
+**Status: Complete** · Parent: [phase-13](phase-13.md) · Depends on: 13.5 · **Model: Sonnet** *(bounded full stack; mirrors Phase 12 generic array editing)*
 
 *Goal: scalar-array VMAD properties (`ArrayOfObject`, `ArrayOfString`, `ArrayOfInt`, `ArrayOfFloat`, `ArrayOfBool`) are editable — add, remove, reorder, and edit elements — using the atomic-column pending model (ADR-0019).*
 
@@ -52,4 +52,10 @@ Frontend (`npm run test:unit`):
 
 ## Proof
 
-*To be filled in on completion. Paste `dotnet test` + `npm run test:unit` output and commit hash.*
+Commits: `dbf0d1f` (implementation), `a131cd6` (mutation-covering tests)
+
+```
+dotnet test: Passed! — Failed: 0, Passed: 654, Total: 654
+npm run test:unit: Tests 238 passed (238)
+Stryker: No issues found (all mutants killed)
+```
