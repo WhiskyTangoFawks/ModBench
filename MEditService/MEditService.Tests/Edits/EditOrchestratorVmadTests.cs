@@ -43,6 +43,56 @@ public sealed class EditOrchestratorVmadTests
         return vmad;
     }
 
+    // Throws if GetVmad is called — used to assert the guard skips the DB lookup
+    private sealed class ThrowOnGetVmadSpy(IRecordQueryService inner) : IRecordQueryService
+    {
+        public IReadOnlyList<PluginResponse> GetPlugins() => inner.GetPlugins();
+        public IReadOnlyList<string> GetRecordTypes() => inner.GetRecordTypes();
+        public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset)
+            => inner.GetRecords(type, plugin, search, limit, offset);
+        public RecordDetail? GetRecord(string formKey) => inner.GetRecord(formKey);
+        public RecordDetail? GetRecordForPlugin(string formKey, string plugin) => inner.GetRecordForPlugin(formKey, plugin);
+        public string? GetRecordType(string formKey) => inner.GetRecordType(formKey);
+        public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
+        public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => inner.GetPluginRecordTypes(plugin);
+        public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
+        public VmadData? GetVmad(string formKey, string plugin) =>
+            throw new InvalidOperationException("GetVmad must not be called for non-VMAD edits");
+    }
+
+    // ---- Non-VMAD edit skips GetVmad ----
+
+    [Fact]
+    public void StageEdit_NonVmadFields_DoesNotCallGetVmad()
+    {
+        FormKey npcFk = default;
+        using var data = new PluginFixtureBuilder("eo-no-vmad-query")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("Npc");
+                npcFk = npc.FormKey;
+                npc.VirtualMachineAdapter = BuildVmad(npc.FormKey);
+            })
+            .Build();
+
+        var reflector = new SchemaReflector();
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        var realQuery = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
+        var spyQuery = new ThrowOnGetVmadSpy(realQuery);
+        var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
+        var orchestrator = new EditOrchestrator(manager, spyQuery, writer, changes, reflector);
+
+        using (manager)
+        {
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["SomeNonVmadField"] = J("42") }, "user", null);
+            Assert.NotNull(result);
+        }
+    }
+
     // ---- Variable property rejected at staging ----
 
     // Wraps a real IRecordQueryService but overrides GetVmad for a specific formKey
@@ -326,7 +376,11 @@ public sealed class EditOrchestratorVmadTests
 
             var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null);
 
-            Assert.IsType<StageEditResult.Staged>(result);
+            var staged = Assert.IsType<StageEditResult.Staged>(result);
+            var oldVal = staged.Changes[0].OldValue;
+            Assert.Equal(JsonValueKind.Object, oldVal.ValueKind);
+            Assert.True(oldVal.TryGetProperty("formKey", out _));
+            Assert.True(oldVal.TryGetProperty("alias", out _));
             var drained = changes.DrainForPlugin("TestPlugin.esp");
             var vmadRef = drained.FormRefsByFormKey[npcFk.ToString()]
                 .FirstOrDefault(r => r.FieldPath.Equals(@"VMAD\DefaultScript\TargetActor", StringComparison.Ordinal));
@@ -373,7 +427,13 @@ public sealed class EditOrchestratorVmadTests
 
             var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null);
 
-            Assert.IsType<StageEditResult.Staged>(result);
+            var staged = Assert.IsType<StageEditResult.Staged>(result);
+            var oldArr = staged.Changes[0].OldValue;
+            Assert.Equal(JsonValueKind.Array, oldArr.ValueKind);
+            var firstEl = oldArr.EnumerateArray().First();
+            Assert.Equal(JsonValueKind.Object, firstEl.ValueKind);
+            Assert.True(firstEl.TryGetProperty("formKey", out _));
+            Assert.True(firstEl.TryGetProperty("alias", out _));
             var drained = changes.DrainForPlugin("TestPlugin.esp");
             var refs = drained.FormRefsByFormKey[npcFk.ToString()]
                 .Where(r => r.FieldPath.Equals(@"VMAD\DefaultScript\Targets", StringComparison.Ordinal))
