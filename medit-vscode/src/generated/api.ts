@@ -563,6 +563,9 @@ export interface components {
                 [key: string]: components["schemas"]["ConflictThis"];
             } | null;
             children?: components["schemas"]["VmadPropertyDiff"][] | null;
+            raw?: {
+                [key: string]: unknown;
+            } | null;
         };
         VmadScriptDiff: {
             name?: string | null;

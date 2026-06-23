@@ -83,7 +83,12 @@ public record VmadPropertyDiff(
     Dictionary<string, string> Types,                  // per-plugin property Type (types differing across plugins → a conflict)
     string WinnerPlugin,
     IReadOnlyDictionary<string, ConflictThis> CellStates,
-    IReadOnlyList<VmadPropertyDiff>? Children);        // struct members (by name) / array elements (by index), aligned & recursive
+    IReadOnlyList<VmadPropertyDiff>? Children,          // struct members (by name) / array elements (by index), aligned & recursive
+                                                        // Raw: per-plugin struct subtree in the editable node-tree shape — a struct carries a list of
+                                                        // member nodes; a structList carries a list of per-instance member-node lists. Populated only
+                                                        // for struct/structList. The frontend patches one member by path and restages the whole value
+                                                        // (atomic column, ADR-0019).
+    Dictionary<string, object?>? Raw = null);
 
 public record VmadScriptDiff(
     string Name,                                       // sort key = ScriptName

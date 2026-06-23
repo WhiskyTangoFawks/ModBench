@@ -1,5 +1,6 @@
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 
 namespace MEditService.Tests.Query;
 
@@ -102,6 +103,44 @@ public sealed class VmadConflictClassifierTests
         var factor = config.Children!.First(c => c.Name == "Factor");
         Assert.Equal(ConflictThis.Override, scale.CellStates["B.esp"]);          // differing member
         Assert.Equal(ConflictThis.IdenticalToMaster, factor.CellStates["B.esp"]); // benign sibling
+    }
+
+    [Fact]
+    public void Classify_StructProperty_CarriesPerPluginRawSubtree()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local",
+            Prop("Config", StructVal(Prop("Factor", Scalar("Float", 1.5f))))));
+
+        var result = VmadConflictClassifier.Classify([a]);
+
+        var config = Assert.Single(result.Compare.Scripts[0].Properties);
+        Assert.Equal("struct", config.Kind);
+        Assert.NotNull(config.Raw);
+
+        var nodes = Assert.IsAssignableFrom<IReadOnlyList<VmadPropertyNode>>(config.Raw!["A.esp"]);
+        var factor = Assert.Single(nodes);
+        Assert.Equal("Factor", factor.Name);
+        Assert.Equal("Float", factor.Type);
+        Assert.Equal(1.5f, factor.FloatValue);
+    }
+
+    [Fact]
+    public void Classify_ArrayOfStructProperty_CarriesPerPluginRawInstances()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local",
+            Prop("Items", StructListVal(
+                [Prop("Qty", Scalar("Int", 7))],
+                [Prop("Qty", Scalar("Int", 9))]))));
+
+        var result = VmadConflictClassifier.Classify([a]);
+
+        var items = Assert.Single(result.Compare.Scripts[0].Properties);
+        Assert.Equal("structList", items.Kind);
+
+        var instances = Assert.IsAssignableFrom<IReadOnlyList<IReadOnlyList<VmadPropertyNode>>>(items.Raw!["A.esp"]);
+        Assert.Equal(2, instances.Count);
+        Assert.Equal(7, Assert.Single(instances[0]).IntValue);
+        Assert.Equal(9, Assert.Single(instances[1]).IntValue);
     }
 
     [Fact]

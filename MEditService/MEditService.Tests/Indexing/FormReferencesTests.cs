@@ -189,4 +189,51 @@ public class FormReferencesTests
         Assert.NotEqual(default, factionRow);
         Assert.Equal(factionFormKey.ToString(), factionRow.Target);
     }
+
+    [Fact]
+    public void Index_VmadStructWithObjectMember_IsIndexedInFormReferences()
+    {
+        FormKey targetFormKey = default;
+        FormKey npcFormKey = default;
+
+        using var fixture = new PluginFixtureBuilder("form-refs-vmad-struct")
+            .WithPlugin("VmadStructRef.esp", mod =>
+            {
+                var target = mod.Npcs.AddNew("RefTarget");
+                targetFormKey = target.FormKey;
+
+                var npc = mod.Npcs.AddNew("VmadStructNpc");
+                npcFormKey = npc.FormKey;
+
+                var vmad = new VirtualMachineAdapter();
+                var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
+                var structProp = new ScriptStructProperty { Name = "Config" };
+                var wrapper = new ScriptEntry();
+                var objMember = new ScriptObjectProperty { Name = "TargetRef", Alias = -1 };
+                objMember.Object.SetTo(targetFormKey);
+                wrapper.Properties.Add(objMember);
+                structProp.Members.Add(wrapper);
+                script.Properties.Add(structProp);
+                vmad.Scripts.Add(script);
+                npc.VirtualMachineAdapter = vmad;
+            })
+            .Build();
+
+        using var repo = OpenRepo();
+        repo.Index(LoadMod(fixture.DataFolder, "VmadStructRef.esp"), 0);
+        repo.UpdateWinners();
+
+        using var cmd = repo.Connection.CreateCommand();
+        cmd.CommandText = "SELECT target_form_key, field_path FROM form_references WHERE source_form_key = $1";
+        cmd.Parameters.Add(new DuckDBParameter { Value = npcFormKey.ToString() });
+        using var reader = cmd.ExecuteReader();
+
+        var rows = new List<(string Target, string FieldPath)>();
+        while (reader.Read())
+            rows.Add((reader.GetString(0), reader.GetString(1)));
+
+        var row = rows.FirstOrDefault(r => r.FieldPath == @"VMAD\DefaultScript\Config\TargetRef");
+        Assert.NotEqual(default, row);
+        Assert.Equal(targetFormKey.ToString(), row.Target);
+    }
 }

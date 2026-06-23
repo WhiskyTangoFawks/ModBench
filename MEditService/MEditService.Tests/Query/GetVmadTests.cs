@@ -84,6 +84,11 @@ public sealed class GetVmadTests : IDisposable
         var structProp = new ScriptStructProperty { Name = "Config" };
         var member = new ScriptEntry { Name = "SubScript" };
         member.Properties.Add(new ScriptFloatProperty { Name = "Factor", Data = 1.5f });
+        var innerStruct = new ScriptStructProperty { Name = "Inner" };
+        var innerWrapper = new ScriptEntry();
+        innerWrapper.Properties.Add(new ScriptIntProperty { Name = "Depth", Data = 42 });
+        innerStruct.Members.Add(innerWrapper);
+        member.Properties.Add(innerStruct);
         structProp.Members.Add(member);
         script.Properties.Add(structProp);
 
@@ -172,6 +177,23 @@ public sealed class GetVmadTests : IDisposable
         var factor = config.Members!.First(m => m.Name == "Factor").Value;
         Assert.Equal("Float", factor.Type);
         Assert.Equal(1.5f, factor.Value);
+    }
+
+    [Fact]
+    public void GetVmad_ReconstructsNestedStructMember_Recursively()
+    {
+        using var repo = LoadedRepository();
+
+        var config = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp")!.Scripts[0].Properties
+            .First(p => p.Name == "Config").Value;
+
+        var inner = config.Members!.First(m => m.Name == "Inner").Value;
+        Assert.Equal("Struct", inner.Type);
+        Assert.NotNull(inner.Members);
+
+        var depth = inner.Members!.First(m => m.Name == "Depth").Value;
+        Assert.Equal("Int", depth.Type);
+        Assert.Equal(42, depth.Value);
     }
 
     [Fact]

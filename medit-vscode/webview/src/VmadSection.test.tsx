@@ -343,6 +343,193 @@ describe('VmadSection array edit mode', () => {
   });
 });
 
+// ── struct edit mode (13.7) ─────────────────────────────────────────────────────
+
+function structVmad(): VmadCompare {
+  return {
+    scripts: [script({
+      name: 'S',
+      properties: [prop({
+        name: 'Bounds',
+        kind: 'struct',
+        types: { 'A.esm': 'Struct' },
+        winnerPlugin: 'A.esm',
+        raw: { 'A.esm': [
+          { name: 'X', type: 'Int', flags: 'Edited', intValue: 1 },
+          { name: 'Y', type: 'Int', flags: 'Edited', intValue: 2 },
+        ] },
+        children: [
+          prop({ name: 'X', kind: 'scalar', values: { 'A.esm': 1 }, types: { 'A.esm': 'Int' }, winnerPlugin: 'A.esm' }),
+          prop({ name: 'Y', kind: 'scalar', values: { 'A.esm': 2 }, types: { 'A.esm': 'Int' }, winnerPlugin: 'A.esm' }),
+        ],
+      })],
+    })],
+  };
+}
+
+describe('VmadSection struct edit mode', () => {
+  it('expanding a Struct in edit mode shows an input per member', () => {
+    const { container } = renderSection(structVmad(), ['A.esm'], { editMode: true, onEdit: vi.fn() });
+    toggle('S');
+    toggle('Bounds');
+
+    const inputs = container.querySelectorAll('input[type="number"]');
+    expect(inputs).toHaveLength(2);
+    expect((inputs[0] as HTMLInputElement).value).toBe('1');
+    expect((inputs[1] as HTMLInputElement).value).toBe('2');
+  });
+
+  it('editing a struct member restages the whole struct subtree at the property path', () => {
+    const onEdit = vi.fn();
+    const { container } = renderSection(structVmad(), ['A.esm'], { editMode: true, onEdit });
+    toggle('S');
+    toggle('Bounds');
+
+    const inputs = container.querySelectorAll('input[type="number"]');
+    fireEvent.change(inputs[0], { target: { value: '99' } });
+    fireEvent.blur(inputs[0]);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Bounds`, [
+      { name: 'X', type: 'Int', flags: 'Edited', intValue: 99 },
+      { name: 'Y', type: 'Int', flags: 'Edited', intValue: 2 },
+    ]);
+  });
+});
+
+function nestedStructVmad(): VmadCompare {
+  return {
+    scripts: [script({
+      name: 'S',
+      properties: [prop({
+        name: 'Bounds',
+        kind: 'struct',
+        types: { 'A.esm': 'Struct' },
+        winnerPlugin: 'A.esm',
+        raw: { 'A.esm': [
+          { name: 'X', type: 'Int', intValue: 1 },
+          { name: 'Inner', type: 'Struct', members: [{ name: 'Depth', type: 'Int', intValue: 42 }] },
+        ] },
+        children: [
+          prop({ name: 'X', kind: 'scalar', values: { 'A.esm': 1 }, types: { 'A.esm': 'Int' }, winnerPlugin: 'A.esm' }),
+          prop({
+            name: 'Inner',
+            kind: 'struct',
+            types: { 'A.esm': 'Struct' },
+            winnerPlugin: 'A.esm',
+            children: [prop({ name: 'Depth', kind: 'scalar', values: { 'A.esm': 42 }, types: { 'A.esm': 'Int' }, winnerPlugin: 'A.esm' })],
+          }),
+        ],
+      })],
+    })],
+  };
+}
+
+describe('VmadSection nested struct edit mode', () => {
+  it('expands struct-in-struct and restages the whole root subtree when a deep member is edited', () => {
+    const onEdit = vi.fn();
+    renderSection(nestedStructVmad(), ['A.esm'], { editMode: true, onEdit });
+    toggle('S');
+    toggle('Bounds');
+    expect(screen.queryByText('Depth')).not.toBeInTheDocument();
+
+    toggle('Inner');
+    expect(screen.getByText('Depth')).toBeInTheDocument();
+
+    // The only editable member visible now is Depth (X is a sibling at the Bounds level).
+    const depthInput = screen.getByText('Depth').closest('tr')!.querySelector('input[type="number"]')!;
+    fireEvent.change(depthInput, { target: { value: '99' } });
+    fireEvent.blur(depthInput);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Bounds`, [
+      { name: 'X', type: 'Int', intValue: 1 },
+      { name: 'Inner', type: 'Struct', members: [{ name: 'Depth', type: 'Int', intValue: 99 }] },
+    ]);
+  });
+});
+
+function structListVmad(): VmadCompare {
+  const inst = (qty: number) => prop({
+    name: `[${qty}]`, kind: 'struct', types: { 'A.esm': 'Struct' }, winnerPlugin: 'A.esm',
+    children: [prop({ name: 'Qty', kind: 'scalar', values: { 'A.esm': qty }, types: { 'A.esm': 'Int' }, winnerPlugin: 'A.esm' })],
+  });
+  return {
+    scripts: [script({
+      name: 'S',
+      properties: [prop({
+        name: 'Items',
+        kind: 'structList',
+        types: { 'A.esm': 'ArrayOfStruct' },
+        winnerPlugin: 'A.esm',
+        raw: { 'A.esm': [
+          [{ name: 'Qty', type: 'Int', intValue: 7 }],
+          [{ name: 'Qty', type: 'Int', intValue: 9 }],
+        ] },
+        children: [inst(7), inst(9)],
+      })],
+    })],
+  };
+}
+
+describe('VmadSection structList + struct structural edits (13.7)', () => {
+
+  it('Add struct appends a default-valued clone of the first element and restages', () => {
+    const onEdit = vi.fn();
+    renderSection(structListVmad(), ['A.esm'], { editMode: true, onEdit });
+    toggle('S');
+    toggle('Items');
+
+    fireEvent.click(screen.getByTitle('Add struct'));
+
+    expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Items`, [
+      [{ name: 'Qty', type: 'Int', intValue: 7 }],
+      [{ name: 'Qty', type: 'Int', intValue: 9 }],
+      [{ name: 'Qty', type: 'Int', intValue: 0 }],
+    ]);
+  });
+
+  it('Remove struct on an element removes it and restages', () => {
+    const onEdit = vi.fn();
+    renderSection(structListVmad(), ['A.esm'], { editMode: true, onEdit });
+    toggle('S');
+    toggle('Items');
+
+    fireEvent.click(screen.getAllByTitle('Remove struct')[0]);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Items`, [
+      [{ name: 'Qty', type: 'Int', intValue: 9 }],
+    ]);
+  });
+
+  it('Remove member on a struct member removes it and restages', () => {
+    const onEdit = vi.fn();
+    renderSection(structVmad(), ['A.esm'], { editMode: true, onEdit });
+    toggle('S');
+    toggle('Bounds');
+
+    fireEvent.click(screen.getAllByTitle('Remove member')[0]);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Bounds`, [
+      { name: 'Y', type: 'Int', flags: 'Edited', intValue: 2 },
+    ]);
+  });
+
+  it('pending struct change shows on the struct property row with a working revert', () => {
+    const onRevert = vi.fn();
+    const chg = pendingChange('A.esm', String.raw`VMAD\S\Bounds`, [{ name: 'X', type: 'Int', intValue: 99 }]);
+    renderSection(structVmad(), ['A.esm'], {
+      editMode: true,
+      onRevert,
+      withPendingCol: 'A.esm',
+      pendingChangeMap: { [String.raw`A.esm:VMAD\S\Bounds`]: chg },
+    });
+    toggle('S');
+
+    const revertBtn = screen.getByTitle('Revert this change');
+    fireEvent.click(revertBtn);
+    expect(onRevert).toHaveBeenCalledWith(chg.id);
+  });
+});
+
 // ── edit mode (13.5) ──────────────────────────────────────────────────────────
 
 const boolVmad = (): VmadCompare => ({
