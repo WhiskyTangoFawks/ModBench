@@ -23,6 +23,184 @@ export interface ArrayEditCtx {
   siblingsByPlugin: Record<string, unknown[]>;
 }
 
+// A Struct/ArrayOfStruct edits as one atomic column: any nested member edit restages the whole
+// subtree (the `raw` node tree) at the property path. nodePath locates this row's node within raw.
+export interface StructEditCtx {
+  structPath: string;                          // VMAD\Script\Prop
+  raw: Record<string, unknown> | null | undefined;
+  nodePath: (string | number)[];               // struct root = node[]; structList root = node[][] (leading index)
+}
+
+// Walks `raw[plugin]` to the node addressed by nodePath. Member-name segments index a node list;
+// a leading numeric segment selects a structList instance's member list.
+function nodeAt(root: unknown, path: (string | number)[]): Record<string, unknown> | undefined {
+  const startsWithIndex = typeof path[0] === 'number';
+  let list = (startsWithIndex ? (root as unknown[])[path[0] as number] : root) as Record<string, unknown>[];
+  let node: Record<string, unknown> | undefined;
+  for (let k = startsWithIndex ? 1 : 0; k < path.length; k++) {
+    node = list.find(n => n.name === path[k]);
+    if (node && k < path.length - 1) list = node.members as Record<string, unknown>[];
+  }
+  return node;
+}
+
+function setNodeValue(node: Record<string, unknown>, p: VmadPropertyDiff, v: unknown): void {
+  if (p.kind === 'object') {
+    const o = v as { formKey: string; alias: number };
+    node.formKeyValue = o.formKey;
+    node.aliasValue = o.alias;
+    return;
+  }
+  switch (scalarType(p)) {
+    case 'bool': node.boolValue = v; break;
+    case 'int': node.intValue = v; break;
+    case 'float': node.floatValue = v; break;
+    default: node.stringValue = v;
+  }
+}
+
+// A new ArrayOfStruct element clones the first element's member shape with default values.
+function defaultNode(n: Record<string, unknown>): Record<string, unknown> {
+  const c = { ...n };
+  if ('boolValue' in c) c.boolValue = false;
+  if ('intValue' in c) c.intValue = 0;
+  if ('floatValue' in c) c.floatValue = 0;
+  if ('stringValue' in c) c.stringValue = '';
+  if ('formKeyValue' in c) { c.formKeyValue = ''; c.aliasValue = -1; }
+  if (Array.isArray(c.members)) c.members = (c.members as Record<string, unknown>[]).map(defaultNode);
+  return c;
+}
+
+// Removes the node addressed by nodePath from a (cloned) raw root: a member from its node list,
+// or an ArrayOfStruct instance (leading-number path) from the instance list.
+function removeAt(root: unknown, path: (string | number)[]): unknown {
+  const last = path.at(-1);
+  if (path.length === 1) {
+    return typeof last === 'number'
+      ? (root as unknown[]).filter((_, j) => j !== last)
+      : (root as Record<string, unknown>[]).filter(n => n.name !== last);
+  }
+  const parentPath = path.slice(0, -1);
+  const list = (parentPath.length === 1 && typeof parentPath[0] === 'number')
+    ? (root as Record<string, unknown>[][])[parentPath[0]]
+    : nodeAt(root, parentPath)!.members as Record<string, unknown>[];
+  const idx = list.findIndex(n => n.name === last);
+  if (idx >= 0) list.splice(idx, 1);
+  return root;
+}
+
+const iconBtnStyle: React.CSSProperties = {
+  background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: 0, lineHeight: 1,
+};
+
+const inlineCell: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4 };
+
+function StructAddButton({ plugin, structPath, raw, onEdit }: Readonly<{
+  plugin: string; structPath: string; raw: Record<string, unknown> | null | undefined; onEdit: OnEdit;
+}>) {
+  return (
+    <button
+      title="Add struct"
+      onClick={() => {
+        const root = structuredClone(raw?.[plugin] ?? []) as Record<string, unknown>[][];
+        const template = root[0];
+        root.push(template ? template.map(defaultNode) : []);
+        onEdit(plugin, structPath, root);
+      }}
+      style={{ ...iconBtnStyle, color: fg, fontSize: '14px', padding: '0 4px' }}
+    >+</button>
+  );
+}
+
+function StructRemoveButton({ plugin, structCtx, onEdit }: Readonly<{
+  plugin: string; structCtx: StructEditCtx; onEdit: OnEdit;
+}>) {
+  const last = structCtx.nodePath.at(-1);
+  return (
+    <button
+      title={typeof last === 'number' ? 'Remove struct' : 'Remove member'}
+      onClick={() => onEdit(plugin, structCtx.structPath,
+        removeAt(structuredClone(structCtx.raw?.[plugin] ?? []), structCtx.nodePath))}
+      style={{ ...iconBtnStyle, color: 'var(--vscode-errorForeground, #f88)' }}
+    >×</button>
+  );
+}
+
+// All per-plugin row context, bundled so the cell renderers stay module-level (and simple).
+interface RowRenderCtx {
+  p: VmadPropertyDiff;
+  isExpanded: boolean;
+  arrayCtx?: ArrayEditCtx;
+  structCtx?: StructEditCtx;
+  siblingsByPlugin?: Record<string, unknown[]>;
+  arrayVmadPath?: string;
+  elementType: string;
+  structRootPath?: string;
+  leafPath?: string;
+  typesDiffer: boolean;
+  edit?: OnEdit;          // onEdit when in edit mode, else undefined
+  leafCtx: LeafCellCtx;
+  onOpen: (fk: string) => void;
+}
+
+function containerCell(plugin: string, c: RowRenderCtx, remove: React.ReactNode): React.ReactNode {
+  const { p, isExpanded, edit, siblingsByPlugin, arrayVmadPath, elementType, structRootPath } = c;
+  if (isExpanded) {
+    if (edit && siblingsByPlugin && arrayVmadPath)
+      return <ArrayAddButton plugin={plugin} arrayVmadPath={arrayVmadPath} currentArr={siblingsByPlugin[plugin] ?? []} elementType={elementType} onEdit={edit} />;
+    if (edit && structRootPath && p.kind === 'structList')
+      return <StructAddButton plugin={plugin} structPath={structRootPath} raw={p.raw} onEdit={edit} />;
+    return remove;
+  }
+  const summary = hasPluginData(p, plugin) ? containerSummary(p) : null;
+  return remove ? <span style={inlineCell}>{summary}{remove}</span> : summary;
+}
+
+function memberCell(plugin: string, c: RowRenderCtx, remove: React.ReactNode): React.ReactNode {
+  const { p, arrayCtx, structCtx, leafPath, typesDiffer, edit, leafCtx, onOpen } = c;
+  const path = arrayCtx ? arrayCtx.vmadPath : leafPath;
+  const typeCue = typesDiffer ? `(${p.types[plugin]})` : null;
+  const editor = (path || structCtx)
+    ? renderLeafCell(p, plugin, path ?? '', arrayCtx, structCtx, leafCtx, typesDiffer)
+    : leafContent(p, plugin, onOpen, typeCue);
+  if (arrayCtx && edit)
+    return <ArrayElementCell plugin={plugin} arrayCtx={arrayCtx} onEdit={edit} editor={editor} />;
+  return remove ? <span style={inlineCell}>{editor}{remove}</span> : editor;
+}
+
+function propertyCell(plugin: string, c: RowRenderCtx): React.ReactNode {
+  const remove = c.edit && c.structCtx
+    ? <StructRemoveButton plugin={plugin} structCtx={c.structCtx} onEdit={c.edit} />
+    : null;
+  return isContainerKind(c.p.kind) ? containerCell(plugin, c, remove) : memberCell(plugin, c, remove);
+}
+
+// Per-row VMAD path classification. Only depth-1 properties carry a top-level path; struct/array
+// internals address their atomic column via the struct/array root instead.
+function rowPaths(depth: number, p: VmadPropertyDiff, scriptName: string) {
+  const top = `VMAD\\${scriptName}\\${p.name}`;
+  const isContainer = isContainerKind(p.kind);
+  const structRootPath = depth === 1 && (p.kind === 'struct' || p.kind === 'structList') ? top : undefined;
+  return {
+    isContainer,
+    leafPath: depth === 1 && !isContainer ? top : undefined,
+    arrayVmadPath: depth === 1 && p.kind === 'array' ? top : undefined,
+    structRootPath,
+  };
+}
+
+// Struct edit context for a child row: extends the parent path by one segment (member name, or
+// instance index for an ArrayOfStruct). Undefined outside a struct subtree.
+function makeChildStructCtx(
+  p: VmadPropertyDiff, c: VmadPropertyDiff, i: number,
+  structRootPath: string | undefined, structCtx: StructEditCtx | undefined,
+): StructEditCtx | undefined {
+  const seg: string | number = p.kind === 'structList' ? i : c.name;
+  if (structRootPath) return { structPath: structRootPath, raw: p.raw, nodePath: [seg] };
+  if (structCtx) return { ...structCtx, nodePath: [...structCtx.nodePath, seg] };
+  return undefined;
+}
+
 function isContainerKind(kind: VmadKind): kind is 'array' | 'struct' | 'structList' {
   return kind === 'array' || kind === 'struct' || kind === 'structList';
 }
@@ -59,7 +237,7 @@ function ArrayAddButton({ plugin, arrayVmadPath, currentArr, elementType, onEdit
     <button
       title="Add element"
       onClick={() => onEdit(plugin, arrayVmadPath, [...currentArr, defaultElementValue(elementType)])}
-      style={{ background: 'none', border: 'none', cursor: 'pointer', color: fg, fontSize: '14px', padding: '0 4px' }}
+      style={{ ...iconBtnStyle, color: fg, fontSize: '14px', padding: '0 4px' }}
     >+</button>
   );
 }
@@ -74,12 +252,12 @@ interface ArrayElementCellProps {
 function ArrayElementCell({ plugin, arrayCtx, onEdit, editor }: Readonly<ArrayElementCellProps>) {
   const siblings = arrayCtx.siblingsByPlugin[plugin] ?? [];
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+    <span style={inlineCell}>
       {editor}
       <button
         title="Remove element"
         onClick={() => onEdit(plugin, arrayCtx.vmadPath, siblings.filter((_, j) => j !== arrayCtx.index))}
-        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--vscode-errorForeground, #f88)', fontSize: '12px', padding: 0, lineHeight: 1 }}
+        style={{ ...iconBtnStyle, color: 'var(--vscode-errorForeground, #f88)' }}
       >×</button>
     </span>
   );
@@ -99,6 +277,7 @@ function renderLeafCell(
   plugin: string,
   vmadPath: string,
   arrayCtx: ArrayEditCtx | undefined,
+  structCtx: StructEditCtx | undefined,
   ctx: LeafCellCtx,
   typesDiffer: boolean,
 ): React.ReactNode {
@@ -107,7 +286,11 @@ function renderLeafCell(
   if (!editMode || !onEdit) return leafContent(p, plugin, onOpen, typeCue);
 
   function commit(v: unknown) {
-    if (arrayCtx) {
+    if (structCtx) {
+      const root = structuredClone(structCtx.raw?.[plugin] ?? []);
+      const node = nodeAt(root, structCtx.nodePath);
+      if (node) { setNodeValue(node, p, v); onEdit(plugin, structCtx.structPath, root); }
+    } else if (arrayCtx) {
       const siblings = arrayCtx.siblingsByPlugin[plugin] ?? [];
       const next = [...siblings];
       next[arrayCtx.index] = v;
@@ -376,14 +559,13 @@ export function VmadSection({
     depth: number,
     scriptName: string,
     arrayCtx?: ArrayEditCtx,
+    structCtx?: StructEditCtx,
   ) => {
     const key = `${parentKey}>${p.name}`;
-    const isContainer = isContainerKind(p.kind);
+    const { isContainer, leafPath, arrayVmadPath, structRootPath } = rowPaths(depth, p, scriptName);
     const hasChildren = isContainer && (p.children?.length ?? 0) > 0;
     const isExpanded = expanded.has(key);
     const typesDiffer = Object.values(p.types).some((t, _, a) => t !== a[0]);
-    const leafPath = depth === 1 && !isContainer ? `VMAD\\${scriptName}\\${p.name}` : undefined;
-    const arrayVmadPath = depth === 1 && p.kind === 'array' ? `VMAD\\${scriptName}\\${p.name}` : undefined;
 
     // Pre-build siblings so the Add button (on the parent array row) can append a default value.
     const siblingsByPlugin = (arrayVmadPath && isExpanded)
@@ -393,6 +575,12 @@ export function VmadSection({
       ? p.children[0].types[p.children[0].winnerPlugin] ?? 'Int'
       : 'Int';
 
+    const rowCtx: RowRenderCtx = {
+      p, isExpanded, arrayCtx, structCtx, siblingsByPlugin, arrayVmadPath, elementType,
+      structRootPath, leafPath, typesDiffer,
+      edit: editMode === true ? onEdit : undefined, leafCtx, onOpen,
+    };
+
     rows.push(
       <tr key={key}>
         <td style={{ ...baseCell, paddingLeft: 8 + depth * 16, opacity: 0.85 }}>
@@ -401,35 +589,17 @@ export function VmadSection({
           )}
           {p.name}
         </td>
-        {valueCells(key, p.cellStates, plugin => {
-          if (isContainer) {
-            if (isExpanded) {
-              if (editMode && onEdit && siblingsByPlugin && arrayVmadPath) {
-                const currentArr = siblingsByPlugin[plugin] ?? [];
-                return <ArrayAddButton plugin={plugin} arrayVmadPath={arrayVmadPath} currentArr={currentArr} elementType={elementType} onEdit={onEdit} />;
-              }
-              return null;
-            }
-            return hasPluginData(p, plugin) ? containerSummary(p) : null;
-          }
-          const path = arrayCtx ? arrayCtx.vmadPath : leafPath;
-          const typeCue = typesDiffer ? `(${p.types[plugin]})` : null;
-          const editor = path
-            ? renderLeafCell(p, plugin, path, arrayCtx, leafCtx, typesDiffer)
-            : leafContent(p, plugin, onOpen, typeCue);
-          if (arrayCtx && editMode && onEdit)
-            return <ArrayElementCell plugin={plugin} arrayCtx={arrayCtx} onEdit={onEdit} editor={editor} />;
-          return editor;
-        }, arrayVmadPath ?? leafPath)}
+        {valueCells(key, p.cellStates, plugin => propertyCell(plugin, rowCtx), arrayVmadPath ?? leafPath ?? structRootPath)}
       </tr>,
     );
 
     if (!hasChildren || !isExpanded) return;
-    if (p.kind === 'array' && arrayVmadPath && siblingsByPlugin) {
-      for (const [i, c] of (p.children ?? []).entries())
-        pushPropertyRows(c, key, depth + 1, scriptName, { vmadPath: arrayVmadPath, index: i, siblingsByPlugin });
-    } else {
-      for (const c of p.children ?? []) pushPropertyRows(c, key, depth + 1, scriptName);
+    for (const [i, c] of (p.children ?? []).entries()) {
+      const childArrayCtx = (p.kind === 'array' && arrayVmadPath && siblingsByPlugin)
+        ? { vmadPath: arrayVmadPath, index: i, siblingsByPlugin }
+        : undefined;
+      pushPropertyRows(c, key, depth + 1, scriptName, childArrayCtx,
+        makeChildStructCtx(p, c, i, structRootPath, structCtx));
     }
   };
 

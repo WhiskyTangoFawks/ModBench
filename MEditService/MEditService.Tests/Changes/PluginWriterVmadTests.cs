@@ -1,5 +1,7 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Queries;
+using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -13,6 +15,9 @@ public class PluginWriterVmadTests
 {
     private static readonly ISchemaReflector _reflector = new SchemaReflector();
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
+
+    // Serializes a per-plugin Raw subtree the way the API does (camelCase) so apply round-trips it.
+    private static readonly JsonSerializerOptions _wire = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     // ---- IsReadOnly ----
 
@@ -340,6 +345,393 @@ public class PluginWriterVmadTests
 
         Assert.Contains(@"VMAD\DefaultScript\TargetActor", result.NotFound);
         Assert.Empty(result.Applied);
+    }
+
+    // ---- Struct member apply ----
+
+    private static (string path, FormKey npcFk, PluginFixtureData data) BuildStructFixture(string prefix)
+    {
+        FormKey npcFk = default;
+        var fixture = new PluginFixtureBuilder(prefix)
+            .WithPlugin("VmadWrite.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("StructNpc");
+                npcFk = npc.FormKey;
+                var vmad = new VirtualMachineAdapter();
+                var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
+
+                var structProp = new ScriptStructProperty { Name = "Config" };
+                var wrapper = new ScriptEntry();
+                wrapper.Properties.Add(new ScriptFloatProperty { Name = "Factor", Data = 1.5f });
+                wrapper.Properties.Add(new ScriptIntProperty { Name = "Count", Data = 3 });
+                structProp.Members.Add(wrapper);
+                script.Properties.Add(structProp);
+
+                vmad.Scripts.Add(script);
+                npc.VirtualMachineAdapter = vmad;
+            })
+            .Build();
+        return (Path.Combine(fixture.DataFolder, "VmadWrite.esp"), npcFk, fixture);
+    }
+
+    private static IScriptStructPropertyGetter ReloadStruct(string path, FormKey npcFk) =>
+        ReloadNpc(path, npcFk).VirtualMachineAdapter!.Scripts
+            .First(s => s.Name == "DefaultScript").Properties
+            .OfType<IScriptStructPropertyGetter>().First(p => p.Name == "Config");
+
+    [Fact]
+    public async Task SaveAsync_VmadStructMemberEdit_WritesNewValue()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-edit");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        // Atomic column: the whole struct subtree is restaged with Factor changed to 2.5.
+        var json = """[{"name":"Factor","type":"Float","floatValue":2.5},{"name":"Count","type":"Int","intValue":3}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.Applied);
+        Assert.Empty(result.NotFound);
+
+        var members = Assert.Single(ReloadStruct(path, npcFk).Members).Properties;
+        Assert.Equal(2.5f, members.OfType<IScriptFloatPropertyGetter>().First(p => p.Name == "Factor").Data);
+        Assert.Equal(3, members.OfType<IScriptIntPropertyGetter>().First(p => p.Name == "Count").Data);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadNestedStructMemberEdit_WritesRecursively()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-nested");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        // Config = { Factor, Count, Inner = { Depth } } — edit the deeply-nested Depth.
+        var json = """
+            [{"name":"Factor","type":"Float","floatValue":1.5},
+             {"name":"Count","type":"Int","intValue":3},
+             {"name":"Inner","type":"Struct","members":[{"name":"Depth","type":"Int","intValue":99}]}]
+            """;
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.Applied);
+
+        var members = Assert.Single(ReloadStruct(path, npcFk).Members).Properties;
+        var inner = members.OfType<IScriptStructPropertyGetter>().First(p => p.Name == "Inner");
+        var depth = Assert.Single(inner.Members).Properties
+            .OfType<IScriptIntPropertyGetter>().First(p => p.Name == "Depth");
+        Assert.Equal(99, depth.Data);
+    }
+
+    // ---- ArrayOfStruct apply ----
+
+    private static (string path, FormKey npcFk, PluginFixtureData data) BuildStructListFixture(string prefix)
+    {
+        FormKey npcFk = default;
+        var fixture = new PluginFixtureBuilder(prefix)
+            .WithPlugin("VmadWrite.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("StructListNpc");
+                npcFk = npc.FormKey;
+                var vmad = new VirtualMachineAdapter();
+                var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
+
+                var listProp = new ScriptStructListProperty { Name = "Items" };
+                var inst0 = new ScriptEntryStructs();
+                inst0.Members.Add(new ScriptIntProperty { Name = "Qty", Data = 7 });
+                listProp.Structs.Add(inst0);
+                script.Properties.Add(listProp);
+
+                vmad.Scripts.Add(script);
+                npc.VirtualMachineAdapter = vmad;
+            })
+            .Build();
+        return (Path.Combine(fixture.DataFolder, "VmadWrite.esp"), npcFk, fixture);
+    }
+
+    private static IScriptStructListPropertyGetter ReloadStructList(string path, FormKey npcFk) =>
+        ReloadNpc(path, npcFk).VirtualMachineAdapter!.Scripts
+            .First(s => s.Name == "DefaultScript").Properties
+            .OfType<IScriptStructListPropertyGetter>().First(p => p.Name == "Items");
+
+    [Fact]
+    public async Task SaveAsync_VmadArrayOfStructMemberEdit_WritesNewValue()
+    {
+        var (path, npcFk, fixture) = BuildStructListFixture("vmad-structlist-edit");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        // Atomic column: whole list restaged, element [0]'s Qty changed to 42.
+        var json = """[[{"name":"Qty","type":"Int","intValue":42}]]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Items", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Items", result.Applied);
+        Assert.Empty(result.NotFound);
+
+        var inst = Assert.Single(ReloadStructList(path, npcFk).Structs);
+        Assert.Equal(42, inst.Members.OfType<IScriptIntPropertyGetter>().First(p => p.Name == "Qty").Data);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadArrayOfStruct_AddsElement()
+    {
+        var (path, npcFk, fixture) = BuildStructListFixture("vmad-structlist-add");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        // Original list has one element; restage with a second (cloned-shape) element appended.
+        var json = """[[{"name":"Qty","type":"Int","intValue":7}],[{"name":"Qty","type":"Int","intValue":0}]]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Items", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Items", result.Applied);
+
+        var structs = ReloadStructList(path, npcFk).Structs;
+        Assert.Equal(2, structs.Count);
+        Assert.Equal(7, structs[0].Members.OfType<IScriptIntPropertyGetter>().First(p => p.Name == "Qty").Data);
+        Assert.Equal(0, structs[1].Members.OfType<IScriptIntPropertyGetter>().First(p => p.Name == "Qty").Data);
+    }
+
+    // ---- Round-trip byte-stability ----
+
+    [Fact]
+    public async Task SaveAsync_VmadStructRoundTrip_IsByteStable()
+    {
+        // Two identical fixtures: one saved untouched (Mutagen passthrough), one with the struct
+        // restaged from its own classifier-derived Raw value. Our rebuild must match byte-for-byte.
+        static (string path, FormKey npc, PluginFixtureData data) BuildRich(string prefix)
+        {
+            FormKey npcFk = default, targetFk = default;
+            var fixture = new PluginFixtureBuilder(prefix)
+                .WithPlugin("VmadWrite.esp", mod =>
+                {
+                    var target = mod.Npcs.AddNew("RefTarget");
+                    targetFk = target.FormKey;
+                    var npc = mod.Npcs.AddNew("RichStructNpc");
+                    npcFk = npc.FormKey;
+
+                    var vmad = new VirtualMachineAdapter();
+                    var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
+                    var structProp = new ScriptStructProperty { Name = "Config" };
+                    var wrapper = new ScriptEntry();
+                    wrapper.Properties.Add(new ScriptFloatProperty { Name = "Factor", Data = 1.5f });
+                    wrapper.Properties.Add(new ScriptIntProperty { Name = "Count", Data = 3 });
+                    var objMember = new ScriptObjectProperty { Name = "Ref", Alias = -1 };
+                    objMember.Object.SetTo(targetFk);
+                    wrapper.Properties.Add(objMember);
+                    var inner = new ScriptStructProperty { Name = "Inner" };
+                    var innerWrapper = new ScriptEntry();
+                    innerWrapper.Properties.Add(new ScriptIntProperty { Name = "Depth", Data = 42 });
+                    inner.Members.Add(innerWrapper);
+                    wrapper.Properties.Add(inner);
+                    structProp.Members.Add(wrapper);
+                    script.Properties.Add(structProp);
+                    vmad.Scripts.Add(script);
+                    npc.VirtualMachineAdapter = vmad;
+                })
+                .Build();
+            return (Path.Combine(fixture.DataFolder, "VmadWrite.esp"), npcFk, fixture);
+        }
+
+        var (pathA, npcA, fxA) = BuildRich("vmad-bytes-a");
+        var (pathB, npcB, fxB) = BuildRich("vmad-bytes-b");
+        using var _a = fxA;
+        using var _b = fxB;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        // Derive the struct's Raw subtree the way the compare endpoint does.
+        var ddl = new TableDdlBuilder(_reflector);
+        using var repo = new DuckDbRecordRepository(_reflector, ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        var modPath = new ModPath(ModKey.FromFileName("VmadWrite.esp"), pathA);
+        repo.Index((IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4), 0);
+        repo.UpdateWinners();
+        var vmadData = repo.GetVmad(npcA.ToString(), "VmadWrite.esp");
+        var compare = VmadConflictClassifier.Classify([new VmadPluginInput("VmadWrite.esp", 0, vmadData)]);
+        var rawConfig = compare.Compare.Scripts[0].Properties.First(p => p.Name == "Config").Raw!["VmadWrite.esp"];
+
+        // A: passthrough save. B: restage the struct from its own Raw.
+        await writer.SaveAsync(pathA, [], GameRelease.Fallout4);
+        var resultB = await writer.SaveAsync(pathB,
+            [MakeVmadChange(npcB, @"VMAD\DefaultScript\Config", JsonSerializer.Serialize(rawConfig, _wire))],
+            GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", resultB.Applied);   // restage actually ran
+        Assert.Equal(await File.ReadAllBytesAsync(pathA), await File.ReadAllBytesAsync(pathB));
+    }
+
+    // ---- Struct member type coverage (Bool, String, Object alias, invalid nodes) ----
+
+    [Fact]
+    public async Task SaveAsync_VmadStructBoolMember_WritesBoolValue()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-bool");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        var json = """[{"name":"Flag","type":"Bool","boolValue":true}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.Applied);
+        var members = Assert.Single(ReloadStruct(path, npcFk).Members).Properties;
+        Assert.True(members.OfType<IScriptBoolPropertyGetter>().First(p => p.Name == "Flag").Data);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructStringMember_WritesStringValue()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-string");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        var json = """[{"name":"Label","type":"String","stringValue":"hello"}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.Applied);
+        var members = Assert.Single(ReloadStruct(path, npcFk).Members).Properties;
+        Assert.Equal("hello", members.OfType<IScriptStringPropertyGetter>().First(p => p.Name == "Label").Data);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructObjectMember_MissingAlias_DefaultsToZero()
+    {
+        FormKey targetFk = default;
+        using var fixture = new PluginFixtureBuilder("vmad-struct-obj-alias")
+            .WithPlugin("VmadWrite.esp", mod =>
+            {
+                var target = mod.Npcs.AddNew("ObjTarget");
+                targetFk = target.FormKey;
+                var npc = mod.Npcs.AddNew("ObjAlias");
+                var vmad = new VirtualMachineAdapter();
+                var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
+                var structProp = new ScriptStructProperty { Name = "Config" };
+                var wrapper = new ScriptEntry();
+                var obj = new ScriptObjectProperty { Name = "Ref", Alias = 5 };
+                obj.Object.SetTo(target.FormKey);
+                wrapper.Properties.Add(obj);
+                structProp.Members.Add(wrapper);
+                script.Properties.Add(structProp);
+                vmad.Scripts.Add(script);
+                npc.VirtualMachineAdapter = vmad;
+            })
+            .Build();
+
+        var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
+        var npcFk = Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("VmadWrite.esp"), path), Fallout4Release.Fallout4)
+            .Npcs.First(n => n.EditorID == "ObjAlias").FormKey;
+
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        // No "aliasValue" key — should default alias to 0
+        var json = $$"""[{"name":"Ref","type":"Object","formKeyValue":"{{targetFk}}"}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.Applied);
+        var members = Assert.Single(ReloadNpc(path, npcFk).VirtualMachineAdapter!.Scripts
+            .First(s => s.Name == "DefaultScript").Properties
+            .OfType<IScriptStructPropertyGetter>().First(p => p.Name == "Config").Members).Properties;
+        Assert.Equal((short)0, members.OfType<IScriptObjectPropertyGetter>().First(p => p.Name == "Ref").Alias);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructMember_InvalidFormKey_ReturnsNotFound()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-badfk");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        var json = """[{"name":"Ref","type":"Object","formKeyValue":"not-a-formkey"}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.NotFound);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructMember_InvalidNodeType_ReturnsNotFound()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-badtype");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        // Missing name field → TryBuildMemberProperty returns false
+        var json = """[{"type":"Int","intValue":1}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.NotFound);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructMember_UnrecognizedType_ReturnsNotFound()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-unknowntype");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        // Type "Unknown" hits the default: return false branch
+        var json = """[{"name":"X","type":"Unknown"}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.NotFound);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructMember_NonArrayMembers_ReturnsNotFound()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-nonarray");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        // Struct member with "members" as a string (not array) → TryBuildMembers returns false
+        var json = """[{"name":"Inner","type":"Struct","members":"oops"}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.NotFound);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructObjectMember_NonNumberAlias_DefaultsToZero()
+    {
+        // aliasValue present but is a string — not a Number → condition false → alias=0
+        FormKey targetFk = default, npcFk = default;
+        using var fixture = new PluginFixtureBuilder("vmad-struct-alias-str")
+            .WithPlugin("VmadWrite.esp", mod =>
+            {
+                var target = mod.Npcs.AddNew("ObjTarget2"); targetFk = target.FormKey;
+                var npc = mod.Npcs.AddNew("StructNpcAlias"); npcFk = npc.FormKey;
+                var vmad = new VirtualMachineAdapter();
+                var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
+                var structProp = new ScriptStructProperty { Name = "Config" };
+                var wrapper = new ScriptEntry();
+                var obj = new ScriptObjectProperty { Name = "Ref", Alias = 5 };
+                obj.Object.SetTo(target.FormKey);
+                wrapper.Properties.Add(obj);
+                structProp.Members.Add(wrapper);
+                script.Properties.Add(structProp);
+                vmad.Scripts.Add(script);
+                npc.VirtualMachineAdapter = vmad;
+            })
+            .Build();
+
+        var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var json = $$"""[{"name":"Ref","type":"Object","formKeyValue":"{{targetFk}}","aliasValue":"five"}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.Applied);
+        var members = Assert.Single(ReloadNpc(path, npcFk).VirtualMachineAdapter!.Scripts
+            .First(s => s.Name == "DefaultScript").Properties
+            .OfType<IScriptStructPropertyGetter>().First(p => p.Name == "Config").Members).Properties;
+        Assert.Equal((short)0, members.OfType<IScriptObjectPropertyGetter>().First(p => p.Name == "Ref").Alias);
     }
 
     // ---- Record with no VMAD → NotFound ----

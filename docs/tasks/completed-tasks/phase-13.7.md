@@ -1,6 +1,6 @@
 # Phase 13.7 — VMAD Struct & ArrayOfStruct Editing
 
-**Status: Not Started** · Parent: [phase-13](phase-13.md) · Depends on: 13.5 · **Model: Opus** *(hardest editing subphase; recursion on both ends + the shared `VmadJson` (de)serializer lynchpin)*
+**Status: Complete** · Parent: [phase-13](phase-13.md) · Depends on: 13.5 · **Model: Opus** *(hardest editing subphase; recursion on both ends + the shared `VmadJson` (de)serializer lynchpin)*
 
 *Goal: Struct (type 7) and ArrayOfStruct (type 17) VMAD properties are editable — their nested named members (and members-of-members, recursively) can be edited, added, and removed.*
 
@@ -52,4 +52,4 @@ Frontend (`npm run test:unit`):
 
 ## Proof
 
-*To be filled in on completion. Paste `dotnet test` + `npm run test:unit` output and commit hash.*
+Backend: 676 passed, 0 failed (`dotnet test -v minimal`). Frontend: 245 unit + 4 integration passed. Commit: `ec9ffcc` (mutation triage) on branch `phase-13.7-vmad-struct-editing`, merged into `main`.

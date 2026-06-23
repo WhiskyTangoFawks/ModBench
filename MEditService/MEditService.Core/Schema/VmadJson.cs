@@ -35,7 +35,8 @@ public sealed record VmadStructEntry(
 public sealed record VmadStructInstance(
     VmadPropertyNode[] Members);
 
-// A single scalar property within a struct member tree.
+// A single property within a struct member tree. Recursive: a member may itself be a
+// Struct (Members) — the (de)serializer descends to arbitrary depth.
 public sealed record VmadPropertyNode(
     string Name,
     string Type,
@@ -45,4 +46,5 @@ public sealed record VmadPropertyNode(
     float? FloatValue = null,
     string? StringValue = null,
     string? FormKeyValue = null,
-    short? AliasValue = null);
+    short? AliasValue = null,
+    VmadPropertyNode[]? Members = null);

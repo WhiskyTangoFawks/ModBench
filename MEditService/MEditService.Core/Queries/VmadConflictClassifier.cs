@@ -88,8 +88,40 @@ public static class VmadConflictClassifier
         conflict.Add(cellStates);
 
         var children = BuildChildren(kind, perPlugin, inputs, masterPlugin, conflict);
-        return new VmadPropertyDiff(name, kind, values, types, winner, cellStates, children);
+        var raw = BuildRaw(kind, perPlugin);
+        return new VmadPropertyDiff(name, kind, values, types, winner, cellStates, children, raw);
     }
+
+    // Per-plugin editable subtree for struct/structList in the VmadPropertyNode shape the apply
+    // path consumes — frontend patches one member by path and restages the whole value.
+    private static Dictionary<string, object?>? BuildRaw(
+        string kind, Dictionary<string, VmadPropertyValue?> perPlugin) => kind switch
+        {
+            "struct" => perPlugin
+                .Where(kv => kv.Value?.Members != null)
+                .ToDictionary(kv => kv.Key, kv => (object?)ToNodes(kv.Value!.Members!)),
+            "structList" => perPlugin
+                .Where(kv => kv.Value?.StructList != null)
+                .ToDictionary(kv => kv.Key, kv => (object?)kv.Value!.StructList!
+                    .Select(inst => (IReadOnlyList<Schema.VmadPropertyNode>)ToNodes(inst))
+                    .ToList()),
+            _ => null,
+        };
+
+    private static Schema.VmadPropertyNode[] ToNodes(IReadOnlyList<VmadNamedValue> members) =>
+        members.Select(m => ToNode(m.Name, m.Value)).ToArray();
+
+    private static Schema.VmadPropertyNode ToNode(string name, VmadPropertyValue v) => v.Type switch
+    {
+        "Bool" => new(name, "Bool", v.Flags, BoolValue: v.Value as bool?),
+        "Int" => new(name, "Int", v.Flags, IntValue: v.Value as int?),
+        "Float" => new(name, "Float", v.Flags, FloatValue: v.Value as float?),
+        "String" => new(name, "String", v.Flags, StringValue: v.Value as string),
+        "Object" => new(name, "Object", v.Flags, FormKeyValue: v.Value as string, AliasValue: v.Alias),
+        "Struct" => new(name, "Struct", v.Flags,
+            Members: v.Members is null ? null : ToNodes(v.Members)),
+        _ => new(name, v.Type, v.Flags),
+    };
 
     private static List<VmadPropertyDiff>? BuildChildren(
         string kind,

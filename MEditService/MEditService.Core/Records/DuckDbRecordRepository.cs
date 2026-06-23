@@ -393,6 +393,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         "Float" => new VmadPropertyValue(n.Type, n.Flags, n.FloatValue),
         "String" => new VmadPropertyValue(n.Type, n.Flags, n.StringValue),
         "Object" => new VmadPropertyValue(n.Type, n.Flags, n.FormKeyValue, n.AliasValue),
+        "Struct" => new VmadPropertyValue(n.Type, n.Flags, null, Members: MapNodes(n.Members ?? [])),
         _ => new VmadPropertyValue(n.Type, n.Flags, null),
     };
 

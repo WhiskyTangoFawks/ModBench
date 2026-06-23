@@ -53,6 +53,7 @@ export interface VmadPropertyDiff {
   winnerPlugin: string;
   cellStates: Record<string, ConflictThis>;
   children?: VmadPropertyDiff[] | null;    // struct members (by name) / array elements (by index)
+  raw?: Record<string, unknown> | null;    // struct/structList only: per-plugin editable node subtree (atomic column)
 }
 
 export interface VmadScriptDiff {

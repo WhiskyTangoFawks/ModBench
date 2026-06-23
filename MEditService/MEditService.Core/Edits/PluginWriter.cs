@@ -299,6 +299,8 @@ public sealed class PluginWriter : IPluginWriter
             case ScriptFloatListProperty p: return RebuildList(p.Data, change.NewValue, el => el.GetSingle());
             case ScriptStringListProperty p: return RebuildList(p.Data, change.NewValue, el => el.GetString()!);
             case ScriptObjectListProperty p: return ApplyObjectListProperty(p, change.NewValue);
+            case ScriptStructProperty p: return ApplyStructProperty(p, change.NewValue);
+            case ScriptStructListProperty p: return ApplyStructListProperty(p, change.NewValue);
             case ScriptVariableProperty:
             case ScriptVariableListProperty:
                 return ApplyOutcome.ReadOnly;
@@ -358,6 +360,99 @@ public sealed class PluginWriter : IPluginWriter
         foreach (var obj in built) p.Objects.Add(obj);
         return ApplyOutcome.Applied;
     }
+
+    private static ApplyOutcome ApplyStructProperty(ScriptStructProperty p, JsonElement members)
+    {
+        if (members.ValueKind != JsonValueKind.Array || !TryBuildMembers(members, out var built))
+            return ApplyOutcome.NotFound;
+        // A Struct's fields live inside a single unnamed ScriptEntry wrapper in the binary format.
+        var wrapper = new ScriptEntry();
+        foreach (var m in built) wrapper.Properties.Add(m);
+        p.Members.Clear();
+        p.Members.Add(wrapper);
+        return ApplyOutcome.Applied;
+    }
+
+    private static ApplyOutcome ApplyStructListProperty(ScriptStructListProperty p, JsonElement instances)
+    {
+        if (instances.ValueKind != JsonValueKind.Array) return ApplyOutcome.NotFound;
+        var built = new List<ScriptEntryStructs>();
+        foreach (var inst in instances.EnumerateArray())
+        {
+            if (inst.ValueKind != JsonValueKind.Array || !TryBuildMembers(inst, out var members))
+                return ApplyOutcome.NotFound;
+            var entry = new ScriptEntryStructs();
+            foreach (var m in members) entry.Members.Add(m);
+            built.Add(entry);
+        }
+        p.Structs.Clear();
+        foreach (var entry in built) p.Structs.Add(entry);
+        return ApplyOutcome.Applied;
+    }
+
+    private static bool TryBuildMembers(JsonElement array, out List<ScriptProperty> built)
+    {
+        built = [];
+        if (array.ValueKind != JsonValueKind.Array) return false;
+        foreach (var el in array.EnumerateArray())
+        {
+            if (!TryBuildMemberProperty(el, out var prop)) return false;
+            built.Add(prop);
+        }
+        return true;
+    }
+
+    private static bool TryBuildMemberProperty(JsonElement node, out ScriptProperty prop)
+    {
+        prop = null!;
+        if (node.ValueKind != JsonValueKind.Object
+            || !node.TryGetProperty("name", out var nameEl) || nameEl.GetString() is not string name
+            || !node.TryGetProperty("type", out var typeEl) || typeEl.GetString() is not string type)
+            return false;
+
+        var flags = ParseMemberFlags(node);
+        switch (type)
+        {
+            case "Bool" when node.TryGetProperty("boolValue", out var v):
+                prop = new ScriptBoolProperty { Name = name, Flags = flags, Data = v.GetBoolean() }; break;
+            case "Int" when node.TryGetProperty("intValue", out var v):
+                prop = new ScriptIntProperty { Name = name, Flags = flags, Data = v.GetInt32() }; break;
+            case "Float" when node.TryGetProperty("floatValue", out var v):
+                prop = new ScriptFloatProperty { Name = name, Flags = flags, Data = v.GetSingle() }; break;
+            case "String" when node.TryGetProperty("stringValue", out var v):
+                prop = new ScriptStringProperty { Name = name, Flags = flags, Data = v.GetString()! }; break;
+            case "Object":
+                // Struct member Object nodes carry formKeyValue/aliasValue (the VmadPropertyNode
+                // wire shape), distinct from the {formKey, alias} shape used for top-level edits.
+                if (!node.TryGetProperty("formKeyValue", out var fkEl) || fkEl.GetString() is not string fkStr
+                    || !FormKey.TryFactory(fkStr, out var fk))
+                    return false;
+                var alias = node.TryGetProperty("aliasValue", out var aEl) && aEl.ValueKind == JsonValueKind.Number
+                    ? aEl.GetInt16()
+                    : (short)0;
+                var obj = new ScriptObjectProperty { Name = name, Flags = flags, Alias = alias };
+                obj.Object.SetTo(fk);
+                prop = obj;
+                break;
+            case "Struct" when node.TryGetProperty("members", out var nested):
+                if (!TryBuildMembers(nested, out var nestedBuilt)) return false;
+                var wrapper = new ScriptEntry();
+                foreach (var m in nestedBuilt) wrapper.Properties.Add(m);
+                var sp = new ScriptStructProperty { Name = name, Flags = flags };
+                sp.Members.Add(wrapper);
+                prop = sp;
+                break;
+            default:
+                return false;
+        }
+        return true;
+    }
+
+    private static ScriptProperty.Flag ParseMemberFlags(JsonElement node) =>
+        node.TryGetProperty("flags", out var f) && f.GetString() is string s
+            && Enum.TryParse<ScriptProperty.Flag>(s, out var parsed)
+            ? parsed
+            : 0;
 
     internal static string CreateBackup(string pluginPath, string? timestamp = null)
     {

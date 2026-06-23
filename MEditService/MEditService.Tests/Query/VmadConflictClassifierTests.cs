@@ -1,5 +1,6 @@
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 
 namespace MEditService.Tests.Query;
 
@@ -102,6 +103,44 @@ public sealed class VmadConflictClassifierTests
         var factor = config.Children!.First(c => c.Name == "Factor");
         Assert.Equal(ConflictThis.Override, scale.CellStates["B.esp"]);          // differing member
         Assert.Equal(ConflictThis.IdenticalToMaster, factor.CellStates["B.esp"]); // benign sibling
+    }
+
+    [Fact]
+    public void Classify_StructProperty_CarriesPerPluginRawSubtree()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local",
+            Prop("Config", StructVal(Prop("Factor", Scalar("Float", 1.5f))))));
+
+        var result = VmadConflictClassifier.Classify([a]);
+
+        var config = Assert.Single(result.Compare.Scripts[0].Properties);
+        Assert.Equal("struct", config.Kind);
+        Assert.NotNull(config.Raw);
+
+        var nodes = Assert.IsAssignableFrom<IReadOnlyList<VmadPropertyNode>>(config.Raw!["A.esp"]);
+        var factor = Assert.Single(nodes);
+        Assert.Equal("Factor", factor.Name);
+        Assert.Equal("Float", factor.Type);
+        Assert.Equal(1.5f, factor.FloatValue);
+    }
+
+    [Fact]
+    public void Classify_ArrayOfStructProperty_CarriesPerPluginRawInstances()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local",
+            Prop("Items", StructListVal(
+                [Prop("Qty", Scalar("Int", 7))],
+                [Prop("Qty", Scalar("Int", 9))]))));
+
+        var result = VmadConflictClassifier.Classify([a]);
+
+        var items = Assert.Single(result.Compare.Scripts[0].Properties);
+        Assert.Equal("structList", items.Kind);
+
+        var instances = Assert.IsAssignableFrom<IReadOnlyList<IReadOnlyList<VmadPropertyNode>>>(items.Raw!["A.esp"]);
+        Assert.Equal(2, instances.Count);
+        Assert.Equal(7, Assert.Single(instances[0]).IntValue);
+        Assert.Equal(9, Assert.Single(instances[1]).IntValue);
     }
 
     [Fact]
@@ -340,6 +379,42 @@ public sealed class VmadConflictClassifierTests
         var v = new VmadPropertyValue("ArrayOfStruct", "", null,
             StructList: [(IReadOnlyList<VmadNamedValue>)inst]);
         Assert.Equal("ArrayOfStruct[{A=Int|7,Z=Int|9}]", VmadConflictClassifier.Canon(v));
+    }
+
+    [Fact]
+    public void Classify_StructPropertyWithNullMembers_RawSubtreeExcludesPlugin()
+    {
+        // A struct VmadPropertyValue with null Members cannot emit a Raw subtree entry.
+        // ToNode must return null Members rather than calling ToNodes(null).
+        var nullMembersVal = new VmadPropertyValue("Struct", "", null, Members: null);
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Config", nullMembersVal)));
+
+        var result = VmadConflictClassifier.Classify([a]);
+
+        var config = Assert.Single(result.Compare.Scripts[0].Properties);
+        Assert.Equal("struct", config.Kind);
+        // Members null → BuildRaw filters it out (Where kv.Value?.Members != null), leaving empty dict
+        Assert.NotNull(config.Raw);
+        Assert.Empty(config.Raw);
+    }
+
+    [Fact]
+    public void Classify_StructPropertyWithNullMembers_ToNodeEmitsNullMembers()
+    {
+        // Classify a plugin that has a Struct member nested inside another struct, where
+        // the inner Struct's Members is null — ToNode must emit null Members rather than crash.
+        var innerNull = new VmadPropertyValue("Struct", "", null, Members: null);
+        var outer = StructVal(Prop("Inner", innerNull));
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Config", outer)));
+
+        var result = VmadConflictClassifier.Classify([a]);
+
+        var config = Assert.Single(result.Compare.Scripts[0].Properties);
+        var nodes = Assert.IsAssignableFrom<IReadOnlyList<VmadPropertyNode>>(config.Raw!["A.esp"]);
+        var inner = Assert.Single(nodes);
+        Assert.Equal("Inner", inner.Name);
+        Assert.Equal("Struct", inner.Type);
+        Assert.Null(inner.Members);
     }
 
     [Fact]

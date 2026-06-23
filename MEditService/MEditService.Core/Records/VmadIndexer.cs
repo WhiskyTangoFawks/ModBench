@@ -118,11 +118,16 @@ internal sealed class VmadIndexer(
             case IScriptStructPropertyGetter p:
                 AppendPropRow(ctx, p, "Struct",
                     new VmadValue(StructJson: SerializeStruct(p.Members)));
+                CollectMemberRefs(ctx, p.Members.SelectMany(m => m.Properties),
+                    $@"VMAD\{ctx.ScriptName}\{property.Name}");
                 break;
 
             case IScriptStructListPropertyGetter p:
                 AppendPropRow(ctx, p, "ArrayOfStruct",
                     new VmadValue(StructJson: SerializeStructList(p.Structs)));
+                for (int i = 0; i < p.Structs.Count; i++)
+                    CollectMemberRefs(ctx, p.Structs[i].Members,
+                        $@"VMAD\{ctx.ScriptName}\{property.Name}[{i}]");
                 break;
 
             default:
@@ -142,6 +147,35 @@ internal sealed class VmadIndexer(
             var fk = objects[i].Object.FormKey.ToString();
             AppendItemRow(ctx, propName, i, "ArrayOfObject", new VmadValue(FormKey: fk, Alias: objects[i].Alias));
             refs.Add(new FormRef(ctx.FormKey, fk, $@"VMAD\{ctx.ScriptName}\{propName}[{i}]", ctx.RecordType, null));
+        }
+    }
+
+    // Recursively collects Object FormKeys nested in struct members so they appear in the
+    // "Referenced By" tab. Mirrors the path conventions used for top-level VMAD Object refs.
+    private void CollectMemberRefs(PropContext ctx, IEnumerable<IScriptPropertyGetter> members, string pathPrefix)
+    {
+        foreach (var m in members)
+        {
+            var path = $@"{pathPrefix}\{m.Name}";
+            switch (m)
+            {
+                case IScriptObjectPropertyGetter o when !o.Object.IsNull:
+                    refs.Add(new FormRef(ctx.FormKey, o.Object.FormKey.ToString(), path, ctx.RecordType, null));
+                    break;
+                case IScriptObjectListPropertyGetter ol:
+                    for (int i = 0; i < ol.Objects.Count; i++)
+                        if (!ol.Objects[i].Object.IsNull)
+                            refs.Add(new FormRef(ctx.FormKey, ol.Objects[i].Object.FormKey.ToString(),
+                                $"{path}[{i}]", ctx.RecordType, null));
+                    break;
+                case IScriptStructPropertyGetter st:
+                    CollectMemberRefs(ctx, st.Members.SelectMany(w => w.Properties), path);
+                    break;
+                case IScriptStructListPropertyGetter sl:
+                    for (int i = 0; i < sl.Structs.Count; i++)
+                        CollectMemberRefs(ctx, sl.Structs[i].Members, $"{path}[{i}]");
+                    break;
+            }
         }
     }
 
@@ -225,6 +259,8 @@ internal sealed class VmadIndexer(
         IScriptFloatPropertyGetter f => new(f.Name, "Float", FlagsString(f.Flags), FloatValue: f.Data),
         IScriptStringPropertyGetter s => new(s.Name, "String", FlagsString(s.Flags), StringValue: s.Data),
         IScriptObjectPropertyGetter o => new(o.Name, "Object", FlagsString(o.Flags), FormKeyValue: o.Object.FormKey.ToString(), AliasValue: o.Alias),
+        IScriptStructPropertyGetter st => new(st.Name, "Struct", FlagsString(st.Flags),
+            Members: st.Members.SelectMany(m => m.Properties).Select(ToPropertyNode).ToArray()),
         _ => new(p.Name, p.GetType().Name, FlagsString(p.Flags))
     };
 
