@@ -393,6 +393,7 @@ public sealed class PluginWriter : IPluginWriter
     private static bool TryBuildMembers(JsonElement array, out List<ScriptProperty> built)
     {
         built = [];
+        if (array.ValueKind != JsonValueKind.Array) return false;
         foreach (var el in array.EnumerateArray())
         {
             if (!TryBuildMemberProperty(el, out var prop)) return false;
@@ -433,7 +434,7 @@ public sealed class PluginWriter : IPluginWriter
                 obj.Object.SetTo(fk);
                 prop = obj;
                 break;
-            case "Struct" when node.TryGetProperty("members", out var nested) && nested.ValueKind == JsonValueKind.Array:
+            case "Struct" when node.TryGetProperty("members", out var nested):
                 if (!TryBuildMembers(nested, out var nestedBuilt)) return false;
                 var wrapper = new ScriptEntry();
                 foreach (var m in nestedBuilt) wrapper.Properties.Add(m);
@@ -448,7 +449,7 @@ public sealed class PluginWriter : IPluginWriter
     }
 
     private static ScriptProperty.Flag ParseMemberFlags(JsonElement node) =>
-        node.TryGetProperty("flags", out var f) && f.GetString() is string s && s.Length > 0
+        node.TryGetProperty("flags", out var f) && f.GetString() is string s
             && Enum.TryParse<ScriptProperty.Flag>(s, out var parsed)
             ? parsed
             : 0;

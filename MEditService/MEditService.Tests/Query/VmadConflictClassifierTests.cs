@@ -382,6 +382,42 @@ public sealed class VmadConflictClassifierTests
     }
 
     [Fact]
+    public void Classify_StructPropertyWithNullMembers_RawSubtreeExcludesPlugin()
+    {
+        // A struct VmadPropertyValue with null Members cannot emit a Raw subtree entry.
+        // ToNode must return null Members rather than calling ToNodes(null).
+        var nullMembersVal = new VmadPropertyValue("Struct", "", null, Members: null);
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Config", nullMembersVal)));
+
+        var result = VmadConflictClassifier.Classify([a]);
+
+        var config = Assert.Single(result.Compare.Scripts[0].Properties);
+        Assert.Equal("struct", config.Kind);
+        // Members null → BuildRaw filters it out (Where kv.Value?.Members != null), leaving empty dict
+        Assert.NotNull(config.Raw);
+        Assert.Empty(config.Raw);
+    }
+
+    [Fact]
+    public void Classify_StructPropertyWithNullMembers_ToNodeEmitsNullMembers()
+    {
+        // Classify a plugin that has a Struct member nested inside another struct, where
+        // the inner Struct's Members is null — ToNode must emit null Members rather than crash.
+        var innerNull = new VmadPropertyValue("Struct", "", null, Members: null);
+        var outer = StructVal(Prop("Inner", innerNull));
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Config", outer)));
+
+        var result = VmadConflictClassifier.Classify([a]);
+
+        var config = Assert.Single(result.Compare.Scripts[0].Properties);
+        var nodes = Assert.IsAssignableFrom<IReadOnlyList<VmadPropertyNode>>(config.Raw!["A.esp"]);
+        var inner = Assert.Single(nodes);
+        Assert.Equal("Inner", inner.Name);
+        Assert.Equal("Struct", inner.Type);
+        Assert.Null(inner.Members);
+    }
+
+    [Fact]
     public void Canon_ScalarTypes_DoNotGetAliasSuffix()
     {
         // Verifies the conditional is v.Type == "Object" (not always-true): non-Object scalars

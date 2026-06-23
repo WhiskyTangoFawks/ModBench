@@ -562,6 +562,178 @@ public class PluginWriterVmadTests
         Assert.Equal(await File.ReadAllBytesAsync(pathA), await File.ReadAllBytesAsync(pathB));
     }
 
+    // ---- Struct member type coverage (Bool, String, Object alias, invalid nodes) ----
+
+    [Fact]
+    public async Task SaveAsync_VmadStructBoolMember_WritesBoolValue()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-bool");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        var json = """[{"name":"Flag","type":"Bool","boolValue":true}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.Applied);
+        var members = Assert.Single(ReloadStruct(path, npcFk).Members).Properties;
+        Assert.True(members.OfType<IScriptBoolPropertyGetter>().First(p => p.Name == "Flag").Data);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructStringMember_WritesStringValue()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-string");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        var json = """[{"name":"Label","type":"String","stringValue":"hello"}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.Applied);
+        var members = Assert.Single(ReloadStruct(path, npcFk).Members).Properties;
+        Assert.Equal("hello", members.OfType<IScriptStringPropertyGetter>().First(p => p.Name == "Label").Data);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructObjectMember_MissingAlias_DefaultsToZero()
+    {
+        FormKey targetFk = default;
+        using var fixture = new PluginFixtureBuilder("vmad-struct-obj-alias")
+            .WithPlugin("VmadWrite.esp", mod =>
+            {
+                var target = mod.Npcs.AddNew("ObjTarget");
+                targetFk = target.FormKey;
+                var npc = mod.Npcs.AddNew("ObjAlias");
+                var vmad = new VirtualMachineAdapter();
+                var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
+                var structProp = new ScriptStructProperty { Name = "Config" };
+                var wrapper = new ScriptEntry();
+                var obj = new ScriptObjectProperty { Name = "Ref", Alias = 5 };
+                obj.Object.SetTo(target.FormKey);
+                wrapper.Properties.Add(obj);
+                structProp.Members.Add(wrapper);
+                script.Properties.Add(structProp);
+                vmad.Scripts.Add(script);
+                npc.VirtualMachineAdapter = vmad;
+            })
+            .Build();
+
+        var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
+        var npcFk = Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("VmadWrite.esp"), path), Fallout4Release.Fallout4)
+            .Npcs.First(n => n.EditorID == "ObjAlias").FormKey;
+
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        // No "aliasValue" key — should default alias to 0
+        var json = $$"""[{"name":"Ref","type":"Object","formKeyValue":"{{targetFk}}"}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.Applied);
+        var members = Assert.Single(ReloadNpc(path, npcFk).VirtualMachineAdapter!.Scripts
+            .First(s => s.Name == "DefaultScript").Properties
+            .OfType<IScriptStructPropertyGetter>().First(p => p.Name == "Config").Members).Properties;
+        Assert.Equal((short)0, members.OfType<IScriptObjectPropertyGetter>().First(p => p.Name == "Ref").Alias);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructMember_InvalidFormKey_ReturnsNotFound()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-badfk");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        var json = """[{"name":"Ref","type":"Object","formKeyValue":"not-a-formkey"}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.NotFound);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructMember_InvalidNodeType_ReturnsNotFound()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-badtype");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        // Missing name field → TryBuildMemberProperty returns false
+        var json = """[{"type":"Int","intValue":1}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.NotFound);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructMember_UnrecognizedType_ReturnsNotFound()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-unknowntype");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        // Type "Unknown" hits the default: return false branch
+        var json = """[{"name":"X","type":"Unknown"}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.NotFound);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructMember_NonArrayMembers_ReturnsNotFound()
+    {
+        var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-nonarray");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        // Struct member with "members" as a string (not array) → TryBuildMembers returns false
+        var json = """[{"name":"Inner","type":"Struct","members":"oops"}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.NotFound);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadStructObjectMember_NonNumberAlias_DefaultsToZero()
+    {
+        // aliasValue present but is a string — not a Number → condition false → alias=0
+        FormKey targetFk = default, npcFk = default;
+        using var fixture = new PluginFixtureBuilder("vmad-struct-alias-str")
+            .WithPlugin("VmadWrite.esp", mod =>
+            {
+                var target = mod.Npcs.AddNew("ObjTarget2"); targetFk = target.FormKey;
+                var npc = mod.Npcs.AddNew("StructNpcAlias"); npcFk = npc.FormKey;
+                var vmad = new VirtualMachineAdapter();
+                var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
+                var structProp = new ScriptStructProperty { Name = "Config" };
+                var wrapper = new ScriptEntry();
+                var obj = new ScriptObjectProperty { Name = "Ref", Alias = 5 };
+                obj.Object.SetTo(target.FormKey);
+                wrapper.Properties.Add(obj);
+                structProp.Members.Add(wrapper);
+                script.Properties.Add(structProp);
+                vmad.Scripts.Add(script);
+                npc.VirtualMachineAdapter = vmad;
+            })
+            .Build();
+
+        var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var json = $$"""[{"name":"Ref","type":"Object","formKeyValue":"{{targetFk}}","aliasValue":"five"}]""";
+        var result = await writer.SaveAsync(path,
+            [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Config", result.Applied);
+        var members = Assert.Single(ReloadNpc(path, npcFk).VirtualMachineAdapter!.Scripts
+            .First(s => s.Name == "DefaultScript").Properties
+            .OfType<IScriptStructPropertyGetter>().First(p => p.Name == "Config").Members).Properties;
+        Assert.Equal((short)0, members.OfType<IScriptObjectPropertyGetter>().First(p => p.Name == "Ref").Alias);
+    }
+
     // ---- Record with no VMAD → NotFound ----
 
     [Fact]
