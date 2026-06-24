@@ -1,6 +1,6 @@
 # Phase 13.8.1 — VMAD Foundation + Add/Remove Property
 
-**Status: Not Started** · Parent: [phase-13.8](phase-13.8.md) · Depends on: 13.5 · **Model: Opus**
+**Status: Complete** · Parent: [phase-13.8](phase-13.8.md) · Depends on: 13.5 · **Model: Opus**
 
 *Goal: Establish the `vmad_struct_op` structural-change foundation end-to-end and ship the first two ops — add a property to a script and remove a property. Later sub-phases (13.8.2/3/4) reuse this plumbing.*
 
@@ -53,4 +53,4 @@ Frontend (`npm run test:unit`):
 
 ## Proof
 
-*To be filled in on completion. Paste `dotnet test` + `npm run test:unit` output and commit hash.*
+Commit `8c11851`. Backend `dotnet test`: 683 passed (incl. add/remove-property writer + staging tests). Frontend `npm run test:unit`: 250 passed; integration + build green.

@@ -1,6 +1,6 @@
 # Phase 13.8.3 — VMAD Change Property Type
 
-**Status: Not Started** · Parent: [phase-13.8](phase-13.8.md) · Depends on: 13.8.1 · **Model: Sonnet**
+**Status: Complete** · Parent: [phase-13.8](phase-13.8.md) · Depends on: 13.8.1 · **Model: Sonnet**
 
 *Goal: Change a property's type, resetting its value to the new type's default and preserving Name/Flags (mirrors xEdit `wbScriptPropertyTypeAfterSet`). Reuses the `vmad_struct_op` foundation from 13.8.1.*
 
@@ -31,4 +31,4 @@ Frontend (`npm run test:unit`):
 
 ## Proof
 
-*To be filled in on completion.*
+Commit `c39646c`. Backend `dotnet test`: set_type replaces type with default value + preserves flags. Frontend `npm run test:unit`: type dropdown stages set_type; pending retype renders `→ <Type>`.

@@ -1,6 +1,6 @@
 # Phase 13.8 — VMAD Structural Editing
 
-**Status: Not Started** · Parent: [phase-13](phase-13.md) · Depends on: 13.5 · **Model: Opus**
+**Status: Complete** · Parent: [phase-13](phase-13.md) · Depends on: 13.5 · **Model: Opus**
 
 *Goal: TES5Edit-parity structural operations on VMAD — add/remove a property on a script, add/remove a whole script (including attaching a script to a record that has none), change a property's type, and edit script/property flags.*
 
