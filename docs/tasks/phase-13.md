@@ -86,7 +86,7 @@ Note: the SF engine is **read-only** and does **not** handle Struct nesting. The
 | [13.5](phase-13.5.md) | Frontend scalar editing — per-type edit widgets, pending column, revert | 13.3, 13.4 | Sonnet |
 | [13.6](phase-13.6.md) | Scalar-array editing — `ArrayOf{Int,Float,Bool,String,Object}`, atomic-column model (ADR-0019), full stack | 13.5 | Sonnet |
 | [13.7](phase-13.7.md) | Struct + ArrayOfStruct editing — recursive nested member editor, full stack | 13.5 | **Opus** |
-| [13.8](phase-13.8.md) | Structural ops — add/remove scripts, add/remove properties, change property type, edit flags | 13.5 | **Opus** |
+| [13.8](phase-13.8.md) | Structural ops — add/remove scripts, add/remove properties, change property type, edit flags (split into [13.8.1](phase-13.8.1.md)–[13.8.4](phase-13.8.4.md)) | 13.5 | **Opus** |
 
 *Model column = recommended Claude model for implementing each sub-phase (Opus for the conflict-classification integration and the two recursive/structural editing phases; Sonnet for the well-specified, reuse-heavy, or pattern-mirroring phases). 13.1 and 13.4 are borderline — both are Sonnet-doable but introduce foundations (`VmadJson` serializer; the addressing/apply scheme) that later phases inherit, so consider Opus there if you want to over-invest early.*
 

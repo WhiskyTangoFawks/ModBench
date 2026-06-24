@@ -35,7 +35,8 @@ public sealed class EditOrchestrator : IEditOrchestrator
         string plugin,
         Dictionary<string, JsonElement> fields,
         string source,
-        string? description)
+        string? description,
+        string? changeType = null)
     {
         var (earlyOut, session, recordType) = ValidateEditContext(formKey, plugin);
         if (earlyOut != null) return earlyOut;
@@ -43,6 +44,9 @@ public sealed class EditOrchestrator : IEditOrchestrator
         var groupId = _changes.GetGroupIdForRecord(formKey, plugin);
         if (groupId is not null)
             return new StageEditResult.BlockedByGroup(groupId.Value);
+
+        if (changeType == PendingChangeConstants.VmadStructOpChangeType)
+            return StageVmadStructOps(formKey, plugin, recordType!, fields, source, description);
 
         var readOnlyFields = fields.Keys
             .Where(f => _writer.IsReadOnly(session!.GameRelease, recordType!, f))
@@ -76,6 +80,50 @@ public sealed class EditOrchestrator : IEditOrchestrator
         var createGroupId = _changes.GetCreateGroupIdForAny(distinctRefs);
 
         var staged = _changes.Upsert(formKey, plugin, recordType!, fields, source, description, oldValues, formRefs, groupId: createGroupId);
+        return new StageEditResult.Staged(staged);
+    }
+
+    // Phase 13.8 structural ops: each field value is an op payload { op, ... } rather than a plain
+    // value, so the normal scalar validation/ref-extraction is bypassed in favour of op-aware handling.
+    private StageEditResult StageVmadStructOps(
+        string formKey, string plugin, string recordType,
+        Dictionary<string, JsonElement> fields, string source, string? description)
+    {
+        var vmadData = _query.GetVmad(formKey, plugin);
+        var oldValues = new Dictionary<string, JsonElement>();
+        var formRefs = new List<PendingFormRef>();
+
+        foreach (var (path, op) in fields)
+        {
+            if (op.ValueKind != JsonValueKind.Object
+                || !op.TryGetProperty("op", out var opEl) || opEl.GetString() is not string opName)
+                return new StageEditResult.RecordNotFound();
+
+            // Route by path shape: "VMAD\<ScriptName>" is a script-level op (add/remove script, set
+            // script flags) — staged as-is with no value validation or old-value capture.
+            if (VmadPath.TryParseScript(path, out _))
+                continue;
+
+            if (!VmadPath.TryParse(path, out var scriptName, out var propName))
+                return new StageEditResult.RecordNotFound();
+
+            // add_property targets an existing script — reject early if it's absent.
+            if (opName == "add_property" &&
+                vmadData?.Scripts.Any(s => string.Equals(s.Name, scriptName, StringComparison.OrdinalIgnoreCase)) != true)
+                return new StageEditResult.RecordNotFound();
+
+            // Capture the property's current value (if any) for revert display.
+            if (FindVmadProperty(vmadData, scriptName, propName) is { } prop)
+                oldValues[path] = SerializeVmadOldValue(prop.Value);
+
+            // Register form references carried in the op's value (Object / ArrayOfObject).
+            if (op.TryGetProperty("value", out var value))
+                ExtractVmadValueRefs(path, value, formRefs);
+        }
+
+        var staged = _changes.Upsert(
+            formKey, plugin, recordType, fields, source, description,
+            oldValues, formRefs, changeType: PendingChangeConstants.VmadStructOpChangeType);
         return new StageEditResult.Staged(staged);
     }
 
@@ -440,32 +488,31 @@ public sealed class EditOrchestrator : IEditOrchestrator
         foreach (var (fieldPath, newValue) in fields)
         {
             if (VmadPath.IsVmadPath(fieldPath))
-            {
-                // VMAD Object property: { "formKey": "...", "alias": n }
-                if (newValue.ValueKind == JsonValueKind.Object &&
-                    newValue.TryGetProperty("formKey", out var fkEl) &&
-                    fkEl.ValueKind == JsonValueKind.String &&
-                    fkEl.GetString() is string fk)
-                {
-                    result.Add(new PendingFormRef(fieldPath, fieldPath, fk));
-                }
-                // VMAD ArrayOfObject property: [{ "formKey": "...", "alias": n }, ...]
-                else if (newValue.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var el in newValue.EnumerateArray())
-                    {
-                        if (el.ValueKind == JsonValueKind.Object &&
-                            el.TryGetProperty("formKey", out var elFkEl) &&
-                            elFkEl.GetString() is string elFk)
-                            result.Add(new PendingFormRef(fieldPath, fieldPath, elFk));
-                    }
-                }
-            }
+                ExtractVmadValueRefs(fieldPath, newValue, result);
             else if (colsByName.TryGetValue(fieldPath, out var col))
                 FormRefPathBuilder.Walk(col, _ => (object?)newValue, (path, fk) =>
                     result.Add(new PendingFormRef(fieldPath, path, fk)));
         }
         return result;
+    }
+
+    // Extracts Object / ArrayOfObject FormKey refs from a VMAD value in the { formKey, alias } shape.
+    private static void ExtractVmadValueRefs(string fieldPath, JsonElement value, List<PendingFormRef> into)
+    {
+        if (value.ValueKind == JsonValueKind.Object &&
+            value.TryGetProperty("formKey", out var fkEl) &&
+            fkEl.ValueKind == JsonValueKind.String && fkEl.GetString() is string fk)
+        {
+            into.Add(new PendingFormRef(fieldPath, fieldPath, fk));
+        }
+        else if (value.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var el in value.EnumerateArray())
+                if (el.ValueKind == JsonValueKind.Object &&
+                    el.TryGetProperty("formKey", out var elFkEl) &&
+                    elFkEl.GetString() is string elFk)
+                    into.Add(new PendingFormRef(fieldPath, fieldPath, elFk));
+        }
     }
 
     private (StageEditResult? earlyOut, IGameSession? session, string? recordType) ValidateEditContext(

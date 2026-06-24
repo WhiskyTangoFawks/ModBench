@@ -113,7 +113,7 @@ public static class ChangeEndpoints
         if (s == null) return Results.Problem(NoSessionMessage);
 
         var decoded = Uri.UnescapeDataString(formKey);
-        return orchestrator.StageEdit(decoded, req.Plugin, req.Fields, req.Source ?? "user", req.Description).ToHttpResult();
+        return orchestrator.StageEdit(decoded, req.Plugin, req.Fields, req.Source ?? "user", req.Description, req.ChangeType).ToHttpResult();
     }
 
     private static IResult CopyRecordTo(
@@ -293,7 +293,8 @@ public record PatchRecordRequest(
     string Plugin,
     Dictionary<string, JsonElement> Fields,
     string? Source,
-    string? Description);
+    string? Description,
+    string? ChangeType = null);
 
 public record CreateRecordRequest(
     string RecordType,

@@ -577,11 +577,20 @@ export function RecordPanel() {
   }, [formKey, port]);
 
   async function handleEdit(plugin: string, fieldName: string, value: unknown) {
+    await stageChange(plugin, { [fieldName]: value });
+  }
+
+  // VMAD structural ops (phase 13.8): stage an op payload under a single change type.
+  async function handleVmadStructOp(plugin: string, vmadPath: string, op: unknown) {
+    await stageChange(plugin, { [vmadPath]: op }, 'vmad_struct_op');
+  }
+
+  async function stageChange(plugin: string, fields: Record<string, unknown>, changeType?: string) {
     setActionError(null);
     const resp = await fetch(`http://localhost:${port}/records/${encodeURIComponent(formKey)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plugin, fields: { [fieldName]: value }, source: 'user' }),
+      body: JSON.stringify({ plugin, fields, source: 'user', ...(changeType ? { changeType } : {}) }),
     });
     if (!resp.ok) {
       if (resp.status === 409) {
@@ -902,6 +911,7 @@ export function RecordPanel() {
                         pendingChangeMap={pendingChangeMap}
                         onEdit={(plugin, vmadPath, value) => { void handleEdit(plugin, vmadPath, value); }}
                         onRevert={changeId => { void handleRevert(changeId); }}
+                        onStructOp={(plugin, vmadPath, op) => { void handleVmadStructOp(plugin, vmadPath, op); }}
                         port={port}
                       />
           </tbody>

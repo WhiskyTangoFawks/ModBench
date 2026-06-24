@@ -443,4 +443,196 @@ public sealed class EditOrchestratorVmadTests
             Assert.Contains(fk3.ToString(), refs);
         }
     }
+
+    // ---- 13.8.1 structural ops: staging add/remove property ----
+
+    [Fact]
+    public void StageEdit_VmadAddProperty_StagedAsStructOpWithNullOldValue()
+    {
+        FormKey npcFk = default, targetFk = default;
+        using var data = new PluginFixtureBuilder("eo-vmad-addprop")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var target = mod.Npcs.AddNew("Target"); targetFk = target.FormKey;
+                var npc = mod.Npcs.AddNew("ScriptedNpc");
+                npcFk = npc.FormKey;
+                npc.VirtualMachineAdapter = BuildVmad(target.FormKey);
+            })
+            .Build();
+
+        var (orchestrator, manager, _) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var fields = new Dictionary<string, JsonElement>
+            {
+                [@"VMAD\DefaultScript\Alpha"] = J("""{"op":"add_property","type":"Int","name":"Alpha","flags":"Edited","value":7}""")
+            };
+
+            var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null, "vmad_struct_op");
+
+            var staged = Assert.IsType<StageEditResult.Staged>(result);
+            var change = Assert.Single(staged.Changes);
+            Assert.Equal("vmad_struct_op", change.ChangeType);
+            Assert.Equal(@"VMAD\DefaultScript\Alpha", change.FieldPath);
+            Assert.Equal(JsonValueKind.Null, change.OldValue.ValueKind);
+        }
+    }
+
+    [Fact]
+    public void StageEdit_VmadAddObjectProperty_AddsFormReference()
+    {
+        FormKey npcFk = default, targetFk = default, altFk = default;
+        using var data = new PluginFixtureBuilder("eo-vmad-addobj")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var target = mod.Npcs.AddNew("Target"); targetFk = target.FormKey;
+                var alt = mod.Npcs.AddNew("AltTarget"); altFk = alt.FormKey;
+                var npc = mod.Npcs.AddNew("ScriptedNpc");
+                npcFk = npc.FormKey;
+                npc.VirtualMachineAdapter = BuildVmad(target.FormKey);
+            })
+            .Build();
+
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var op = $$$"""{"op":"add_property","type":"Object","name":"NewRef","flags":"Edited","value":{"formKey":"{{{altFk}}}","alias":0}}""";
+            var fields = new Dictionary<string, JsonElement> { [@"VMAD\DefaultScript\NewRef"] = J(op) };
+
+            var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null, "vmad_struct_op");
+
+            Assert.IsType<StageEditResult.Staged>(result);
+            var drained = changes.DrainForPlugin("TestPlugin.esp");
+            var vmadRef = drained.FormRefsByFormKey[npcFk.ToString()]
+                .FirstOrDefault(r => r.FieldPath.Equals(@"VMAD\DefaultScript\NewRef", StringComparison.Ordinal));
+            Assert.NotNull(vmadRef);
+            Assert.Equal(altFk.ToString(), vmadRef.TargetFormKey);
+        }
+    }
+
+    [Fact]
+    public void StageEdit_VmadAddProperty_ScriptAmongOthers_Staged()
+    {
+        // Two scripts; add_property targets one of them. Guards against an Any()->All() regression
+        // in the "script exists" check (All would be false when a sibling script doesn't match).
+        FormKey npcFk = default;
+        using var data = new PluginFixtureBuilder("eo-vmad-addprop-multi")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("ScriptedNpc");
+                npcFk = npc.FormKey;
+                var vmad = new VirtualMachineAdapter();
+                vmad.Scripts.Add(new ScriptEntry { Name = "ScriptA", Flags = ScriptEntry.Flag.Local });
+                vmad.Scripts.Add(new ScriptEntry { Name = "ScriptB", Flags = ScriptEntry.Flag.Local });
+                npc.VirtualMachineAdapter = vmad;
+            })
+            .Build();
+
+        var (orchestrator, manager, _) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var fields = new Dictionary<string, JsonElement>
+            {
+                [@"VMAD\ScriptA\Alpha"] = J("""{"op":"add_property","type":"Int","name":"Alpha","flags":"Edited","value":1}""")
+            };
+
+            var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null, "vmad_struct_op");
+
+            Assert.IsType<StageEditResult.Staged>(result);
+        }
+    }
+
+    [Fact]
+    public void StageEdit_VmadAddProperty_UnknownScript_ReturnsRecordNotFound()
+    {
+        FormKey npcFk = default, targetFk = default;
+        using var data = new PluginFixtureBuilder("eo-vmad-addprop-noscript")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var target = mod.Npcs.AddNew("Target"); targetFk = target.FormKey;
+                var npc = mod.Npcs.AddNew("ScriptedNpc");
+                npcFk = npc.FormKey;
+                npc.VirtualMachineAdapter = BuildVmad(target.FormKey);
+            })
+            .Build();
+
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var fields = new Dictionary<string, JsonElement>
+            {
+                [@"VMAD\NoSuchScript\Alpha"] = J("""{"op":"add_property","type":"Int","name":"Alpha","flags":"Edited","value":7}""")
+            };
+
+            var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null, "vmad_struct_op");
+
+            Assert.IsType<StageEditResult.RecordNotFound>(result);
+            Assert.Empty(changes.GetChanges(formKey: npcFk.ToString()));
+        }
+    }
+
+    [Fact]
+    public void StageEdit_VmadRemoveProperty_StagedAsStructOpCapturingOldValue()
+    {
+        FormKey npcFk = default, targetFk = default;
+        using var data = new PluginFixtureBuilder("eo-vmad-removeprop")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var target = mod.Npcs.AddNew("Target"); targetFk = target.FormKey;
+                var npc = mod.Npcs.AddNew("ScriptedNpc");
+                npcFk = npc.FormKey;
+                npc.VirtualMachineAdapter = BuildVmad(target.FormKey);
+            })
+            .Build();
+
+        var (orchestrator, manager, _) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var fields = new Dictionary<string, JsonElement>
+            {
+                [@"VMAD\DefaultScript\IsActive"] = J("""{"op":"remove_property"}""")
+            };
+
+            var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null, "vmad_struct_op");
+
+            var staged = Assert.IsType<StageEditResult.Staged>(result);
+            var change = Assert.Single(staged.Changes);
+            Assert.Equal("vmad_struct_op", change.ChangeType);
+            // Old value captures the property's current value (true) for revert display.
+            Assert.Equal(JsonValueKind.True, change.OldValue.ValueKind);
+        }
+    }
+
+    // ---- 13.8.2 structural ops: staging add/remove script ----
+
+    [Fact]
+    public void StageEdit_VmadAddScript_RecordWithNoVmad_StagedAsStructOp()
+    {
+        FormKey npcFk = default;
+        using var data = new PluginFixtureBuilder("eo-vmad-addscript")
+            .WithPlugin("TestPlugin.esp", mod => { npcFk = mod.Npcs.AddNew("PlainNpc").FormKey; })
+            .Build();
+
+        var (orchestrator, manager, _) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var fields = new Dictionary<string, JsonElement>
+            {
+                [@"VMAD\NewScript"] = J("""{"op":"add_script","name":"NewScript","flags":"Local","properties":[]}""")
+            };
+
+            var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null, "vmad_struct_op");
+
+            var staged = Assert.IsType<StageEditResult.Staged>(result);
+            var change = Assert.Single(staged.Changes);
+            Assert.Equal("vmad_struct_op", change.ChangeType);
+            Assert.Equal(@"VMAD\NewScript", change.FieldPath);
+        }
+    }
 }

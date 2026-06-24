@@ -439,6 +439,7 @@ export interface components {
             } | null;
             source?: string | null;
             description?: string | null;
+            changeType?: string | null;
         };
         PendingChange: {
             /** Format: uuid */

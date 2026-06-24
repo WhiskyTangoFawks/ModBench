@@ -136,7 +136,9 @@ public sealed class PluginWriter : IPluginWriter
     {
         foreach (var group in byFormKey)
         {
-            var fieldChanges = group.Where(c => c.ChangeType == PendingChangeConstants.FieldEditChangeType).ToList();
+            var fieldChanges = group.Where(c =>
+                c.ChangeType == PendingChangeConstants.FieldEditChangeType ||
+                c.ChangeType == PendingChangeConstants.VmadStructOpChangeType).ToList();
 
             if (!FormKey.TryFactory(group.Key, out var formKey))
             {
@@ -251,6 +253,9 @@ public sealed class PluginWriter : IPluginWriter
         PendingChange change,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
+        if (change.ChangeType == PendingChangeConstants.VmadStructOpChangeType)
+            return ApplyVmadStructOp(record, change);
+
         if (VmadPath.IsVmadPath(change.FieldPath))
             return ApplyVmadField(record, change);
 
@@ -287,20 +292,27 @@ public sealed class PluginWriter : IPluginWriter
         if (prop == null)
             return ApplyOutcome.NotFound;
 
+        return ApplyValue(prop, change.NewValue);
+    }
+
+    // Applies a value (per-type payload shape from 13.4/13.6/13.7) into an existing property.
+    // Shared by in-place field edits (ApplyVmadField) and structural add_property.
+    private static ApplyOutcome ApplyValue(ScriptProperty prop, JsonElement value)
+    {
         switch (prop)
         {
-            case ScriptBoolProperty p: p.Data = change.NewValue.GetBoolean(); break;
-            case ScriptIntProperty p: p.Data = change.NewValue.GetInt32(); break;
-            case ScriptFloatProperty p: p.Data = change.NewValue.GetSingle(); break;
-            case ScriptStringProperty p: p.Data = change.NewValue.GetString()!; break;
-            case ScriptObjectProperty p: return ApplyObjectProperty(p, change.NewValue);
-            case ScriptBoolListProperty p: return RebuildList(p.Data, change.NewValue, el => el.GetBoolean());
-            case ScriptIntListProperty p: return RebuildList(p.Data, change.NewValue, el => el.GetInt32());
-            case ScriptFloatListProperty p: return RebuildList(p.Data, change.NewValue, el => el.GetSingle());
-            case ScriptStringListProperty p: return RebuildList(p.Data, change.NewValue, el => el.GetString()!);
-            case ScriptObjectListProperty p: return ApplyObjectListProperty(p, change.NewValue);
-            case ScriptStructProperty p: return ApplyStructProperty(p, change.NewValue);
-            case ScriptStructListProperty p: return ApplyStructListProperty(p, change.NewValue);
+            case ScriptBoolProperty p: p.Data = value.GetBoolean(); break;
+            case ScriptIntProperty p: p.Data = value.GetInt32(); break;
+            case ScriptFloatProperty p: p.Data = value.GetSingle(); break;
+            case ScriptStringProperty p: p.Data = value.GetString()!; break;
+            case ScriptObjectProperty p: return ApplyObjectProperty(p, value);
+            case ScriptBoolListProperty p: return RebuildList(p.Data, value, el => el.GetBoolean());
+            case ScriptIntListProperty p: return RebuildList(p.Data, value, el => el.GetInt32());
+            case ScriptFloatListProperty p: return RebuildList(p.Data, value, el => el.GetSingle());
+            case ScriptStringListProperty p: return RebuildList(p.Data, value, el => el.GetString()!);
+            case ScriptObjectListProperty p: return ApplyObjectListProperty(p, value);
+            case ScriptStructProperty p: return ApplyStructProperty(p, value);
+            case ScriptStructListProperty p: return ApplyStructListProperty(p, value);
             case ScriptVariableProperty:
             case ScriptVariableListProperty:
                 return ApplyOutcome.ReadOnly;
@@ -310,6 +322,226 @@ public sealed class PluginWriter : IPluginWriter
 
         return ApplyOutcome.Applied;
     }
+
+    // Structural VMAD operations (phase 13.8): add/remove a property on a script.
+    // The change value is an op payload { op, ... }; the op discriminator routes the work.
+    private static ApplyOutcome ApplyVmadStructOp(IMajorRecord record, PendingChange change)
+    {
+        if (record is not IHaveVirtualMachineAdapter vmadRecord)
+            return ApplyOutcome.NotFound;
+
+        var op = change.NewValue;
+        if (op.ValueKind != JsonValueKind.Object
+            || !op.TryGetProperty("op", out var opEl) || opEl.GetString() is not string opName)
+            return ApplyOutcome.NotFound;
+
+        // Route by path shape: "VMAD\<ScriptName>" is script-level, "VMAD\<ScriptName>\<Prop>" property-level.
+        if (VmadPath.TryParseScript(change.FieldPath, out var scriptOnly))
+        {
+            var adapter = vmadRecord.VirtualMachineAdapter;
+            return opName switch
+            {
+                "add_script" => AddScript(vmadRecord, scriptOnly, op),
+                "remove_script" => RemoveScript(adapter, scriptOnly),
+                "set_flags" => SetScriptFlags(adapter, scriptOnly, op),
+                _ => ApplyOutcome.NotFound,
+            };
+        }
+
+        if (!VmadPath.TryParse(change.FieldPath, out var scriptName, out var propName))
+            return ApplyOutcome.NotFound;
+
+        var vmad = vmadRecord.VirtualMachineAdapter;
+        var script = vmad?.Scripts.FirstOrDefault(s =>
+            string.Equals(s.Name, scriptName, StringComparison.OrdinalIgnoreCase));
+        if (script == null)
+            return ApplyOutcome.NotFound;
+
+        return opName switch
+        {
+            "add_property" => AddProperty(script, op),
+            "remove_property" => RemoveProperty(script, propName),
+            "set_type" => SetType(script, propName, op),
+            "set_flags" => SetPropertyFlags(script, propName, op),
+            _ => ApplyOutcome.NotFound,
+        };
+    }
+
+    private static ApplyOutcome SetPropertyFlags(ScriptEntry script, string propName, JsonElement op)
+    {
+        var prop = script.Properties.FirstOrDefault(p =>
+            string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase));
+        if (prop == null) return ApplyOutcome.NotFound;
+        if (!op.TryGetProperty("flags", out var f) || f.GetString() is not string s
+            || !Enum.TryParse<ScriptProperty.Flag>(s, out var parsed))
+            return ApplyOutcome.NotFound;
+        prop.Flags = parsed;
+        return ApplyOutcome.Applied;
+    }
+
+    private static ApplyOutcome SetScriptFlags(IAVirtualMachineAdapter? vmad, string scriptName, JsonElement op)
+    {
+        var script = vmad?.Scripts.FirstOrDefault(s =>
+            string.Equals(s.Name, scriptName, StringComparison.OrdinalIgnoreCase));
+        if (script == null) return ApplyOutcome.NotFound;
+        if (!op.TryGetProperty("flags", out var f) || f.GetString() is not string s
+            || !Enum.TryParse<ScriptEntry.Flag>(s, out var parsed))
+            return ApplyOutcome.NotFound;
+        script.Flags = parsed;
+        return ApplyOutcome.Applied;
+    }
+
+    // Replaces a property in place with a default-valued property of the target type, preserving
+    // Name and Flags (mirrors xEdit's wbScriptPropertyTypeAfterSet, which resets the value).
+    private static ApplyOutcome SetType(ScriptEntry script, string propName, JsonElement op)
+    {
+        if (!op.TryGetProperty("type", out var typeEl) || typeEl.GetString() is not string type)
+            return ApplyOutcome.NotFound;
+
+        var idx = -1;
+        for (var i = 0; i < script.Properties.Count; i++)
+            if (string.Equals(script.Properties[i].Name, propName, StringComparison.OrdinalIgnoreCase))
+            {
+                idx = i;
+                break;
+            }
+        if (idx < 0) return ApplyOutcome.NotFound;
+
+        var replacement = BuildDefaultProperty(type);
+        if (replacement == null) return ApplyOutcome.NotFound;
+        replacement.Name = script.Properties[idx].Name;
+        replacement.Flags = script.Properties[idx].Flags;
+        script.Properties[idx] = replacement;
+        return ApplyOutcome.Applied;
+    }
+
+    private static ApplyOutcome AddScript(IHaveVirtualMachineAdapter vmadRecord, string scriptName, JsonElement op)
+    {
+        // Attach an adapter to a record that has none (correct subtype per record via reflection).
+        var vmad = vmadRecord.VirtualMachineAdapter ?? CreateAdapter(vmadRecord);
+        if (vmad == null)
+            return ApplyOutcome.NotFound;
+
+        // A new script starts empty; properties are added individually via add_property.
+        var entry = new ScriptEntry { Name = scriptName, Flags = ParseScriptFlags(op) };
+
+        for (var i = vmad.Scripts.Count - 1; i >= 0; i--)
+            if (string.Equals(vmad.Scripts[i].Name, scriptName, StringComparison.OrdinalIgnoreCase))
+                vmad.Scripts.RemoveAt(i);
+        vmad.Scripts.Add(entry);
+        SortScripts(vmad);
+        return ApplyOutcome.Applied;
+    }
+
+    // Removing the last script leaves an empty adapter (matches xEdit) rather than nulling it.
+    private static ApplyOutcome RemoveScript(IAVirtualMachineAdapter? vmad, string scriptName)
+    {
+        if (vmad == null) return ApplyOutcome.NotFound;
+        var removed = false;
+        for (var i = vmad.Scripts.Count - 1; i >= 0; i--)
+            if (string.Equals(vmad.Scripts[i].Name, scriptName, StringComparison.OrdinalIgnoreCase))
+            {
+                vmad.Scripts.RemoveAt(i);
+                removed = true;
+            }
+        return removed ? ApplyOutcome.Applied : ApplyOutcome.NotFound;
+    }
+
+    private static void SortScripts(IAVirtualMachineAdapter vmad)
+    {
+        var sorted = vmad.Scripts.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        vmad.Scripts.Clear();
+        foreach (var s in sorted) vmad.Scripts.Add(s);
+    }
+
+    private static IAVirtualMachineAdapter? CreateAdapter(IHaveVirtualMachineAdapter record)
+    {
+        var prop = record.GetType().GetProperty(nameof(IHaveVirtualMachineAdapter.VirtualMachineAdapter));
+        if (prop?.CanWrite != true || prop.PropertyType.IsAbstract) return null;
+        if (System.Activator.CreateInstance(prop.PropertyType) is not IAVirtualMachineAdapter adapter) return null;
+        prop.SetValue(record, adapter);
+        return adapter;
+    }
+
+    private static ScriptEntry.Flag ParseScriptFlags(JsonElement op) =>
+        op.TryGetProperty("flags", out var f) && f.GetString() is string s
+            && Enum.TryParse<ScriptEntry.Flag>(s, out var parsed)
+            ? parsed
+            : ScriptEntry.Flag.Local;
+
+    private static ApplyOutcome AddProperty(ScriptEntry script, JsonElement op)
+    {
+        if (!op.TryGetProperty("name", out var nameEl) || nameEl.GetString() is not string name
+            || !op.TryGetProperty("type", out var typeEl) || typeEl.GetString() is not string type)
+            return ApplyOutcome.NotFound;
+
+        var prop = BuildDefaultProperty(type);
+        if (prop == null)
+            return ApplyOutcome.NotFound;
+        prop.Name = name;
+        prop.Flags = ParseStructOpFlags(op);
+
+        if (op.TryGetProperty("value", out var value) && value.ValueKind != JsonValueKind.Null)
+        {
+            var outcome = ApplyValue(prop, value);
+            if (outcome != ApplyOutcome.Applied) return outcome;
+        }
+
+        RemoveByName(script, name);
+        script.Properties.Add(prop);
+        SortProperties(script);
+        return ApplyOutcome.Applied;
+    }
+
+    private static ApplyOutcome RemoveProperty(ScriptEntry script, string propName) =>
+        RemoveByName(script, propName) ? ApplyOutcome.Applied : ApplyOutcome.NotFound;
+
+    private static bool RemoveByName(ScriptEntry script, string name)
+    {
+        var removed = false;
+        for (var i = script.Properties.Count - 1; i >= 0; i--)
+            if (string.Equals(script.Properties[i].Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                script.Properties.RemoveAt(i);
+                removed = true;
+            }
+        return removed;
+    }
+
+    private static void SortProperties(ScriptEntry script)
+    {
+        var sorted = script.Properties
+            .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        script.Properties.Clear();
+        foreach (var p in sorted) script.Properties.Add(p);
+    }
+
+    // Empty property of the given VMAD type; value is filled separately via ApplyValue.
+    // Returns null for unknown / non-editable (Variable) types.
+    private static ScriptProperty? BuildDefaultProperty(string type) => type switch
+    {
+        "Bool" => new ScriptBoolProperty(),
+        "Int" => new ScriptIntProperty(),
+        "Float" => new ScriptFloatProperty(),
+        "String" => new ScriptStringProperty { Data = "" },
+        "Object" => new ScriptObjectProperty { Alias = -1 },
+        "ArrayOfBool" => new ScriptBoolListProperty(),
+        "ArrayOfInt" => new ScriptIntListProperty(),
+        "ArrayOfFloat" => new ScriptFloatListProperty(),
+        "ArrayOfString" => new ScriptStringListProperty(),
+        "ArrayOfObject" => new ScriptObjectListProperty(),
+        "Struct" => new ScriptStructProperty(),
+        "ArrayOfStruct" => new ScriptStructListProperty(),
+        _ => null,
+    };
+
+    // Like ParseMemberFlags but defaults a new property to Edited (matches xEdit's add default).
+    private static ScriptProperty.Flag ParseStructOpFlags(JsonElement op) =>
+        op.TryGetProperty("flags", out var f) && f.GetString() is string s
+            && Enum.TryParse<ScriptProperty.Flag>(s, out var parsed)
+            ? parsed
+            : ScriptProperty.Flag.Edited;
 
     private static bool TryParseScriptObject(JsonElement el, out FormKey fk, out short alias)
     {

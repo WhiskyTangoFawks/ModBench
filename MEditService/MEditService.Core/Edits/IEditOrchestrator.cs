@@ -9,7 +9,8 @@ public interface IEditOrchestrator
         string plugin,
         Dictionary<string, JsonElement> fields,
         string source,
-        string? description);
+        string? description,
+        string? changeType = null);
 
     StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source);
 
