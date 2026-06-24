@@ -52,7 +52,7 @@ Analyze the survivors. Obvious fixes can be dealt with directly. Complexity or a
 - **Suppression** — last resort; flag explicitly for developer approval
 
 
-**Never suppress without explicit developer approval.** Only logging may go untested — handled via `stryker-config.json`, never comment annotations.
+**Never suppress without explicit developer approval.** Only logging may go untested — handled via `stryker-config.json`, never comment annotations. 
 
 ## Suppression format (only after explicit developer approval)
 
