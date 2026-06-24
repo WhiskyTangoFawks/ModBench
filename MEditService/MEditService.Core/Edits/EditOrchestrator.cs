@@ -96,8 +96,15 @@ public sealed class EditOrchestrator : IEditOrchestrator
         foreach (var (path, op) in fields)
         {
             if (op.ValueKind != JsonValueKind.Object
-                || !op.TryGetProperty("op", out var opEl) || opEl.GetString() is not string opName
-                || !VmadPath.TryParse(path, out var scriptName, out var propName))
+                || !op.TryGetProperty("op", out var opEl) || opEl.GetString() is not string opName)
+                return new StageEditResult.RecordNotFound();
+
+            // Route by path shape: "VMAD\<ScriptName>" is a script-level op (add/remove script, set
+            // script flags) — staged as-is with no value validation or old-value capture.
+            if (VmadPath.TryParseScript(path, out _))
+                continue;
+
+            if (!VmadPath.TryParse(path, out var scriptName, out var propName))
                 return new StageEditResult.RecordNotFound();
 
             // add_property targets an existing script — reject early if it's absent.

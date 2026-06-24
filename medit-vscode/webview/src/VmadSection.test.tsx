@@ -792,4 +792,109 @@ describe('VmadSection edit mode', () => {
       { op: 'add_property', type: 'Int', name: 'NewProp', flags: 'Edited', value: 99 },
     );
   });
+
+  // ── add/remove script (13.8.2) ─────────────────────────────────────────────
+
+  it('add-script control stages an add_script op even when the record has no VMAD', () => {
+    const onStructOp = vi.fn();
+    renderSection(null, ['A.esm'], { editMode: true, onStructOp });
+
+    fireEvent.click(screen.getByTitle('Add script'));
+    fireEvent.change(screen.getByLabelText('New script name'), { target: { value: 'MyScript' } });
+    fireEvent.change(screen.getByLabelText('New script flags'), { target: { value: 'Local' } });
+    fireEvent.click(screen.getByText('Add'));
+
+    expect(onStructOp).toHaveBeenCalledWith(
+      'A.esm',
+      String.raw`VMAD\MyScript`,
+      { op: 'add_script', name: 'MyScript', flags: 'Local', properties: [] },
+    );
+  });
+
+  it('remove-script control stages a remove_script op', () => {
+    const onStructOp = vi.fn();
+    const vmad: VmadCompare = { scripts: [script({ name: 'S', flags: { 'A.esm': 'Local' } })] };
+    renderSection(vmad, ['A.esm'], { editMode: true, onStructOp });
+
+    fireEvent.click(screen.getByTitle('Remove script'));
+
+    expect(onStructOp).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S`, { op: 'remove_script' });
+  });
+
+  it('a pending add_script renders as a new added script row', () => {
+    const chg = pendingChange('A.esm', String.raw`VMAD\NewScript`, {
+      op: 'add_script', name: 'NewScript', flags: 'Local', properties: [],
+    });
+    renderSection(null, ['A.esm'], {
+      withPendingCol: 'A.esm',
+      pendingChangeMap: { [`A.esm:${chg.fieldPath}`]: chg },
+      onRevert: vi.fn(),
+    });
+
+    expect(screen.getByText('NewScript')).toBeInTheDocument();
+  });
+
+  // ── change property type (13.8.3) ──────────────────────────────────────────
+
+  it('type dropdown on a property stages a set_type op', () => {
+    const onStructOp = vi.fn();
+    const vmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [prop({ name: 'Counter', kind: 'scalar', values: { 'A.esm': 42 }, types: { 'A.esm': 'Int' } })],
+      })],
+    };
+    renderSection(vmad, ['A.esm'], { editMode: true, onStructOp });
+    toggle('S');
+
+    fireEvent.change(screen.getByLabelText('Type for Counter'), { target: { value: 'Float' } });
+
+    expect(onStructOp).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Counter`, { op: 'set_type', type: 'Float' });
+  });
+
+  it('a pending set_type renders the new type', () => {
+    const chg = pendingChange('A.esm', String.raw`VMAD\S\Counter`, { op: 'set_type', type: 'Float' });
+    const vmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [prop({ name: 'Counter', kind: 'scalar', values: { 'A.esm': 42 }, types: { 'A.esm': 'Int' } })],
+      })],
+    };
+    renderSection(vmad, ['A.esm'], {
+      withPendingCol: 'A.esm',
+      pendingChangeMap: { [`A.esm:${chg.fieldPath}`]: chg },
+      onRevert: vi.fn(),
+    });
+    toggle('S');
+
+    expect(screen.getByText('→ Float')).toBeInTheDocument();
+  });
+
+  // ── set flags (13.8.4) ─────────────────────────────────────────────────────
+
+  it('script flags control stages set_flags on the script', () => {
+    const onStructOp = vi.fn();
+    const vmad: VmadCompare = { scripts: [script({ name: 'S', flags: { 'A.esm': 'Local' } })] };
+    renderSection(vmad, ['A.esm'], { editMode: true, onStructOp });
+
+    fireEvent.change(screen.getByLabelText('Flags for S'), { target: { value: 'Inherited' } });
+
+    expect(onStructOp).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S`, { op: 'set_flags', flags: 'Inherited' });
+  });
+
+  it('property flags control stages set_flags on the property', () => {
+    const onStructOp = vi.fn();
+    const vmad: VmadCompare = {
+      scripts: [script({
+        name: 'S', flags: { 'A.esm': 'Local' },
+        properties: [prop({ name: 'Counter', kind: 'scalar', values: { 'A.esm': 42 }, types: { 'A.esm': 'Int' } })],
+      })],
+    };
+    renderSection(vmad, ['A.esm'], { editMode: true, onStructOp });
+    toggle('S');
+
+    fireEvent.change(screen.getByLabelText('Flags for Counter'), { target: { value: 'Removed' } });
+
+    expect(onStructOp).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Counter`, { op: 'set_flags', flags: 'Removed' });
+  });
 });

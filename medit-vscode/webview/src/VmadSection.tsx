@@ -528,6 +528,31 @@ const structBtnStyle: React.CSSProperties = {
   ...iconBtnStyle, fontSize: '14px', padding: '0 4px', color: fg,
 };
 
+const dialogInputStyle: React.CSSProperties = {
+  fontFamily: mono, fontSize: '12px',
+  background: 'var(--vscode-input-background, #3c3c3c)', color: fg,
+  border: '1px solid var(--vscode-input-border, #555)', padding: '2px 6px',
+};
+
+// Shared modal chrome for the add-property / add-script dialogs (fixed overlay + title + footer).
+function ModalShell({ title, confirmDisabled, onConfirm, onCancel, children }: Readonly<{
+  title: string; confirmDisabled?: boolean; onConfirm: () => void; onCancel: () => void; children: React.ReactNode;
+}>) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: 'var(--vscode-editor-background, #1e1e1e)', border: '1px solid var(--vscode-editorGroup-border, #444)', padding: 12, minWidth: 280 }}>
+        <div style={{ fontFamily: mono, fontSize: '12px', marginBottom: 8 }}>{title}</div>
+        <table><tbody>{children}</tbody></table>
+        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+          <button onClick={onCancel} style={{ fontSize: '11px', padding: '2px 8px', cursor: 'pointer' }}>Cancel</button>
+          <button onClick={onConfirm} disabled={confirmDisabled}
+            style={{ fontSize: '11px', padding: '2px 8px', cursor: 'pointer', background: 'var(--vscode-button-background, #0e639c)', color: 'var(--vscode-button-foreground, #fff)', border: 'none' }}>Add</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AddPropertyDialog({ port, onConfirm, onCancel }: Readonly<{
   port?: number;
   onConfirm: (v: { name: string; type: string; value: unknown }) => void;
@@ -541,11 +566,7 @@ function AddPropertyDialog({ port, onConfirm, onCancel }: Readonly<{
   function changeType(t: string) { setType(t); setValue(defaultOpValue(t)); }
 
   const kind = opScalarKind(type);
-  const inputStyle: React.CSSProperties = {
-    fontFamily: mono, fontSize: '12px',
-    background: 'var(--vscode-input-background, #3c3c3c)', color: fg,
-    border: '1px solid var(--vscode-input-border, #555)', padding: '2px 6px',
-  };
+  const inputStyle = dialogInputStyle;
 
   function valueControl(): React.ReactNode {
     if (kind === 'bool') {
@@ -584,31 +605,16 @@ function AddPropertyDialog({ port, onConfirm, onCancel }: Readonly<{
   }
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.4)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      <div style={{ background: 'var(--vscode-editor-background, #1e1e1e)', border: '1px solid var(--vscode-editorGroup-border, #444)', padding: 12, minWidth: 280 }}>
-        <div style={{ fontFamily: mono, fontSize: '12px', marginBottom: 8 }}>Add property</div>
-        <table><tbody>
-          <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Name</td>
-            <td><input aria-label="New property name" style={inputStyle} value={name} onChange={e => setName(e.target.value)} /></td></tr>
-          <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Type</td>
-            <td><select aria-label="New property type" style={inputStyle} value={type} onChange={e => changeType(e.target.value)}>
-              {ADDABLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select></td></tr>
-          <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Value</td><td>{valueControl()}</td></tr>
-        </tbody></table>
-        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-          <button onClick={onCancel} style={{ fontSize: '11px', padding: '2px 8px', cursor: 'pointer' }}>Cancel</button>
-          <button
-            onClick={() => onConfirm({ name, type, value })}
-            disabled={name.trim() === ''}
-            style={{ fontSize: '11px', padding: '2px 8px', cursor: 'pointer', background: 'var(--vscode-button-background, #0e639c)', color: 'var(--vscode-button-foreground, #fff)', border: 'none' }}
-          >Add</button>
-        </div>
-      </div>
-    </div>
+    <ModalShell title="Add property" confirmDisabled={name.trim() === ''}
+      onCancel={onCancel} onConfirm={() => onConfirm({ name, type, value })}>
+      <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Name</td>
+        <td><input aria-label="New property name" style={inputStyle} value={name} onChange={e => setName(e.target.value)} /></td></tr>
+      <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Type</td>
+        <td><select aria-label="New property type" style={inputStyle} value={type} onChange={e => changeType(e.target.value)}>
+          {ADDABLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select></td></tr>
+      <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Value</td><td>{valueControl()}</td></tr>
+    </ModalShell>
   );
 }
 
@@ -646,6 +652,66 @@ function RemovePropertyButton({ plugin, scriptName, propName, onStructOp }: Read
   );
 }
 
+// Type dropdown (13.8.3) — changing it stages set_type, which resets the value on the backend.
+function SetTypeControl({ plugin, scriptName, propName, currentType, onStructOp }: Readonly<{
+  plugin: string; scriptName: string; propName: string; currentType: string; onStructOp: OnStructOp;
+}>) {
+  const known = (ADDABLE_TYPES as readonly string[]).includes(currentType);
+  return (
+    <select
+      aria-label={`Type for ${propName}`}
+      title="Changing type resets the value"
+      value={known ? currentType : ''}
+      onChange={e => onStructOp(plugin, `VMAD\\${scriptName}\\${propName}`, { op: 'set_type', type: e.target.value })}
+      style={{ ...dialogInputStyle, fontSize: '11px' }}
+    >
+      {!known && <option value="">{currentType || '—'}</option>}
+      {ADDABLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+    </select>
+  );
+}
+
+const PROP_FLAGS = ['Edited', 'Removed'] as const;
+
+const flagSelectStyle: React.CSSProperties = { ...dialogInputStyle, fontSize: '11px' };
+
+// Script flags control (13.8.4) — reflects the current per-plugin flag, stages set_flags on change.
+function ScriptFlagsControl({ plugin, scriptName, current, onStructOp }: Readonly<{
+  plugin: string; scriptName: string; current: string | null; onStructOp: OnStructOp;
+}>) {
+  const val = current && (SCRIPT_FLAGS as readonly string[]).includes(current) ? current : 'Local';
+  return (
+    <select aria-label={`Flags for ${scriptName}`} value={val} style={flagSelectStyle}
+      onChange={e => onStructOp(plugin, `VMAD\\${scriptName}`, { op: 'set_flags', flags: e.target.value })}>
+      {SCRIPT_FLAGS.map(f => <option key={f} value={f}>{f}</option>)}
+    </select>
+  );
+}
+
+// Property flags control (13.8.4). The read model carries no per-property flag, so this is set-only
+// (defaults to Edited) — staging set_flags applies the chosen value on save.
+function PropertyFlagsControl({ plugin, scriptName, propName, onStructOp }: Readonly<{
+  plugin: string; scriptName: string; propName: string; onStructOp: OnStructOp;
+}>) {
+  return (
+    <select aria-label={`Flags for ${propName}`} defaultValue="Edited" style={flagSelectStyle}
+      onChange={e => onStructOp(plugin, `VMAD\\${scriptName}\\${propName}`, { op: 'set_flags', flags: e.target.value })}>
+      {PROP_FLAGS.map(f => <option key={f} value={f}>{f}</option>)}
+    </select>
+  );
+}
+
+// Pending-column label for a VMAD change (op-aware): structural ops render distinctly.
+function pendingOpLabel(v: unknown): React.ReactNode {
+  if (isStructOp(v)) {
+    if (v.op === 'remove_property') return <span style={{ textDecoration: 'line-through' }}>removed</span>;
+    if (v.op === 'set_type') return <span>→ {(v as { type?: string }).type ?? ''}</span>;
+    if (v.op === 'add_property') return <span>{toStr((v as { value?: unknown }).value)}</span>;
+    return <span>{v.op}</span>;
+  }
+  return <span>{toStr(v)}</span>;
+}
+
 // Renders a pending add_property in the pending column: an inline editor (scalar) in edit mode that
 // re-issues the same add op with the new value, else a read-only value. Plus a revert control.
 function AddedPendingCell({ change, editMode, onStructOp, onRevert }: Readonly<{
@@ -667,6 +733,64 @@ function AddedPendingCell({ change, editMode, onStructOp, onRevert }: Readonly<{
   );
 }
 
+// ── structural ops (13.8.2): add / remove script ───────────────────────────────
+
+const SCRIPT_FLAGS = ['Local', 'Inherited', 'Removed', 'InheritedAndRemoved'] as const;
+
+// VMAD\<ScriptName> (no property segment) → script name; null otherwise.
+function parseVmadScriptPath(path: string): string | null {
+  const parts = path.split('\\');
+  return parts.length === 2 && parts[0] === 'VMAD' ? parts[1] : null;
+}
+
+function AddScriptDialog({ onConfirm, onCancel }: Readonly<{
+  onConfirm: (v: { name: string; flags: string }) => void; onCancel: () => void;
+}>) {
+  const [name, setName] = useState('');
+  const [flags, setFlags] = useState<string>('Local');
+  return (
+    <ModalShell title="Add script" confirmDisabled={name.trim() === ''}
+      onCancel={onCancel} onConfirm={() => onConfirm({ name, flags })}>
+      <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Name</td>
+        <td><input aria-label="New script name" style={dialogInputStyle} value={name} onChange={e => setName(e.target.value)} /></td></tr>
+      <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Flags</td>
+        <td><select aria-label="New script flags" style={dialogInputStyle} value={flags} onChange={e => setFlags(e.target.value)}>
+          {SCRIPT_FLAGS.map(f => <option key={f} value={f}>{f}</option>)}
+        </select></td></tr>
+    </ModalShell>
+  );
+}
+
+function AddScriptButton({ plugin, onStructOp }: Readonly<{ plugin: string; onStructOp: OnStructOp }>) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button title="Add script" onClick={() => setOpen(true)} style={structBtnStyle}>+ script</button>
+      {open && (
+        <AddScriptDialog
+          onCancel={() => setOpen(false)}
+          onConfirm={({ name, flags }) => {
+            setOpen(false);
+            onStructOp(plugin, `VMAD\\${name}`, { op: 'add_script', name, flags, properties: [] });
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function RemoveScriptButton({ plugin, scriptName, onStructOp }: Readonly<{
+  plugin: string; scriptName: string; onStructOp: OnStructOp;
+}>) {
+  return (
+    <button
+      title="Remove script"
+      onClick={() => onStructOp(plugin, `VMAD\\${scriptName}`, { op: 'remove_script' })}
+      style={{ ...iconBtnStyle, color: 'var(--vscode-errorForeground, #f88)' }}
+    >×</button>
+  );
+}
+
 // ── VmadSection ────────────────────────────────────────────────────────────────
 
 export function VmadSection({
@@ -675,7 +799,24 @@ export function VmadSection({
 }: Readonly<VmadSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  if (!vmad || vmad.scripts.length === 0) return null;
+  const scripts = vmad?.scripts ?? [];
+  const showAddScript = editMode === true && onStructOp != null;
+
+  // Pending add_script ops (script-level paths) not yet in the compare tree → synthetic script rows.
+  const existingScriptNames = new Set(scripts.map(s => s.name));
+  const pendingScriptAdds = new Map<string, Record<string, PendingChange>>();
+  if (pendingChangeMap) {
+    for (const c of Object.values(pendingChangeMap)) {
+      if (!isStructOp(c.newValue) || c.newValue.op !== 'add_script') continue;
+      const name = parseVmadScriptPath(c.fieldPath);
+      if (name == null || existingScriptNames.has(name)) continue;
+      const m = pendingScriptAdds.get(name) ?? {};
+      m[c.plugin] = c;
+      pendingScriptAdds.set(name, m);
+    }
+  }
+
+  if (scripts.length === 0 && !showAddScript && pendingScriptAdds.size === 0) return null;
 
   const toggle = (key: string) => setExpanded(prev => {
     const next = new Set(prev);
@@ -707,9 +848,7 @@ export function VmadSection({
           >
             {hasPending && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                {isStructOp(change.newValue) && change.newValue.op === 'remove_property'
-                  ? <span style={{ textDecoration: 'line-through' }}>removed</span>
-                  : <span>{toStr(change.newValue)}</span>}
+                {pendingOpLabel(change.newValue)}
                 {onRevert && (
                   <button
                     onClick={() => onRevert(change.id)}
@@ -742,6 +881,17 @@ export function VmadSection({
       <td colSpan={totalCols} style={headerCell}>Scripts (VMAD)</td>
     </tr>,
   );
+
+  if (showAddScript) {
+    rows.push(
+      <tr key="vmad-add-script">
+        <td style={{ ...baseCell, opacity: 0.85 }}>＋ script</td>
+        {columns.map((col, i) => col.kind === 'pending'
+          ? <td key={`add-script:p${i}`} style={baseCell} />
+          : <td key={`add-script:d${i}`} style={baseCell}><AddScriptButton plugin={col.override.plugin} onStructOp={onStructOp} /></td>)}
+      </tr>,
+    );
+  }
 
   const leafCtx: LeafCellCtx = { editMode, onEdit, port, onOpen };
 
@@ -785,6 +935,9 @@ export function VmadSection({
           depth === 1 && editMode && onStructOp
             ? <span style={inlineCell}>
                 {propertyCell(plugin, rowCtx)}
+                <SetTypeControl plugin={plugin} scriptName={scriptName} propName={p.name}
+                  currentType={p.types[plugin] ?? p.types[p.winnerPlugin] ?? ''} onStructOp={onStructOp} />
+                <PropertyFlagsControl plugin={plugin} scriptName={scriptName} propName={p.name} onStructOp={onStructOp} />
                 <RemovePropertyButton plugin={plugin} scriptName={scriptName} propName={p.name} onStructOp={onStructOp} />
               </span>
             : propertyCell(plugin, rowCtx),
@@ -845,7 +998,7 @@ export function VmadSection({
     );
   };
 
-  for (const [i, s] of vmad.scripts.entries()) {
+  for (const [i, s] of scripts.entries()) {
     const key = `s:${i}:${s.name}`;
     const existingNames = new Set(s.properties.map(p => p.name));
     const addsByName = pendingAddsForScript(s.name, existingNames);
@@ -863,8 +1016,9 @@ export function VmadSection({
         {valueCells(key, s.cellStates, plugin =>
           editMode && onStructOp
             ? <span style={inlineCell}>
-                <span>{s.flags[plugin] ?? null}</span>
+                <ScriptFlagsControl plugin={plugin} scriptName={s.name} current={s.flags[plugin] ?? null} onStructOp={onStructOp} />
                 <AddPropertyButton plugin={plugin} scriptName={s.name} onStructOp={onStructOp} port={port} />
+                <RemoveScriptButton plugin={plugin} scriptName={s.name} onStructOp={onStructOp} />
               </span>
             : (s.flags[plugin] ?? null))}
       </tr>,
@@ -874,6 +1028,35 @@ export function VmadSection({
       for (const p of s.properties) pushPropertyRows(p, key, 1, s.name);
       for (const [propName, perPlugin] of addsByName) pushAddedRow(key, propName, perPlugin);
     }
+  }
+
+  for (const [name, perPlugin] of pendingScriptAdds) {
+    rows.push(
+      <tr key={`added-script>${name}`}>
+        <td style={headerCell}>
+          <span style={{ color: 'var(--vscode-gitDecoration-addedResourceForeground, #8f8)', marginRight: 4 }}>＋</span>
+          <span>{name}</span>
+        </td>
+        {columns.map((col, i) => {
+          if (col.kind === 'pending') {
+            const change = perPlugin[col.plugin];
+            return (
+              <td key={`as:${name}:p${i}`} style={{
+                ...baseCell, fontStyle: 'italic',
+                backgroundColor: change ? 'rgba(255,200,50,0.10)' : undefined,
+                opacity: change ? 1 : 0.3,
+              }}>
+                {change && onRevert && (
+                  <button onClick={() => onRevert(change.id)} title="Revert this change"
+                    style={{ ...iconBtnStyle, color: 'var(--vscode-errorForeground, #f88)', fontSize: '11px' }}>↩</button>
+                )}
+              </td>
+            );
+          }
+          return <td key={`as:${name}:d${i}`} style={{ ...baseCell, opacity: 0.3 }} />;
+        })}
+      </tr>,
+    );
   }
 
   return <>{rows}</>;

@@ -21,4 +21,15 @@ public static class VmadPath
         propertyName = rest[(sep + 1)..];
         return true;
     }
+
+    // Parses a script-level path "VMAD\<ScriptName>" (no property segment).
+    public static bool TryParseScript(string path, out string scriptName)
+    {
+        scriptName = "";
+        if (!IsVmadPath(path)) return false;
+        var rest = path[Prefix.Length..];
+        if (rest.Length == 0 || rest.Contains('\\')) return false;
+        scriptName = rest;
+        return true;
+    }
 }

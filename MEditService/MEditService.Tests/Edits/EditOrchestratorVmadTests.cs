@@ -574,4 +574,32 @@ public sealed class EditOrchestratorVmadTests
             Assert.Equal(JsonValueKind.True, change.OldValue.ValueKind);
         }
     }
+
+    // ---- 13.8.2 structural ops: staging add/remove script ----
+
+    [Fact]
+    public void StageEdit_VmadAddScript_RecordWithNoVmad_StagedAsStructOp()
+    {
+        FormKey npcFk = default;
+        using var data = new PluginFixtureBuilder("eo-vmad-addscript")
+            .WithPlugin("TestPlugin.esp", mod => { npcFk = mod.Npcs.AddNew("PlainNpc").FormKey; })
+            .Build();
+
+        var (orchestrator, manager, _) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var fields = new Dictionary<string, JsonElement>
+            {
+                [@"VMAD\NewScript"] = J("""{"op":"add_script","name":"NewScript","flags":"Local","properties":[]}""")
+            };
+
+            var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null, "vmad_struct_op");
+
+            var staged = Assert.IsType<StageEditResult.Staged>(result);
+            var change = Assert.Single(staged.Changes);
+            Assert.Equal("vmad_struct_op", change.ChangeType);
+            Assert.Equal(@"VMAD\NewScript", change.FieldPath);
+        }
+    }
 }

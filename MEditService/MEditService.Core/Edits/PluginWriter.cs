@@ -335,7 +335,19 @@ public sealed class PluginWriter : IPluginWriter
             || !op.TryGetProperty("op", out var opEl) || opEl.GetString() is not string opName)
             return ApplyOutcome.NotFound;
 
-        // Property-level ops require a script + property segment.
+        // Route by path shape: "VMAD\<ScriptName>" is script-level, "VMAD\<ScriptName>\<Prop>" property-level.
+        if (VmadPath.TryParseScript(change.FieldPath, out var scriptOnly))
+        {
+            var adapter = vmadRecord.VirtualMachineAdapter;
+            return opName switch
+            {
+                "add_script" => AddScript(vmadRecord, scriptOnly, op),
+                "remove_script" => RemoveScript(adapter, scriptOnly),
+                "set_flags" => SetScriptFlags(adapter, scriptOnly, op),
+                _ => ApplyOutcome.NotFound,
+            };
+        }
+
         if (!VmadPath.TryParse(change.FieldPath, out var scriptName, out var propName))
             return ApplyOutcome.NotFound;
 
@@ -349,9 +361,115 @@ public sealed class PluginWriter : IPluginWriter
         {
             "add_property" => AddProperty(script, op),
             "remove_property" => RemoveProperty(script, propName),
+            "set_type" => SetType(script, propName, op),
+            "set_flags" => SetPropertyFlags(script, propName, op),
             _ => ApplyOutcome.NotFound,
         };
     }
+
+    private static ApplyOutcome SetPropertyFlags(ScriptEntry script, string propName, JsonElement op)
+    {
+        var prop = script.Properties.FirstOrDefault(p =>
+            string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase));
+        if (prop == null) return ApplyOutcome.NotFound;
+        if (!op.TryGetProperty("flags", out var f) || f.GetString() is not string s
+            || !Enum.TryParse<ScriptProperty.Flag>(s, out var parsed))
+            return ApplyOutcome.NotFound;
+        prop.Flags = parsed;
+        return ApplyOutcome.Applied;
+    }
+
+    private static ApplyOutcome SetScriptFlags(IAVirtualMachineAdapter? vmad, string scriptName, JsonElement op)
+    {
+        var script = vmad?.Scripts.FirstOrDefault(s =>
+            string.Equals(s.Name, scriptName, StringComparison.OrdinalIgnoreCase));
+        if (script == null) return ApplyOutcome.NotFound;
+        if (!op.TryGetProperty("flags", out var f) || f.GetString() is not string s
+            || !Enum.TryParse<ScriptEntry.Flag>(s, out var parsed))
+            return ApplyOutcome.NotFound;
+        script.Flags = parsed;
+        return ApplyOutcome.Applied;
+    }
+
+    // Replaces a property in place with a default-valued property of the target type, preserving
+    // Name and Flags (mirrors xEdit's wbScriptPropertyTypeAfterSet, which resets the value).
+    private static ApplyOutcome SetType(ScriptEntry script, string propName, JsonElement op)
+    {
+        if (!op.TryGetProperty("type", out var typeEl) || typeEl.GetString() is not string type)
+            return ApplyOutcome.NotFound;
+
+        var idx = -1;
+        for (var i = 0; i < script.Properties.Count; i++)
+            if (string.Equals(script.Properties[i].Name, propName, StringComparison.OrdinalIgnoreCase))
+            {
+                idx = i;
+                break;
+            }
+        if (idx < 0) return ApplyOutcome.NotFound;
+
+        var replacement = BuildDefaultProperty(type);
+        if (replacement == null) return ApplyOutcome.NotFound;
+        replacement.Name = script.Properties[idx].Name;
+        replacement.Flags = script.Properties[idx].Flags;
+        script.Properties[idx] = replacement;
+        return ApplyOutcome.Applied;
+    }
+
+    private static ApplyOutcome AddScript(IHaveVirtualMachineAdapter vmadRecord, string scriptName, JsonElement op)
+    {
+        // Attach an adapter to a record that has none (correct subtype per record via reflection).
+        var vmad = vmadRecord.VirtualMachineAdapter ?? CreateAdapter(vmadRecord);
+        if (vmad == null)
+            return ApplyOutcome.NotFound;
+
+        var entry = new ScriptEntry { Name = scriptName, Flags = ParseScriptFlags(op) };
+        if (op.TryGetProperty("properties", out var props) && props.ValueKind == JsonValueKind.Array
+            && TryBuildMembers(props, out var seeded))
+            foreach (var p in seeded) entry.Properties.Add(p);
+
+        for (var i = vmad.Scripts.Count - 1; i >= 0; i--)
+            if (string.Equals(vmad.Scripts[i].Name, scriptName, StringComparison.OrdinalIgnoreCase))
+                vmad.Scripts.RemoveAt(i);
+        vmad.Scripts.Add(entry);
+        SortScripts(vmad);
+        return ApplyOutcome.Applied;
+    }
+
+    // Removing the last script leaves an empty adapter (matches xEdit) rather than nulling it.
+    private static ApplyOutcome RemoveScript(IAVirtualMachineAdapter? vmad, string scriptName)
+    {
+        if (vmad == null) return ApplyOutcome.NotFound;
+        var removed = false;
+        for (var i = vmad.Scripts.Count - 1; i >= 0; i--)
+            if (string.Equals(vmad.Scripts[i].Name, scriptName, StringComparison.OrdinalIgnoreCase))
+            {
+                vmad.Scripts.RemoveAt(i);
+                removed = true;
+            }
+        return removed ? ApplyOutcome.Applied : ApplyOutcome.NotFound;
+    }
+
+    private static void SortScripts(IAVirtualMachineAdapter vmad)
+    {
+        var sorted = vmad.Scripts.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        vmad.Scripts.Clear();
+        foreach (var s in sorted) vmad.Scripts.Add(s);
+    }
+
+    private static IAVirtualMachineAdapter? CreateAdapter(IHaveVirtualMachineAdapter record)
+    {
+        var prop = record.GetType().GetProperty(nameof(IHaveVirtualMachineAdapter.VirtualMachineAdapter));
+        if (prop?.CanWrite != true || prop.PropertyType.IsAbstract) return null;
+        if (System.Activator.CreateInstance(prop.PropertyType) is not IAVirtualMachineAdapter adapter) return null;
+        prop.SetValue(record, adapter);
+        return adapter;
+    }
+
+    private static ScriptEntry.Flag ParseScriptFlags(JsonElement op) =>
+        op.TryGetProperty("flags", out var f) && f.GetString() is string s
+            && Enum.TryParse<ScriptEntry.Flag>(s, out var parsed)
+            ? parsed
+            : ScriptEntry.Flag.Local;
 
     private static ApplyOutcome AddProperty(ScriptEntry script, JsonElement op)
     {

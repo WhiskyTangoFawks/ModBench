@@ -822,4 +822,169 @@ public class PluginWriterVmadTests
         Assert.Contains(props, p => p.Name == "IsActive");
         Assert.Contains(props, p => p.Name == "Counter");
     }
+
+    // ---- 13.8.2 structural ops: add/remove script ----
+
+    [Fact]
+    public async Task SaveAsync_VmadAddScript_RecordHasNoVmad_CreatesAdapterWithScript()
+    {
+        FormKey npcFk = default;
+        using var fixture = new PluginFixtureBuilder("vmad-addscript-novmad")
+            .WithPlugin("VmadWrite.esp", mod => { npcFk = mod.Npcs.AddNew("PlainNpc").FormKey; })
+            .Build();
+        var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        var op = """{"op":"add_script","name":"NewScript","flags":"Local","properties":[]}""";
+        var result = await writer.SaveAsync(path, [MakeStructOp(npcFk, @"VMAD\NewScript", op)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\NewScript", result.Applied);
+        var vmad = ReloadNpc(path, npcFk).VirtualMachineAdapter;
+        Assert.NotNull(vmad);
+        Assert.Equal(2, vmad!.ObjectFormat);
+        Assert.Contains(vmad.Scripts, s => s.Name == "NewScript");
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadAddScript_ExistingVmad_AddsSortedByName()
+    {
+        var (path, npcKey, _, _, fixture) = BuildFixture("vmad-addscript-existing");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        var op = """{"op":"add_script","name":"AAAScript","flags":"Local","properties":[]}""";
+        var result = await writer.SaveAsync(path, [MakeStructOp(npcKey, @"VMAD\AAAScript", op)], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\AAAScript", result.Applied);
+        var names = ReloadNpc(path, npcKey).VirtualMachineAdapter!.Scripts.Select(s => s.Name).ToList();
+        Assert.Contains("AAAScript", names);
+        Assert.Equal(names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase), names);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadRemoveScript_RemovesAndKeepsSiblings()
+    {
+        var (path, npcKey, _, _, fixture) = BuildFixture("vmad-removescript");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        var result = await writer.SaveAsync(path,
+            [MakeStructOp(npcKey, @"VMAD\SiblingScript", """{"op":"remove_script"}""")], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\SiblingScript", result.Applied);
+        var scripts = ReloadNpc(path, npcKey).VirtualMachineAdapter!.Scripts;
+        Assert.DoesNotContain(scripts, s => s.Name == "SiblingScript");
+        Assert.Contains(scripts, s => s.Name == "DefaultScript");
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadRemoveLastScript_RetainsEmptyAdapter()
+    {
+        FormKey npcFk = default;
+        using var fixture = new PluginFixtureBuilder("vmad-removelastscript")
+            .WithPlugin("VmadWrite.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("OneScriptNpc");
+                npcFk = npc.FormKey;
+                var vmad = new VirtualMachineAdapter();
+                vmad.Scripts.Add(new ScriptEntry { Name = "OnlyScript", Flags = ScriptEntry.Flag.Local });
+                npc.VirtualMachineAdapter = vmad;
+            })
+            .Build();
+        var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        var result = await writer.SaveAsync(path,
+            [MakeStructOp(npcFk, @"VMAD\OnlyScript", """{"op":"remove_script"}""")], GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\OnlyScript", result.Applied);
+        var vmad = ReloadNpc(path, npcFk).VirtualMachineAdapter;
+        Assert.NotNull(vmad);
+        Assert.Empty(vmad!.Scripts);
+    }
+
+    // ---- 13.8.3 structural op: change property type ----
+
+    [Fact]
+    public async Task SaveAsync_VmadSetType_ReplacesWithDefaultValuedNewType()
+    {
+        // "Counter" is an Int property (Data 42) in BuildVmad; retype it to Float → default 0, Name kept.
+        var (path, npcKey, _, _, fixture) = BuildFixture("vmad-settype");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        var result = await writer.SaveAsync(path,
+            [MakeStructOp(npcKey, @"VMAD\DefaultScript\Counter", """{"op":"set_type","type":"Float"}""")],
+            GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Counter", result.Applied);
+        var prop = ReloadNpc(path, npcKey).VirtualMachineAdapter!.Scripts
+            .First(s => s.Name == "DefaultScript").Properties.First(p => p.Name == "Counter");
+        var floatProp = Assert.IsAssignableFrom<IScriptFloatPropertyGetter>(prop);
+        Assert.Equal(0f, floatProp.Data);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadSetType_PreservesFlags()
+    {
+        FormKey npcFk = default;
+        using var fixture = new PluginFixtureBuilder("vmad-settype-flags")
+            .WithPlugin("VmadWrite.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("FlagNpc");
+                npcFk = npc.FormKey;
+                var vmad = new VirtualMachineAdapter();
+                var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
+                script.Properties.Add(new ScriptIntProperty { Name = "P", Data = 5, Flags = ScriptProperty.Flag.Removed });
+                vmad.Scripts.Add(script);
+                npc.VirtualMachineAdapter = vmad;
+            })
+            .Build();
+        var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        await writer.SaveAsync(path,
+            [MakeStructOp(npcFk, @"VMAD\DefaultScript\P", """{"op":"set_type","type":"Bool"}""")],
+            GameRelease.Fallout4);
+
+        var prop = ReloadNpc(path, npcFk).VirtualMachineAdapter!.Scripts
+            .First(s => s.Name == "DefaultScript").Properties.First(p => p.Name == "P");
+        Assert.IsAssignableFrom<IScriptBoolPropertyGetter>(prop);
+        Assert.Equal(ScriptProperty.Flag.Removed, prop.Flags);
+    }
+
+    // ---- 13.8.4 structural op: set flags ----
+
+    [Fact]
+    public async Task SaveAsync_VmadSetPropertyFlags_WritesFlags()
+    {
+        var (path, npcKey, _, _, fixture) = BuildFixture("vmad-setpropflags");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        var result = await writer.SaveAsync(path,
+            [MakeStructOp(npcKey, @"VMAD\DefaultScript\Counter", """{"op":"set_flags","flags":"Removed"}""")],
+            GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript\Counter", result.Applied);
+        var prop = ReloadNpc(path, npcKey).VirtualMachineAdapter!.Scripts
+            .First(s => s.Name == "DefaultScript").Properties.First(p => p.Name == "Counter");
+        Assert.Equal(ScriptProperty.Flag.Removed, prop.Flags);
+    }
+
+    [Fact]
+    public async Task SaveAsync_VmadSetScriptFlags_WritesFlags()
+    {
+        var (path, npcKey, _, _, fixture) = BuildFixture("vmad-setscriptflags");
+        using var _ = fixture;
+        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+
+        var result = await writer.SaveAsync(path,
+            [MakeStructOp(npcKey, @"VMAD\DefaultScript", """{"op":"set_flags","flags":"Inherited"}""")],
+            GameRelease.Fallout4);
+
+        Assert.Contains(@"VMAD\DefaultScript", result.Applied);
+        var script = ReloadNpc(path, npcKey).VirtualMachineAdapter!.Scripts.First(s => s.Name == "DefaultScript");
+        Assert.Equal(ScriptEntry.Flag.Inherited, script.Flags);
+    }
 }
