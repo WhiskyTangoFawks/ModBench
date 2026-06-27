@@ -12,7 +12,8 @@ public class WorldspaceQueryServiceTests
     // block / sub-block grouping logic.
     private sealed class StubReader(
         IReadOnlyList<CellLocationSummary> cells,
-        IReadOnlyList<RecordSummary>? records = null) : IRecordReader
+        IReadOnlyList<RecordSummary>? records = null,
+        CellReferences? cellRefs = null) : IRecordReader
     {
         public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey) => cells;
 
@@ -27,7 +28,8 @@ public class WorldspaceQueryServiceTests
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferences(string fk) => [];
         public PagedResult<CellSummary> GetInteriorCells(string p, int l, int o) => new([], 0);
-        public CellReferences GetCellReferences(string p, string fk) => new([], []);
+        public CellReferences GetCellReferences(string p, string fk) => cellRefs ?? new([], []);
+        public PlacementRow? GetPlacement(string formKey, string plugin) => null;
     }
 
     private sealed class StubSession(IRecordReader repo) : ISessionManager
@@ -47,7 +49,12 @@ public class WorldspaceQueryServiceTests
     }
 
     private static WorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) =>
-        new(new StubSession(new StubReader(cells)));
+        new(new StubSession(new StubReader(cells)), DuckDbTestFactory.MakePendingChangeService());
+
+    private static WorldspaceQueryService ServiceWithChanges(
+        IPendingChangeService changes,
+        CellReferences? committedRefs = null) =>
+        new(new StubSession(new StubReader([], cellRefs: committedRefs)), changes);
 
     [Fact]
     public void GetWorldspaceBlocks_GroupsCellsIntoBlocksAndSubBlocks()
@@ -101,7 +108,7 @@ public class WorldspaceQueryServiceTests
     public void WorldspaceQuery_NoSession_ThrowsInvalidOperation()
     {
         // No session loaded → Repository is null → a clear InvalidOperationException, not an NRE.
-        var svc = new WorldspaceQueryService(new StubSession(null!));
+        var svc = new WorldspaceQueryService(new StubSession(null!), DuckDbTestFactory.MakePendingChangeService());
         Assert.Throws<InvalidOperationException>(() => svc.GetInteriorCells("M.esp", 50, 0));
     }
 
@@ -112,7 +119,7 @@ public class WorldspaceQueryServiceTests
             new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA"),
             new RecordSummary("0002:M.esp", "M.esp", 0, true, null),
         ]);
-        var svc = new WorldspaceQueryService(new StubSession(reader));
+        var svc = new WorldspaceQueryService(new StubSession(reader), DuckDbTestFactory.MakePendingChangeService());
 
         var result = svc.GetWorldspaces("M.esp");
 
@@ -120,6 +127,55 @@ public class WorldspaceQueryServiceTests
         Assert.Equal("0001:M.esp", result[0].FormKey);
         Assert.Equal("WorldA", result[0].EditorId);
         Assert.Null(result[1].EditorId);
+    }
+
+    [Fact]
+    public void GetCellReferences_PendingCreated_AppearsUnderCell_InCorrectGroup()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        changes.Upsert("1234:Patch.esp", "Patch.esp", "refr",
+            new() { [PendingChangeConstants.CreateFieldPath] = PendingChangeConstants.NullElement },
+            "user", null, [],
+            changeType: PendingChangeConstants.CreateChangeType,
+            parentCell: "cell:Fallout4.esm", placementGroup: PendingChangeConstants.PlacementGroupPersistent);
+
+        var result = ServiceWithChanges(changes).GetCellReferences("Patch.esp", "cell:Fallout4.esm");
+
+        Assert.Single(result.Persistent);
+        Assert.Equal("1234:Patch.esp", result.Persistent[0].FormKey);
+        Assert.Empty(result.Temporary);
+    }
+
+    [Fact]
+    public void GetCellReferences_PendingDeleted_IsHidden()
+    {
+        var committed = new CellReferences([new PlacedSummary("dead:Mod.esp", null, null, "refr")], []);
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        changes.Upsert("dead:Mod.esp", "Mod.esp", "refr",
+            new() { [PendingChangeConstants.DeleteFieldPath] = PendingChangeConstants.NullElement },
+            "user", null, [],
+            changeType: PendingChangeConstants.DeleteChangeType,
+            parentCell: "cell:Fallout4.esm");
+
+        var result = ServiceWithChanges(changes, committed).GetCellReferences("Mod.esp", "cell:Fallout4.esm");
+
+        Assert.Empty(result.Persistent);
+    }
+
+    [Fact]
+    public void GetCellReferences_CopiedRef_AppearsUnderTargetCell_NotOtherCell()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        changes.Upsert("5678:Patch.esp", "Patch.esp", "refr",
+            new() { [PendingChangeConstants.CreateFieldPath] = PendingChangeConstants.NullElement },
+            "user", null, [],
+            changeType: PendingChangeConstants.CreateChangeType,
+            parentCell: "target:Fallout4.esm", placementGroup: PendingChangeConstants.PlacementGroupTemporary);
+
+        var svc = ServiceWithChanges(changes);
+
+        Assert.Empty(svc.GetCellReferences("Patch.esp", "other:Fallout4.esm").Temporary);
+        Assert.Single(svc.GetCellReferences("Patch.esp", "target:Fallout4.esm").Temporary);
     }
 
     [Fact]

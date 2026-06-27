@@ -1,3 +1,4 @@
+using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Session;
 
@@ -21,8 +22,13 @@ public sealed class WorldspaceQueryService : IWorldspaceQueryService
     private const int WorldspaceListLimit = 5000;
 
     private readonly ISessionManager _session;
+    private readonly IPendingChangeService _changes;
 
-    public WorldspaceQueryService(ISessionManager session) => _session = session;
+    public WorldspaceQueryService(ISessionManager session, IPendingChangeService changes)
+    {
+        _session = session;
+        _changes = changes;
+    }
 
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin)
     {
@@ -62,8 +68,46 @@ public sealed class WorldspaceQueryService : IWorldspaceQueryService
         return new WorldspaceBlocks(blocks, topCell);
     }
 
-    public CellReferences GetCellReferences(string plugin, string cellFormKey) =>
-        RequireRepository().GetCellReferences(plugin, cellFormKey);
+    public CellReferences GetCellReferences(string plugin, string cellFormKey)
+    {
+        var committed = RequireRepository().GetCellReferences(plugin, cellFormKey);
+        var pluginChanges = _changes.GetChanges(plugin);
+
+        if (pluginChanges.Count == 0)
+            return committed;
+
+        var deleted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var persistentAdded = new List<PlacedSummary>();
+        var temporaryAdded = new List<PlacedSummary>();
+
+        foreach (var c in pluginChanges)
+        {
+            if (c.ChangeType == PendingChangeConstants.DeleteChangeType)
+                deleted.Add(c.FormKey);
+            else if (c.ChangeType == PendingChangeConstants.CreateChangeType
+                     && string.Equals(c.ParentCell, cellFormKey, StringComparison.OrdinalIgnoreCase))
+            {
+                var summary = new PlacedSummary(c.FormKey, null, null, c.RecordType);
+                if (c.PlacementGroup == PendingChangeConstants.PlacementGroupPersistent)
+                    persistentAdded.Add(summary);
+                else if (c.PlacementGroup == PendingChangeConstants.PlacementGroupTemporary)
+                    temporaryAdded.Add(summary);
+            }
+        }
+
+        if (deleted.Count == 0 && persistentAdded.Count == 0 && temporaryAdded.Count == 0)
+            return committed;
+
+        return new CellReferences(
+            committed.Persistent
+                .Where(r => !deleted.Contains(r.FormKey))
+                .Concat(persistentAdded)
+                .ToList(),
+            committed.Temporary
+                .Where(r => !deleted.Contains(r.FormKey))
+                .Concat(temporaryAdded)
+                .ToList());
+    }
 
     public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset) =>
         RequireRepository().GetInteriorCells(plugin, limit, offset);

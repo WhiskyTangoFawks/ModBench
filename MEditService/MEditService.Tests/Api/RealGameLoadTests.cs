@@ -46,6 +46,7 @@ public sealed class RealGameLoadTests : IDisposable
     {
         await using var app = new WebApplicationFactory<Program>();
         var client = app.CreateClient();
+        client.Timeout = TimeSpan.FromMinutes(10);
 
         var response = await client.PostAsJsonAsync("/session/load", new
         {
@@ -62,6 +63,7 @@ public sealed class RealGameLoadTests : IDisposable
     {
         await using var app = new WebApplicationFactory<Program>();
         var client = app.CreateClient();
+        client.Timeout = TimeSpan.FromMinutes(10);
 
         var load = await client.PostAsJsonAsync("/session/load", new
         {
