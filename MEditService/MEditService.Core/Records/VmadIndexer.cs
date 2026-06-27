@@ -215,14 +215,14 @@ internal sealed class VmadIndexer(
 
     private static void AppendValueColumns(IDuckDBAppenderRow row, VmadValue v, bool includeStructJson)
     {
-        AppendNullable(row, v.Bool);
-        AppendNullable(row, v.Int);
-        AppendNullable(row, v.Float);
-        AppendNullableString(row, v.String);
-        AppendNullableString(row, v.FormKey);
-        AppendNullable(row, v.Alias);
+        DuckDbAppend.Nullable(row, v.Bool);
+        DuckDbAppend.Nullable(row, v.Int);
+        DuckDbAppend.Nullable(row, v.Float);
+        DuckDbAppend.Nullable(row, v.String);
+        DuckDbAppend.Nullable(row, v.FormKey);
+        DuckDbAppend.Nullable(row, v.Alias);
         if (includeStructJson)
-            AppendNullableString(row, v.StructJson);
+            DuckDbAppend.Nullable(row, v.StructJson);
     }
 
     private static string SerializeStruct(IReadOnlyList<IScriptEntryGetter> members)
@@ -269,29 +269,4 @@ internal sealed class VmadIndexer(
 
     private static string FlagsString(ScriptProperty.Flag flags) =>
         flags == 0 ? "" : flags.ToString();
-
-    private static void AppendNullable(IDuckDBAppenderRow row, bool? val)
-    {
-        if (val.HasValue) row.AppendValue(val.Value); else row.AppendNullValue();
-    }
-
-    private static void AppendNullable(IDuckDBAppenderRow row, int? val)
-    {
-        if (val.HasValue) row.AppendValue(val.Value); else row.AppendNullValue();
-    }
-
-    private static void AppendNullable(IDuckDBAppenderRow row, float? val)
-    {
-        if (val.HasValue) row.AppendValue(val.Value); else row.AppendNullValue();
-    }
-
-    private static void AppendNullable(IDuckDBAppenderRow row, short? val)
-    {
-        if (val.HasValue) row.AppendValue(val.Value); else row.AppendNullValue();
-    }
-
-    private static void AppendNullableString(IDuckDBAppenderRow row, string? val)
-    {
-        if (val != null) row.AppendValue(val); else row.AppendNullValue();
-    }
 }

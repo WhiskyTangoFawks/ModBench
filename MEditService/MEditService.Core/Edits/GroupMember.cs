@@ -10,4 +10,7 @@ public record GroupMember(
     string FieldPath,
     JsonElement OldValue,
     JsonElement NewValue,
-    string Source = "system");
+    string Source = "system",
+    // Placement intent for placed records (refr/achr). Null for every non-placed member.
+    string? ParentCell = null,
+    string? PlacementGroup = null);

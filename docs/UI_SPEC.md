@@ -48,10 +48,12 @@ When a session is loaded, top-level nodes are:
 
 | Node | Label | Children |
 |------|-------|---------|
-| Plugins | One node per loaded plugin | Record type nodes |
+| Plugins | One node per loaded plugin | "Worldspaces" + "Interior Cells" nodes (Phase 16) + record type nodes |
 | Conflicts | "Conflicts ({N})" — lazy-loaded count | Conflict record nodes (Phase 9) |
-| Worldspaces | "Worldspaces" | WRLD record nodes (Phase 16) |
-| Interior Cells | "Interior Cells" | CELL record nodes (Phase 16) |
+
+The worldspace/cell tree is **per-plugin** (under each plugin node), showing what that
+plugin declares — its records and overrides — not a cross-plugin winner. `WRLD`, `CELL`,
+`REFR`, and `ACHR` are shown spatially (see §2.6) and hidden from the flat record-type list.
 
 ### 2.2 Plugin Nodes
 
@@ -137,7 +139,10 @@ Conflict-status filtering, EditorID search, and record-type narrowing are all ex
 
 ### 2.6 Worldspace/Interior Cell Tree (Phase 16)
 
-Under the "Worldspaces" top-level node:
+Per-plugin, under each plugin node sit "Worldspaces" and "Interior Cells" group nodes that
+show what *that plugin* declares (records and overrides), never a cross-plugin winner.
+Placed records (REFR/ACHR) are indexed; parentage lives in `placement` / `cell_location`
+side tables (ADR-0023). Under the plugin's "Worldspaces" node:
 
 ```
 Worldspaces
@@ -152,6 +157,14 @@ Worldspaces
 ```
 
 Block and Sub-block nodes are grouping nodes only (no record, no click action). Clicking a CELL or REFR node opens the record editor.
+
+**Context menu actions on worldspace/cell nodes (Phase 16.2.4):**
+
+| Node | contextValue | Actions |
+| ---- | ------------ | ------- |
+| CellNode | `cell` | *(none)* |
+| PlacedGroupNode | `placedGroup-persistent` / `placedGroup-temporary` | **Create Placed…** — QuickPick REFR/ACHR + optional template FormKey; calls `POST /plugins/{plugin}/cells/{cellFormKey}/placed` |
+| PlacedNode | `refr` | **Copy as Override Into…** (same handler as `mEdit.copyAsOverrideInto`); **Delete** (same handler as `mEdit.deleteRecord`) |
 
 ---
 

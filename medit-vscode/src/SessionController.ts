@@ -93,6 +93,31 @@ export class SessionController {
     }
   }
 
+  async createPlaced(
+    plugin: string,
+    cellFormKey: string,
+    recordType: string,
+    placementGroup: string,
+    templateFormKey?: string,
+  ): Promise<void> {
+    try {
+      const { response } = await this.deps.client.POST(
+        '/plugins/{plugin}/cells/{cellFormKey}/placed',
+        { params: { path: { plugin, cellFormKey } }, body: { recordType, placementGroup, templateFormKey } },
+      );
+      if (!response.ok) {
+        const text = await response.text();
+        this.log(`[SessionController] createPlaced failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Create placed failed — ${text}`);
+        return;
+      }
+      this.deps.refreshTree();
+    } catch (e) {
+      this.log(`[SessionController] createPlaced threw: ${e instanceof Error ? e.message : String(e)}`);
+      this.deps.showError(`mEdit: Create placed failed — ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   async saveGroup(groupId: string): Promise<void> {
     const { response } = await this.deps.client.POST('/change-groups/{groupId}/save', {
       params: { path: { groupId } },

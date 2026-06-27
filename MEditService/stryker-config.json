@@ -4,11 +4,11 @@
     "test-projects": [
       "MEditService.Tests/MEditService.Tests.csproj"
     ],
-    "concurrency": 11,
     "coverage-analysis": "perTest",
     "mutation-level": "Standard",
     "reporters": [
-      "json"
+      "json",
+      "progress"
     ],
     "thresholds": {
       "high": 80,

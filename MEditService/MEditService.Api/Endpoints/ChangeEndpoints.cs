@@ -82,6 +82,14 @@ public static class ChangeEndpoints
             .ProducesProblem(404)
             .ProducesProblem(409);
 
+        app.MapPost("/plugins/{plugin}/cells/{cellFormKey}/placed", CreatePlacedRecord)
+            .WithName("CreatePlacedRecord")
+            .WithTags(Tag)
+            .Produces<MEditService.Core.Queries.CreateRecordResult>()
+            .Produces<IReadOnlyList<ReferenceValidationError>>(422)
+            .ProducesProblem(404)
+            .ProducesProblem(409);
+
         app.MapPost("/changes/groups/save", SaveGroups)
             .WithName("SaveGroups")
             .WithTags(Tag)
@@ -205,6 +213,40 @@ public static class ChangeEndpoints
         }
     }
 
+    private static IResult CreatePlacedRecord(
+        [FromRoute] string plugin,
+        [FromRoute] string cellFormKey,
+        [FromBody] CreatePlacedRecordRequest req,
+        ISessionManager session,
+        IEditOrchestrator orchestrator)
+    {
+        var s = session.Session;
+        if (s == null) return Results.Problem(NoSessionMessage);
+
+        var decodedPlugin = Uri.UnescapeDataString(plugin);
+        var decodedCellFormKey = Uri.UnescapeDataString(cellFormKey);
+
+        var pluginMeta = s.Plugins.FirstOrDefault(p =>
+            p.Name.Equals(decodedPlugin, StringComparison.OrdinalIgnoreCase));
+        if (pluginMeta == null) return Results.NotFound();
+        if (pluginMeta.IsImmutable)
+            return Results.Problem($"'{decodedPlugin}' is a base-game plugin and cannot be edited.", statusCode: 409);
+
+        try
+        {
+            return orchestrator.CreatePlacedRecord(pluginMeta.Name, req.RecordType, decodedCellFormKey, req.PlacementGroup, req.TemplateFormKey, req.Source ?? "user") switch
+            {
+                CreateRecordOutcome.Success ok => Results.Ok(new MEditService.Core.Queries.CreateRecordResult(ok.FormKey, ok.GroupId)),
+                CreateRecordOutcome.InvalidReferences inv => Results.UnprocessableEntity(inv.Errors),
+                _ => Results.Problem("Unexpected error.")
+            };
+        }
+        catch (ArgumentException ex)
+        {
+            return Results.Problem(ex.Message, statusCode: 422);
+        }
+    }
+
     private static async Task<IResult> SaveGroups(
         [FromBody] Guid[] groupIds,
         PluginSaver saver,
@@ -298,6 +340,12 @@ public record PatchRecordRequest(
 
 public record CreateRecordRequest(
     string RecordType,
+    string? TemplateFormKey,
+    string? Source);
+
+public record CreatePlacedRecordRequest(
+    string RecordType,
+    string PlacementGroup,
     string? TemplateFormKey,
     string? Source);
 

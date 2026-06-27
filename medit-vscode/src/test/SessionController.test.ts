@@ -541,3 +541,60 @@ describe('SessionController.deleteRecords', () => {
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 });
+
+// ── createPlaced ───────────────────────────────────────────────────────────────
+
+describe('SessionController.createPlaced', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs to /plugins/{plugin}/cells/{cellFormKey}/placed and refreshes tree on success', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: true, status: 200 } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.createPlaced('MyMod.esp', '000001A4:Fallout4.esm', 'refr', 'persistent');
+
+    expect(client.POST).toHaveBeenCalledWith(
+      '/plugins/{plugin}/cells/{cellFormKey}/placed',
+      expect.objectContaining({
+        params: { path: { plugin: 'MyMod.esp', cellFormKey: '000001A4:Fallout4.esm' } },
+        body: expect.objectContaining({ recordType: 'refr', placementGroup: 'persistent' }),
+      }),
+    );
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+    expect(deps.showError).not.toHaveBeenCalled();
+  });
+
+  it('shows error on non-ok response', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({
+        response: { ok: false, status: 422, text: () => Promise.resolve('invalid type') },
+      }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.createPlaced('MyMod.esp', '000001A4:Fallout4.esm', 'refr', 'persistent');
+
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('invalid type'));
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  it('shows error on network failure', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockRejectedValue(new Error('network error')),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.createPlaced('MyMod.esp', '000001A4:Fallout4.esm', 'refr', 'persistent');
+
+    expect(deps.showError).toHaveBeenCalled();
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+});

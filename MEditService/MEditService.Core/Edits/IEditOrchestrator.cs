@@ -24,6 +24,15 @@ public interface IEditOrchestrator
     /// </summary>
     CreateRecordOutcome CreateRecord(string plugin, string recordType, string? templateFormKey, string source);
 
+    /// <summary>
+    /// Like <see cref="CreateRecord"/>, but for a placed record (refr/achr): stamps
+    /// <paramref name="parentCell"/> / <paramref name="placementGroup"/> onto the <c>$create</c> change so
+    /// the writer lands the new ref under that cell's Persistent/Temporary GRUP (ADR-0023).
+    /// </summary>
+    CreateRecordOutcome CreatePlacedRecord(
+        string plugin, string recordType, string parentCell, string placementGroup,
+        string? templateFormKey, string source);
+
     DeleteRecordsResult DeleteRecords(IReadOnlyList<(string FormKey, string Plugin)> targets, string source);
 
     RenumberResult Renumber(string formKey, uint newFormId, string plugin, string source);

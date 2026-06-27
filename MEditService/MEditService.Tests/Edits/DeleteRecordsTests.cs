@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Noggog;
 
 namespace MEditService.Tests.Edits;
 
@@ -53,6 +54,46 @@ public sealed class DeleteRecordsTests
         {
             var result = orchestrator.DeleteRecords([("000001:Test.esp", "Test.esp")], "user");
             Assert.IsType<DeleteRecordsResult.NoSession>(result);
+        }
+    }
+
+    // --- Phase 16.2.2: placed delete carries placement ---
+
+    [Fact]
+    public void DeleteRecords_PlacedTarget_StagesDeleteCarryingPlacement()
+    {
+        string cellFk = "", placedFk = "";
+        var data = new PluginFixtureBuilder("dr-placed")
+            .WithPlugin("Target.esp", mod =>
+            {
+                var wrld = mod.Worldspaces.AddNew("TestWorld");
+                var cell = new Cell(mod) { EditorID = "TestCell", Grid = new CellGrid { Point = new P2Int(0, 0) } };
+                var po = new PlacedObject(mod) { EditorID = "placedRef", Position = new P3Float(1f, 2f, 3f) };
+                cell.Persistent.Add(po);
+                var sub = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                sub.Items.Add(cell);
+                var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                block.Items.Add(sub);
+                wrld.SubCells.Add(block);
+                cellFk = cell.FormKey.ToString();
+                placedFk = po.FormKey.ToString();
+            })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.DeleteRecords([(placedFk, "Target.esp")], "user");
+
+                Assert.IsType<DeleteRecordsResult.Staged>(result);
+                var deleteChange = changes.GetChanges().Single(c => c.ChangeType == "delete");
+                Assert.Equal(placedFk, deleteChange.FormKey);
+                Assert.Equal(cellFk, deleteChange.ParentCell);
+                Assert.Equal("persistent", deleteChange.PlacementGroup);
+            }
         }
     }
 

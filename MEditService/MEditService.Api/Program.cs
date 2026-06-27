@@ -51,6 +51,7 @@ try
     builder.Services.AddSingleton<DuckDbPendingChangeService>();
     builder.Services.AddSingleton<IPendingChangeService>(sp => sp.GetRequiredService<DuckDbPendingChangeService>());
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
+    builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
     builder.Services.AddSingleton<IEditOrchestrator, EditOrchestrator>();
     builder.Services.AddSingleton<PluginSaver>();
 
@@ -71,6 +72,7 @@ try
     app.MapSessionEndpoints();
     app.MapPluginEndpoints();
     app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
+    app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapChangeEndpoints();
 
     var cliArgs = CliArgs.Parse(args);

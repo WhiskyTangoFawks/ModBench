@@ -90,8 +90,20 @@ The commit must exist on a feature branch before running mutation tests — Stry
 
 ### Step 5 — Mutation tests (only if Core CS changed)
 
-- [ ] Run: `cd MEditService && bash ../.claude/skills/mutation-test/run.sh`
+Mutation runs are scoped to changed files (`since: main`). Pick cadence by where you are:
+
+- **Per-subtask validate** — run mutation **targeted** at the methods you just changed, not the
+  full changed-files corpus:
+  `cd MEditService && bash ../.claude/skills/mutation-test/run.sh --file <ChangedFile>.cs`
+- **Phase-end validate** — run the full changed-files scope **once**:
+  `cd MEditService && bash ../.claude/skills/mutation-test/run.sh`
+
 - [ ] Triage survivors per /mutation-test
+- [ ] **Confirm each triaged fix with a targeted run** (`run.sh --mutant-ids <id>` / `--file`).
+  **Never re-run the full corpus to confirm a fix** — a full run can take ~an hour.
+
+The terminal window that opens shows live `%`-progress for the developer to watch; the agent
+just waits for the script to return and reads only the printed summary.
 
 ### Step 6 — Completion & Merge
 - [ ] For each task file listed above: set Status to complete, fill in Proof section with test output and commit hash, then move to `docs/tasks/completed-tasks/`

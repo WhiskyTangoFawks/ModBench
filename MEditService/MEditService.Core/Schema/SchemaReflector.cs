@@ -22,9 +22,12 @@ public sealed class SchemaReflector : ISchemaReflector
         _logger = logger ?? NullLogger<SchemaReflector>.Instance; // Stryker disable once NullCoalescing: logger init; only usage is a defensive LogTrace in catch — unreachable from tests without artificial exception injection
     }
 
+    // Phase 16: placed references (refr/achr) are indexed as normal records so the
+    // worldspace tree, record editor, and agent queries are uniform DuckDB reads; their
+    // cell parentage lives in the `placement` side table. Landscape/navmesh and the rare
+    // projectile/hazard placements stay excluded — they aren't standard editable refs.
     private static readonly HashSet<string> _excludedTables = new(StringComparer.OrdinalIgnoreCase)
     {
-        "refr", "achr",
         "land", "navm", "navi",
         "pgre", "pmis", "parw", "pbar", "pbea",
         "pcon", "pfla", "pfo2", "phzd",

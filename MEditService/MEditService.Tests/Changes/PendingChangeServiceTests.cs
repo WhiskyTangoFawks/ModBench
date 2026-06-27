@@ -559,6 +559,61 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Equal("agent", changes[0].Source);
     }
 
+    // --- Phase 16.2.2: placement columns ---
+
+    [Fact]
+    public void Upsert_WithPlacement_RoundTripsParentCellAndGroup()
+    {
+        _svc.Upsert("FK1", "P.esp", "refr",
+            new() { ["$create"] = J("null") }, "user", null, new(),
+            changeType: "create",
+            parentCell: "001234:Fallout4.esm", placementGroup: "temporary");
+
+        var change = _svc.GetChanges(formKey: "FK1")[0];
+        Assert.Equal("001234:Fallout4.esm", change.ParentCell);
+        Assert.Equal("temporary", change.PlacementGroup);
+    }
+
+    [Fact]
+    public void Upsert_WithoutPlacement_DefaultsBothNull()
+    {
+        _svc.Upsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"x\"") }, "user", null, new());
+
+        var change = _svc.GetChanges(formKey: "FK1")[0];
+        Assert.Null(change.ParentCell);
+        Assert.Null(change.PlacementGroup);
+    }
+
+    [Fact]
+    public void DrainForPlugin_PreservesPlacement()
+    {
+        _svc.Upsert("FK1", "A.esp", "refr",
+            new() { ["$create"] = J("null") }, "user", null, new(),
+            changeType: "create",
+            parentCell: "001234:Fallout4.esm", placementGroup: "persistent");
+
+        var drained = _svc.DrainForPlugin("A.esp");
+
+        Assert.Single(drained.Changes);
+        Assert.Equal("001234:Fallout4.esm", drained.Changes[0].ParentCell);
+        Assert.Equal("persistent", drained.Changes[0].PlacementGroup);
+    }
+
+    [Fact]
+    public void StageGroup_MemberWithPlacement_RoundTripsThroughGroupRead()
+    {
+        var members = new[]
+        {
+            new GroupMember("FK1", "P.esp", "refr", "delete", "$delete", J("null"), J("null"),
+                "user", "001234:Fallout4.esm", "temporary"),
+        };
+        var group = _svc.StageGroup("delete", null, members);
+
+        var change = _svc.GetChanges(groupId: group.Id)[0];
+        Assert.Equal("001234:Fallout4.esm", change.ParentCell);
+        Assert.Equal("temporary", change.PlacementGroup);
+    }
+
     // --- Semaphore lifecycle ---
 
     [Fact]

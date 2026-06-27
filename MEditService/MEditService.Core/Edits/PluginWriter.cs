@@ -1,11 +1,14 @@
 using System.Globalization;
+using System.Reflection;
 using System.Text.Json;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Plugins.Utility;
 
 namespace MEditService.Core.Edits;
 
@@ -14,12 +17,14 @@ public interface IPluginWriter
     Task<PreparedPluginSave> PrepareAsync(
         string pluginPath,
         IReadOnlyList<PendingChange> changes,
-        GameRelease gameRelease);
+        GameRelease gameRelease,
+        ILinkCache? linkCache = null);
 
     Task<SaveResult> SaveAsync(
         string pluginPath,
         IReadOnlyList<PendingChange> changes,
-        GameRelease gameRelease);
+        GameRelease gameRelease,
+        ILinkCache? linkCache = null);
 
     bool IsReadOnly(GameRelease release, string recordType, string fieldPath);
 }
@@ -40,7 +45,8 @@ public sealed class PluginWriter : IPluginWriter
     public async Task<PreparedPluginSave> PrepareAsync(
         string pluginPath,
         IReadOnlyList<PendingChange> changes,
-        GameRelease gameRelease)
+        GameRelease gameRelease,
+        ILinkCache? linkCache = null)
     {
         var backupPath = CreateBackup(pluginPath);
 
@@ -57,9 +63,10 @@ public sealed class PluginWriter : IPluginWriter
         var notFound = new List<string>();
         var createFailed = new List<string>();
 
-        ApplyCreateChanges(byFormKey, mod, schemas, applied, notFound, createFailed);
-        ApplyFieldChanges(byFormKey, mod, schemas, applied, readOnly, notFound);
-        ApplyDeleteChanges(byFormKey, mod, schemas, applied, notFound);
+        var placedCtx = new PlacedWriteContext(gameRelease, linkCache);
+        ApplyCreateChanges(byFormKey, mod, schemas, placedCtx, applied, notFound, createFailed);
+        ApplyFieldChanges(byFormKey, mod, schemas, placedCtx, applied, readOnly, notFound);
+        ApplyDeleteChanges(byFormKey, mod, schemas, placedCtx, applied, notFound);
         ApplyRenumberChanges(byFormKey, mod, schemas, applied, notFound);
 
         var dir = Path.GetDirectoryName(pluginPath)!;
@@ -79,9 +86,10 @@ public sealed class PluginWriter : IPluginWriter
     public async Task<SaveResult> SaveAsync(
         string pluginPath,
         IReadOnlyList<PendingChange> changes,
-        GameRelease gameRelease)
+        GameRelease gameRelease,
+        ILinkCache? linkCache = null)
     {
-        using var prep = await PrepareAsync(pluginPath, changes, gameRelease);
+        using var prep = await PrepareAsync(pluginPath, changes, gameRelease, linkCache);
         prep.Commit();
         PruneOldBackups(pluginPath);
         return prep.Result;
@@ -96,10 +104,15 @@ public sealed class PluginWriter : IPluginWriter
         return col?.Apply == null;
     }
 
+    // Carries the release + link cache needed by the cell-aware placed-record write paths
+    // (create/copy/delete) without breaking the parameter budget on the Apply methods.
+    private readonly record struct PlacedWriteContext(GameRelease Release, ILinkCache? LinkCache);
+
     private static void ApplyCreateChanges(
         IEnumerable<IGrouping<string, PendingChange>> byFormKey,
         IMod mod,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        PlacedWriteContext ctx,
         List<string> applied,
         List<string> notFound,
         List<string> createFailed)
@@ -115,7 +128,25 @@ public sealed class PluginWriter : IPluginWriter
                 continue;
             }
 
-            if (!schemas.TryGetValue(createChange.RecordType, out var schema) || schema.AddNew == null)
+            if (!schemas.TryGetValue(createChange.RecordType, out var schema))
+            {
+                createFailed.Add(createChange.RecordType);
+                continue;
+            }
+
+            // Placed records (refr/achr) have no top-level group; they live inside a cell's
+            // Persistent/Temporary GRUP. Route them to the cell-aware create path.
+            if (createChange.ParentCell != null)
+            {
+                switch (TryCreatePlaced(mod, ctx, schema, formKey, createChange))
+                {
+                    case ApplyOutcome.Applied: applied.Add(createChange.FieldPath); break;
+                    default: createFailed.Add(createChange.RecordType); break;
+                }
+                continue;
+            }
+
+            if (schema.AddNew == null)
             {
                 createFailed.Add(createChange.RecordType);
                 continue;
@@ -126,10 +157,94 @@ public sealed class PluginWriter : IPluginWriter
         }
     }
 
+    // Cell-aware create for placed records (refr/achr): pull the parent cell into `mod` as an
+    // override via the link cache, construct a blank placed record of the schema's concrete type,
+    // and add it to the cell's Persistent/Temporary list. Game-agnostic via reflection (mirrors
+    // PlacementWalker / SchemaReflector) so it holds for every Mutagen-supported game.
+    private static ApplyOutcome TryCreatePlaced(
+        IMod mod, PlacedWriteContext ctx, RecordTableSchema schema,
+        FormKey formKey, PendingChange createChange)
+    {
+        if (ctx.LinkCache == null) return ApplyOutcome.NotFound;
+        if (!FormKey.TryFactory(createChange.ParentCell!, out var cellFormKey)) return ApplyOutcome.NotFound;
+
+        // Mutagen's game-agnostic factory; schema.RecordType is the getter interface, which Loqui
+        // resolves to the concrete placed class. Throws only for unregistered types (not placed).
+        var placed = MajorRecordInstantiator.Activator(formKey, ctx.Release, schema.RecordType);
+
+        var cell = ResolveWinnerAsOverride(mod, ctx.LinkCache, cellFormKey);
+        if (cell == null) return ApplyOutcome.NotFound;
+
+        return AddToPlacementGroup(cell, createChange.PlacementGroup, placed)
+            ? ApplyOutcome.Applied
+            : ApplyOutcome.NotFound;
+    }
+
+    // Resolves a record's winning context from the link cache and pulls it into `mod` as an override,
+    // reconstructing its parentage. For a cell FormKey this yields the cell override (its
+    // worldspace/block chain rebuilt); for a placed-ref FormKey Mutagen rebuilds the cell→ref chain,
+    // pulling the parent cell in as an override and deep-copying the ref — so this doubles as the
+    // copy-as-override path for placed records. Invoked via reflection because ResolveContext /
+    // GetOrAddAsOverride are typed on the game's mod types.
+    private static IMajorRecord? ResolveWinnerAsOverride(IMod mod, ILinkCache linkCache, FormKey formKey)
+    {
+        // Pick the non-generic ResolveContext(FormKey, ResolveTarget) — the open-generic overload
+        // also matches by parameter types, so GetMethod alone is ambiguous.
+        var resolve = linkCache.GetType().GetMethods()
+            .FirstOrDefault(m => m is { Name: "ResolveContext", IsGenericMethodDefinition: false }
+                && m.GetParameters() is [{ ParameterType.Name: "FormKey" }, { ParameterType.Name: "ResolveTarget" }]);
+        if (resolve == null) return null;
+        var context = resolve.Invoke(linkCache, [formKey, ResolveTarget.Winner]);
+        var getOrAdd = context?.GetType().GetMethod("GetOrAddAsOverride", [mod.GetType()])
+            ?? context?.GetType().GetMethods()
+                .FirstOrDefault(m => m.Name == "GetOrAddAsOverride" && m.GetParameters().Length == 1);
+        return getOrAdd?.Invoke(context, [mod]) as IMajorRecord;
+    }
+
+    // Adds a placed record to the cell's Persistent or Temporary list (reflected by name).
+    private static bool AddToPlacementGroup(IMajorRecord cell, string? placementGroup, IMajorRecord placed)
+    {
+        var listName = placementGroup == "temporary" ? "Temporary" : "Persistent";
+        if (cell.GetType().GetProperty(listName)?.GetValue(cell) is not System.Collections.IList list)
+            return false;
+        list.Add(placed);
+        return true;
+    }
+
+    // Removes the placed record with the given FormKey from the cell's Persistent/Temporary list.
+    private static bool RemoveFromPlacementGroup(IMajorRecord cell, string? placementGroup, FormKey formKey)
+    {
+        var listName = placementGroup == "temporary" ? "Temporary" : "Persistent";
+        if (cell.GetType().GetProperty(listName)?.GetValue(cell) is not System.Collections.IList list)
+            return false;
+        for (var i = list.Count - 1; i >= 0; i--)
+            if (list[i] is IMajorRecordGetter rec && rec.FormKey == formKey)
+            {
+                list.RemoveAt(i);
+                return true;
+            }
+        return false;
+    }
+
+    // Copy-as-override for placed records: a group of field_edit changes that carries ParentCell but
+    // whose record is absent from `mod` is a copy of a placed ref. Resolving its winner and overriding
+    // it pulls the parent cell into `mod` and deep-copies the ref — Mutagen rebuilds the cell→ref
+    // parentage. Returns the materialised placed record so the staged field edits can apply to it.
+    private static IMajorRecord? TryMaterializePlacedCopy(
+        IMod mod, PlacedWriteContext ctx, IGrouping<string, PendingChange> group, FormKey formKey)
+    {
+        if (ctx.LinkCache == null) return null;
+        var copyChange = group.FirstOrDefault(c =>
+            c.ChangeType == PendingChangeConstants.FieldEditChangeType && c.ParentCell != null);
+        if (copyChange == null) return null;
+        return ResolveWinnerAsOverride(mod, ctx.LinkCache, formKey);
+    }
+
     private static void ApplyFieldChanges(
         IEnumerable<IGrouping<string, PendingChange>> byFormKey,
         IMod mod,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        PlacedWriteContext ctx,
         List<string> applied,
         List<string> readOnly,
         List<string> notFound)
@@ -139,6 +254,7 @@ public sealed class PluginWriter : IPluginWriter
             var fieldChanges = group.Where(c =>
                 c.ChangeType == PendingChangeConstants.FieldEditChangeType ||
                 c.ChangeType == PendingChangeConstants.VmadStructOpChangeType).ToList();
+            if (fieldChanges.Count == 0) continue;
 
             if (!FormKey.TryFactory(group.Key, out var formKey))
             {
@@ -146,7 +262,11 @@ public sealed class PluginWriter : IPluginWriter
                 continue;
             }
 
-            var record = mod.EnumerateMajorRecords().OfType<IMajorRecord>().FirstOrDefault(r => r.FormKey == formKey);
+            // Copy-as-override of a placed ref into a plugin that doesn't have it yet: the ref isn't
+            // in `mod`, so materialise it first — resolve the winner and pull it in as an override
+            // (parent cell + deep-copied ref), then apply the staged field edits onto it.
+            var record = mod.EnumerateMajorRecords().OfType<IMajorRecord>().FirstOrDefault(r => r.FormKey == formKey)
+                ?? TryMaterializePlacedCopy(mod, ctx, group, formKey);
             if (record == null)
             {
                 notFound.AddRange(fieldChanges.Select(c => c.FieldPath));
@@ -169,6 +289,7 @@ public sealed class PluginWriter : IPluginWriter
         IEnumerable<IGrouping<string, PendingChange>> byFormKey,
         IMod mod,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        PlacedWriteContext ctx,
         List<string> applied,
         List<string> notFound)
     {
@@ -177,19 +298,45 @@ public sealed class PluginWriter : IPluginWriter
             var deleteChange = group.FirstOrDefault(c => c.ChangeType == PendingChangeConstants.DeleteChangeType);
             if (deleteChange == null) continue;
 
-            if (!FormKey.TryFactory(group.Key, out var formKey) ||
-                !schemas.TryGetValue(deleteChange.RecordType, out var schema) ||
-                schema.Remove == null)
-            {
-                notFound.Add(deleteChange.FieldPath);
-                continue;
-            }
-
-            if (schema.Remove(mod, formKey))
+            if (TryDelete(mod, schemas, ctx, deleteChange, group.Key) == ApplyOutcome.Applied)
                 applied.Add(deleteChange.FieldPath);
             else
                 notFound.Add(deleteChange.FieldPath);
         }
+    }
+
+    private static ApplyOutcome TryDelete(
+        IMod mod, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        PlacedWriteContext ctx, PendingChange change, string formKeyStr)
+    {
+        if (!FormKey.TryFactory(formKeyStr, out var formKey))
+            return ApplyOutcome.NotFound;
+
+        // Placed records (refr/achr) have no top-level group; remove them from their parent cell's
+        // Persistent/Temporary list (pulling the cell in as an override) rather than via schema.Remove.
+        if (change.ParentCell != null)
+            return TryDeletePlaced(mod, ctx, change, formKey);
+
+        if (!schemas.TryGetValue(change.RecordType, out var schema) || schema.Remove == null)
+            return ApplyOutcome.NotFound;
+
+        return schema.Remove(mod, formKey) ? ApplyOutcome.Applied : ApplyOutcome.NotFound;
+    }
+
+    // Cell-aware delete for a placed record: pull the parent cell into `mod` as an override and remove
+    // the placed ref from its Persistent/Temporary list. Game-agnostic via ResolveWinnerAsOverride.
+    private static ApplyOutcome TryDeletePlaced(
+        IMod mod, PlacedWriteContext ctx, PendingChange change, FormKey formKey)
+    {
+        if (ctx.LinkCache == null) return ApplyOutcome.NotFound;
+        if (!FormKey.TryFactory(change.ParentCell!, out var cellFormKey)) return ApplyOutcome.NotFound;
+
+        var cell = ResolveWinnerAsOverride(mod, ctx.LinkCache, cellFormKey);
+        if (cell == null) return ApplyOutcome.NotFound;
+
+        return RemoveFromPlacementGroup(cell, change.PlacementGroup, formKey)
+            ? ApplyOutcome.Applied
+            : ApplyOutcome.NotFound;
     }
 
     private static void ApplyRenumberChanges(

@@ -112,6 +112,10 @@
         "title": "mEdit: Delete Record"
       },
       {
+        "command": "mEdit.createPlaced",
+        "title": "mEdit: Create Placed…"
+      },
+      {
         "command": "mEdit.saveGroup",
         "title": "mEdit: Save Group",
         "icon": "$(cloud-upload)"
@@ -187,6 +191,21 @@
           "command": "mEdit.deleteRecord",
           "when": "view == mEdit.pluginTree && viewItem == record",
           "group": "mEdit@3"
+        },
+        {
+          "command": "mEdit.createPlaced",
+          "when": "view == mEdit.pluginTree && (viewItem == placedGroup-persistent || viewItem == placedGroup-temporary)",
+          "group": "mEdit@1"
+        },
+        {
+          "command": "mEdit.copyAsOverrideInto",
+          "when": "view == mEdit.pluginTree && viewItem == refr",
+          "group": "mEdit@1"
+        },
+        {
+          "command": "mEdit.deleteRecord",
+          "when": "view == mEdit.pluginTree && viewItem == refr",
+          "group": "mEdit@2"
         },
         {
           "command": "mEdit.saveGroup",

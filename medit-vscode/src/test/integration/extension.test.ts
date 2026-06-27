@@ -70,6 +70,7 @@ describe('mEdit command registration', () => {
     'mEdit.revertGroup',
     'mEdit.saveAllGroups',
     'mEdit.revertAllGroups',
+    'mEdit.createPlaced',
   ];
 
   it('registers all expected commands on activation', async () => {

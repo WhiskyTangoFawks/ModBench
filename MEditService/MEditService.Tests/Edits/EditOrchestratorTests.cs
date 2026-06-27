@@ -10,6 +10,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog;
 
 namespace MEditService.Tests.Edits;
 
@@ -225,6 +226,107 @@ public sealed class EditOrchestratorTests
             var result = orchestrator.StageEdit("ABC:000001:X.esp", "X.esp", fields, "user", null);
 
             Assert.IsType<StageEditResult.NoSession>(result);
+        }
+    }
+
+    // --- Phase 16.2.2: placed create / copy ---
+
+    // Builds a worldspace cell holding one persistent placed object in the named plugin,
+    // capturing the cell + placed FormKeys.
+    private static PluginFixtureData PlacedFixture(
+        string prefix, string plugin, out string cellFk, out string placedFk)
+    {
+        string cell = "", placed = "";
+        var data = new PluginFixtureBuilder(prefix)
+            .WithPlugin(plugin, mod =>
+            {
+                var wrld = mod.Worldspaces.AddNew("TestWorld");
+                var c = new Cell(mod) { EditorID = "TestCell", Grid = new CellGrid { Point = new P2Int(0, 0) } };
+                var po = new PlacedObject(mod) { EditorID = "placedRef", Position = new P3Float(1f, 2f, 3f) };
+                c.Persistent.Add(po);
+                var sub = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                sub.Items.Add(c);
+                var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                block.Items.Add(sub);
+                wrld.SubCells.Add(block);
+                cell = c.FormKey.ToString();
+                placed = po.FormKey.ToString();
+            })
+            .WithPlugin("Target.esp")
+            .Build();
+        cellFk = cell;
+        placedFk = placed;
+        return data;
+    }
+
+    [Fact]
+    public void CreatePlacedRecord_StagesCreateChangeCarryingPlacement()
+    {
+        var data = new PluginFixtureBuilder("eo-create-placed")
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreatePlacedRecord(
+                        "Target.esp", "refr", "001234:Fallout4.esm", "temporary", null, "user"));
+
+                var createChange = changes.GetChanges(formKey: result.FormKey).Single(c => c.FieldPath == "$create");
+                Assert.Equal("001234:Fallout4.esm", createChange.ParentCell);
+                Assert.Equal("temporary", createChange.PlacementGroup);
+            }
+        }
+    }
+
+    [Fact]
+    public void CopyRecordTo_PlacedWinner_StagesChangesCarryingPlacement()
+    {
+        var data = PlacedFixture("eo-copy-placed", "Source.esp", out var cellFk, out var placedFk);
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.CopyRecordTo(placedFk, "Target.esp", "user");
+
+                Assert.IsType<StageEditResult.Staged>(result);
+                var staged = changes.GetChanges(formKey: placedFk, plugin: "Target.esp");
+                Assert.NotEmpty(staged);
+                Assert.All(staged, c => Assert.Equal(cellFk, c.ParentCell));
+                Assert.All(staged, c => Assert.Equal("persistent", c.PlacementGroup));
+            }
+        }
+    }
+
+    [Fact]
+    public void CopyRecordTo_NonPlacedWinner_StagesNullPlacement()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-copy-nonplaced")
+            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user");
+
+                var staged = changes.GetChanges(formKey: npcKey.ToString(), plugin: "Target.esp");
+                Assert.NotEmpty(staged);
+                Assert.All(staged, c => Assert.Null(c.ParentCell));
+                Assert.All(staged, c => Assert.Null(c.PlacementGroup));
+            }
         }
     }
 

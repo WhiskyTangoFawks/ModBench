@@ -298,6 +298,48 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
     }
 
     [Fact]
+    public async Task SavePlugin_CreatePlacedInMasterCell_LandsRefUnderOverrideCell()
+    {
+        // Proves the production save path hands the writer a typed link cache: a placed REFR created
+        // under a cell that lives only in a master is pulled into the active plugin as a cell override.
+        FormKey cellFk = default;
+        var data = new PluginFixtureBuilder("sm-placed-create")
+            .WithPlugin("Master.esp", mod =>
+            {
+                var wrld = mod.Worldspaces.AddNew("PlacedWorld");
+                var cell = new Cell(mod) { EditorID = "ExtCell", Grid = new CellGrid { Point = new Noggog.P2Int(1, 2) } };
+                cellFk = cell.FormKey;
+                var sub = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                sub.Items.Add(cell);
+                var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                block.Items.Add(sub);
+                wrld.SubCells.Add(block);
+            })
+            .WithPlugin("Active.esp", mod =>
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Master.esp") }))
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            var newRefFk = manager.ReserveFormKey("Active.esp");
+            var createChange = new PendingChange(
+                Guid.NewGuid(), newRefFk, "Active.esp", "$create", "refr",
+                J("null"), J("null"), "user", null, DateTime.UtcNow, "create", null,
+                ParentCell: cellFk.ToString(), PlacementGroup: "persistent");
+
+            await manager.SavePlugin("Active.esp", [createChange]);
+
+            var activePath = Path.Combine(data.DataFolder, "Active.esp");
+            using var saved = ModFactory.ImportGetter(
+                new ModPath(ModKey.FromFileName("Active.esp"), activePath), GameRelease.Fallout4);
+            var cell = saved.EnumerateMajorRecords().OfType<ICellGetter>().Single(c => c.FormKey == cellFk);
+            Assert.Contains(cell.Persistent, p => p.FormKey == FormKey.Factory(newRefFk));
+        }
+    }
+
+    [Fact]
     public async Task SavePlugin_WithCreateChange_ReloadPicksUpBumpedNextFormID()
     {
         var data = new PluginFixtureBuilder("sm-create-nfid")

@@ -2,6 +2,21 @@
 
 Stryker.NET mutation tests against `MEditService.Core`. Commands from `MEditService/`.
 
+> ⚠️ **Run `run.sh` foreground, exactly as documented.** Never as an agent background task
+> (`run_in_background`) — the harness SIGKILLs the task's process group, which kills the terminal
+> window `run.sh` spawns and can take VS Code down with it. Never `pkill`/`kill` host processes
+> (especially `pkill dotnet` — it kills VS Code's C# servers). The opened terminal is the
+> **developer's** live `%`-progress view (`progress` reporter); the agent only waits for the
+> script to return and reads the printed summary — raw Stryker output never enters agent context.
+
+> 🏎️ **Confirm fixes with targeted runs, never a full re-run.** A full run can take ~an hour, so
+> after triaging a survivor confirm it with `run.sh --mutant-ids <id>` / `--file <File>.cs`. The
+> ~316 MB real-game test was removed from the suite (it inflated every indexing mutant's timeout
+> budget); real-data coverage now comes from the small committed
+> `MEditService.Tests/TestData/mEditTestSubset.esm` (see `RealData/CutDownPluginGenerator.cs`).
+> The full-install smoke test (`RealData/RealInstallSmokeTests.cs`) is gated behind `MEDIT_SMOKE=1`
+> so it never runs under mutation.
+
 ## Running the report
 
 > ⚠️ **Never read `mutation-report.json` directly.** Files are 2–3 MB with full source embedded. Always run `run.sh` (calls `parse-report.py`) — only the summary reaches context.

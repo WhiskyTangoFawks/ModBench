@@ -56,6 +56,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 changed_at  TIMESTAMP   NOT NULL,
                 group_id    VARCHAR,
                 change_type VARCHAR     NOT NULL DEFAULT 'field_edit',
+                parent_cell     VARCHAR,
+                placement_group VARCHAR,
                 PRIMARY KEY (form_key, plugin, field_path)
             );
             CREATE TABLE IF NOT EXISTS pending_form_references (
@@ -113,7 +115,9 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         Dictionary<string, JsonElement> oldValues,
         IReadOnlyList<PendingFormRef>? formRefs = null,
         string changeType = PendingChangeConstants.FieldEditChangeType,
-        Guid? groupId = null)
+        Guid? groupId = null,
+        string? parentCell = null,
+        string? placementGroup = null)
     {
         _sem.Wait();
         try
@@ -147,8 +151,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = """
                     INSERT INTO pending_changes
-                        (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                        (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id, parent_cell, placement_group)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                     ON CONFLICT (form_key, plugin, field_path) DO UPDATE SET
                         new_value   = excluded.new_value,
                         changed_at  = excluded.changed_at,
@@ -156,7 +160,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                         description = excluded.description,
                         change_type = excluded.change_type,
                         group_id    = COALESCE(pending_changes.group_id, excluded.group_id)
-                    RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id
+                    RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id, parent_cell, placement_group
                     """;
                 cmd.Parameters.Add(new DuckDBParameter { Value = id });
                 cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
@@ -170,6 +174,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 cmd.Parameters.Add(new DuckDBParameter { Value = now });
                 cmd.Parameters.Add(new DuckDBParameter { Value = changeType });
                 cmd.Parameters.Add(new DuckDBParameter { Value = groupId.HasValue ? (object)groupId.Value.ToString() : DBNull.Value });
+                cmd.Parameters.Add(new DuckDBParameter { Value = (object?)parentCell ?? DBNull.Value });
+                cmd.Parameters.Add(new DuckDBParameter { Value = (object?)placementGroup ?? DBNull.Value });
 
                 using var reader = cmd.ExecuteReader();
                 if (reader.Read())
@@ -226,7 +232,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"""
-            SELECT id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id
+            SELECT id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id, parent_cell, placement_group
             FROM pending_changes{where}
             ORDER BY changed_at
             """;
@@ -409,7 +415,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             cmd.CommandText = """
                 DELETE FROM pending_changes
                 WHERE plugin = $1
-                RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id
+                RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id, parent_cell, placement_group
                 """;
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
 
@@ -602,8 +608,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 using var ins = conn.CreateCommand();
                 ins.CommandText = """
                     INSERT INTO pending_changes
-                        (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, group_id, change_type)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                        (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, group_id, change_type, parent_cell, placement_group)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                     ON CONFLICT (form_key, plugin, field_path) DO UPDATE SET
                         new_value   = excluded.new_value,
                         changed_at  = excluded.changed_at,
@@ -624,6 +630,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 ins.Parameters.Add(new DuckDBParameter { Value = createdAt });
                 ins.Parameters.Add(new DuckDBParameter { Value = groupId.ToString() });
                 ins.Parameters.Add(new DuckDBParameter { Value = m.ChangeType });
+                ins.Parameters.Add(new DuckDBParameter { Value = (object?)m.ParentCell ?? DBNull.Value });
+                ins.Parameters.Add(new DuckDBParameter { Value = (object?)m.PlacementGroup ?? DBNull.Value });
                 ins.ExecuteNonQuery();
             }
 
@@ -711,12 +719,14 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         var changedAt = reader.GetDateTime(9);
         var changeType = reader.GetString(10);
         var groupId = reader.IsDBNull(11) ? (Guid?)null : Guid.Parse(reader.GetString(11));
+        var parentCell = reader.IsDBNull(12) ? null : reader.GetString(12);
+        var placementGroup = reader.IsDBNull(13) ? null : reader.GetString(13);
 
         using var oldDoc = JsonDocument.Parse(oldValueJson);
         var oldValue = oldDoc.RootElement.Clone();
         using var newDoc = JsonDocument.Parse(newValueJson);
         var newValue = newDoc.RootElement.Clone();
 
-        return new PendingChange(id, formKey, plugin, fieldPath, recordType, oldValue, newValue, source, description, changedAt, changeType, groupId);
+        return new PendingChange(id, formKey, plugin, fieldPath, recordType, oldValue, newValue, source, description, changedAt, changeType, groupId, parentCell, placementGroup);
     }
 }

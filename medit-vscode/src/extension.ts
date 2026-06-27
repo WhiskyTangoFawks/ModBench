@@ -7,7 +7,7 @@ import { createApiClient } from './ApiClient';
 import { detectGamePaths } from './GamePathDetector';
 import { SessionWizard } from './SessionWizard';
 import { SessionController } from './SessionController';
-import { LoadMoreNode, PluginTreeProvider, RecordNode } from './PluginTreeProvider';
+import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeProvider, RecordNode } from './PluginTreeProvider';
 import { ChangeGroupNode, ChangeGroupsTreeProvider } from './ChangeGroupsTreeProvider';
 import { ApiPluginRepository } from './PluginRepository';
 import { FilterCodeLensProvider } from './FilterCodeLensProvider';
@@ -152,8 +152,17 @@ export async function activate(context: vscode.ExtensionContext) {
         (fk) => { openRecordPanel(context, openPanels, fk, fk, port, vscode.ViewColumn.Beside); },
       );
     }),
-    vscode.commands.registerCommand('mEdit.deleteRecord', async (item?: RecordNode, allSelected?: RecordNode[]) => {
-      let targets: RecordNode[];
+    vscode.commands.registerCommand('mEdit.deleteRecord', async (item?: RecordNode | PlacedNode, allSelected?: (RecordNode | PlacedNode)[]) => {
+      const toTarget = (n: RecordNode | PlacedNode) =>
+        n instanceof PlacedNode
+          ? { formKey: n.placed.formKey ?? '', plugin: n.plugin }
+          : { formKey: n.record.formKey, plugin: n.record.plugin };
+      const toName = (n: RecordNode | PlacedNode) =>
+        n instanceof PlacedNode
+          ? (n.placed.editorId ?? n.placed.formKey ?? '')
+          : (n.record.editorId ?? n.record.formKey);
+
+      let targets: (RecordNode | PlacedNode)[];
       if (allSelected?.length) {
         targets = allSelected;
       } else {
@@ -164,11 +173,11 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage('mEdit: Select one or more records in the tree first.');
         return;
       }
-      const names = targets.map(n => n.record.editorId ?? n.record.formKey).join(', ');
+      const names = targets.map(toName).join(', ');
       const label = targets.length === 1 ? `Delete "${names}"?` : `Delete ${targets.length} records?`;
       const answer = await vscode.window.showWarningMessage(label, { modal: true }, 'Delete');
       if (answer !== 'Delete') return;
-      await controller.deleteRecords(targets.map(n => ({ formKey: n.record.formKey, plugin: n.record.plugin })));
+      await controller.deleteRecords(targets.map(toTarget));
     }),
     vscode.commands.registerCommand('mEdit.saveGroup', async (node: ChangeGroupNode) => {
       if (!node?.groupId) return;
@@ -184,8 +193,8 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('mEdit.revertAllGroups', async () => {
       await controller.revertAllGroups();
     }),
-    vscode.commands.registerCommand('mEdit.copyAsOverrideInto', async (node?: RecordNode) => {
-      const formKey = node?.record?.formKey;
+    vscode.commands.registerCommand('mEdit.copyAsOverrideInto', async (node?: RecordNode | PlacedNode) => {
+      const formKey = node instanceof PlacedNode ? node.placed.formKey : node?.record?.formKey;
       if (!formKey) {
         vscode.window.showErrorMessage('mEdit: No record selected.');
         return;
@@ -211,6 +220,22 @@ export async function activate(context: vscode.ExtensionContext) {
       }
 
       await controller.copyRecordTo(formKey, targetPlugin);
+    }),
+    vscode.commands.registerCommand('mEdit.createPlaced', async (node?: PlacedGroupNode) => {
+      if (!node) return;
+      const recordType = await vscode.window.showQuickPick(
+        [{ label: 'REFR', description: 'Placed object' }, { label: 'ACHR', description: 'Placed actor' }],
+        { placeHolder: 'Select placed record type' },
+      );
+      if (!recordType) return;
+      const templateFormKey = await vscode.window.showInputBox({
+        prompt: 'Template FormKey (optional — leave blank for empty record)',
+        placeHolder: 'e.g. 000001A4:Fallout4.esm',
+      });
+      await controller.createPlaced(
+        node.plugin, node.cellFormKey, recordType.label.toLowerCase(),
+        node.group, templateFormKey || undefined,
+      );
     }),
   );
 

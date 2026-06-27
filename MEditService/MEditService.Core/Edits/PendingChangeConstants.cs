@@ -12,6 +12,8 @@ internal static class PendingChangeConstants
     internal const string RenumberChangeType = "renumber";
     internal const string RenumberFieldPath = "$renumber";
     internal const string VmadStructOpChangeType = "vmad_struct_op";
+    internal const string PlacementGroupPersistent = "persistent";
+    internal const string PlacementGroupTemporary = "temporary";
 
     internal static readonly JsonElement NullElement =
         JsonSerializer.SerializeToElement<object?>(null);

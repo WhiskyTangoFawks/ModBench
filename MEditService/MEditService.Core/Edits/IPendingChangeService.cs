@@ -20,7 +20,9 @@ public interface IPendingChangeService
         Dictionary<string, JsonElement> oldValues,
         IReadOnlyList<PendingFormRef>? formRefs = null,
         string changeType = PendingChangeConstants.FieldEditChangeType,
-        Guid? groupId = null);
+        Guid? groupId = null,
+        string? parentCell = null,
+        string? placementGroup = null);
 
     /// <summary>
     /// Returns the GroupId of the first pending <c>$create</c> change whose FormKey is in <paramref name="formKeys"/>,

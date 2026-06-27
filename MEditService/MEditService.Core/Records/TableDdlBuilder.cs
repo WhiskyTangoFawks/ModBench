@@ -21,6 +21,7 @@ public sealed class TableDdlBuilder : ITableDdlBuilder
         CreateIndexStateTable(connection);
         CreateFormReferencesTable(connection);
         CreateVmadTables(connection);
+        CreatePlacementTables(connection);
         foreach (var schema in _reflector.GetSchemas(release).Values)
             CreateRecordTable(connection, schema);
     }
@@ -127,6 +128,51 @@ public sealed class TableDdlBuilder : ITableDdlBuilder
         Execute(connection, """
             CREATE INDEX IF NOT EXISTS idx_vmad_items_fk
                 ON vmad_property_list_items(form_key, plugin)
+            """);
+    }
+
+    // Phase 16: side tables for the worldspace tree. Parentage is structural (GRUP nesting),
+    // so it lives here rather than on the reflected record tables — keeping placement read-only
+    // by construction and isolating "move a ref between cells" as a structural op.
+    internal static void CreatePlacementTables(DuckDBConnection connection)
+    {
+        Execute(connection, """
+            CREATE TABLE IF NOT EXISTS placement (
+                form_key        VARCHAR NOT NULL,
+                plugin          VARCHAR NOT NULL,
+                parent_cell     VARCHAR NOT NULL,
+                placement_group VARCHAR NOT NULL,
+                pos_x           FLOAT,
+                pos_y           FLOAT,
+                pos_z           FLOAT
+            )
+            """);
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_placement_cell
+                ON placement(parent_cell, plugin)
+            """);
+
+        Execute(connection, """
+            CREATE TABLE IF NOT EXISTS cell_location (
+                cell_form_key    VARCHAR NOT NULL,
+                plugin           VARCHAR NOT NULL,
+                parent_worldspace VARCHAR,
+                block_x          INTEGER,
+                block_y          INTEGER,
+                sub_x            INTEGER,
+                sub_y            INTEGER,
+                grid_x           INTEGER,
+                grid_y           INTEGER,
+                is_interior      BOOLEAN NOT NULL DEFAULT FALSE
+            )
+            """);
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_cell_location_worldspace
+                ON cell_location(parent_worldspace, plugin)
+            """);
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_cell_location_region
+                ON cell_location(parent_worldspace, grid_x, grid_y)
             """);
     }
 

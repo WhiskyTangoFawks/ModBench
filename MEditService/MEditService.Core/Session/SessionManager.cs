@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Session;
@@ -133,7 +134,7 @@ public sealed class SessionManager : ISessionManager, IDisposable
     public async Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes)
     {
         var (metadata, _, gameRelease) = RequirePlugin(plugin);
-        var result = await _writer.SaveAsync(metadata.Path, changes, gameRelease);
+        var result = await _writer.SaveAsync(metadata.Path, changes, gameRelease, BuildTypedLinkCache(gameRelease));
         await ReindexPlugin(plugin);
         return result;
     }
@@ -141,7 +142,21 @@ public sealed class SessionManager : ISessionManager, IDisposable
     public async Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes)
     {
         var (metadata, _, gameRelease) = RequirePlugin(plugin);
-        return await _writer.PrepareAsync(metadata.Path, changes, gameRelease);
+        return await _writer.PrepareAsync(metadata.Path, changes, gameRelease, BuildTypedLinkCache(gameRelease));
+    }
+
+    // Typed link cache over the session's load-order getters; the placed-record write paths in
+    // PluginWriter need the typed cache for GetOrAddAsOverride (see TypedLinkCacheFactory).
+    private ILinkCache BuildTypedLinkCache(GameRelease gameRelease)
+    {
+        lock (_lock)
+        {
+            var mods = _session!.Plugins
+                .Select(p => _session.GetMod(p.Name))
+                .OfType<IModGetter>()
+                .ToList();
+            return TypedLinkCacheFactory.Create(mods, gameRelease);
+        }
     }
 
     public Task ReindexPlugin(string plugin)

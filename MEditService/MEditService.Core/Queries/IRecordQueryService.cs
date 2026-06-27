@@ -14,4 +14,5 @@ public interface IRecordQueryService
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
     VmadData? GetVmad(string formKey, string plugin);
+    PlacementRow? GetPlacement(string formKey, string plugin);
 }

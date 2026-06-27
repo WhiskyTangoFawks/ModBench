@@ -19,11 +19,23 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_ExcludesPlacedRecordTypes()
+    public void GetSchemas_IncludesPlacedRecordTypes()
     {
+        // Phase 16: placed objects are indexed as normal records so the worldspace tree,
+        // record editor, and agent queries are uniform DuckDB reads.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.False(schemas.ContainsKey("refr"));
-        Assert.False(schemas.ContainsKey("achr"));
+        Assert.True(schemas.ContainsKey("refr"));
+        Assert.True(schemas.ContainsKey("achr"));
+    }
+
+    [Fact]
+    public void GetSchemas_StillExcludesNonReferenceCellChildren()
+    {
+        // Landscape and navmesh live in cell children too but aren't standard refs.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        Assert.False(schemas.ContainsKey("land"));
+        Assert.False(schemas.ContainsKey("navm"));
+        Assert.False(schemas.ContainsKey("navi"));
     }
 
     [Fact]

@@ -25,7 +25,10 @@ vi.mock('vscode', () => ({
   ThemeIcon: class { constructor(public id: string) {} },
 }));
 
-import { PluginTreeProvider, PluginNode, RecordTypeNode, RecordNode, LoadMoreNode } from '../PluginTreeProvider';
+import {
+  PluginTreeProvider, PluginNode, RecordTypeNode, RecordNode, LoadMoreNode,
+  CellNode, InteriorCellsNode, InteriorLoadMoreNode,
+} from '../PluginTreeProvider';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -64,6 +67,10 @@ function makeRepository(overrides: Partial<{
     setFilter: vi.fn().mockResolvedValue(null),
     clearFilter: vi.fn().mockResolvedValue(undefined),
     getActiveFilter: vi.fn().mockResolvedValue(null),
+    getWorldspaces: vi.fn().mockResolvedValue([]),
+    getWorldspaceBlocks: vi.fn().mockResolvedValue({ blocks: [], topCell: null }),
+    getCellReferences: vi.fn().mockResolvedValue({ persistent: [], temporary: [] }),
+    getInteriorCells: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   };
 }
 
@@ -317,5 +324,86 @@ describe('PluginTreeProvider.refresh', () => {
     provider.refresh();
 
     expect(fired).toHaveLength(1);
+  });
+});
+
+// ── Phase 16: worldspace / cell / placed-object tree ──────────────────────────
+
+describe('PluginTreeProvider worldspace tree', () => {
+  it('adds Worldspaces and Interior Cells nodes and hides spatial record types', async () => {
+    const repo = makeRepository({
+      recordTypes: [
+        { type: 'worldspace', count: 1 },
+        { type: 'cell', count: 4 },
+        { type: 'refr', count: 99 },
+        { type: 'WEAP', count: 5 },
+      ],
+    });
+    const provider = new PluginTreeProvider(repo);
+    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
+
+    const children = await provider.getChildren(pluginNode);
+    const labels = children.map(c => c.label);
+
+    expect(labels).toContain('Worldspaces');
+    expect(labels).toContain('Interior Cells');
+    expect(labels).toContain('WEAP');
+    expect(labels).not.toContain('refr');
+    expect(labels).not.toContain('cell');
+    expect(labels).not.toContain('worldspace');
+  });
+
+  it('expands a worldspace into its TopCell and blocks', async () => {
+    const repo = makeRepository({ recordTypes: [{ type: 'worldspace', count: 1 }] });
+    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World' }]);
+    (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
+      topCell: { formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null },
+      blocks: [{ x: 0, y: 0, subBlocks: [{ x: 0, y: 0, cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5 }] }] }],
+    });
+    const provider = new PluginTreeProvider(repo);
+    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
+    const [wsRoot] = await provider.getChildren(pluginNode);
+    const [wsNode] = await provider.getChildren(wsRoot);
+
+    const wsChildren = await provider.getChildren(wsNode);
+    const [, blockNode] = wsChildren;
+    const subBlocks = await provider.getChildren(blockNode);
+    const cells = await provider.getChildren(subBlocks[0]);
+
+    expect(wsChildren).toHaveLength(2); // TopCell + 1 block
+    expect((cells[0] as CellNode).cell.cellX).toBe(12);
+    expect(cells[0].label).toBe('Cell (12, -5)');
+  });
+
+  it('expands a cell into non-empty persistent/temporary groups and placed leaves', async () => {
+    const repo = makeRepository();
+    (repo.getCellReferences as ReturnType<typeof vi.fn>).mockResolvedValue({
+      persistent: [{ formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr' }],
+      temporary: [],
+    });
+    const provider = new PluginTreeProvider(repo);
+    const cellNode = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0 });
+
+    const groups = await provider.getChildren(cellNode);
+    expect(groups).toHaveLength(1); // only persistent (temporary empty)
+    expect(groups[0].label).toBe('Persistent');
+
+    const placed = await provider.getChildren(groups[0]);
+    expect(placed).toHaveLength(1);
+    expect(placed[0].label).toBe('barrelRef [REFR:b]');
+  });
+
+  it('paginates interior cells with a load-more node', async () => {
+    const repo = makeRepository();
+    (repo.getInteriorCells as ReturnType<typeof vi.fn>).mockResolvedValue({
+      items: [{ formKey: 'i:M.esp', editorId: 'IntCell', cellX: 0, cellY: 0 }],
+      total: 60,
+    });
+    const provider = new PluginTreeProvider(repo);
+    const node = new InteriorCellsNode('M.esp');
+
+    const children = await provider.getChildren(node);
+    expect(children.filter(c => c instanceof CellNode)).toHaveLength(1);
+    expect(children.filter(c => c instanceof InteriorLoadMoreNode)).toHaveLength(1);
   });
 });

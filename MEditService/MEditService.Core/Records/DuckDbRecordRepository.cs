@@ -19,6 +19,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     private readonly ILogger _logger;
     private readonly DuckDBConnection _connection;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
+    private readonly PlacementWalker _placementWalker = new();
+    private static readonly string[] _placedTableNames = ["refr", "achr"];
     private bool _filterActive;
 
     public DuckDBConnection Connection => _connection;
@@ -104,6 +106,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         // before the single form_references flush below.
         DeleteVmadForPlugin(plugin);
         IndexVmad(pluginMod, plugin, refs);
+
+        IndexPlacement(pluginMod, plugin);
 
         // Delete stale refs only after both loops succeed — an exception mid-loop now leaves
         // existing form_references intact rather than permanently empty.
@@ -579,6 +583,46 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         _logger.LogInformation("Indexed VMAD for {Count} records in {Plugin}", vmadCount, plugin);
     }
 
+    // Phase 16: populate the worldspace-tree side tables from the GRUP hierarchy that
+    // EnumerateMajorRecords flattens away.
+    private void IndexPlacement(IModGetter pluginMod, string plugin)
+    {
+        DeleteExisting("placement", plugin);
+        DeleteExisting("cell_location", plugin);
+
+        using var cellAppender = _connection.CreateAppender("cell_location");
+        using var placeAppender = _connection.CreateAppender("placement");
+
+        _placementWalker.Walk(pluginMod,
+            cell =>
+            {
+                var row = cellAppender.CreateRow();
+                row.AppendValue(cell.CellFormKey);
+                row.AppendValue(plugin);
+                DuckDbAppend.Nullable(row, cell.ParentWorldspace);
+                DuckDbAppend.Nullable(row, cell.BlockX);
+                DuckDbAppend.Nullable(row, cell.BlockY);
+                DuckDbAppend.Nullable(row, cell.SubX);
+                DuckDbAppend.Nullable(row, cell.SubY);
+                DuckDbAppend.Nullable(row, cell.GridX);
+                DuckDbAppend.Nullable(row, cell.GridY);
+                DuckDbAppend.Nullable(row, cell.IsInterior);
+                row.EndRow();
+            },
+            placed =>
+            {
+                var row = placeAppender.CreateRow();
+                row.AppendValue(placed.FormKey);
+                row.AppendValue(plugin);
+                row.AppendValue(placed.ParentCell);
+                row.AppendValue(placed.PlacementGroup);
+                DuckDbAppend.Nullable(row, placed.PosX);
+                DuckDbAppend.Nullable(row, placed.PosY);
+                DuckDbAppend.Nullable(row, placed.PosZ);
+                row.EndRow();
+            });
+    }
+
     private void DeleteVmadForPlugin(string plugin)
     {
         foreach (var table in (string[])["vmad_scripts", "vmad_properties", "vmad_property_list_items"])
@@ -671,6 +715,120 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 reader.GetString(3),
                 reader.IsDBNull(4) ? null : reader.GetString(4)));
         return results;
+    }
+
+    // ── Phase 16: worldspace tree reads ────────────────────────────────────────
+
+    public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
+            FROM cell_location cl
+            LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin
+            WHERE cl.parent_worldspace = $1 AND cl.plugin = $2
+            ORDER BY cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
+            """;
+        AddParams(cmd, [worldspaceFormKey, plugin]);
+        using var reader = cmd.ExecuteReader();
+
+        var rows = new List<CellLocationSummary>();
+        while (reader.Read())
+            rows.Add(new CellLocationSummary(
+                reader.GetString(0),
+                reader.IsDBNull(1) ? null : reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetInt32(2),
+                reader.IsDBNull(3) ? null : reader.GetInt32(3),
+                reader.IsDBNull(4) ? null : reader.GetInt32(4),
+                reader.IsDBNull(5) ? null : reader.GetInt32(5),
+                reader.IsDBNull(6) ? null : reader.GetInt32(6),
+                reader.IsDBNull(7) ? null : reader.GetInt32(7)));
+        return rows;
+    }
+
+    public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset)
+    {
+        using var countCmd = _connection.CreateCommand();
+        countCmd.CommandText = "SELECT COUNT(*) FROM cell_location WHERE is_interior AND plugin = $1";
+        countCmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        var total = (long)countCmd.ExecuteScalar()!;
+
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y
+            FROM cell_location cl
+            LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin
+            WHERE cl.is_interior AND cl.plugin = $1
+            ORDER BY c.editor_id
+            LIMIT {limit} OFFSET {offset}
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        using var reader = cmd.ExecuteReader();
+
+        var items = new List<CellSummary>();
+        while (reader.Read())
+            items.Add(new CellSummary(
+                reader.GetString(0),
+                reader.IsDBNull(1) ? null : reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetInt32(2),
+                reader.IsDBNull(3) ? null : reader.GetInt32(3)));
+        return new PagedResult<CellSummary>(items, (int)total);
+    }
+
+    public CellReferences GetCellReferences(string plugin, string cellFormKey)
+    {
+        var schemas = RequireSchemas();
+        var placedTables = _placedTableNames.Where(schemas.ContainsKey).ToList();
+        if (placedTables.Count == 0)
+            return new CellReferences([], []);
+
+        var union = string.Join("\nUNION ALL\n",
+            placedTables.Select(t => $"SELECT '{t}' AS rt, form_key, plugin, editor_id, \"base\" FROM \"{t}\""));
+
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT p.placement_group, r.rt, p.form_key, r.editor_id, r.base
+            FROM placement p
+            JOIN ({union}) r ON r.form_key = p.form_key AND r.plugin = p.plugin
+            WHERE p.parent_cell = $1 AND p.plugin = $2
+            ORDER BY r.editor_id
+            """;
+        AddParams(cmd, [cellFormKey, plugin]);
+        using var reader = cmd.ExecuteReader();
+
+        var persistent = new List<PlacedSummary>();
+        var temporary = new List<PlacedSummary>();
+        while (reader.Read())
+        {
+            var group = reader.GetString(0);
+            var summary = new PlacedSummary(
+                reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.GetString(1));
+            (group == "persistent" ? persistent : temporary).Add(summary);
+        }
+        return new CellReferences(persistent, temporary);
+    }
+
+    public PlacementRow? GetPlacement(string formKey, string plugin)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT parent_cell, placement_group, pos_x, pos_y, pos_z
+            FROM placement
+            WHERE form_key = $1 AND plugin = $2
+            """;
+        AddParams(cmd, [formKey, plugin]);
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read()) return null;
+        return new PlacementRow(
+            formKey,
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.IsDBNull(2) ? null : reader.GetFloat(2),
+            reader.IsDBNull(3) ? null : reader.GetFloat(3),
+            reader.IsDBNull(4) ? null : reader.GetFloat(4));
     }
 
     public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)

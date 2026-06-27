@@ -26,6 +26,8 @@
 
   <ItemGroup>
     <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Committed cut-down real-data plugin used by RealData tests; regenerate via CutDownPluginGenerator. -->
+    <None Include="TestData/**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

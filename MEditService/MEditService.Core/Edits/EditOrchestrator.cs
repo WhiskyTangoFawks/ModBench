@@ -200,13 +200,26 @@ public sealed class EditOrchestrator : IEditOrchestrator
                 oldValues[fv.Metadata.Name] = JsonSerializer.SerializeToElement(fv.Value);
         }
 
+        var placement = _query.GetPlacement(formKey, winner.Plugin);
+
         var schemas = _schemaReflector.GetSchemas(session!.GameRelease);
         var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!);
-        var staged = _changes.Upsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues, formRefs);
+        var staged = _changes.Upsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues, formRefs,
+            parentCell: placement?.ParentCell, placementGroup: placement?.PlacementGroup);
         return new StageEditResult.Staged(staged);
     }
 
-    public CreateRecordOutcome CreateRecord(string plugin, string recordType, string? templateFormKey, string source)
+    public CreateRecordOutcome CreateRecord(string plugin, string recordType, string? templateFormKey, string source) =>
+        CreateRecordCore(plugin, recordType, templateFormKey, source, parentCell: null, placementGroup: null);
+
+    public CreateRecordOutcome CreatePlacedRecord(
+        string plugin, string recordType, string parentCell, string placementGroup,
+        string? templateFormKey, string source) =>
+        CreateRecordCore(plugin, recordType, templateFormKey, source, parentCell, placementGroup);
+
+    private CreateRecordOutcome CreateRecordCore(
+        string plugin, string recordType, string? templateFormKey, string source,
+        string? parentCell, string? placementGroup)
     {
         var session = _sessionManager.Session
             ?? throw new InvalidOperationException("No session loaded.");
@@ -239,7 +252,9 @@ public sealed class EditOrchestrator : IEditOrchestrator
             new Dictionary<string, JsonElement>(),
             formRefs: null,
             changeType: PendingChangeConstants.CreateChangeType,
-            groupId: groupId);
+            groupId: groupId,
+            parentCell: parentCell,
+            placementGroup: placementGroup);
 
         if (templateFields != null)
         {
@@ -312,13 +327,16 @@ public sealed class EditOrchestrator : IEditOrchestrator
         foreach (var (formKey, plugin) in targets)
         {
             var recordType = _query.GetRecordType(formKey) ?? "unknown";
+            var placement = _query.GetPlacement(formKey, plugin);
             members.Add(new GroupMember(
                 formKey, plugin, recordType,
                 PendingChangeConstants.DeleteChangeType,
                 PendingChangeConstants.DeleteFieldPath,
                 PendingChangeConstants.NullElement,
                 PendingChangeConstants.NullElement,
-                source));
+                source,
+                placement?.ParentCell,
+                placement?.PlacementGroup));
         }
 
         // Group by (record, field) first: two deleted targets can each be referenced by a

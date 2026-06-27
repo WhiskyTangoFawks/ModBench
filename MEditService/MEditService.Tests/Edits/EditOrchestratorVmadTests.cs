@@ -58,6 +58,7 @@ public sealed class EditOrchestratorVmadTests
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
         public VmadData? GetVmad(string formKey, string plugin) =>
             throw new InvalidOperationException("GetVmad must not be called for non-VMAD edits");
+        public PlacementRow? GetPlacement(string formKey, string plugin) => inner.GetPlacement(formKey, plugin);
     }
 
     // ---- Non-VMAD edit skips GetVmad ----
@@ -119,6 +120,7 @@ public sealed class EditOrchestratorVmadTests
                 ])
             ]);
         }
+        public PlacementRow? GetPlacement(string formKey, string plugin) => inner.GetPlacement(formKey, plugin);
     }
 
     [Fact]

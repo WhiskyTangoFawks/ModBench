@@ -182,6 +182,9 @@ public sealed class RecordQueryService : IRecordQueryService
     public VmadData? GetVmad(string formKey, string plugin) =>
         RequireRepository().GetVmad(formKey, plugin);
 
+    public PlacementRow? GetPlacement(string formKey, string plugin) =>
+        RequireRepository().GetPlacement(formKey, plugin);
+
     private IGameSession RequireSession() =>
         _session.Session ?? throw new InvalidOperationException("No session loaded.");
 

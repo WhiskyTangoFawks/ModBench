@@ -868,6 +868,15 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
 
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
             inner.GetReferences(targetFormKey);
+
+        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey) =>
+            inner.GetWorldspaceCells(plugin, worldspaceFormKey);
+        public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset) =>
+            inner.GetInteriorCells(plugin, limit, offset);
+        public CellReferences GetCellReferences(string plugin, string cellFormKey) =>
+            inner.GetCellReferences(plugin, cellFormKey);
+        public PlacementRow? GetPlacement(string formKey, string plugin) =>
+            inner.GetPlacement(formKey, plugin);
     }
 
     private sealed class StubSessionManager(IRecordReader repository, GameRelease release) : ISessionManager
