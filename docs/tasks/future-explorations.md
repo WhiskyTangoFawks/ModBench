@@ -7,7 +7,7 @@
 - **`PluginContext` record for `IConflictClassifier`** — the interface takes `IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters`, a raw projection of `PluginMetadata`. If the classifier needs a second property (e.g. implicit-master flag for `.esm` injection semantics), a second parallel dict would need threading through. Introduce a small `record PluginContext(string Name, IReadOnlyList<string> Masters)` and map `PluginMetadata → PluginContext` in `RecordQueryService`. Do this when the classifier needs its second property.
 
 ## Near-term deferred
-- **Non-FO4 game support** — backend architecture complete (Phase M); blocked on adding `Mutagen.Bethesda.Skyrim`, `.Oblivion`, `.Starfield` NuGet packages + extension game-picker wiring
+- **Non-FO4 game support** — backend architecture complete (Phase M); blocked on adding `Mutagen.Bethesda.Skyrim`, `.Oblivion`, `.Starfield` NuGet packages + extension game-picker wiring. Spec + running game-coupling findings list: [multi-game-enablement](multi-game-enablement.md)
 - **Backend binary bundled in VSIX** — package .NET self-contained binary into the extension so users don't need a separate install step
 - **MO2 native reconstruction** — doc: add backend exe to MO2 Tools, start from MO2 → attached mode works normally
 - Parallelize plugin loading and investigate DB saved local DB State- either for entire DB, or just for pending changes (so they survive a restart)

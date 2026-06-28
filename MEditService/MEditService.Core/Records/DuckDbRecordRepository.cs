@@ -52,6 +52,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         var refs = new List<FormRef>();
 
+        // One transaction for the whole reindex so a throw partway leaves the prior committed
+        // read model intact rather than a partial snapshot. DuckDB appenders enroll in the active
+        // transaction, so deletes and appender flushes roll back together on Dispose-without-Commit.
+        using var tx = _connection.BeginTransaction();
+
         foreach (var (tableName, schema) in schemas)
         {
             List<IMajorRecordGetter> records;
@@ -109,8 +114,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         IndexPlacement(pluginMod, plugin);
 
-        // Delete stale refs only after both loops succeed — an exception mid-loop now leaves
-        // existing form_references intact rather than permanently empty.
+        // Clear this plugin's stale refs, then rebuild from the refs gathered across both passes.
         DeleteFormReferencesForPlugin(plugin);
         if (refs.Count > 0)
         {
@@ -130,6 +134,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 row.EndRow();
             }
         }
+
+        tx.Commit();
     }
 
     public void UpdateWinners()

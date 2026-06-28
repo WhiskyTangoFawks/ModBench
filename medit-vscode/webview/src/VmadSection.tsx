@@ -297,12 +297,30 @@ interface ArrayElementCellProps {
 
 function ArrayElementCell({ plugin, arrayCtx, onEdit, editor }: Readonly<ArrayElementCellProps>) {
   const siblings = arrayCtx.siblingsByPlugin[plugin] ?? [];
+  const { index, vmadPath } = arrayCtx;
+  const swap = (j: number) => {
+    const next = [...siblings];
+    [next[index], next[j]] = [next[j], next[index]];
+    onEdit(plugin, vmadPath, next);
+  };
   return (
     <span style={inlineCell}>
       {editor}
       <button
+        title="Move up"
+        disabled={index === 0}
+        onClick={() => swap(index - 1)}
+        style={iconBtnStyle}
+      >▲</button>
+      <button
+        title="Move down"
+        disabled={index === siblings.length - 1}
+        onClick={() => swap(index + 1)}
+        style={iconBtnStyle}
+      >▼</button>
+      <button
         title="Remove element"
-        onClick={() => onEdit(plugin, arrayCtx.vmadPath, siblings.filter((_, j) => j !== arrayCtx.index))}
+        onClick={() => onEdit(plugin, vmadPath, siblings.filter((_, j) => j !== index))}
         style={{ ...iconBtnStyle, color: 'var(--vscode-errorForeground, #f88)' }}
       >×</button>
     </span>

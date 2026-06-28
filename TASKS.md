@@ -39,6 +39,7 @@ Each phase has its own spec file in [docs/tasks/](docs/tasks/). Completed phases
 | **15** | Not Started | Scripting engine — Python scripts with YAML frontmatter + SQL query; `edit()` API; built-in scripts | [phase-15](docs/tasks/phase-15.md) |
 | **16** | Not Started | Worldspace/Cell tree — WRLD block hierarchy, CELL nodes with XCLC coords, REFR persistent/temporary split | [phase-16](docs/tasks/phase-16.md) |
 | **17** | Not Started | Record editor column interactions — collapse, drag-drop values, "Copy All to Pending" context menu | [phase-17](docs/tasks/phase-17.md) |
+| **M.1** | In Spec | Multi-game enablement — non-FO4 NuGet packages + game-picker wiring; running game-coupling findings list (VMAD indexer first) | [multi-game-enablement](docs/tasks/multi-game-enablement.md) |
 
 ---
 

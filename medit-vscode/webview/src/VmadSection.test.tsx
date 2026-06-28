@@ -309,6 +309,28 @@ describe('VmadSection array edit mode', () => {
     expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Items`, [10, 30]);
   });
 
+  it('Move down on an element swaps it with the next and stages the reordered array', () => {
+    const onEdit = vi.fn();
+    renderSection(arrayVmad('scalar', [10, 20, 30]), ['A.esm'], { editMode: true, onEdit });
+    toggle('S');
+    toggle('Items');
+
+    fireEvent.click(screen.getAllByTitle('Move down')[0]);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Items`, [20, 10, 30]);
+  });
+
+  it('Move up on an element swaps it with the previous and stages the reordered array', () => {
+    const onEdit = vi.fn();
+    renderSection(arrayVmad('scalar', [10, 20, 30]), ['A.esm'], { editMode: true, onEdit });
+    toggle('S');
+    toggle('Items');
+
+    fireEvent.click(screen.getAllByTitle('Move up')[2]);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Items`, [10, 30, 20]);
+  });
+
   it('pending array change shows on the parent row pending column with revert button', () => {
     const onRevert = vi.fn();
     const chg = pendingChange('A.esm', String.raw`VMAD\S\Items`, [10, 20, 0]);
