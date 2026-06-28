@@ -5,9 +5,14 @@ Stryker.NET mutation tests against `MEditService.Core`. Commands from `MEditServ
 > ⚠️ **Run `run.sh` foreground, exactly as documented.** Never as an agent background task
 > (`run_in_background`) — the harness SIGKILLs the task's process group, which kills the terminal
 > window `run.sh` spawns and can take VS Code down with it. Never `pkill`/`kill` host processes
-> (especially `pkill dotnet` — it kills VS Code's C# servers). The opened terminal is the
-> **developer's** live `%`-progress view (`progress` reporter); the agent only waits for the
-> script to return and reads the printed summary — raw Stryker output never enters agent context.
+> (especially `pkill dotnet` — it kills VS Code's C# servers). The opened terminal tails Stryker's
+> raw TTY output; the agent only waits for the script to return and reads the printed summary —
+> raw Stryker output never enters agent context.
+>
+> ⚠️ **Do not re-add `"progress"` to `stryker-config.json` reporters.** ShellProgressBar crashes
+> with `ArgumentOutOfRangeException` (negative string length) when Stryker runs inside the PTY
+> that `script -q -c` creates — the default PTY width triggers the bug. `"json"` alone is
+> sufficient; `run.sh` parses the report and prints the summary.
 
 > 🏎️ **Confirm fixes with targeted runs, never a full re-run.** A full run can take ~an hour, so
 > after triaging a survivor confirm it with `run.sh --mutant-ids <id>` / `--file <File>.cs`. The
