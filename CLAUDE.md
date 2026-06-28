@@ -1,6 +1,6 @@
-# mEdit
+# Modbench and mEdit
 
-VS Code extension + local C# service for viewing, editing, and comparing Bethesda plugin files (`.esp`/`.esm`/`.esl`).
+VS Code extension + local C# service for viewing, editing, modlists, and viewing and comparing Bethesda plugin files (`.esp`/`.esm`/`.esl`).
 
 ## Stack
 

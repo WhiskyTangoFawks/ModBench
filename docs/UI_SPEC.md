@@ -380,7 +380,13 @@ All `mEdit.*` commands are available in the command palette. The full list is th
 
 ---
 
-## 6. Field Type Rendering Rules (Summary)
+## 6. Mod List View (Loadout)
+
+Specified separately in [`medit-vscode/src/modmanager/docs/UI_SPEC.md`](../medit-vscode/src/modmanager/docs/UI_SPEC.md).
+
+---
+
+## 7. Field Type Rendering Rules (Summary)
 
 These rules apply everywhere a field value is rendered — in the compare grid, the pending changes panel, and any future surfaces.
 
