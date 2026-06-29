@@ -55,4 +55,4 @@ Test Files  23 passed (23)
       Tests  296 passed (296)
 ```
 
-`npm run build` (tsc --noEmit + esbuild + webview) clean. Commit hash: *pending commit.*
+`npm run build` (tsc --noEmit + esbuild + webview) clean. Validated via `/simplify` + `/code-review` (high). Commit: `4cc6168`.
