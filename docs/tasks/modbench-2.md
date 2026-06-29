@@ -14,7 +14,7 @@ All work is extension-side (`medit-vscode/src/modmanager/`); it is file/JSON wor
 
 | Phase | Goal | Model | Est. |
 | ----- | ---- | ----- | ---- |
-| [2.1](modbench-2.1.md) | **Data foundation** — `GameDirectory`, `IModlistSource`, MO2 adapter (byte-faithful round-trip), native adapter, serialization tests | Opus 4.8 | ~3 days |
+| [2.1](modbench-2.1.md) ✅ | **Data foundation** — `IModlistSource`, MO2 adapter (byte-faithful round-trip), serialization tests. *(Workspace root = MO2 instance; no new game-path config. Native adapter deferred — see below.)* | Opus 4.8 | ~3 days |
 | [2.2](modbench-2.2.md) | **Tree UI & core interactions** — `ModListProvider` (separators + ungrouped root items + checkboxes + tooltips), enable/disable, profile selector, header buttons | Opus 4.8 | ~4 days |
 | [2.3](modbench-2.3.md) | **Drag, filter & context menus** — `TreeDragAndDropController` (mod + separator block), live filter with grouping toggle, all mod/separator context menu actions | Sonnet 4.6 | ~3 days |
 
@@ -22,6 +22,12 @@ All work is extension-side (`medit-vscode/src/modmanager/`); it is file/JSON wor
 
 ---
 
-## Open question
+## Deferred (out of 2.1)
 
-MO2 round-trip fidelity needs a fixture from a real MO2 instance (see spec "Open Questions"). Use the LitR instance from Modbench-1 validation — export a real `modlist.txt` as the fixture file.
+- **Native adapter** — creating a *fresh, empty* MO2-format instance from scratch (for users without an existing MO2 folder). The 2.1 workflow opens an existing MO2 folder, so nothing exercises fresh-instance creation. Scope it when a "New instance" feature is actually wanted.
+
+---
+
+## Open question — resolved in 2.1
+
+MO2 round-trip fidelity is proven against a **trimmed-real** fixture captured from the LitR instance (committed under `medit-vscode/src/modmanager/test/fixtures/mo2-instance/`), with the full real LitR instance backing an opt-in test. The full `modlist.txt` is intentionally *not* committed.

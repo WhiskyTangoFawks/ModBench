@@ -4,6 +4,11 @@ TypeScript VS Code extension. Root [CLAUDE.md](../CLAUDE.md) for project-wide in
 
 `extension.ts` = composition root — wires everything, no business logic.
 
+## Invariants
+
+- **The open VS Code workspace root _is_ the MO2 instance directory.** The mod manager (`src/modmanager/`) reads `mods/`, `profiles/`, and `ModOrganizer.ini` relative to the workspace folder — there is no separate "instance path" config. `ModOrganizer.ini` supplies the active profile (`selected_profile`) and the game directory (`gamePath`). `GamePathDetector` resolves the _vanilla/editing_ game path only (later phases); it does **not** locate the instance.
+- **Mod-manager file writes are byte-faithful via surgical edits**, never model→re-serialization: splice only the changed bytes of `modlist.txt`/`ModOrganizer.ini` so CRLF, comments, `*` unmanaged lines, separators, and order survive verbatim. Pure transforms live in `src/modmanager/mo2/*.ts`; the in-memory `ModlistEntry[]` model is a read-view, not the serialization source.
+
 ## Module Map
 
 | Module | Owns | Key rule |
