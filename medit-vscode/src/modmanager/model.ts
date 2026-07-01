@@ -27,6 +27,20 @@ export interface IModlistSource {
   readModlist(): Promise<ModlistEntry[]>;
   setEnabled(modName: string, enabled: boolean): Promise<void>;
   reorder(modName: string, toIndex: number): Promise<void>;
+  /** Insert a new enabled separator immediately after `afterEntryName` (mod or separator).
+   *  When `afterEntryName` is a separator, inserts after its last child. */
+  insertSeparator(name: string, afterEntryName: string): Promise<void>;
+  renameSeparator(oldName: string, newName: string): Promise<void>;
+  deleteSeparator(name: string): Promise<void>;
+  /** Move `modName` to the end of `separatorName`'s section, or to the ungrouped
+   *  section (before the first separator) when `separatorName` is null. */
+  moveModToSeparator(modName: string, separatorName: string | null): Promise<void>;
+  /** Remove the mod from modlist.txt and delete its mods/<name>/ directory. */
+  removeMod(modName: string): Promise<void>;
+  /** Move a separator and all its children as a block to entry-index `toIndex`. */
+  reorderSeparatorBlock(separatorName: string, toIndex: number): Promise<void>;
+  /** Nexus Mods game slug (e.g. "fallout4") for constructing mod page URLs. */
+  getNexusSlug(): Promise<string>;
   listProfiles(): Promise<string[]>;
   getActiveProfile(): Promise<string>;
   setActiveProfile(name: string): Promise<void>;

@@ -1,9 +1,32 @@
-import { readFile, writeFile, readdir } from 'node:fs/promises';
+import { readFile, writeFile, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { IModlistSource, ModlistEntry } from '../model';
-import { parseModlist, setEnabledInText, moveModInText } from './modlistText';
+import {
+  deleteSeparatorInText,
+  insertSeparatorAtIndexInText,
+  moveModInText,
+  moveModToSeparatorEndInText,
+  moveSeparatorBlockInText,
+  parseModlist,
+  removeModFromText,
+  renameSeparatorInText,
+  setEnabledInText,
+} from './modlistText';
 import { parseMetaIni } from './metaIni';
-import { readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
+import { readGameName, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
+
+const NEXUS_SLUGS: Record<string, string> = {
+  'Fallout 4': 'fallout4',
+  'Fallout 4 VR': 'fallout4',
+  'Fallout 3': 'fallout3',
+  'Fallout New Vegas': 'newvegas',
+  'Skyrim': 'skyrim',
+  'Skyrim Special Edition': 'skyrimspecialedition',
+  'Skyrim VR': 'skyrimspecialedition',
+  'Enderal': 'enderal',
+  'Oblivion': 'oblivion',
+  'Morrowind': 'morrowind',
+};
 
 /** MO2 instance adapter. `instanceRoot` is the folder containing
  *  ModOrganizer.ini, mods/ and profiles/ — i.e. the open VS Code workspace.
@@ -18,6 +41,11 @@ export class Mo2ModlistSource implements IModlistSource {
   private async modlistPath(): Promise<string> {
     const profile = await this.getActiveProfile();
     return join(this.instanceRoot, 'profiles', profile, 'modlist.txt');
+  }
+
+  private async modifyModlist(fn: (text: string) => string): Promise<void> {
+    const path = await this.modlistPath();
+    await writeFile(path, fn(await readFile(path, 'utf8')));
   }
 
   async readModlist(): Promise<ModlistEntry[]> {
@@ -41,13 +69,53 @@ export class Mo2ModlistSource implements IModlistSource {
   }
 
   async setEnabled(modName: string, enabled: boolean): Promise<void> {
-    const path = await this.modlistPath();
-    await writeFile(path, setEnabledInText(await readFile(path, 'utf8'), modName, enabled));
+    await this.modifyModlist((t) => setEnabledInText(t, modName, enabled));
   }
 
   async reorder(modName: string, toIndex: number): Promise<void> {
-    const path = await this.modlistPath();
-    await writeFile(path, moveModInText(await readFile(path, 'utf8'), modName, toIndex));
+    await this.modifyModlist((t) => moveModInText(t, modName, toIndex));
+  }
+
+  async insertSeparator(name: string, afterEntryName: string): Promise<void> {
+    await this.modifyModlist((text) => {
+      const entries = parseModlist(text);
+      const entryIdx = entries.findIndex((e) => e.name === afterEntryName);
+      if (entryIdx === -1) throw new Error(`Entry not found in modlist: ${afterEntryName}`);
+      let afterIndex = entryIdx;
+      if (entries[entryIdx].kind === 'separator') {
+        for (let i = entryIdx + 1; i < entries.length; i++) {
+          if (entries[i].kind === 'separator') break;
+          afterIndex = i;
+        }
+      }
+      return insertSeparatorAtIndexInText(text, name, afterIndex);
+    });
+  }
+
+  async renameSeparator(oldName: string, newName: string): Promise<void> {
+    await this.modifyModlist((t) => renameSeparatorInText(t, oldName, newName));
+  }
+
+  async deleteSeparator(name: string): Promise<void> {
+    await this.modifyModlist((t) => deleteSeparatorInText(t, name));
+  }
+
+  async moveModToSeparator(modName: string, separatorName: string | null): Promise<void> {
+    await this.modifyModlist((t) => moveModToSeparatorEndInText(t, modName, separatorName));
+  }
+
+  async removeMod(modName: string): Promise<void> {
+    await this.modifyModlist((t) => removeModFromText(t, modName));
+    await rm(join(this.instanceRoot, 'mods', modName), { recursive: true, force: true });
+  }
+
+  async reorderSeparatorBlock(separatorName: string, toIndex: number): Promise<void> {
+    await this.modifyModlist((t) => moveSeparatorBlockInText(t, separatorName, toIndex));
+  }
+
+  async getNexusSlug(): Promise<string> {
+    const gameName = readGameName(await readFile(this.iniPath, 'utf8'));
+    return NEXUS_SLUGS[gameName] ?? gameName.toLowerCase().replace(/\s+/g, '');
   }
 
   async listProfiles(): Promise<string[]> {

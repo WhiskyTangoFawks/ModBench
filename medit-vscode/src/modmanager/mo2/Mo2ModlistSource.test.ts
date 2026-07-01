@@ -90,6 +90,79 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(await src.readPluginOrder()).toEqual(['Foo.esp', 'Bar.esp']);
   });
 
+  it('insertSeparator after a mod places the new separator immediately below it', async () => {
+    await src.insertSeparator('New Group', 'SKK Fast Start new game (Fallout 4)');
+    const entries = await src.readModlist();
+    const idx = entries.findIndex((e) => e.name === 'New Group');
+    expect(idx).toBe(1);
+    expect(entries[idx].kind).toBe('separator');
+    expect(entries[idx - 1].name).toBe('SKK Fast Start new game (Fallout 4)');
+  });
+
+  it('insertSeparator after a separator places the new separator after the last child', async () => {
+    // "Unassigned" has children [NODELETE] and Unofficial; new sep goes after Unofficial
+    await src.insertSeparator('After Unassigned', 'Unassigned (Modlist Development)');
+    const entries = await src.readModlist();
+    const idx = entries.findIndex((e) => e.name === 'After Unassigned');
+    expect(entries[idx - 1].name).toBe('Unofficial Fallout 4 Patch');
+  });
+
+  it('renameSeparator changes the separator name on disk', async () => {
+    await src.renameSeparator('Unassigned (Modlist Development)', 'Core Mods');
+    const entries = await src.readModlist();
+    expect(entries.some((e) => e.name === 'Core Mods' && e.kind === 'separator')).toBe(true);
+    expect(entries.some((e) => e.name === 'Unassigned (Modlist Development)')).toBe(false);
+    const raw = await readFile(modlistPath(), 'utf8');
+    expect(raw).not.toContain('Unassigned');
+  });
+
+  it('deleteSeparator removes only the separator line; child mods remain', async () => {
+    await src.deleteSeparator('Unassigned (Modlist Development)');
+    const entries = await src.readModlist();
+    expect(entries.some((e) => e.name === 'Unassigned (Modlist Development)')).toBe(false);
+    expect(entries.some((e) => e.name === '[NODELETE] Radfall')).toBe(true);
+    expect(entries.some((e) => e.name === 'Unofficial Fallout 4 Patch')).toBe(true);
+  });
+
+  it('moveModToSeparator moves a mod to the end of the target separator section', async () => {
+    await src.moveModToSeparator(
+      'SKK Fast Start new game (Fallout 4)',
+      'Radfall - All-In-One Survival Overhaul',
+    );
+    const entries = await src.readModlist();
+    expect(entries.at(-1)?.name).toBe('SKK Fast Start new game (Fallout 4)');
+  });
+
+  it('moveModToSeparator with null moves a mod to the ungrouped section', async () => {
+    await src.moveModToSeparator('[NODELETE] Radfall', null);
+    const entries = await src.readModlist();
+    const nodeDeleteIdx = entries.findIndex((e) => e.name === '[NODELETE] Radfall');
+    const firstSepIdx = entries.findIndex((e) => e.kind === 'separator');
+    expect(nodeDeleteIdx).toBeLessThan(firstSepIdx);
+  });
+
+  it('removeMod removes the modlist entry and deletes the mods/ directory', async () => {
+    await src.removeMod('Harder VATS');
+    const entries = await src.readModlist();
+    expect(entries.some((e) => e.name === 'Harder VATS')).toBe(false);
+    await expect(readFile(join(dir, 'mods', 'Harder VATS', 'meta.ini'), 'utf8')).rejects.toThrow();
+  });
+
+  it('reorderSeparatorBlock moves the separator and all its children as a block', async () => {
+    // Move Unassigned block to end (toIndex=5, after remaining 5 entries)
+    await src.reorderSeparatorBlock('Unassigned (Modlist Development)', 5);
+    const entries = await src.readModlist();
+    const unassignedIdx = entries.findIndex((e) => e.name === 'Unassigned (Modlist Development)');
+    expect(unassignedIdx).toBeGreaterThan(entries.findIndex((e) => e.name === 'Cracked and Smudged Pip-Boy Screen'));
+    // Children follow the separator
+    expect(entries[unassignedIdx + 1].name).toBe('[NODELETE] Radfall');
+    expect(entries[unassignedIdx + 2].name).toBe('Unofficial Fallout 4 Patch');
+  });
+
+  it('getNexusSlug returns the Nexus game slug from ModOrganizer.ini', async () => {
+    expect(await src.getNexusSlug()).toBe('fallout4');
+  });
+
   it('setActiveProfile persists selected_profile and switches which modlist is read', async () => {
     await src.setActiveProfile('Secondary');
     expect(await src.getActiveProfile()).toBe('Secondary');

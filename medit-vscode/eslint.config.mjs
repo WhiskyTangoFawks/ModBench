@@ -8,6 +8,13 @@ export default tseslint.config(
     eslint.configs.recommended,
     tseslint.configs.recommendedTypeChecked,
 
+    // Standard convention: _-prefixed params are intentionally unused
+    {
+        rules: {
+            '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+        },
+    },
+
     // Extension source (tsconfig.json)
     {
         files: ['src/**/*.ts'],
@@ -21,7 +28,7 @@ export default tseslint.config(
 
     // Test files — relax unsafe-any rules since mocks legitimately use any
     {
-        files: ['src/test/**/*.ts', 'webview/src/**/*.test.{ts,tsx}'],
+        files: ['src/test/**/*.ts', 'src/**/*.test.ts', 'webview/src/**/*.test.{ts,tsx}'],
         rules: {
             '@typescript-eslint/no-explicit-any': 'off',
             '@typescript-eslint/no-unsafe-assignment': 'off',

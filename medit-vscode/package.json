@@ -161,6 +161,38 @@
         "command": "mEdit.modList.refresh",
         "title": "mEdit: Refresh Mod List",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "mEdit.modList.mod.openInExplorer",
+        "title": "Open in Explorer"
+      },
+      {
+        "command": "mEdit.modList.mod.addSeparatorBelow",
+        "title": "Add Separator Below…"
+      },
+      {
+        "command": "mEdit.modList.mod.moveToSeparator",
+        "title": "Move to Separator…"
+      },
+      {
+        "command": "mEdit.modList.mod.uninstall",
+        "title": "Uninstall…"
+      },
+      {
+        "command": "mEdit.modList.mod.viewOnNexus",
+        "title": "View on Nexus Mods"
+      },
+      {
+        "command": "mEdit.modList.separator.rename",
+        "title": "Rename…"
+      },
+      {
+        "command": "mEdit.modList.separator.addSeparatorBelow",
+        "title": "Add Separator Below…"
+      },
+      {
+        "command": "mEdit.modList.separator.delete",
+        "title": "Delete Separator"
       }
     ],
     "menus": {
@@ -258,6 +290,66 @@
           "command": "mEdit.saveGroup",
           "when": "view == mEdit.changeGroupTree && viewItem == changeGroup",
           "group": "inline"
+        },
+        {
+          "command": "mEdit.modList.mod.openInExplorer",
+          "when": "view == mEdit.modList && viewItem == mod",
+          "group": "modActions@1"
+        },
+        {
+          "command": "mEdit.modList.mod.addSeparatorBelow",
+          "when": "view == mEdit.modList && viewItem == mod",
+          "group": "modActions@2"
+        },
+        {
+          "command": "mEdit.modList.mod.moveToSeparator",
+          "when": "view == mEdit.modList && viewItem == mod",
+          "group": "modActions@3"
+        },
+        {
+          "command": "mEdit.modList.mod.uninstall",
+          "when": "view == mEdit.modList && viewItem == mod",
+          "group": "modActions@4"
+        },
+        {
+          "command": "mEdit.modList.mod.openInExplorer",
+          "when": "view == mEdit.modList && viewItem == modWithNexus",
+          "group": "modActions@1"
+        },
+        {
+          "command": "mEdit.modList.mod.addSeparatorBelow",
+          "when": "view == mEdit.modList && viewItem == modWithNexus",
+          "group": "modActions@2"
+        },
+        {
+          "command": "mEdit.modList.mod.moveToSeparator",
+          "when": "view == mEdit.modList && viewItem == modWithNexus",
+          "group": "modActions@3"
+        },
+        {
+          "command": "mEdit.modList.mod.uninstall",
+          "when": "view == mEdit.modList && viewItem == modWithNexus",
+          "group": "modActions@4"
+        },
+        {
+          "command": "mEdit.modList.mod.viewOnNexus",
+          "when": "view == mEdit.modList && viewItem == modWithNexus",
+          "group": "modActions@5"
+        },
+        {
+          "command": "mEdit.modList.separator.rename",
+          "when": "view == mEdit.modList && viewItem == separator",
+          "group": "sepActions@1"
+        },
+        {
+          "command": "mEdit.modList.separator.addSeparatorBelow",
+          "when": "view == mEdit.modList && viewItem == separator",
+          "group": "sepActions@2"
+        },
+        {
+          "command": "mEdit.modList.separator.delete",
+          "when": "view == mEdit.modList && viewItem == separator",
+          "group": "sepActions@3"
         },
         {
           "command": "mEdit.revertGroup",

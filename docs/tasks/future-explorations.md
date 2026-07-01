@@ -2,6 +2,14 @@
 
 ## Technical debt
 
+<!-- modbench-2.3 surfaced — super low priority, not triggered by normal MO2 profiles -->
+
+- **`ModListProvider.load()` should return error node, not empty list** — `load()` catches and logs but returns `undefined`, so `getChildren` shows an empty tree with no user-visible feedback. Requires a new `ErrorNode` tree item; violates the CLAUDE.md invariant "error node instead of empty list when tree fetch fails."
+- **`moveToSeparator` QuickPick logic belongs in `IModlistSource`, not `extension.ts`** — reads `readModlist()` directly in the command handler to build the separator list and determine placement, which is business logic. Per `medit-vscode/CLAUDE.md`, `extension.ts` is the composition root with no business logic; this should be a new `IModlistSource` method.
+- **`modifyModlist` is not serialized** — concurrent calls (e.g. fast successive DnD drops) each read→transform→write independently; second write clobbers the first. Fix with a per-instance lock/queue if concurrent writes ever become a concern.
+- **`removeMod` two-phase write is not atomic** — writes modlist.txt then `rm -rf mods/<name>/`. A crash between the two leaves the mod directory but no modlist entry; on reload, MO2 shows the mod as unmanaged. Fix: delete directory first (reversible via Recycle Bin or backup), then remove from modlist.
+- **BOM on first modlist.txt line** — `parseModlist` and `isEntryLine` check `raw[0]` for `+`/`-`; a UTF-8 BOM (`﻿`) on the first line causes that entry to be silently skipped. MO2 does not write BOMs, so this is theoretical. Strip BOM before parsing if it becomes an issue.
+
 - **Cache `pluginMasters` dict on session** — `RecordQueryService.GetCompare` rebuilds `Plugins.ToDictionary(p => p.Name, p => p.Masters)` on every compare call; session is immutable so this can be computed once at session-load time and stored on `IGameSession` or lazily on the service. Low priority until 255-plugin load orders become common.
 - **Fold injection into `ComputeConflictAll`** — `IsInjectedRecord` post-hoc overwrites `conflictAll` after classification finishes, meaning `ConflictCritical` fires even on `NoConflict`/`Override` injected records. Clarify the domain rule (is an injected but content-identical record still critical?) then move injection into `ComputeConflictAll` so it's one factor in the grade rather than a silent override.
 - **`PluginContext` record for `IConflictClassifier`** — the interface takes `IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters`, a raw projection of `PluginMetadata`. If the classifier needs a second property (e.g. implicit-master flag for `.esm` injection semantics), a second parallel dict would need threading through. Introduce a small `record PluginContext(string Name, IReadOnlyList<string> Masters)` and map `PluginMetadata → PluginContext` in `RecordQueryService`. Do this when the classifier needs its second property.

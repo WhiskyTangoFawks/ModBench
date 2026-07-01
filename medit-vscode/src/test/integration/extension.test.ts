@@ -75,6 +75,14 @@ describe('mEdit command registration', () => {
     'mEdit.modList.switchProfile',
     'mEdit.modList.launchMedit',
     'mEdit.modList.refresh',
+    'mEdit.modList.mod.openInExplorer',
+    'mEdit.modList.mod.addSeparatorBelow',
+    'mEdit.modList.mod.moveToSeparator',
+    'mEdit.modList.mod.uninstall',
+    'mEdit.modList.mod.viewOnNexus',
+    'mEdit.modList.separator.rename',
+    'mEdit.modList.separator.addSeparatorBelow',
+    'mEdit.modList.separator.delete',
   ];
 
   it('registers all expected commands on activation', async () => {

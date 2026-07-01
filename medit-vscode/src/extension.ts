@@ -15,7 +15,7 @@ import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from './messages';
 import { openReferencedByPanel } from './ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
-import { ModListProvider } from './modmanager/ModListProvider';
+import { ModListProvider, ModNode, SeparatorNode } from './modmanager/ModListProvider';
 
 let backendManager: BackendManager | undefined;
 
@@ -113,6 +113,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const modListView = vscode.window.createTreeView('mEdit.modList', {
       treeDataProvider: modListProvider,
       showCollapseAll: true,
+      dragAndDropController: modListProvider,
     });
 
     const updateProfileDescription = async () => {
@@ -123,6 +124,16 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     };
     void updateProfileDescription();
+
+    const runModAction = async (logLabel: string, failMessage: string, action: () => Promise<void>) => {
+      try {
+        await action();
+        modListProvider.refresh();
+      } catch (err) {
+        log(`[extension] ${logLabel} failed: ${err instanceof Error ? err.message : String(err)}`);
+        void vscode.window.showErrorMessage(`mEdit: ${failMessage}`);
+      }
+    };
 
     context.subscriptions.push(
       modListView,
@@ -158,10 +169,93 @@ export async function activate(context: vscode.ExtensionContext) {
         void updateProfileDescription();
       }),
       vscode.commands.registerCommand('mEdit.modList.filter', () => {
-        void vscode.window.showInformationMessage('mEdit: Mod list filter is coming in Modbench-2.3.');
+        const box = vscode.window.createInputBox();
+        box.placeholder = 'Filter mods…';
+        let grouping = true;
+        const updateBtn = () => {
+          box.buttons = [{ iconPath: new vscode.ThemeIcon('list-tree'), tooltip: `Group by separator (${grouping ? 'on' : 'off'})` }];
+        };
+        updateBtn();
+        box.onDidTriggerButton(() => {
+          grouping = !grouping;
+          updateBtn();
+          modListProvider.setFilter(box.value, grouping);
+        });
+        box.onDidChangeValue((text) => modListProvider.setFilter(text, grouping));
+        box.onDidHide(() => { modListProvider.setFilter('', true); box.dispose(); });
+        box.show();
       }),
       vscode.commands.registerCommand('mEdit.modList.launchMedit', () => {
         void vscode.window.showInformationMessage('mEdit: Launch mEdit is wired in Modbench-5.');
+      }),
+      vscode.commands.registerCommand('mEdit.modList.mod.openInExplorer', async (node: ModNode) => {
+        if (node?.kind !== 'mod') return;
+        const uri = vscode.Uri.file(path.join(instanceRoot, 'mods', node.mod.name));
+        await vscode.commands.executeCommand('revealInExplorer', uri);
+      }),
+      vscode.commands.registerCommand('mEdit.modList.mod.addSeparatorBelow', async (node: ModNode) => {
+        if (node?.kind !== 'mod') return;
+        const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
+        if (!name) return;
+        await runModAction('addSeparatorBelow', 'Failed to add separator.', () => modlistSource.insertSeparator(name, node.mod.name));
+      }),
+      vscode.commands.registerCommand('mEdit.modList.mod.moveToSeparator', async (node: ModNode) => {
+        if (node?.kind !== 'mod') return;
+        let separators: string[];
+        try {
+          const entries = await modlistSource.readModlist();
+          separators = entries.filter((e) => e.kind === 'separator').map((e) => e.name);
+        } catch (err) {
+          log(`[extension] moveToSeparator readModlist failed: ${err instanceof Error ? err.message : String(err)}`);
+          void vscode.window.showErrorMessage(`mEdit: Failed to read mod list.`);
+          return;
+        }
+        const items: Array<vscode.QuickPickItem & { sepName: string | null }> = [
+          { label: 'Ungrouped', description: 'Before first separator', sepName: null },
+          ...separators.map((s) => ({ label: s, sepName: s })),
+        ];
+        const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Move to separator…' });
+        if (!picked) return;
+        await runModAction('moveToSeparator', 'Failed to move mod.', () => modlistSource.moveModToSeparator(node.mod.name, picked.sepName));
+      }),
+      vscode.commands.registerCommand('mEdit.modList.mod.uninstall', async (node: ModNode) => {
+        if (node?.kind !== 'mod') return;
+        const answer = await vscode.window.showWarningMessage(
+          `Uninstall "${node.mod.name}"? This will permanently delete the mod folder from disk.`,
+          { modal: true },
+          'Uninstall',
+        );
+        if (answer !== 'Uninstall') return;
+        await runModAction('uninstall', `Failed to uninstall "${node.mod.name}".`, () => modlistSource.removeMod(node.mod.name));
+      }),
+      vscode.commands.registerCommand('mEdit.modList.mod.viewOnNexus', async (node: ModNode) => {
+        if (node?.kind !== 'mod' || !node.mod.nexusId) return;
+        const nexusId = node.mod.nexusId;
+        await runModAction('viewOnNexus', 'Failed to open Nexus page.', async () => {
+          const slug = await modlistSource.getNexusSlug();
+          await vscode.env.openExternal(
+            vscode.Uri.parse(`https://www.nexusmods.com/${slug}/mods/${nexusId}`),
+          );
+        });
+      }),
+      vscode.commands.registerCommand('mEdit.modList.separator.rename', async (node: SeparatorNode) => {
+        if (node?.kind !== 'separator') return;
+        const newName = await vscode.window.showInputBox({
+          prompt: 'Rename separator',
+          value: node.separator.name,
+        });
+        if (!newName || newName === node.separator.name) return;
+        await runModAction('renameSeparator', 'Failed to rename separator.', () => modlistSource.renameSeparator(node.separator.name, newName));
+      }),
+      vscode.commands.registerCommand('mEdit.modList.separator.addSeparatorBelow', async (node: SeparatorNode) => {
+        if (node?.kind !== 'separator') return;
+        const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
+        if (!name) return;
+        await runModAction('separator.addSeparatorBelow', 'Failed to add separator.', () => modlistSource.insertSeparator(name, node.separator.name));
+      }),
+      vscode.commands.registerCommand('mEdit.modList.separator.delete', async (node: SeparatorNode) => {
+        if (node?.kind !== 'separator') return;
+        await runModAction('deleteSeparator', 'Failed to delete separator.', () => modlistSource.deleteSeparator(node.separator.name));
       }),
     );
   } else {
