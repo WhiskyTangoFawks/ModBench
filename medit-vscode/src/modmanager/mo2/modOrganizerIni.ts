@@ -9,6 +9,7 @@ import { lineRanges } from './lineScan';
 
 const KEY = 'selected_profile';
 const GAME_KEY = 'gameName';
+const GAME_PATH_KEY = 'gamePath';
 
 /** Span of the value (right of `=`) on the line for `key`, or null. */
 function valueSpan(text: string, key: string): { start: number; end: number } | null {
@@ -37,6 +38,13 @@ export function readGameName(text: string): string {
   const span = valueSpan(text, GAME_KEY);
   if (!span) throw new Error('ModOrganizer.ini: missing gameName');
   return text.slice(span.start, span.end).trim();
+}
+
+/** The game directory MO2 deploys into and reads vanilla masters from. */
+export function readGamePath(text: string): string {
+  const span = valueSpan(text, GAME_PATH_KEY);
+  if (!span) throw new Error('ModOrganizer.ini: missing gamePath');
+  return unwrap(text.slice(span.start, span.end));
 }
 
 export function setSelectedProfileInText(text: string, profile: string): string {

@@ -1,8 +1,35 @@
 import * as vscode from 'vscode';
 import type { IModlistSource, Mod, ModlistEntry, Separator } from './model';
 import { groupModlist, type ModlistTree } from './modlistTree';
+import { buildFileConflictIndex } from './fileConflictIndex';
+import { computeModStatuses, type ModStatus, type ModStatusResult } from './statusChecker';
+import { readVanillaMasters } from './vanillaMasters';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
+
+/** 'ok'/undefined -&gt; default package icon; warn for conflicts, error for broken. */
+function statusIconId(status?: ModStatusResult): string {
+  switch (status?.status.kind) {
+    case 'conflicts':
+    case 'overrides':
+      return 'warning';
+    case 'missingMaster':
+    case 'missingMod':
+      return 'error';
+    default:
+      return 'package';
+  }
+}
+
+function statusLabel(status: ModStatus): string {
+  switch (status.kind) {
+    case 'conflicts': return `⚠ ${status.count} conflicts`;
+    case 'overrides': return `⚠ Overrides ${status.count}`;
+    case 'missingMaster': return `✗ Missing master: ${status.masters.join(', ')}`;
+    case 'missingMod': return '✗ Missing mod';
+    case 'ok': return '';
+  }
+}
 
 /** Non-interactive first root item: "247 active / 312 installed". */
 export class CountNode extends vscode.TreeItem {
@@ -22,16 +49,24 @@ export class SeparatorNode extends vscode.TreeItem {
   }
 }
 
-/** A mod row with a native checkbox, version description, and tooltip. */
+/** A mod row with a native checkbox, version description, and tooltip.
+ *  `status` (Modbench-3) overlays a conflict/missing-master/missing-mod badge
+ *  onto the icon, description, and tooltip when present and not 'ok'. */
 export class ModNode extends vscode.TreeItem {
   readonly kind = 'mod' as const;
-  constructor(public readonly mod: Mod) {
+  constructor(public readonly mod: Mod, status?: ModStatusResult) {
     super(mod.name, vscode.TreeItemCollapsibleState.None);
-    this.description = mod.version ?? '';
-    this.tooltip = [mod.name, mod.version, mod.nexusId, mod.archiveFilename]
+    const baseTooltip = [mod.name, mod.version, mod.nexusId, mod.archiveFilename]
       .filter((s): s is string => !!s)
       .join(' · ');
-    this.iconPath = new vscode.ThemeIcon('package');
+    this.description = mod.version ?? '';
+    this.tooltip = baseTooltip;
+    this.iconPath = new vscode.ThemeIcon(statusIconId(status));
+    if (status && status.status.kind !== 'ok') {
+      const label = statusLabel(status.status);
+      this.description = [this.description, label].filter(Boolean).join(' ');
+      this.tooltip = [baseTooltip, label, ...status.conflictLines].filter(Boolean).join('\n');
+    }
     this.contextValue = mod.nexusId ? 'modWithNexus' : 'mod';
     this.checkboxState = mod.enabled
       ? vscode.TreeItemCheckboxState.Checked
@@ -53,18 +88,27 @@ export class ModListProvider
 
   private tree?: ModlistTree;
   private cachedEntries?: ModlistEntry[];
+  private statuses?: Map<string, ModStatusResult>;
   private filterText = '';
   private filterLower = '';
   private groupingOn = true;
   private readonly log: (msg: string) => void;
 
-  constructor(private readonly source: IModlistSource, log?: (msg: string) => void) {
+  /** `instanceRoot`, when provided, enables status badges (Modbench-3):
+   *  file-conflict index + missing-master/missing-mod checks against real
+   *  files on disk. Omitted in tests that use an in-memory-only source. */
+  constructor(
+    private readonly source: IModlistSource,
+    log?: (msg: string) => void,
+    private readonly instanceRoot?: string,
+  ) {
     this.log = log ?? (() => {});
   }
 
   refresh(): void {
     this.tree = undefined;
     this.cachedEntries = undefined;
+    this.statuses = undefined;
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -131,7 +175,7 @@ export class ModListProvider
       const mods = this.filterText && !this.matches(element.separator.name)
         ? element.mods.filter((m) => this.matches(m.name))
         : element.mods;
-      return mods.map((m) => new ModNode(m));
+      return mods.map((m) => new ModNode(m, this.statuses?.get(m.name)));
     }
     if (element) return [];
 
@@ -141,19 +185,23 @@ export class ModListProvider
     if (!this.filterText) {
       return [
         new CountNode(tree.activeCount, tree.installedCount),
-        ...tree.ungrouped.map((m) => new ModNode(m)),
+        ...tree.ungrouped.map((m) => new ModNode(m, this.statuses?.get(m.name))),
         ...tree.groups.map((g) => new SeparatorNode(g.separator, g.mods)),
       ];
     }
 
     if (!this.groupingOn) {
       const allMods = [...tree.ungrouped, ...tree.groups.flatMap((g) => g.mods)];
-      return allMods.filter((m) => this.matches(m.name)).map((m) => new ModNode(m));
+      return allMods.filter((m) => this.matches(m.name)).map((m) => new ModNode(m, this.statuses?.get(m.name)));
     }
 
     // groupingOn with active filter
     const roots: ModlistNode[] = [];
-    roots.push(...tree.ungrouped.filter((m) => this.matches(m.name)).map((m) => new ModNode(m)));
+    roots.push(
+      ...tree.ungrouped
+        .filter((m) => this.matches(m.name))
+        .map((m) => new ModNode(m, this.statuses?.get(m.name))),
+    );
     for (const g of tree.groups) {
       const sepNameMatches = this.matches(g.separator.name);
       const matchingMods = sepNameMatches ? g.mods : g.mods.filter((m) => this.matches(m.name));
@@ -186,6 +234,13 @@ export class ModListProvider
       const entries = await this.source.readModlist();
       this.cachedEntries = entries;
       this.tree = groupModlist(entries);
+      if (this.instanceRoot) {
+        const [index, vanillaMasters] = await Promise.all([
+          buildFileConflictIndex(entries, this.instanceRoot),
+          readVanillaMasters(this.instanceRoot, this.log),
+        ]);
+        this.statuses = await computeModStatuses(entries, this.instanceRoot, index, vanillaMasters, this.log);
+      }
       return this.tree;
     } catch (e) {
       this.log(`[ModListProvider] readModlist failed: ${e instanceof Error ? e.message : String(e)}`);

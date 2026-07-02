@@ -109,7 +109,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (instanceRoot) {
     const modlistSource = new Mo2ModlistSource(instanceRoot);
-    const modListProvider = new ModListProvider(modlistSource, log);
+    const modListProvider = new ModListProvider(modlistSource, log, instanceRoot);
     const modListView = vscode.window.createTreeView('mEdit.modList', {
       treeDataProvider: modListProvider,
       showCollapseAll: true,

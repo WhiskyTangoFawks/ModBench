@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
+import { join } from 'node:path';
 import type { IModlistSource, Mod, ModlistEntry, Separator } from './model';
+
+const conflictFixture = join(__dirname, 'test', 'fixtures', 'conflict-instance');
 
 vi.mock('vscode', () => ({
   TreeItem: class {
@@ -309,6 +312,32 @@ describe('ModListProvider', () => {
       const roots = await provider.getChildren();
       expect(roots.some((n) => n instanceof CountNode)).toBe(true);
       expect(roots.some((n) => n instanceof SeparatorNode)).toBe(true);
+    });
+  });
+
+  describe('status badges (instanceRoot provided)', () => {
+    it('attaches a warning icon and conflict tooltip line to conflicted mods', async () => {
+      const source = new FakeSource([mod('ModA'), mod('ModB')]);
+      const provider = new ModListProvider(source, undefined, conflictFixture);
+      const roots = await provider.getChildren();
+      const [modA, modB] = roots.filter((n): n is ModNode => n instanceof ModNode);
+
+      expect(modA.label).toBe('ModA');
+      expect(modA.iconPath).toEqual({ id: 'warning' });
+      expect(modA.tooltip).toContain('textures/shared/foo.dds');
+
+      expect(modB.label).toBe('ModB');
+      expect(modB.iconPath).toEqual({ id: 'warning' });
+      expect(modB.tooltip).toContain('textures/shared/foo.dds');
+    });
+
+    it('leaves existing no-instanceRoot behaviour unchanged (no status computed)', async () => {
+      const source = new FakeSource([mod('ModA'), mod('ModB')]);
+      const provider = new ModListProvider(source);
+      const roots = await provider.getChildren();
+      const modA = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
+
+      expect(modA.iconPath).toEqual({ id: 'package' }); // default icon, unaffected by status wiring
     });
   });
 });
