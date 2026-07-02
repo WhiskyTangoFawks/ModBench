@@ -22,6 +22,15 @@ export interface Separator {
 
 export type ModlistEntry = Mod | Separator;
 
+/** Metadata known at install time for a new mod's meta.ini. For a manual local
+ *  install only `installationFile` is typically known; Nexus id/version arrive
+ *  with the download flow (Modbench-7). */
+export interface InstallMeta {
+  modid?: string;
+  version?: string;
+  installationFile?: string;
+}
+
 /** Persistence over an MO2 instance for the active profile. Top = highest priority. */
 export interface IModlistSource {
   readModlist(): Promise<ModlistEntry[]>;
@@ -37,6 +46,10 @@ export interface IModlistSource {
   moveModToSeparator(modName: string, separatorName: string | null): Promise<void>;
   /** Remove the mod from modlist.txt and delete its mods/<name>/ directory. */
   removeMod(modName: string): Promise<void>;
+  /** Install a new mod: copy `sourceDir`'s contents to mods/<name>/, write its
+   *  meta.ini, and append a disabled line at the bottom of modlist.txt (lowest
+   *  priority). Rejects if a mod named `name` already exists. */
+  installMod(name: string, sourceDir: string, meta: InstallMeta): Promise<void>;
   /** Move a separator and all its children as a block to entry-index `toIndex`. */
   reorderSeparatorBlock(separatorName: string, toIndex: number): Promise<void>;
   /** Nexus Mods game slug (e.g. "fallout4") for constructing mod page URLs. */

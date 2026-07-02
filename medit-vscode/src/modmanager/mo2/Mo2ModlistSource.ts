@@ -1,7 +1,8 @@
-import { readFile, writeFile, readdir, rm } from 'node:fs/promises';
+import { readFile, writeFile, readdir, rm, cp, access } from 'node:fs/promises'; // access used by exists()
 import { join } from 'node:path';
-import type { IModlistSource, ModlistEntry } from '../model';
+import type { IModlistSource, InstallMeta, ModlistEntry } from '../model';
 import {
+  appendModToText,
   deleteSeparatorInText,
   insertSeparatorAtIndexInText,
   moveModInText,
@@ -12,8 +13,14 @@ import {
   renameSeparatorInText,
   setEnabledInText,
 } from './modlistText';
-import { parseMetaIni } from './metaIni';
+import { parseMetaIni, writeMetaIni } from './metaIni';
 import { readGameName, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
+
+const exists = (path: string): Promise<boolean> =>
+  access(path).then(
+    () => true,
+    () => false,
+  );
 
 const NEXUS_SLUGS: Record<string, string> = {
   'Fallout 4': 'fallout4',
@@ -107,6 +114,15 @@ export class Mo2ModlistSource implements IModlistSource {
   async removeMod(modName: string): Promise<void> {
     await this.modifyModlist((t) => removeModFromText(t, modName));
     await rm(join(this.instanceRoot, 'mods', modName), { recursive: true, force: true });
+  }
+
+  async installMod(name: string, sourceDir: string, meta: InstallMeta): Promise<void> {
+    const modDir = join(this.instanceRoot, 'mods', name);
+    if (await exists(modDir)) throw new Error(`A mod named "${name}" already exists.`);
+    await cp(sourceDir, modDir, { recursive: true });
+    const gameName = readGameName(await readFile(this.iniPath, 'utf8'));
+    await writeFile(join(modDir, 'meta.ini'), writeMetaIni({ gameName, ...meta }));
+    await this.modifyModlist((t) => appendModToText(t, name));
   }
 
   async reorderSeparatorBlock(separatorName: string, toIndex: number): Promise<void> {

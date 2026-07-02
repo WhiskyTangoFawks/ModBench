@@ -154,6 +154,29 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     await expect(readFile(join(dir, 'mods', 'Harder VATS', 'meta.ini'), 'utf8')).rejects.toThrow();
   });
 
+  it('installMod copies files, writes meta.ini, and appends a disabled bottom line', async () => {
+    const staging = await mkdtemp(join(tmpdir(), 'stage-'));
+    await writeFile(join(staging, 'MyNew.esp'), 'plugin');
+    await src.installMod('My New Mod', staging, { installationFile: 'MyNewMod-1-0.7z' });
+    await rm(staging, { recursive: true, force: true });
+
+    // files copied into mods/<name>/
+    expect(await readFile(join(dir, 'mods', 'My New Mod', 'MyNew.esp'), 'utf8')).toBe('plugin');
+    // meta.ini written and readable back through readModlist
+    const meta = await readFile(join(dir, 'mods', 'My New Mod', 'meta.ini'), 'utf8');
+    expect(meta).toContain('gameName=Fallout 4'); // the instance's authoritative gameName from ModOrganizer.ini
+    expect(meta).toContain('installationFile=MyNewMod-1-0.7z');
+    // appended at the bottom, disabled
+    const entries = await src.readModlist();
+    expect(entries.at(-1)).toMatchObject({ kind: 'mod', name: 'My New Mod', enabled: false });
+  });
+
+  it('installMod rejects when a mod of that name already exists', async () => {
+    const staging = await mkdtemp(join(tmpdir(), 'stage-'));
+    await expect(src.installMod('Harder VATS', staging, {})).rejects.toThrow(/already exists/);
+    await rm(staging, { recursive: true, force: true });
+  });
+
   it('reorderSeparatorBlock moves the separator and all its children as a block', async () => {
     // Move Unassigned block to end (toIndex=5, after remaining 5 entries)
     await src.reorderSeparatorBlock('Unassigned (Modlist Development)', 5);

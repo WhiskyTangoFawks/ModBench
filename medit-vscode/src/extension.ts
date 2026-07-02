@@ -20,6 +20,8 @@ import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './mo
 import { deploy, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
 import { buildExplicitPlugins } from './modmanager/explicitSession';
+import { detectRoot } from './modmanager/install/detectRoot';
+import { extractArchive } from './modmanager/install/extractArchive';
 
 let backendManager: BackendManager | undefined;
 
@@ -162,6 +164,18 @@ export function activate(context: vscode.ExtensionContext) {
       }
     };
 
+    /** Prompt for a mod name, defaulting to the archive/folder basename. */
+    const promptModName = (defaultName: string): Thenable<string | undefined> =>
+      vscode.window.showInputBox({ prompt: 'Mod name', value: defaultName });
+
+    const warnIfFomod = (name: string, isFomod: boolean): void => {
+      if (isFomod)
+        void vscode.window.showWarningMessage(
+          `mEdit: "${name}" is a FOMOD installer — its files were copied as-is and need manual ` +
+            `arrangement (the scripted installer is coming later).`,
+        );
+    };
+
     // ── Editing lifecycle (Launch mEdit → spawn backend + load-explicit) ──────
     /** Spawn (or attach) the backend and load the active modlist as a
      *  load-explicit session. Also the crash-restart reload path. */
@@ -260,6 +274,45 @@ export function activate(context: vscode.ExtensionContext) {
         }
       }),
       ...registerDeployCommands(instanceRoot, modlistSource, log),
+      vscode.commands.registerCommand('mEdit.modList.installFromArchive', async () => {
+        const picked = await vscode.window.showOpenDialog({
+          canSelectMany: false,
+          filters: { 'Mod archives': ['zip', '7z', 'rar'] },
+          openLabel: 'Install',
+        });
+        const archive = picked?.[0]?.fsPath;
+        if (!archive) return;
+        const name = await promptModName(path.basename(archive).replace(/\.(zip|7z|rar)$/i, ''));
+        if (!name) return;
+        await runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
+          const staging = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'medit-install-'));
+          try {
+            await extractArchive(archive, staging);
+            const { sourceDir, isFomod } = await detectRoot(staging);
+            await modlistSource.installMod(name, sourceDir, { installationFile: path.basename(archive) });
+            warnIfFomod(name, isFomod);
+          } finally {
+            await fs.promises.rm(staging, { recursive: true, force: true });
+          }
+        });
+      }),
+      vscode.commands.registerCommand('mEdit.modList.installFromFolder', async () => {
+        const picked = await vscode.window.showOpenDialog({
+          canSelectFiles: false,
+          canSelectFolders: true,
+          canSelectMany: false,
+          openLabel: 'Install',
+        });
+        const folder = picked?.[0]?.fsPath;
+        if (!folder) return;
+        const name = await promptModName(path.basename(folder));
+        if (!name) return;
+        await runModAction('installFromFolder', `Failed to install "${name}".`, async () => {
+          const { sourceDir, isFomod } = await detectRoot(folder);
+          await modlistSource.installMod(name, sourceDir, {});
+          warnIfFomod(name, isFomod);
+        });
+      }),
       vscode.commands.registerCommand('mEdit.modList.mod.openInExplorer', async (node: ModNode) => {
         if (node?.kind !== 'mod') return;
         const uri = vscode.Uri.file(path.join(instanceRoot, 'mods', node.mod.name));

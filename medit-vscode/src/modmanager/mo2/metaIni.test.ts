@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseMetaIni } from './metaIni';
+import { parseMetaIni, writeMetaIni } from './metaIni';
 
 const modsDir = join(__dirname, '..', 'test', 'fixtures', 'mo2-instance', 'mods');
 const meta = (mod: string) => readFileSync(join(modsDir, mod, 'meta.ini'), 'utf8');
@@ -28,6 +28,32 @@ describe('parseMetaIni', () => {
       version: undefined,
       nexusId: undefined,
       archiveFilename: undefined,
+    });
+  });
+});
+
+describe('writeMetaIni', () => {
+  it('emits a [General] section with only the present keys', () => {
+    expect(writeMetaIni({ gameName: 'Fallout4', installationFile: 'MyMod-1-2.7z' })).toBe(
+      '[General]\ngameName=Fallout4\ninstallationFile=MyMod-1-2.7z\n',
+    );
+  });
+
+  it('omits absent keys entirely (no blank lines)', () => {
+    expect(writeMetaIni({ gameName: 'Fallout4' })).toBe('[General]\ngameName=Fallout4\n');
+  });
+
+  it('round-trips modid/version/installationFile through parseMetaIni', () => {
+    const text = writeMetaIni({
+      gameName: 'Fallout4',
+      modid: '4598',
+      version: '2.1.5.0',
+      installationFile: 'UFO4P-4598.7z',
+    });
+    expect(parseMetaIni(text)).toEqual({
+      version: '2.1.5.0',
+      nexusId: '4598',
+      archiveFilename: 'UFO4P-4598.7z',
     });
   });
 });
