@@ -1,4 +1,4 @@
-// Read-only parse of a mod's meta.ini [General] section. 2.1 never writes meta.ini.
+// Parse/serialize a mod's meta.ini [General] section.
 
 export interface ModMeta {
   version?: string;
@@ -20,4 +20,20 @@ export function parseMetaIni(text: string): ModMeta {
     nexusId: modid && modid !== '0' ? modid : undefined,
     archiveFilename: values.get('installationFile'),
   };
+}
+
+/** Serialize a mod's meta.ini [General] section, emitting only the keys present.
+ *  Keys use MO2's names so the result round-trips through parseMetaIni. */
+export function writeMetaIni(meta: {
+  gameName?: string;
+  modid?: string;
+  version?: string;
+  installationFile?: string;
+}): string {
+  const lines = ['[General]'];
+  for (const key of ['gameName', 'modid', 'version', 'installationFile'] as const) {
+    const value = meta[key];
+    if (value) lines.push(`${key}=${value}`);
+  }
+  return lines.join('\n') + '\n';
 }

@@ -78,6 +78,8 @@ describe('mEdit command registration', () => {
     'mEdit.modList.deploy',
     'mEdit.modList.purge',
     'mEdit.modList.launchGame',
+    'mEdit.modList.installFromArchive',
+    'mEdit.modList.installFromFolder',
     'mEdit.modList.mod.openInExplorer',
     'mEdit.modList.mod.addSeparatorBelow',
     'mEdit.modList.mod.moveToSeparator',

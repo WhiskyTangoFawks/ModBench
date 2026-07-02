@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
+  appendModToText,
   deleteSeparatorInText,
   insertSeparatorAtIndexInText,
   moveModInText,
@@ -359,6 +360,29 @@ describe('moveSeparatorBlockInText', () => {
     expect(() =>
       moveSeparatorBlockInText(defaultModlist(), 'No Such Sep', 0),
     ).toThrow(/No Such Sep/);
+  });
+});
+
+describe('appendModToText — add a disabled mod at the bottom (lowest priority)', () => {
+  it('appends a disabled line and preserves every existing byte', () => {
+    const input = defaultModlist();
+    const out = appendModToText(input, 'My New Mod');
+    expect(out.startsWith(input)).toBe(true); // nothing before the append changed
+    expect(parseModlist(out).at(-1)).toEqual({ kind: 'mod', name: 'My New Mod', enabled: false });
+  });
+
+  it('uses the file EOL (CRLF) and ends with a single trailing newline', () => {
+    const input = '+A\r\n+B\r\n';
+    expect(appendModToText(input, 'C')).toBe('+A\r\n+B\r\n-C\r\n');
+  });
+
+  it('adds a missing EOL to the prior last line before appending', () => {
+    const input = '+A\n+B'; // no trailing newline
+    expect(appendModToText(input, 'C')).toBe('+A\n+B\n-C\n');
+  });
+
+  it('appends to an empty file', () => {
+    expect(appendModToText('', 'C')).toBe('-C\n');
   });
 });
 

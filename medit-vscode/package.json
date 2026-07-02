@@ -202,6 +202,14 @@
         "icon": "$(run-all)"
       },
       {
+        "command": "mEdit.modList.installFromArchive",
+        "title": "mEdit: Install Mod from Archive…"
+      },
+      {
+        "command": "mEdit.modList.installFromFolder",
+        "title": "mEdit: Install Mod from Folder…"
+      },
+      {
         "command": "mEdit.modList.mod.openInExplorer",
         "title": "Open in Explorer"
       },

@@ -61,6 +61,7 @@ class FakeSource implements IModlistSource {
   deleteSeparator(_name: string): Promise<void> { return Promise.resolve(); }
   moveModToSeparator(_mod: string, _sep: string | null): Promise<void> { return Promise.resolve(); }
   removeMod(_name: string): Promise<void> { return Promise.resolve(); }
+  installMod(_name: string, _dir: string, _meta: unknown): Promise<void> { return Promise.resolve(); }
   reorderSeparatorBlock(_sep: string, _idx: number): Promise<void> { return Promise.resolve(); }
   getNexusSlug(): Promise<string> { return Promise.resolve('fallout4'); }
   listProfiles(): Promise<string[]> { return Promise.resolve(this.profiles); }

@@ -121,6 +121,17 @@ export function deleteSeparatorInText(text: string, name: string): string {
   return lines.join('');
 }
 
+/** Append a disabled mod line at the bottom (lowest priority), preserving every
+ *  existing byte. Ensures the prior last line is EOL-terminated first, and uses
+ *  the file's own EOL (CRLF if present, else LF). */
+export function appendModToText(text: string, modName: string): string {
+  const eol = detectEol(text);
+  const newLine = `-${modName}${eol}`;
+  if (text === '') return newLine;
+  const needsEol = !/\r\n$|\r$|\n$/.test(text);
+  return text + (needsEol ? eol : '') + newLine;
+}
+
 /** Remove a mod's entry line entirely. Throws if absent; throws if the name resolves to a separator. */
 export function removeModFromText(text: string, modName: string): string {
   const lines = splitLinesKeepEol(text);
