@@ -132,12 +132,22 @@ export class Mo2ModlistSource implements IModlistSource {
   }
 
   async readPluginOrder(): Promise<string[]> {
+    return (await this.readPluginLines()).map((l) => (l.startsWith('*') ? l.slice(1) : l));
+  }
+
+  async readEnabledPlugins(): Promise<string[]> {
+    return (await this.readPluginLines())
+      .filter((l) => l.startsWith('*'))
+      .map((l) => l.slice(1));
+  }
+
+  /** Non-comment, non-blank plugins.txt lines in order (leading `*` retained). */
+  private async readPluginLines(): Promise<string[]> {
     const profile = await this.getActiveProfile();
     const text = await readFile(join(this.instanceRoot, 'profiles', profile, 'plugins.txt'), 'utf8');
     return text
       .split(/\r\n|\r|\n/)
       .map((l) => l.trim()) // also strips a leading UTF-8 BOM (U+FEFF) so the comment header still matches
-      .filter((l) => l.length > 0 && !l.startsWith('#'))
-      .map((l) => (l.startsWith('*') ? l.slice(1) : l));
+      .filter((l) => l.length > 0 && !l.startsWith('#'));
   }
 }

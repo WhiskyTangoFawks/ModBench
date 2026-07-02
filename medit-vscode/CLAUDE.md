@@ -16,7 +16,7 @@ TypeScript VS Code extension. Root [CLAUDE.md](../CLAUDE.md) for project-wide in
 | `extension.ts` | Wiring: creates instances, registers commands, handles prompts | No business logic; prompts user then delegates to `SessionController` |
 | `SessionController` | HTTP orchestration for commands (create plugin, copy record, load session) | No VS Code types in interface — MCP tools can call it directly |
 | `SessionWizard` | Multi-step session setup (game path detection → `POST /session/load`) | Returns `boolean` — true if session now loaded |
-| `BackendManager` | Polls `GET /health` until backend available; emits `'attached'` or `'disconnected'` | Never spawns backend process |
+| `BackendManager` | Owns the editing backend lifecycle: `start()` (attach if already healthy, else spawn the bundled binary), `stop()`, crash-restart (`'restarted'`); polls `GET /health` | Spawns/tears down the backend ([ADR-0022](../docs/adr/0022-extension-owns-backend-lifecycle.md)); path/exe injected by `extension.ts` |
 | `PluginRepository` | HTTP adapter for plugin/record data (`GET /plugins`, `/record-types`, `/records`) | Interface: `PluginRepository`; impl: `ApiPluginRepository` |
 | `PluginTreeProvider` | VS Code sidebar tree: maps repo data to tree nodes; owns page cache | Takes `PluginRepository`, not `ApiClient` — page cache keyed on `"plugin::recordType"` strings |
 | `ApiClient` | Typed `openapi-fetch` client factory | Type alias for generated client; DTOs defined here |

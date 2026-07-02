@@ -98,10 +98,6 @@
         "title": "mEdit: Open Compare"
       },
       {
-        "command": "mEdit.loadSession",
-        "title": "mEdit: Load Session"
-      },
-      {
         "command": "mEdit.reloadSession",
         "title": "mEdit: Reload Session"
       },
@@ -181,6 +177,11 @@
         "icon": "$(rocket)"
       },
       {
+        "command": "mEdit.closeMedit",
+        "title": "mEdit: Close mEdit",
+        "icon": "$(close)"
+      },
+      {
         "command": "mEdit.modList.refresh",
         "title": "mEdit: Refresh Mod List",
         "icon": "$(refresh)"
@@ -239,6 +240,11 @@
           "command": "mEdit.refreshTree",
           "when": "view == mEdit.pluginTree",
           "group": "navigation"
+        },
+        {
+          "command": "mEdit.closeMedit",
+          "when": "view == mEdit.pluginTree",
+          "group": "navigation@9"
         },
         {
           "command": "mEdit.newPlugin",
@@ -420,9 +426,10 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run build",
+    "vscode:prepublish": "npm run build && npm run build:backend",
     "build": "tsc -p tsconfig.json --noEmit && node esbuild.mjs && npm run build:webview",
     "build:webview": "VITE_CJS_IGNORE_WARNING=1 vite build --config webview/vite.config.ts",
+    "build:backend": "dotnet publish ../MEditService/MEditService.Api/MEditService.Api.csproj -c Release --self-contained -r linux-x64 -o backend",
     "watch": "node esbuild.mjs --watch",
     "generate-api": "openapi-typescript http://localhost:5172/swagger/v1/swagger.json -o src/generated/api.ts",
     "test:unit": "vitest run",

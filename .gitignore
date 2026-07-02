@@ -13,6 +13,9 @@ dist/
 bethesda-plugin-editor/out/
 *.vsix
 
+# Vitest cache
+.vite/
+
 # Stryker mutation test reports (keep baseline/ tracked)
 MEditService/StrykerOutput/[0-9]*/
 
@@ -27,6 +30,7 @@ src/generated/
 medit-vscode/.vscode-test/
 medit-vscode/.vscode-test.mjs
 medit-vscode/out/
+medit-vscode/backend/
 medit-vscode/tsconfig.integration.json
 
 # OS

@@ -111,7 +111,7 @@ medit does not invent a modlist format — its format **is** MO2's (see [MM ADR-
 The extension owns the editing backend process ([ADR-0022](adr/0022-extension-owns-backend-lifecycle.md)). `BackendManager` gains spawn/teardown (it previously only health-polled — see the now-reversed "Never spawns backend process" rule in `medit-vscode/CLAUDE.md`).
 
 - **Spawn**: lazily, on first entry into Plugin (editing) mode for the active modlist.
-- **Warm**: stays alive across Mod List ⇄ Plugin List toggles for the lifetime of that profile's modlist (one backend, one session — ADR-0015 preserved) to avoid re-indexing churn.
+- **Warm**: the session persists for the duration of an editing session (one backend, one session — ADR-0015 preserved). Per the Modbench-5 decision, **explicit Close tears down**; re-entering editing re-spawns and re-indexes (the "warm across every view toggle" variant was not built).
 - **Teardown**: on switching profile/modlist, closing the workspace, or explicit close. Restarted on crash.
 
 The backend gains a **`load-explicit`** session source: an ordered `{name, physicalPath}` list (the active modlist's enabled plugins + vanilla masters), alongside the existing single-data-folder scan. `GameSession.AddPlugin(filePath)` already loads a plugin from an arbitrary path; `load-explicit` generalises that to construct the whole ordered session from scattered physical paths. This is also the foundation for loading an arbitrary overriding-plugin set (the future "delta" comparison feature).

@@ -90,6 +90,12 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(await src.readPluginOrder()).toEqual(['Foo.esp', 'Bar.esp']);
   });
 
+  it('readEnabledPlugins returns only *-enabled entries, in load order', async () => {
+    const path = join(dir, 'profiles', 'Default', 'plugins.txt');
+    await writeFile(path, '# header\r\n*Foo.esp\r\nBar.esp\r\n*Baz.esl\r\n');
+    expect(await src.readEnabledPlugins()).toEqual(['Foo.esp', 'Baz.esl']);
+  });
+
   it('insertSeparator after a mod places the new separator immediately below it', async () => {
     await src.insertSeparator('New Group', 'SKK Fast Start new game (Fallout 4)');
     const entries = await src.readModlist();

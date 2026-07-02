@@ -56,7 +56,7 @@ describe('mEdit command registration', () => {
   const EXPECTED_COMMANDS = [
     'mEdit.openEditor',
     'mEdit.openCompare',
-    'mEdit.loadSession',
+    'mEdit.closeMedit',
     'mEdit.reloadSession',
     'mEdit.refreshTree',
     'mEdit.newPlugin',

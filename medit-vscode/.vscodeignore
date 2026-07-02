@@ -1,0 +1,18 @@
+# Ship only the bundled runtime (out/ + the published backend/) — not sources.
+.vscode/**
+.vscode-test/**
+src/**
+webview/**
+node_modules/**
+**/*.ts
+**/*.map
+**/tsconfig*.json
+**/.eslintrc*
+eslint.config.*
+esbuild.mjs
+vitest.config.*
+**/*.test.*
+
+# Keep: out/ (bundled extension + webview) and backend/ (published self-contained service)
+!backend/**
+!out/**

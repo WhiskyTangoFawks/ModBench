@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SessionController, type SessionControllerDeps } from '../SessionController';
 import type { PluginMetadata } from '../ApiClient';
-import type { SessionWizard } from '../SessionWizard';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -46,10 +45,6 @@ function makeClient({
   } as any;
 }
 
-function makeWizardFactory(result: boolean): () => SessionWizard {
-  return () => ({ run: vi.fn().mockResolvedValue(result) } as any);
-}
-
 function makeRepository({
   setFilterError = null as string | null,
   activeFilter = null as string | null,
@@ -69,7 +64,6 @@ function makeDeps(overrides: Partial<SessionControllerDeps> = {}): SessionContro
   return {
     client: makeClient(),
     repository: makeRepository(),
-    makeWizard: makeWizardFactory(true),
     refreshTree: vi.fn(),
     refreshGroupTree: vi.fn(),
     setStatusText: vi.fn(),
@@ -137,75 +131,6 @@ describe('SessionController.copyRecordTo', () => {
 
     expect(deps.showError).toHaveBeenCalledOnce();
     expect(deps.refreshTree).not.toHaveBeenCalled();
-  });
-});
-
-// ── loadSession ───────────────────────────────────────────────────────────────
-
-describe('SessionController.loadSession', () => {
-  beforeEach(() => vi.resetAllMocks());
-
-  it('runs wizard and refreshes tree when wizard succeeds', async () => {
-    const deps = makeDeps({ makeWizard: makeWizardFactory(true) });
-    const ctrl = new SessionController(deps);
-
-    await ctrl.loadSession();
-
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
-    expect(deps.setStatusText).toHaveBeenCalledOnce();
-  });
-
-  it('does not refresh tree when wizard is cancelled', async () => {
-    const deps = makeDeps({ makeWizard: makeWizardFactory(false) });
-    const ctrl = new SessionController(deps);
-
-    await ctrl.loadSession();
-
-    expect(deps.refreshTree).not.toHaveBeenCalled();
-    expect(deps.setStatusText).not.toHaveBeenCalled();
-  });
-});
-
-// ── onBackendConnected ────────────────────────────────────────────────────────
-
-describe('SessionController.onBackendConnected', () => {
-  beforeEach(() => vi.resetAllMocks());
-
-  it('sets Ready status with plugin count and refreshes tree', async () => {
-    const deps = makeDeps({
-      repository: makeRepository({ plugins: makePlugins(3) }),
-      makeWizard: makeWizardFactory(true),
-    });
-    const ctrl = new SessionController(deps);
-
-    await ctrl.onBackendConnected();
-
-    expect(deps.setStatusText).toHaveBeenCalledWith(expect.stringContaining('3'));
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
-    expect(deps.showWarning).not.toHaveBeenCalled();
-  });
-
-  it('shows warning when no plugins are loaded', async () => {
-    const deps = makeDeps({
-      makeWizard: makeWizardFactory(true),
-    });
-    const ctrl = new SessionController(deps);
-
-    await ctrl.onBackendConnected();
-
-    expect(deps.showWarning).toHaveBeenCalledOnce();
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
-  });
-
-  it('sets No session status and refreshes tree when wizard fails', async () => {
-    const deps = makeDeps({ makeWizard: makeWizardFactory(false) });
-    const ctrl = new SessionController(deps);
-
-    await ctrl.onBackendConnected();
-
-    expect(deps.setStatusText).toHaveBeenCalledWith(expect.stringContaining('No session'));
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
-    expect(deps.showWarning).not.toHaveBeenCalled();
   });
 });
 
@@ -595,6 +520,80 @@ describe('SessionController.createPlaced', () => {
     await ctrl.createPlaced('MyMod.esp', '000001A4:Fallout4.esm', 'refr', 'persistent');
 
     expect(deps.showError).toHaveBeenCalled();
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+});
+
+// ── loadExplicitSession ───────────────────────────────────────────────────────
+
+describe('SessionController.loadExplicitSession', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  const plugins = [
+    { name: 'Foo.esp', path: '/mods/A/Foo.esp' },
+    { name: 'Fallout4.esm', path: '/game/Data/Fallout4.esm' },
+  ];
+
+  it('POSTs the ordered plugin list + dataFolder game directory and refreshes', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'loaded', failures: [] } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.loadExplicitSession(plugins, '/game/Data');
+
+    expect(deps.client.POST).toHaveBeenCalledWith(
+      '/session/load-explicit',
+      expect.objectContaining({ body: { plugins, gameDirectory: '/game/Data', gameRelease: 'Fallout4' } }),
+    );
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+    expect(deps.showError).not.toHaveBeenCalled();
+  });
+
+  it('surfaces skipped-plugin failures as a warning (never silent)', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({
+        response: { ok: true },
+        data: { status: 'loaded', failures: [{ name: 'Lunar-UniqueCreatures.esp', reason: 'RACE parse' }] },
+      }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.loadExplicitSession(plugins, '/game/Data');
+
+    expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('Lunar-UniqueCreatures.esp'));
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+  });
+
+  it('warns when the active profile has zero enabled plugins (never silently empty)', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'loaded', failures: [] } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.loadExplicitSession([], '/game/Data');
+
+    expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+  });
+
+  it('shows an error and does not refresh when the load fails', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: false, status: 400, text: () => Promise.resolve('bad dir') } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.loadExplicitSession(plugins, '/game/Data');
+
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('bad dir'));
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 });

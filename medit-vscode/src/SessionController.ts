@@ -1,11 +1,10 @@
 import type { ApiClient } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
-import type { SessionWizard } from './SessionWizard';
+import { reportSkippedPlugins } from './sessionFailures';
 
 export interface SessionControllerDeps {
   client: ApiClient;
   repository: PluginRepository;
-  makeWizard: () => SessionWizard;
   refreshTree: () => void;
   refreshGroupTree: () => void;
   setStatusText: (text: string) => void;
@@ -46,10 +45,36 @@ export class SessionController {
     this.deps.refreshTree();
   }
 
-  async loadSession(): Promise<void> {
-    const loaded = await this.deps.makeWizard().run();
-    if (!loaded) return;
-    this.deps.setStatusText('$(check) mEdit: Ready');
+  /** Load the editing session from an ordered { name, path } list built from the
+   *  active modlist (POST /session/load-explicit). `gameDirectory` must be the
+   *  resolved Data folder — the backend prepends implicit masters from it. */
+  async loadExplicitSession(
+    plugins: { name: string; path: string }[],
+    gameDirectory: string,
+    gameRelease = 'Fallout4',
+  ): Promise<void> {
+    const { data, response } = await this.deps.client.POST('/session/load-explicit', {
+      body: { plugins, gameDirectory, gameRelease },
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      this.log(`[SessionController] loadExplicitSession failed (${response.status}): ${text}`);
+      this.deps.showError(`mEdit: Failed to load session — ${text}`);
+      return;
+    }
+    reportSkippedPlugins(data?.failures, {
+      log: (m) => this.log(`[SessionController] ${m}`),
+      warn: this.deps.showWarning,
+    });
+    if (plugins.length === 0) {
+      // Only base-game masters loaded — the user's mental model ("my mods are
+      // loaded") would be silently wrong (ADR-0026 integrity tier).
+      this.deps.showWarning(
+        'mEdit: The active profile has no enabled plugins — only base-game masters were loaded. ' +
+          'Enable plugins in the mod list (or check the profile\'s plugins.txt).',
+      );
+    }
+    this.deps.setStatusText(`$(check) mEdit: Ready (${plugins.length} plugins)`);
     this.deps.refreshTree();
   }
 
@@ -184,25 +209,5 @@ export class SessionController {
     for (const g of data.filter(g => g.id)) {
       await this.revertGroup(g.id!);
     }
-  }
-
-  async onBackendConnected(): Promise<void> {
-    const loaded = await this.deps.makeWizard().run();
-    if (!loaded) {
-      this.deps.setStatusText('$(plug) mEdit: No session');
-      this.deps.refreshTree();
-      return;
-    }
-    const plugins = await this.deps.repository.getPlugins();
-    const count = plugins.length;
-    if (count === 0) {
-      this.deps.showWarning(
-        'mEdit: Session loaded but no plugins were found. ' +
-        'Plugins.txt may be listing no plugins (common with vanilla post-NextGen FO4). ' +
-        'Use MO2 or add plugins to Plugins.txt manually.',
-      );
-    }
-    this.deps.setStatusText(`$(check) mEdit: Ready (${count} plugins)`);
-    this.deps.refreshTree();
   }
 }

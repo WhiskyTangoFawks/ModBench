@@ -6,7 +6,6 @@ import * as cp from 'child_process';
 import { BackendManager } from './BackendManager';
 import { createApiClient } from './ApiClient';
 import { detectGamePaths } from './GamePathDetector';
-import { SessionWizard } from './SessionWizard';
 import { SessionController } from './SessionController';
 import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeProvider, RecordNode } from './PluginTreeProvider';
 import { ChangeGroupNode, ChangeGroupsTreeProvider } from './ChangeGroupsTreeProvider';
@@ -17,13 +16,36 @@ import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, ty
 import { openReferencedByPanel } from './ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { ModListProvider, ModNode, SeparatorNode } from './modmanager/ModListProvider';
-import { resolveGameDirectory, type GameDirectory } from './modmanager/gameDirectory';
+import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './modmanager/gameDirectory';
 import { deploy, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
+import { buildExplicitPlugins } from './modmanager/explicitSession';
 
 let backendManager: BackendManager | undefined;
 
-export async function activate(context: vscode.ExtensionContext) {
+const meditConfig = () => vscode.workspace.getConfiguration('mEdit');
+
+/** Leave editing: show the Loadout view and tear down the editing backend. */
+function exitToLoadout(): void {
+  void vscode.commands.executeCommand('setContext', 'medit.viewMode', 'loadout');
+  backendManager?.stop();
+}
+
+/** Game-path resolver: explicit `game.*` overrides if both set, else autodetect.
+ *  Shared by the session wizard, the deploy commands, and editing launch. */
+function makeDetectPaths(): DetectPaths {
+  return () => {
+    const c = meditConfig();
+    const dataOverride = (c.get('game.dataFolderPath') as string) ?? '';
+    const pluginsOverride = (c.get('game.pluginsTxtPath') as string) ?? '';
+    if (dataOverride && pluginsOverride) {
+      return Promise.resolve({ dataFolder: dataOverride, pluginsTxt: pluginsOverride });
+    }
+    return detectGamePaths();
+  };
+}
+
+export function activate(context: vscode.ExtensionContext) {
   const cfg = vscode.workspace.getConfiguration('mEdit');
   const port: number = cfg.get('backendPort') ?? 5172;
 
@@ -34,9 +56,14 @@ export async function activate(context: vscode.ExtensionContext) {
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   context.subscriptions.push(statusBarItem);
 
+  // Bundled backend binary (see build:backend / .vscodeignore). __dirname is
+  // out/ at runtime; the published self-contained executable lives in backend/.
+  const backendExe = process.platform === 'win32' ? 'MEditService.Api.exe' : 'MEditService.Api';
   backendManager = new BackendManager({
     port,
     log,
+    executablePath: path.join(__dirname, '..', 'backend', backendExe),
+    spawn: (exe, args) => cp.spawn(exe, args, { detached: false, stdio: 'ignore' }),
     statusBar: {
       setText: (t) => { statusBarItem.text = t; },
       show: () => statusBarItem.show(),
@@ -71,24 +98,6 @@ export async function activate(context: vscode.ExtensionContext) {
     client,
     repository,
     log,
-    makeWizard: () => new SessionWizard({
-      client,
-      detectPaths: () => {
-        const dataOverride: string = cfg.get('game.dataFolderPath') ?? '';
-        const pluginsOverride: string = cfg.get('game.pluginsTxtPath') ?? '';
-        if (dataOverride && pluginsOverride) {
-          return Promise.resolve({ dataFolder: dataOverride, pluginsTxt: pluginsOverride });
-        }
-        return detectGamePaths();
-      },
-      showQuickPick: (items) =>
-        vscode.window.showQuickPick(items, { placeHolder: 'Select game path' }) as Promise<{ label: string } | undefined>,
-      showInputBox: (opts) =>
-        vscode.window.showInputBox({ prompt: opts.prompt, value: opts.value }),
-      showErrorMessage: (msg) => { void vscode.window.showErrorMessage(msg); },
-      showWarningMessage: (msg) => { void vscode.window.showWarningMessage(msg); },
-      log,
-    }),
     refreshTree: () => treeProvider.refresh(),
     refreshGroupTree: () => changeGroupTreeProvider.refresh(),
     setStatusText: (t) => { statusBarItem.text = t; },
@@ -153,6 +162,40 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     };
 
+    // ── Editing lifecycle (Launch mEdit → spawn backend + load-explicit) ──────
+    /** Spawn (or attach) the backend and load the active modlist as a
+     *  load-explicit session. Also the crash-restart reload path. */
+    const enterEditing = async (): Promise<void> => {
+      const gd = await resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths());
+      if (!gd) {
+        exitToLoadout(); // don't strand the UI in an empty editing view
+        void vscode.window.showErrorMessage(
+          'mEdit: No game directory found. Set mEdit.mods.gameDirectory to your Stock Game Folder or Steam install.',
+        );
+        return;
+      }
+      // Spawn/attach the backend and walk the mod tree concurrently — independent
+      // work; the health gate is applied after they join.
+      const [, plugins] = await Promise.all([
+        backendManager!.start(),
+        buildExplicitPlugins(modlistSource, instanceRoot, gd.dataFolder),
+      ]);
+      if (!backendManager!.isHealthy) {
+        exitToLoadout(); // tear down the half-started backend and reset the view
+        void vscode.window.showErrorMessage('mEdit: Backend failed to start — see the mEdit output for details.');
+        return;
+      }
+      await controller.loadExplicitSession(plugins, gd.dataFolder);
+      await controller.syncFilterState();
+      changeGroupTreeProvider.refresh();
+    };
+
+    backendManager.on('restarted', () => {
+      void enterEditing().catch((err: unknown) =>
+        log(`[extension] reload after backend restart failed: ${err instanceof Error ? err.message : String(err)}`),
+      );
+    });
+
     context.subscriptions.push(
       modListView,
       modListView.onDidChangeCheckboxState(async (e) => {
@@ -183,6 +226,9 @@ export async function activate(context: vscode.ExtensionContext) {
           { placeHolder: 'Switch profile' },
         );
         if (!picked || picked.label === active) return;
+        // New session boundary — tear down any live editing backend so a stale
+        // session can't survive the profile change (no-op if already stopped).
+        exitToLoadout();
         await modListProvider.switchProfile(picked.label);
         void updateProfileDescription();
       }),
@@ -203,8 +249,15 @@ export async function activate(context: vscode.ExtensionContext) {
         box.onDidHide(() => { modListProvider.setFilter('', true); box.dispose(); });
         box.show();
       }),
-      vscode.commands.registerCommand('mEdit.modList.launchMedit', () => {
-        void vscode.window.showInformationMessage('mEdit: Launch mEdit is wired in Modbench-5.');
+      vscode.commands.registerCommand('mEdit.modList.launchMedit', async () => {
+        void vscode.commands.executeCommand('setContext', 'medit.viewMode', 'editing');
+        try {
+          await enterEditing();
+        } catch (err) {
+          log(`[extension] launchMedit failed: ${err instanceof Error ? err.message : String(err)}`);
+          exitToLoadout(); // reset the view and tear down any half-started backend
+          void vscode.window.showErrorMessage('mEdit: Failed to enter editing mode.');
+        }
       }),
       ...registerDeployCommands(instanceRoot, modlistSource, log),
       vscode.commands.registerCommand('mEdit.modList.mod.openInExplorer', async (node: ModNode) => {
@@ -286,7 +339,7 @@ export async function activate(context: vscode.ExtensionContext) {
     changeGroupTreeView,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     vscode.commands.registerCommand('mEdit.refreshTree', () => treeProvider.refresh()),
-    vscode.commands.registerCommand('mEdit.loadSession', () => controller.loadSession()),
+    vscode.commands.registerCommand('mEdit.closeMedit', () => exitToLoadout()),
     vscode.commands.registerCommand('mEdit.reloadSession', () => treeProvider.refresh()),
     vscode.commands.registerCommand('mEdit.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port);
@@ -422,18 +475,10 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  backendManager.on('status', (status) => {
-    if (status === 'attached') {
-      void controller.onBackendConnected()
-        .then(() => controller.syncFilterState())
-        .then(() => changeGroupTreeProvider.refresh())
-        .catch((err: unknown) => log(`[extension] onBackendConnected failed: ${err instanceof Error ? err.message : String(err)}`));
-    }
-  });
-
-  await backendManager.connect().catch((err: unknown) => {
-    vscode.window.showErrorMessage(`mEdit: Backend failed to start — ${err instanceof Error ? err.message : String(err)}`);
-  });
+  // The backend is now spawned lazily on entering editing (Launch mEdit) and
+  // torn down on Close mEdit — the extension owns its lifecycle (ADR-0022). There
+  // is no auto-connect / auto-wizard at activation; show a neutral idle state.
+  statusBarItem.text = '$(plug) mEdit';
 }
 
 export function deactivate() {
@@ -448,16 +493,8 @@ function registerDeployCommands(
   modlistSource: Mo2ModlistSource,
   log: (msg: string) => void,
 ): vscode.Disposable[] {
-  const config = () => vscode.workspace.getConfiguration('mEdit');
-
-  const detectPaths = () => {
-    const dataOverride = (config().get('game.dataFolderPath') as string) ?? '';
-    const pluginsOverride = (config().get('game.pluginsTxtPath') as string) ?? '';
-    if (dataOverride && pluginsOverride) {
-      return Promise.resolve({ dataFolder: dataOverride, pluginsTxt: pluginsOverride });
-    }
-    return detectGamePaths();
-  };
+  const config = meditConfig;
+  const detectPaths = makeDetectPaths();
 
   const reporter: Reporter = {
     report: (severity, message, detail) => {

@@ -46,4 +46,7 @@ export interface IModlistSource {
   setActiveProfile(name: string): Promise<void>;
   /** plugins.txt load order, read-only (the Plugin List view owns plugin order). */
   readPluginOrder(): Promise<string[]>;
+  /** plugins.txt load order, enabled-only (the `*`-prefixed lines) — the plugins
+   *  that actually load, used to build a `load-explicit` editing session. */
+  readEnabledPlugins(): Promise<string[]>;
 }
