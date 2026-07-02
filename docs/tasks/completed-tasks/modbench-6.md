@@ -1,6 +1,6 @@
 # Modbench-6 — Mod installation from archive/folder (was M-5)
 
-**Status: In Progress**
+**Status: Complete**
 **Recommended model: Sonnet 4.6** — mostly mechanical (extract, detect root, normalize, write `meta.ini`); the only judgment call is the archive-lib decision, which is bounded.
 
 ## Decisions (planning)
@@ -34,4 +34,16 @@ Archive extraction: Node has no native 7z/RAR — shell out to `7z` or use a Nod
 
 ## Proof
 
-*To be filled in on completion. Paste `npm run test:unit` output and commit hash here.*
+Commit: `1cc0b68` (on branch `modbench-6-install-from-archive`, merged to `main`).
+
+`npm run test:unit`:
+
+```text
+ Test Files  33 passed (33)
+      Tests  413 passed (413)
+   Duration  2.57s
+```
+
+Frontend mechanical gates (`validate/run-gates.sh --frontend`): build type-check + bundle,
+lint, `test:unit` (413), and `test:integration` (4 passing) all green. No Core CS changed, so
+mutation testing is not applicable.
