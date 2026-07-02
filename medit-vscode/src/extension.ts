@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
+import * as cp from 'child_process';
 import { BackendManager } from './BackendManager';
 import { createApiClient } from './ApiClient';
 import { detectGamePaths } from './GamePathDetector';
@@ -16,6 +17,9 @@ import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, ty
 import { openReferencedByPanel } from './ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { ModListProvider, ModNode, SeparatorNode } from './modmanager/ModListProvider';
+import { resolveGameDirectory, type GameDirectory } from './modmanager/gameDirectory';
+import { deploy, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
+import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
 
 let backendManager: BackendManager | undefined;
 
@@ -106,6 +110,20 @@ export async function activate(context: vscode.ExtensionContext) {
   // The open workspace root IS the MO2 instance (see medit-vscode/CLAUDE.md). Until
   // the Loadout↔Editing toggle lands (Modbench-5), Mod List is the only visible view.
   void vscode.commands.executeCommand('setContext', 'medit.viewMode', 'loadout');
+
+  // Deploy/Purge/Launch are standalone-only; hidden when an external manager owns
+  // deployment. Default standalone (the mechanism on Linux, where USVFS is absent).
+  const applyDeploymentMode = () => {
+    const mode = vscode.workspace.getConfiguration('mEdit').get('mods.deploymentMode') ?? 'standalone';
+    void vscode.commands.executeCommand('setContext', 'medit.deploymentStandalone', mode !== 'external');
+  };
+  applyDeploymentMode();
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('mEdit.mods.deploymentMode')) applyDeploymentMode();
+    }),
+  );
+
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (instanceRoot) {
     const modlistSource = new Mo2ModlistSource(instanceRoot);
@@ -188,6 +206,7 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.commands.registerCommand('mEdit.modList.launchMedit', () => {
         void vscode.window.showInformationMessage('mEdit: Launch mEdit is wired in Modbench-5.');
       }),
+      ...registerDeployCommands(instanceRoot, modlistSource, log),
       vscode.commands.registerCommand('mEdit.modList.mod.openInExplorer', async (node: ModNode) => {
         if (node?.kind !== 'mod') return;
         const uri = vscode.Uri.file(path.join(instanceRoot, 'mods', node.mod.name));
@@ -419,6 +438,98 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
   backendManager?.dispose();
+}
+
+/** Deploy / Purge / Launch Game commands (standalone mode). Orchestrates the
+ *  existing resolver + deployer over the active MO2 instance; surfacing goes
+ *  through an injected reporter per ADR-0026. */
+function registerDeployCommands(
+  instanceRoot: string,
+  modlistSource: Mo2ModlistSource,
+  log: (msg: string) => void,
+): vscode.Disposable[] {
+  const config = () => vscode.workspace.getConfiguration('mEdit');
+
+  const detectPaths = () => {
+    const dataOverride = (config().get('game.dataFolderPath') as string) ?? '';
+    const pluginsOverride = (config().get('game.pluginsTxtPath') as string) ?? '';
+    if (dataOverride && pluginsOverride) {
+      return Promise.resolve({ dataFolder: dataOverride, pluginsTxt: pluginsOverride });
+    }
+    return detectGamePaths();
+  };
+
+  const reporter: Reporter = {
+    report: (severity, message, detail) => {
+      const suffix = detail ? ` — ${detail}` : '';
+      log(`[deploy] ${severity}: ${message}${suffix}`);
+      if (severity === 'error') void vscode.window.showErrorMessage(`mEdit: ${message}`);
+      else void vscode.window.showWarningMessage(`mEdit: ${message}`);
+    },
+  };
+
+  const resolveGd = async () => {
+    const gd = await resolveGameDirectory(instanceRoot, config(), detectPaths);
+    if (!gd) {
+      reporter.report('error', 'No game directory found. Set mEdit.mods.gameDirectory to your Stock Game Folder or Steam install.');
+    }
+    return gd;
+  };
+
+  const resolveLoadOrder = async (): Promise<LoadOrderDeployment[]> => {
+    const target = (config().get('game.pluginsTxtPath') as string) || (await detectPaths())?.pluginsTxt;
+    if (!target) return [];
+    const profile = await modlistSource.getActiveProfile();
+    return [{ source: path.join(instanceRoot, 'profiles', profile, 'plugins.txt'), target }];
+  };
+
+  const runDeploy = async (gd: GameDirectory) => {
+    const index = buildFileConflictIndex(await modlistSource.readModlist(), instanceRoot);
+    await deploy(instanceRoot, gd, await index, reporter, { loadOrder: await resolveLoadOrder() });
+  };
+
+  return [
+    vscode.commands.registerCommand('mEdit.modList.deploy', async () => {
+      try {
+        const gd = await resolveGd();
+        if (!gd) return;
+        await runDeploy(gd);
+        void vscode.window.showInformationMessage('mEdit: Mods deployed.');
+      } catch (err) {
+        reporter.report('error', 'Deploy failed.', err instanceof Error ? err.message : String(err));
+      }
+    }),
+    vscode.commands.registerCommand('mEdit.modList.purge', async () => {
+      try {
+        const gd = await resolveGd();
+        if (!gd) return;
+        await purge(instanceRoot, gd, reporter);
+        void vscode.window.showInformationMessage('mEdit: Deployed mods purged.');
+      } catch (err) {
+        reporter.report('error', 'Purge failed.', err instanceof Error ? err.message : String(err));
+      }
+    }),
+    vscode.commands.registerCommand('mEdit.modList.launchGame', async () => {
+      try {
+        const gd = await resolveGd();
+        if (!gd) return;
+        await runDeploy(gd);
+        // Switch to the Plugin List view while the game runs (mirrors launchMedit).
+        void vscode.commands.executeCommand('setContext', 'medit.viewMode', 'editing');
+        const executable = path.join(gd.root, 'Fallout4.exe');
+        const template = (config().get('mods.launchCommand') as string) || '';
+        const child = template
+          ? cp.spawn(template.replaceAll('${executable}', executable), { shell: true, cwd: gd.root, detached: true, stdio: 'ignore' })
+          : cp.spawn(executable, { cwd: gd.root, detached: true, stdio: 'ignore' });
+        child.on('error', (e) => reporter.report('error', 'Failed to launch the game.', e.message));
+        child.on('exit', () => {
+          void purge(instanceRoot, gd, reporter).catch((e) => log(`[deploy] purge on exit failed: ${String(e)}`));
+        });
+      } catch (err) {
+        reporter.report('error', 'Launch Game failed.', err instanceof Error ? err.message : String(err));
+      }
+    }),
+  ];
 }
 
 function promptPluginName(): Thenable<string | undefined> {

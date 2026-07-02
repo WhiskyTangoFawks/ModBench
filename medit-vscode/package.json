@@ -34,6 +34,29 @@
           "type": "string",
           "default": "",
           "description": "Path to folder containing .sql filter files and .py scripts. Defaults to ~/.medit/scripts."
+        },
+        "mEdit.mods.gameDirectory": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Game directory to deploy into (the folder containing the game executable and Data/). A Steam install or a stock game folder. Leave blank to fall back to ModOrganizer.ini's gamePath, then Steam auto-detect."
+        },
+        "mEdit.mods.deploymentMode": {
+          "type": "string",
+          "enum": ["standalone", "external"],
+          "enumDescriptions": [
+            "mEdit hardlinks the merged mod view into the game directory's Data/ (the mechanism on Linux, where MO2's USVFS is unavailable).",
+            "An external manager (MO2/Vortex) owns deployment; mEdit hides Deploy/Purge/Launch Game."
+          ],
+          "default": "standalone",
+          "scope": "resource",
+          "description": "Who deploys mods into the game directory."
+        },
+        "mEdit.mods.launchCommand": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Optional override for Launch Game. Template with a ${executable} placeholder (e.g. for Proton/Wine or an F4SE loader). Leave blank to spawn the executable directly."
         }
       }
     },
@@ -163,6 +186,21 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "mEdit.modList.deploy",
+        "title": "mEdit: Deploy Mods",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "mEdit.modList.purge",
+        "title": "mEdit: Purge Deployed Mods",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "mEdit.modList.launchGame",
+        "title": "mEdit: Launch Game",
+        "icon": "$(run-all)"
+      },
+      {
         "command": "mEdit.modList.mod.openInExplorer",
         "title": "Open in Explorer"
       },
@@ -236,6 +274,21 @@
           "command": "mEdit.modList.refresh",
           "when": "view == mEdit.modList",
           "group": "navigation@4"
+        },
+        {
+          "command": "mEdit.modList.deploy",
+          "when": "view == mEdit.modList && medit.deploymentStandalone",
+          "group": "navigation@5"
+        },
+        {
+          "command": "mEdit.modList.purge",
+          "when": "view == mEdit.modList && medit.deploymentStandalone",
+          "group": "navigation@6"
+        },
+        {
+          "command": "mEdit.modList.launchGame",
+          "when": "view == mEdit.modList && medit.deploymentStandalone",
+          "group": "navigation@7"
         },
         {
           "command": "mEdit.saveAllGroups",

@@ -27,6 +27,20 @@ describe('readVanillaMasters', () => {
     expect(masters).toEqual(new Set(['fallout4.esm', 'dlcrobot.esm']));
   });
 
+  it('normalizes a Wine drive-mapped gamePath so masters resolve on Linux', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'medit-vanillamasters-'));
+    const gamePath = join(dir, 'Game');
+    await mkdir(join(gamePath, 'Data'), { recursive: true });
+    await writeFile(join(gamePath, 'Data', 'Fallout4.esm'), '');
+    const winePath = 'Z:' + gamePath.replaceAll('/', '\\');
+    await writeFile(join(dir, 'ModOrganizer.ini'), `[General]\r\ngamePath=@ByteArray(${winePath})\r\n`);
+
+    // Skip on Windows, where the native path is used as-is (no Wine translation).
+    if (process.platform !== 'win32') {
+      expect(await readVanillaMasters(dir)).toEqual(new Set(['fallout4.esm']));
+    }
+  });
+
   it('tolerates a missing ModOrganizer.ini and returns an empty set', async () => {
     dir = await mkdtemp(join(tmpdir(), 'medit-vanillamasters-'));
     expect(await readVanillaMasters(dir)).toEqual(new Set());
