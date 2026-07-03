@@ -7,7 +7,7 @@ A VS Code extension + local C# service that together form a modding IDE for Beth
 
 Targets Fallout 4 in v1; architecture supports any Mutagen-supported game without code changes.
 
-See [CONTEXT-MAP.md](CONTEXT-MAP.md) for how the two views map to bounded contexts, [CONTEXT.md](CONTEXT.md) for editing domain language, and [docs/mod-manager.md](docs/mod-manager.md) for the mod-manager spec.
+See [CONTEXT-MAP.md](CONTEXT-MAP.md) for how the two views map to bounded contexts, [CONTEXT.md](CONTEXT.md) for editing domain language, and [docs/specs/](docs/specs/) for the per-surface UI specs.
 
 ## Prerequisites
 
@@ -70,7 +70,7 @@ The open workspace folder is treated as the MO2 instance directory (`mods/`, `pr
 
 ## Development
 
-See [docs/adr/](docs/adr/) for architectural decisions, [docs/UI_SPEC.md](docs/UI_SPEC.md) for the mEdit view's UI spec, [docs/mod-manager.md](docs/mod-manager.md) for the Loadout view's spec, and [TASKS.md](TASKS.md) for the phased build plan.
+See [docs/adr/](docs/adr/) for architectural decisions, [docs/specs/](docs/specs/) for the per-surface UI specs, and [ROADMAP.md](ROADMAP.md) for status and planned initiatives (work items live on [GitHub Issues](https://github.com/WhiskyTangoFawks/mEdit/issues)).
 
 Tests follow TDD — write a failing test before any implementation.
 

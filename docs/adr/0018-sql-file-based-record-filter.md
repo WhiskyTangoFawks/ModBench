@@ -23,6 +23,6 @@ VS Code provides syntax highlighting, undo history, save, and version control fo
 ## Consequences
 
 - `GET /plugins/{plugin}/conflicts` (original Phase 9.6 scope) is deferred — a plugin-scoped conflict filter requires `{plugin}` substitution, which is deferred.
-- The "All / Conflicts / Overrides / Clean" toolbar from UI_SPEC §2.5 is replaced by the filter QuickPick + Code Lens.
+- The "All / Conflicts / Overrides / Clean" toolbar from the mEdit spec (`docs/specs/medit.md`) §2.5 is replaced by the filter QuickPick + Code Lens.
 - Phase 15 inherits `mEdit.scriptsPath` and the Code Lens infrastructure rather than building its own.
 - Filter SQL runs against real DuckDB table names. Users must know the schema (table names match Mutagen record type names; column names match `ColumnSpec` field names from `SchemaReflector`).

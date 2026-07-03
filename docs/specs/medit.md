@@ -1,16 +1,19 @@
 # mEdit — Functional UI Specification
 
-This document is the canonical description of the **mEdit view**'s frontend surfaces — one of Modbench's two views (see [CONTEXT-MAP.md](../CONTEXT-MAP.md)). The other view, **Loadout** (mod install/order/deploy), has its own spec at [docs/mod-manager.md](mod-manager.md). Each section here describes what is shown, what interactions are available, and what data drives them. Implementation phases should be designed against this spec; when a phase changes the intended behavior, update this document first.
+This document is the canonical description of the **mEdit view**'s frontend surfaces — one of Modbench's UI surfaces (see [CONTEXT-MAP.md](../../CONTEXT-MAP.md) and the [spec layer overview](README.md)). The Loadout surface (mod install/order/deploy) has its own spec at [mods.md](mods.md). Each section here describes what is shown, what interactions are available, and what data drives them. Implementation work should be designed against this spec; when an initiative changes the intended behavior, update this document first.
 
 ---
 
 ## Overall Layout
 
-Modbench is a VS Code extension; this section covers the mEdit view's UI. Its UI is composed of three surfaces:
+Modbench is a VS Code extension with a single activity-bar container (`modbench`). A `modbench.viewMode` context key toggles the sidebar between the Loadout surface (`modbench.modList`, spec: [mods.md](mods.md)) and the mEdit surface. **Launch mEdit** (in the Loadout header) switches to editing mode, lazily spawning the backend and loading the active modlist as the session; **Close mEdit** switches back and tears the session down.
 
-1. **Sidebar tree** (VS Code activity bar panel) — the entry point for all navigation
-2. **Record editor panel** (VS Code editor tab, webview) — the main work surface; one tab per open record
-3. **Status bar item** — backend connection state; bottom of VS Code window
+The mEdit view is composed of four surfaces:
+
+1. **Plugins tree** (`modbench.pluginTree`, sidebar) — the entry point for all navigation
+2. **Change Groups tree** (`modbench.changeGroupTree`, sidebar, below the Plugins tree) — in-flight ChangeGroups (§4)
+3. **Record editor panel** (VS Code editor tab, webview) — the main work surface; one tab per open record
+4. **Status bar item** — backend connection state; bottom of VS Code window
 
 There is no toolbar or top-level menu bar. All actions are reachable from the sidebar tree context menu, the command palette, or the record editor panel itself.
 
@@ -27,13 +30,13 @@ The status bar item sits in the bottom-right of the VS Code window.
 | Attached, no session | "mEdit: no session" | default |
 | Attached, session loaded | "mEdit: {GameRelease} — {N} plugins" | success (green) |
 
-Clicking the item when the backend is not running shows a notification with instructions to start it. Clicking when attached opens the session wizard if no session is loaded, or does nothing if a session is already active.
+Clicking the item when the backend is not running shows a notification with instructions to start it. Sessions are created via **Launch mEdit** (from the Loadout surface), not from the status bar.
 
 ---
 
 ## 2. Sidebar Tree
 
-The sidebar tree is the primary navigation surface. It is a VS Code `TreeView` registered under the `mEdit` view container.
+The sidebar tree is the primary navigation surface. It is a VS Code `TreeView` registered as `modbench.pluginTree` ("Plugins") in the `modbench` container, visible while `modbench.viewMode == 'editing'`.
 
 ### 2.0 Multi-Select
 
@@ -41,8 +44,7 @@ The tree view has `canSelectMany: true`. Ctrl+click and Shift+click select multi
 
 ### 2.1 Top-Level Nodes
 
-When no session is loaded:
-- Single informational node: "No session — click to load…"; activating it runs `mEdit.loadSession`.
+The session is built on entry: **Launch mEdit** constructs it from the active modlist's enabled plugins plus vanilla masters (`load-explicit`). There is no separate load-session step.
 
 When a session is loaded, top-level nodes are:
 
@@ -95,7 +97,7 @@ Context menu (`contextValue: "record"`):
 
 | Action | Notes |
 |--------|-------|
-| Open Record | Default action (also triggered by single click); runs `mEdit.openEditor` |
+| Open Record | Default action (also triggered by single click); runs `modbench.openEditor` |
 | Copy as Override Into… | Plugin picker; calls copy-to |
 | Copy as New Record Into… | Plugin picker; calls `POST /plugins/{plugin}/records` with template (Phase 10) |
 | Remove Record | Confirmation dialog listing all selected records; calls `POST /records/delete` with all selected `(FormKey, Plugin)` pairs as one batch (Phase 10); Delete key also triggers this when record nodes are selected |
@@ -108,28 +110,28 @@ The record tree is filtered by a **filter file** — a plain `.sql` file contain
 
 **Entry points:**
 
-- Tree view title bar: funnel icon button (always visible) → opens `mEdit.setFilter` QuickPick; funnel-slash icon (visible only when filter active) → `mEdit.clearFilter`
-- Command palette: `mEdit.setFilter`, `mEdit.clearFilter`
-- Code Lens on open `.sql` files in `mEdit.scriptsPath` (see below)
+- Tree view title bar: funnel icon button (always visible) → opens `modbench.setFilter` QuickPick; funnel-slash icon (visible only when filter active) → `modbench.clearFilter`
+- Command palette: `modbench.setFilter`, `modbench.clearFilter`
+- Code Lens on open `.sql` files in `modbench.scriptsPath` (see below)
 
-**`mEdit.setFilter` QuickPick:**
+**`modbench.setFilter` QuickPick:**
 
-Lists all `.sql` files in `mEdit.scriptsPath` plus a "New filter…" option. Selecting a file POSTs its SQL to the backend and refreshes the tree. "New filter…" opens a new untitled `.sql` editor tab.
+Lists all `.sql` files in `modbench.scriptsPath` plus a "New filter…" option. Selecting a file POSTs its SQL to the backend and refreshes the tree. "New filter…" opens a new untitled `.sql` editor tab.
 
 **Code Lens on `.sql` files:**
 
-Two inline lenses appear at the top of every `.sql` file under `mEdit.scriptsPath`:
+Two inline lenses appear at the top of every `.sql` file under `modbench.scriptsPath`:
 
 - `▶ Apply as Filter` — when the file's content does not match the currently active filter SQL
 - `✓ Active — click to clear` — when this file is the active filter
 
 An editor title bar funnel-slash button is also shown when any filter is active.
 
-**Active filter indicator:** the tree title bar funnel icon and the editor title bar button both reflect active/inactive state via the `mEdit.filterActive` VS Code context key.
+**Active filter indicator:** the tree title bar funnel icon and the editor title bar button both reflect active/inactive state via the `modbench.filterActive` VS Code context key.
 
 **Clearing the filter** restores the full unfiltered tree.
 
-**Built-in presets** (copied to `mEdit.scriptsPath` on first use):
+**Built-in presets** (copied to `modbench.scriptsPath` on first use):
 
 | File | SQL |
 |------|-----|
@@ -164,13 +166,13 @@ Block and Sub-block nodes are grouping nodes only (no record, no click action). 
 | ---- | ------------ | ------- |
 | CellNode | `cell` | *(none)* |
 | PlacedGroupNode | `placedGroup-persistent` / `placedGroup-temporary` | **Create Placed…** — QuickPick REFR/ACHR + optional template FormKey; calls `POST /plugins/{plugin}/cells/{cellFormKey}/placed` |
-| PlacedNode | `refr` | **Copy as Override Into…** (same handler as `mEdit.copyAsOverrideInto`); **Delete** (same handler as `mEdit.deleteRecord`) |
+| PlacedNode | `refr` | **Copy as Override Into…** (same handler as `modbench.copyAsOverrideInto`); **Delete** (same handler as `modbench.deleteRecord`) |
 
 ---
 
 ## 3. Record Editor Panel
 
-The record editor is a VS Code webview panel opened by `mEdit.openEditor`. One panel can be open at a time (reused when navigating between records — see extension invariant). The panel is a React app.
+The record editor is a VS Code webview panel opened by `modbench.openEditor`. One panel can be open at a time (reused when navigating between records — see extension invariant). The panel is a React app.
 
 ### 3.1 Panel Header
 
@@ -361,28 +363,29 @@ When no groups are active: single informational node — "No pending group chang
 
 ### 4.4 Error State
 
-If `POST /change-groups/{id}/save` returns a partial failure (some plugins saved, some did not): show a VS Code error notification naming which plugins saved and which failed. The group row remains in the tree with its re-queued changes intact. See phase-10.5.md for the partial-save failure contract.
+If `POST /change-groups/{id}/save` returns a partial failure (some plugins saved, some did not): show a VS Code error notification naming which plugins saved and which failed. The group row remains in the tree with its re-queued changes intact. See [phase-10.5](../tasks/completed-tasks/phase-10.5.md) for the partial-save failure contract.
 
 ---
 
 ## 5. Command Palette Commands
 
-All `mEdit.*` commands are available in the command palette. The full list is the canonical registry in `package.json` `contributes.commands`. Commands relevant to navigation and common workflows:
+All `modbench.*` commands are available in the command palette. The full list is the canonical registry in `package.json` `contributes.commands`. Commands relevant to navigation and common workflows:
 
 | Command ID | Title | Notes |
 |-----------|-------|-------|
-| `mEdit.loadSession` | mEdit: Load Session | Runs session wizard |
-| `mEdit.openEditor` | mEdit: Open Record Editor | Internal; also bound to tree click |
-| `mEdit.newPlugin` | mEdit: New Plugin… | Prompts for name and type |
-| `mEdit.copyAsOverride` | mEdit: Copy as Override Into… | Requires active record panel |
-| `mEdit.showConflicts` | mEdit: Show Conflicts | Focuses the Conflicts tree node (Phase 9) |
-| `mEdit.runScript` | mEdit: Run Script… | QuickPick; context = active record if panel open, else global (Phase 15) |
+| `modbench.modList.launchMedit` | Modbench: Launch mEdit | Enters editing mode; spawns backend, loads the modlist session |
+| `modbench.closeMedit` | Modbench: Close mEdit | Returns to Loadout; tears down the session |
+| `modbench.reloadSession` | Modbench: Reload Session | Refreshes the Plugins tree |
+| `modbench.openEditor` | Modbench: Open Editor | Internal; also bound to tree click |
+| `modbench.newPlugin` | Modbench: New Plugin… | Prompts for name and type |
+| `modbench.copyAsOverrideInto` | Modbench: Copy as Override Into… | Plugin picker |
+| `modbench.runScript` | Modbench: Run Script… | Planned (Phase 15); QuickPick; context = active record if panel open, else global |
 
 ---
 
 ## 6. Mod List View (Loadout)
 
-Specified separately in [`medit-vscode/src/modmanager/docs/UI_SPEC.md`](../medit-vscode/src/modmanager/docs/UI_SPEC.md).
+Specified separately in [mods.md](mods.md).
 
 ---
 

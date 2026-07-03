@@ -28,7 +28,7 @@ TypeScript VS Code extension. Root [CLAUDE.md](../CLAUDE.md) for project-wide in
 - Context menu availability controlled by tree node `contextValue` (set from backend metadata). Values: `"plugin"`, `"pluginImmutable"`, `"recordType"`, `"record"`.
 - New commands: prompt in `extension.ts`, delegate to `SessionController` (explicit args, no VS Code types).
 - New data queries: add to `PluginRepository` interface, implement in `ApiPluginRepository`, test without VS Code.
-- Before any new UI surface: read `docs/UI_SPEC.md` first; add to spec if not covered.
+- Before any new UI surface: read the relevant surface spec in `docs/specs/` first (`medit.md` for editing UI, `mods.md` for Loadout); add to the spec if not covered.
 
 ## Type Mapping: PluginMetadata
 
