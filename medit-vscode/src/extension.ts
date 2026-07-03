@@ -25,11 +25,11 @@ import { extractArchive } from './modmanager/install/extractArchive';
 
 let backendManager: BackendManager | undefined;
 
-const meditConfig = () => vscode.workspace.getConfiguration('mEdit');
+const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
 /** Leave editing: show the Loadout view and tear down the editing backend. */
 function exitToLoadout(): void {
-  void vscode.commands.executeCommand('setContext', 'medit.viewMode', 'loadout');
+  void vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
   backendManager?.stop();
 }
 
@@ -48,10 +48,10 @@ function makeDetectPaths(): DetectPaths {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  const cfg = vscode.workspace.getConfiguration('mEdit');
+  const cfg = vscode.workspace.getConfiguration('modbench');
   const port: number = cfg.get('backendPort') ?? 5172;
 
-  const outputChannel = vscode.window.createOutputChannel('mEdit');
+  const outputChannel = vscode.window.createOutputChannel('Modbench');
   context.subscriptions.push(outputChannel);
   const log = (msg: string) => outputChannel.appendLine(`[${new Date().toISOString()}] ${msg}`);
 
@@ -92,7 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
   const filterProvider = new FilterCodeLensProvider(scriptsPath);
 
   const setFilterActive = (active: boolean, sql?: string) => {
-    void vscode.commands.executeCommand('setContext', 'mEdit.filterActive', active);
+    void vscode.commands.executeCommand('setContext', 'modbench.filterActive', active);
     filterProvider.setActiveSql(active ? (sql ?? null) : null);
   };
 
@@ -108,30 +108,30 @@ export function activate(context: vscode.ExtensionContext) {
     setFilterActive,
   });
 
-  const treeView = vscode.window.createTreeView('mEdit.pluginTree', {
+  const treeView = vscode.window.createTreeView('modbench.pluginTree', {
     treeDataProvider: treeProvider,
     canSelectMany: true,
   });
 
-  const changeGroupTreeView = vscode.window.createTreeView('mEdit.changeGroupTree', {
+  const changeGroupTreeView = vscode.window.createTreeView('modbench.changeGroupTree', {
     treeDataProvider: changeGroupTreeProvider,
   });
 
   // ── Mod List (Loadout) view ──────────────────────────────────────────────────
   // The open workspace root IS the MO2 instance (see medit-vscode/CLAUDE.md). Until
   // the Loadout↔Editing toggle lands (Modbench-5), Mod List is the only visible view.
-  void vscode.commands.executeCommand('setContext', 'medit.viewMode', 'loadout');
+  void vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
 
   // Deploy/Purge/Launch are standalone-only; hidden when an external manager owns
   // deployment. Default standalone (the mechanism on Linux, where USVFS is absent).
   const applyDeploymentMode = () => {
-    const mode = vscode.workspace.getConfiguration('mEdit').get('mods.deploymentMode') ?? 'standalone';
-    void vscode.commands.executeCommand('setContext', 'medit.deploymentStandalone', mode !== 'external');
+    const mode = vscode.workspace.getConfiguration('modbench').get('mods.deploymentMode') ?? 'standalone';
+    void vscode.commands.executeCommand('setContext', 'modbench.deploymentStandalone', mode !== 'external');
   };
   applyDeploymentMode();
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('mEdit.mods.deploymentMode')) applyDeploymentMode();
+      if (e.affectsConfiguration('modbench.mods.deploymentMode')) applyDeploymentMode();
     }),
   );
 
@@ -139,7 +139,7 @@ export function activate(context: vscode.ExtensionContext) {
   if (instanceRoot) {
     const modlistSource = new Mo2ModlistSource(instanceRoot);
     const modListProvider = new ModListProvider(modlistSource, log, instanceRoot);
-    const modListView = vscode.window.createTreeView('mEdit.modList', {
+    const modListView = vscode.window.createTreeView('modbench.modList', {
       treeDataProvider: modListProvider,
       showCollapseAll: true,
       dragAndDropController: modListProvider,
@@ -160,7 +160,7 @@ export function activate(context: vscode.ExtensionContext) {
         modListProvider.refresh();
       } catch (err) {
         log(`[extension] ${logLabel} failed: ${err instanceof Error ? err.message : String(err)}`);
-        void vscode.window.showErrorMessage(`mEdit: ${failMessage}`);
+        void vscode.window.showErrorMessage(`Modbench: ${failMessage}`);
       }
     };
 
@@ -171,7 +171,7 @@ export function activate(context: vscode.ExtensionContext) {
     const warnIfFomod = (name: string, isFomod: boolean): void => {
       if (isFomod)
         void vscode.window.showWarningMessage(
-          `mEdit: "${name}" is a FOMOD installer — its files were copied as-is and need manual ` +
+          `Modbench: "${name}" is a FOMOD installer — its files were copied as-is and need manual ` +
             `arrangement (the scripted installer is coming later).`,
         );
     };
@@ -184,7 +184,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (!gd) {
         exitToLoadout(); // don't strand the UI in an empty editing view
         void vscode.window.showErrorMessage(
-          'mEdit: No game directory found. Set mEdit.mods.gameDirectory to your Stock Game Folder or Steam install.',
+          'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
         );
         return;
       }
@@ -196,7 +196,7 @@ export function activate(context: vscode.ExtensionContext) {
       ]);
       if (!backendManager!.isHealthy) {
         exitToLoadout(); // tear down the half-started backend and reset the view
-        void vscode.window.showErrorMessage('mEdit: Backend failed to start — see the mEdit output for details.');
+        void vscode.window.showErrorMessage('Modbench: Backend failed to start — see the Modbench output for details.');
         return;
       }
       await controller.loadExplicitSession(plugins, gd.dataFolder);
@@ -221,16 +221,16 @@ export function activate(context: vscode.ExtensionContext) {
             // ADR-0026: a failed user action must surface, not silently leave the checkbox
             // out of sync with disk. Log detail, notify, and refresh to resync the checkbox.
             log(`[extension] toggling "${node.mod.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
-            void vscode.window.showErrorMessage(`mEdit: Failed to update "${node.mod.name}".`);
+            void vscode.window.showErrorMessage(`Modbench: Failed to update "${node.mod.name}".`);
             modListProvider.refresh();
           }
         }
       }),
-      vscode.commands.registerCommand('mEdit.modList.refresh', () => {
+      vscode.commands.registerCommand('modbench.modList.refresh', () => {
         modListProvider.refresh();
         void updateProfileDescription();
       }),
-      vscode.commands.registerCommand('mEdit.modList.switchProfile', async () => {
+      vscode.commands.registerCommand('modbench.modList.switchProfile', async () => {
         const [profiles, active] = await Promise.all([
           modlistSource.listProfiles(),
           modlistSource.getActiveProfile(),
@@ -246,7 +246,7 @@ export function activate(context: vscode.ExtensionContext) {
         await modListProvider.switchProfile(picked.label);
         void updateProfileDescription();
       }),
-      vscode.commands.registerCommand('mEdit.modList.filter', () => {
+      vscode.commands.registerCommand('modbench.modList.filter', () => {
         const box = vscode.window.createInputBox();
         box.placeholder = 'Filter mods…';
         let grouping = true;
@@ -263,18 +263,18 @@ export function activate(context: vscode.ExtensionContext) {
         box.onDidHide(() => { modListProvider.setFilter('', true); box.dispose(); });
         box.show();
       }),
-      vscode.commands.registerCommand('mEdit.modList.launchMedit', async () => {
-        void vscode.commands.executeCommand('setContext', 'medit.viewMode', 'editing');
+      vscode.commands.registerCommand('modbench.modList.launchMedit', async () => {
+        void vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'editing');
         try {
           await enterEditing();
         } catch (err) {
           log(`[extension] launchMedit failed: ${err instanceof Error ? err.message : String(err)}`);
           exitToLoadout(); // reset the view and tear down any half-started backend
-          void vscode.window.showErrorMessage('mEdit: Failed to enter editing mode.');
+          void vscode.window.showErrorMessage('Modbench: Failed to enter editing mode.');
         }
       }),
       ...registerDeployCommands(instanceRoot, modlistSource, log),
-      vscode.commands.registerCommand('mEdit.modList.installFromArchive', async () => {
+      vscode.commands.registerCommand('modbench.modList.installFromArchive', async () => {
         const picked = await vscode.window.showOpenDialog({
           canSelectMany: false,
           filters: { 'Mod archives': ['zip', '7z', 'rar'] },
@@ -296,7 +296,7 @@ export function activate(context: vscode.ExtensionContext) {
           }
         });
       }),
-      vscode.commands.registerCommand('mEdit.modList.installFromFolder', async () => {
+      vscode.commands.registerCommand('modbench.modList.installFromFolder', async () => {
         const picked = await vscode.window.showOpenDialog({
           canSelectFiles: false,
           canSelectFolders: true,
@@ -313,18 +313,18 @@ export function activate(context: vscode.ExtensionContext) {
           warnIfFomod(name, isFomod);
         });
       }),
-      vscode.commands.registerCommand('mEdit.modList.mod.openInExplorer', async (node: ModNode) => {
+      vscode.commands.registerCommand('modbench.modList.mod.openInExplorer', async (node: ModNode) => {
         if (node?.kind !== 'mod') return;
         const uri = vscode.Uri.file(path.join(instanceRoot, 'mods', node.mod.name));
         await vscode.commands.executeCommand('revealInExplorer', uri);
       }),
-      vscode.commands.registerCommand('mEdit.modList.mod.addSeparatorBelow', async (node: ModNode) => {
+      vscode.commands.registerCommand('modbench.modList.mod.addSeparatorBelow', async (node: ModNode) => {
         if (node?.kind !== 'mod') return;
         const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
         if (!name) return;
         await runModAction('addSeparatorBelow', 'Failed to add separator.', () => modlistSource.insertSeparator(name, node.mod.name));
       }),
-      vscode.commands.registerCommand('mEdit.modList.mod.moveToSeparator', async (node: ModNode) => {
+      vscode.commands.registerCommand('modbench.modList.mod.moveToSeparator', async (node: ModNode) => {
         if (node?.kind !== 'mod') return;
         let separators: string[];
         try {
@@ -332,7 +332,7 @@ export function activate(context: vscode.ExtensionContext) {
           separators = entries.filter((e) => e.kind === 'separator').map((e) => e.name);
         } catch (err) {
           log(`[extension] moveToSeparator readModlist failed: ${err instanceof Error ? err.message : String(err)}`);
-          void vscode.window.showErrorMessage(`mEdit: Failed to read mod list.`);
+          void vscode.window.showErrorMessage(`Modbench: Failed to read mod list.`);
           return;
         }
         const items: Array<vscode.QuickPickItem & { sepName: string | null }> = [
@@ -343,7 +343,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (!picked) return;
         await runModAction('moveToSeparator', 'Failed to move mod.', () => modlistSource.moveModToSeparator(node.mod.name, picked.sepName));
       }),
-      vscode.commands.registerCommand('mEdit.modList.mod.uninstall', async (node: ModNode) => {
+      vscode.commands.registerCommand('modbench.modList.mod.uninstall', async (node: ModNode) => {
         if (node?.kind !== 'mod') return;
         const answer = await vscode.window.showWarningMessage(
           `Uninstall "${node.mod.name}"? This will permanently delete the mod folder from disk.`,
@@ -353,7 +353,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (answer !== 'Uninstall') return;
         await runModAction('uninstall', `Failed to uninstall "${node.mod.name}".`, () => modlistSource.removeMod(node.mod.name));
       }),
-      vscode.commands.registerCommand('mEdit.modList.mod.viewOnNexus', async (node: ModNode) => {
+      vscode.commands.registerCommand('modbench.modList.mod.viewOnNexus', async (node: ModNode) => {
         if (node?.kind !== 'mod' || !node.mod.nexusId) return;
         const nexusId = node.mod.nexusId;
         await runModAction('viewOnNexus', 'Failed to open Nexus page.', async () => {
@@ -363,7 +363,7 @@ export function activate(context: vscode.ExtensionContext) {
           );
         });
       }),
-      vscode.commands.registerCommand('mEdit.modList.separator.rename', async (node: SeparatorNode) => {
+      vscode.commands.registerCommand('modbench.modList.separator.rename', async (node: SeparatorNode) => {
         if (node?.kind !== 'separator') return;
         const newName = await vscode.window.showInputBox({
           prompt: 'Rename separator',
@@ -372,13 +372,13 @@ export function activate(context: vscode.ExtensionContext) {
         if (!newName || newName === node.separator.name) return;
         await runModAction('renameSeparator', 'Failed to rename separator.', () => modlistSource.renameSeparator(node.separator.name, newName));
       }),
-      vscode.commands.registerCommand('mEdit.modList.separator.addSeparatorBelow', async (node: SeparatorNode) => {
+      vscode.commands.registerCommand('modbench.modList.separator.addSeparatorBelow', async (node: SeparatorNode) => {
         if (node?.kind !== 'separator') return;
         const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
         if (!name) return;
         await runModAction('separator.addSeparatorBelow', 'Failed to add separator.', () => modlistSource.insertSeparator(name, node.separator.name));
       }),
-      vscode.commands.registerCommand('mEdit.modList.separator.delete', async (node: SeparatorNode) => {
+      vscode.commands.registerCommand('modbench.modList.separator.delete', async (node: SeparatorNode) => {
         if (node?.kind !== 'separator') return;
         await runModAction('deleteSeparator', 'Failed to delete separator.', () => modlistSource.deleteSeparator(node.separator.name));
       }),
@@ -391,21 +391,21 @@ export function activate(context: vscode.ExtensionContext) {
     treeView,
     changeGroupTreeView,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
-    vscode.commands.registerCommand('mEdit.refreshTree', () => treeProvider.refresh()),
-    vscode.commands.registerCommand('mEdit.closeMedit', () => exitToLoadout()),
-    vscode.commands.registerCommand('mEdit.reloadSession', () => treeProvider.refresh()),
-    vscode.commands.registerCommand('mEdit.openEditor', (args?: { formKey?: string; label?: string }) => {
+    vscode.commands.registerCommand('modbench.refreshTree', () => treeProvider.refresh()),
+    vscode.commands.registerCommand('modbench.closeMedit', () => exitToLoadout()),
+    vscode.commands.registerCommand('modbench.reloadSession', () => treeProvider.refresh()),
+    vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port);
     }),
-    vscode.commands.registerCommand('mEdit.openCompare', () => {
+    vscode.commands.registerCommand('modbench.openCompare', () => {
       openRecordPanel(context, openPanels, 'mEdit', undefined, port);
     }),
-    vscode.commands.registerCommand('mEdit.loadMore', (node: LoadMoreNode) => treeProvider.loadMore(node)),
-    vscode.commands.registerCommand('mEdit.newPlugin', async () => {
+    vscode.commands.registerCommand('modbench.loadMore', (node: LoadMoreNode) => treeProvider.loadMore(node)),
+    vscode.commands.registerCommand('modbench.newPlugin', async () => {
       const name = await promptPluginName();
       if (name) await controller.createPlugin(name);
     }),
-    vscode.commands.registerCommand('mEdit.setFilter', async () => {
+    vscode.commands.registerCommand('modbench.setFilter', async () => {
       const files = fs.existsSync(scriptsPath)
         ? fs.readdirSync(scriptsPath).filter(f => f.endsWith('.sql'))
         : [];
@@ -425,23 +425,23 @@ export function activate(context: vscode.ExtensionContext) {
       const sql = fs.readFileSync(filePath, 'utf8');
       await controller.setFilter(sql);
     }),
-    vscode.commands.registerCommand('mEdit.setFilterFromDocument', async () => {
+    vscode.commands.registerCommand('modbench.setFilterFromDocument', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;
       const sql = editor.document.getText();
       await controller.setFilter(sql);
     }),
-    vscode.commands.registerCommand('mEdit.clearFilter', () => controller.clearFilter()),
-    vscode.commands.registerCommand('mEdit.showReferencedBy', (node?: RecordNode) => {
+    vscode.commands.registerCommand('modbench.clearFilter', () => controller.clearFilter()),
+    vscode.commands.registerCommand('modbench.showReferencedBy', (node?: RecordNode) => {
       if (!node?.record?.formKey) return;
       openReferencedByPanel(
         context, openPanels,
         node.record.formKey, node.record.editorId, port,
-        (fk) => { void vscode.commands.executeCommand('mEdit.openEditor', { formKey: fk, label: fk }); },
+        (fk) => { void vscode.commands.executeCommand('modbench.openEditor', { formKey: fk, label: fk }); },
         (fk) => { openRecordPanel(context, openPanels, fk, fk, port, vscode.ViewColumn.Beside); },
       );
     }),
-    vscode.commands.registerCommand('mEdit.deleteRecord', async (item?: RecordNode | PlacedNode, allSelected?: (RecordNode | PlacedNode)[]) => {
+    vscode.commands.registerCommand('modbench.deleteRecord', async (item?: RecordNode | PlacedNode, allSelected?: (RecordNode | PlacedNode)[]) => {
       const toTarget = (n: RecordNode | PlacedNode) =>
         n instanceof PlacedNode
           ? { formKey: n.placed.formKey ?? '', plugin: n.plugin }
@@ -459,7 +459,7 @@ export function activate(context: vscode.ExtensionContext) {
         targets = sel.length ? sel : item ? [item] : [];
       }
       if (targets.length === 0) {
-        vscode.window.showErrorMessage('mEdit: Select one or more records in the tree first.');
+        vscode.window.showErrorMessage('Modbench: Select one or more records in the tree first.');
         return;
       }
       const names = targets.map(toName).join(', ');
@@ -468,24 +468,24 @@ export function activate(context: vscode.ExtensionContext) {
       if (answer !== 'Delete') return;
       await controller.deleteRecords(targets.map(toTarget));
     }),
-    vscode.commands.registerCommand('mEdit.saveGroup', async (node: ChangeGroupNode) => {
+    vscode.commands.registerCommand('modbench.saveGroup', async (node: ChangeGroupNode) => {
       if (!node?.groupId) return;
       await controller.saveGroup(node.groupId);
     }),
-    vscode.commands.registerCommand('mEdit.revertGroup', async (node: ChangeGroupNode) => {
+    vscode.commands.registerCommand('modbench.revertGroup', async (node: ChangeGroupNode) => {
       if (!node?.groupId) return;
       await controller.revertGroup(node.groupId);
     }),
-    vscode.commands.registerCommand('mEdit.saveAllGroups', async () => {
+    vscode.commands.registerCommand('modbench.saveAllGroups', async () => {
       await controller.saveAllGroups();
     }),
-    vscode.commands.registerCommand('mEdit.revertAllGroups', async () => {
+    vscode.commands.registerCommand('modbench.revertAllGroups', async () => {
       await controller.revertAllGroups();
     }),
-    vscode.commands.registerCommand('mEdit.copyAsOverrideInto', async (node?: RecordNode | PlacedNode) => {
+    vscode.commands.registerCommand('modbench.copyAsOverrideInto', async (node?: RecordNode | PlacedNode) => {
       const formKey = node instanceof PlacedNode ? node.placed.formKey : node?.record?.formKey;
       if (!formKey) {
-        vscode.window.showErrorMessage('mEdit: No record selected.');
+        vscode.window.showErrorMessage('Modbench: No record selected.');
         return;
       }
 
@@ -510,7 +510,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       await controller.copyRecordTo(formKey, targetPlugin);
     }),
-    vscode.commands.registerCommand('mEdit.createPlaced', async (node?: PlacedGroupNode) => {
+    vscode.commands.registerCommand('modbench.createPlaced', async (node?: PlacedGroupNode) => {
       if (!node) return;
       const recordType = await vscode.window.showQuickPick(
         [{ label: 'REFR', description: 'Placed object' }, { label: 'ACHR', description: 'Placed actor' }],
@@ -553,15 +553,15 @@ function registerDeployCommands(
     report: (severity, message, detail) => {
       const suffix = detail ? ` — ${detail}` : '';
       log(`[deploy] ${severity}: ${message}${suffix}`);
-      if (severity === 'error') void vscode.window.showErrorMessage(`mEdit: ${message}`);
-      else void vscode.window.showWarningMessage(`mEdit: ${message}`);
+      if (severity === 'error') void vscode.window.showErrorMessage(`Modbench: ${message}`);
+      else void vscode.window.showWarningMessage(`Modbench: ${message}`);
     },
   };
 
   const resolveGd = async () => {
     const gd = await resolveGameDirectory(instanceRoot, config(), detectPaths);
     if (!gd) {
-      reporter.report('error', 'No game directory found. Set mEdit.mods.gameDirectory to your Stock Game Folder or Steam install.');
+      reporter.report('error', 'No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.');
     }
     return gd;
   };
@@ -579,33 +579,33 @@ function registerDeployCommands(
   };
 
   return [
-    vscode.commands.registerCommand('mEdit.modList.deploy', async () => {
+    vscode.commands.registerCommand('modbench.modList.deploy', async () => {
       try {
         const gd = await resolveGd();
         if (!gd) return;
         await runDeploy(gd);
-        void vscode.window.showInformationMessage('mEdit: Mods deployed.');
+        void vscode.window.showInformationMessage('Modbench: Mods deployed.');
       } catch (err) {
         reporter.report('error', 'Deploy failed.', err instanceof Error ? err.message : String(err));
       }
     }),
-    vscode.commands.registerCommand('mEdit.modList.purge', async () => {
+    vscode.commands.registerCommand('modbench.modList.purge', async () => {
       try {
         const gd = await resolveGd();
         if (!gd) return;
         await purge(instanceRoot, gd, reporter);
-        void vscode.window.showInformationMessage('mEdit: Deployed mods purged.');
+        void vscode.window.showInformationMessage('Modbench: Deployed mods purged.');
       } catch (err) {
         reporter.report('error', 'Purge failed.', err instanceof Error ? err.message : String(err));
       }
     }),
-    vscode.commands.registerCommand('mEdit.modList.launchGame', async () => {
+    vscode.commands.registerCommand('modbench.modList.launchGame', async () => {
       try {
         const gd = await resolveGd();
         if (!gd) return;
         await runDeploy(gd);
         // Switch to the Plugin List view while the game runs (mirrors launchMedit).
-        void vscode.commands.executeCommand('setContext', 'medit.viewMode', 'editing');
+        void vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'editing');
         const executable = path.join(gd.root, 'Fallout4.exe');
         const template = (config().get('mods.launchCommand') as string) || '';
         const child = template
@@ -655,7 +655,7 @@ function openRecordPanel(
     }
   }
 
-  const panel = vscode.window.createWebviewPanel('mEdit', title, viewColumn, {
+  const panel = vscode.window.createWebviewPanel('modbench', title, viewColumn, {
     enableScripts: true,
     localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'out', 'webview'))],
   });
@@ -669,7 +669,7 @@ function openRecordPanel(
     if (typeof msg === 'object' && msg !== null && 'type' in msg) {
       const m = msg as WebviewToExtension;
       if (m.type === WEBVIEW_TO_EXTENSION.OPEN_RECORD) {
-        vscode.commands.executeCommand('mEdit.openEditor', { formKey: m.formKey, label: m.formKey });
+        vscode.commands.executeCommand('modbench.openEditor', { formKey: m.formKey, label: m.formKey });
       }
     }
   });

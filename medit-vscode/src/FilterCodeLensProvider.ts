@@ -24,13 +24,13 @@ export class FilterCodeLensProvider implements vscode.CodeLensProvider {
     if (isActive) {
       return [new vscode.CodeLens(range, {
         title: '✓ Active — click to clear',
-        command: 'mEdit.clearFilter',
+        command: 'modbench.clearFilter',
       })];
     }
 
     return [new vscode.CodeLens(range, {
       title: '▶ Apply as Filter',
-      command: 'mEdit.setFilterFromDocument',
+      command: 'modbench.setFilterFromDocument',
     })];
   }
 }

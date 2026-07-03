@@ -44,7 +44,7 @@ Update when: adding a command (add ID to `EXPECTED_COMMANDS`), or new `extension
 
 ## Logging
 
-- Single `vscode.OutputChannel` named `'mEdit'`, created in `extension.ts`, passed to every module making HTTP calls or handling async errors.
+- Single `vscode.OutputChannel` named `'Modbench'`, created in `extension.ts`, passed to every module making HTTP calls or handling async errors.
 - All `catch` blocks log to OutputChannel before showing UI or swallowing. No silent `catch { }`.
 - `PluginTreeProvider` shows error tree node instead of empty list when fetch fails.
 - Webview: all async ops must check `resp.ok` and set error state on failure. No fire-and-forget fetches.

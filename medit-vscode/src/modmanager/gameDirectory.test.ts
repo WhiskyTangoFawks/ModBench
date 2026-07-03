@@ -18,7 +18,7 @@ describe('resolveGameDirectory', () => {
     if (dir) await rm(dir, { recursive: true, force: true });
   });
 
-  it('resolves an explicit mEdit.mods.gameDirectory setting directly', async () => {
+  it('resolves an explicit modbench.mods.gameDirectory setting directly', async () => {
     dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
     const gameRoot = join(dir, 'Stock Game Folder');
     await mkdir(join(gameRoot, 'Data'), { recursive: true });

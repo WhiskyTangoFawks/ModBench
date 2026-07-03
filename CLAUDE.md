@@ -2,6 +2,15 @@
 
 VS Code extension + local C# service for viewing, editing, modlists, and viewing and comparing Bethesda plugin files (`.esp`/`.esm`/`.esl`).
 
+## Product Structure
+
+**Modbench** is the product — the modding IDE. It surfaces two views backed by two bounded contexts:
+
+- **Loadout** view → Mod Management context (install, order, enable, deploy mods). Lives entirely in the extension (`medit-vscode/src/modmanager/`); never touches the C# backend.
+- **mEdit** view → Editing context (view/edit/compare plugin records). Lives in the C# backend (`MEditService/`) plus the editor webviews.
+
+See [CONTEXT-MAP.md](CONTEXT-MAP.md) for the full context split and the language boundary between them, [CONTEXT.md](CONTEXT.md) for editing domain language, and [medit-vscode/src/modmanager/CONTEXT.md](medit-vscode/src/modmanager/CONTEXT.md) for mod-management domain language. The two contexts deliberately use different vocabulary (e.g. "mod" is forbidden in Editing, "record"/"FormKey" is absent in Mod Management) — check which context you're in before naming things.
+
 ## Stack
 
 **Backend** — C# ASP.NET Core minimal API (`MEditService/`)

@@ -1,7 +1,7 @@
 {
   "name": "medit-vscode",
-  "displayName": "mEdit",
-  "description": "View, edit, and compare Bethesda plugin files (.esp/.esm/.esl)",
+  "displayName": "Modbench",
+  "description": "Modbench: install, order, and deploy mods; view, edit, and compare Bethesda plugin files (.esp/.esm/.esl)",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.85.0"
@@ -13,46 +13,46 @@
   "main": "./out/extension.js",
   "contributes": {
     "configuration": {
-      "title": "mEdit",
+      "title": "Modbench",
       "properties": {
-        "mEdit.backendPort": {
+        "modbench.backendPort": {
           "type": "number",
           "default": 5172,
           "description": "Port the mEdit backend API listens on."
         },
-        "mEdit.game.dataFolderPath": {
+        "modbench.game.dataFolderPath": {
           "type": "string",
           "default": "",
           "description": "Override: absolute path to the Fallout 4 Data folder. Leave blank for auto-detect."
         },
-        "mEdit.game.pluginsTxtPath": {
+        "modbench.game.pluginsTxtPath": {
           "type": "string",
           "default": "",
           "description": "Override: absolute path to Plugins.txt. Leave blank for auto-detect."
         },
-        "mEdit.scriptsPath": {
+        "modbench.scriptsPath": {
           "type": "string",
           "default": "",
           "description": "Path to folder containing .sql filter files and .py scripts. Defaults to ~/.medit/scripts."
         },
-        "mEdit.mods.gameDirectory": {
+        "modbench.mods.gameDirectory": {
           "type": "string",
           "default": "",
           "scope": "resource",
           "description": "Game directory to deploy into (the folder containing the game executable and Data/). A Steam install or a stock game folder. Leave blank to fall back to ModOrganizer.ini's gamePath, then Steam auto-detect."
         },
-        "mEdit.mods.deploymentMode": {
+        "modbench.mods.deploymentMode": {
           "type": "string",
           "enum": ["standalone", "external"],
           "enumDescriptions": [
-            "mEdit hardlinks the merged mod view into the game directory's Data/ (the mechanism on Linux, where MO2's USVFS is unavailable).",
-            "An external manager (MO2/Vortex) owns deployment; mEdit hides Deploy/Purge/Launch Game."
+            "Modbench hardlinks the merged mod view into the game directory's Data/ (the mechanism on Linux, where MO2's USVFS is unavailable).",
+            "An external manager (MO2/Vortex) owns deployment; Modbench hides Deploy/Purge/Launch Game."
           ],
           "default": "standalone",
           "scope": "resource",
           "description": "Who deploys mods into the game directory."
         },
-        "mEdit.mods.launchCommand": {
+        "modbench.mods.launchCommand": {
           "type": "string",
           "default": "",
           "scope": "resource",
@@ -63,373 +63,373 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "medit",
-          "title": "mEdit",
+          "id": "modbench",
+          "title": "Modbench",
           "icon": "images/medit.svg"
         }
       ]
     },
     "views": {
-      "medit": [
+      "modbench": [
         {
-          "id": "mEdit.modList",
+          "id": "modbench.modList",
           "name": "Mods",
-          "when": "medit.viewMode == 'loadout'"
+          "when": "modbench.viewMode == 'loadout'"
         },
         {
-          "id": "mEdit.pluginTree",
+          "id": "modbench.pluginTree",
           "name": "Plugins",
-          "when": "medit.viewMode == 'editing'"
+          "when": "modbench.viewMode == 'editing'"
         },
         {
-          "id": "mEdit.changeGroupTree",
+          "id": "modbench.changeGroupTree",
           "name": "Change Groups",
-          "when": "medit.viewMode == 'editing'"
+          "when": "modbench.viewMode == 'editing'"
         }
       ]
     },
     "commands": [
       {
-        "command": "mEdit.openEditor",
-        "title": "mEdit: Open Editor"
+        "command": "modbench.openEditor",
+        "title": "Modbench: Open Editor"
       },
       {
-        "command": "mEdit.openCompare",
-        "title": "mEdit: Open Compare"
+        "command": "modbench.openCompare",
+        "title": "Modbench: Open Compare"
       },
       {
-        "command": "mEdit.reloadSession",
-        "title": "mEdit: Reload Session"
+        "command": "modbench.reloadSession",
+        "title": "Modbench: Reload Session"
       },
       {
-        "command": "mEdit.refreshTree",
-        "title": "mEdit: Refresh",
+        "command": "modbench.refreshTree",
+        "title": "Modbench: Refresh",
         "icon": "$(refresh)"
       },
       {
-        "command": "mEdit.newPlugin",
-        "title": "mEdit: New Plugin…",
+        "command": "modbench.newPlugin",
+        "title": "Modbench: New Plugin…",
         "icon": "$(add)"
       },
       {
-        "command": "mEdit.copyAsOverrideInto",
-        "title": "mEdit: Copy as Override Into…"
+        "command": "modbench.copyAsOverrideInto",
+        "title": "Modbench: Copy as Override Into…"
       },
       {
-        "command": "mEdit.setFilter",
-        "title": "mEdit: Filter Records…",
+        "command": "modbench.setFilter",
+        "title": "Modbench: Filter Records…",
         "icon": "$(filter)"
       },
       {
-        "command": "mEdit.clearFilter",
-        "title": "mEdit: Clear Filter",
+        "command": "modbench.clearFilter",
+        "title": "Modbench: Clear Filter",
         "icon": "$(filter-filled)"
       },
       {
-        "command": "mEdit.setFilterFromDocument",
-        "title": "mEdit: Apply SQL File as Filter"
+        "command": "modbench.setFilterFromDocument",
+        "title": "Modbench: Apply SQL File as Filter"
       },
       {
-        "command": "mEdit.showReferencedBy",
-        "title": "mEdit: Show Referenced By"
+        "command": "modbench.showReferencedBy",
+        "title": "Modbench: Show Referenced By"
       },
       {
-        "command": "mEdit.deleteRecord",
-        "title": "mEdit: Delete Record"
+        "command": "modbench.deleteRecord",
+        "title": "Modbench: Delete Record"
       },
       {
-        "command": "mEdit.createPlaced",
-        "title": "mEdit: Create Placed…"
+        "command": "modbench.createPlaced",
+        "title": "Modbench: Create Placed…"
       },
       {
-        "command": "mEdit.saveGroup",
-        "title": "mEdit: Save Group",
+        "command": "modbench.saveGroup",
+        "title": "Modbench: Save Group",
         "icon": "$(cloud-upload)"
       },
       {
-        "command": "mEdit.revertGroup",
-        "title": "mEdit: Revert Group",
+        "command": "modbench.revertGroup",
+        "title": "Modbench: Revert Group",
         "icon": "$(discard)"
       },
       {
-        "command": "mEdit.saveAllGroups",
-        "title": "mEdit: Save All Groups",
+        "command": "modbench.saveAllGroups",
+        "title": "Modbench: Save All Groups",
         "icon": "$(cloud-upload)"
       },
       {
-        "command": "mEdit.revertAllGroups",
-        "title": "mEdit: Revert All Groups",
+        "command": "modbench.revertAllGroups",
+        "title": "Modbench: Revert All Groups",
         "icon": "$(discard)"
       },
       {
-        "command": "mEdit.modList.filter",
-        "title": "mEdit: Filter Mods…",
+        "command": "modbench.modList.filter",
+        "title": "Modbench: Filter Mods…",
         "icon": "$(search)"
       },
       {
-        "command": "mEdit.modList.switchProfile",
-        "title": "mEdit: Switch Profile…",
+        "command": "modbench.modList.switchProfile",
+        "title": "Modbench: Switch Profile…",
         "icon": "$(account)"
       },
       {
-        "command": "mEdit.modList.launchMedit",
-        "title": "mEdit: Launch mEdit",
+        "command": "modbench.modList.launchMedit",
+        "title": "Modbench: Launch mEdit",
         "icon": "$(rocket)"
       },
       {
-        "command": "mEdit.closeMedit",
-        "title": "mEdit: Close mEdit",
+        "command": "modbench.closeMedit",
+        "title": "Modbench: Close mEdit",
         "icon": "$(close)"
       },
       {
-        "command": "mEdit.modList.refresh",
-        "title": "mEdit: Refresh Mod List",
+        "command": "modbench.modList.refresh",
+        "title": "Modbench: Refresh Mod List",
         "icon": "$(refresh)"
       },
       {
-        "command": "mEdit.modList.deploy",
-        "title": "mEdit: Deploy Mods",
+        "command": "modbench.modList.deploy",
+        "title": "Modbench: Deploy Mods",
         "icon": "$(cloud-download)"
       },
       {
-        "command": "mEdit.modList.purge",
-        "title": "mEdit: Purge Deployed Mods",
+        "command": "modbench.modList.purge",
+        "title": "Modbench: Purge Deployed Mods",
         "icon": "$(clear-all)"
       },
       {
-        "command": "mEdit.modList.launchGame",
-        "title": "mEdit: Launch Game",
+        "command": "modbench.modList.launchGame",
+        "title": "Modbench: Launch Game",
         "icon": "$(run-all)"
       },
       {
-        "command": "mEdit.modList.installFromArchive",
-        "title": "mEdit: Install Mod from Archive…"
+        "command": "modbench.modList.installFromArchive",
+        "title": "Modbench: Install Mod from Archive…"
       },
       {
-        "command": "mEdit.modList.installFromFolder",
-        "title": "mEdit: Install Mod from Folder…"
+        "command": "modbench.modList.installFromFolder",
+        "title": "Modbench: Install Mod from Folder…"
       },
       {
-        "command": "mEdit.modList.mod.openInExplorer",
+        "command": "modbench.modList.mod.openInExplorer",
         "title": "Open in Explorer"
       },
       {
-        "command": "mEdit.modList.mod.addSeparatorBelow",
+        "command": "modbench.modList.mod.addSeparatorBelow",
         "title": "Add Separator Below…"
       },
       {
-        "command": "mEdit.modList.mod.moveToSeparator",
+        "command": "modbench.modList.mod.moveToSeparator",
         "title": "Move to Separator…"
       },
       {
-        "command": "mEdit.modList.mod.uninstall",
+        "command": "modbench.modList.mod.uninstall",
         "title": "Uninstall…"
       },
       {
-        "command": "mEdit.modList.mod.viewOnNexus",
+        "command": "modbench.modList.mod.viewOnNexus",
         "title": "View on Nexus Mods"
       },
       {
-        "command": "mEdit.modList.separator.rename",
+        "command": "modbench.modList.separator.rename",
         "title": "Rename…"
       },
       {
-        "command": "mEdit.modList.separator.addSeparatorBelow",
+        "command": "modbench.modList.separator.addSeparatorBelow",
         "title": "Add Separator Below…"
       },
       {
-        "command": "mEdit.modList.separator.delete",
+        "command": "modbench.modList.separator.delete",
         "title": "Delete Separator"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "mEdit.refreshTree",
-          "when": "view == mEdit.pluginTree",
+          "command": "modbench.refreshTree",
+          "when": "view == modbench.pluginTree",
           "group": "navigation"
         },
         {
-          "command": "mEdit.closeMedit",
-          "when": "view == mEdit.pluginTree",
+          "command": "modbench.closeMedit",
+          "when": "view == modbench.pluginTree",
           "group": "navigation@9"
         },
         {
-          "command": "mEdit.newPlugin",
-          "when": "view == mEdit.pluginTree",
+          "command": "modbench.newPlugin",
+          "when": "view == modbench.pluginTree",
           "group": "navigation"
         },
         {
-          "command": "mEdit.setFilter",
-          "when": "view == mEdit.pluginTree",
+          "command": "modbench.setFilter",
+          "when": "view == modbench.pluginTree",
           "group": "navigation"
         },
         {
-          "command": "mEdit.clearFilter",
-          "when": "view == mEdit.pluginTree && mEdit.filterActive",
+          "command": "modbench.clearFilter",
+          "when": "view == modbench.pluginTree && modbench.filterActive",
           "group": "navigation"
         },
         {
-          "command": "mEdit.modList.filter",
-          "when": "view == mEdit.modList",
+          "command": "modbench.modList.filter",
+          "when": "view == modbench.modList",
           "group": "navigation@1"
         },
         {
-          "command": "mEdit.modList.switchProfile",
-          "when": "view == mEdit.modList",
+          "command": "modbench.modList.switchProfile",
+          "when": "view == modbench.modList",
           "group": "navigation@2"
         },
         {
-          "command": "mEdit.modList.launchMedit",
-          "when": "view == mEdit.modList",
+          "command": "modbench.modList.launchMedit",
+          "when": "view == modbench.modList",
           "group": "navigation@3"
         },
         {
-          "command": "mEdit.modList.refresh",
-          "when": "view == mEdit.modList",
+          "command": "modbench.modList.refresh",
+          "when": "view == modbench.modList",
           "group": "navigation@4"
         },
         {
-          "command": "mEdit.modList.deploy",
-          "when": "view == mEdit.modList && medit.deploymentStandalone",
+          "command": "modbench.modList.deploy",
+          "when": "view == modbench.modList && modbench.deploymentStandalone",
           "group": "navigation@5"
         },
         {
-          "command": "mEdit.modList.purge",
-          "when": "view == mEdit.modList && medit.deploymentStandalone",
+          "command": "modbench.modList.purge",
+          "when": "view == modbench.modList && modbench.deploymentStandalone",
           "group": "navigation@6"
         },
         {
-          "command": "mEdit.modList.launchGame",
-          "when": "view == mEdit.modList && medit.deploymentStandalone",
+          "command": "modbench.modList.launchGame",
+          "when": "view == modbench.modList && modbench.deploymentStandalone",
           "group": "navigation@7"
         },
         {
-          "command": "mEdit.saveAllGroups",
-          "when": "view == mEdit.changeGroupTree",
+          "command": "modbench.saveAllGroups",
+          "when": "view == modbench.changeGroupTree",
           "group": "navigation"
         },
         {
-          "command": "mEdit.revertAllGroups",
-          "when": "view == mEdit.changeGroupTree",
+          "command": "modbench.revertAllGroups",
+          "when": "view == modbench.changeGroupTree",
           "group": "navigation"
         }
       ],
       "editor/title": [
         {
-          "command": "mEdit.clearFilter",
-          "when": "mEdit.filterActive",
+          "command": "modbench.clearFilter",
+          "when": "modbench.filterActive",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
-          "command": "mEdit.copyAsOverrideInto",
-          "when": "view == mEdit.pluginTree && viewItem == record",
-          "group": "mEdit@1"
+          "command": "modbench.copyAsOverrideInto",
+          "when": "view == modbench.pluginTree && viewItem == record",
+          "group": "modbench@1"
         },
         {
-          "command": "mEdit.showReferencedBy",
-          "when": "view == mEdit.pluginTree && viewItem == record",
-          "group": "mEdit@2"
+          "command": "modbench.showReferencedBy",
+          "when": "view == modbench.pluginTree && viewItem == record",
+          "group": "modbench@2"
         },
         {
-          "command": "mEdit.deleteRecord",
-          "when": "view == mEdit.pluginTree && viewItem == record",
-          "group": "mEdit@3"
+          "command": "modbench.deleteRecord",
+          "when": "view == modbench.pluginTree && viewItem == record",
+          "group": "modbench@3"
         },
         {
-          "command": "mEdit.createPlaced",
-          "when": "view == mEdit.pluginTree && (viewItem == placedGroup-persistent || viewItem == placedGroup-temporary)",
-          "group": "mEdit@1"
+          "command": "modbench.createPlaced",
+          "when": "view == modbench.pluginTree && (viewItem == placedGroup-persistent || viewItem == placedGroup-temporary)",
+          "group": "modbench@1"
         },
         {
-          "command": "mEdit.copyAsOverrideInto",
-          "when": "view == mEdit.pluginTree && viewItem == refr",
-          "group": "mEdit@1"
+          "command": "modbench.copyAsOverrideInto",
+          "when": "view == modbench.pluginTree && viewItem == refr",
+          "group": "modbench@1"
         },
         {
-          "command": "mEdit.deleteRecord",
-          "when": "view == mEdit.pluginTree && viewItem == refr",
-          "group": "mEdit@2"
+          "command": "modbench.deleteRecord",
+          "when": "view == modbench.pluginTree && viewItem == refr",
+          "group": "modbench@2"
         },
         {
-          "command": "mEdit.saveGroup",
-          "when": "view == mEdit.changeGroupTree && viewItem == changeGroup",
+          "command": "modbench.saveGroup",
+          "when": "view == modbench.changeGroupTree && viewItem == changeGroup",
           "group": "inline"
         },
         {
-          "command": "mEdit.modList.mod.openInExplorer",
-          "when": "view == mEdit.modList && viewItem == mod",
+          "command": "modbench.modList.mod.openInExplorer",
+          "when": "view == modbench.modList && viewItem == mod",
           "group": "modActions@1"
         },
         {
-          "command": "mEdit.modList.mod.addSeparatorBelow",
-          "when": "view == mEdit.modList && viewItem == mod",
+          "command": "modbench.modList.mod.addSeparatorBelow",
+          "when": "view == modbench.modList && viewItem == mod",
           "group": "modActions@2"
         },
         {
-          "command": "mEdit.modList.mod.moveToSeparator",
-          "when": "view == mEdit.modList && viewItem == mod",
+          "command": "modbench.modList.mod.moveToSeparator",
+          "when": "view == modbench.modList && viewItem == mod",
           "group": "modActions@3"
         },
         {
-          "command": "mEdit.modList.mod.uninstall",
-          "when": "view == mEdit.modList && viewItem == mod",
+          "command": "modbench.modList.mod.uninstall",
+          "when": "view == modbench.modList && viewItem == mod",
           "group": "modActions@4"
         },
         {
-          "command": "mEdit.modList.mod.openInExplorer",
-          "when": "view == mEdit.modList && viewItem == modWithNexus",
+          "command": "modbench.modList.mod.openInExplorer",
+          "when": "view == modbench.modList && viewItem == modWithNexus",
           "group": "modActions@1"
         },
         {
-          "command": "mEdit.modList.mod.addSeparatorBelow",
-          "when": "view == mEdit.modList && viewItem == modWithNexus",
+          "command": "modbench.modList.mod.addSeparatorBelow",
+          "when": "view == modbench.modList && viewItem == modWithNexus",
           "group": "modActions@2"
         },
         {
-          "command": "mEdit.modList.mod.moveToSeparator",
-          "when": "view == mEdit.modList && viewItem == modWithNexus",
+          "command": "modbench.modList.mod.moveToSeparator",
+          "when": "view == modbench.modList && viewItem == modWithNexus",
           "group": "modActions@3"
         },
         {
-          "command": "mEdit.modList.mod.uninstall",
-          "when": "view == mEdit.modList && viewItem == modWithNexus",
+          "command": "modbench.modList.mod.uninstall",
+          "when": "view == modbench.modList && viewItem == modWithNexus",
           "group": "modActions@4"
         },
         {
-          "command": "mEdit.modList.mod.viewOnNexus",
-          "when": "view == mEdit.modList && viewItem == modWithNexus",
+          "command": "modbench.modList.mod.viewOnNexus",
+          "when": "view == modbench.modList && viewItem == modWithNexus",
           "group": "modActions@5"
         },
         {
-          "command": "mEdit.modList.separator.rename",
-          "when": "view == mEdit.modList && viewItem == separator",
+          "command": "modbench.modList.separator.rename",
+          "when": "view == modbench.modList && viewItem == separator",
           "group": "sepActions@1"
         },
         {
-          "command": "mEdit.modList.separator.addSeparatorBelow",
-          "when": "view == mEdit.modList && viewItem == separator",
+          "command": "modbench.modList.separator.addSeparatorBelow",
+          "when": "view == modbench.modList && viewItem == separator",
           "group": "sepActions@2"
         },
         {
-          "command": "mEdit.modList.separator.delete",
-          "when": "view == mEdit.modList && viewItem == separator",
+          "command": "modbench.modList.separator.delete",
+          "when": "view == modbench.modList && viewItem == separator",
           "group": "sepActions@3"
         },
         {
-          "command": "mEdit.revertGroup",
-          "when": "view == mEdit.changeGroupTree && viewItem == changeGroup",
+          "command": "modbench.revertGroup",
+          "when": "view == modbench.changeGroupTree && viewItem == changeGroup",
           "group": "inline"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "mEdit.deleteRecord",
+        "command": "modbench.deleteRecord",
         "key": "Delete",
-        "when": "focusedView == mEdit.pluginTree && viewItem == record"
+        "when": "focusedView == modbench.pluginTree && viewItem == record"
       }
     ]
   },

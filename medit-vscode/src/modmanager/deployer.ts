@@ -112,7 +112,7 @@ export async function deploy(
   if (modsStat.dev !== gameStat.dev) {
     reporter.report(
       'error',
-      'Cannot deploy: mods/ and the game directory are on different drives. Point mEdit.mods.gameDirectory at a stock folder on the same drive, or use the symlink fallback.',
+      'Cannot deploy: mods/ and the game directory are on different drives. Point modbench.mods.gameDirectory at a stock folder on the same drive, or use the symlink fallback.',
       `mods/=${modsDir} game=${gameDirectory.root}`,
     );
     return;

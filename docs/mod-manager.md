@@ -1,6 +1,6 @@
-# mEdit Mod Manager — Feature Specification
+# Modbench Mod Manager (Loadout view) — Feature Specification
 
-A full MO2-compatible mod manager built into the VS Code extension, unified with the existing record editor.
+A full MO2-compatible mod manager built into the VS Code extension, unified with the existing record editor (the mEdit view).
 
 This spec belongs to the **Mod Management** bounded context (see [CONTEXT-MAP.md](../CONTEXT-MAP.md)). Architecture is fixed by:
 - [ADR-0021](adr/0021-mod-manager-in-extension.md) — mod manager lives in the extension, not the backend

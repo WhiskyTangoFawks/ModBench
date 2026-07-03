@@ -275,12 +275,12 @@ describe('LoadMoreNode', () => {
 // ── RecordNode ────────────────────────────────────────────────────────────────
 
 describe('RecordNode', () => {
-  it('wires .command to mEdit.openEditor with formKey and label', () => {
+  it('wires .command to modbench.openEditor with formKey and label', () => {
     const record = makeRecord(0);
     const node = new RecordNode(record);
 
     expect(node.command).toEqual({
-      command: 'mEdit.openEditor',
+      command: 'modbench.openEditor',
       title: 'Open Record',
       arguments: [{ formKey: record.formKey, label: `${record.editorId} [${record.formKey}]` }],
     });

@@ -20,7 +20,7 @@ export function openReferencedByPanel(
   }
 
   const title = `Referenced By: ${editorId ?? formKey}`;
-  const panel = vscode.window.createWebviewPanel('mEdit.referencedBy', title, vscode.ViewColumn.Beside, {
+  const panel = vscode.window.createWebviewPanel('modbench.referencedBy', title, vscode.ViewColumn.Beside, {
     enableScripts: true,
     localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'out', 'webview'))],
   });

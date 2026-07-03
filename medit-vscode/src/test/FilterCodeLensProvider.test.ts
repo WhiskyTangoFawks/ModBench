@@ -50,7 +50,7 @@ describe('FilterCodeLensProvider', () => {
       const lenses = provider.provideCodeLenses(doc);
 
       expect(lenses).toHaveLength(1);
-      expect((lenses[0] as any).command.command).toBe('mEdit.setFilterFromDocument');
+      expect((lenses[0] as any).command.command).toBe('modbench.setFilterFromDocument');
     });
 
     it('returns Clear lens when the document sql matches the active filter', () => {
@@ -64,7 +64,7 @@ describe('FilterCodeLensProvider', () => {
       const lenses = provider.provideCodeLenses(doc);
 
       expect(lenses).toHaveLength(1);
-      expect((lenses[0] as any).command.command).toBe('mEdit.clearFilter');
+      expect((lenses[0] as any).command.command).toBe('modbench.clearFilter');
     });
 
     it('returns Apply lens when document sql differs from active filter', () => {
@@ -78,7 +78,7 @@ describe('FilterCodeLensProvider', () => {
       const lenses = provider.provideCodeLenses(doc);
 
       expect(lenses).toHaveLength(1);
-      expect((lenses[0] as any).command.command).toBe('mEdit.setFilterFromDocument');
+      expect((lenses[0] as any).command.command).toBe('modbench.setFilterFromDocument');
     });
 
     it('ignores leading/trailing whitespace when comparing sql', () => {
@@ -91,7 +91,7 @@ describe('FilterCodeLensProvider', () => {
 
       const lenses = provider.provideCodeLenses(doc);
 
-      expect((lenses[0] as any).command.command).toBe('mEdit.clearFilter');
+      expect((lenses[0] as any).command.command).toBe('modbench.clearFilter');
     });
   });
 
@@ -107,7 +107,7 @@ describe('FilterCodeLensProvider', () => {
 
       const lenses = provider.provideCodeLenses(doc);
 
-      expect((lenses[0] as any).command.command).toBe('mEdit.setFilterFromDocument');
+      expect((lenses[0] as any).command.command).toBe('modbench.setFilterFromDocument');
     });
   });
 });

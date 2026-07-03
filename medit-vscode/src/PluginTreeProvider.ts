@@ -47,7 +47,7 @@ export class RecordNode extends vscode.TreeItem {
     super(label, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'record';
     this.command = {
-      command: 'mEdit.openEditor',
+      command: 'modbench.openEditor',
       title: 'Open Record',
       arguments: [{ formKey: record.formKey, label }],
     };
@@ -59,7 +59,7 @@ export class LoadMoreNode extends vscode.TreeItem {
   constructor(public readonly parentNode: RecordTypeNode, remaining: number) {
     super(`$(sync) Load more… (${remaining.toLocaleString()} remaining)`, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'loadMore';
-    this.command = { command: 'mEdit.loadMore', title: 'Load More', arguments: [this] };
+    this.command = { command: 'modbench.loadMore', title: 'Load More', arguments: [this] };
   }
 }
 
@@ -80,7 +80,7 @@ export class WorldspaceNode extends vscode.TreeItem {
     const label = worldspace.editorId ?? worldspace.formKey;
     super(`${label} [WRLD:${formId(worldspace.formKey)}]`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'worldspace';
-    this.command = { command: 'mEdit.openEditor', title: 'Open Record', arguments: [{ formKey: worldspace.formKey, label }] };
+    this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: worldspace.formKey, label }] };
   }
 }
 
@@ -107,7 +107,7 @@ export class CellNode extends vscode.TreeItem {
       ?? (cell.cellX != null ? `Cell (${cell.cellX}, ${cell.cellY})` : cell.formKey);
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'cell';
-    this.command = { command: 'mEdit.openEditor', title: 'Open Record', arguments: [{ formKey: cell.formKey, label }] };
+    this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: cell.formKey, label }] };
   }
 }
 
@@ -132,7 +132,7 @@ export class PlacedNode extends vscode.TreeItem {
     const label = `${name} [${placed.recordType.toUpperCase()}:${formId(placed.formKey)}]`;
     super(label, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'refr';
-    this.command = { command: 'mEdit.openEditor', title: 'Open Record', arguments: [{ formKey: placed.formKey, label }] };
+    this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: placed.formKey, label }] };
   }
 }
 
@@ -150,7 +150,7 @@ export class InteriorLoadMoreNode extends vscode.TreeItem {
   constructor(public readonly parentNode: InteriorCellsNode, remaining: number) {
     super(`$(sync) Load more… (${remaining.toLocaleString()} remaining)`, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'loadMore';
-    this.command = { command: 'mEdit.loadMore', title: 'Load More', arguments: [this] };
+    this.command = { command: 'modbench.loadMore', title: 'Load More', arguments: [this] };
   }
 }
 

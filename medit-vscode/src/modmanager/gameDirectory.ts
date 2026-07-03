@@ -38,7 +38,7 @@ async function hasDataFolder(root: string): Promise<boolean> {
 }
 
 /** Resolution order, first hit wins:
- *  1. explicit `mEdit.mods.gameDirectory` (errors if it has no Data/)
+ *  1. explicit `modbench.mods.gameDirectory` (errors if it has no Data/)
  *  2. MO2's ModOrganizer.ini gamePath (normalized from a Wine/Windows path)
  *  3. GamePathDetector autodetect
  *  Returns null when nothing resolves — the caller then prompts. */
@@ -50,7 +50,7 @@ export async function resolveGameDirectory(
   const explicit = (config.get('mods.gameDirectory') ?? '').trim();
   if (explicit) {
     if (!(await hasDataFolder(explicit))) {
-      throw new Error(`mEdit.mods.gameDirectory has no Data/ subfolder: ${explicit}`);
+      throw new Error(`modbench.mods.gameDirectory has no Data/ subfolder: ${explicit}`);
     }
     return { root: explicit, dataFolder: join(explicit, 'Data') };
   }

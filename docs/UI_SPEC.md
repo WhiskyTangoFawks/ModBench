@@ -1,12 +1,12 @@
 # mEdit — Functional UI Specification
 
-This document is the canonical description of mEdit's frontend surfaces. Each section describes what is shown, what interactions are available, and what data drives them. Implementation phases should be designed against this spec; when a phase changes the intended behavior, update this document first.
+This document is the canonical description of the **mEdit view**'s frontend surfaces — one of Modbench's two views (see [CONTEXT-MAP.md](../CONTEXT-MAP.md)). The other view, **Loadout** (mod install/order/deploy), has its own spec at [docs/mod-manager.md](mod-manager.md). Each section here describes what is shown, what interactions are available, and what data drives them. Implementation phases should be designed against this spec; when a phase changes the intended behavior, update this document first.
 
 ---
 
 ## Overall Layout
 
-mEdit is a VS Code extension. Its UI is composed of three surfaces:
+Modbench is a VS Code extension; this section covers the mEdit view's UI. Its UI is composed of three surfaces:
 
 1. **Sidebar tree** (VS Code activity bar panel) — the entry point for all navigation
 2. **Record editor panel** (VS Code editor tab, webview) — the main work surface; one tab per open record

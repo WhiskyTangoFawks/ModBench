@@ -52,42 +52,42 @@ after(async () => {
 
 // ── Command registration ───────────────────────────────────────────────────────
 
-describe('mEdit command registration', () => {
+describe('modbench command registration', () => {
   const EXPECTED_COMMANDS = [
-    'mEdit.openEditor',
-    'mEdit.openCompare',
-    'mEdit.closeMedit',
-    'mEdit.reloadSession',
-    'mEdit.refreshTree',
-    'mEdit.newPlugin',
-    'mEdit.copyAsOverrideInto',
-    'mEdit.setFilter',
-    'mEdit.clearFilter',
-    'mEdit.setFilterFromDocument',
-    'mEdit.showReferencedBy',
-    'mEdit.deleteRecord',
-    'mEdit.saveGroup',
-    'mEdit.revertGroup',
-    'mEdit.saveAllGroups',
-    'mEdit.revertAllGroups',
-    'mEdit.createPlaced',
-    'mEdit.modList.filter',
-    'mEdit.modList.switchProfile',
-    'mEdit.modList.launchMedit',
-    'mEdit.modList.refresh',
-    'mEdit.modList.deploy',
-    'mEdit.modList.purge',
-    'mEdit.modList.launchGame',
-    'mEdit.modList.installFromArchive',
-    'mEdit.modList.installFromFolder',
-    'mEdit.modList.mod.openInExplorer',
-    'mEdit.modList.mod.addSeparatorBelow',
-    'mEdit.modList.mod.moveToSeparator',
-    'mEdit.modList.mod.uninstall',
-    'mEdit.modList.mod.viewOnNexus',
-    'mEdit.modList.separator.rename',
-    'mEdit.modList.separator.addSeparatorBelow',
-    'mEdit.modList.separator.delete',
+    'modbench.openEditor',
+    'modbench.openCompare',
+    'modbench.closeMedit',
+    'modbench.reloadSession',
+    'modbench.refreshTree',
+    'modbench.newPlugin',
+    'modbench.copyAsOverrideInto',
+    'modbench.setFilter',
+    'modbench.clearFilter',
+    'modbench.setFilterFromDocument',
+    'modbench.showReferencedBy',
+    'modbench.deleteRecord',
+    'modbench.saveGroup',
+    'modbench.revertGroup',
+    'modbench.saveAllGroups',
+    'modbench.revertAllGroups',
+    'modbench.createPlaced',
+    'modbench.modList.filter',
+    'modbench.modList.switchProfile',
+    'modbench.modList.launchMedit',
+    'modbench.modList.refresh',
+    'modbench.modList.deploy',
+    'modbench.modList.purge',
+    'modbench.modList.launchGame',
+    'modbench.modList.installFromArchive',
+    'modbench.modList.installFromFolder',
+    'modbench.modList.mod.openInExplorer',
+    'modbench.modList.mod.addSeparatorBelow',
+    'modbench.modList.mod.moveToSeparator',
+    'modbench.modList.mod.uninstall',
+    'modbench.modList.mod.viewOnNexus',
+    'modbench.modList.separator.rename',
+    'modbench.modList.separator.addSeparatorBelow',
+    'modbench.modList.separator.delete',
   ];
 
   it('registers all expected commands on activation', async () => {
@@ -100,11 +100,11 @@ describe('mEdit command registration', () => {
 
 // ── openEditor ────────────────────────────────────────────────────────────────
 
-describe('mEdit.openEditor', () => {
+describe('modbench.openEditor', () => {
   it('opens a new webview tab when no panel exists', async () => {
     const tabsBefore = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
 
-    await vscode.commands.executeCommand('mEdit.openEditor', {
+    await vscode.commands.executeCommand('modbench.openEditor', {
       formKey: 'Fallout4.esm:000001',
       label: 'Test Record',
     });
@@ -112,13 +112,13 @@ describe('mEdit.openEditor', () => {
     await new Promise(r => setTimeout(r, 500));
 
     const tabsAfter = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
-    assert.ok(tabsAfter > tabsBefore, 'Expected a new tab to be opened by mEdit.openEditor');
+    assert.ok(tabsAfter > tabsBefore, 'Expected a new tab to be opened by modbench.openEditor');
   });
 
   it('reuses the existing panel on a second call', async () => {
     const tabsAfterFirst = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
 
-    await vscode.commands.executeCommand('mEdit.openEditor', {
+    await vscode.commands.executeCommand('modbench.openEditor', {
       formKey: 'Fallout4.esm:000002',
       label: 'Another Record',
     });
@@ -129,18 +129,18 @@ describe('mEdit.openEditor', () => {
     assert.strictEqual(
       tabsAfterSecond,
       tabsAfterFirst,
-      'Second mEdit.openEditor call should reuse the existing panel, not open a new tab'
+      'Second modbench.openEditor call should reuse the existing panel, not open a new tab'
     );
   });
 
   it('updates the panel title when opened for a different record', async () => {
-    await vscode.commands.executeCommand('mEdit.openEditor', {
+    await vscode.commands.executeCommand('modbench.openEditor', {
       formKey: 'Fallout4.esm:000010',
       label: 'First Record',
     });
     await new Promise(r => setTimeout(r, 300));
 
-    await vscode.commands.executeCommand('mEdit.openEditor', {
+    await vscode.commands.executeCommand('modbench.openEditor', {
       formKey: 'Fallout4.esm:000011',
       label: 'Second Record',
     });

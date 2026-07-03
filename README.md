@@ -1,12 +1,19 @@
-# mEdit
+# Modbench
 
-A VS Code extension + local C# service for viewing, editing, and comparing Bethesda plugin files (`.esp`/`.esm`/`.esl`). Targets Fallout 4 in v1.
+A VS Code extension + local C# service that together form a modding IDE for Bethesda games. Modbench surfaces two views:
+
+- **Loadout** — install, order, enable, and deploy mods (an MO2-compatible mod manager). Pure TypeScript/Node, lives in the extension.
+- **mEdit** — view, edit, and compare Bethesda plugin files (`.esp`/`.esm`/`.esl`): FormKeys, override stacks, conflicts. Backed by the C# service.
+
+Targets Fallout 4 in v1; architecture supports any Mutagen-supported game without code changes.
+
+See [CONTEXT-MAP.md](CONTEXT-MAP.md) for how the two views map to bounded contexts, [CONTEXT.md](CONTEXT.md) for editing domain language, and [docs/mod-manager.md](docs/mod-manager.md) for the mod-manager spec.
 
 ## Prerequisites
 
 | Tool | Version | Notes |
 |---|---|---|
-| [.NET SDK](https://dotnet.microsoft.com/download) | 9.x | Backend service |
+| [.NET SDK](https://dotnet.microsoft.com/download) | 9.x | Editing backend (`MEditService`) |
 | [Node.js](https://nodejs.org/) | 20 LTS or later | VS Code extension build |
 | [VS Code](https://code.visualstudio.com/) | Latest | Required for the extension |
 
@@ -18,21 +25,23 @@ sudo apt-get install -y dotnet-sdk-9.0 nodejs npm
 ## Repository layout
 
 ```
-BethesdaPluginService/              C# backend (ASP.NET Core minimal API)
-  BethesdaPluginService.sln         Solution file
-  BethesdaPluginService.Core/       Domain logic, services, DuckDB index
-  BethesdaPluginService.Api/        HTTP host, route handlers, Swashbuckle
-bethesda-plugin-editor/             VS Code extension + React webviews
+MEditService/                       C# backend (ASP.NET Core minimal API) — mEdit editing only
+  MEditService.sln                  Solution file
+  MEditService.Core/                Domain logic, services, DuckDB index
+  MEditService.Api/                 HTTP host, route handlers, Swashbuckle
+medit-vscode/                       VS Code extension + React webviews
   src/                              Extension host (TypeScript / VS Code API)
+  src/modmanager/                   Loadout view — mod install/order/deploy (no backend calls)
   webview/                          React UI (Vite build, outputs to out/webview)
 ```
 
-## Backend setup
+## Backend setup (mEdit / editing)
 
 ```bash
+cd MEditService
 dotnet restore
-dotnet build BethesdaPluginService/BethesdaPluginService.sln
-dotnet run --project BethesdaPluginService/BethesdaPluginService.Api
+dotnet build MEditService.sln
+dotnet run --project MEditService.Api
 ```
 
 Service runs at `http://localhost:5172`.
@@ -40,30 +49,39 @@ Service runs at `http://localhost:5172`.
 - OpenAPI spec: `GET /openapi.json`
 - Swagger UI: `/swagger`
 
+The backend is only needed once you enter the mEdit (editing) view — the extension spawns and tears it down for you ([ADR-0022](docs/adr/0022-extension-owns-backend-lifecycle.md)). The Loadout view works standalone with no backend running.
+
 ## VS Code extension setup
 
 ```bash
-cd bethesda-plugin-editor
+cd medit-vscode
 npm install
 npm run build          # compile extension + webview
 npm run generate-api   # regenerate typed client from OpenAPI spec (backend must be running)
 ```
 
-Press **F5** in VS Code to launch the Extension Development Host.
+**F5 does not reliably launch the extension.** Use the Extension Development Host CLI instead:
+
+```bash
+code --extensionDevelopmentPath="$(pwd)/medit-vscode" "$(pwd)"
+```
+
+The open workspace folder is treated as the MO2 instance directory (`mods/`, `profiles/`, `ModOrganizer.ini`) for the Loadout view.
 
 ## Development
 
-See [docs/adr/](docs/adr/) for architectural decisions and [TASKS.md](TASKS.md) for the phased build plan.
+See [docs/adr/](docs/adr/) for architectural decisions, [docs/UI_SPEC.md](docs/UI_SPEC.md) for the mEdit view's UI spec, [docs/mod-manager.md](docs/mod-manager.md) for the Loadout view's spec, and [TASKS.md](TASKS.md) for the phased build plan.
 
-Tests follow TDD — write a failing test before any implementation. Run the test suite:
+Tests follow TDD — write a failing test before any implementation.
 
 ```bash
-cd MEditService && dotnet test
+cd MEditService && dotnet test -v minimal
+cd medit-vscode && npm run test:unit && npm run test:integration
 ```
 
 ## Agent friendliness
 
-The architecture is agent-friendly by construction.
+The mEdit editing backend is agent-friendly by construction.
 
 | Property | How achieved |
 |---|---|

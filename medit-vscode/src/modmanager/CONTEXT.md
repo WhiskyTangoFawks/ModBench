@@ -1,6 +1,6 @@
 # Mod Management
 
-The mEdit subsystem that installs, orders, enables, and deploys mods, and locates the game. Lives in the VS Code extension. Operates on files and folders, never on record internals.
+The Modbench subsystem (Loadout view) that installs, orders, enables, and deploys mods, and locates the game. Lives in the VS Code extension. Operates on files and folders, never on record internals.
 
 ## Language
 
