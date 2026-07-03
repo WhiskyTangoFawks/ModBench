@@ -76,6 +76,8 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 **Pending change**: Staged field edit held in memory; not yet written to disk. For complex fields, stores the entire new field value atomically — no per-element pending change. _Avoid: draft, unsaved edit._
 
+**ChangeGroup**: Batch of pending changes staged by one record-lifecycle operation (create, delete, renumber), saved or reverted atomically as a unit — possibly spanning plugins (e.g. a renumber's cascading reference updates). Surfaced in the Change Groups tree. _Avoid: transaction, batch edit._
+
 **Complex field**: Field of type `array` or `struct`. Always committed as one atomic pending change; revert is all-or-nothing at the column level. _Avoid: compound field, nested field._
 
 **Sorted array**: Array with a stable sort key (e.g. `Keywords`, `Perks`, keyed by FormKey). In compare grid: elements aligned by sort key across columns. See ADR-0019. _Avoid: keyed array._
@@ -86,9 +88,9 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 ### Filters & scripts
 
-**Record filter**: DuckDB SELECT stored on the backend session that narrows the record tree. Stored as `.sql` in `mEdit.scriptsPath`; applied via Code Lens or `mEdit.setFilter`. A degenerate script — selection only, no Python body. _Avoid: search filter, query filter._
+**Record filter**: DuckDB SELECT stored on the backend session that narrows the record tree. Stored as `.sql` in `modbench.scriptsPath`; applied via Code Lens or `modbench.setFilter`. A degenerate script — selection only, no Python body. _Avoid: search filter, query filter._
 
-**Filter file**: `.sql` file in `mEdit.scriptsPath` returning a `form_key` column. Shares folder/UX surface with scripts but has no Python body. _Avoid: filter script._
+**Filter file**: `.sql` file in `modbench.scriptsPath` returning a `form_key` column. Shares folder/UX surface with scripts but has no Python body. _Avoid: filter script._
 
 **Script**: Python file with YAML frontmatter declaring a SQL query + Python body that iterates records and calls `edit()`. All `edit()` calls route through `PendingChangeService`. Preferred agent output for complex multi-record operations — reviewable, rerunnable, deterministic. See Phase 15. _Avoid: macro, automation._
 
