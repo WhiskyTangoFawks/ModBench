@@ -30,7 +30,7 @@ See [CONTEXT-MAP.md](CONTEXT-MAP.md) for the full context split and the language
 - Backend and extension always started independently by the user
 - Architecture must support all Mutagen-supported games without code changes; tests may use FO4 as concrete game
 
-Rationale: [docs/adr/](docs/adr/). Frontend design: [docs/UI_SPEC.md](docs/UI_SPEC.md).
+Rationale: [docs/adr/](docs/adr/). UI surface specs: [docs/specs/](docs/specs/).
 
 ## References
 
@@ -63,3 +63,17 @@ npm run generate-api     # regenerate src/generated/api.ts from live backend at 
 Run `/validate` at end of any task.
 
 Solving pre-existing problems is always in scope.
+
+## Agent skills
+
+### Issue tracker
+
+Work is tracked as GitHub issues via the `gh` CLI: PRDs are per-initiative issues, implementation issues are vertical slices; durable per-surface specs live in `docs/specs/`. External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles use their default label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context: `CONTEXT-MAP.md` at the root maps the Editing and Mod Management contexts to their `CONTEXT.md` glossaries; system-wide ADRs in `docs/adr/`. See `docs/agents/domain.md`.
