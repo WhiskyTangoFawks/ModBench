@@ -30,8 +30,8 @@ Completed (specs + proofs in [completed-tasks/](docs/tasks/completed-tasks/)): p
 
 Seeded from the [MO2/Vortex feature inventory](docs/research/mod-manager-feature-inventory.md):
 
-- **Downloads surface v1** — grill [docs/specs/downloads.md](docs/specs/downloads.md)'s open questions (queue UI shape, downloads directory, retention), then build; may absorb or supersede #5/#6.
-- **Plugins / load-order surface decision** — own tab (MO2 model) vs part of mEdit vs a Mods-view mode; LOOT masterlist vs dependency-only sort. Informs how #7 lands.
+- **Downloads surface v1** — queue UI shape resolved ([ADR-0027](docs/adr/0027-mo2-surfaces-map-to-native-vscode-views.md): editor-tab webview + status-bar item); grill [docs/specs/downloads.md](docs/specs/downloads.md)'s remaining open questions (downloads directory, retention), then build; may absorb or supersede #5/#6.
+- **Plugins / load-order surface** — resolved ([ADR-0027](docs/adr/0027-mo2-surfaces-map-to-native-vscode-views.md)): own Mod-Management sidebar view ([docs/specs/plugins.md](docs/specs/plugins.md)), stacked with Mods, not part of mEdit; dependency-only auto-sort, not a LOOT masterlist. Implementation tracked in #7.
 - **FOMOD installers** — currently detect-and-flag only; a full `ModuleConfig.xml` installer is its own initiative.
 - **Overwrite folder UX** — surface to reassign/discard files collected on purge.
 - **Alpha readiness** — cross-platform packaging (#9), MO2 round-trip fidelity corpus, onboarding for the first external super-users.

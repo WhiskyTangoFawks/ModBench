@@ -5,9 +5,10 @@ The Loadout view: the Mod Management context's primary surface. A VS Code `TreeV
 Architecture is fixed by:
 - [ADR-0021](../adr/0021-mod-manager-in-extension.md) — mod manager lives in the extension, not the backend
 - [ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md) — the extension owns the editing backend's lifecycle; MO2 compat is by file import, not VFS
+- [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) — MO2's Mods/Plugins/Downloads panels map to native VS Code views and editor tabs, not a custom panel switcher
 - [Mod-Management ADR-0001](../../medit-vscode/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md) — the modlist format **is** MO2's format, behind a source adapter
 
-The Editing surface is specified in [medit.md](medit.md); the planned Downloads surface in [downloads.md](downloads.md).
+The Editing surface is specified in [medit.md](medit.md); the planned Downloads surface in [downloads.md](downloads.md); the planned Plugins (load order) surface in [plugins.md](plugins.md).
 
 ---
 
@@ -196,7 +197,7 @@ Hover tooltip lists the conflicting files and the winner. File-level conflicts (
 
 ### Plugin load order (planned — Modbench-9)
 
-Load-order display lives in the mEdit Plugins tree today. Planned: drag-and-drop reorder writing `plugins.txt`, dependency-only auto-sort (topological by masters), missing-master badge. **Whether this becomes its own Plugins surface is an open question** — see [ROADMAP.md](../../ROADMAP.md).
+Specified separately in [plugins.md](plugins.md): a dedicated Mod-Management sidebar `TreeView`, stacked with the Mods tree ([ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)) — not a mode of this view, not folded into the mEdit Plugins tree. Drag-and-drop reorder writing `plugins.txt`, dependency-only auto-sort (topological by masters), missing-master badge.
 
 ---
 
@@ -207,4 +208,3 @@ Load-order display lives in the mEdit Plugins tree today. Planned: drag-and-drop
 - **Vortex adapter** — confirm `vortex.deployment.json` is stable enough to bother with the read-only snapshot.
 - **Overwrite folder UX** — files moved to `mods/overwrite/` on purge need a surface to reassign or discard.
 - **Delta / overlay editing** — load an arbitrary overriding-plugin set side-by-side (xEdit-like). Builds on `load-explicit`; deferred.
-- **Plugins surface** — own tab vs part of mEdit vs mode of this view (see ROADMAP).
