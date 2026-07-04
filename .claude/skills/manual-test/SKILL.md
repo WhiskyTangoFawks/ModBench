@@ -1,3 +1,8 @@
+---
+name: manual-test
+description: Build the extension and launch a VS Code Extension Development Host against a real MO2 instance for manual, end-to-end testing.
+---
+
 # Manual Test
 
 Build the extension if needed, then launch a VS Code Extension Development Host pointed at

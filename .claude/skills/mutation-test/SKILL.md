@@ -1,3 +1,8 @@
+---
+name: mutation-test
+description: Run Stryker.NET mutation tests against MEditService.Core and triage survivors.
+---
+
 # Mutation Test
 
 Stryker.NET mutation tests against `MEditService.Core`. Commands from `MEditService/`.

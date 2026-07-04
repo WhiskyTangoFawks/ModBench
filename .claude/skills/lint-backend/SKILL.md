@@ -1,3 +1,8 @@
+---
+name: lint-backend
+description: Check the C# backend for formatting violations and analyzer diagnostics (dotnet format + build). Use before committing backend changes.
+---
+
 # Lint Backend
 
 Check C# backend for formatting violations and analyzer diagnostics. Commands from repo root.
