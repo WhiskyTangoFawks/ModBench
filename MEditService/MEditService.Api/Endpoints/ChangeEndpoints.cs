@@ -13,6 +13,14 @@ public static class ChangeEndpoints
 
     public static IEndpointRouteBuilder MapChangeEndpoints(this IEndpointRouteBuilder app)
     {
+        MapRecordOperationEndpoints(app);
+        MapChangeManagementEndpoints(app);
+        return app;
+    }
+
+    // Record-lifecycle operations: edit, copy, delete, renumber, create.
+    private static void MapRecordOperationEndpoints(IEndpointRouteBuilder app)
+    {
         app.MapMethods("/records/{formKey}", ["PATCH"], PatchRecord)
             .WithName("PatchRecord")
             .WithTags(Tag)
@@ -45,6 +53,26 @@ public static class ChangeEndpoints
             .ProducesProblem(409)
             .ProducesProblem(422);
 
+        app.MapPost("/plugins/{plugin}/records", CreateRecord)
+            .WithName("CreateRecord")
+            .WithTags(Tag)
+            .Produces<MEditService.Core.Queries.CreateRecordResult>()
+            .Produces<IReadOnlyList<ReferenceValidationError>>(422)
+            .ProducesProblem(404)
+            .ProducesProblem(409);
+
+        app.MapPost("/plugins/{plugin}/cells/{cellFormKey}/placed", CreatePlacedRecord)
+            .WithName("CreatePlacedRecord")
+            .WithTags(Tag)
+            .Produces<MEditService.Core.Queries.CreateRecordResult>()
+            .Produces<IReadOnlyList<ReferenceValidationError>>(422)
+            .ProducesProblem(404)
+            .ProducesProblem(409);
+    }
+
+    // Pending-change and change-group management: list, revert, save.
+    private static void MapChangeManagementEndpoints(IEndpointRouteBuilder app)
+    {
         app.MapGet("/change-groups", (IPendingChangeService changes) => Results.Ok(changes.GetChangeGroups()))
             .WithName("GetChangeGroups")
             .WithTags(Tag)
@@ -74,22 +102,6 @@ public static class ChangeEndpoints
             .Produces<int>()
             .ProducesProblem(400);
 
-        app.MapPost("/plugins/{plugin}/records", CreateRecord)
-            .WithName("CreateRecord")
-            .WithTags(Tag)
-            .Produces<MEditService.Core.Queries.CreateRecordResult>()
-            .Produces<IReadOnlyList<ReferenceValidationError>>(422)
-            .ProducesProblem(404)
-            .ProducesProblem(409);
-
-        app.MapPost("/plugins/{plugin}/cells/{cellFormKey}/placed", CreatePlacedRecord)
-            .WithName("CreatePlacedRecord")
-            .WithTags(Tag)
-            .Produces<MEditService.Core.Queries.CreateRecordResult>()
-            .Produces<IReadOnlyList<ReferenceValidationError>>(422)
-            .ProducesProblem(404)
-            .ProducesProblem(409);
-
         app.MapPost("/changes/groups/save", SaveGroups)
             .WithName("SaveGroups")
             .WithTags(Tag)
@@ -107,8 +119,6 @@ public static class ChangeEndpoints
             .ProducesProblem(404)
             .ProducesProblem(409)
             .ProducesProblem(500);
-
-        return app;
     }
 
     private static IResult PatchRecord(

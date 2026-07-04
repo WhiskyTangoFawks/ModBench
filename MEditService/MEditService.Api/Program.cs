@@ -115,8 +115,13 @@ try
                 gameFolder, "Plugins.txt");
         }
 
-        // Linux/Proton: data folder is {steamLibrary}/steamapps/common/{Game}/Data
-        // Plugins.txt lives under {steamLibrary}/steamapps/compatdata/{appId}/pfx/...
+        return FindProtonPluginsTxt(dataFolderPath, gameRelease, gameFolder);
+    }
+
+    // Linux/Proton: data folder is {steamLibrary}/steamapps/common/{Game}/Data
+    // Plugins.txt lives under {steamLibrary}/steamapps/compatdata/{appId}/pfx/...
+    static string? FindProtonPluginsTxt(string dataFolderPath, GameRelease gameRelease, string gameFolder)
+    {
         var steamAppId = gameRelease.ToCategory() switch
         {
             GameCategory.Fallout4 => "377160",
