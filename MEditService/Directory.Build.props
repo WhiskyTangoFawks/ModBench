@@ -3,5 +3,15 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <!--
+      Code-quality / complexity rules (severity set to `warning` in .editorconfig) are deliberately
+      exempt from TreatWarningsAsErrors: they surface in build output so the agent can see and triage
+      them per-instance (see /validate), but they never block the build. Making them errors would force
+      large refactors mid-task, including on pre-existing code merely touched nearby — the opposite of
+      the per-instance scoping we want.
+        S3776 cognitive complexity · S1541 cyclomatic complexity · S138 method length
+        S134 nesting depth · S107 too many parameters · S1067 expression complexity
+    -->
+    <WarningsNotAsErrors>S3776;S1541;S138;S134;S107;S1067</WarningsNotAsErrors>
   </PropertyGroup>
 </Project>

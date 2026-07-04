@@ -81,6 +81,16 @@ dotnet_diagnostic.CA1848.severity = none
 # S2139: log + rethrow is the deliberate pattern in this codebase (see CLAUDE.md logging conventions)
 dotnet_diagnostic.S2139.severity = none
 
+# Complexity / maintainability rules — surfaced at `warning` so the build reports the same code-quality
+# hotspots your IDE (SonarQube for IDE) shows. Exempt from TreatWarningsAsErrors via <WarningsNotAsErrors>
+# in Directory.Build.props, so they are visible-but-not-blocking and get per-instance triage in /validate.
+dotnet_diagnostic.S3776.severity = warning  # Cognitive Complexity of methods should not be too high
+dotnet_diagnostic.S1541.severity = warning  # Cyclomatic Complexity of methods should not be too high
+dotnet_diagnostic.S138.severity = warning   # Functions should not have too many lines of code
+dotnet_diagnostic.S134.severity = warning   # Control flow statements should not be nested too deeply
+dotnet_diagnostic.S107.severity = warning   # Functions should not have too many parameters
+dotnet_diagnostic.S1067.severity = warning  # Expressions should not be too complex
+
 
 #### C# Coding Conventions ####
 [*.cs]
