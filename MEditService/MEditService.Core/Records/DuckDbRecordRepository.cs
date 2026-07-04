@@ -58,54 +58,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         using var tx = _connection.BeginTransaction();
 
         foreach (var (tableName, schema) in schemas)
-        {
-            List<IMajorRecordGetter> records;
-            try
-            {
-                records = pluginMod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false).ToList();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to enumerate {RecordType} records from {Plugin}", tableName, plugin);
-                throw;
-            }
-
-            if (records.Count == 0) continue;
-
-            _logger.LogDebug("Appending {Count} {RecordType} records from {Plugin}", records.Count, tableName, plugin);
-
-            DeleteExisting(tableName, plugin);
-
-            using var appender = _connection.CreateAppender(tableName);
-            foreach (var record in records)
-            {
-                try
-                {
-                    var row = appender.CreateRow();
-                    row.AppendValue(record.FormKey.ToString());
-                    row.AppendValue(plugin);
-                    row.AppendValue((int?)loadOrderIndex);
-                    row.AppendValue((bool?)false);
-                    if (record.EditorID is { } edId)
-                        row.AppendValue(edId);
-                    else
-                        row.AppendNullValue();
-
-                    foreach (var col in schema.RecordColumns)
-                        AppendTyped(row, col.Extract(record), col.DuckDbType);
-
-                    row.EndRow();
-                    CollectFormRefs(refs, record, tableName, schema);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex,
-                        "Failed to append {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
-                        tableName, record.FormKey, record.EditorID, plugin);
-                    throw;
-                }
-            }
-        }
+            IndexRecordTable(tableName, schema, pluginMod, plugin, loadOrderIndex, refs);
 
         // Walk VMAD after the per-type loop so both generic and VMAD Object refs land in `refs`
         // before the single form_references flush below.
@@ -136,6 +89,58 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         }
 
         tx.Commit();
+    }
+
+    private void IndexRecordTable(
+        string tableName, RecordTableSchema schema, IModGetter pluginMod,
+        string plugin, int loadOrderIndex, List<FormRef> refs)
+    {
+        List<IMajorRecordGetter> records;
+        try
+        {
+            records = pluginMod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to enumerate {RecordType} records from {Plugin}", tableName, plugin);
+            throw;
+        }
+
+        if (records.Count == 0) return;
+
+        _logger.LogDebug("Appending {Count} {RecordType} records from {Plugin}", records.Count, tableName, plugin);
+
+        DeleteExisting(tableName, plugin);
+
+        using var appender = _connection.CreateAppender(tableName);
+        foreach (var record in records)
+        {
+            try
+            {
+                var row = appender.CreateRow();
+                row.AppendValue(record.FormKey.ToString());
+                row.AppendValue(plugin);
+                row.AppendValue((int?)loadOrderIndex);
+                row.AppendValue((bool?)false);
+                if (record.EditorID is { } edId)
+                    row.AppendValue(edId);
+                else
+                    row.AppendNullValue();
+
+                foreach (var col in schema.RecordColumns)
+                    AppendTyped(row, col.Extract(record), col.DuckDbType);
+
+                row.EndRow();
+                CollectFormRefs(refs, record, tableName, schema);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Failed to append {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
+                    tableName, record.FormKey, record.EditorID, plugin);
+                throw;
+            }
+        }
     }
 
     public void UpdateWinners()
@@ -360,15 +365,22 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return rows;
     }
 
-    private static VmadPropertyValue MapVmadProperty(VmadPropertyRow r, List<VmadListItemRow>? items) => r.Type switch
+    // Array-of-scalar property types, whose elements come from the vmad_property_list_items rows.
+    private static readonly HashSet<string> ScalarArrayTypes = new(StringComparer.Ordinal)
+        { "ArrayOfBool", "ArrayOfInt", "ArrayOfFloat", "ArrayOfString", "ArrayOfObject" };
+
+    private static VmadPropertyValue MapVmadProperty(VmadPropertyRow r, List<VmadListItemRow>? items) =>
+        ScalarArrayTypes.Contains(r.Type)
+            ? new VmadPropertyValue(r.Type, r.Flags, null, ListItems: MapVmadItems(items))
+            : MapNonArrayVmadProperty(r);
+
+    private static VmadPropertyValue MapNonArrayVmadProperty(VmadPropertyRow r) => r.Type switch
     {
         "Bool" => new VmadPropertyValue(r.Type, r.Flags, r.Bool),
         "Int" => new VmadPropertyValue(r.Type, r.Flags, r.Int),
         "Float" => new VmadPropertyValue(r.Type, r.Flags, r.Float),
         "String" => new VmadPropertyValue(r.Type, r.Flags, r.String),
         "Object" => new VmadPropertyValue(r.Type, r.Flags, r.FormKey, r.Alias),
-        "ArrayOfBool" or "ArrayOfInt" or "ArrayOfFloat" or "ArrayOfString" or "ArrayOfObject" =>
-            new VmadPropertyValue(r.Type, r.Flags, null, ListItems: MapVmadItems(items)),
         "Struct" => new VmadPropertyValue(r.Type, r.Flags, null, Members: MapStructMembers(r.StructJson)),
         "ArrayOfStruct" => new VmadPropertyValue(r.Type, r.Flags, null, StructList: MapStructList(r.StructJson)),
         _ => new VmadPropertyValue(r.Type, r.Flags, null),
