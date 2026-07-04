@@ -76,11 +76,30 @@ public sealed class WorldspaceQueryService : IWorldspaceQueryService
         if (pluginChanges.Count == 0)
             return committed;
 
+        var (deleted, persistentAdded, temporaryAdded) = ClassifyPendingPlacements(pluginChanges, cellFormKey);
+
+        if (deleted.Count == 0 && persistentAdded.Count == 0 && temporaryAdded.Count == 0)
+            return committed;
+
+        return new CellReferences(
+            committed.Persistent
+                .Where(r => !deleted.Contains(r.FormKey))
+                .Concat(persistentAdded)
+                .ToList(),
+            committed.Temporary
+                .Where(r => !deleted.Contains(r.FormKey))
+                .Concat(temporaryAdded)
+                .ToList());
+    }
+
+    private static (HashSet<string> Deleted, List<PlacedSummary> PersistentAdded, List<PlacedSummary> TemporaryAdded)
+        ClassifyPendingPlacements(IReadOnlyList<PendingChange> changes, string cellFormKey)
+    {
         var deleted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var persistentAdded = new List<PlacedSummary>();
         var temporaryAdded = new List<PlacedSummary>();
 
-        foreach (var c in pluginChanges)
+        foreach (var c in changes)
         {
             if (c.ChangeType == PendingChangeConstants.DeleteChangeType)
                 deleted.Add(c.FormKey);
@@ -95,18 +114,7 @@ public sealed class WorldspaceQueryService : IWorldspaceQueryService
             }
         }
 
-        if (deleted.Count == 0 && persistentAdded.Count == 0 && temporaryAdded.Count == 0)
-            return committed;
-
-        return new CellReferences(
-            committed.Persistent
-                .Where(r => !deleted.Contains(r.FormKey))
-                .Concat(persistentAdded)
-                .ToList(),
-            committed.Temporary
-                .Where(r => !deleted.Contains(r.FormKey))
-                .Concat(temporaryAdded)
-                .ToList());
+        return (deleted, persistentAdded, temporaryAdded);
     }
 
     public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset) =>
