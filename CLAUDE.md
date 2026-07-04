@@ -64,6 +64,8 @@ Run `/validate` at end of any task.
 
 Solving pre-existing problems is always in scope.
 
+Implementation plans for bug fixes and features follow `/tdd`: write the test first, confirm it fails (RED), then write the minimal code to pass (GREEN), one behavior at a time. Trivial changes (typo fixes, renames, config/docs-only edits) are exempt.
+
 ## Agent skills
 
 ### Issue tracker
