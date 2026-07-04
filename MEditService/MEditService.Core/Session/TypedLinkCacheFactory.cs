@@ -27,14 +27,8 @@ internal static class TypedLinkCacheFactory
         var modGetterType = assembly.GetType($"Mutagen.Bethesda.{category}.I{category}ModGetter")!;
         var modType = assembly.GetType($"Mutagen.Bethesda.{category}.I{category}Mod")!;
 
-        // ToImmutableLinkCache<TMod, TModGetter>(this IEnumerable<TModGetter>) — the overload whose
-        // first parameter element is the bare type parameter (not a wrapping IModListingGetter<>).
         var method = typeof(LinkCacheConstructionMixIn).GetMethods()
-            .First(m => m is { Name: "ToImmutableLinkCache", IsGenericMethodDefinition: true }
-                && m.GetGenericArguments().Length == 2
-                && m.GetParameters() is [{ ParameterType: { IsGenericType: true } p }, _]
-                && p.GetGenericTypeDefinition() == typeof(IEnumerable<>)
-                && p.GetGenericArguments()[0].IsGenericParameter)
+            .First(IsBareEnumerableToImmutableLinkCache)
             .MakeGenericMethod(modType, modGetterType);
 
         // The mods are TModGetter at runtime; a typed array satisfies IEnumerable<TModGetter>.
@@ -43,5 +37,19 @@ internal static class TypedLinkCacheFactory
             typed.SetValue(mods[i], i);
 
         return (ILinkCache)method.Invoke(null, [typed, null])!;
+    }
+
+    // ToImmutableLinkCache<TMod, TModGetter>(this IEnumerable<TModGetter>) — the overload whose
+    // first parameter element is the bare type parameter (not a wrapping IModListingGetter<>).
+    private static bool IsBareEnumerableToImmutableLinkCache(MethodInfo m)
+    {
+        if (m is not { Name: "ToImmutableLinkCache", IsGenericMethodDefinition: true })
+            return false;
+        if (m.GetGenericArguments().Length != 2)
+            return false;
+        if (m.GetParameters() is not [{ ParameterType: { IsGenericType: true } p }, _])
+            return false;
+        return p.GetGenericTypeDefinition() == typeof(IEnumerable<>)
+            && p.GetGenericArguments()[0].IsGenericParameter;
     }
 }
