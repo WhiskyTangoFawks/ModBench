@@ -163,10 +163,7 @@ internal sealed class VmadIndexer(
                     refs.Add(new FormRef(ctx.FormKey, o.Object.FormKey.ToString(), path, ctx.RecordType, null));
                     break;
                 case IScriptObjectListPropertyGetter ol:
-                    for (int i = 0; i < ol.Objects.Count; i++)
-                        if (!ol.Objects[i].Object.IsNull)
-                            refs.Add(new FormRef(ctx.FormKey, ol.Objects[i].Object.FormKey.ToString(),
-                                $"{path}[{i}]", ctx.RecordType, null));
+                    AddObjectListMemberRefs(ctx, ol, path);
                     break;
                 case IScriptStructPropertyGetter st:
                     CollectMemberRefs(ctx, st.Members.SelectMany(w => w.Properties), path);
@@ -176,6 +173,16 @@ internal sealed class VmadIndexer(
                         CollectMemberRefs(ctx, sl.Structs[i].Members, $"{path}[{i}]");
                     break;
             }
+        }
+    }
+
+    private void AddObjectListMemberRefs(PropContext ctx, IScriptObjectListPropertyGetter list, string path)
+    {
+        for (int i = 0; i < list.Objects.Count; i++)
+        {
+            if (list.Objects[i].Object.IsNull) continue;
+            refs.Add(new FormRef(ctx.FormKey, list.Objects[i].Object.FormKey.ToString(),
+                $"{path}[{i}]", ctx.RecordType, null));
         }
     }
 
