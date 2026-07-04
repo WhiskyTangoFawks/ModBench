@@ -79,7 +79,7 @@ public sealed class EditOrchestrator : IEditOrchestrator
         var distinctRefs = formRefs.Select(r => r.TargetFormKey).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var createGroupId = _changes.GetCreateGroupIdForAny(distinctRefs);
 
-        var staged = _changes.Upsert(formKey, plugin, recordType!, fields, source, description, oldValues, formRefs, groupId: createGroupId);
+        var staged = _changes.Upsert(new PendingChangeUpsert(formKey, plugin, recordType!, fields, source, description, oldValues, formRefs, GroupId: createGroupId));
         return new StageEditResult.Staged(staged);
     }
 
@@ -121,9 +121,9 @@ public sealed class EditOrchestrator : IEditOrchestrator
                 ExtractVmadValueRefs(path, value, formRefs);
         }
 
-        var staged = _changes.Upsert(
+        var staged = _changes.Upsert(new PendingChangeUpsert(
             formKey, plugin, recordType, fields, source, description,
-            oldValues, formRefs, changeType: PendingChangeConstants.VmadStructOpChangeType);
+            oldValues, formRefs, ChangeType: PendingChangeConstants.VmadStructOpChangeType));
         return new StageEditResult.Staged(staged);
     }
 
@@ -204,8 +204,8 @@ public sealed class EditOrchestrator : IEditOrchestrator
 
         var schemas = _schemaReflector.GetSchemas(session!.GameRelease);
         var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!);
-        var staged = _changes.Upsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues, formRefs,
-            parentCell: placement?.ParentCell, placementGroup: placement?.PlacementGroup);
+        var staged = _changes.Upsert(new PendingChangeUpsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues, formRefs,
+            ParentCell: placement?.ParentCell, PlacementGroup: placement?.PlacementGroup));
         return new StageEditResult.Staged(staged);
     }
 
@@ -245,27 +245,27 @@ public sealed class EditOrchestrator : IEditOrchestrator
 
         var reservedFormKey = _sessionManager.ReserveFormKey(plugin);
         var groupId = Guid.NewGuid();
-        _changes.Upsert(
+        _changes.Upsert(new PendingChangeUpsert(
             reservedFormKey, plugin, recordType,
             new Dictionary<string, JsonElement> { [PendingChangeConstants.CreateFieldPath] = JsonSerializer.SerializeToElement<object?>(null) },
             source, null,
             new Dictionary<string, JsonElement>(),
-            formRefs: null,
-            changeType: PendingChangeConstants.CreateChangeType,
-            groupId: groupId,
-            parentCell: parentCell,
-            placementGroup: placementGroup);
+            FormRefs: null,
+            ChangeType: PendingChangeConstants.CreateChangeType,
+            GroupId: groupId,
+            ParentCell: parentCell,
+            PlacementGroup: placementGroup));
 
         if (templateFields != null)
         {
             var templateRefs = ExtractFormKeyRefs(templateFields, schemas, recordType);
-            _changes.Upsert(
+            _changes.Upsert(new PendingChangeUpsert(
                 reservedFormKey, plugin, recordType,
                 templateFields, source, null,
                 new Dictionary<string, JsonElement>(),
                 templateRefs,
-                changeType: PendingChangeConstants.FieldEditChangeType,
-                groupId: groupId);
+                ChangeType: PendingChangeConstants.FieldEditChangeType,
+                GroupId: groupId));
         }
 
         return new CreateRecordOutcome.Success(reservedFormKey, groupId);

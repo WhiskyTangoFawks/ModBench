@@ -8,21 +8,26 @@ public sealed record DrainResult(
     IReadOnlyList<PendingChange> Changes,
     ILookup<string, PendingFormRef> FormRefsByFormKey);
 
+/// <summary>
+/// One record's worth of staged field edits to insert or update in the pending-changes buffer.
+/// </summary>
+public sealed record PendingChangeUpsert(
+    string FormKey,
+    string Plugin,
+    string RecordType,
+    Dictionary<string, JsonElement> Fields,
+    string Source,
+    string? Description,
+    Dictionary<string, JsonElement> OldValues,
+    IReadOnlyList<PendingFormRef>? FormRefs = null,
+    string ChangeType = PendingChangeConstants.FieldEditChangeType,
+    Guid? GroupId = null,
+    string? ParentCell = null,
+    string? PlacementGroup = null);
+
 public interface IPendingChangeService
 {
-    IReadOnlyList<PendingChange> Upsert(
-        string formKey,
-        string plugin,
-        string recordType,
-        Dictionary<string, JsonElement> fields,
-        string source,
-        string? description,
-        Dictionary<string, JsonElement> oldValues,
-        IReadOnlyList<PendingFormRef>? formRefs = null,
-        string changeType = PendingChangeConstants.FieldEditChangeType,
-        Guid? groupId = null,
-        string? parentCell = null,
-        string? placementGroup = null);
+    IReadOnlyList<PendingChange> Upsert(PendingChangeUpsert change);
 
     /// <summary>
     /// Returns the GroupId of the first pending <c>$create</c> change whose FormKey is in <paramref name="formKeys"/>,

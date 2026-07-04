@@ -89,14 +89,14 @@ public sealed class PluginSaverSaveGroupTests
         var changes = DuckDbTestFactory.MakePendingChangeService();
         // Stage group spanning 2 plugins
         var groupId = Guid.NewGuid();
-        changes.Upsert("000001:A.esp", "A.esp", "npc_",
+        changes.Upsert(new PendingChangeUpsert("000001:A.esp", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null, new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            groupId: groupId);
-        changes.Upsert("000001:B.esp", "B.esp", "npc_",
+            GroupId: groupId));
+        changes.Upsert(new PendingChangeUpsert("000001:B.esp", "B.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null, new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            groupId: groupId);
+            GroupId: groupId));
 
         var session = new StubSession();
         string? firstTmpPath = null;
@@ -127,14 +127,14 @@ public sealed class PluginSaverSaveGroupTests
     {
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var groupId = Guid.NewGuid();
-        changes.Upsert("000001:A.esp", "A.esp", "npc_",
+        changes.Upsert(new PendingChangeUpsert("000001:A.esp", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null, new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            groupId: groupId);
-        changes.Upsert("000001:B.esp", "B.esp", "npc_",
+            GroupId: groupId));
+        changes.Upsert(new PendingChangeUpsert("000001:B.esp", "B.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null, new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            groupId: groupId);
+            GroupId: groupId));
 
         var session = new StubSession();
         var saver = new PluginSaver(changes, session);

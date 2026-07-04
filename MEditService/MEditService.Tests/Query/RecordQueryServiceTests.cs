@@ -431,10 +431,10 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         // Stage a pending change for this record
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var newVal = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement;
-        changes.Upsert(fk, TestPluginFixture.PluginName, "npc_",
+        changes.Upsert(new PendingChangeUpsert(fk, TestPluginFixture.PluginName, "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = newVal },
             "test", null,
-            new Dictionary<string, System.Text.Json.JsonElement>());
+            new Dictionary<string, System.Text.Json.JsonElement>()));
 
         var svcWithChanges = new RecordQueryService(_manager, changes, new SchemaReflector(), new ConflictClassifier());
         var compare = svcWithChanges.GetCompare(fk);
@@ -618,9 +618,9 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var changes = DuckDbTestFactory.MakePendingChangeService();
-            changes.Upsert(npcKey.ToString(), "Override.esp", "npc_",
+            changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
+                "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetPluginRecordTypes("Override.esp");
@@ -652,9 +652,9 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var changes = DuckDbTestFactory.MakePendingChangeService();
             // stage npcKey2 into Override.esp (not yet committed)
-            changes.Upsert(npcKey2.ToString(), "Override.esp", "npc_",
+            changes.Upsert(new PendingChangeUpsert(npcKey2.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
+                "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetPluginRecordTypes("Override.esp");
@@ -682,9 +682,9 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var changes = DuckDbTestFactory.MakePendingChangeService();
-            changes.Upsert(baseNpcKey.ToString(), "Override.esp", "npc_",
+            changes.Upsert(new PendingChangeUpsert(baseNpcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
+                "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetPluginRecordTypes("Override.esp");
@@ -711,9 +711,9 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var changes = DuckDbTestFactory.MakePendingChangeService();
-            changes.Upsert(npcKey.ToString(), "Override.esp", "npc_",
+            changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
+                "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetRecords(type: "npc_", plugin: "Override.esp", search: null, limit: 100, offset: 0);
@@ -742,9 +742,9 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var changes = DuckDbTestFactory.MakePendingChangeService();
-            changes.Upsert(npcKey.ToString(), "Override.esp", "npc_",
+            changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
+                "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetRecords(type: "npc_", plugin: "Override.esp", search: null, limit: 100, offset: 1);
@@ -759,9 +759,9 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         // "Unknown.esp" is not in _manager's Plugins list → FirstOrDefault returns null → ?? -1 fires.
         var fk = FormKey.Factory("000001:Fallout4.esm");
         var changes = DuckDbTestFactory.MakePendingChangeService();
-        changes.Upsert(fk.ToString(), "Unknown.esp", "npc_",
+        changes.Upsert(new PendingChangeUpsert(fk.ToString(), "Unknown.esp", "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-            "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
+            "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
         var svc = new RecordQueryService(_manager, changes, new SchemaReflector(), new ConflictClassifier());
 
         var result = svc.GetRecords(type: "npc_", plugin: "Unknown.esp", search: null, limit: 100, offset: 0);
@@ -779,9 +779,9 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         var fk = committed.Items[0].FormKey;
 
         var changes = DuckDbTestFactory.MakePendingChangeService();
-        changes.Upsert(fk, TestPluginFixture.PluginName, "npc_",
+        changes.Upsert(new PendingChangeUpsert(fk, TestPluginFixture.PluginName, "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-            "user", null, new Dictionary<string, System.Text.Json.JsonElement>());
+            "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
         var svc = new RecordQueryService(_manager, changes, new SchemaReflector(), new ConflictClassifier());
 
         var result = svc.GetRecords(type: "npc_", plugin: TestPluginFixture.PluginName, search: null, limit: 100, offset: 0);

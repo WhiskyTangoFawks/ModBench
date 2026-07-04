@@ -26,7 +26,7 @@ public sealed class PendingChangeServiceTests : IDisposable
         var fields = new Dictionary<string, JsonElement> { ["name"] = J("\"NewName\"") };
         var old = new Dictionary<string, JsonElement> { ["name"] = J("\"OldName\"") };
 
-        var changes = _svc.Upsert("ABC:000001:TestPlugin.esp", "TestPlugin.esp", "npc_", fields, "user", null, old);
+        var changes = _svc.Upsert(new PendingChangeUpsert("ABC:000001:TestPlugin.esp", "TestPlugin.esp", "npc_", fields, "user", null, old));
 
         Assert.Single(changes);
         Assert.Equal("ABC:000001:TestPlugin.esp", changes[0].FormKey);
@@ -41,10 +41,10 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void Upsert_SameFieldTwice_UpdatesNewValueKeepsOldValue()
     {
         var old = new Dictionary<string, JsonElement> { ["name"] = J("\"OldName\"") };
-        _svc.Upsert("FK1", "P.esp", "npc_",
-            new Dictionary<string, JsonElement> { ["name"] = J("\"First\"") }, "user", null, old);
-        _svc.Upsert("FK1", "P.esp", "npc_",
-            new Dictionary<string, JsonElement> { ["name"] = J("\"Second\"") }, "user", null, old);
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_",
+            new Dictionary<string, JsonElement> { ["name"] = J("\"First\"") }, "user", null, old));
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_",
+            new Dictionary<string, JsonElement> { ["name"] = J("\"Second\"") }, "user", null, old));
 
         var changes = _svc.GetChanges();
         Assert.Single(changes);
@@ -55,9 +55,9 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void Upsert_MissingOldValue_StoresNullOldValue()
     {
-        var changes = _svc.Upsert("FK1", "P.esp", "npc_",
+        var changes = _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_",
             new Dictionary<string, JsonElement> { ["name"] = J("\"New\"") }, "user", null,
-            new Dictionary<string, JsonElement>());
+            new Dictionary<string, JsonElement>()));
 
         Assert.Equal(JsonValueKind.Null, changes[0].OldValue.ValueKind);
     }
@@ -66,8 +66,8 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void GetChanges_FiltersByPlugin()
     {
         var old = new Dictionary<string, JsonElement> { ["name"] = J("\"Old\"") };
-        _svc.Upsert("FK", "A.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"A\"") }, "user", null, old);
-        _svc.Upsert("FK", "B.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"B\"") }, "user", null, old);
+        _svc.Upsert(new PendingChangeUpsert("FK", "A.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"A\"") }, "user", null, old));
+        _svc.Upsert(new PendingChangeUpsert("FK", "B.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"B\"") }, "user", null, old));
 
         var result = _svc.GetChanges(plugin: "A.esp");
 
@@ -79,8 +79,8 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void GetChanges_FiltersByFormKey()
     {
         var old = new Dictionary<string, JsonElement> { ["name"] = J("\"Old\"") };
-        _svc.Upsert("FK1", "P.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"A\"") }, "user", null, old);
-        _svc.Upsert("FK2", "P.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"B\"") }, "user", null, old);
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"A\"") }, "user", null, old));
+        _svc.Upsert(new PendingChangeUpsert("FK2", "P.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"B\"") }, "user", null, old));
 
         var result = _svc.GetChanges(formKey: "FK1");
 
@@ -92,8 +92,8 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void Revert_ByChangeId_RemovesChange()
     {
         var old = new Dictionary<string, JsonElement> { ["name"] = J("\"Old\"") };
-        var changes = _svc.Upsert("FK1", "P.esp", "npc_",
-            new Dictionary<string, JsonElement> { ["name"] = J("\"New\"") }, "user", null, old);
+        var changes = _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_",
+            new Dictionary<string, JsonElement> { ["name"] = J("\"New\"") }, "user", null, old));
 
         var removed = _svc.Revert(changes[0].Id);
 
@@ -115,11 +115,11 @@ public sealed class PendingChangeServiceTests : IDisposable
             ["name"] = J("\"Old\""),
             ["short_name"] = J("\"OldShort\""),
         };
-        _svc.Upsert("FK1", "P.esp", "npc_",
-            new Dictionary<string, JsonElement> { ["name"] = J("\"N\""), ["short_name"] = J("\"SN\"") }, "user", null, old2);
-        _svc.Upsert("FK2", "P.esp", "npc_",
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_",
+            new Dictionary<string, JsonElement> { ["name"] = J("\"N\""), ["short_name"] = J("\"SN\"") }, "user", null, old2));
+        _svc.Upsert(new PendingChangeUpsert("FK2", "P.esp", "npc_",
             new Dictionary<string, JsonElement> { ["name"] = J("\"N2\"") }, "user", null,
-            new Dictionary<string, JsonElement> { ["name"] = J("\"Old2\"") });
+            new Dictionary<string, JsonElement> { ["name"] = J("\"Old2\"") }));
 
         var removed = _svc.Revert(plugin: "P.esp", formKey: "FK1");
 
@@ -133,8 +133,8 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void RevertBulk_NullFilters_RemovesAll()
     {
         var old = new Dictionary<string, JsonElement> { ["name"] = J("\"Old\"") };
-        _svc.Upsert("FK1", "A.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"A\"") }, "user", null, old);
-        _svc.Upsert("FK2", "B.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"B\"") }, "user", null, old);
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"A\"") }, "user", null, old));
+        _svc.Upsert(new PendingChangeUpsert("FK2", "B.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"B\"") }, "user", null, old));
 
         var removed = _svc.Revert(plugin: null, formKey: null);
 
@@ -146,8 +146,8 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void DrainForPlugin_ReturnsAndClearsPluginChanges()
     {
         var old = new Dictionary<string, JsonElement> { ["name"] = J("\"Old\"") };
-        _svc.Upsert("FK1", "A.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"A\"") }, "user", null, old);
-        _svc.Upsert("FK1", "B.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"B\"") }, "user", null, old);
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"A\"") }, "user", null, old));
+        _svc.Upsert(new PendingChangeUpsert("FK1", "B.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"B\"") }, "user", null, old));
 
         var drained = _svc.DrainForPlugin("A.esp");
 
@@ -161,8 +161,8 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void GetPendingFields_ReturnsCurrentNewValues()
     {
         var old = new Dictionary<string, JsonElement> { ["name"] = J("\"Old\"") };
-        _svc.Upsert("FK1", "P.esp", "npc_",
-            new Dictionary<string, JsonElement> { ["name"] = J("\"New\"") }, "user", null, old);
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_",
+            new Dictionary<string, JsonElement> { ["name"] = J("\"New\"") }, "user", null, old));
 
         var pending = _svc.GetPendingFields("FK1", "P.esp");
 
@@ -180,8 +180,8 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void Upsert_WithDescription_DescriptionRoundTrips()
     {
-        _svc.Upsert("FK1", "P.esp", "npc_",
-            new() { ["name"] = J("\"x\"") }, "user", "My description", new());
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_",
+            new() { ["name"] = J("\"x\"") }, "user", "My description", new()));
         var changes = _svc.GetChanges();
         Assert.Equal("My description", changes[0].Description);
     }
@@ -189,8 +189,8 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void OnSessionUnloaded_DropsTable()
     {
-        _svc.Upsert("FK1", "P.esp", "npc_",
-            new() { ["name"] = J("\"x\"") }, "test", null, new());
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_",
+            new() { ["name"] = J("\"x\"") }, "test", null, new()));
 
         ((IPendingChangeLifecycle)_svc).OnSessionUnloaded();
 
@@ -213,8 +213,8 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void GetStagedFormKeys_ReturnsDistinctFormKeysWithRecordType()
     {
         var fields = new Dictionary<string, JsonElement> { ["name"] = J("\"X\""), ["level"] = J("1") };
-        _svc.Upsert("FK1", "Override.esp", "npc_", fields, "user", null, new());
-        _svc.Upsert("FK2", "Override.esp", "weap", new() { ["damage"] = J("10") }, "user", null, new());
+        _svc.Upsert(new PendingChangeUpsert("FK1", "Override.esp", "npc_", fields, "user", null, new()));
+        _svc.Upsert(new PendingChangeUpsert("FK2", "Override.esp", "weap", new() { ["damage"] = J("10") }, "user", null, new()));
 
         var result = _svc.GetStagedFormKeys("Override.esp");
 
@@ -227,7 +227,7 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void GetStagedFormKeys_DeduplicatesMultipleFieldsForSameRecord()
     {
         var fields = new Dictionary<string, JsonElement> { ["name"] = J("\"X\""), ["level"] = J("1") };
-        _svc.Upsert("FK1", "Override.esp", "npc_", fields, "user", null, new());
+        _svc.Upsert(new PendingChangeUpsert("FK1", "Override.esp", "npc_", fields, "user", null, new()));
 
         var result = _svc.GetStagedFormKeys("Override.esp");
 
@@ -238,8 +238,8 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void GetStagedFormKeys_FiltersByRecordType()
     {
-        _svc.Upsert("FK1", "Override.esp", "npc_", new() { ["name"] = J("\"X\"") }, "user", null, new());
-        _svc.Upsert("FK2", "Override.esp", "weap", new() { ["damage"] = J("10") }, "user", null, new());
+        _svc.Upsert(new PendingChangeUpsert("FK1", "Override.esp", "npc_", new() { ["name"] = J("\"X\"") }, "user", null, new()));
+        _svc.Upsert(new PendingChangeUpsert("FK2", "Override.esp", "weap", new() { ["damage"] = J("10") }, "user", null, new()));
 
         var result = _svc.GetStagedFormKeys("Override.esp", recordType: "npc_");
 
@@ -250,8 +250,8 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void GetStagedFormKeys_ExcludesOtherPlugins()
     {
-        _svc.Upsert("FK1", "A.esp", "npc_", new() { ["name"] = J("\"X\"") }, "user", null, new());
-        _svc.Upsert("FK2", "B.esp", "npc_", new() { ["name"] = J("\"Y\"") }, "user", null, new());
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_", new() { ["name"] = J("\"X\"") }, "user", null, new()));
+        _svc.Upsert(new PendingChangeUpsert("FK2", "B.esp", "npc_", new() { ["name"] = J("\"Y\"") }, "user", null, new()));
 
         var result = _svc.GetStagedFormKeys("A.esp");
 
@@ -269,8 +269,8 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void GetStagedFormKeys_NullRecordType_ReturnsAllFormKeys()
     {
-        _svc.Upsert("FK1", "A.esp", "npc_", new() { ["name"] = J("\"X\"") }, "user", null, new());
-        _svc.Upsert("FK2", "A.esp", "weap", new() { ["damage"] = J("10") }, "user", null, new());
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_", new() { ["name"] = J("\"X\"") }, "user", null, new()));
+        _svc.Upsert(new PendingChangeUpsert("FK2", "A.esp", "weap", new() { ["damage"] = J("10") }, "user", null, new()));
 
         var result = _svc.GetStagedFormKeys("A.esp", recordType: null);
 
@@ -286,14 +286,14 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void Revert_ByChangeId_ClearsPendingFormRefs()
     {
-        var changes = _svc.Upsert("FK1", "A.esp", "npc_",
+        var changes = _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_",
             new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(),
-            [RaceRef]);
+            [RaceRef]));
 
         _svc.Revert(changes[0].Id);
 
         // Re-stage without form refs so DrainForPlugin has a change to return
-        _svc.Upsert("FK1", "A.esp", "npc_", new() { ["name"] = J("\"Bob\"") }, "user", null, new());
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_", new() { ["name"] = J("\"Bob\"") }, "user", null, new()));
         var drained = _svc.DrainForPlugin("A.esp");
         Assert.Empty(drained.FormRefsByFormKey["FK1"]);
     }
@@ -301,15 +301,15 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void RevertBulk_ByPlugin_ClearsPendingFormRefsForThatPluginOnly()
     {
-        _svc.Upsert("FK1", "A.esp", "npc_",
-            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]);
-        _svc.Upsert("FK2", "B.esp", "npc_",
-            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]);
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]));
+        _svc.Upsert(new PendingChangeUpsert("FK2", "B.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]));
 
         _svc.Revert(plugin: "A.esp", formKey: null);
 
         // A.esp form refs gone — re-stage so drain has something
-        _svc.Upsert("FK1", "A.esp", "npc_", new() { ["name"] = J("\"Bob\"") }, "user", null, new());
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_", new() { ["name"] = J("\"Bob\"") }, "user", null, new()));
         var drainedA = _svc.DrainForPlugin("A.esp");
         Assert.Empty(drainedA.FormRefsByFormKey["FK1"]);
 
@@ -323,11 +323,11 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void RevertBulk_ByFormKey_CleansUpOnlyMatchingFormRefs()
     {
-        _svc.Upsert("FK1", "P.esp", "npc_",
-            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]);
-        _svc.Upsert("FK2", "P.esp", "npc_",
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]));
+        _svc.Upsert(new PendingChangeUpsert("FK2", "P.esp", "npc_",
             new() { ["race"] = J("\"000002:Fallout4.esm\"") }, "user", null, new(),
-            [new PendingFormRef("race", "race", "000002:Fallout4.esm")]);
+            [new PendingFormRef("race", "race", "000002:Fallout4.esm")]));
 
         _svc.Revert(plugin: "P.esp", formKey: "FK1");
 
@@ -346,8 +346,8 @@ public sealed class PendingChangeServiceTests : IDisposable
         var ref1 = new PendingFormRef("race", "race", "000001:Fallout4.esm");
         var ref2 = new PendingFormRef("race", "race", "000002:Fallout4.esm");
 
-        _svc.Upsert("FK1", "A.esp", "npc_", new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [ref1]);
-        _svc.Upsert("FK1", "A.esp", "npc_", new() { ["race"] = J("\"000002:Fallout4.esm\"") }, "user", null, new(), [ref2]);
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_", new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [ref1]));
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_", new() { ["race"] = J("\"000002:Fallout4.esm\"") }, "user", null, new(), [ref2]));
 
         var drained = _svc.DrainForPlugin("A.esp");
         var refs = drained.FormRefsByFormKey["FK1"].ToList();
@@ -358,9 +358,9 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void DrainForPlugin_ReturnsAndClearsFormRefs()
     {
-        _svc.Upsert("FK1", "A.esp", "npc_",
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_",
             new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(),
-            [RaceRef]);
+            [RaceRef]));
 
         var drained = _svc.DrainForPlugin("A.esp");
 
@@ -421,7 +421,7 @@ public sealed class PendingChangeServiceTests : IDisposable
         var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK2", "P.esp", "name") };
         var group = _svc.StageGroup("create", null, members);
         // standalone change
-        _svc.Upsert("FK3", "P.esp", "npc_", new() { ["level"] = J("5") }, "user", null, new());
+        _svc.Upsert(new PendingChangeUpsert("FK3", "P.esp", "npc_", new() { ["level"] = J("5") }, "user", null, new()));
 
         var grouped = _svc.GetChanges(groupId: group.Id);
 
@@ -475,7 +475,7 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void GetGroupIdForRecord_WhenStandalone_ReturnsNull()
     {
-        _svc.Upsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"x\"") }, "user", null, new());
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"x\"") }, "user", null, new()));
 
         Assert.Null(_svc.GetGroupIdForRecord("FK1", "P.esp"));
     }
@@ -485,10 +485,10 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void Upsert_ChangeType_DefaultIsFieldEditExplicitOverrides()
     {
-        _svc.Upsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"x\"") }, "user", null, new());
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"x\"") }, "user", null, new()));
         Assert.Equal("field_edit", _svc.GetChanges()[0].ChangeType);
 
-        _svc.Upsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"y\"") }, "user", null, new(), changeType: "create");
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"y\"") }, "user", null, new(), ChangeType: "create"));
         Assert.Equal("create", _svc.GetChanges()[0].ChangeType);
     }
 
@@ -514,7 +514,7 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void StageGroup_OnConflict_UpdatesSourceAndDescription()
     {
         // Manual edit on the field first
-        _svc.Upsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"manual\"") }, "user", "user note", new());
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"manual\"") }, "user", "user note", new()));
 
         // Stage group on the same field
         var members = new[] { new GroupMember("FK1", "P.esp", "npc_", "field_edit", "name", J("null"), J("\"group\""), "system") };
@@ -532,8 +532,8 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void RevertGroup_ClearsPendingFormRefsForGroupOwnedChanges()
     {
         // Upsert with form refs (writes pending_form_references rows)
-        _svc.Upsert("FK1", "A.esp", "npc_",
-            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]);
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, new(), [RaceRef]));
 
         // StageGroup on same field — ON CONFLICT takes ownership (group_id set)
         var members = new[] { new GroupMember("FK1", "A.esp", "npc_", "field_edit", "race", J("null"), J("\"000002:Fallout4.esm\"")) };
@@ -564,10 +564,10 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void Upsert_WithPlacement_RoundTripsParentCellAndGroup()
     {
-        _svc.Upsert("FK1", "P.esp", "refr",
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "refr",
             new() { ["$create"] = J("null") }, "user", null, new(),
-            changeType: "create",
-            parentCell: "001234:Fallout4.esm", placementGroup: "temporary");
+            ChangeType: "create",
+            ParentCell: "001234:Fallout4.esm", PlacementGroup: "temporary"));
 
         var change = _svc.GetChanges(formKey: "FK1")[0];
         Assert.Equal("001234:Fallout4.esm", change.ParentCell);
@@ -577,7 +577,7 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void Upsert_WithoutPlacement_DefaultsBothNull()
     {
-        _svc.Upsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"x\"") }, "user", null, new());
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"x\"") }, "user", null, new()));
 
         var change = _svc.GetChanges(formKey: "FK1")[0];
         Assert.Null(change.ParentCell);
@@ -587,10 +587,10 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void DrainForPlugin_PreservesPlacement()
     {
-        _svc.Upsert("FK1", "A.esp", "refr",
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "refr",
             new() { ["$create"] = J("null") }, "user", null, new(),
-            changeType: "create",
-            parentCell: "001234:Fallout4.esm", placementGroup: "persistent");
+            ChangeType: "create",
+            ParentCell: "001234:Fallout4.esm", PlacementGroup: "persistent"));
 
         var drained = _svc.DrainForPlugin("A.esp");
 

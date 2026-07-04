@@ -86,11 +86,11 @@ public sealed class ExecuteGroupSaveAsyncTests
         var svc = DuckDbTestFactory.MakePendingChangeService();
         var formRefs = new[] { new PendingFormRef("aggression", "aggression", "000002:Ref.esp") };
         var groupId = Guid.NewGuid();
-        svc.Upsert("000001:Test.esp", "A.esp", "npc_",
+        svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null,
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            formRefs, groupId: groupId);
+            formRefs, GroupId: groupId));
 
         await Assert.ThrowsAsync<IOException>(() =>
             svc.ExecuteGroupSaveAsync(groupId, _ =>
@@ -106,11 +106,11 @@ public sealed class ExecuteGroupSaveAsyncTests
     {
         var svc = DuckDbTestFactory.MakePendingChangeService();
         var groupId = Guid.NewGuid();
-        svc.Upsert("000001:Test.esp", "A.esp", "npc_",
+        svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\""), ["name"] = J("\"Bob\"") },
             "user", null,
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\""), ["name"] = J("\"Alice\"") },
-            groupId: groupId);
+            GroupId: groupId));
 
         IReadOnlyDictionary<string, IReadOnlyList<PendingChange>>? captured = null;
         await svc.ExecuteGroupSaveAsync(groupId, byPlugin =>
@@ -130,14 +130,14 @@ public sealed class ExecuteGroupSaveAsyncTests
     {
         var svc = DuckDbTestFactory.MakePendingChangeService();
         var groupId = Guid.NewGuid();
-        svc.Upsert("000001:Test.esp", "A.esp", "npc_",
+        svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null, new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            groupId: groupId);
-        svc.Upsert("000002:Test.esp", "B.esp", "npc_",
+            GroupId: groupId));
+        svc.Upsert(new PendingChangeUpsert("000002:Test.esp", "B.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null, new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            groupId: groupId);
+            GroupId: groupId));
 
         await svc.ExecuteGroupSaveAsync(groupId, _ => Task.FromResult(NoResults()));
 
@@ -163,11 +163,11 @@ public sealed class ExecuteGroupSaveAsyncTests
         var svc = DuckDbTestFactory.MakePendingChangeService();
         var formRefs = new[] { new PendingFormRef("aggression", "aggression", "000002:Ref.esp") };
         var groupId = Guid.NewGuid();
-        svc.Upsert("000001:Test.esp", "A.esp", "npc_",
+        svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null,
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            formRefs, groupId: groupId);
+            formRefs, GroupId: groupId));
 
         await svc.ExecuteGroupSaveAsync(groupId, _ => Task.FromResult(NoResults()));
 

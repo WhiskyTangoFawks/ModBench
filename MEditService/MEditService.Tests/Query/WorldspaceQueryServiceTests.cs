@@ -134,11 +134,11 @@ public class WorldspaceQueryServiceTests
     public void GetCellReferences_PendingCreated_AppearsUnderCell_InCorrectGroup()
     {
         var changes = DuckDbTestFactory.MakePendingChangeService();
-        changes.Upsert("1234:Patch.esp", "Patch.esp", "refr",
+        changes.Upsert(new PendingChangeUpsert("1234:Patch.esp", "Patch.esp", "refr",
             new() { [PendingChangeConstants.CreateFieldPath] = PendingChangeConstants.NullElement },
             "user", null, [],
-            changeType: PendingChangeConstants.CreateChangeType,
-            parentCell: "cell:Fallout4.esm", placementGroup: PendingChangeConstants.PlacementGroupPersistent);
+            ChangeType: PendingChangeConstants.CreateChangeType,
+            ParentCell: "cell:Fallout4.esm", PlacementGroup: PendingChangeConstants.PlacementGroupPersistent));
 
         var result = ServiceWithChanges(changes).GetCellReferences("Patch.esp", "cell:Fallout4.esm");
 
@@ -152,11 +152,11 @@ public class WorldspaceQueryServiceTests
     {
         var committed = new CellReferences([new PlacedSummary("dead:Mod.esp", null, null, "refr")], []);
         var changes = DuckDbTestFactory.MakePendingChangeService();
-        changes.Upsert("dead:Mod.esp", "Mod.esp", "refr",
+        changes.Upsert(new PendingChangeUpsert("dead:Mod.esp", "Mod.esp", "refr",
             new() { [PendingChangeConstants.DeleteFieldPath] = PendingChangeConstants.NullElement },
             "user", null, [],
-            changeType: PendingChangeConstants.DeleteChangeType,
-            parentCell: "cell:Fallout4.esm");
+            ChangeType: PendingChangeConstants.DeleteChangeType,
+            ParentCell: "cell:Fallout4.esm"));
 
         var result = ServiceWithChanges(changes, committed).GetCellReferences("Mod.esp", "cell:Fallout4.esm");
 
@@ -167,11 +167,11 @@ public class WorldspaceQueryServiceTests
     public void GetCellReferences_CopiedRef_AppearsUnderTargetCell_NotOtherCell()
     {
         var changes = DuckDbTestFactory.MakePendingChangeService();
-        changes.Upsert("5678:Patch.esp", "Patch.esp", "refr",
+        changes.Upsert(new PendingChangeUpsert("5678:Patch.esp", "Patch.esp", "refr",
             new() { [PendingChangeConstants.CreateFieldPath] = PendingChangeConstants.NullElement },
             "user", null, [],
-            changeType: PendingChangeConstants.CreateChangeType,
-            parentCell: "target:Fallout4.esm", placementGroup: PendingChangeConstants.PlacementGroupTemporary);
+            ChangeType: PendingChangeConstants.CreateChangeType,
+            ParentCell: "target:Fallout4.esm", PlacementGroup: PendingChangeConstants.PlacementGroupTemporary));
 
         var svc = ServiceWithChanges(changes);
 

@@ -105,115 +105,116 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         return (where, paramValues);
     }
 
-    public IReadOnlyList<PendingChange> Upsert(
-        string formKey,
-        string plugin,
-        string recordType,
-        Dictionary<string, JsonElement> fields,
-        string source,
-        string? description,
-        Dictionary<string, JsonElement> oldValues,
-        IReadOnlyList<PendingFormRef>? formRefs = null,
-        string changeType = PendingChangeConstants.FieldEditChangeType,
-        Guid? groupId = null,
-        string? parentCell = null,
-        string? placementGroup = null)
+    public IReadOnlyList<PendingChange> Upsert(PendingChangeUpsert change)
     {
         _sem.Wait();
         try
         {
-            formRefs ??= [];
             var conn = RequireConnection();
-            var refsByField = formRefs.ToLookup(r => r.StagedField);
-            var result = new List<PendingChange>(fields.Count);
+            var refsByField = (change.FormRefs ?? []).ToLookup(r => r.StagedField);
+            var result = new List<PendingChange>(change.Fields.Count);
             var now = DateTime.UtcNow;
 
             using var txn = conn.BeginTransaction();
 
-            if (groupId != null)
+            if (change.GroupId is { } groupId)
+                EnsureChangeGroup(conn, groupId, now);
+
+            foreach (var (field, newValue) in change.Fields)
             {
-                using var insGroup = conn.CreateCommand();
-                insGroup.CommandText = """
-                    INSERT INTO change_groups (id, operation, description, created_at)
-                    VALUES ($1, 'create', NULL, $2)
-                    ON CONFLICT DO NOTHING
-                    """;
-                insGroup.Parameters.Add(new DuckDBParameter { Value = groupId.Value.ToString() });
-                insGroup.Parameters.Add(new DuckDBParameter { Value = now });
-                insGroup.ExecuteNonQuery();
-            }
-
-            foreach (var (field, newValue) in fields)
-            {
-                var id = Guid.NewGuid().ToString();
-                var oldRaw = oldValues.TryGetValue(field, out var ov) ? ov.GetRawText() : "null";
-
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = """
-                    INSERT INTO pending_changes
-                        (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id, parent_cell, placement_group)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-                    ON CONFLICT (form_key, plugin, field_path) DO UPDATE SET
-                        new_value   = excluded.new_value,
-                        changed_at  = excluded.changed_at,
-                        source      = excluded.source,
-                        description = excluded.description,
-                        change_type = excluded.change_type,
-                        group_id    = COALESCE(pending_changes.group_id, excluded.group_id)
-                    RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id, parent_cell, placement_group
-                    """;
-                cmd.Parameters.Add(new DuckDBParameter { Value = id });
-                cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-                cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-                cmd.Parameters.Add(new DuckDBParameter { Value = field });
-                cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
-                cmd.Parameters.Add(new DuckDBParameter { Value = oldRaw });
-                cmd.Parameters.Add(new DuckDBParameter { Value = newValue.GetRawText() });
-                cmd.Parameters.Add(new DuckDBParameter { Value = source });
-                cmd.Parameters.Add(new DuckDBParameter { Value = description });
-                cmd.Parameters.Add(new DuckDBParameter { Value = now });
-                cmd.Parameters.Add(new DuckDBParameter { Value = changeType });
-                cmd.Parameters.Add(new DuckDBParameter { Value = groupId.HasValue ? (object)groupId.Value.ToString() : DBNull.Value });
-                cmd.Parameters.Add(new DuckDBParameter { Value = (object?)parentCell ?? DBNull.Value });
-                cmd.Parameters.Add(new DuckDBParameter { Value = (object?)placementGroup ?? DBNull.Value });
-
-                using var reader = cmd.ExecuteReader();
-                if (reader.Read())
-                    result.Add(ReadChange(reader));
-
-                // Replace pending form refs for this field
-                using var del = conn.CreateCommand();
-                del.CommandText = """
-                    DELETE FROM pending_form_references
-                    WHERE source_form_key = $1 AND source_plugin = $2 AND staged_field = $3
-                    """;
-                del.Parameters.Add(new DuckDBParameter { Value = formKey });
-                del.Parameters.Add(new DuckDBParameter { Value = plugin });
-                del.Parameters.Add(new DuckDBParameter { Value = field });
-                del.ExecuteNonQuery();
-
-                foreach (var r in refsByField[field])
-                {
-                    using var ins = conn.CreateCommand();
-                    ins.CommandText = """
-                        INSERT INTO pending_form_references
-                            (source_form_key, source_plugin, target_form_key, field_path, staged_field, record_type)
-                        VALUES ($1, $2, $3, $4, $5, $6)
-                        """;
-                    ins.Parameters.Add(new DuckDBParameter { Value = formKey });
-                    ins.Parameters.Add(new DuckDBParameter { Value = plugin });
-                    ins.Parameters.Add(new DuckDBParameter { Value = r.TargetFormKey });
-                    ins.Parameters.Add(new DuckDBParameter { Value = r.FieldPath });
-                    ins.Parameters.Add(new DuckDBParameter { Value = field });
-                    ins.Parameters.Add(new DuckDBParameter { Value = recordType });
-                    ins.ExecuteNonQuery();
-                }
+                if (UpsertField(conn, change, field, newValue, now) is { } staged)
+                    result.Add(staged);
+                ReplacePendingFormRefs(conn, change, field, refsByField[field]);
             }
             txn.Commit();
 
             return result;
         }
         finally { _sem.Release(); }
+    }
+
+    private static void EnsureChangeGroup(DuckDBConnection conn, Guid groupId, DateTime now)
+    {
+        using var insGroup = conn.CreateCommand();
+        insGroup.CommandText = """
+            INSERT INTO change_groups (id, operation, description, created_at)
+            VALUES ($1, 'create', NULL, $2)
+            ON CONFLICT DO NOTHING
+            """;
+        insGroup.Parameters.Add(new DuckDBParameter { Value = groupId.ToString() });
+        insGroup.Parameters.Add(new DuckDBParameter { Value = now });
+        insGroup.ExecuteNonQuery();
+    }
+
+    private static PendingChange? UpsertField(
+        DuckDBConnection conn, PendingChangeUpsert change, string field, JsonElement newValue, DateTime now)
+    {
+        var id = Guid.NewGuid().ToString();
+        var oldRaw = change.OldValues.TryGetValue(field, out var ov) ? ov.GetRawText() : "null";
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO pending_changes
+                (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id, parent_cell, placement_group)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            ON CONFLICT (form_key, plugin, field_path) DO UPDATE SET
+                new_value   = excluded.new_value,
+                changed_at  = excluded.changed_at,
+                source      = excluded.source,
+                description = excluded.description,
+                change_type = excluded.change_type,
+                group_id    = COALESCE(pending_changes.group_id, excluded.group_id)
+            RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id, parent_cell, placement_group
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = id });
+        cmd.Parameters.Add(new DuckDBParameter { Value = change.FormKey });
+        cmd.Parameters.Add(new DuckDBParameter { Value = change.Plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = field });
+        cmd.Parameters.Add(new DuckDBParameter { Value = change.RecordType });
+        cmd.Parameters.Add(new DuckDBParameter { Value = oldRaw });
+        cmd.Parameters.Add(new DuckDBParameter { Value = newValue.GetRawText() });
+        cmd.Parameters.Add(new DuckDBParameter { Value = change.Source });
+        cmd.Parameters.Add(new DuckDBParameter { Value = change.Description });
+        cmd.Parameters.Add(new DuckDBParameter { Value = now });
+        cmd.Parameters.Add(new DuckDBParameter { Value = change.ChangeType });
+        cmd.Parameters.Add(new DuckDBParameter { Value = change.GroupId.HasValue ? (object)change.GroupId.Value.ToString() : DBNull.Value });
+        cmd.Parameters.Add(new DuckDBParameter { Value = (object?)change.ParentCell ?? DBNull.Value });
+        cmd.Parameters.Add(new DuckDBParameter { Value = (object?)change.PlacementGroup ?? DBNull.Value });
+
+        using var reader = cmd.ExecuteReader();
+        return reader.Read() ? ReadChange(reader) : null;
+    }
+
+    // Replace pending form refs for this field
+    private static void ReplacePendingFormRefs(
+        DuckDBConnection conn, PendingChangeUpsert change, string field, IEnumerable<PendingFormRef> fieldRefs)
+    {
+        using var del = conn.CreateCommand();
+        del.CommandText = """
+            DELETE FROM pending_form_references
+            WHERE source_form_key = $1 AND source_plugin = $2 AND staged_field = $3
+            """;
+        del.Parameters.Add(new DuckDBParameter { Value = change.FormKey });
+        del.Parameters.Add(new DuckDBParameter { Value = change.Plugin });
+        del.Parameters.Add(new DuckDBParameter { Value = field });
+        del.ExecuteNonQuery();
+
+        foreach (var r in fieldRefs)
+        {
+            using var ins = conn.CreateCommand();
+            ins.CommandText = """
+                INSERT INTO pending_form_references
+                    (source_form_key, source_plugin, target_form_key, field_path, staged_field, record_type)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                """;
+            ins.Parameters.Add(new DuckDBParameter { Value = change.FormKey });
+            ins.Parameters.Add(new DuckDBParameter { Value = change.Plugin });
+            ins.Parameters.Add(new DuckDBParameter { Value = r.TargetFormKey });
+            ins.Parameters.Add(new DuckDBParameter { Value = r.FieldPath });
+            ins.Parameters.Add(new DuckDBParameter { Value = field });
+            ins.Parameters.Add(new DuckDBParameter { Value = change.RecordType });
+            ins.ExecuteNonQuery();
+        }
     }
 
     public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? groupId = null)
