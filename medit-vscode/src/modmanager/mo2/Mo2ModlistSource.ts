@@ -39,6 +39,8 @@ const NEXUS_SLUGS: Record<string, string> = {
  *  ModOrganizer.ini, mods/ and profiles/ — i.e. the open VS Code workspace.
  *  Reads/writes the active profile; all writes are byte-faithful. */
 export class Mo2ModlistSource implements IModlistSource {
+  private modlistMutex: Promise<void> = Promise.resolve();
+
   constructor(private readonly instanceRoot: string) {}
 
   private get iniPath(): string {
@@ -50,9 +52,15 @@ export class Mo2ModlistSource implements IModlistSource {
     return join(this.instanceRoot, 'profiles', profile, 'modlist.txt');
   }
 
-  private async modifyModlist(fn: (text: string) => string): Promise<void> {
-    const path = await this.modlistPath();
-    await writeFile(path, fn(await readFile(path, 'utf8')));
+  private modifyModlist(fn: (text: string) => string): Promise<void> {
+    const task = this.modlistMutex.then(async () => {
+      const path = await this.modlistPath();
+      await writeFile(path, fn(await readFile(path, 'utf8')));
+    });
+    // Chain tail must never stay rejected, or every later call would hang forever
+    // waiting on a dead link — only the caller's own `task` should see the error.
+    this.modlistMutex = task.catch(() => undefined);
+    return task;
   }
 
   async readModlist(): Promise<ModlistEntry[]> {

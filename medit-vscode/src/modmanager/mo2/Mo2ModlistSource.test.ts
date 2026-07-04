@@ -84,6 +84,25 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(entries[0].name).toBe('Cracked and Smudged Pip-Boy Screen');
   });
 
+  it('serializes overlapping modifyModlist calls so neither mutation is lost', async () => {
+    await Promise.all([
+      src.setEnabled('Harder VATS', true),
+      src.setEnabled('ENBoost - 12k', false),
+    ]);
+    const after = await readFile(modlistPath(), 'utf8');
+    expect(after).toContain('+Harder VATS');
+    expect(after).toContain('-ENBoost - 12k');
+  });
+
+  it('a rejected mutation does not block subsequent mutations from running', async () => {
+    await expect(src.insertSeparator('New Group', 'Does Not Exist')).rejects.toThrow(
+      /not found/,
+    );
+    await src.setEnabled('Harder VATS', true);
+    const after = await readFile(modlistPath(), 'utf8');
+    expect(after).toContain('+Harder VATS');
+  });
+
   it('readPluginOrder tolerates a BOM and blank/whitespace lines', async () => {
     const path = join(dir, 'profiles', 'Default', 'plugins.txt');
     await writeFile(path, '﻿# header\r\n*Foo.esp\r\n\r\n   \r\nBar.esp\r\n');
