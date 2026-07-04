@@ -150,26 +150,23 @@ public sealed class ConflictClassifier : IConflictClassifier
                   je.ValueKind == System.Text.Json.JsonValueKind.Array
                 ? (System.Text.Json.JsonElement?)je : null);
 
-        var children = new List<FieldDiff>();
+        var builder = new ArrayChildrenBuilder(elementMeta, arrays, masterPlugin, records, logger, maxChildren, parentFieldName);
+        var children = elementMeta.IsSortable ? builder.BuildSorted() : builder.BuildPositional();
+        return children is { Count: > 0 } ? children : null;
+    }
 
-        FieldDiff MakeChild(string label, Dictionary<string, object?> subValues)
-        {
-            var fieldWinner = records
-                .Where(r => subValues.GetValueOrDefault(r.Plugin) != null)
-                .MaxBy(r => r.LoadOrderIndex)!;
-            var winnerValue = subValues[fieldWinner.Plugin];
-            var cellStates = ComputeCellStates(label, subValues, masterPlugin, records, []);
-            var childChildren = elementMeta.Fields != null
-                ? BuildStructChildren(elementMeta.Fields, subValues, masterPlugin, records, logger)
-                : null;
-            return new FieldDiff(label, subValues, fieldWinner.Plugin, winnerValue, cellStates, childChildren);
-        }
-
-        void WarnTooLarge(int count) => logger.LogWarning(
-            "Array field {Field} on {FormKey} has {Count} elements across plugins — exceeding MaxArrayChildCount ({Max}), falling back to opaque display",
-            parentFieldName, records[0].FormKey, count, maxChildren);
-
-        if (elementMeta.IsSortable)
+    // One array field's per-element diff expansion: sorted arrays diff by element key
+    // (union across plugins), unsorted arrays diff by position.
+    private sealed class ArrayChildrenBuilder(
+        FieldMetadata elementMeta,
+        Dictionary<string, System.Text.Json.JsonElement?> arrays,
+        string masterPlugin,
+        IReadOnlyList<RecordDetail> records,
+        ILogger logger,
+        int maxChildren,
+        string parentFieldName)
+    {
+        public List<FieldDiff>? BuildSorted()
         {
             var union = records
                 .Where(r => arrays.GetValueOrDefault(r.Plugin) != null)
@@ -184,19 +181,9 @@ public sealed class ConflictClassifier : IConflictClassifier
                 return null;
             }
 
-            // One EnumerateArray pass per plugin; avoids O(u×p×e) scan per key below.
-            var lookups = new Dictionary<string, Dictionary<string, object?>>();
-            foreach (var kv in arrays.Where(kv => kv.Value != null))
-            {
-                var pluginLookup = new Dictionary<string, object?>(StringComparer.Ordinal);
-                foreach (var el in kv.Value!.Value.EnumerateArray())
-                {
-                    var k = el.GetString();
-                    if (k != null) pluginLookup.TryAdd(k, el); // keep first on dup key, matching original FirstOrDefault
-                }
-                lookups[kv.Key] = pluginLookup;
-            }
+            var lookups = BuildPluginLookups();
 
+            var children = new List<FieldDiff>();
             foreach (var key in union)
             {
                 var subValues = arrays.ToDictionary(
@@ -206,8 +193,10 @@ public sealed class ConflictClassifier : IConflictClassifier
 
                 children.Add(MakeChild(key, subValues));
             }
+            return children;
         }
-        else
+
+        public List<FieldDiff>? BuildPositional()
         {
             var maxLen = arrays.Values
                 .Where(v => v != null)
@@ -222,6 +211,7 @@ public sealed class ConflictClassifier : IConflictClassifier
                 return null;
             }
 
+            var children = new List<FieldDiff>();
             for (var i = 0; i < maxLen; i++)
             {
                 var subValues = arrays.ToDictionary(
@@ -235,9 +225,42 @@ public sealed class ConflictClassifier : IConflictClassifier
 
                 children.Add(MakeChild($"[{i}]", subValues));
             }
+            return children;
         }
 
-        return children.Count > 0 ? children : null;
+        // One EnumerateArray pass per plugin; avoids O(u×p×e) scan per key in BuildSorted.
+        private Dictionary<string, Dictionary<string, object?>> BuildPluginLookups()
+        {
+            var lookups = new Dictionary<string, Dictionary<string, object?>>();
+            foreach (var kv in arrays.Where(kv => kv.Value != null))
+            {
+                var pluginLookup = new Dictionary<string, object?>(StringComparer.Ordinal);
+                foreach (var el in kv.Value!.Value.EnumerateArray())
+                {
+                    var k = el.GetString();
+                    if (k != null) pluginLookup.TryAdd(k, el); // keep first on dup key, matching original FirstOrDefault
+                }
+                lookups[kv.Key] = pluginLookup;
+            }
+            return lookups;
+        }
+
+        private FieldDiff MakeChild(string label, Dictionary<string, object?> subValues)
+        {
+            var fieldWinner = records
+                .Where(r => subValues.GetValueOrDefault(r.Plugin) != null)
+                .MaxBy(r => r.LoadOrderIndex)!;
+            var winnerValue = subValues[fieldWinner.Plugin];
+            var cellStates = ComputeCellStates(label, subValues, masterPlugin, records, []);
+            var childChildren = elementMeta.Fields != null
+                ? BuildStructChildren(elementMeta.Fields, subValues, masterPlugin, records, logger)
+                : null;
+            return new FieldDiff(label, subValues, fieldWinner.Plugin, winnerValue, cellStates, childChildren);
+        }
+
+        private void WarnTooLarge(int count) => logger.LogWarning(
+            "Array field {Field} on {FormKey} has {Count} elements across plugins — exceeding MaxArrayChildCount ({Max}), falling back to opaque display",
+            parentFieldName, records[0].FormKey, count, maxChildren);
     }
 
     private static List<FieldDiff>? BuildStructChildren(
@@ -290,7 +313,6 @@ public sealed class ConflictClassifier : IConflictClassifier
         HashSet<string> sortedArrays)
     {
         var isSorted = sortedArrays.Contains(fieldName);
-        var masterValue = values.GetValueOrDefault(masterPlugin);
 
         // Field winner: highest load-order plugin with a non-null value for this field.
         var fieldWinner = records
@@ -305,37 +327,53 @@ public sealed class ConflictClassifier : IConflictClassifier
         {
             if (plugin == masterPlugin) continue;
 
-            var pluginValue = values.GetValueOrDefault(plugin);
-            if (pluginValue == null) continue;
-
-            if (ValuesEqual(pluginValue, masterValue, isSorted))
-            {
-                cellStates[plugin] = ConflictThis.IdenticalToMaster;
-                continue;
-            }
-
-            if (plugin == fieldWinner.Plugin)
-            {
-                var contested = records
-                    .Where(r => r.Plugin != masterPlugin && r.Plugin != plugin)
-                    .Any(r =>
-                    {
-                        var v = values.GetValueOrDefault(r.Plugin);
-                        return v != null && !ValuesEqual(v, pluginValue, isSorted);
-                    });
-                cellStates[plugin] = contested ? ConflictThis.ConflictWins : ConflictThis.Override;
-            }
-            else
-            {
-                var fieldWinnerValue = values[fieldWinner.Plugin];
-                cellStates[plugin] = !ValuesEqual(pluginValue, fieldWinnerValue, isSorted)
-                    ? ConflictThis.ConflictLoses
-                    : ConflictThis.Override;
-            }
+            if (ClassifyCell(plugin, values, fieldWinner, records, masterPlugin, isSorted) is { } state)
+                cellStates[plugin] = state;
         }
 
         return cellStates;
     }
+
+    // One plugin's cell state for one field; null when the plugin has no value for the field.
+    private static ConflictThis? ClassifyCell(
+        string plugin,
+        Dictionary<string, object?> values,
+        RecordDetail fieldWinner,
+        IReadOnlyList<RecordDetail> records,
+        string masterPlugin,
+        bool isSorted)
+    {
+        var pluginValue = values.GetValueOrDefault(plugin);
+        if (pluginValue == null) return null;
+
+        if (ValuesEqual(pluginValue, values.GetValueOrDefault(masterPlugin), isSorted))
+            return ConflictThis.IdenticalToMaster;
+
+        if (plugin == fieldWinner.Plugin)
+            return IsContested(records, values, masterPlugin, plugin, pluginValue, isSorted)
+                ? ConflictThis.ConflictWins
+                : ConflictThis.Override;
+
+        return !ValuesEqual(pluginValue, values[fieldWinner.Plugin], isSorted)
+            ? ConflictThis.ConflictLoses
+            : ConflictThis.Override;
+    }
+
+    // True when another non-master plugin carries a different value than the field winner's.
+    private static bool IsContested(
+        IReadOnlyList<RecordDetail> records,
+        Dictionary<string, object?> values,
+        string masterPlugin,
+        string winnerPlugin,
+        object? winnerValue,
+        bool isSorted) =>
+        records
+            .Where(r => r.Plugin != masterPlugin && r.Plugin != winnerPlugin)
+            .Any(r =>
+            {
+                var v = values.GetValueOrDefault(r.Plugin);
+                return v != null && !ValuesEqual(v, winnerValue, isSorted);
+            });
 
     private static Dictionary<string, object?> IndexByName(IReadOnlyList<FieldValue> fields) =>
         fields.ToDictionary(f => f.Metadata.Name, f => f.Value);
