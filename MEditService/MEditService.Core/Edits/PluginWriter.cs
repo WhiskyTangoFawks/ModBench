@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
@@ -273,14 +274,25 @@ public sealed class PluginWriter : IPluginWriter
                 continue;
             }
 
-            foreach (var change in fieldChanges)
+            ApplyFieldsToRecord(record, fieldChanges, schemas, applied, readOnly, notFound);
+        }
+    }
+
+    private static void ApplyFieldsToRecord(
+        IMajorRecord record,
+        List<PendingChange> fieldChanges,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        List<string> applied,
+        List<string> readOnly,
+        List<string> notFound)
+    {
+        foreach (var change in fieldChanges)
+        {
+            switch (TryApplyField(record, change, schemas))
             {
-                switch (TryApplyField(record, change, schemas))
-                {
-                    case ApplyOutcome.Applied: applied.Add(change.FieldPath); break;
-                    case ApplyOutcome.ReadOnly: readOnly.Add(change.FieldPath); break;
-                    case ApplyOutcome.NotFound: notFound.Add(change.FieldPath); break;
-                }
+                case ApplyOutcome.Applied: applied.Add(change.FieldPath); break;
+                case ApplyOutcome.ReadOnly: readOnly.Add(change.FieldPath); break;
+                case ApplyOutcome.NotFound: notFound.Add(change.FieldPath); break;
             }
         }
     }
@@ -353,36 +365,10 @@ public sealed class PluginWriter : IPluginWriter
             var renumberChange = group.FirstOrDefault(c => c.ChangeType == PendingChangeConstants.RenumberChangeType);
             if (renumberChange == null) continue;
 
-            var oldFormKeyStr = renumberChange.OldValue.GetString()!;
-            var newFormKeyStr = renumberChange.NewValue.GetString()!;
-
-            if (!FormKey.TryFactory(oldFormKeyStr, out var oldFormKey) ||
-                !FormKey.TryFactory(newFormKeyStr, out var newFormKey))
-            {
+            if (TryRenumberRecord(mod, schemas, renumberChange, allMappings))
+                applied.Add(renumberChange.FieldPath);
+            else
                 notFound.Add(renumberChange.FieldPath);
-                continue;
-            }
-
-            if (!schemas.TryGetValue(renumberChange.RecordType, out var schema) ||
-                schema.AddExisting == null || schema.Remove == null)
-            {
-                notFound.Add(renumberChange.FieldPath);
-                continue;
-            }
-
-            var oldRecord = mod.EnumerateMajorRecords()
-                .FirstOrDefault(r => r.FormKey == oldFormKey);
-            if (oldRecord == null)
-            {
-                notFound.Add(renumberChange.FieldPath);
-                continue;
-            }
-
-            var newRecord = (IMajorRecord)oldRecord.Duplicate(newFormKey);
-            schema.AddExisting(mod, newRecord);
-            schema.Remove(mod, oldFormKey);
-            allMappings[oldFormKey] = newFormKey;
-            applied.Add(renumberChange.FieldPath);
         }
 
         // Single pass: remap all intra-plugin FormLinks across all renumber operations.
@@ -391,6 +377,30 @@ public sealed class PluginWriter : IPluginWriter
         if (allMappings.Count > 0)
             foreach (var rec in mod.EnumerateMajorRecords())
                 rec.RemapLinks(allMappings);
+    }
+
+    private static bool TryRenumberRecord(
+        IMod mod, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        PendingChange renumberChange, Dictionary<FormKey, FormKey> allMappings)
+    {
+        if (!FormKey.TryFactory(renumberChange.OldValue.GetString()!, out var oldFormKey) ||
+            !FormKey.TryFactory(renumberChange.NewValue.GetString()!, out var newFormKey))
+            return false;
+
+        if (!schemas.TryGetValue(renumberChange.RecordType, out var schema) ||
+            schema.AddExisting == null || schema.Remove == null)
+            return false;
+
+        var oldRecord = mod.EnumerateMajorRecords()
+            .FirstOrDefault(r => r.FormKey == oldFormKey);
+        if (oldRecord == null)
+            return false;
+
+        var newRecord = (IMajorRecord)oldRecord.Duplicate(newFormKey);
+        schema.AddExisting(mod, newRecord);
+        schema.Remove(mod, oldFormKey);
+        allMappings[oldFormKey] = newFormKey;
+        return true;
     }
 
     private enum ApplyOutcome { Applied, ReadOnly, NotFound }
@@ -484,22 +494,31 @@ public sealed class PluginWriter : IPluginWriter
 
         // Route by path shape: "VMAD\<ScriptName>" is script-level, "VMAD\<ScriptName>\<Prop>" property-level.
         if (VmadPath.TryParseScript(change.FieldPath, out var scriptOnly))
-        {
-            var adapter = vmadRecord.VirtualMachineAdapter;
-            return opName switch
-            {
-                "add_script" => AddScript(vmadRecord, scriptOnly, op),
-                "remove_script" => RemoveScript(adapter, scriptOnly),
-                "set_flags" => SetScriptFlags(adapter, scriptOnly, op),
-                _ => ApplyOutcome.NotFound,
-            };
-        }
+            return ApplyScriptLevelOp(vmadRecord, scriptOnly, opName, op);
 
         if (!VmadPath.TryParse(change.FieldPath, out var scriptName, out var propName))
             return ApplyOutcome.NotFound;
 
-        var vmad = vmadRecord.VirtualMachineAdapter;
-        var script = vmad?.Scripts.FirstOrDefault(s =>
+        return ApplyPropertyLevelOp(vmadRecord, scriptName, propName, opName, op);
+    }
+
+    private static ApplyOutcome ApplyScriptLevelOp(
+        IHaveVirtualMachineAdapter vmadRecord, string scriptName, string opName, JsonElement op)
+    {
+        var adapter = vmadRecord.VirtualMachineAdapter;
+        return opName switch
+        {
+            "add_script" => AddScript(vmadRecord, scriptName, op),
+            "remove_script" => RemoveScript(adapter, scriptName),
+            "set_flags" => SetScriptFlags(adapter, scriptName, op),
+            _ => ApplyOutcome.NotFound,
+        };
+    }
+
+    private static ApplyOutcome ApplyPropertyLevelOp(
+        IHaveVirtualMachineAdapter vmadRecord, string scriptName, string propName, string opName, JsonElement op)
+    {
+        var script = vmadRecord.VirtualMachineAdapter?.Scripts.FirstOrDefault(s =>
             string.Equals(s.Name, scriptName, StringComparison.OrdinalIgnoreCase));
         if (script == null)
             return ApplyOutcome.NotFound;
@@ -665,23 +684,25 @@ public sealed class PluginWriter : IPluginWriter
     }
 
     // Empty property of the given VMAD type; value is filled separately via ApplyValue.
-    // Returns null for unknown / non-editable (Variable) types.
-    private static ScriptProperty? BuildDefaultProperty(string type) => type switch
+    // Unknown / non-editable (Variable) types are absent, so BuildDefaultProperty returns null.
+    private static readonly Dictionary<string, Func<ScriptProperty>> DefaultPropertyFactories = new(StringComparer.Ordinal)
     {
-        "Bool" => new ScriptBoolProperty(),
-        "Int" => new ScriptIntProperty(),
-        "Float" => new ScriptFloatProperty(),
-        "String" => new ScriptStringProperty { Data = "" },
-        "Object" => new ScriptObjectProperty { Alias = -1 },
-        "ArrayOfBool" => new ScriptBoolListProperty(),
-        "ArrayOfInt" => new ScriptIntListProperty(),
-        "ArrayOfFloat" => new ScriptFloatListProperty(),
-        "ArrayOfString" => new ScriptStringListProperty(),
-        "ArrayOfObject" => new ScriptObjectListProperty(),
-        "Struct" => new ScriptStructProperty(),
-        "ArrayOfStruct" => new ScriptStructListProperty(),
-        _ => null,
+        ["Bool"] = () => new ScriptBoolProperty(),
+        ["Int"] = () => new ScriptIntProperty(),
+        ["Float"] = () => new ScriptFloatProperty(),
+        ["String"] = () => new ScriptStringProperty { Data = "" },
+        ["Object"] = () => new ScriptObjectProperty { Alias = -1 },
+        ["ArrayOfBool"] = () => new ScriptBoolListProperty(),
+        ["ArrayOfInt"] = () => new ScriptIntListProperty(),
+        ["ArrayOfFloat"] = () => new ScriptFloatListProperty(),
+        ["ArrayOfString"] = () => new ScriptStringListProperty(),
+        ["ArrayOfObject"] = () => new ScriptObjectListProperty(),
+        ["Struct"] = () => new ScriptStructProperty(),
+        ["ArrayOfStruct"] = () => new ScriptStructListProperty(),
     };
+
+    private static ScriptProperty? BuildDefaultProperty(string type) =>
+        DefaultPropertyFactories.TryGetValue(type, out var make) ? make() : null;
 
     // Like ParseMemberFlags but defaults a new property to Edited (matches xEdit's add default).
     private static ScriptProperty.Flag ParseStructOpFlags(JsonElement op) =>
@@ -784,12 +805,29 @@ public sealed class PluginWriter : IPluginWriter
     private static bool TryBuildMemberProperty(JsonElement node, out ScriptProperty prop)
     {
         prop = null!;
-        if (node.ValueKind != JsonValueKind.Object
-            || !node.TryGetProperty("name", out var nameEl) || nameEl.GetString() is not string name
-            || !node.TryGetProperty("type", out var typeEl) || typeEl.GetString() is not string type)
-            return false;
+        if (node.ValueKind != JsonValueKind.Object) return false;
+        if (!TryGetStringProperty(node, "name", out var name)) return false;
+        if (!TryGetStringProperty(node, "type", out var type)) return false;
 
         var flags = ParseMemberFlags(node);
+        return type switch
+        {
+            "Object" => TryBuildObjectMember(node, name, flags, out prop),
+            "Struct" => TryBuildStructMember(node, name, flags, out prop),
+            _ => TryBuildScalarMember(node, type, name, flags, out prop),
+        };
+    }
+
+    private static bool TryGetStringProperty(JsonElement node, string propertyName, [NotNullWhen(true)] out string? value)
+    {
+        value = node.TryGetProperty(propertyName, out var el) ? el.GetString() : null;
+        return value != null;
+    }
+
+    private static bool TryBuildScalarMember(
+        JsonElement node, string type, string name, ScriptProperty.Flag flags, out ScriptProperty prop)
+    {
+        prop = null!;
         switch (type)
         {
             case "Bool" when node.TryGetProperty("boolValue", out var v):
@@ -800,30 +838,41 @@ public sealed class PluginWriter : IPluginWriter
                 prop = new ScriptFloatProperty { Name = name, Flags = flags, Data = v.GetSingle() }; break;
             case "String" when node.TryGetProperty("stringValue", out var v):
                 prop = new ScriptStringProperty { Name = name, Flags = flags, Data = v.GetString()! }; break;
-            case "Object":
-                // Struct member Object nodes carry formKeyValue/aliasValue (the VmadPropertyNode
-                // wire shape), distinct from the {formKey, alias} shape used for top-level edits.
-                if (!node.TryGetProperty("formKeyValue", out var fkEl) || fkEl.GetString() is not string fkStr
-                    || !FormKey.TryFactory(fkStr, out var fk))
-                    return false;
-                var alias = node.TryGetProperty("aliasValue", out var aEl) && aEl.ValueKind == JsonValueKind.Number
-                    ? aEl.GetInt16()
-                    : (short)0;
-                var obj = new ScriptObjectProperty { Name = name, Flags = flags, Alias = alias };
-                obj.Object.SetTo(fk);
-                prop = obj;
-                break;
-            case "Struct" when node.TryGetProperty("members", out var nested):
-                if (!TryBuildMembers(nested, out var nestedBuilt)) return false;
-                var wrapper = new ScriptEntry();
-                foreach (var m in nestedBuilt) wrapper.Properties.Add(m);
-                var sp = new ScriptStructProperty { Name = name, Flags = flags };
-                sp.Members.Add(wrapper);
-                prop = sp;
-                break;
             default:
                 return false;
         }
+        return true;
+    }
+
+    // Struct member Object nodes carry formKeyValue/aliasValue (the VmadPropertyNode
+    // wire shape), distinct from the {formKey, alias} shape used for top-level edits.
+    private static bool TryBuildObjectMember(
+        JsonElement node, string name, ScriptProperty.Flag flags, out ScriptProperty prop)
+    {
+        prop = null!;
+        if (!node.TryGetProperty("formKeyValue", out var fkEl) || fkEl.GetString() is not string fkStr
+            || !FormKey.TryFactory(fkStr, out var fk))
+            return false;
+        var alias = node.TryGetProperty("aliasValue", out var aEl) && aEl.ValueKind == JsonValueKind.Number
+            ? aEl.GetInt16()
+            : (short)0;
+        var obj = new ScriptObjectProperty { Name = name, Flags = flags, Alias = alias };
+        obj.Object.SetTo(fk);
+        prop = obj;
+        return true;
+    }
+
+    private static bool TryBuildStructMember(
+        JsonElement node, string name, ScriptProperty.Flag flags, out ScriptProperty prop)
+    {
+        prop = null!;
+        if (!node.TryGetProperty("members", out var nested)) return false;
+        if (!TryBuildMembers(nested, out var nestedBuilt)) return false;
+        var wrapper = new ScriptEntry();
+        foreach (var m in nestedBuilt) wrapper.Properties.Add(m);
+        var sp = new ScriptStructProperty { Name = name, Flags = flags };
+        sp.Members.Add(wrapper);
+        prop = sp;
         return true;
     }
 
