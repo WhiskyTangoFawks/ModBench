@@ -95,30 +95,8 @@ public sealed class EditOrchestrator : IEditOrchestrator
 
         foreach (var (path, op) in fields)
         {
-            if (op.ValueKind != JsonValueKind.Object
-                || !op.TryGetProperty("op", out var opEl) || opEl.GetString() is not string opName)
+            if (!TryCollectVmadStructOp(path, op, vmadData, oldValues, formRefs))
                 return new StageEditResult.RecordNotFound();
-
-            // Route by path shape: "VMAD\<ScriptName>" is a script-level op (add/remove script, set
-            // script flags) — staged as-is with no value validation or old-value capture.
-            if (VmadPath.TryParseScript(path, out _))
-                continue;
-
-            if (!VmadPath.TryParse(path, out var scriptName, out var propName))
-                return new StageEditResult.RecordNotFound();
-
-            // add_property targets an existing script — reject early if it's absent.
-            if (opName == "add_property" &&
-                vmadData?.Scripts.Any(s => string.Equals(s.Name, scriptName, StringComparison.OrdinalIgnoreCase)) != true)
-                return new StageEditResult.RecordNotFound();
-
-            // Capture the property's current value (if any) for revert display.
-            if (FindVmadProperty(vmadData, scriptName, propName) is { } prop)
-                oldValues[path] = SerializeVmadOldValue(prop.Value);
-
-            // Register form references carried in the op's value (Object / ArrayOfObject).
-            if (op.TryGetProperty("value", out var value))
-                ExtractVmadValueRefs(path, value, formRefs);
         }
 
         var staged = _changes.Upsert(new PendingChangeUpsert(
@@ -127,21 +105,67 @@ public sealed class EditOrchestrator : IEditOrchestrator
         return new StageEditResult.Staged(staged);
     }
 
+    private static string? GetOpName(JsonElement op) =>
+        op.ValueKind == JsonValueKind.Object && op.TryGetProperty("op", out var opEl)
+            ? opEl.GetString()
+            : null;
+
+    // Validates one struct-op payload and collects its old value and form refs.
+    // False means the op is malformed or targets a missing script (surfaced as RecordNotFound).
+    private static bool TryCollectVmadStructOp(
+        string path, JsonElement op, VmadData? vmadData,
+        Dictionary<string, JsonElement> oldValues, List<PendingFormRef> formRefs)
+    {
+        if (GetOpName(op) is not { } opName)
+            return false;
+
+        // Route by path shape: "VMAD\<ScriptName>" is a script-level op (add/remove script, set
+        // script flags) — staged as-is with no value validation or old-value capture.
+        if (VmadPath.TryParseScript(path, out _))
+            return true;
+
+        if (!VmadPath.TryParse(path, out var scriptName, out var propName))
+            return false;
+
+        // add_property targets an existing script — reject early if it's absent.
+        if (opName == "add_property" &&
+            vmadData?.Scripts.Any(s => string.Equals(s.Name, scriptName, StringComparison.OrdinalIgnoreCase)) != true)
+            return false;
+
+        // Capture the property's current value (if any) for revert display.
+        if (FindVmadProperty(vmadData, scriptName, propName) is { } prop)
+            oldValues[path] = SerializeVmadOldValue(prop.Value);
+
+        // Register form references carried in the op's value (Object / ArrayOfObject).
+        if (op.TryGetProperty("value", out var value))
+            ExtractVmadValueRefs(path, value, formRefs);
+
+        return true;
+    }
+
     // VMAD fields: check for Variable/ArrayOfVariable types which are read-only.
     // IsReadOnly returns false for all VMAD paths (it can't know the type without a DB lookup),
     // so we do the type check here using GetVmad.
+    // The VMAD property types stageable as plain field edits; anything else (Variable,
+    // ArrayOfVariable, Struct, ArrayOfStruct, ...) is read-only through this path.
+    private static readonly HashSet<string> EditableVmadPropertyTypes = new(StringComparer.Ordinal)
+    {
+        "Bool", "Int", "Float", "String", "Object",
+        "ArrayOfBool", "ArrayOfInt", "ArrayOfFloat", "ArrayOfString", "ArrayOfObject",
+    };
+
     private static void CollectVmadReadOnlyFields(
         List<string> vmadFields, VmadData? vmadData, List<string> readOnlyFields)
     {
         foreach (var path in vmadFields)
         {
-            if (!VmadPath.TryParse(path, out var scriptName, out var propName) ||
-                FindVmadProperty(vmadData, scriptName, propName) is
-                {
-                    Value.Type: not (
-                    "Bool" or "Int" or "Float" or "String" or "Object" or
-                    "ArrayOfBool" or "ArrayOfInt" or "ArrayOfFloat" or "ArrayOfString" or "ArrayOfObject")
-                })
+            if (!VmadPath.TryParse(path, out var scriptName, out var propName))
+            {
+                readOnlyFields.Add(path);
+                continue;
+            }
+            if (FindVmadProperty(vmadData, scriptName, propName) is { } prop
+                && !EditableVmadPropertyTypes.Contains(prop.Value.Type))
                 readOnlyFields.Add(path);
         }
     }
@@ -301,22 +325,7 @@ public sealed class EditOrchestrator : IEditOrchestrator
             .Select(p => p.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var blocked = new List<BlockedReference>();
-        var toNullify = new List<(string SourceFormKey, string SourcePlugin, string FieldPath, string RecordType)>();
-
-        foreach (var (formKey, _) in targets)
-        {
-            foreach (var refResult in _query.GetReferences(formKey))
-            {
-                // Skip self-references within the delete batch
-                if (targetFormKeys.Contains(refResult.FormKey)) continue;
-
-                if (immutablePlugins.Contains(refResult.Plugin))
-                    blocked.Add(new BlockedReference(formKey, refResult.FormKey, refResult.Plugin, refResult.FieldPath, refResult.RecordType, refResult.EditorId));
-                else
-                    toNullify.Add((refResult.FormKey, refResult.Plugin, refResult.FieldPath, refResult.RecordType));
-            }
-        }
+        var (blocked, toNullify) = PartitionInboundReferences(targets, targetFormKeys, immutablePlugins);
 
         if (blocked.Count > 0)
             return new DeleteRecordsResult.BlockedByReferences(blocked);
@@ -339,10 +348,47 @@ public sealed class EditOrchestrator : IEditOrchestrator
                 placement?.PlacementGroup));
         }
 
-        // Group by (record, field) first: two deleted targets can each be referenced by a
-        // different element of the *same* array field on the same source record, and staging
-        // one GroupMember per reference would have the second overwrite the first's removal
-        // (StageGroup upserts on (form_key, plugin, field_path)).
+        AddNullificationMembers(members, toNullify, source);
+
+        var group = _changes.StageGroup("delete", null, members);
+        return new DeleteRecordsResult.Staged(group);
+    }
+
+    private (List<BlockedReference> Blocked, List<(string SourceFormKey, string SourcePlugin, string FieldPath, string RecordType)> ToNullify)
+        PartitionInboundReferences(
+            IReadOnlyList<(string FormKey, string Plugin)> targets,
+            HashSet<string> targetFormKeys,
+            HashSet<string> immutablePlugins)
+    {
+        var blocked = new List<BlockedReference>();
+        var toNullify = new List<(string SourceFormKey, string SourcePlugin, string FieldPath, string RecordType)>();
+
+        foreach (var (formKey, _) in targets)
+        {
+            foreach (var refResult in _query.GetReferences(formKey))
+            {
+                // Skip self-references within the delete batch
+                if (targetFormKeys.Contains(refResult.FormKey)) continue;
+
+                if (immutablePlugins.Contains(refResult.Plugin))
+                    blocked.Add(new BlockedReference(formKey, refResult.FormKey, refResult.Plugin, refResult.FieldPath, refResult.RecordType, refResult.EditorId));
+                else
+                    toNullify.Add((refResult.FormKey, refResult.Plugin, refResult.FieldPath, refResult.RecordType));
+            }
+        }
+
+        return (blocked, toNullify);
+    }
+
+    // Group by (record, field) first: two deleted targets can each be referenced by a
+    // different element of the *same* array field on the same source record, and staging
+    // one GroupMember per reference would have the second overwrite the first's removal
+    // (StageGroup upserts on (form_key, plugin, field_path)).
+    private void AddNullificationMembers(
+        List<GroupMember> members,
+        List<(string SourceFormKey, string SourcePlugin, string FieldPath, string RecordType)> toNullify,
+        string source)
+    {
         foreach (var fieldGroup in toNullify.GroupBy(t => (t.SourceFormKey, t.SourcePlugin, TopLevelFieldName(t.FieldPath), t.RecordType)))
         {
             var (sourceFormKey, sourcePlugin, topLevelField, recordType) = fieldGroup.Key;
@@ -363,9 +409,6 @@ public sealed class EditOrchestrator : IEditOrchestrator
                 newValue,
                 source));
         }
-
-        var group = _changes.StageGroup("delete", null, members);
-        return new DeleteRecordsResult.Staged(group);
     }
 
     public RenumberResult Renumber(string formKey, uint newFormId, string plugin, string source)
