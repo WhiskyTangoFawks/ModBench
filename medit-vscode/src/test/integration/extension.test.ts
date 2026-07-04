@@ -5,6 +5,7 @@ import { before, after, describe, it } from 'mocha';
 
 const TEST_PORT = 15172;
 let mockBackend: http.Server;
+let ext: vscode.Extension<unknown> | undefined;
 
 function createMockBackend(): http.Server {
   return http.createServer((req, res) => {
@@ -33,11 +34,13 @@ before(async function () {
   mockBackend = createMockBackend();
   await new Promise<void>(r => mockBackend.listen(TEST_PORT, '127.0.0.1', () => r()));
 
-  // activationEvents: [] means the extension is NOT auto-activated on startup.
-  // Force activation so commands are registered before any test runs.
-  const ext = vscode.extensions.all.find(e => e.packageJSON?.name === 'medit-vscode');
-  if (ext && !ext.isActive) {
-    await ext.activate();
+  // The extension must auto-activate via onStartupFinished (no manual
+  // activate() call here) — that's the behavior under test. Poll rather than
+  // assume, since activation timing after workbench restore isn't instant.
+  ext = vscode.extensions.all.find(e => e.packageJSON?.name === 'medit-vscode');
+  const deadline = Date.now() + 5000;
+  while (ext && !ext.isActive && Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 100));
   }
 
   // Give BackendManager time to poll and reach 'attached' (polls every 500 ms).
@@ -48,6 +51,14 @@ after(async () => {
   await new Promise<void>((resolve, reject) =>
     mockBackend.close(err => (err ? reject(err) : resolve()))
   );
+});
+
+// ── Activation ───────────────────────────────────────────────────────────────────
+
+describe('modbench activation', () => {
+  it('auto-activates on startup without any explicit activate() call', () => {
+    assert.ok(ext?.isActive, 'expected the extension to auto-activate via onStartupFinished');
+  });
 });
 
 // ── Command registration ───────────────────────────────────────────────────────
