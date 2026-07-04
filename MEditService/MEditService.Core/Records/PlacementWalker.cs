@@ -33,38 +33,47 @@ public sealed class PlacementWalker
 {
     private readonly ConcurrentDictionary<(Type, string), MemberInfo?> _members = new();
 
+    // Block/sub-block coordinates of an exterior cell; default (all null) for top and interior cells.
+    private readonly record struct BlockCoords(int? BlockX, int? BlockY, int? SubX, int? SubY);
+
     public void Walk(IModGetter mod, Action<CellLocationRow> onCell, Action<PlacementRow> onPlacement)
     {
         foreach (var wrld in Enumerate(Get(mod, "Worldspaces")))
-        {
-            var wrldFk = ((IMajorRecordGetter)wrld).FormKey.ToString();
-
-            if (Get(wrld, "TopCell") is { } topCell)
-                EmitCell(topCell, wrldFk, null, null, null, null, isInterior: false, onCell, onPlacement);
-
-            foreach (var block in List(wrld, "SubCells"))
-            {
-                int? bx = Int(Get(block, "BlockNumberX"));
-                int? by = Int(Get(block, "BlockNumberY"));
-                foreach (var sub in List(block, "Items"))
-                {
-                    int? sx = Int(Get(sub, "BlockNumberX"));
-                    int? sy = Int(Get(sub, "BlockNumberY"));
-                    foreach (var cell in List(sub, "Items"))
-                        EmitCell(cell, wrldFk, bx, by, sx, sy, isInterior: false, onCell, onPlacement);
-                }
-            }
-        }
+            WalkWorldspace(wrld, onCell, onPlacement);
 
         // Interior cells: mod.Cells (ListGroup) -> CellBlock.SubBlocks -> CellSubBlock.Cells
         foreach (var cellBlock in Enumerate(Get(mod, "Cells")))
             foreach (var subBlock in List(cellBlock, "SubBlocks"))
                 foreach (var cell in List(subBlock, "Cells"))
-                    EmitCell(cell, null, null, null, null, null, isInterior: true, onCell, onPlacement);
+                    EmitCell(cell, null, default, isInterior: true, onCell, onPlacement);
+    }
+
+    private void WalkWorldspace(object wrld, Action<CellLocationRow> onCell, Action<PlacementRow> onPlacement)
+    {
+        var wrldFk = ((IMajorRecordGetter)wrld).FormKey.ToString();
+
+        if (Get(wrld, "TopCell") is { } topCell)
+            EmitCell(topCell, wrldFk, default, isInterior: false, onCell, onPlacement);
+
+        foreach (var block in List(wrld, "SubCells"))
+            WalkExteriorBlock(block, wrldFk, onCell, onPlacement);
+    }
+
+    private void WalkExteriorBlock(object block, string wrldFk, Action<CellLocationRow> onCell, Action<PlacementRow> onPlacement)
+    {
+        int? bx = Int(Get(block, "BlockNumberX"));
+        int? by = Int(Get(block, "BlockNumberY"));
+        foreach (var sub in List(block, "Items"))
+        {
+            int? sx = Int(Get(sub, "BlockNumberX"));
+            int? sy = Int(Get(sub, "BlockNumberY"));
+            foreach (var cell in List(sub, "Items"))
+                EmitCell(cell, wrldFk, new BlockCoords(bx, by, sx, sy), isInterior: false, onCell, onPlacement);
+        }
     }
 
     private void EmitCell(
-        object cell, string? worldspaceFk, int? bx, int? by, int? sx, int? sy, bool isInterior,
+        object cell, string? worldspaceFk, BlockCoords coords, bool isInterior,
         Action<CellLocationRow> onCell, Action<PlacementRow> onPlacement)
     {
         var cellFk = ((IMajorRecordGetter)cell).FormKey.ToString();
@@ -72,7 +81,8 @@ public sealed class PlacementWalker
         int? gx = point == null ? null : Int(Get(point, "X"));
         int? gy = point == null ? null : Int(Get(point, "Y"));
 
-        onCell(new CellLocationRow(cellFk, worldspaceFk, bx, by, sx, sy, gx, gy, isInterior));
+        onCell(new CellLocationRow(cellFk, worldspaceFk,
+            coords.BlockX, coords.BlockY, coords.SubX, coords.SubY, gx, gy, isInterior));
 
         EmitPlaced(cell, cellFk, "Persistent", "persistent", onPlacement);
         EmitPlaced(cell, cellFk, "Temporary", "temporary", onPlacement);
