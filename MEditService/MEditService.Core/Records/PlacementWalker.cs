@@ -45,8 +45,10 @@ public sealed class PlacementWalker
         foreach (var cellBlock in Enumerate(Get(mod, "Cells")))
         {
             foreach (var subBlock in List(cellBlock, "SubBlocks"))
+            {
                 foreach (var cell in List(subBlock, "Cells"))
                     EmitCell(cell, null, default, isInterior: true, onCell, onPlacement);
+            }
         }
     }
 
