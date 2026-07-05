@@ -58,44 +58,8 @@ public class SessionManagerThreadSafetyTests : IClassFixture<TestPluginFixture>
         Assert.False(result.IsImmutable);
     }
 
-    [Fact]
-    public async Task CreatePlugin_SessionHasNewPlugin()
-    {
-        using var manager = MakeLoadedManager();
-
-        var task = Task.Run(() => manager.CreatePlugin("Added.esp"));
-        var completed = await Task.WhenAny(task, Task.Delay(5000));
-        Assert.Same(task, completed);
-        await task;
-
-        var names = manager.Session!.Plugins.Select(p => p.Name).ToList();
-        Assert.Contains("Added.esp", names);
-        Assert.Contains(TestPluginFixture.PluginName, names);
-    }
-
-    // --- CreatePlugin guard clauses ---
-
-    [Fact]
-    public void CreatePlugin_NoSession_Throws()
-    {
-        using var manager = MakeManager();
-        Assert.Throws<InvalidOperationException>(() => manager.CreatePlugin("X.esp"));
-    }
-
-    [Fact]
-    public void CreatePlugin_InvalidExtension_Throws()
-    {
-        using var manager = MakeLoadedManager();
-        Assert.Throws<ArgumentException>(() => manager.CreatePlugin("Plugin.txt"));
-    }
-
-    [Fact]
-    public void CreatePlugin_FileAlreadyExists_Throws()
-    {
-        using var manager = MakeLoadedManager();
-        // TestPluginFixture.PluginName already exists in the data folder
-        Assert.Throws<IOException>(() => manager.CreatePlugin(TestPluginFixture.PluginName));
-    }
+    // Session-membership and guard-clause behavior (NoSession/InvalidExtension/FileAlreadyExists)
+    // are covered by SessionManagerTests; this class keeps only the concurrency-specific cases.
 
     // --- Dispose idempotency ---
 
