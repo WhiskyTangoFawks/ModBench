@@ -411,44 +411,73 @@ public sealed class SchemaReflector : ISchemaReflector
             ? long.Parse(v.GetString()!, System.Globalization.CultureInfo.InvariantCulture)
             : v.GetInt64();
 
-    // ── Per-sub-field reflection (operates on object, not IMajorRecordGetter) ─
+    // ── Shared leaf classification (column ⇄ sub-field) ───────────────────────
+    // The neutral facts a leaf field carries, independent of whether it becomes a top-level
+    // column or a struct/array sub-field. Get reads the raw value from any instance; Convert
+    // turns a JSON token into the value to write — null means "no generic applier" (form-links
+    // supply their own per context: read-only as a column, ApplyFormLinkJson as a sub-field).
+    private sealed record LeafSpec(
+        string ApiType,
+        string DuckDbType,
+        string[] ValidFormKeyTypes,
+        string[] EnumValues,
+        Func<object, object?> Get,
+        Func<JsonElement, object?>? Convert,
+        bool AllowsNull = false,
+        bool IsBitmask = false,
+        string[]? EnumBitValues = null);
 
-    private static SubFieldSpec? GetSubFieldInfo(
-        PropertyInfo prop,
-        IReadOnlyDictionary<Type, string> getterTypeToTable,
-        int depth,
-        ILogger logger)
+    // Classifies the leaf kinds shared by both dispatch paths: primitive, translated-string,
+    // enum, form-link. Returns null for list/loqui-struct — the callers handle those.
+    private static LeafSpec? ClassifyLeaf(
+        PropertyInfo prop, Type core, IReadOnlyDictionary<Type, string> getterTypeToTable)
     {
-        if (depth > 3) return null;
-
-        var type = prop.PropertyType;
-        var core = Nullable.GetUnderlyingType(type) ?? type;
-        var nullable = Nullable.GetUnderlyingType(type) != null || !type.IsValueType;
-        var colName = ToSnakeCase(prop.Name);
-
-        if (TryMapPrimitive(core, out _, out var primApiType, out var primConv))
-            return new(colName, primApiType, _empty, _empty,
-                SubGetter(prop), SubApplier(prop.Name, nullable, primConv));
+        if (TryMapPrimitive(core, out var duckDb, out var apiType, out var conv))
+            return new(apiType, duckDb, _empty, _empty, SubGetter(prop), conv);
 
         if (IsTranslatedString(core))
-            return BuildTranslatedStringSubField(prop, colName, nullable);
+        {
+            var g = SubGetter(prop);
+            return new("string", "VARCHAR", _empty, _empty,
+                obj => { try { return (g(obj) as ITranslatedStringGetter)?.String; } catch { return null; } }, // Stryker disable once Block: silent accessor lambda — lookup-backed strings throw when game strings files are absent (see MEditService CLAUDE.md)
+                v => new TranslatedString(Language.English, v.GetString()));
+        }
 
         if (core.IsEnum)
-            return BuildEnumSubField(prop, core, colName, nullable);
+            return ClassifyEnumLeaf(prop, core);
 
         if (IsFormLink(core))
-            return BuildFormLinkSubField(prop, core, colName, getterTypeToTable, logger);
-
-        if (IsLoquiInterface(core))
-            return BuildStructSubField(prop, core, colName, getterTypeToTable, depth, logger);
+        {
+            var g = SubGetter(prop);
+            return new("formKey", "VARCHAR", GetFormLinkValidTypes(core, getterTypeToTable), _empty,
+                obj => (g(obj) as IFormLinkGetter)?.FormKeyNullable?.ToString(),
+                Convert: null,
+                AllowsNull: IsNullableFormLink(core));
+        }
 
         return null;
     }
 
-    private static Func<object, object?> SubGetter(PropertyInfo prop) =>
-        obj => { try { return prop.GetValue(obj); } catch { return null; } };
+    // Enum leaf, shared by both projections. Bitmask ([Flags] with power-of-two members) stores as
+    // BIGINT and round-trips through decimal strings; a plain enum stores its name as VARCHAR.
+    private static LeafSpec ClassifyEnumLeaf(PropertyInfo prop, Type core)
+    {
+        var g = SubGetter(prop);
+        var (names, bits) = GetEnumMeta(core);
+        if (bits != null)
+            return new("enum", "BIGINT", _empty, names,
+                obj => g(obj) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
+                v => Enum.ToObject(core, ReadBitmaskLong(v)),
+                IsBitmask: true, EnumBitValues: bits);
+        return new("enum", "VARCHAR", _empty, names,
+            obj => g(obj)?.ToString(),
+            v => Enum.Parse(core, v.GetString()!, ignoreCase: true));
+    }
 
-    private static Action<object, JsonElement> SubApplier(string pName, bool nullable, Func<JsonElement, object?> conv)
+    // The one applier shared by columns and sub-fields: writes a converted JSON value onto a
+    // property, tolerating a missing property and (when nullable) a JSON null. Operates on
+    // `object`; the column path adapts the IMajorRecord receiver via MakeColumnApplier.
+    private static Action<object, JsonElement> MakeApplier(string pName, bool nullable, Func<JsonElement, object?> conv)
     {
         var cache = new ConcurrentDictionary<Type, PropertyInfo?>();
         return (obj, val) =>
@@ -466,39 +495,57 @@ public sealed class SchemaReflector : ISchemaReflector
         };
     }
 
-    private static SubFieldSpec BuildTranslatedStringSubField(PropertyInfo prop, string colName, bool nullable)
+    private static Action<IMajorRecord, JsonElement> MakeColumnApplier(string pName, bool nullable, Func<JsonElement, object?> conv)
     {
-        var g = SubGetter(prop);
-        return new(colName, "string", _empty, _empty,
-            obj => { try { return (g(obj) as ITranslatedStringGetter)?.String; } catch { return null; } },
-            SubApplier(prop.Name, nullable, v => new TranslatedString(Language.English, v.GetString())));
+        var applier = MakeApplier(pName, nullable, conv);
+        return (record, val) => applier(record, val);
     }
 
-    private static SubFieldSpec BuildEnumSubField(PropertyInfo prop, Type core, string colName, bool nullable)
+    // ── Per-sub-field reflection (operates on object, not IMajorRecordGetter) ─
+
+    private static SubFieldSpec? GetSubFieldInfo(
+        PropertyInfo prop,
+        IReadOnlyDictionary<Type, string> getterTypeToTable,
+        int depth,
+        ILogger logger)
     {
-        var g = SubGetter(prop);
-        var (names, bits) = GetEnumMeta(core);
-        if (bits != null)
-            return new(colName, "enum", _empty, names,
-                obj => g(obj) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
-                SubApplier(prop.Name, nullable, v => Enum.ToObject(core, ReadBitmaskLong(v))),
-                IsBitmask: true, EnumBitValues: bits);
-        return new(colName, "enum", _empty, names,
-            obj => g(obj)?.ToString(),
-            SubApplier(prop.Name, nullable, v => Enum.Parse(core, v.GetString() ?? "", ignoreCase: true)));
+        if (depth > 3) return null;
+
+        var type = prop.PropertyType;
+        var core = Nullable.GetUnderlyingType(type) ?? type;
+        var nullable = Nullable.GetUnderlyingType(type) != null || !type.IsValueType;
+        var colName = ToSnakeCase(prop.Name);
+
+        if (ClassifyLeaf(prop, core, getterTypeToTable) is { } leaf)
+            return ProjectSubField(prop, colName, core, nullable, leaf, logger);
+
+        if (IsLoquiInterface(core))
+            return BuildStructSubField(prop, core, colName, getterTypeToTable, depth, logger);
+
+        return null;
     }
 
-    private static SubFieldSpec BuildFormLinkSubField(
-        PropertyInfo prop, Type core, string colName,
-        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+    // Projects a shared LeafSpec into a sub-field. Generic leaves (primitive / enum / translated-
+    // string) use the shared applier; a form-link (its Convert is null) gets ApplyFormLinkJson —
+    // the one place a sub-field form-link differs from its read-only column counterpart.
+    private static SubFieldSpec ProjectSubField(
+        PropertyInfo prop, string colName, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
-        var g = SubGetter(prop);
         var pName = prop.Name;
-        return new(colName, "formKey", GetFormLinkValidTypes(core, getterTypeToTable), _empty,
-            obj => (g(obj) as IFormLinkGetter)?.FormKeyNullable?.ToString(),
-            (obj, val) => ApplyFormLinkJson(obj, val, pName, logger),
-            AllowsNull: IsNullableFormLink(core));
+        Action<object, JsonElement>? apply;
+        if (leaf.Convert is { } c)
+            apply = MakeApplier(pName, nullable, c);
+        else if (IsFormLink(core))
+            apply = (obj, val) => ApplyFormLinkJson(obj, val, pName, logger);
+        else
+            apply = null;
+        return new(colName, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
+            leaf.Get, apply,
+            AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask, EnumBitValues: leaf.EnumBitValues);
     }
+
+    private static Func<object, object?> SubGetter(PropertyInfo prop) =>
+        obj => { try { return prop.GetValue(obj); } catch { return null; } };
 
     private static void ApplyFormLinkJson(object obj, JsonElement val, string pName, ILogger logger)
     {
@@ -562,18 +609,8 @@ public sealed class SchemaReflector : ISchemaReflector
         var core = Nullable.GetUnderlyingType(type) ?? type;
         var nullable = Nullable.GetUnderlyingType(type) != null || !type.IsValueType;
 
-        if (TryMapPrimitive(core, out var primDuckDb, out var primApiType, out var primConv))
-            return new(primDuckDb, r => TryGet(r, prop), primApiType, _empty, _empty,
-                ColumnApplier(prop.Name, nullable, primConv));
-
-        if (IsTranslatedString(core))
-            return BuildTranslatedStringColumn(prop, nullable);
-
-        if (core.IsEnum)
-            return BuildEnumColumn(prop, core, nullable);
-
-        if (IsFormLink(core))
-            return BuildFormLinkColumn(prop, core, getterTypeToTable);
+        if (ClassifyLeaf(prop, core, getterTypeToTable) is { } leaf)
+            return ProjectColumn(prop, nullable, leaf);
 
         if (IsListType(core, out var elementType))
             return BuildListColumn(prop, elementType, getterTypeToTable, logger);
@@ -584,52 +621,12 @@ public sealed class SchemaReflector : ISchemaReflector
         return null;
     }
 
-    private static Action<IMajorRecord, JsonElement> ColumnApplier(string pName, bool nullable, Func<JsonElement, object?> conv)
-    {
-        var cache = new ConcurrentDictionary<Type, PropertyInfo?>();
-        return (record, value) =>
-        {
-            var rp = cache.GetOrAdd(record.GetType(), t =>
-                t.GetProperty(pName, BindingFlags.Public | BindingFlags.Instance))!;
-            if (value.ValueKind == JsonValueKind.Null)
-            {
-                if (nullable) rp.SetValue(record, null);
-                return;
-            }
-            var v = conv(value);
-            if (v != null) rp.SetValue(record, v);
-        };
-    }
-
-    private static ColumnInfoResult BuildTranslatedStringColumn(PropertyInfo prop, bool nullable) =>
-        new("VARCHAR",
-            r =>
-            {
-                try { return (TryGet(r, prop) as ITranslatedStringGetter)?.String; } // Stryker disable once Block: per-call accessor lambda stays silent per MEditService CLAUDE.md; lookup-backed strings throw when game strings files are absent
-                catch { return null; }
-            },
-            "string", _empty, _empty,
-            ColumnApplier(prop.Name, nullable, v => new TranslatedString(Language.English, v.GetString())));
-
-    private static ColumnInfoResult BuildEnumColumn(PropertyInfo prop, Type core, bool nullable)
-    {
-        var (names, bits) = GetEnumMeta(core);
-        if (bits != null)
-            return new("BIGINT",
-                r => TryGet(r, prop) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
-                "enum", _empty, names,
-                ColumnApplier(prop.Name, nullable, v => Enum.ToObject(core, ReadBitmaskLong(v))),
-                IsBitmask: true, EnumBitValues: bits);
-        return new("VARCHAR", r => TryGet(r, prop)?.ToString(), "enum", _empty, names,
-            ColumnApplier(prop.Name, nullable, v => Enum.Parse(core, v.GetString()!, ignoreCase: true)));
-    }
-
-    private static ColumnInfoResult BuildFormLinkColumn(
-        PropertyInfo prop, Type core, IReadOnlyDictionary<Type, string> getterTypeToTable) =>
-        new("VARCHAR",
-            r => (TryGet(r, prop) as IFormLinkGetter)?.FormKeyNullable?.ToString(),
-            "formKey", GetFormLinkValidTypes(core, getterTypeToTable), _empty, null,
-            AllowsNull: IsNullableFormLink(core));
+    // Projects a shared LeafSpec into a top-level column. A form-link leaf (Convert null) yields a
+    // null Apply — top-level form-link columns are read-only in the index.
+    private static ColumnInfoResult ProjectColumn(PropertyInfo prop, bool nullable, LeafSpec leaf) =>
+        new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
+            leaf.Convert is { } c ? MakeColumnApplier(prop.Name, nullable, c) : null,
+            AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask, EnumBitValues: leaf.EnumBitValues);
 
     // ── IReadOnlyList<T> ──────────────────────────────────────────────────────
 
