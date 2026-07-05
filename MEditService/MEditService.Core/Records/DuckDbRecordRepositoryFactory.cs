@@ -5,21 +5,14 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Records;
 
-public sealed class DuckDbRecordRepositoryFactory : IRecordRepositoryFactory
+public sealed class DuckDbRecordRepositoryFactory(
+    ISchemaReflector schemaReflector,
+    ITableDdlBuilder ddlBuilder,
+    ILogger<DuckDbRecordRepositoryFactory>? logger = null) : IRecordRepositoryFactory
 {
-    private readonly ISchemaReflector _schemaReflector;
-    private readonly ITableDdlBuilder _ddlBuilder;
-    private readonly ILogger _logger;
-
-    public DuckDbRecordRepositoryFactory(
-        ISchemaReflector schemaReflector,
-        ITableDdlBuilder ddlBuilder,
-        ILogger<DuckDbRecordRepositoryFactory>? logger = null)
-    {
-        _schemaReflector = schemaReflector;
-        _ddlBuilder = ddlBuilder;
-        _logger = (ILogger?)logger ?? NullLogger.Instance;
-    }
+    private readonly ISchemaReflector _schemaReflector = schemaReflector;
+    private readonly ITableDdlBuilder _ddlBuilder = ddlBuilder;
+    private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     public IRecordRepository Create(GameRelease gameRelease)
     {
