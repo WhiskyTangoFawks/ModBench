@@ -121,11 +121,11 @@ public sealed class PlacementWalker
         return obj == null
             ? null
             : Member(obj.GetType(), name) switch
-        {
-            PropertyInfo p => p.GetValue(obj),
-            FieldInfo f => f.GetValue(obj),
-            _ => null,
-        };
+            {
+                PropertyInfo p => p.GetValue(obj),
+                FieldInfo f => f.GetValue(obj),
+                _ => null,
+            };
     }
 
     private IEnumerable<object> List(object? obj, string name) =>
