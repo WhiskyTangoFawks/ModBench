@@ -43,9 +43,11 @@ public sealed class PlacementWalker
 
         // Interior cells: mod.Cells (ListGroup) -> CellBlock.SubBlocks -> CellSubBlock.Cells
         foreach (var cellBlock in Enumerate(Get(mod, "Cells")))
+        {
             foreach (var subBlock in List(cellBlock, "SubBlocks"))
                 foreach (var cell in List(subBlock, "Cells"))
                     EmitCell(cell, null, default, isInterior: true, onCell, onPlacement);
+        }
     }
 
     private void WalkWorldspace(object wrld, Action<CellLocationRow> onCell, Action<PlacementRow> onPlacement)
@@ -114,8 +116,9 @@ public sealed class PlacementWalker
 
     private object? Get(object? obj, string name)
     {
-        if (obj == null) return null;
-        return Member(obj.GetType(), name) switch
+        return obj == null
+            ? null
+            : Member(obj.GetType(), name) switch
         {
             PropertyInfo p => p.GetValue(obj),
             FieldInfo f => f.GetValue(obj),
