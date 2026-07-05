@@ -17,13 +17,12 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     private readonly ISchemaReflector _schemaReflector;
     private readonly ITableDdlBuilder _ddlBuilder;
     private readonly ILogger _logger;
-    private readonly DuckDBConnection _connection;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
     private readonly PlacementWalker _placementWalker = new();
     private static readonly string[] _placedTableNames = ["refr", "achr"];
     private bool _filterActive;
 
-    public DuckDBConnection Connection => _connection;
+    public DuckDBConnection Connection { get; }
 
     public DuckDbRecordRepository(
         ISchemaReflector schemaReflector,
@@ -33,13 +32,13 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         _schemaReflector = schemaReflector;
         _ddlBuilder = ddlBuilder;
         _logger = logger;
-        _connection = new DuckDBConnection("DataSource=:memory:");
-        _connection.Open();
+        Connection = new DuckDBConnection("DataSource=:memory:");
+        Connection.Open();
     }
 
     public void Initialize(GameRelease release)
     {
-        _ddlBuilder.CreateTables(_connection, release);
+        _ddlBuilder.CreateTables(Connection, release);
         _schemas = _schemaReflector.GetSchemas(release);
     }
 
@@ -55,7 +54,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         // One transaction for the whole reindex so a throw partway leaves the prior committed
         // read model intact rather than a partial snapshot. DuckDB appenders enroll in the active
         // transaction, so deletes and appender flushes roll back together on Dispose-without-Commit.
-        using var tx = _connection.BeginTransaction();
+        using var tx = Connection.BeginTransaction();
 
         foreach (var (tableName, schema) in schemas)
             IndexRecordTable(tableName, schema, pluginMod, plugin, loadOrderIndex, refs);
@@ -71,7 +70,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         DeleteFormReferencesForPlugin(plugin);
         if (refs.Count > 0)
         {
-            using var refAppender = _connection.CreateAppender("form_references");
+            using var refAppender = Connection.CreateAppender("form_references");
             foreach (var r in refs)
             {
                 var row = refAppender.CreateRow();
@@ -98,7 +97,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         List<IMajorRecordGetter> records;
         try
         {
-            records = pluginMod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false).ToList();
+            records = [.. pluginMod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false)];
         }
         catch (Exception ex)
         {
@@ -112,7 +111,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         DeleteExisting(tableName, plugin);
 
-        using var appender = _connection.CreateAppender(tableName);
+        using var appender = Connection.CreateAppender(tableName);
         foreach (var record in records)
         {
             try
@@ -165,7 +164,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         var (where, paramValues) = BuildWhere(plugin, search, _filterActive);
 
         var countSql = $"SELECT COUNT(*) FROM \"{tableName}\"{where}";
-        using var countCmd = _connection.CreateCommand();
+        using var countCmd = Connection.CreateCommand();
         countCmd.CommandText = countSql;
         AddParams(countCmd, paramValues);
         var total = (long)countCmd.ExecuteScalar()!;
@@ -176,7 +175,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             ORDER BY editor_id
             LIMIT {limit} OFFSET {offset}
             """;
-        using var dataCmd = _connection.CreateCommand();
+        using var dataCmd = Connection.CreateCommand();
         dataCmd.CommandText = dataSql;
         AddParams(dataCmd, paramValues);
 
@@ -208,7 +207,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             LIMIT 1
             """;
 
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = sql;
         AddParams(cmd, values);
         using var reader = cmd.ExecuteReader();
@@ -232,7 +231,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             WHERE form_key = $1
             ORDER BY load_order_idx
             """;
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = sql;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         using var reader = cmd.ExecuteReader();
@@ -240,6 +239,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         var list = new List<RecordDetail>();
         var cache = new Dictionary<string, string?>();
         while (reader.Read())
+        {
             list.Add(ReadDetail(reader, schema, fk =>
             {
                 if (cache.TryGetValue(fk, out var t)) return t;
@@ -247,6 +247,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 cache[fk] = resolved;
                 return resolved;
             }));
+        }
+
         return list;
     }
 
@@ -266,18 +268,17 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             .ToDictionary(g => g.Key, g => g.OrderBy(r => r.ListItemIndex).ToList());
 
         var scriptData = scripts
-            .Select(s =>
+            .ConvertAll(s =>
             {
                 var props = propsByScript.TryGetValue(s.Name, out var rows)
-                    ? rows.Select(r =>
+                    ? [.. rows.Select(r =>
                     {
                         var items = itemsByProp.GetValueOrDefault((r.ScriptName, r.PropertyIndex));
                         return new VmadNamedValue(r.PropertyName, MapVmadProperty(r, items));
-                    }).ToList()
+                    })]
                     : new List<VmadNamedValue>();
                 return new VmadScriptData(s.Name, s.Flags, props);
-            })
-            .ToList();
+            });
 
         return new VmadData(scriptData);
     }
@@ -294,7 +295,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     private List<VmadScriptRow> ReadVmadScriptRows(string formKey, string plugin)
     {
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
             SELECT script_name, flags FROM vmad_scripts
             WHERE form_key = $1 AND plugin = $2
@@ -312,7 +313,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     private List<VmadPropertyRow> ReadVmadPropertyRows(string formKey, string plugin)
     {
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
             SELECT script_name, property_name, property_index, type, flags,
                    bool_value, int_value, float_value, string_value, form_key_value, alias_value, struct_json
@@ -326,6 +327,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         var rows = new List<VmadPropertyRow>();
         while (reader.Read())
+        {
             rows.Add(new VmadPropertyRow(
                 reader.GetString(0), reader.GetString(1), reader.GetInt32(2), reader.GetString(3), reader.GetString(4),
                 reader.IsDBNull(5) ? null : reader.GetBoolean(5),
@@ -335,12 +337,14 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 reader.IsDBNull(9) ? null : reader.GetString(9),
                 reader.IsDBNull(10) ? null : reader.GetInt16(10),
                 reader.IsDBNull(11) ? null : reader.GetString(11)));
+        }
+
         return rows;
     }
 
     private List<VmadListItemRow> ReadVmadListItemRows(string formKey, string plugin)
     {
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
             SELECT script_name, property_index, list_item_index, type,
                    bool_value, int_value, float_value, string_value, form_key_value, alias_value
@@ -354,6 +358,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         var rows = new List<VmadListItemRow>();
         while (reader.Read())
+        {
             rows.Add(new VmadListItemRow(
                 reader.GetString(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetString(3),
                 reader.IsDBNull(4) ? null : reader.GetBoolean(4),
@@ -362,6 +367,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 reader.IsDBNull(7) ? null : reader.GetString(7),
                 reader.IsDBNull(8) ? null : reader.GetString(8),
                 reader.IsDBNull(9) ? null : reader.GetInt16(9)));
+        }
+
         return rows;
     }
 
@@ -391,22 +398,19 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         if (structJson is null) return null;
         // A Struct's fields live inside a single unnamed ScriptEntry wrapper in the binary format,
         // so flatten that wrapper to surface struct fields directly as named members.
-        return VmadJson.DeserializeStruct(structJson)
+        return [.. VmadJson.DeserializeStruct(structJson)
             .SelectMany(e => e.Properties)
-            .Select(n => new VmadNamedValue(n.Name, MapNode(n)))
-            .ToList();
+            .Select(n => new VmadNamedValue(n.Name, MapNode(n)))];
     }
 
     private static List<IReadOnlyList<VmadNamedValue>>? MapStructList(string? structJson)
     {
         if (structJson is null) return null;
-        return VmadJson.DeserializeStructList(structJson)
-            .Select(inst => (IReadOnlyList<VmadNamedValue>)MapNodes(inst.Members))
-            .ToList();
+        return [.. VmadJson.DeserializeStructList(structJson).Select(inst => (IReadOnlyList<VmadNamedValue>)MapNodes(inst.Members))];
     }
 
     private static List<VmadNamedValue> MapNodes(VmadPropertyNode[] nodes) =>
-        nodes.Select(n => new VmadNamedValue(n.Name, MapNode(n))).ToList();
+        [.. nodes.Select(n => new VmadNamedValue(n.Name, MapNode(n)))];
 
     private static VmadPropertyValue MapNode(VmadPropertyNode n) => n.Type switch
     {
@@ -423,7 +427,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     private static List<VmadPropertyValue> MapVmadItems(List<VmadListItemRow>? items) =>
         items is null
             ? []
-            : items.Select(i => i.Type switch
+            : [.. items.Select(i => i.Type switch
             {
                 "ArrayOfBool" => new VmadPropertyValue("Bool", "", i.Bool),
                 "ArrayOfInt" => new VmadPropertyValue("Int", "", i.Int),
@@ -431,12 +435,12 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 "ArrayOfString" => new VmadPropertyValue("String", "", i.String),
                 "ArrayOfObject" => new VmadPropertyValue("Object", "", i.FormKey, i.Alias),
                 _ => new VmadPropertyValue(i.Type, "", null),
-            }).ToList();
+            })];
 
     public int CountRecordsForPlugin(string tableName, string plugin)
     {
         var (where, paramValues) = BuildWhere(plugin, null, _filterActive);
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT COUNT(*) FROM \"{tableName}\"{where}";
         AddParams(cmd, paramValues);
         return (int)(long)cmd.ExecuteScalar()!;
@@ -447,7 +451,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         var schemas = RequireSchemas();
         foreach (var tableName in schemas.Keys)
         {
-            using var cmd = _connection.CreateCommand();
+            using var cmd = Connection.CreateCommand();
             cmd.CommandText = $"SELECT 1 FROM \"{tableName}\" WHERE form_key = $1 LIMIT 1";
             cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
             if (cmd.ExecuteScalar() != null) return tableName;
@@ -465,12 +469,12 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         var union = string.Join("\nUNION ALL\n",
             tableNames.Select(t => $"SELECT {cols} FROM \"{t}\"{where}"));
 
-        using var countCmd = _connection.CreateCommand();
+        using var countCmd = Connection.CreateCommand();
         countCmd.CommandText = $"SELECT COUNT(*) FROM ({union})";
         AddParams(countCmd, paramValues);
         var total = (long)countCmd.ExecuteScalar()!;
 
-        using var dataCmd = _connection.CreateCommand();
+        using var dataCmd = Connection.CreateCommand();
         dataCmd.CommandText = $"""
             SELECT {cols} FROM ({union})
             ORDER BY editor_id
@@ -559,7 +563,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     private void DeleteExisting(string tableName, string plugin)
     {
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"DELETE FROM \"{tableName}\" WHERE plugin = $1";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         cmd.ExecuteNonQuery();
@@ -567,7 +571,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     private void DeleteFormReferencesForPlugin(string plugin)
     {
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = "DELETE FROM form_references WHERE source_plugin = $1";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         cmd.ExecuteNonQuery();
@@ -575,9 +579,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     private void IndexVmad(IModGetter pluginMod, string plugin, List<FormRef> refs)
     {
-        using var scriptAppender = _connection.CreateAppender("vmad_scripts");
-        using var propAppender = _connection.CreateAppender("vmad_properties");
-        using var itemAppender = _connection.CreateAppender("vmad_property_list_items");
+        using var scriptAppender = Connection.CreateAppender("vmad_scripts");
+        using var propAppender = Connection.CreateAppender("vmad_properties");
+        using var itemAppender = Connection.CreateAppender("vmad_property_list_items");
         var indexer = new VmadIndexer(scriptAppender, propAppender, itemAppender, refs, _logger);
 
         var vmadCount = 0;
@@ -608,8 +612,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         DeleteExisting("placement", plugin);
         DeleteExisting("cell_location", plugin);
 
-        using var cellAppender = _connection.CreateAppender("cell_location");
-        using var placeAppender = _connection.CreateAppender("placement");
+        using var cellAppender = Connection.CreateAppender("cell_location");
+        using var placeAppender = Connection.CreateAppender("placement");
 
         _placementWalker.Walk(pluginMod,
             cell =>
@@ -651,8 +655,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     {
         var schemas = RequireSchemas();
         foreach (var (tableName, schema) in schemas)
+        {
             if (schema.RecordType.IsInstanceOfType(record))
                 return tableName;
+        }
+
         return record.GetType().Name.ToLowerInvariant();
     }
 
@@ -674,7 +681,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     private void Execute(string sql)
     {
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
     }
@@ -698,7 +705,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey)
     {
-        var sql = """
+        const string sql = """
             SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id
             FROM form_references fr
             WHERE fr.target_form_key = $1
@@ -719,19 +726,22 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             WHERE pfr.target_form_key = $1
             """;
 
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = sql;
         AddParams(cmd, [targetFormKey]);
 
         var results = new List<ReferenceResult>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
+        {
             results.Add(new ReferenceResult(
                 reader.GetString(0),
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.GetString(3),
                 reader.IsDBNull(4) ? null : reader.GetString(4)));
+        }
+
         return results;
     }
 
@@ -739,7 +749,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey)
     {
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
             SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
             FROM cell_location cl
@@ -752,6 +762,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         var rows = new List<CellLocationSummary>();
         while (reader.Read())
+        {
             rows.Add(new CellLocationSummary(
                 reader.GetString(0),
                 reader.IsDBNull(1) ? null : reader.GetString(1),
@@ -761,17 +772,19 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 reader.IsDBNull(5) ? null : reader.GetInt32(5),
                 reader.IsDBNull(6) ? null : reader.GetInt32(6),
                 reader.IsDBNull(7) ? null : reader.GetInt32(7)));
+        }
+
         return rows;
     }
 
     public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset)
     {
-        using var countCmd = _connection.CreateCommand();
+        using var countCmd = Connection.CreateCommand();
         countCmd.CommandText = "SELECT COUNT(*) FROM cell_location WHERE is_interior AND plugin = $1";
         countCmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         var total = (long)countCmd.ExecuteScalar()!;
 
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
             SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y
             FROM cell_location cl
@@ -785,11 +798,14 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         var items = new List<CellSummary>();
         while (reader.Read())
+        {
             items.Add(new CellSummary(
                 reader.GetString(0),
                 reader.IsDBNull(1) ? null : reader.GetString(1),
                 reader.IsDBNull(2) ? null : reader.GetInt32(2),
                 reader.IsDBNull(3) ? null : reader.GetInt32(3)));
+        }
+
         return new PagedResult<CellSummary>(items, (int)total);
     }
 
@@ -803,7 +819,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         var union = string.Join("\nUNION ALL\n",
             placedTables.Select(t => $"SELECT '{t}' AS rt, form_key, plugin, editor_id, \"base\" FROM \"{t}\""));
 
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
             SELECT p.placement_group, r.rt, p.form_key, r.editor_id, r.base
             FROM placement p
@@ -831,7 +847,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     public PlacementRow? GetPlacement(string formKey, string plugin)
     {
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
             SELECT parent_cell, placement_group, pos_x, pos_y, pos_z
             FROM placement
@@ -858,7 +874,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         var union = string.Join("\nUNION ALL\n",
             tables.Select(t => $"SELECT plugin FROM \"{t}\" WHERE form_key IN (SELECT form_key FROM _filter)"));
 
-        using var cmd = _connection.CreateCommand();
+        using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT DISTINCT plugin FROM ({union})";
         using var reader = cmd.ExecuteReader();
 
@@ -876,7 +892,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             return;
         }
 
-        using var probeCmd = _connection.CreateCommand();
+        using var probeCmd = Connection.CreateCommand();
         probeCmd.CommandText = $"SELECT * FROM ({sql}) __probe LIMIT 0";
         using var probeReader = probeCmd.ExecuteReader();
         bool hasFormKey = Enumerable.Range(0, probeReader.FieldCount)
@@ -889,5 +905,5 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         _filterActive = true;
     }
 
-    public void Dispose() => _connection.Dispose();
+    public void Dispose() => Connection.Dispose();
 }
