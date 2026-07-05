@@ -17,25 +17,17 @@ public interface IWorldspaceQueryService
 /// placement / cell_location side tables — everything that plugin declares (its own records and
 /// overrides), never a cross-plugin winner. See ADR-0023.
 /// </summary>
-public sealed class WorldspaceQueryService : IWorldspaceQueryService
+public sealed class WorldspaceQueryService(ISessionManager session, IPendingChangeService changes) : IWorldspaceQueryService
 {
     private const int WorldspaceListLimit = 5000;
 
-    private readonly ISessionManager _session;
-    private readonly IPendingChangeService _changes;
-
-    public WorldspaceQueryService(ISessionManager session, IPendingChangeService changes)
-    {
-        _session = session;
-        _changes = changes;
-    }
+    private readonly ISessionManager _session = session;
+    private readonly IPendingChangeService _changes = changes;
 
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin)
     {
         var repo = RequireRepository();
-        return repo.GetRecords("worldspace", plugin, null, WorldspaceListLimit, 0).Items
-            .Select(r => new WorldspaceSummary(r.FormKey, r.EditorId))
-            .ToList();
+        return [.. repo.GetRecords("worldspace", plugin, null, WorldspaceListLimit, 0).Items.Select(r => new WorldspaceSummary(r.FormKey, r.EditorId))];
     }
 
     public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey)
@@ -54,15 +46,12 @@ public sealed class WorldspaceQueryService : IWorldspaceQueryService
             .OrderBy(g => g.Key.X).ThenBy(g => g.Key.Y)
             .Select(blockGroup => new WorldspaceBlockDto(
                 blockGroup.Key.X, blockGroup.Key.Y,
-                blockGroup
+                [.. blockGroup
                     .GroupBy(c => (X: c.SubX ?? 0, Y: c.SubY ?? 0))
                     .OrderBy(g => g.Key.X).ThenBy(g => g.Key.Y)
                     .Select(subGroup => new WorldspaceSubBlockDto(
                         subGroup.Key.X, subGroup.Key.Y,
-                        subGroup
-                            .Select(c => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY))
-                            .ToList()))
-                    .ToList()))
+                        [.. subGroup.Select(c => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY))]))]))
             .ToList();
 
         return new WorldspaceBlocks(blocks, topCell);
@@ -78,18 +67,19 @@ public sealed class WorldspaceQueryService : IWorldspaceQueryService
 
         var (deleted, persistentAdded, temporaryAdded) = ClassifyPendingPlacements(pluginChanges, cellFormKey);
 
-        if (deleted.Count == 0 && persistentAdded.Count == 0 && temporaryAdded.Count == 0)
-            return committed;
-
-        return new CellReferences(
-            committed.Persistent
-                .Where(r => !deleted.Contains(r.FormKey))
-                .Concat(persistentAdded)
-                .ToList(),
-            committed.Temporary
-                .Where(r => !deleted.Contains(r.FormKey))
-                .Concat(temporaryAdded)
-                .ToList());
+        return deleted.Count == 0 && persistentAdded.Count == 0 && temporaryAdded.Count == 0
+            ? committed
+            : new CellReferences(
+            [
+                .. committed.Persistent
+                    .Where(r => !deleted.Contains(r.FormKey)),
+                .. persistentAdded,
+            ],
+            [
+                .. committed.Temporary
+                    .Where(r => !deleted.Contains(r.FormKey)),
+                .. temporaryAdded,
+            ]);
     }
 
     private static (HashSet<string> Deleted, List<PlacedSummary> PersistentAdded, List<PlacedSummary> TemporaryAdded)
@@ -102,9 +92,11 @@ public sealed class WorldspaceQueryService : IWorldspaceQueryService
         foreach (var c in changes)
         {
             if (c.ChangeType == PendingChangeConstants.DeleteChangeType)
+            {
                 deleted.Add(c.FormKey);
+            }
             else if (c.ChangeType == PendingChangeConstants.CreateChangeType
-                     && string.Equals(c.ParentCell, cellFormKey, StringComparison.OrdinalIgnoreCase))
+                                 && string.Equals(c.ParentCell, cellFormKey, StringComparison.OrdinalIgnoreCase))
             {
                 var summary = new PlacedSummary(c.FormKey, null, null, c.RecordType);
                 if (c.PlacementGroup == PendingChangeConstants.PlacementGroupPersistent)
