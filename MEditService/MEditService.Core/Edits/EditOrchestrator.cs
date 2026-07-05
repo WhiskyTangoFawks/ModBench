@@ -8,7 +8,7 @@ using MEditService.Core.Session;
 
 namespace MEditService.Core.Edits;
 
-public sealed class EditOrchestrator(
+public sealed partial class EditOrchestrator(
     ISessionManager sessionManager,
     IRecordQueryService query,
     IPluginWriter writer,
@@ -444,13 +444,13 @@ public sealed class EditOrchestrator(
         var members = new List<GroupMember>
         {
             // The renumber change for the record itself
-            new GroupMember(
-            formKey, plugin, recordType,
-            PendingChangeConstants.RenumberChangeType,
-            PendingChangeConstants.RenumberFieldPath,
-            JsonSerializer.SerializeToElement(formKey),
-            JsonSerializer.SerializeToElement(newFormKey),
-            source)
+            new(
+                formKey, plugin, recordType,
+                PendingChangeConstants.RenumberChangeType,
+                PendingChangeConstants.RenumberFieldPath,
+                JsonSerializer.SerializeToElement(formKey),
+                JsonSerializer.SerializeToElement(newFormKey),
+                source),
         };
 
         // FieldEdit changes for cross-plugin editable references only
@@ -500,11 +500,12 @@ public sealed class EditOrchestrator(
     private static string TopLevelFieldName(string fieldPath) =>
         fieldPath.Split(['.', '['], 2)[0];
 
-    private static readonly Regex BracketIndex = new(@"\[(\d+)\]", RegexOptions.Compiled);
+    [GeneratedRegex(@"\[(\d+)\]")]
+    private static partial Regex BracketIndex();
 
     private static int? ParseArrayIndex(string fieldPath)
     {
-        var m = BracketIndex.Match(fieldPath);
+        var m = BracketIndex().Match(fieldPath);
         return m.Success ? int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : null;
     }
 
