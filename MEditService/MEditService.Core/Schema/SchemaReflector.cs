@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Core.Schema;
 
-public sealed class SchemaReflector(ILogger<SchemaReflector>? logger = null) : ISchemaReflector
+public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = null) : ISchemaReflector
 {
     // Stryker disable once NullCoalescing: logger init; only usage is a defensive LogTrace in catch — unreachable from tests without artificial exception injection
     private readonly ILogger _logger = logger ?? NullLogger<SchemaReflector>.Instance;
@@ -746,5 +746,8 @@ public sealed class SchemaReflector(ILogger<SchemaReflector>? logger = null) : I
     }
 
     internal static string ToSnakeCase(string name) =>
-        Regex.Replace(name, "(?<=[a-z0-9])([A-Z])", "_$1").ToLowerInvariant();
+        SnakeCaseBoundary().Replace(name, "_$1").ToLowerInvariant();
+
+    [GeneratedRegex("(?<=[a-z0-9])([A-Z])")]
+    private static partial Regex SnakeCaseBoundary();
 }
