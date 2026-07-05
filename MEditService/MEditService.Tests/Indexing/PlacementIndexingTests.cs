@@ -169,19 +169,8 @@ public class PlacementIndexingTests
         finally { dir.Delete(recursive: true); }
     }
 
-    [Fact]
-    public void Index_PersistentPlacedObject_WritesPlacementRow()
-    {
-        using var b = IndexFixture();
-        var rows = Query(b.Repo,
-            "SELECT parent_cell, placement_group, pos_x, pos_y, pos_z FROM placement WHERE form_key = $1", b.BarrelFk);
-        var row = Assert.Single(rows);
-        Assert.Equal(b.ExtCellFk, row["parent_cell"]);
-        Assert.Equal("persistent", row["placement_group"]);
-        Assert.Equal(10f, ToF(row["pos_x"]));
-        Assert.Equal(20f, ToF(row["pos_y"]));
-        Assert.Equal(30f, ToF(row["pos_z"]));
-    }
+    // Index_PersistentPlacedObject persistent-row content (parent cell / group / position) is
+    // covered behaviorally by GetPlacement_PlacedRef_ReturnsParentCellGroupAndPosition.
 
     [Fact]
     public void Index_TemporaryPlacedObject_WritesTemporaryPlacementRow()

@@ -338,13 +338,9 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         Assert.All(result, r => Assert.True(r.Count > 0));
     }
 
-    [Fact]
-    public void GetPluginRecordTypes_ReturnsTypesInAscendingOrder()
-    {
-        var result = _svc.GetPluginRecordTypes(TestPluginFixture.PluginName);
-        var types = result.Select(r => r.Type).ToList();
-        Assert.Equal(types.Order().ToList(), types);
-    }
+    // Ascending-order guarantee is tested with >1 type in
+    // GetPluginRecordTypes_WithMultipleTypes_ReturnsInAscendingOrder; the single-type
+    // fixture makes a dedicated ordering test here trivially true.
 
     [Fact]
     public void GetPluginRecordTypes_UnknownPlugin_ReturnsEmpty()
