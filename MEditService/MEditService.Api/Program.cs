@@ -32,8 +32,8 @@ try
                 Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "mEdit", "logs", "medit-.log"),
-                rollingInterval: RollingInterval.Day,
-                formatProvider: CultureInfo.InvariantCulture));
+                formatProvider: CultureInfo.InvariantCulture,
+                rollingInterval: RollingInterval.Day));
 
     builder.Services.AddCors(opts =>
         opts.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
@@ -108,14 +108,11 @@ try
 
         if (gameFolder == null) return null;
 
-        if (OperatingSystem.IsWindows())
-        {
-            return Path.Combine(
+        return OperatingSystem.IsWindows()
+            ? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                gameFolder, "Plugins.txt");
-        }
-
-        return FindProtonPluginsTxt(dataFolderPath, gameRelease, gameFolder);
+                gameFolder, "Plugins.txt")
+            : FindProtonPluginsTxt(dataFolderPath, gameRelease, gameFolder);
     }
 
     // Linux/Proton: data folder is {steamLibrary}/steamapps/common/{Game}/Data
