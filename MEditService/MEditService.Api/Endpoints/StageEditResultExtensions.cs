@@ -30,8 +30,8 @@ public static class StageEditResultExtensions
             "Records have active group changes — revert groups first.", statusCode: 409),
         DeleteRecordsResult.BlockedByReferences b => Results.Problem(
             detail: "One or more records are referenced by immutable plugins and cannot be deleted.",
-            extensions: new Dictionary<string, object?> { ["blockedBy"] = b.BlockedBy },
-            statusCode: 409),
+            statusCode: 409,
+            extensions: new Dictionary<string, object?> { ["blockedBy"] = b.BlockedBy }),
         DeleteRecordsResult.Staged s => Results.Ok(s.Group),
         var r => throw new InvalidOperationException($"Unhandled DeleteRecordsResult variant: {r.GetType().Name}")
     };
