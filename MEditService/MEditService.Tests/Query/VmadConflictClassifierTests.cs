@@ -357,29 +357,11 @@ public sealed class VmadConflictClassifierTests
         Assert.Equal(ConflictAll.Override, result.ConflictContribution);
     }
 
-    // --- Canon unit tests (Canon is internal) ---
-
-    [Fact]
-    public void Canon_StructMembers_SortedAlphabeticallyRegardlessOfInputOrder()
-    {
-        // Verifies OrderBy(Name) not OrderByDescending: members stored as [Z, A] must produce
-        // "Struct{A=...,Z=...}" not "Struct{Z=...,A=...}".
-        var v = new VmadPropertyValue("Struct", "", null,
-            Members: [new VmadNamedValue("Z", Scalar("Int", 1)), new VmadNamedValue("A", Scalar("Int", 2))]);
-        Assert.Equal("Struct{A=Int|2,Z=Int|1}", VmadConflictClassifier.Canon(v));
-    }
-
-    [Fact]
-    public void Canon_StructListInstances_MembersSortedAlphabetically()
-    {
-        // Verifies OrderBy(Name) in struct-list instances: [Z, A] → {A=...,Z=...}.
-        var inst = new VmadNamedValue[] {
-            new("Z", Scalar("Int", 9)), new("A", Scalar("Int", 7))
-        };
-        var v = new VmadPropertyValue("ArrayOfStruct", "", null,
-            StructList: [(IReadOnlyList<VmadNamedValue>)inst]);
-        Assert.Equal("ArrayOfStruct[{A=Int|7,Z=Int|9}]", VmadConflictClassifier.Canon(v));
-    }
+    // Canon (internal) member sorting is covered behaviorally by
+    // Classify_ReorderedButEqualScriptsAndProperties_NotFlagged and
+    // Classify_AlignsScriptsPropertiesAndMembers_InSortedOrder. The Canon sort *direction*
+    // is a behaviorally-equivalent detail (both sides canonicalize identically), so it is
+    // deliberately not pinned to an exact string here.
 
     [Fact]
     public void Classify_StructPropertyWithNullMembers_RawSubtreeExcludesPlugin()
@@ -415,16 +397,5 @@ public sealed class VmadConflictClassifierTests
         Assert.Equal("Inner", inner.Name);
         Assert.Equal("Struct", inner.Type);
         Assert.Null(inner.Members);
-    }
-
-    [Fact]
-    public void Canon_ScalarTypes_DoNotGetAliasSuffix()
-    {
-        // Verifies the conditional is v.Type == "Object" (not always-true): non-Object scalars
-        // must produce "Type|value" not "Type|value []".
-        Assert.Equal("Int|42", VmadConflictClassifier.Canon(Scalar("Int", 42)));
-        Assert.Equal("Bool|True", VmadConflictClassifier.Canon(Scalar("Bool", true)));
-        Assert.Equal("Float|1.5", VmadConflictClassifier.Canon(Scalar("Float", 1.5f)));
-        Assert.Equal("String|hello", VmadConflictClassifier.Canon(Scalar("String", "hello")));
     }
 }

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -45,9 +46,10 @@ public sealed class SessionApiTests : IClassFixture<LoadedNpcApiFixture>
         });
         load.EnsureSuccessStatusCode();
 
-        var records = await _client.GetFromJsonAsync<dynamic>($"/records?type=NPC_&limit=10");
+        var records = await _client.GetFromJsonAsync<JsonElement>($"/records?type=npc_&limit=10");
 
-        Assert.NotNull(records);
+        // The loaded plugin's NPC records were actually indexed and are queryable.
+        Assert.True(records.GetProperty("total").GetInt32() > 0);
     }
 
     [Fact]

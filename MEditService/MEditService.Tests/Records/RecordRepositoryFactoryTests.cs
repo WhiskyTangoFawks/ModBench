@@ -17,17 +17,4 @@ public class RecordRepositoryFactoryTests
         var result = repo.GetRecords("npc_", null, null, 1, 0);
         Assert.Equal(0, result.Total);
     }
-
-    [Fact]
-    public void Create_ReturnsIRecordReader()
-    {
-        var reflector = new SchemaReflector();
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-
-        using var repo = factory.Create(GameRelease.Fallout4);
-        IRecordReader reader = repo;
-
-        var result = reader.GetRecords("npc_", null, null, 1, 0);
-        Assert.Equal(0, result.Total);
-    }
 }

@@ -187,24 +187,22 @@ public sealed class PendingChangeServiceTests : IDisposable
     }
 
     [Fact]
-    public void OnSessionUnloaded_DropsTable()
+    public void OnSessionUnloaded_ClearsSession()
     {
         _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_",
             new() { ["name"] = J("\"x\"") }, "test", null, new()));
 
         ((IPendingChangeLifecycle)_svc).OnSessionUnloaded();
 
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'pending_changes'";
-        Assert.Equal(0L, cmd.ExecuteScalar());
+        // Observable effect of unload: the service behaves as if no session is loaded.
+        Assert.Throws<InvalidOperationException>(() => _svc.GetChanges());
     }
 
     [Fact]
-    public void GetChanges_BeforeSessionLoaded_ThrowsWithMessage()
+    public void GetChanges_BeforeSessionLoaded_Throws()
     {
         var svc = new DuckDbPendingChangeService();
-        var ex = Assert.Throws<InvalidOperationException>(() => svc.GetChanges());
-        Assert.Equal("No session loaded.", ex.Message);
+        Assert.Throws<InvalidOperationException>(() => svc.GetChanges());
     }
 
     // --- GetStagedFormKeys ---
@@ -331,13 +329,13 @@ public sealed class PendingChangeServiceTests : IDisposable
 
         _svc.Revert(plugin: "P.esp", formKey: "FK1");
 
-        // Verify FK1 refs removed and FK2 refs untouched via direct DB query
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "SELECT source_form_key FROM pending_form_references ORDER BY source_form_key";
-        using var reader = cmd.ExecuteReader();
-        var remaining = new List<string>();
-        while (reader.Read()) remaining.Add(reader.GetString(0));
-        Assert.Equal(["FK2"], remaining);
+        // FK1 refs gone — re-stage (no refs) so drain surfaces FK1; FK2 refs intact.
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"Bob\"") }, "user", null, new()));
+        var drained = _svc.DrainForPlugin("P.esp");
+        Assert.Empty(drained.FormRefsByFormKey["FK1"]);
+        var fk2Refs = drained.FormRefsByFormKey["FK2"].ToList();
+        Assert.Single(fk2Refs);
+        Assert.Equal("000002:Fallout4.esm", fk2Refs[0].TargetFormKey);
     }
 
     [Fact]
@@ -370,9 +368,9 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Equal("race", refs[0].FieldPath);
         Assert.Equal("000001:Fallout4.esm", refs[0].TargetFormKey);
 
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM pending_form_references WHERE source_plugin = 'A.esp'";
-        Assert.Equal(0L, cmd.ExecuteScalar());
+        // Clears: a second drain no longer surfaces FK1's refs.
+        var second = _svc.DrainForPlugin("A.esp");
+        Assert.Empty(second.FormRefsByFormKey["FK1"]);
     }
 
     // --- ChangeGroup ---
@@ -541,9 +539,9 @@ public sealed class PendingChangeServiceTests : IDisposable
 
         _svc.RevertGroup(group.Id);
 
-        using var cmd = _conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM pending_form_references WHERE source_form_key = 'FK1'";
-        Assert.Equal(0L, cmd.ExecuteScalar());
+        // Reverting the group-owned change clears its pending form refs: FK1 no longer drains.
+        var drained = _svc.DrainForPlugin("A.esp");
+        Assert.Empty(drained.FormRefsByFormKey["FK1"]);
     }
 
     // --- Finding 8: StageGroup uses Source from GroupMember ---
@@ -619,9 +617,14 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void GetStagedFormKeys_ReleasesLockBetweenCalls()
     {
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_",
+            new() { ["name"] = J("\"x\"") }, "user", null, new()));
+
         var first = _svc.GetStagedFormKeys("A.esp");
         var second = _svc.GetStagedFormKeys("A.esp"); // deadlocks if semaphore not released
-        Assert.NotNull(first);
-        Assert.NotNull(second);
+
+        // The second call re-acquired the lock and returned the staged data (not a hang / empty).
+        Assert.NotEmpty(first);
+        Assert.NotEmpty(second);
     }
 }

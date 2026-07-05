@@ -14,46 +14,26 @@ public class ColumnSpecTests
             validFormKeyTypes ?? [], enumValues ?? [], null, isArray);
 
     [Fact]
-    public void ToFieldMetadata_MapsNameAndApiType()
+    public void ToFieldMetadata_MapsAllFields()
     {
-        var col = MakeColumn(name: "some_field", apiType: "string");
-        var meta = col.ToFieldMetadata();
-        Assert.Equal("some_field", meta.Name);
-        Assert.Equal("string", meta.Type);
-    }
+        var enums = new[] { "Alpha", "Beta", "Gamma" };
+        var formKeyTypes = new[] { "race" };
+        var col = MakeColumn(name: "some_field", apiType: "enum", isArray: true,
+            validFormKeyTypes: formKeyTypes, enumValues: enums);
 
-    [Fact]
-    public void ToFieldMetadata_IsArray_ReflectsColumnProperty()
-    {
-        var col = MakeColumn(isArray: true);
         var meta = col.ToFieldMetadata();
+
+        Assert.Equal("some_field", meta.Name);
+        Assert.Equal("enum", meta.Type);
         Assert.True(meta.IsArray);
+        Assert.Equal(enums, meta.EnumValues);
+        Assert.Equal(formKeyTypes, meta.ValidFormKeyTypes);
     }
 
     [Fact]
     public void ToFieldMetadata_IsArray_DefaultsFalse()
     {
-        var col = MakeColumn();
-        var meta = col.ToFieldMetadata();
-        Assert.False(meta.IsArray);
-    }
-
-    [Fact]
-    public void ToFieldMetadata_PassesThroughEnumValues()
-    {
-        var values = new[] { "Alpha", "Beta", "Gamma" };
-        var col = MakeColumn(apiType: "enum", enumValues: values);
-        var meta = col.ToFieldMetadata();
-        Assert.Equal(values, meta.EnumValues);
-    }
-
-    [Fact]
-    public void ToFieldMetadata_PassesThroughValidFormKeyTypes()
-    {
-        var types = new[] { "race" };
-        var col = MakeColumn(apiType: "formKey", validFormKeyTypes: types);
-        var meta = col.ToFieldMetadata();
-        Assert.Equal(types, meta.ValidFormKeyTypes);
+        Assert.False(MakeColumn().ToFieldMetadata().IsArray);
     }
 
     [Fact]

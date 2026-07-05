@@ -32,17 +32,18 @@ public class FilterTests : IClassFixture<TestPluginFixture>
     // --- SetFilter: validation ---
 
     [Fact]
-    public void SetFilter_ValidSql_DoesNotThrow()
+    public void SetFilter_ValidSqlWithExtraColumns_FiltersByFormKey()
     {
+        // A filter projecting extra columns beyond form_key is accepted and still filters.
         using var repo = LoadedRepository();
-        repo.SetFilter("SELECT form_key FROM \"NPC_\"");
-    }
+        var all = repo.GetRecords("NPC_", null, null, 100, 0);
+        var firstFormKey = all.Items[0].FormKey;
 
-    [Fact]
-    public void SetFilter_ValidSqlWithExtraColumns_DoesNotThrow()
-    {
-        using var repo = LoadedRepository();
-        Assert.Null(Record.Exception(() => repo.SetFilter("SELECT form_key, plugin FROM \"NPC_\"")));
+        repo.SetFilter($"SELECT '{firstFormKey}' AS form_key, 'x' AS plugin");
+
+        var filtered = repo.GetRecords("NPC_", null, null, 100, 0);
+        Assert.Equal(1, filtered.Total);
+        Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
     }
 
     [Fact]

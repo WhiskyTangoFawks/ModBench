@@ -26,12 +26,22 @@ public sealed class RealInstallSmokeTests
         GameRelease.Starfield,
     ];
 
-    [Fact]
+    /// <summary>
+    /// Marks the smoke test skipped (not passed) unless <c>MEDIT_SMOKE=1</c>, so normal and
+    /// mutation runs report an honest "skipped" rather than a green no-op.
+    /// </summary>
+    private sealed class SmokeFactAttribute : FactAttribute
+    {
+        public SmokeFactAttribute()
+        {
+            if (Environment.GetEnvironmentVariable("MEDIT_SMOKE") != "1")
+                Skip = "Set MEDIT_SMOKE=1 to run the real-install smoke test.";
+        }
+    }
+
+    [SmokeFact]
     public async Task DiscoveredInstalls_LoadAndIndex()
     {
-        if (Environment.GetEnvironmentVariable("MEDIT_SMOKE") != "1")
-            return; // self-excluded from normal/mutation runs; run explicitly with MEDIT_SMOKE=1
-
         var locator = new GameLocator();
         var tested = 0;
 
