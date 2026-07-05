@@ -126,8 +126,11 @@ internal sealed class VmadIndexer(
                 AppendPropRow(ctx, p, "ArrayOfStruct",
                     new VmadValue(StructJson: SerializeStructList(p.Structs)));
                 for (int i = 0; i < p.Structs.Count; i++)
+                {
                     CollectMemberRefs(ctx, p.Structs[i].Members,
                         $@"VMAD\{ctx.ScriptName}\{property.Name}[{i}]");
+                }
+
                 break;
 
             default:
@@ -267,7 +270,7 @@ internal sealed class VmadIndexer(
         IScriptStringPropertyGetter s => new(s.Name, "String", FlagsString(s.Flags), StringValue: s.Data),
         IScriptObjectPropertyGetter o => new(o.Name, "Object", FlagsString(o.Flags), FormKeyValue: o.Object.FormKey.ToString(), AliasValue: o.Alias),
         IScriptStructPropertyGetter st => new(st.Name, "Struct", FlagsString(st.Flags),
-            Members: st.Members.SelectMany(m => m.Properties).Select(ToPropertyNode).ToArray()),
+            Members: [.. st.Members.SelectMany(m => m.Properties).Select(ToPropertyNode)]),
         _ => new(p.Name, p.GetType().Name, FlagsString(p.Flags))
     };
 
