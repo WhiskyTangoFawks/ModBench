@@ -58,15 +58,33 @@ Must precede mutation (Stryker `--since` diffs `HEAD`..`main`).
 
 ## Step 4 — Mutation (Core CS logic only)
 
-Scoped `since: main`:
+Mutation testing here is a **spec-audit / entropy tool, not a score gate** — the goal is
+to **disposition every survivor, not drive to zero.** Scoped `since: main`:
 
 - Per-subtask: `cd MEditService && bash ../.claude/skills/mutation-test/run.sh --file <File>.cs`
 - Phase-end: `… run.sh` (full changed-files, once)
 
-Triage survivors per `/mutation-test` → Step 2 triage. Confirm each fix targeted (`--mutant-ids`/`--file`); **never** full re-run (~1h). Read only the returned summary.
+Triage survivors per `/mutation-test` (9-way, gating question first). Apply
+**Delete / Refactor / Simplify / Fix-coupling / kill autonomously**. Do **not** apply
+Accepts (unproductive/equivalent) or any suppression mid-flow — collect them, and every
+survivor, into a **disposition ledger** in the validate summary:
+
+```
+<file>:<line> [mutator] → killed | deleted | simplified | accepted:<reason> | request-fixture:<condition>
+```
+
+`request-fixture` **pauses that survivor**: surface the request to the developer (a real
+plugin exhibiting the malformed-data condition) — do not accept or delete it until the
+fixture arrives and a behavioral test is written. Confirm each applied fix targeted
+(`--mutant-ids`/`--file`); **never** full re-run (~1h). Read only the returned summary.
 
 ## Step 5 — Merge & complete
 
+- **Ledger review (dead-code veto):** present the Step 4 disposition ledger's proposed
+  `accepted:`/suppression entries to the developer before merge. Approved → apply the
+  suppression now (config-level per `/mutation-test`). Rejected → fall back to Delete or
+  a real red-green cycle. Unresolved `request-fixture` survivors block completion of that
+  slice until the fixture + test land. Nothing is permanently silenced without sign-off.
 - Task files → Status complete + Proof (test output + commit hash) → move to `docs/tasks/completed-tasks/`.
 - `git checkout main && git merge --no-ff <branch> && git push`.
 - Large path → `rm validation-plan.md`.
