@@ -113,7 +113,7 @@ describe('ReferencedByApp — child rows', () => {
     vi.mocked(vscode.postMessage).mockClear();
     const childRow = screen.getByText('Fallout4.esm').closest('[data-testid="ref-child-row"]');
     expect(childRow).not.toBeNull();
-    fireEvent.click(childRow!);
+    fireEvent.click(childRow);
     expect(vscode.postMessage).not.toHaveBeenCalled();
   });
 });

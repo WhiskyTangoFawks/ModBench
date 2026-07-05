@@ -1,6 +1,6 @@
 ---
 name: validate
-description: Post-implementation review-and-ship workflow. Run at the end of any coding task — mechanical gates, report-only /code-review triage, complexity-warning triage, autonomous commit/push, mutation tests, and merge.
+description: Post-implementation review-and-ship workflow. Run at the end of any coding task — mechanical gates, report-only /code-review triage, autonomous commit/push, mutation tests, and merge.
 ---
 
 # Validate
@@ -12,7 +12,7 @@ Run after any implementation task. Size picks the path (Step 0). Review = one **
 **Small** (ALL): ≤ ~3 files · no `MEditService.Core` logic change · one context · low blast radius.
 **Large**: anything else, or when in doubt.
 
-- Small → run Steps 1–6 inline; no `validation-plan.md`.
+- Small → run Steps 1–5 inline; no `validation-plan.md`.
 - Large → write `validation-plan.md` (below), hand off to a fresh session.
 
 ## Step 1 — Gates
@@ -30,7 +30,7 @@ Classify changed files → run matching gate (never review non-compiling code):
 | both | `… --backend --frontend` |
 | config/docs only | skip |
 
-Fix all failures, rerun. Core CS (`MEditService/MEditService.Core/**/*.cs`) = mutation-eligible → Step 5.
+Fix all failures, rerun. Core CS (`MEditService/MEditService.Core/**/*.cs`) = mutation-eligible → Step 4.
 
 ## Step 2 — Review
 
@@ -46,11 +46,9 @@ Fix all failures, rerun. Core CS (`MEditService/MEditService.Core/**/*.cs`) = mu
 
 3. Rerun Step 1 gates if any fix changed logic.
 
-## Step 3 — Complexity warnings
+Complexity / quality notes are not a validate step: the `code-quality` Stop hook surfaces them continuously during the work, scoped to changed files, for in-loop triage. Validate owns correctness, gates, and mutation — not the complexity re-check.
 
-Build emits non-blocking Sonar warnings (`S3776` `S1541` `S138` `S134` `S107` `S1067`). Read those on touched files/lines → Step 2 triage. Clears nearby pre-existing quality without forcing scope.
-
-## Step 4 — Commit & push
+## Step 3 — Commit & push
 
 - On `main` → `git checkout -b <slug>`.
 - Commit autonomously — reference issue/task, `Co-Authored-By` trailer, no message-review prompt.
@@ -58,7 +56,7 @@ Build emits non-blocking Sonar warnings (`S3776` `S1541` `S138` `S134` `S107` `S
 
 Must precede mutation (Stryker `--since` diffs `HEAD`..`main`).
 
-## Step 5 — Mutation (Core CS logic only)
+## Step 4 — Mutation (Core CS logic only)
 
 Scoped `since: main`:
 
@@ -67,7 +65,7 @@ Scoped `since: main`:
 
 Triage survivors per `/mutation-test` → Step 2 triage. Confirm each fix targeted (`--mutant-ids`/`--file`); **never** full re-run (~1h). Read only the returned summary.
 
-## Step 6 — Merge & complete
+## Step 5 — Merge & complete
 
 - Task files → Status complete + Proof (test output + commit hash) → move to `docs/tasks/completed-tasks/`.
 - `git checkout main && git merge --no-ff <branch> && git push`.
@@ -88,11 +86,10 @@ Files: <git diff --name-only>
 Scope: backend? · frontend? · Core CS (mutation)? · config/docs?
 Tasks: <paths + what to complete, or none>
 
-Run /validate Steps 1–6:
+Run /validate Steps 1–5:
 - [ ] 1 Gates: `<cmd>`
 - [ ] 2 `/code-review` report-only → triage (fix / defer-issue / escalate / reject) + apply
-- [ ] 3 Complexity warnings on touched files → triage
-- [ ] 4 Branch, commit (autonomous), push
-- [ ] 5 Mutation (Core CS logic only)
-- [ ] 6 Task files complete, merge --no-ff, push, rm validation-plan.md
+- [ ] 3 Branch, commit (autonomous), push
+- [ ] 4 Mutation (Core CS logic only)
+- [ ] 5 Task files complete, merge --no-ff, push, rm validation-plan.md
 ```

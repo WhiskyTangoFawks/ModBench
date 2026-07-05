@@ -1,6 +1,7 @@
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
+import sonarjs from 'eslint-plugin-sonarjs';
 
 export default tseslint.config(
     { ignores: ['src/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**', 'src/test/webviewUtils.test.ts'] },
@@ -23,6 +24,24 @@ export default tseslint.config(
                 project: './tsconfig.json',
                 tsconfigRootDir: import.meta.dirname,
             },
+        },
+    },
+
+    // Complexity feedback on extension-host logic (mod-management + orchestration),
+    // mirroring the backend Sonar complexity rules. Thresholds approximate their C#
+    // counterparts (S3776/S1541/S138/S134/S107). Kept at `warn` so they never fail
+    // `npm run lint`; the code-quality Stop hook surfaces them scoped to changed files.
+    // Not applied to webview/src (thin React presentation) or tests.
+    {
+        files: ['src/**/*.ts'],
+        ignores: ['src/**/*.test.ts', 'src/test/**'],
+        plugins: { sonarjs },
+        rules: {
+            'sonarjs/cognitive-complexity': ['warn', 15], // ≈ S3776
+            'complexity': ['warn', 10], // ≈ S1541 cyclomatic
+            'max-lines-per-function': ['warn', 80], // ≈ S138
+            'max-depth': ['warn', 4], // ≈ S134
+            'max-params': ['warn', 7], // ≈ S107
         },
     },
 
