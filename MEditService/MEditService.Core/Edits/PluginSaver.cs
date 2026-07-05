@@ -53,7 +53,7 @@ public sealed class PluginSaver(IPendingChangeService changes, ISessionManager s
         });
 
         if (result is SaveGroupResult.Saved saved)
-            await session.ReindexPlugins(saved.ByPlugin.Keys.ToList());
+            await session.ReindexPlugins([.. saved.ByPlugin.Keys]);
 
         return result;
     }
