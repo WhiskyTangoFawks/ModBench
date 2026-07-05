@@ -30,8 +30,10 @@ internal static class FormRefPathBuilder
     {
         if (meta.Fields == null || value is not JsonElement { ValueKind: JsonValueKind.Object } obj) return;
         foreach (var field in meta.Fields)
+        {
             if (obj.TryGetProperty(field.Name, out var prop))
                 Walk(field, prop, path.Length > 0 ? $"{path}.{field.Name}" : field.Name, onFormKeyLeaf);
+        }
     }
 
     private static void WalkArray(
