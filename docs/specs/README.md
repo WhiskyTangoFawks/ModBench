@@ -23,4 +23,4 @@ Rules:
 - When an initiative's slices ship, **fold the outcome back into the surface spec** — a spec that lags the product is a bug.
 - Specs use the vocabulary of their bounded context (see [CONTEXT-MAP.md](../../CONTEXT-MAP.md)); the "why" behind structural choices lives in [docs/adr/](../adr/), not here.
 
-The initiative queue and open surface questions live in [ROADMAP.md](../../ROADMAP.md).
+The roadmap is the [GitHub Milestones](https://github.com/WhiskyTangoFawks/mEdit/milestones) epic board — each milestone is an epic, its issues are the slices.

@@ -1,6 +1,6 @@
 # Mod Manager Feature Inventory — MO2 / Vortex / Modbench
 
-A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's current status. This seeds the surface specs in [docs/specs/](../specs/) and the initiative list in [ROADMAP.md](../../ROADMAP.md).
+A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's current status. This seeds the surface specs in [docs/specs/](../specs/) and the epics on [GitHub Milestones](https://github.com/WhiskyTangoFawks/mEdit/milestones).
 
 **Status legend:** ✅ exists · 🔜 planned (tracked issue) · ❓ open question (needs a grilling session) · ➖ out of scope / covered natively by VS Code
 
@@ -35,7 +35,7 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 | Premium vs free download links | ✓ | ✓ | 🔜 modbench-7 open question (direct CDN vs redirect) |
 | Collections | ✗ | ✓ browse + install + author | ➖ long-term idea only; but note Modbench's angle — a modlist repo under git *is* a shareable collection |
 
-## Plugins / load order (surface undecided — see ROADMAP)
+## Plugins / load order (surface resolved by ADR-0027; tracked in milestone 1 / #7)
 
 | Feature | MO2 | Vortex | Modbench |
 |---|---|---|---|

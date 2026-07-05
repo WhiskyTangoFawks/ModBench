@@ -12,6 +12,21 @@ This repo separates durable documentation from work items:
 
 When an initiative's slices ship, fold the outcome back into the relevant surface spec in `docs/specs/` — the spec must always describe current behavior.
 
+## Milestones = epics (the roadmap)
+
+There is **no `ROADMAP.md`** — the [GitHub Milestones](https://github.com/WhiskyTangoFawks/mEdit/milestones) tab _is_ the roadmap. A milestone is used as an **epic**: a themed body of work whose assigned issues are its slices. This is a deliberate re-purposing — milestones here carry **no release/commitment semantics and no due dates**; a milestone is just "a named group of issues with a completion %."
+
+- **One issue → one milestone.** An issue belongs to at most one epic (or none). Any finer hierarchy (epic → sub-epic) uses sub-issues or labels, not milestones.
+- **Ordering lives in the title prefix** (GitHub has no priority field). A **number = prioritized/sequenced** (`1 — Mod-management maturity` … `6 — …`); **no number = unprioritized/speculative** (bare topic name, e.g. `Navmesh editing`), which sorts below every numbered epic. Former `wishlist` items are unnumbered milestones.
+- The per-epic narrative lives in the **milestone description**; un-scheduled roadmap items are tracked as real issues under their epic, not as prose.
+
+Traverse it with `gh`:
+- **List epics in order**: `gh api repos/WhiskyTangoFawks/mEdit/milestones --jq 'sort_by(.title)[] | "\(.title): \(.open_issues)o/\(.closed_issues)c"'`
+- **Issues in an epic**: `gh issue list --milestone "1 — Mod-management maturity"`
+- **Assign / move**: `gh issue edit <n> --milestone "<title>"`; **create an epic**: `gh api --method POST repos/…/milestones -f title=… -f description=…`.
+
+A `wishlist` item graduates into a prioritized epic by getting a numbered milestone (and, once scoped, `/to-issues` slices).
+
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.

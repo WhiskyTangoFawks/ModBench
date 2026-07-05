@@ -27,5 +27,5 @@ Modbench's goal is to reconstruct MO2's workflow — a persistent Mods list on t
 - `docs/specs/mods.md` — Plugin load order section updated to point at the new `docs/specs/plugins.md`; "Plugins surface" open question resolved.
 - `docs/specs/plugins.md` — new surface spec (skeleton; Planned) for the Plugins (load order) sidebar view.
 - `docs/specs/downloads.md` — Queue UI open question resolved: editor-tab webview + status-bar item, not a dedicated tree or quickpick-only.
-- `ROADMAP.md` — "Plugins / load-order surface decision" planned-initiative entry resolved; implementation is tracked as issue #7.
+- Plugins / load-order surface decision resolved; implementation tracked as issue #7 (milestone 1 — Mod-management maturity).
 - No extension code reserves or locks the auxiliary bar — it is an unenforced default, not a technical constraint.
