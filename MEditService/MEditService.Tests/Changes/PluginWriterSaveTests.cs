@@ -2,26 +2,29 @@ using MEditService.Core.Edits;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Changes;
 
 public sealed class PluginWriterSaveTests
 {
     [Fact]
-    public async Task SaveAsync_Success_OriginalFileIsUpdated()
+    public async Task SaveAsync_Success_OriginalPathHoldsValidPlugin()
     {
         using var data = new PluginFixtureBuilder("pw-save-original")
             .WithPlugin("TestPlugin.esp")
             .Build();
 
         var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
-        var before = File.GetLastWriteTimeUtc(pluginPath);
 
         var writer = new PluginWriter(new SchemaReflector(), NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(pluginPath, [], GameRelease.Fallout4);
 
-        Assert.True(File.GetLastWriteTimeUtc(pluginPath) >= before);
-        Assert.True(File.Exists(pluginPath));
+        // The original path (not a temp copy) holds a valid, re-loadable plugin after save.
+        var reloaded = Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("TestPlugin.esp"), pluginPath), Fallout4Release.Fallout4);
+        Assert.Equal("TestPlugin.esp", reloaded.ModKey.FileName);
     }
 
     [Fact]
