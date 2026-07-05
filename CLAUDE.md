@@ -70,7 +70,7 @@ Implementation plans for bug fixes and features follow `/tdd`: write the test fi
 
 ### Issue tracker
 
-Work is tracked as GitHub issues via the `gh` CLI: PRDs are per-initiative issues, implementation issues are vertical slices; durable per-surface specs live in `docs/specs/`. External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+Work is tracked as GitHub issues via the `gh` CLI: PRDs are per-initiative issues, implementation issues are vertical slices; durable per-surface specs live in `docs/specs/`. GitHub **Milestones are used as epics** and are the roadmap (the milestones tab — there is no `ROADMAP.md`); numbered titles are prioritized, unnumbered are speculative. External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

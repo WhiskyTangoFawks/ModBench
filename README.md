@@ -70,7 +70,7 @@ The open workspace folder is treated as the MO2 instance directory (`mods/`, `pr
 
 ## Development
 
-See [docs/adr/](docs/adr/) for architectural decisions, [docs/specs/](docs/specs/) for the per-surface UI specs, and [ROADMAP.md](ROADMAP.md) for status and planned initiatives (work items live on [GitHub Issues](https://github.com/WhiskyTangoFawks/mEdit/issues)).
+See [docs/adr/](docs/adr/) for architectural decisions, [docs/specs/](docs/specs/) for the per-surface UI specs, and the **[GitHub Milestones](https://github.com/WhiskyTangoFawks/mEdit/milestones)** epic board for the roadmap (each milestone is an epic; issues are the slices).
 
 Tests follow TDD — write a failing test before any implementation.
 
