@@ -6,14 +6,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Records;
 
-public sealed class TableDdlBuilder : ITableDdlBuilder
+public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuilder
 {
-    private readonly ISchemaReflector _reflector;
-
-    public TableDdlBuilder(ISchemaReflector reflector)
-    {
-        _reflector = reflector;
-    }
+    private readonly ISchemaReflector _reflector = reflector;
 
     public void CreateTables(DuckDBConnection connection, GameRelease release)
     {
