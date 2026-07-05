@@ -8,27 +8,18 @@ using MEditService.Core.Session;
 
 namespace MEditService.Core.Edits;
 
-public sealed class EditOrchestrator : IEditOrchestrator
+public sealed class EditOrchestrator(
+    ISessionManager sessionManager,
+    IRecordQueryService query,
+    IPluginWriter writer,
+    IPendingChangeService changes,
+    ISchemaReflector schemaReflector) : IEditOrchestrator
 {
-    private readonly ISessionManager _sessionManager;
-    private readonly IRecordQueryService _query;
-    private readonly IPluginWriter _writer;
-    private readonly IPendingChangeService _changes;
-    private readonly ISchemaReflector _schemaReflector;
-
-    public EditOrchestrator(
-        ISessionManager sessionManager,
-        IRecordQueryService query,
-        IPluginWriter writer,
-        IPendingChangeService changes,
-        ISchemaReflector schemaReflector)
-    {
-        _sessionManager = sessionManager;
-        _query = query;
-        _writer = writer;
-        _changes = changes;
-        _schemaReflector = schemaReflector;
-    }
+    private readonly ISessionManager _sessionManager = sessionManager;
+    private readonly IRecordQueryService _query = query;
+    private readonly IPluginWriter _writer = writer;
+    private readonly IPendingChangeService _changes = changes;
+    private readonly ISchemaReflector _schemaReflector = schemaReflector;
 
     public StageEditResult StageEdit(
         string formKey,
@@ -130,7 +121,9 @@ public sealed class EditOrchestrator : IEditOrchestrator
         // add_property targets an existing script — reject early if it's absent.
         if (opName == "add_property" &&
             vmadData?.Scripts.Any(s => string.Equals(s.Name, scriptName, StringComparison.OrdinalIgnoreCase)) != true)
+        {
             return false;
+        }
 
         // Capture the property's current value (if any) for revert display.
         if (FindVmadProperty(vmadData, scriptName, propName) is { } prop)
@@ -166,7 +159,9 @@ public sealed class EditOrchestrator : IEditOrchestrator
             }
             if (FindVmadProperty(vmadData, scriptName, propName) is { } prop
                 && !EditableVmadPropertyTypes.Contains(prop.Value.Type))
+            {
                 readOnlyFields.Add(path);
+            }
         }
     }
 
@@ -176,7 +171,11 @@ public sealed class EditOrchestrator : IEditOrchestrator
         foreach (var path in vmadFields)
         {
             if (!VmadPath.TryParse(path, out var scriptName, out var propName)
-                || FindVmadProperty(vmadData, scriptName, propName) is not { } prop) continue;
+                || FindVmadProperty(vmadData, scriptName, propName) is not { } prop)
+            {
+                continue;
+            }
+
             oldValues[path] = SerializeVmadOldValue(prop.Value);
         }
     }
@@ -273,7 +272,7 @@ public sealed class EditOrchestrator : IEditOrchestrator
             reservedFormKey, plugin, recordType,
             new Dictionary<string, JsonElement> { [PendingChangeConstants.CreateFieldPath] = JsonSerializer.SerializeToElement<object?>(null) },
             source, null,
-            new Dictionary<string, JsonElement>(),
+            [],
             FormRefs: null,
             ChangeType: PendingChangeConstants.CreateChangeType,
             GroupId: groupId,
@@ -286,7 +285,7 @@ public sealed class EditOrchestrator : IEditOrchestrator
             _changes.Upsert(new PendingChangeUpsert(
                 reservedFormKey, plugin, recordType,
                 templateFields, source, null,
-                new Dictionary<string, JsonElement>(),
+                [],
                 templateRefs,
                 ChangeType: PendingChangeConstants.FieldEditChangeType,
                 GroupId: groupId));
@@ -442,16 +441,17 @@ public sealed class EditOrchestrator : IEditOrchestrator
         if (_query.GetRecordType(newFormKey) != null)
             return new RenumberResult.FormIdInUse();
 
-        var members = new List<GroupMember>();
-
-        // The renumber change for the record itself
-        members.Add(new GroupMember(
+        var members = new List<GroupMember>
+        {
+            // The renumber change for the record itself
+            new GroupMember(
             formKey, plugin, recordType,
             PendingChangeConstants.RenumberChangeType,
             PendingChangeConstants.RenumberFieldPath,
             JsonSerializer.SerializeToElement(formKey),
             JsonSerializer.SerializeToElement(newFormKey),
-            source));
+            source)
+        };
 
         // FieldEdit changes for cross-plugin editable references only
         var crossPluginRefs = allRefs
@@ -527,8 +527,7 @@ public sealed class EditOrchestrator : IEditOrchestrator
         string? LookupRecordType(string fk)
         {
             var committed = _query.GetRecordType(fk);
-            if (committed != null) return committed;
-            return _changes.GetPendingCreateRecordType(fk);
+            return committed ?? _changes.GetPendingCreateRecordType(fk);
         }
         foreach (var (fieldPath, newValue) in fields)
         {
@@ -549,10 +548,14 @@ public sealed class EditOrchestrator : IEditOrchestrator
         foreach (var (fieldPath, newValue) in fields)
         {
             if (VmadPath.IsVmadPath(fieldPath))
+            {
                 ExtractVmadValueRefs(fieldPath, newValue, result);
+            }
             else if (colsByName.TryGetValue(fieldPath, out var col))
+            {
                 FormRefPathBuilder.Walk(col, _ => (object?)newValue, (path, fk) =>
-                    result.Add(new PendingFormRef(fieldPath, path, fk)));
+                                result.Add(new PendingFormRef(fieldPath, path, fk)));
+            }
         }
         return result;
     }
@@ -569,10 +572,14 @@ public sealed class EditOrchestrator : IEditOrchestrator
         else if (value.ValueKind == JsonValueKind.Array)
         {
             foreach (var el in value.EnumerateArray())
+            {
                 if (el.ValueKind == JsonValueKind.Object &&
                     el.TryGetProperty("formKey", out var elFkEl) &&
                     elFkEl.GetString() is string elFk)
+                {
                     into.Add(new PendingFormRef(fieldPath, fieldPath, elFk));
+                }
+            }
         }
     }
 
