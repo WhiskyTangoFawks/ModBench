@@ -50,8 +50,9 @@ public static class SessionEndpoints
 
     private static IResult? ParseGameRelease(string? raw, out GameRelease release)
     {
-        if (Enum.TryParse(raw, out release)) return null;
-        return Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
+        return Enum.TryParse(raw, out release)
+            ? null
+            : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
     }
 
     private static IResult LoadSession(SessionLoadRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
@@ -84,7 +85,7 @@ public static class SessionEndpoints
 
         if (ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
-        if (req.Plugins is null || req.Plugins.Any(p => string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path)))
+        if (req.Plugins?.Any(p => string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path)) != false)
             return Results.Problem("Each plugin entry must have a non-empty Name and Path.", statusCode: 400);
 
         var missing = req.Plugins.Where(p => !File.Exists(p.Path)).Select(p => p.Path).ToList();
@@ -153,9 +154,9 @@ public static class SessionEndpoints
 
     private static IResult GetFilter(ISessionManager sessionManager)
     {
-        if (sessionManager.Session is null)
-            return Results.Problem("No session loaded.", statusCode: 503);
-        return Results.Ok(new SessionFilterResponse(sessionManager.Session.FilterSql));
+        return sessionManager.Session is null
+            ? Results.Problem("No session loaded.", statusCode: 503)
+            : Results.Ok(new SessionFilterResponse(sessionManager.Session.FilterSql));
     }
 }
 
