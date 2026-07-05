@@ -149,8 +149,10 @@ public sealed class InMemoryRecordRepository(ISchemaReflector schemaReflector) :
         foreach (var tableName in tableNames)
         {
             if (_tables.TryGetValue(tableName, out var table))
+            {
                 foreach (var r in table)
                     result.Add(r.Plugin);
+            }
         }
 
         return result;
