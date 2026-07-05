@@ -59,16 +59,14 @@ public sealed class PluginWriter : IPluginWriter
         var byFormKey = changes.GroupBy(c => c.FormKey);
         var schemas = _schemaReflector.GetSchemas(gameRelease);
 
-        var applied = new List<string>();
-        var readOnly = new List<string>();
-        var notFound = new List<string>();
+        var results = new ApplyResults();
         var createFailed = new List<string>();
 
         var placedCtx = new PlacedWriteContext(gameRelease, linkCache);
-        ApplyCreateChanges(byFormKey, mod, schemas, placedCtx, applied, notFound, createFailed);
-        ApplyFieldChanges(byFormKey, mod, schemas, placedCtx, applied, readOnly, notFound);
-        ApplyDeleteChanges(byFormKey, mod, schemas, placedCtx, applied, notFound);
-        ApplyRenumberChanges(byFormKey, mod, schemas, applied, notFound);
+        ApplyCreateChanges(byFormKey, mod, schemas, placedCtx, results, createFailed);
+        ApplyFieldChanges(byFormKey, mod, schemas, placedCtx, results);
+        ApplyDeleteChanges(byFormKey, mod, schemas, placedCtx, results);
+        ApplyRenumberChanges(byFormKey, mod, schemas, results);
 
         var dir = Path.GetDirectoryName(pluginPath)!;
         var tmpDir = Path.Combine(dir, ".medit_tmp_" + Path.GetRandomFileName());
@@ -81,7 +79,8 @@ public sealed class PluginWriter : IPluginWriter
             .WithNoDataFolder()
             .WriteAsync();
 
-        return new PreparedPluginSave(tmpPath, pluginPath, new SaveResult(backupPath, applied, readOnly, notFound, createFailed));
+        return new PreparedPluginSave(tmpPath, pluginPath,
+            new SaveResult(backupPath, results.Applied, results.ReadOnly, results.NotFound, createFailed));
     }
 
     public async Task<SaveResult> SaveAsync(
@@ -114,8 +113,7 @@ public sealed class PluginWriter : IPluginWriter
         IMod mod,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         PlacedWriteContext ctx,
-        List<string> applied,
-        List<string> notFound,
+        ApplyResults results,
         List<string> createFailed)
     {
         foreach (var group in byFormKey)
@@ -125,7 +123,7 @@ public sealed class PluginWriter : IPluginWriter
 
             if (!FormKey.TryFactory(group.Key, out var formKey))
             {
-                notFound.Add(createChange.FieldPath);
+                results.NotFound.Add(createChange.FieldPath);
                 continue;
             }
 
@@ -141,7 +139,7 @@ public sealed class PluginWriter : IPluginWriter
             {
                 switch (TryCreatePlaced(mod, ctx, schema, formKey, createChange))
                 {
-                    case ApplyOutcome.Applied: applied.Add(createChange.FieldPath); break;
+                    case ApplyOutcome.Applied: results.Applied.Add(createChange.FieldPath); break;
                     default: createFailed.Add(createChange.RecordType); break;
                 }
                 continue;
@@ -154,7 +152,7 @@ public sealed class PluginWriter : IPluginWriter
             }
 
             schema.AddNew(mod, formKey);
-            applied.Add(createChange.FieldPath);
+            results.Applied.Add(createChange.FieldPath);
         }
     }
 
@@ -246,9 +244,7 @@ public sealed class PluginWriter : IPluginWriter
         IMod mod,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         PlacedWriteContext ctx,
-        List<string> applied,
-        List<string> readOnly,
-        List<string> notFound)
+        ApplyResults results)
     {
         foreach (var group in byFormKey)
         {
@@ -259,7 +255,7 @@ public sealed class PluginWriter : IPluginWriter
 
             if (!FormKey.TryFactory(group.Key, out var formKey))
             {
-                notFound.AddRange(fieldChanges.Select(c => c.FieldPath));
+                results.NotFound.AddRange(fieldChanges.Select(c => c.FieldPath));
                 continue;
             }
 
@@ -270,30 +266,12 @@ public sealed class PluginWriter : IPluginWriter
                 ?? TryMaterializePlacedCopy(mod, ctx, group, formKey);
             if (record == null)
             {
-                notFound.AddRange(fieldChanges.Select(c => c.FieldPath));
+                results.NotFound.AddRange(fieldChanges.Select(c => c.FieldPath));
                 continue;
             }
 
-            ApplyFieldsToRecord(record, fieldChanges, schemas, applied, readOnly, notFound);
-        }
-    }
-
-    private static void ApplyFieldsToRecord(
-        IMajorRecord record,
-        List<PendingChange> fieldChanges,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        List<string> applied,
-        List<string> readOnly,
-        List<string> notFound)
-    {
-        foreach (var change in fieldChanges)
-        {
-            switch (TryApplyField(record, change, schemas))
-            {
-                case ApplyOutcome.Applied: applied.Add(change.FieldPath); break;
-                case ApplyOutcome.ReadOnly: readOnly.Add(change.FieldPath); break;
-                case ApplyOutcome.NotFound: notFound.Add(change.FieldPath); break;
-            }
+            foreach (var change in fieldChanges)
+                results.Record(TryApplyField(record, change, schemas), change.FieldPath);
         }
     }
 
@@ -302,18 +280,14 @@ public sealed class PluginWriter : IPluginWriter
         IMod mod,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         PlacedWriteContext ctx,
-        List<string> applied,
-        List<string> notFound)
+        ApplyResults results)
     {
         foreach (var group in byFormKey)
         {
             var deleteChange = group.FirstOrDefault(c => c.ChangeType == PendingChangeConstants.DeleteChangeType);
             if (deleteChange == null) continue;
 
-            if (TryDelete(mod, schemas, ctx, deleteChange, group.Key) == ApplyOutcome.Applied)
-                applied.Add(deleteChange.FieldPath);
-            else
-                notFound.Add(deleteChange.FieldPath);
+            results.Record(TryDelete(mod, schemas, ctx, deleteChange, group.Key), deleteChange.FieldPath);
         }
     }
 
@@ -355,8 +329,7 @@ public sealed class PluginWriter : IPluginWriter
         IEnumerable<IGrouping<string, PendingChange>> byFormKey,
         IMod mod,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        List<string> applied,
-        List<string> notFound)
+        ApplyResults results)
     {
         var allMappings = new Dictionary<FormKey, FormKey>();
 
@@ -366,9 +339,9 @@ public sealed class PluginWriter : IPluginWriter
             if (renumberChange == null) continue;
 
             if (TryRenumberRecord(mod, schemas, renumberChange, allMappings))
-                applied.Add(renumberChange.FieldPath);
+                results.Applied.Add(renumberChange.FieldPath);
             else
-                notFound.Add(renumberChange.FieldPath);
+                results.NotFound.Add(renumberChange.FieldPath);
         }
 
         // Single pass: remap all intra-plugin FormLinks across all renumber operations.
@@ -404,6 +377,27 @@ public sealed class PluginWriter : IPluginWriter
     }
 
     private enum ApplyOutcome { Applied, ReadOnly, NotFound }
+
+    // Collects each change's outcome into the three SaveResult buckets, owning the
+    // ApplyOutcome→bucket mapping in one place so the four Apply passes don't each
+    // re-implement it. createFailed is tracked separately by the create pass — it records
+    // a RecordType (the schema that couldn't be built), not a field path.
+    private sealed class ApplyResults
+    {
+        public List<string> Applied { get; } = [];
+        public List<string> ReadOnly { get; } = [];
+        public List<string> NotFound { get; } = [];
+
+        public void Record(ApplyOutcome outcome, string fieldPath)
+        {
+            switch (outcome)
+            {
+                case ApplyOutcome.Applied: Applied.Add(fieldPath); break;
+                case ApplyOutcome.ReadOnly: ReadOnly.Add(fieldPath); break;
+                case ApplyOutcome.NotFound: NotFound.Add(fieldPath); break;
+            }
+        }
+    }
 
     private static ApplyOutcome TryApplyField(
         IMajorRecord record,
