@@ -28,7 +28,7 @@ public static class VmadConflictClassifier
             .ToList();
 
         var scriptDiffs = scriptNames
-            .Select(scriptName =>
+            .ConvertAll(scriptName =>
             {
                 var perPlugin = inputs.ToDictionary(
                     i => i.Plugin,
@@ -40,8 +40,7 @@ public static class VmadConflictClassifier
 
                 var properties = BuildPropertyDiffs(inputs, masterPlugin, perPlugin, conflict);
                 return new VmadScriptDiff(scriptName, flags, winner, cellStates, properties);
-            })
-            .ToList();
+            });
 
         return new VmadClassifyResult(new VmadCompare(scriptDiffs), conflict.Result);
     }
@@ -60,15 +59,14 @@ public static class VmadConflictClassifier
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToList();
 
-        return propNames
+        return [.. propNames
             .Select(propName =>
             {
                 var perPlugin = inputs.ToDictionary(
                     i => i.Plugin,
                     i => perPluginScript[i.Plugin]?.Properties.FirstOrDefault(p => p.Name == propName)?.Value);
                 return BuildDiff(propName, perPlugin, inputs, masterPlugin, conflict);
-            })
-            .ToList();
+            })];
     }
 
     private static VmadPropertyDiff BuildDiff(
@@ -109,7 +107,7 @@ public static class VmadConflictClassifier
         };
 
     private static Schema.VmadPropertyNode[] ToNodes(IReadOnlyList<VmadNamedValue> members) =>
-        members.Select(m => ToNode(m.Name, m.Value)).ToArray();
+        [.. members.Select(m => ToNode(m.Name, m.Value))];
 
     private static Schema.VmadPropertyNode ToNode(string name, VmadPropertyValue v) => v.Type switch
     {
@@ -150,10 +148,9 @@ public static class VmadConflictClassifier
         var maxLen = perPlugin.Values.Select(v => v is null ? 0 : select(v)?.Count ?? 0).DefaultIfEmpty(0).Max();
         if (maxLen == 0) return null;
 
-        return Enumerable.Range(0, maxLen)
+        return [.. Enumerable.Range(0, maxLen)
             .Select(idx => ChildDiff($"[{idx}]", perPlugin, inputs, masterPlugin, conflict,
-                v => select(v) is { } list && idx < list.Count ? elementAt(list, idx) : null))
-            .ToList();
+                v => select(v) is { } list && idx < list.Count ? elementAt(list, idx) : null))];
     }
 
     // Aligns struct members by name (union, sorted).
@@ -172,10 +169,9 @@ public static class VmadConflictClassifier
             .ToList();
         if (names.Count == 0) return null;
 
-        return names
+        return [.. names
             .Select(mn => ChildDiff(mn, perPlugin, inputs, masterPlugin, conflict,
-                v => v.Members?.FirstOrDefault(m => m.Name == mn)?.Value))
-            .ToList();
+                v => v.Members?.FirstOrDefault(m => m.Name == mn)?.Value))];
     }
 
     private static VmadPropertyDiff ChildDiff(
@@ -260,14 +256,20 @@ public static class VmadConflictClassifier
     {
         if (v == null) return null;
         if (v.Members != null)
+        {
             return "Struct{" + string.Join(",", v.Members
                 .OrderBy(m => m.Name, StringComparer.Ordinal)
                 .Select(m => $"{m.Name}={Canon(m.Value)}")) + "}";
+        }
+
         if (v.StructList != null)
+        {
             return "ArrayOfStruct[" + string.Join(",", v.StructList
                 .Select(inst => "{" + string.Join(",", inst
                     .OrderBy(m => m.Name, StringComparer.Ordinal)
                     .Select(m => $"{m.Name}={Canon(m.Value)}")) + "}")) + "]";
+        }
+
         if (v.ListItems != null)
             return $"{v.Type}[" + string.Join(",", v.ListItems.Select(Canon)) + "]";
         var leaf = v.Type == "Object" ? $"{v.Value} [{v.Alias}]" : v.Value?.ToString() ?? "";
