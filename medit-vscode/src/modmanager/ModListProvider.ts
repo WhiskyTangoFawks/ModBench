@@ -171,37 +171,40 @@ export class ModListProvider
   }
 
   async getChildren(element?: ModlistNode): Promise<ModlistNode[]> {
-    if (element instanceof SeparatorNode) {
-      const mods = this.filterText && !this.matches(element.separator.name)
-        ? element.mods.filter((m) => this.matches(m.name))
-        : element.mods;
-      return mods.map((m) => new ModNode(m, this.statuses?.get(m.name)));
-    }
+    if (element instanceof SeparatorNode) return this.separatorChildren(element);
     if (element) return [];
 
     const tree = await this.load();
     if (!tree) return [];
+    if (!this.filterText) return this.unfilteredRoots(tree);
+    if (!this.groupingOn) return this.flatFilteredRoots(tree);
+    return this.groupedFilteredRoots(tree);
+  }
 
-    if (!this.filterText) {
-      return [
-        new CountNode(tree.activeCount, tree.installedCount),
-        ...tree.ungrouped.map((m) => new ModNode(m, this.statuses?.get(m.name))),
-        ...tree.groups.map((g) => new SeparatorNode(g.separator, g.mods)),
-      ];
-    }
+  private toModNode = (m: Mod): ModNode => new ModNode(m, this.statuses?.get(m.name));
 
-    if (!this.groupingOn) {
-      const allMods = [...tree.ungrouped, ...tree.groups.flatMap((g) => g.mods)];
-      return allMods.filter((m) => this.matches(m.name)).map((m) => new ModNode(m, this.statuses?.get(m.name)));
-    }
+  private separatorChildren(element: SeparatorNode): ModlistNode[] {
+    const mods = this.filterText && !this.matches(element.separator.name)
+      ? element.mods.filter((m) => this.matches(m.name))
+      : element.mods;
+    return mods.map(this.toModNode);
+  }
 
-    // groupingOn with active filter
-    const roots: ModlistNode[] = [];
-    roots.push(
-      ...tree.ungrouped
-        .filter((m) => this.matches(m.name))
-        .map((m) => new ModNode(m, this.statuses?.get(m.name))),
-    );
+  private unfilteredRoots(tree: ModlistTree): ModlistNode[] {
+    return [
+      new CountNode(tree.activeCount, tree.installedCount),
+      ...tree.ungrouped.map(this.toModNode),
+      ...tree.groups.map((g) => new SeparatorNode(g.separator, g.mods)),
+    ];
+  }
+
+  private flatFilteredRoots(tree: ModlistTree): ModlistNode[] {
+    const allMods = [...tree.ungrouped, ...tree.groups.flatMap((g) => g.mods)];
+    return allMods.filter((m) => this.matches(m.name)).map(this.toModNode);
+  }
+
+  private groupedFilteredRoots(tree: ModlistTree): ModlistNode[] {
+    const roots: ModlistNode[] = [...tree.ungrouped.filter((m) => this.matches(m.name)).map(this.toModNode)];
     for (const g of tree.groups) {
       const sepNameMatches = this.matches(g.separator.name);
       const matchingMods = sepNameMatches ? g.mods : g.mods.filter((m) => this.matches(m.name));
