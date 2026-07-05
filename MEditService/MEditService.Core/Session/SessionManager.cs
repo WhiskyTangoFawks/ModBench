@@ -10,14 +10,19 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Session;
 
-public sealed class SessionManager : ISessionManager, IDisposable
+public sealed class SessionManager(
+    IRecordRepositoryFactory repositoryFactory,
+    IPluginWriter writer,
+    IPendingChangeService? pendingChanges = null,
+    ILogger<SessionManager>? logger = null,
+    IModImporter? modImporter = null) : ISessionManager, IDisposable
 {
     private readonly Lock _lock = new();
-    private readonly ILogger<SessionManager> _logger;
-    private readonly IRecordRepositoryFactory _repositoryFactory;
-    private readonly IPluginWriter _writer;
-    private readonly IPendingChangeLifecycle? _changeLifecycle;
-    private readonly IModImporter _modImporter;
+    private readonly ILogger<SessionManager> _logger = logger ?? NullLogger<SessionManager>.Instance;
+    private readonly IRecordRepositoryFactory _repositoryFactory = repositoryFactory;
+    private readonly IPluginWriter _writer = writer;
+    private readonly IPendingChangeLifecycle? _changeLifecycle = pendingChanges as IPendingChangeLifecycle;
+    private readonly IModImporter _modImporter = modImporter ?? new DefaultModImporter();
     private GameSession? _session;
     private IRecordRepository? _repository;
     private readonly Dictionary<string, uint> _nextFormIds = new(StringComparer.OrdinalIgnoreCase);
@@ -27,20 +32,6 @@ public sealed class SessionManager : ISessionManager, IDisposable
     private string? _dataFolderPath;
     private string? _pluginsTxtPath;
     private GameRelease _gameRelease;
-
-    public SessionManager(
-        IRecordRepositoryFactory repositoryFactory,
-        IPluginWriter writer,
-        IPendingChangeService? pendingChanges = null,
-        ILogger<SessionManager>? logger = null,
-        IModImporter? modImporter = null)
-    {
-        _repositoryFactory = repositoryFactory;
-        _writer = writer;
-        _changeLifecycle = pendingChanges as IPendingChangeLifecycle;
-        _logger = logger ?? NullLogger<SessionManager>.Instance;
-        _modImporter = modImporter ?? new DefaultModImporter();
-    }
 
     public IGameSession? Session { get { lock (_lock) return _session; } }
     public IRecordReader? Repository { get { lock (_lock) return _repository; } }
@@ -248,9 +239,7 @@ public sealed class SessionManager : ISessionManager, IDisposable
             if (_session == null)
                 throw new InvalidOperationException(NoSessionMessage);
             var meta = _session.Plugins.FirstOrDefault(p =>
-                string.Equals(p.Name, plugin, StringComparison.OrdinalIgnoreCase));
-            if (meta == null)
-                throw new KeyNotFoundException($"Plugin '{plugin}' not found in session.");
+                string.Equals(p.Name, plugin, StringComparison.OrdinalIgnoreCase)) ?? throw new KeyNotFoundException($"Plugin '{plugin}' not found in session.");
             return (meta, _repository!, _gameRelease);
         }
     }
