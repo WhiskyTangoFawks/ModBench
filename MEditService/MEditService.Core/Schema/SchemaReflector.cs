@@ -13,14 +13,10 @@ using Mutagen.Bethesda.Strings;
 
 namespace MEditService.Core.Schema;
 
-public sealed class SchemaReflector : ISchemaReflector
+public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = null) : ISchemaReflector
 {
-    private readonly ILogger _logger;
-
-    public SchemaReflector(ILogger<SchemaReflector>? logger = null)
-    {
-        _logger = logger ?? NullLogger<SchemaReflector>.Instance; // Stryker disable once NullCoalescing: logger init; only usage is a defensive LogTrace in catch — unreachable from tests without artificial exception injection
-    }
+    // Stryker disable once NullCoalescing: logger init; only usage is a defensive LogTrace in catch — unreachable from tests without artificial exception injection
+    private readonly ILogger _logger = logger ?? NullLogger<SchemaReflector>.Instance;
 
     // Phase 16: placed references (refr/achr) are indexed as normal records so the
     // worldspace tree, record editor, and agent queries are uniform DuckDB reads; their
@@ -117,16 +113,16 @@ public sealed class SchemaReflector : ISchemaReflector
             .FirstOrDefault(p => targetGroupType.IsAssignableFrom(p.PropertyType));
         if (groupProp == null) return default;
 
-        Action<IMod, FormKey> addNew = (mod, fk) =>
+        void addNew(IMod mod, FormKey fk)
         {
             var group = (IGroup)groupProp.GetValue(mod)!;
             group.AddNew(fk);
-        };
-        Action<IMod, IMajorRecord> addExisting = (mod, rec) =>
+        }
+        void addExisting(IMod mod, IMajorRecord rec)
         {
             var group = (IGroup)groupProp.GetValue(mod)!;
             group.AddUntyped(rec);
-        };
+        }
 
         // Remove(FormKey) is on IGroup<T>, not the non-generic IGroup; resolve MethodInfo
         // once at schema-build time and close over it to avoid per-call reflection.
@@ -134,11 +130,13 @@ public sealed class SchemaReflector : ISchemaReflector
         var removeMethod = targetGroupType
             .GetMethod("Remove", BindingFlags.Public | BindingFlags.Instance, [typeof(FormKey)]);
         if (removeMethod != null)
+        {
             remove = (mod, fk) =>
             {
                 var grp = groupProp.GetValue(mod)!;
                 return removeMethod.Invoke(grp, [fk]) is true;
             };
+        }
 
         return (addNew, remove, addExisting);
     }
@@ -322,28 +320,29 @@ public sealed class SchemaReflector : ISchemaReflector
         var core = Nullable.GetUnderlyingType(elementType) ?? elementType;
 
         if (IsFormLink(core))
+        {
             // Array elements are commonly sparse (a "Null" slot is a tolerated placeholder, not a
             // data error) — getter interfaces can't statically distinguish this from a non-nullable
             // scalar anyway (see IsNullableFormLink), so default permissive here regardless.
             return new FieldMetadata("", "formKey", false,
                 GetFormLinkValidTypes(core, getterTypeToTable), _empty,
                 IsSortable: true, AllowsNull: true);
+        }
 
         if (IsLoquiInterface(core))
         {
             var sub = BuildSubSchema(core, getterTypeToTable, logger);
-            if (sub.Count == 0) return null;
-            return new FieldMetadata("", "struct", false, _empty, _empty,
-                Fields: sub.Select(s => s.ToFieldMetadata()).ToList());
+            return sub.Count == 0
+                ? null
+                : new FieldMetadata("", "struct", false, _empty, _empty,
+                Fields: [.. sub.Select(s => s.ToFieldMetadata())]);
         }
 
         if (core == typeof(float))
             return new("", "float", false, _empty, _empty);
         if (core == typeof(string) || IsTranslatedString(core))
             return new("", "string", false, _empty, _empty);
-        if (_integerTypes.Contains(core))
-            return new("", "int", false, _empty, _empty);
-        return null;
+        return _integerTypes.Contains(core) ? new("", "int", false, _empty, _empty) : null;
     }
 
     private static readonly HashSet<Type> _integerTypes =
@@ -464,12 +463,12 @@ public sealed class SchemaReflector : ISchemaReflector
     {
         var g = SubGetter(prop);
         var (names, bits) = GetEnumMeta(core);
-        if (bits != null)
-            return new("enum", "BIGINT", _empty, names,
+        return bits != null
+            ? new("enum", "BIGINT", _empty, names,
                 obj => g(obj) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
                 v => Enum.ToObject(core, ReadBitmaskLong(v)),
-                IsBitmask: true, EnumBitValues: bits);
-        return new("enum", "VARCHAR", _empty, names,
+                IsBitmask: true, EnumBitValues: bits)
+            : new("enum", "VARCHAR", _empty, names,
             obj => g(obj)?.ToString(),
             v => Enum.Parse(core, v.GetString()!, ignoreCase: true));
     }
@@ -519,10 +518,7 @@ public sealed class SchemaReflector : ISchemaReflector
         if (ClassifyLeaf(prop, core, getterTypeToTable) is { } leaf)
             return ProjectSubField(prop, colName, core, nullable, leaf, logger);
 
-        if (IsLoquiInterface(core))
-            return BuildStructSubField(prop, core, colName, getterTypeToTable, depth, logger);
-
-        return null;
+        return IsLoquiInterface(core) ? BuildStructSubField(prop, core, colName, getterTypeToTable, depth, logger) : null;
     }
 
     // Projects a shared LeafSpec into a sub-field. Generic leaves (primitive / enum / translated-
@@ -535,10 +531,7 @@ public sealed class SchemaReflector : ISchemaReflector
         Action<object, JsonElement>? apply;
         if (leaf.Convert is { } c)
             apply = MakeApplier(pName, nullable, c);
-        else if (IsFormLink(core))
-            apply = (obj, val) => ApplyFormLinkJson(obj, val, pName, logger);
-        else
-            apply = null;
+        else apply = IsFormLink(core) ? ((obj, val) => ApplyFormLinkJson(obj, val, pName, logger)) : null;
         return new(colName, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
             leaf.Get, apply,
             AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask, EnumBitValues: leaf.EnumBitValues);
@@ -615,10 +608,7 @@ public sealed class SchemaReflector : ISchemaReflector
         if (IsListType(core, out var elementType))
             return BuildListColumn(prop, elementType, getterTypeToTable, logger);
 
-        if (IsLoquiInterface(core))
-            return BuildStructColumn(prop, core, getterTypeToTable, logger);
-
-        return null;
+        return IsLoquiInterface(core) ? BuildStructColumn(prop, core, getterTypeToTable, logger) : null;
     }
 
     // Projects a shared LeafSpec into a top-level column. A form-link leaf (Convert null) yields a
@@ -642,7 +632,7 @@ public sealed class SchemaReflector : ISchemaReflector
         var elemMeta = BuildElementMeta(elementType, getterTypeToTable, logger);
         if (elemMeta == null) return null;
 
-        Func<IMajorRecordGetter, object?> extractor = r =>
+        object? extractor(IMajorRecordGetter r)
         {
             try // Stryker disable once Block: per-call accessor lambda stays silent per MEditService CLAUDE.md; SerializeListItems can throw on unusual record types in real game data
             {
@@ -651,7 +641,7 @@ public sealed class SchemaReflector : ISchemaReflector
                     : null;
             }
             catch { return null; }
-        };
+        }
 
         var pName = prop.Name;
         Action<IMajorRecord, JsonElement>? apply = isFl || isLoqui
@@ -720,14 +710,14 @@ public sealed class SchemaReflector : ISchemaReflector
         var subFields = BuildSubSchema(core, getterTypeToTable, logger);
         if (subFields.Count == 0) return null;
 
-        var subFieldMetas = subFields.Select(s => s.ToFieldMetadata()).ToList();
+        var subFieldMetas = subFields.ConvertAll(s => s.ToFieldMetadata());
 
-        Func<IMajorRecordGetter, object?> extractor = r =>
+        object? extractor(IMajorRecordGetter r)
         {
             var obj = TryGet(r, prop);
             return obj == null ? null
                 : JsonSerializer.Serialize(ExtractSubObject(obj, subFields));
-        };
+        }
 
         var setterType = GetSetterType(core);
         var pName = prop.Name;
@@ -756,5 +746,8 @@ public sealed class SchemaReflector : ISchemaReflector
     }
 
     internal static string ToSnakeCase(string name) =>
-        Regex.Replace(name, "(?<=[a-z0-9])([A-Z])", "_$1").ToLowerInvariant();
+        SnakeCaseBoundary().Replace(name, "_$1").ToLowerInvariant();
+
+    [GeneratedRegex("(?<=[a-z0-9])([A-Z])")]
+    private static partial Regex SnakeCaseBoundary();
 }

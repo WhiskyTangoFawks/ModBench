@@ -150,9 +150,9 @@ public static class ChangeEndpoints
         IEditOrchestrator orchestrator)
     {
         var targets = (req.Records ?? []).Select(r => (r.FormKey, r.Plugin)).ToList();
-        if (targets.Count == 0)
-            return Results.Problem("At least one record must be specified.", statusCode: 400);
-        return orchestrator.DeleteRecords(targets, "user").ToHttpResult();
+        return targets.Count == 0
+            ? Results.Problem("At least one record must be specified.", statusCode: 400)
+            : orchestrator.DeleteRecords(targets, "user").ToHttpResult();
     }
 
     private static IResult GetChanges(
@@ -330,8 +330,8 @@ public static class ChangeEndpoints
             RenumberResult.PluginImmutable p => Results.Problem(
                 $"'{p.Plugin}' is immutable and cannot be edited.", statusCode: 409),
             RenumberResult.ImmutableReferences blocked => Results.Problem(
-                title: "Immutable plugin holds a reference to this record.",
                 statusCode: 409,
+                title: "Immutable plugin holds a reference to this record.",
                 extensions: new Dictionary<string, object?> { { "blockers", blocked.Blockers } }),
             RenumberResult.FormIdInUse => Results.Problem(
                 "The requested FormID is already in use.", statusCode: 422),

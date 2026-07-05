@@ -29,9 +29,8 @@ public static class CheckErrorBuilder
         var resolvedType = getRecordType(value);
         if (resolvedType == null)
             return $"[{value}] <Error: Could not be resolved>";
-        if (validTypes.Count > 0 && !validTypes.Contains(resolvedType, StringComparer.OrdinalIgnoreCase))
-            return $"Found a {resolvedType} reference, expected: {string.Join(", ", validTypes)}";
-
-        return null;
+        return validTypes.Count > 0 && !validTypes.Contains(resolvedType, StringComparer.OrdinalIgnoreCase)
+            ? $"Found a {resolvedType} reference, expected: {string.Join(", ", validTypes)}"
+            : null;
     }
 }

@@ -30,18 +30,12 @@ public interface IPluginWriter
     bool IsReadOnly(GameRelease release, string recordType, string fieldPath);
 }
 
-public sealed class PluginWriter : IPluginWriter
+public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<PluginWriter> logger) : IPluginWriter
 {
     private const int MaxBackups = 5;
 
-    private readonly ISchemaReflector _schemaReflector;
-    private readonly ILogger<PluginWriter> _logger;
-
-    public PluginWriter(ISchemaReflector schemaReflector, ILogger<PluginWriter> logger)
-    {
-        _schemaReflector = schemaReflector;
-        _logger = logger;
-    }
+    private readonly ISchemaReflector _schemaReflector = schemaReflector;
+    private readonly ILogger<PluginWriter> _logger = logger;
 
     public async Task<PreparedPluginSave> PrepareAsync(
         string pluginPath,
@@ -217,11 +211,14 @@ public sealed class PluginWriter : IPluginWriter
         if (cell.GetType().GetProperty(listName)?.GetValue(cell) is not System.Collections.IList list)
             return false;
         for (var i = list.Count - 1; i >= 0; i--)
+        {
             if (list[i] is IMajorRecordGetter rec && rec.FormKey == formKey)
             {
                 list.RemoveAt(i);
                 return true;
             }
+        }
+
         return false;
     }
 
@@ -348,8 +345,10 @@ public sealed class PluginWriter : IPluginWriter
         // IMod.RemapLinks() is an explicit interface impl on AMod that throws; iterate
         // records directly so each concrete type's public override is dispatched.
         if (allMappings.Count > 0)
+        {
             foreach (var rec in mod.EnumerateMajorRecords())
                 rec.RemapLinks(allMappings);
+        }
     }
 
     private static bool TryRenumberRecord(
@@ -358,11 +357,15 @@ public sealed class PluginWriter : IPluginWriter
     {
         if (!FormKey.TryFactory(renumberChange.OldValue.GetString()!, out var oldFormKey) ||
             !FormKey.TryFactory(renumberChange.NewValue.GetString()!, out var newFormKey))
+        {
             return false;
+        }
 
         if (!schemas.TryGetValue(renumberChange.RecordType, out var schema) ||
             schema.AddExisting == null || schema.Remove == null)
+        {
             return false;
+        }
 
         var oldRecord = mod.EnumerateMajorRecords()
             .FirstOrDefault(r => r.FormKey == oldFormKey);
@@ -484,7 +487,9 @@ public sealed class PluginWriter : IPluginWriter
         var op = change.NewValue;
         if (op.ValueKind != JsonValueKind.Object
             || !op.TryGetProperty("op", out var opEl) || opEl.GetString() is not string opName)
+        {
             return ApplyOutcome.NotFound;
+        }
 
         // Route by path shape: "VMAD\<ScriptName>" is script-level, "VMAD\<ScriptName>\<Prop>" property-level.
         if (VmadPath.TryParseScript(change.FieldPath, out var scriptOnly))
@@ -534,7 +539,10 @@ public sealed class PluginWriter : IPluginWriter
         if (prop == null) return ApplyOutcome.NotFound;
         if (!op.TryGetProperty("flags", out var f) || f.GetString() is not string s
             || !Enum.TryParse<ScriptProperty.Flag>(s, out var parsed))
+        {
             return ApplyOutcome.NotFound;
+        }
+
         prop.Flags = parsed;
         return ApplyOutcome.Applied;
     }
@@ -546,7 +554,10 @@ public sealed class PluginWriter : IPluginWriter
         if (script == null) return ApplyOutcome.NotFound;
         if (!op.TryGetProperty("flags", out var f) || f.GetString() is not string s
             || !Enum.TryParse<ScriptEntry.Flag>(s, out var parsed))
+        {
             return ApplyOutcome.NotFound;
+        }
+
         script.Flags = parsed;
         return ApplyOutcome.Applied;
     }
@@ -560,11 +571,14 @@ public sealed class PluginWriter : IPluginWriter
 
         var idx = -1;
         for (var i = 0; i < script.Properties.Count; i++)
+        {
             if (string.Equals(script.Properties[i].Name, propName, StringComparison.OrdinalIgnoreCase))
             {
                 idx = i;
                 break;
             }
+        }
+
         if (idx < 0) return ApplyOutcome.NotFound;
 
         var replacement = BuildDefaultProperty(type);
@@ -586,8 +600,11 @@ public sealed class PluginWriter : IPluginWriter
         var entry = new ScriptEntry { Name = scriptName, Flags = ParseScriptFlags(op) };
 
         for (var i = vmad.Scripts.Count - 1; i >= 0; i--)
+        {
             if (string.Equals(vmad.Scripts[i].Name, scriptName, StringComparison.OrdinalIgnoreCase))
                 vmad.Scripts.RemoveAt(i);
+        }
+
         vmad.Scripts.Add(entry);
         SortScripts(vmad);
         return ApplyOutcome.Applied;
@@ -599,11 +616,14 @@ public sealed class PluginWriter : IPluginWriter
         if (vmad == null) return ApplyOutcome.NotFound;
         var removed = false;
         for (var i = vmad.Scripts.Count - 1; i >= 0; i--)
+        {
             if (string.Equals(vmad.Scripts[i].Name, scriptName, StringComparison.OrdinalIgnoreCase))
             {
                 vmad.Scripts.RemoveAt(i);
                 removed = true;
             }
+        }
+
         return removed ? ApplyOutcome.Applied : ApplyOutcome.NotFound;
     }
 
@@ -633,7 +653,9 @@ public sealed class PluginWriter : IPluginWriter
     {
         if (!op.TryGetProperty("name", out var nameEl) || nameEl.GetString() is not string name
             || !op.TryGetProperty("type", out var typeEl) || typeEl.GetString() is not string type)
+        {
             return ApplyOutcome.NotFound;
+        }
 
         var prop = BuildDefaultProperty(type);
         if (prop == null)
@@ -660,11 +682,14 @@ public sealed class PluginWriter : IPluginWriter
     {
         var removed = false;
         for (var i = script.Properties.Count - 1; i >= 0; i--)
+        {
             if (string.Equals(script.Properties[i].Name, name, StringComparison.OrdinalIgnoreCase))
             {
                 script.Properties.RemoveAt(i);
                 removed = true;
             }
+        }
+
         return removed;
     }
 
@@ -846,7 +871,10 @@ public sealed class PluginWriter : IPluginWriter
         prop = null!;
         if (!node.TryGetProperty("formKeyValue", out var fkEl) || fkEl.GetString() is not string fkStr
             || !FormKey.TryFactory(fkStr, out var fk))
+        {
             return false;
+        }
+
         var alias = node.TryGetProperty("aliasValue", out var aEl) && aEl.ValueKind == JsonValueKind.Number
             ? aEl.GetInt16()
             : (short)0;
@@ -898,7 +926,9 @@ public sealed class PluginWriter : IPluginWriter
             .Skip(MaxBackups);
 
         foreach (var f in old)
+        {
             try { File.Delete(f); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to delete old backup {File}", f); }
+        }
     }
 }

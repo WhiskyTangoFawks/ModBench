@@ -189,6 +189,13 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   async getChildren(element?: PluginTreeNode): Promise<PluginTreeNode[]> {
     if (!element) return this.fetchPlugins();
     if (element instanceof PluginNode) return this.fetchPluginChildren(element);
+    if (element instanceof RecordTypeNode) return this.fetchRecords(element);
+    return this.getSpatialChildren(element);
+  }
+
+  // Dispatch for the worldspace / cell / block spatial hierarchy, split out of getChildren
+  // so neither dispatch ladder exceeds the complexity budget.
+  private getSpatialChildren(element: PluginTreeNode): Promise<PluginTreeNode[]> | PluginTreeNode[] {
     if (element instanceof WorldspacesNode) return this.fetchWorldspaces(element);
     if (element instanceof WorldspaceNode) return this.fetchWorldspaceChildren(element);
     if (element instanceof BlockNode) return element.block.subBlocks.map(s => new SubBlockNode(element.plugin, s));
@@ -196,7 +203,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     if (element instanceof CellNode) return this.fetchCellGroups(element);
     if (element instanceof PlacedGroupNode) return element.placed.map(p => new PlacedNode(element.plugin, p));
     if (element instanceof InteriorCellsNode) return this.fetchInteriorCells(element);
-    if (element instanceof RecordTypeNode) return this.fetchRecords(element);
     return [];
   }
 

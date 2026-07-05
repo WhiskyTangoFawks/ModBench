@@ -103,46 +103,14 @@ export async function deploy(
 ): Promise<void> {
   const { dataFolder } = gameDirectory;
 
-  // Hardlinks require mods/ and the game directory to share a volume. Bail before
-  // touching anything if they don't (ADR-0026 "explicit action failed") — the
-  // caller offers a stock-folder move or symlink fallback; we never silently symlink.
-  const statFn = opts.statFn ?? ((p: string) => stat(p));
   const modsDir = join(instanceRoot, 'mods');
-  const [modsStat, gameStat] = await Promise.all([statFn(modsDir), statFn(gameDirectory.root)]);
-  if (modsStat.dev !== gameStat.dev) {
-    reporter.report(
-      'error',
-      'Cannot deploy: mods/ and the game directory are on different drives. Point modbench.mods.gameDirectory at a stock folder on the same drive, or use the symlink fallback.',
-      `mods/=${modsDir} game=${gameDirectory.root}`,
-    );
-    return;
-  }
+  const statFn = opts.statFn ?? ((p: string) => stat(p));
+  if (!(await onSameVolume(modsDir, gameDirectory, statFn, reporter))) return;
 
-  const previous = await readManifest(instanceRoot);
-  const previousLinks = new Set(previous?.links ?? []);
-  // First deploy: snapshot Data/ as the vanilla baseline. On re-deploy the
-  // baseline is preserved from the prior manifest (Data/ now includes our links).
-  const preExisting = previous?.preExisting ?? (await listRelativeFiles(dataFolder));
+  const { previousLinks, preExisting } = await readBaseline(instanceRoot, dataFolder);
 
-  const linkFn = opts.linkFn ?? link;
-  const links: string[] = [];
-  const skipped: string[] = [];
-
-  for (const [relativePath, entry] of index.files) {
-    // MO2 Root-Builder: a mod's root/ contents map to the game root, not Data/.
-    // Deploying them into Data/root/ would be wrong; skip (deferred — see modbench-4).
-    if (relativePath === 'root' || relativePath.startsWith('root/')) continue;
-
-    const outcome = await linkWinner(join(dataFolder, relativePath), entry.winner, previousLinks.has(relativePath), linkFn);
-    (outcome === 'linked' ? links : skipped).push(relativePath);
-  }
-
-  // Remove prior links whose path is no longer a winner (e.g. a mod was
-  // disabled/removed), so a later purge doesn't misfile them as strays.
-  const nowLinked = new Set(links);
-  for (const relativePath of previousLinks) {
-    if (!nowLinked.has(relativePath)) await rm(join(dataFolder, relativePath), { force: true });
-  }
+  const { links, skipped } = await linkWinners(index, dataFolder, previousLinks, opts.linkFn ?? link);
+  await removeStaleLinks(dataFolder, previousLinks, links);
 
   if (skipped.length > 0) {
     reporter.report(
@@ -156,6 +124,68 @@ export async function deploy(
 
   const manifest: Manifest = { links, preExisting, loadOrder };
   await writeFile(manifestPath(instanceRoot), JSON.stringify(manifest, null, 2));
+}
+
+/** Hardlinks require mods/ and the game directory to share a volume. Reports and
+ *  returns false if they don't (ADR-0026 "explicit action failed") — the caller
+ *  offers a stock-folder move or symlink fallback; we never silently symlink. */
+async function onSameVolume(
+  modsDir: string,
+  gameDirectory: GameDirectory,
+  statFn: (p: string) => Promise<{ dev: number }>,
+  reporter: Reporter,
+): Promise<boolean> {
+  const [modsStat, gameStat] = await Promise.all([statFn(modsDir), statFn(gameDirectory.root)]);
+  if (modsStat.dev === gameStat.dev) return true;
+  reporter.report(
+    'error',
+    'Cannot deploy: mods/ and the game directory are on different drives. Point modbench.mods.gameDirectory at a stock folder on the same drive, or use the symlink fallback.',
+    `mods/=${modsDir} game=${gameDirectory.root}`,
+  );
+  return false;
+}
+
+/** Resolve the prior-deploy baseline: our previous links, and the vanilla Data/
+ *  snapshot. First deploy snapshots Data/; re-deploy preserves the prior baseline
+ *  (Data/ now includes our links, so it must not be re-snapshotted). */
+async function readBaseline(
+  instanceRoot: string,
+  dataFolder: string,
+): Promise<{ previousLinks: Set<string>; preExisting: string[] }> {
+  const previous = await readManifest(instanceRoot);
+  return {
+    previousLinks: new Set(previous?.links ?? []),
+    preExisting: previous?.preExisting ?? (await listRelativeFiles(dataFolder)),
+  };
+}
+
+/** Hardlink each winner into Data/, partitioning paths into linked vs skipped. */
+async function linkWinners(
+  index: FileConflictIndex,
+  dataFolder: string,
+  previousLinks: Set<string>,
+  linkFn: (source: string, target: string) => Promise<void>,
+): Promise<{ links: string[]; skipped: string[] }> {
+  const links: string[] = [];
+  const skipped: string[] = [];
+  for (const [relativePath, entry] of index.files) {
+    // MO2 Root-Builder: a mod's root/ contents map to the game root, not Data/.
+    // Deploying them into Data/root/ would be wrong; skip (deferred — see modbench-4).
+    if (relativePath === 'root' || relativePath.startsWith('root/')) continue;
+
+    const outcome = await linkWinner(join(dataFolder, relativePath), entry.winner, previousLinks.has(relativePath), linkFn);
+    (outcome === 'linked' ? links : skipped).push(relativePath);
+  }
+  return { links, skipped };
+}
+
+/** Remove prior links whose path is no longer a winner (e.g. a mod was
+ *  disabled/removed), so a later purge doesn't misfile them as strays. */
+async function removeStaleLinks(dataFolder: string, previousLinks: Set<string>, links: string[]): Promise<void> {
+  const nowLinked = new Set(links);
+  for (const relativePath of previousLinks) {
+    if (!nowLinked.has(relativePath)) await rm(join(dataFolder, relativePath), { force: true });
+  }
 }
 
 /** Copy load-order files to their game-read targets. Best-effort: a failure is

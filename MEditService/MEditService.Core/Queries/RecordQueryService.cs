@@ -5,40 +5,31 @@ using MEditService.Core.Session;
 
 namespace MEditService.Core.Queries;
 
-public sealed class RecordQueryService : IRecordQueryService
+public sealed class RecordQueryService(
+    ISessionManager session,
+    IPendingChangeService changes,
+    ISchemaReflector schemaReflector,
+    IConflictClassifier conflictClassifier) : IRecordQueryService
 {
-    private readonly ISessionManager _session;
-    private readonly IPendingChangeService _changes;
-    private readonly ISchemaReflector _schemaReflector;
-    private readonly IConflictClassifier _conflictClassifier;
-
-    public RecordQueryService(
-        ISessionManager session,
-        IPendingChangeService changes,
-        ISchemaReflector schemaReflector,
-        IConflictClassifier conflictClassifier)
-    {
-        _session = session;
-        _changes = changes;
-        _schemaReflector = schemaReflector;
-        _conflictClassifier = conflictClassifier;
-    }
+    private readonly ISessionManager _session = session;
+    private readonly IPendingChangeService _changes = changes;
+    private readonly ISchemaReflector _schemaReflector = schemaReflector;
+    private readonly IConflictClassifier _conflictClassifier = conflictClassifier;
 
     public IReadOnlyList<PluginResponse> GetPlugins()
     {
         var s = RequireSession();
         if (s.FilterSql is null)
-            return s.Plugins.Select(PluginResponse.FromMetadata).ToList();
+            return [.. s.Plugins.Select(PluginResponse.FromMetadata)];
 
         var matchingPlugins = RequireRepository().GetPluginsWithMatchingRecords(RequireSchemas().Keys);
-        return s.Plugins
+        return [.. s.Plugins
             .Where(p => matchingPlugins.Contains(p.Name))
-            .Select(PluginResponse.FromMetadata)
-            .ToList();
+            .Select(PluginResponse.FromMetadata)];
     }
 
     public IReadOnlyList<string> GetRecordTypes() =>
-        RequireSchemas().Keys.Order().ToList();
+        [.. RequireSchemas().Keys.Order()];
 
     public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset)
     {
@@ -54,7 +45,7 @@ public sealed class RecordQueryService : IRecordQueryService
         }
         else
         {
-            committed = repository.SearchRecords(schemas.Keys.ToList(), plugin, search, limit, offset);
+            committed = repository.SearchRecords([.. schemas.Keys], plugin, search, limit, offset);
         }
 
         if (plugin == null || offset > 0)
@@ -72,8 +63,7 @@ public sealed class RecordQueryService : IRecordQueryService
             .FirstOrDefault(p => p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase))?.LoadOrderIndex ?? -1;
 
         var stagedSummaries = staged
-            .Select(s => new RecordSummary(s.FormKey, plugin, loadOrderIndex, IsWinner: false, EditorId: null))
-            .ToList();
+            .ConvertAll(s => new RecordSummary(s.FormKey, plugin, loadOrderIndex, IsWinner: false, EditorId: null));
 
         return new PagedResult<RecordSummary>(
             [.. committed.Items, .. stagedSummaries],
@@ -84,16 +74,14 @@ public sealed class RecordQueryService : IRecordQueryService
     {
         var repository = RequireRepository();
         var tableName = repository.FindRecordType(formKey);
-        if (tableName == null) return null;
-        return repository.GetRecord(tableName, formKey, plugin: null, winnerOnly: true);
+        return tableName == null ? null : repository.GetRecord(tableName, formKey, plugin: null, winnerOnly: true);
     }
 
     public RecordDetail? GetRecordForPlugin(string formKey, string plugin)
     {
         var repository = RequireRepository();
         var tableName = repository.FindRecordType(formKey);
-        if (tableName == null) return null;
-        return repository.GetRecord(tableName, formKey, plugin, winnerOnly: false);
+        return tableName == null ? null : repository.GetRecord(tableName, formKey, plugin, winnerOnly: false);
     }
 
     public string? GetRecordType(string formKey) =>
@@ -110,24 +98,21 @@ public sealed class RecordQueryService : IRecordQueryService
             var withPending = overrides.Select(o =>
             {
                 var pending = _changes.GetPendingFields(formKey, o.Plugin);
-                if (pending == null) return o;
-                return o with { PendingFields = pending.ToDictionary(kv => kv.Key, kv => (object?)kv.Value) };
+                return pending == null ? o : (o with { PendingFields = pending.ToDictionary(kv => kv.Key, kv => (object?)kv.Value) });
             }).ToList();
 
             var pluginMasters = RequireSession().Plugins
                 .ToDictionary(p => p.Name, p => p.Masters);
             var classification = _conflictClassifier.Classify(withPending, pluginMasters);
             var annotated = withPending
-                .Select(o => new CompareOverride(
+                .ConvertAll(o => new CompareOverride(
                     o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields, o.PendingFields,
-                    classification.PluginStates.GetValueOrDefault(o.Plugin, ConflictThis.OnlyOne)))
-                .ToList();
+                    classification.PluginStates.GetValueOrDefault(o.Plugin, ConflictThis.OnlyOne)));
 
             // VMAD is outside the generic reflection pipeline, so classify it separately and fold
             // its conflict contribution into the record-level ConflictAll (computed on demand, never stored).
             var vmadInputs = withPending
-                .Select(o => new VmadPluginInput(o.Plugin, o.LoadOrderIndex, repository.GetVmad(formKey, o.Plugin)))
-                .ToList();
+                .ConvertAll(o => new VmadPluginInput(o.Plugin, o.LoadOrderIndex, repository.GetVmad(formKey, o.Plugin)));
             VmadCompare? vmad = null;
             var conflictAll = classification.ConflictAll;
             if (vmadInputs.Any(i => i.Vmad != null))
@@ -170,10 +155,9 @@ public sealed class RecordQueryService : IRecordQueryService
             counts[recordType] = existing + 1;
         }
 
-        return counts
+        return [.. counts
             .Select(kv => new PluginRecordTypeCount(kv.Key, kv.Value))
-            .OrderBy(r => r.Type)
-            .ToList();
+            .OrderBy(r => r.Type)];
     }
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>

@@ -6,16 +6,11 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
-public sealed class InMemoryRecordRepository : IRecordRepository
+public sealed class InMemoryRecordRepository(ISchemaReflector schemaReflector) : IRecordRepository
 {
-    private readonly ISchemaReflector _schemaReflector;
+    private readonly ISchemaReflector _schemaReflector = schemaReflector;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
-    private readonly Dictionary<string, List<RecordDetail>> _tables = new();
-
-    public InMemoryRecordRepository(ISchemaReflector schemaReflector)
-    {
-        _schemaReflector = schemaReflector;
-    }
+    private readonly Dictionary<string, List<RecordDetail>> _tables = [];
 
     public DuckDBConnection Connection =>
         throw new NotSupportedException();
@@ -99,20 +94,16 @@ public sealed class InMemoryRecordRepository : IRecordRepository
 
     public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey)
     {
-        if (!_tables.TryGetValue(tableName, out var table))
-            return [];
-
-        return table.Where(r => r.FormKey == formKey)
-            .OrderBy(r => r.LoadOrderIndex)
-            .ToList();
+        return !_tables.TryGetValue(tableName, out var table)
+            ? []
+            : [.. table.Where(r => r.FormKey == formKey).OrderBy(r => r.LoadOrderIndex)];
     }
 
     public int CountRecordsForPlugin(string tableName, string plugin)
     {
-        if (!_tables.TryGetValue(tableName, out var table))
-            return 0;
-
-        return table.Count(r => r.Plugin.Equals(plugin, StringComparison.OrdinalIgnoreCase));
+        return !_tables.TryGetValue(tableName, out var table)
+            ? 0
+            : table.Count(r => r.Plugin.Equals(plugin, StringComparison.OrdinalIgnoreCase));
     }
 
     public string? FindRecordType(string formKey)
@@ -136,7 +127,7 @@ public sealed class InMemoryRecordRepository : IRecordRepository
             allItems.AddRange(page.Items);
         }
         allItems.Sort((a, b) => string.Compare(a.EditorId, b.EditorId, StringComparison.OrdinalIgnoreCase));
-        return new PagedResult<RecordSummary>(allItems.Skip(offset).Take(limit).ToList(), total);
+        return new PagedResult<RecordSummary>([.. allItems.Skip(offset).Take(limit)], total);
     }
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => [];
@@ -156,9 +147,14 @@ public sealed class InMemoryRecordRepository : IRecordRepository
     {
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var tableName in tableNames)
+        {
             if (_tables.TryGetValue(tableName, out var table))
+            {
                 foreach (var r in table)
                     result.Add(r.Plugin);
+            }
+        }
+
         return result;
     }
 

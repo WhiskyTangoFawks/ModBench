@@ -14,13 +14,12 @@ public sealed class GameSession : IGameSession
     private readonly Dictionary<string, IModGetter> _modsByName = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PluginMetadata> _plugins = [];
     private readonly List<PluginLoadFailure> _loadFailures = [];
-    private readonly ILinkCache _linkCache;
 
     public string DataFolderPath { get; }
     public GameRelease GameRelease { get; }
     public IReadOnlyList<PluginMetadata> Plugins => _plugins;
     public IReadOnlyList<PluginLoadFailure> LoadFailures => _loadFailures;
-    public ILinkCache LinkCache => _linkCache;
+    public ILinkCache LinkCache { get; }
     public string? FilterSql { get; set; }
 
     public IModGetter? GetMod(string pluginName) =>
@@ -67,14 +66,16 @@ public sealed class GameSession : IGameSession
 
         var explicitNames = PluginListings.RawLoadOrderListingsFromPath(pluginsTxtPath, gameRelease)
             .Where(l => l.Enabled)
-            .Select(l => l.FileName.ToString())
+            .Select(l => l.FileName)
             .Where(name => !implicitKeys.Contains(name));
 
-        return implicitKeys
-            .Select(name => new ResolvedPlugin(name, Path.Combine(dataFolderPath, name), IsImmutable: true))
-            .Concat(explicitNames
-                .Select(name => new ResolvedPlugin(name, Path.Combine(dataFolderPath, name), IsImmutable: false)))
-            .ToList();
+        return
+        [
+            .. implicitKeys
+                        .Select(name => new ResolvedPlugin(name, Path.Combine(dataFolderPath, name), IsImmutable: true)),
+            .. explicitNames
+                    .Select(name => new ResolvedPlugin(name, Path.Combine(dataFolderPath, name), IsImmutable: false)),
+        ];
     }
 
     private GameSession(string dataFolderPath, GameRelease gameRelease, IReadOnlyList<ResolvedPlugin> ordered, ILogger? logger)
@@ -131,7 +132,7 @@ public sealed class GameSession : IGameSession
 
         logger.LogInformation("Building load order and link cache for {Count} plugin(s)", modListings.Count);
         var loadOrder = new LoadOrder<IModListing<IModGetter>>(modListings);
-        _linkCache = loadOrder.ToUntypedImmutableLinkCache(gameRelease.ToCategory());
+        LinkCache = loadOrder.ToUntypedImmutableLinkCache(gameRelease.ToCategory());
         logger.LogInformation("GameSession ready");
     }
 
@@ -173,8 +174,10 @@ public sealed class GameSession : IGameSession
     public void Dispose()
     {
         foreach (var mod in _mods)
+        {
             // Stryker disable once Statement : verifying per-mod disposal requires OS-level resource checks beyond the public API
             mod.Dispose();
-        (_linkCache as IDisposable)?.Dispose();
+        }
+        (LinkCache as IDisposable)?.Dispose();
     }
 }

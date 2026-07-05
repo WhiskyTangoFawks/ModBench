@@ -4,12 +4,9 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Queries;
 
-public sealed class ConflictClassifier : IConflictClassifier
+public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = null) : IConflictClassifier
 {
-    private readonly ILogger _logger;
-
-    public ConflictClassifier(ILogger<ConflictClassifier>? logger = null)
-        => _logger = (ILogger?)logger ?? NullLogger.Instance;
+    private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
@@ -36,7 +33,7 @@ public sealed class ConflictClassifier : IConflictClassifier
             .Where(f => f.Metadata.ElementType?.IsSortable == true)
             .Select(f => f.Metadata.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var diffs = BuildDiffs(master.Fields.Select(f => f.Metadata.Name).ToList(), conflictingRecords, winner, master.Plugin, sortedArrays);
+        var diffs = BuildDiffs([.. master.Fields.Select(f => f.Metadata.Name)], conflictingRecords, winner, master.Plugin, sortedArrays);
 
         var conflictAll = ComputeConflictAll(master.Plugin, masterValues, conflictingRecords, diffs, sortedArrays);
 
@@ -115,7 +112,7 @@ public sealed class ConflictClassifier : IConflictClassifier
     {
         var masterFieldMeta = records[0].Fields
             .ToDictionary(f => f.Metadata.Name, f => f.Metadata);
-        return fieldNames
+        return [.. fieldNames
             .Select(fieldName =>
             {
                 var values = records.ToDictionary(
@@ -131,8 +128,7 @@ public sealed class ConflictClassifier : IConflictClassifier
                     children = BuildArrayChildren(meta.ElementType, values, masterPlugin, records, _logger, MaxArrayChildCount, fieldName);
                 return new FieldDiff(fieldName, values, winner.Plugin, winnerValue, cellStates, children);
             })
-            .Where(d => d.Values.Values.Any(v => v != null))
-            .ToList();
+            .Where(d => d.Values.Values.Any(v => v != null))];
     }
 
     private static List<FieldDiff>? BuildArrayChildren(
@@ -301,7 +297,10 @@ public sealed class ConflictClassifier : IConflictClassifier
         if (structValue is System.Text.Json.JsonElement je &&
             je.ValueKind == System.Text.Json.JsonValueKind.Object &&
             je.TryGetProperty(subFieldName, out var sub))
+        {
             return sub.ValueKind == System.Text.Json.JsonValueKind.Null ? null : sub;
+        }
+
         return null;
     }
 
@@ -350,9 +349,11 @@ public sealed class ConflictClassifier : IConflictClassifier
             return ConflictThis.IdenticalToMaster;
 
         if (plugin == fieldWinner.Plugin)
+        {
             return IsContested(records, values, masterPlugin, plugin, pluginValue, isSorted)
                 ? ConflictThis.ConflictWins
                 : ConflictThis.Override;
+        }
 
         return !ValuesEqual(pluginValue, values[fieldWinner.Plugin], isSorted)
             ? ConflictThis.ConflictLoses
@@ -389,8 +390,8 @@ public sealed class ConflictClassifier : IConflictClassifier
                 jb.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
                 if (ja.GetArrayLength() != jb.GetArrayLength()) return false;
-                var sortedA = ja.EnumerateArray().Select(e => e.GetRawText()).OrderBy(x => x);
-                var sortedB = jb.EnumerateArray().Select(e => e.GetRawText()).OrderBy(x => x);
+                var sortedA = ja.EnumerateArray().Select(e => e.GetRawText()).Order();
+                var sortedB = jb.EnumerateArray().Select(e => e.GetRawText()).Order();
                 return sortedA.SequenceEqual(sortedB);
             }
             return ja.GetRawText() == jb.GetRawText();

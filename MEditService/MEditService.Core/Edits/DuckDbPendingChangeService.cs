@@ -400,9 +400,11 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 refCmd.Parameters.Add(new DuckDBParameter { Value = plugin });
                 using var refReader = refCmd.ExecuteReader();
                 while (refReader.Read())
+                {
                     refsList.Add((
                         refReader.GetString(0),
                         new PendingFormRef(refReader.GetString(1), refReader.GetString(2), refReader.GetString(3))));
+                }
             }
 
             using var txn = conn.BeginTransaction();
@@ -531,8 +533,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
 
             using var reader = cmd.ExecuteReader();
-            if (!reader.Read()) return null;
-            return Guid.Parse(reader.GetString(0));
+            return !reader.Read() ? null : Guid.Parse(reader.GetString(0));
         }
         finally { _sem.Release(); }
     }
@@ -552,8 +553,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
 
             using var reader = cmd.ExecuteReader();
-            if (!reader.Read()) return null;
-            return reader.GetString(0);
+            return !reader.Read() ? null : reader.GetString(0);
         }
         finally { _sem.Release(); }
     }
@@ -576,8 +576,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             foreach (var key in formKeys)
                 cmd.Parameters.Add(new DuckDBParameter { Value = key });
             using var reader = cmd.ExecuteReader();
-            if (!reader.Read() || reader.IsDBNull(0)) return null;
-            return Guid.Parse(reader.GetString(0));
+            return !reader.Read() || reader.IsDBNull(0) ? null : Guid.Parse(reader.GetString(0));
         }
         finally { _sem.Release(); }
     }
@@ -641,7 +640,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             using var countCmd = conn.CreateCommand();
             countCmd.CommandText = "SELECT CAST(COUNT(*) AS INTEGER) FROM pending_changes WHERE group_id = $1";
             countCmd.Parameters.Add(new DuckDBParameter { Value = groupId.ToString() });
-            var actualCount = Convert.ToInt32(countCmd.ExecuteScalar()!, System.Globalization.CultureInfo.InvariantCulture);
+            var actualCount = Convert.ToInt32(countCmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
             var pluginCount = members.Select(m => m.Plugin).Distinct(StringComparer.OrdinalIgnoreCase).Count();
             return new ChangeGroup(groupId, operation, description, createdAt, actualCount, pluginCount);
         }
@@ -661,7 +660,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
 
             var byPlugin = pending
                 .GroupBy(c => c.Plugin)
-                .ToDictionary(g => g.Key, g => (IReadOnlyList<PendingChange>)g.ToList());
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<PendingChange>)[.. g]);
 
             await using var txn = await conn.BeginTransactionAsync();
             DeleteChangesForGroup(conn, groupId);
