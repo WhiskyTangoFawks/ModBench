@@ -20,7 +20,8 @@ const SEPARATOR_SUFFIX = '_separator';
  *  lines carry no model meaning and are ignored (but preserved on write). */
 export function parseModlist(text: string): ModlistEntry[] {
   const entries: ModlistEntry[] = [];
-  for (const raw of text.split(/\r\n|\r|\n/)) {
+  const withoutBom = text.startsWith('\uFEFF') ? text.slice(1) : text; // model view only; write path preserves the BOM byte
+  for (const raw of withoutBom.split(/\r\n|\r|\n/)) {
     const prefix = raw[0];
     if (prefix !== '+' && prefix !== '-') continue; // comment, *, blank
     const enabled = prefix === '+';
