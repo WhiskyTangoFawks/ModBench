@@ -154,10 +154,22 @@ export class InteriorLoadMoreNode extends vscode.TreeItem {
   }
 }
 
+/** Inline error surface: shown instead of an empty list when a fetch fails,
+ *  so a failure is never indistinguishable from "nothing here" (ADR-0026). */
+export class ErrorNode extends vscode.TreeItem {
+  readonly kind = 'error' as const;
+  constructor(message: string) {
+    super(`⚠ Failed to load: ${message}`, vscode.TreeItemCollapsibleState.None);
+    this.contextValue = 'error';
+    this.tooltip = message;
+    this.iconPath = new vscode.ThemeIcon('error');
+  }
+}
+
 export type PluginTreeNode =
   | PluginNode | RecordTypeNode | RecordNode | LoadMoreNode
   | WorldspacesNode | WorldspaceNode | BlockNode | SubBlockNode | CellNode
-  | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorLoadMoreNode;
+  | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorLoadMoreNode | ErrorNode;
 
 type PageCache = Map<string, { items: RecordSummary[]; total: number }>;
 type CellPageCache = Map<string, { items: CellSummary[]; total: number }>;
@@ -241,13 +253,14 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return e instanceof Error ? e.message : String(e);
   }
 
-  private async fetchPlugins(): Promise<PluginNode[]> {
+  private async fetchPlugins(): Promise<PluginTreeNode[]> {
     try {
       const plugins = await this.repository.getPlugins();
       return plugins.map(p => new PluginNode(p));
     } catch (e) {
-      this.log(`[PluginTreeProvider] fetchPlugins failed: ${this.err(e)}`);
-      return [];
+      const message = this.err(e);
+      this.log(`[PluginTreeProvider] fetchPlugins failed: ${message}`);
+      return [new ErrorNode(message)];
     }
   }
 
@@ -262,18 +275,20 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       }
       return nodes;
     } catch (e) {
-      this.log(`[PluginTreeProvider] fetchPluginChildren(${node.plugin.name}) failed: ${this.err(e)}`);
-      return [];
+      const message = this.err(e);
+      this.log(`[PluginTreeProvider] fetchPluginChildren(${node.plugin.name}) failed: ${message}`);
+      return [new ErrorNode(message)];
     }
   }
 
-  private async fetchWorldspaces(node: WorldspacesNode): Promise<WorldspaceNode[]> {
+  private async fetchWorldspaces(node: WorldspacesNode): Promise<PluginTreeNode[]> {
     try {
       const worldspaces = await this.repository.getWorldspaces(node.plugin);
       return worldspaces.map(w => new WorldspaceNode(node.plugin, w));
     } catch (e) {
-      this.log(`[PluginTreeProvider] fetchWorldspaces(${node.plugin}) failed: ${this.err(e)}`);
-      return [];
+      const message = this.err(e);
+      this.log(`[PluginTreeProvider] fetchWorldspaces(${node.plugin}) failed: ${message}`);
+      return [new ErrorNode(message)];
     }
   }
 
@@ -285,12 +300,13 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       nodes.push(...data.blocks.map(b => new BlockNode(node.plugin, b)));
       return nodes;
     } catch (e) {
-      this.log(`[PluginTreeProvider] fetchWorldspaceChildren(${node.worldspace.formKey}) failed: ${this.err(e)}`);
-      return [];
+      const message = this.err(e);
+      this.log(`[PluginTreeProvider] fetchWorldspaceChildren(${node.worldspace.formKey}) failed: ${message}`);
+      return [new ErrorNode(message)];
     }
   }
 
-  private async fetchCellGroups(node: CellNode): Promise<PlacedGroupNode[]> {
+  private async fetchCellGroups(node: CellNode): Promise<PluginTreeNode[]> {
     const cacheKey = `${node.plugin}::${node.cell.formKey}`;
     let refs = this.refCache.get(cacheKey);
     if (!refs) {
@@ -298,8 +314,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
         refs = await this.repository.getCellReferences(node.plugin, node.cell.formKey);
         this.refCache.set(cacheKey, refs);
       } catch (e) {
-        this.log(`[PluginTreeProvider] fetchCellGroups(${node.cell.formKey}) failed: ${this.err(e)}`);
-        return [];
+        const message = this.err(e);
+        this.log(`[PluginTreeProvider] fetchCellGroups(${node.cell.formKey}) failed: ${message}`);
+        return [new ErrorNode(message)];
       }
     }
     const groups: PlacedGroupNode[] = [];
@@ -315,8 +332,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
         cached = await this.repository.getInteriorCells(node.plugin, 0, PAGE_SIZE);
         this.interiorCache.set(node.plugin, cached);
       } catch (e) {
-        this.log(`[PluginTreeProvider] fetchInteriorCells(${node.plugin}) failed: ${this.err(e)}`);
-        return [];
+        const message = this.err(e);
+        this.log(`[PluginTreeProvider] fetchInteriorCells(${node.plugin}) failed: ${message}`);
+        return [new ErrorNode(message)];
       }
     }
     const nodes: PluginTreeNode[] = cached.items.map(c => new CellNode(node.plugin, c));
@@ -326,7 +344,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return nodes;
   }
 
-  private async fetchRecords(node: RecordTypeNode): Promise<(RecordNode | LoadMoreNode)[]> {
+  private async fetchRecords(node: RecordTypeNode): Promise<PluginTreeNode[]> {
     const cacheKey = this.cacheKey(node);
     let cached = this.pageCache.get(cacheKey);
     if (!cached) {
@@ -334,8 +352,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
         cached = await this.repository.getRecords(node.plugin, node.recordType, 0, PAGE_SIZE);
         this.pageCache.set(cacheKey, cached);
       } catch (e) {
-        this.log(`[PluginTreeProvider] fetchRecords(${node.plugin}, ${node.recordType}) failed: ${this.err(e)}`);
-        return [];
+        const message = this.err(e);
+        this.log(`[PluginTreeProvider] fetchRecords(${node.plugin}, ${node.recordType}) failed: ${message}`);
+        return [new ErrorNode(message)];
       }
     }
 

@@ -28,6 +28,7 @@ vi.mock('vscode', () => ({
 import {
   PluginTreeProvider, PluginNode, RecordTypeNode, RecordNode, LoadMoreNode,
   CellNode, InteriorCellsNode, InteriorLoadMoreNode,
+  WorldspacesNode, WorldspaceNode, ErrorNode,
 } from '../PluginTreeProvider';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -405,5 +406,86 @@ describe('PluginTreeProvider worldspace tree', () => {
     const children = await provider.getChildren(node);
     expect(children.filter(c => c instanceof CellNode)).toHaveLength(1);
     expect(children.filter(c => c instanceof InteriorLoadMoreNode)).toHaveLength(1);
+  });
+});
+
+// ── Fetch failures render an error node instead of an empty list (ADR-0026) ──
+
+describe('PluginTreeProvider fetch failures', () => {
+  it('fetchPlugins: renders an error node when getPlugins fails', async () => {
+    const repo = { ...makeRepository(), getPlugins: vi.fn().mockRejectedValue(new Error('boom')) };
+    const provider = new PluginTreeProvider(repo);
+
+    const children = await provider.getChildren(undefined);
+
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ErrorNode);
+    expect(children[0].tooltip).toContain('boom');
+  });
+
+  it('fetchPluginChildren: renders an error node when getRecordTypes fails', async () => {
+    const repo = { ...makeRepository(), getRecordTypes: vi.fn().mockRejectedValue(new Error('boom')) };
+    const provider = new PluginTreeProvider(repo);
+    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
+
+    const children = await provider.getChildren(pluginNode);
+
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ErrorNode);
+  });
+
+  it('fetchRecords: renders an error node when getRecords fails', async () => {
+    const repo = { ...makeRepository(), getRecords: vi.fn().mockRejectedValue(new Error('boom')) };
+    const provider = new PluginTreeProvider(repo);
+    const node = new RecordTypeNode('Plugin0.esp', 'WEAP', 5);
+
+    const children = await provider.getChildren(node);
+
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ErrorNode);
+  });
+
+  it('fetchWorldspaces: renders an error node when getWorldspaces fails', async () => {
+    const repo = { ...makeRepository(), getWorldspaces: vi.fn().mockRejectedValue(new Error('boom')) };
+    const provider = new PluginTreeProvider(repo);
+    const node = new WorldspacesNode('Plugin0.esp');
+
+    const children = await provider.getChildren(node);
+
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ErrorNode);
+  });
+
+  it('fetchWorldspaceChildren: renders an error node when getWorldspaceBlocks fails', async () => {
+    const repo = { ...makeRepository(), getWorldspaceBlocks: vi.fn().mockRejectedValue(new Error('boom')) };
+    const provider = new PluginTreeProvider(repo);
+    const node = new WorldspaceNode('Plugin0.esp', { formKey: 'wrld:M.esp', editorId: 'World' });
+
+    const children = await provider.getChildren(node);
+
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ErrorNode);
+  });
+
+  it('fetchCellGroups: renders an error node when getCellReferences fails', async () => {
+    const repo = { ...makeRepository(), getCellReferences: vi.fn().mockRejectedValue(new Error('boom')) };
+    const provider = new PluginTreeProvider(repo);
+    const node = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0 });
+
+    const children = await provider.getChildren(node);
+
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ErrorNode);
+  });
+
+  it('fetchInteriorCells: renders an error node when getInteriorCells fails', async () => {
+    const repo = { ...makeRepository(), getInteriorCells: vi.fn().mockRejectedValue(new Error('boom')) };
+    const provider = new PluginTreeProvider(repo);
+    const node = new InteriorCellsNode('M.esp');
+
+    const children = await provider.getChildren(node);
+
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ErrorNode);
   });
 });

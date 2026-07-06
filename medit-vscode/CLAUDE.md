@@ -46,7 +46,7 @@ Update when: adding a command (add ID to `EXPECTED_COMMANDS`), or new `extension
 
 - Single `vscode.OutputChannel` named `'Modbench'`, created in `extension.ts`, passed to every module making HTTP calls or handling async errors.
 - All `catch` blocks log to OutputChannel before showing UI or swallowing. No silent `catch { }`.
-- `PluginTreeProvider` shows error tree node instead of empty list when fetch fails.
+- `PluginTreeProvider` and `ModListProvider` show an error tree node instead of an empty list when a fetch/read fails. `ModListProvider`'s status-badge computation (a secondary, non-blocking step) instead degrades badges and reports a warning — badges silently absent would otherwise look identical to "no conflicts."
 - Webview: all async ops must check `resp.ok` and set error state on failure. No fire-and-forget fetches.
 
 ## Error surfacing ([ADR-0026](../docs/adr/0026-error-surfacing-policy.md))

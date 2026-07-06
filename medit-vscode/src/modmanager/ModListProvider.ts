@@ -4,6 +4,7 @@ import { groupModlist, type ModlistTree } from './modlistTree';
 import { buildFileConflictIndex } from './fileConflictIndex';
 import { computeModStatuses, type ModStatus, type ModStatusResult } from './statusChecker';
 import { readVanillaMasters } from './vanillaMasters';
+import type { Reporter } from './deployer';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
@@ -49,6 +50,18 @@ export class SeparatorNode extends vscode.TreeItem {
   }
 }
 
+/** Inline error surface: shown instead of an empty list when a fetch/read fails,
+ *  so a failure is never indistinguishable from "nothing here" (ADR-0026). */
+export class ErrorNode extends vscode.TreeItem {
+  readonly kind = 'error' as const;
+  constructor(message: string) {
+    super(`⚠ Failed to load: ${message}`, vscode.TreeItemCollapsibleState.None);
+    this.contextValue = 'error';
+    this.tooltip = message;
+    this.iconPath = new vscode.ThemeIcon('error');
+  }
+}
+
 /** A mod row with a native checkbox, version description, and tooltip.
  *  `status` (Modbench-3) overlays a conflict/missing-master/missing-mod badge
  *  onto the icon, description, and tooltip when present and not 'ok'. */
@@ -74,7 +87,13 @@ export class ModNode extends vscode.TreeItem {
   }
 }
 
-export type ModlistNode = CountNode | SeparatorNode | ModNode;
+export type ModlistNode = CountNode | SeparatorNode | ModNode | ErrorNode;
+
+/** Mod/separator rows are the only nodes with a modlist.txt entry to drag or index;
+ *  CountNode and ErrorNode are non-interactive summary/status rows. */
+function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
+  return node.kind === 'mod' || node.kind === 'separator';
+}
 
 /** Sidebar Mod List (Loadout) tree over an MO2 instance's active profile. */
 export class ModListProvider
@@ -89,6 +108,7 @@ export class ModListProvider
   private tree?: ModlistTree;
   private cachedEntries?: ModlistEntry[];
   private statuses?: Map<string, ModStatusResult>;
+  private loadError?: string;
   private filterText = '';
   private filterLower = '';
   private groupingOn = true;
@@ -96,11 +116,15 @@ export class ModListProvider
 
   /** `instanceRoot`, when provided, enables status badges (Modbench-3):
    *  file-conflict index + missing-master/missing-mod checks against real
-   *  files on disk. Omitted in tests that use an in-memory-only source. */
+   *  files on disk. Omitted in tests that use an in-memory-only source.
+   *  `reporter`, when provided, surfaces a status-computation failure as a
+   *  warning (ADR-0026: badges silently absent would otherwise look
+   *  identical to "no conflicts"). */
   constructor(
     private readonly source: IModlistSource,
     log?: (msg: string) => void,
     private readonly instanceRoot?: string,
+    private readonly reporter?: Reporter,
   ) {
     this.log = log ?? (() => {});
   }
@@ -109,6 +133,7 @@ export class ModListProvider
     this.tree = undefined;
     this.cachedEntries = undefined;
     this.statuses = undefined;
+    this.loadError = undefined;
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -126,7 +151,7 @@ export class ModListProvider
     _token: vscode.CancellationToken,
   ): void {
     const node = source[0];
-    if (!node || node.kind === 'count') return;
+    if (!node || !isEntryNode(node)) return;
     const name = node.kind === 'mod' ? node.mod.name : node.separator.name;
     dataTransfer.set(DND_MIME, new vscode.DataTransferItem({ kind: node.kind, name }));
   }
@@ -155,7 +180,7 @@ export class ModListProvider
   private flatIndexOf(node: ModlistNode | undefined): number {
     if (!this.cachedEntries) return 0;
     if (!node) return this.cachedEntries.length;
-    if (node.kind === 'count') return 0;
+    if (!isEntryNode(node)) return 0;
     if (node.kind === 'mod') {
       const idx = this.cachedEntries.findIndex((e) => e.kind === 'mod' && e.name === node.mod.name);
       return idx >= 0 ? idx : this.cachedEntries.length;
@@ -175,7 +200,7 @@ export class ModListProvider
     if (element) return [];
 
     const tree = await this.load();
-    if (!tree) return [];
+    if (!tree) return [new ErrorNode(this.loadError ?? 'unknown error')];
     if (!this.filterText) return this.unfilteredRoots(tree);
     if (!this.groupingOn) return this.flatFilteredRoots(tree);
     return this.groupedFilteredRoots(tree);
@@ -231,23 +256,37 @@ export class ModListProvider
     this.refresh();
   }
 
+  private err(e: unknown): string {
+    return e instanceof Error ? e.message : String(e);
+  }
+
   private async load(): Promise<ModlistTree | undefined> {
     if (this.tree) return this.tree;
+    let entries: ModlistEntry[];
     try {
-      const entries = await this.source.readModlist();
-      this.cachedEntries = entries;
-      this.tree = groupModlist(entries);
-      if (this.instanceRoot) {
+      entries = await this.source.readModlist();
+    } catch (e) {
+      this.loadError = this.err(e);
+      this.log(`[ModListProvider] readModlist failed: ${this.loadError}`);
+      return undefined;
+    }
+    this.loadError = undefined;
+    this.cachedEntries = entries;
+    this.tree = groupModlist(entries);
+    if (this.instanceRoot) {
+      try {
         const [index, vanillaMasters] = await Promise.all([
           buildFileConflictIndex(entries, this.instanceRoot),
           readVanillaMasters(this.instanceRoot, this.log),
         ]);
         this.statuses = await computeModStatuses(entries, this.instanceRoot, index, vanillaMasters, this.log);
+      } catch (e) {
+        const message = this.err(e);
+        this.log(`[ModListProvider] status computation failed: ${message}`);
+        this.reporter?.report('warning', 'Could not compute mod conflict/missing-master status — badges may be inaccurate.', message);
+        this.statuses = undefined;
       }
-      return this.tree;
-    } catch (e) {
-      this.log(`[ModListProvider] readModlist failed: ${e instanceof Error ? e.message : String(e)}`);
-      return undefined;
     }
+    return this.tree;
   }
 }
