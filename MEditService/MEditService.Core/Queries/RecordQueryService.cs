@@ -119,24 +119,13 @@ public sealed class RecordQueryService(
             {
                 var vmadResult = VmadConflictClassifier.Classify(vmadInputs);
                 vmad = vmadResult.Compare;
-                conflictAll = EscalateConflict(conflictAll, vmadResult.ConflictContribution);
+                conflictAll = ConflictRules.Escalate(conflictAll, vmadResult.ConflictContribution);
             }
 
             return new CompareResult(annotated, classification.Diffs, conflictAll, vmad);
         }
         return null;
     }
-
-    // Folds a VMAD conflict contribution (NoConflict/Override/Conflict) into the generic record-level
-    // result, taking the more severe of the two. OnlyOne (single override) and ConflictCritical
-    // (injected) are preserved as-is. Explicit so it does not depend on enum declaration order.
-    private static ConflictAll EscalateConflict(ConflictAll generic, ConflictAll vmad) => generic switch
-    {
-        ConflictAll.OnlyOne or ConflictAll.ConflictCritical => generic,
-        ConflictAll.Conflict => ConflictAll.Conflict,
-        ConflictAll.Override => vmad == ConflictAll.Conflict ? ConflictAll.Conflict : ConflictAll.Override,
-        _ => vmad, // generic == NoConflict: the VMAD contribution wins
-    };
 
     public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin)
     {

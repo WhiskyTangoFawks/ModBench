@@ -186,49 +186,25 @@ public static class VmadConflictClassifier
         return BuildDiff(name, childPer, inputs, masterPlugin, conflict);
     }
 
-    // Mirrors ConflictClassifier.ComputeCellStates: master omitted; winner = highest load-order
-    // plugin with a non-null value. Callers only ever align names drawn from the union of plugins
-    // that have the value, so at least one canonical value is always non-null and a winner exists.
+    // Delegates per-cell classification to ConflictRules (shared with the generic field path):
+    // master omitted; winner = highest load-order plugin with a non-null value. Callers only ever
+    // align names drawn from the union of plugins that have the value, so at least one canonical
+    // value is always non-null and a winner exists.
     private static (Dictionary<string, ConflictThis> States, string Winner) ComputeCellStates(
         IReadOnlyList<VmadPluginInput> inputs, string masterPlugin, Func<string, string?> valueOf)
     {
         // Materialize each plugin's canonical value once — valueOf can recurse through a struct subtree.
-        var canon = inputs.ToDictionary(i => i.Plugin, i => valueOf(i.Plugin));
+        var canon = inputs.ToDictionary(i => i.Plugin, i => (object?)valueOf(i.Plugin));
+        var pluginOrder = inputs.Select(i => (i.Plugin, i.LoadOrderIndex)).ToList();
 
         var winner = inputs
             .Where(i => canon[i.Plugin] != null)
             .MaxBy(i => i.LoadOrderIndex)!
             .Plugin;
 
-        var ctx = new CellContext(masterPlugin, winner, canon[masterPlugin], canon[winner], canon);
-
-        var states = inputs
-            .Where(i => i.Plugin != masterPlugin)
-            .Select(i => (i.Plugin, State: ClassifyCell(i.Plugin, canon[i.Plugin], ctx)))
-            .Where(x => x.State.HasValue)
-            .ToDictionary(x => x.Plugin, x => x.State!.Value);
+        var states = ConflictRules.ComputeCellStates(canon, masterPlugin, pluginOrder, Equals);
 
         return (states, winner);
-    }
-
-    private readonly record struct CellContext(
-        string MasterPlugin, string Winner, string? MasterValue, string? WinnerValue,
-        IReadOnlyDictionary<string, string?> CanonByPlugin);
-
-    private static ConflictThis? ClassifyCell(string plugin, string? value, CellContext ctx)
-    {
-        if (value == null) return null;
-        if (value == ctx.MasterValue) return ConflictThis.IdenticalToMaster;
-
-        if (plugin == ctx.Winner)
-        {
-            var contested = ctx.CanonByPlugin.Any(kv =>
-                kv.Key != ctx.MasterPlugin && kv.Key != plugin &&
-                kv.Value is string rv && rv != value);
-            return contested ? ConflictThis.ConflictWins : ConflictThis.Override;
-        }
-
-        return value != ctx.WinnerValue ? ConflictThis.ConflictLoses : ConflictThis.Override;
     }
 
     private static string Kind(string? type) => type switch
@@ -276,29 +252,14 @@ public static class VmadConflictClassifier
         return $"{v.Type}|{leaf}";
     }
 
-    // Reduces all per-cell states to a record-level conflict contribution:
-    // any ConflictWins/Loses => Conflict; else any Override => Override; else NoConflict.
+    // Collects per-cell states across the whole VMAD tree and folds them via ConflictRules.Reduce
+    // (shared with the generic field path) into a single record-level conflict contribution.
     private sealed class ConflictAccumulator
     {
-        private bool _conflict;
-        private bool _override;
+        private readonly List<ConflictThis> _states = [];
 
-        public void Add(IReadOnlyDictionary<string, ConflictThis> states)
-        {
-            foreach (var s in states.Values)
-            {
-                if (s is ConflictThis.ConflictWins or ConflictThis.ConflictLoses) _conflict = true;
-                else if (s == ConflictThis.Override) _override = true;
-            }
-        }
+        public void Add(IReadOnlyDictionary<string, ConflictThis> states) => _states.AddRange(states.Values);
 
-        public ConflictAll Result
-        {
-            get
-            {
-                if (_conflict) return ConflictAll.Conflict;
-                return _override ? ConflictAll.Override : ConflictAll.NoConflict;
-            }
-        }
+        public ConflictAll Result => ConflictRules.Reduce(_states);
     }
 }
