@@ -27,7 +27,6 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         var winner = conflictingRecords.FirstOrDefault(o => o.IsWinner)
             ?? throw new InvalidOperationException(
                 $"No winner in {conflictingRecords.Count} overrides for FormKey '{conflictingRecords[0].FormKey}'");
-        var masterValues = IndexByName(master.Fields);
         var sortedArrays = conflictingRecords
             .SelectMany(r => r.Fields)
             .Where(f => f.Metadata.ElementType?.IsSortable == true)
@@ -35,7 +34,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var diffs = BuildDiffs([.. master.Fields.Select(f => f.Metadata.Name)], conflictingRecords, winner, master.Plugin, sortedArrays);
 
-        var conflictAll = ComputeConflictAll(master.Plugin, masterValues, conflictingRecords, diffs, sortedArrays);
+        var conflictAll = ConflictRules.Reduce(diffs.SelectMany(d => d.CellStates.Values));
 
         var pluginConflictThis = conflictingRecords.ToDictionary(
             o => o.Plugin,
@@ -45,29 +44,6 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             conflictAll = ConflictAll.ConflictCritical;
 
         return new ClassifyResult(conflictAll, pluginConflictThis, diffs);
-    }
-
-    private static ConflictAll ComputeConflictAll(
-        string masterPlugin,
-        Dictionary<string, object?> masterValues,
-        IReadOnlyList<RecordDetail> overrides,
-        IReadOnlyList<FieldDiff> diffs,
-        HashSet<string> sortedArrays)
-    {
-        var hasAnyChange = overrides.Skip(1).Any(o =>
-            o.Fields.Any(f =>
-                f.Value != null &&
-                !ValuesEqual(f.Value, masterValues.GetValueOrDefault(f.Metadata.Name), sortedArrays.Contains(f.Metadata.Name))));
-
-        if (!hasAnyChange) return ConflictAll.NoConflict;
-
-        var hasConflict = diffs.Any(d =>
-            d.Values
-                .Where(kv => kv.Key != masterPlugin && kv.Value != null)
-                .Select(kv => kv.Value?.ToString())
-                .Distinct().Skip(1).Any());
-
-        return hasConflict ? ConflictAll.Conflict : ConflictAll.Override;
     }
 
     private static ConflictThis AggregateConflictThis(
@@ -312,72 +288,9 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         HashSet<string> sortedArrays)
     {
         var isSorted = sortedArrays.Contains(fieldName);
-
-        // Field winner: highest load-order plugin with a non-null value for this field.
-        var fieldWinner = records
-            .Where(r => values.GetValueOrDefault(r.Plugin) != null)
-            .MaxBy(r => r.LoadOrderIndex);
-
-        if (fieldWinner == null) return [];
-
-        var cellStates = new Dictionary<string, ConflictThis>();
-
-        foreach (var plugin in records.Select(r => r.Plugin))
-        {
-            if (plugin == masterPlugin) continue;
-
-            if (ClassifyCell(plugin, values, fieldWinner, records, masterPlugin, isSorted) is { } state)
-                cellStates[plugin] = state;
-        }
-
-        return cellStates;
+        var pluginOrder = records.Select(r => (r.Plugin, r.LoadOrderIndex)).ToList();
+        return ConflictRules.ComputeCellStates(values, masterPlugin, pluginOrder, (a, b) => ValuesEqual(a, b, isSorted));
     }
-
-    // One plugin's cell state for one field; null when the plugin has no value for the field.
-    private static ConflictThis? ClassifyCell(
-        string plugin,
-        Dictionary<string, object?> values,
-        RecordDetail fieldWinner,
-        IReadOnlyList<RecordDetail> records,
-        string masterPlugin,
-        bool isSorted)
-    {
-        var pluginValue = values.GetValueOrDefault(plugin);
-        if (pluginValue == null) return null;
-
-        if (ValuesEqual(pluginValue, values.GetValueOrDefault(masterPlugin), isSorted))
-            return ConflictThis.IdenticalToMaster;
-
-        if (plugin == fieldWinner.Plugin)
-        {
-            return IsContested(records, values, masterPlugin, plugin, pluginValue, isSorted)
-                ? ConflictThis.ConflictWins
-                : ConflictThis.Override;
-        }
-
-        return !ValuesEqual(pluginValue, values[fieldWinner.Plugin], isSorted)
-            ? ConflictThis.ConflictLoses
-            : ConflictThis.Override;
-    }
-
-    // True when another non-master plugin carries a different value than the field winner's.
-    private static bool IsContested(
-        IReadOnlyList<RecordDetail> records,
-        Dictionary<string, object?> values,
-        string masterPlugin,
-        string winnerPlugin,
-        object? winnerValue,
-        bool isSorted) =>
-        records
-            .Where(r => r.Plugin != masterPlugin && r.Plugin != winnerPlugin)
-            .Any(r =>
-            {
-                var v = values.GetValueOrDefault(r.Plugin);
-                return v != null && !ValuesEqual(v, winnerValue, isSorted);
-            });
-
-    private static Dictionary<string, object?> IndexByName(IReadOnlyList<FieldValue> fields) =>
-        fields.ToDictionary(f => f.Metadata.Name, f => f.Value);
 
     // JsonElement doesn't override Equals() — compare by raw JSON text to handle array/struct fields.
     // For sorted arrays, sort elements before comparing so insertion-order differences don't register as conflicts.

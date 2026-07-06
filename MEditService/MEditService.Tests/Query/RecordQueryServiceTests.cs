@@ -293,6 +293,78 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
                 Assert.Equal(ConflictAll.Conflict, svc.GetCompare(npcKey.ToString())!.ConflictAll));
     }
 
+    [Fact]
+    public void GetCompare_ConflictedFieldWithUncontestedVmad_DoesNotDowngradeFromConflict()
+    {
+        // Verifies Escalate(Conflict, NoConflict) = Conflict (not NoConflict) — escalation must take
+        // the more severe axis even when the *generic* side is the more severe one and VMAD is milder.
+        // Both Mid and Top disagree on aggression → generic = Conflict. Their VMAD is identical → vmad = NoConflict.
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-escalate-no-downgrade")
+            .WithPlugin("Base.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("EscalateNoDowngradeTest");
+                npc.Aggression = Npc.AggressionType.Unaggressive;
+                npc.VirtualMachineAdapter = ScriptVmad(10);
+                npcKey = npc.FormKey;
+            })
+            .WithPlugin("Mid.esp", (mod, prev) =>
+            {
+                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
+                o.Aggression = Npc.AggressionType.Frenzied; // differs from Top below → generic Conflict
+            })
+            .WithPlugin("Top.esp", (mod, prev) =>
+            {
+                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
+                o.Aggression = Npc.AggressionType.Aggressive; // differs from Mid → generic Conflict
+            })
+            .Build();
+        using (data)
+            WithCompareService(data, svc =>
+                Assert.Equal(ConflictAll.Conflict, svc.GetCompare(npcKey.ToString())!.ConflictAll));
+    }
+
+    [Fact]
+    public void GetCompare_EquivalentGenericFieldAndVmadPropertyConflictLoss_ClassifyToSameConflictThis()
+    {
+        // ADR-0016: a generic field and a VMAD property in the same conflict shape (Mid overridden
+        // by Top) must classify to the same ConflictThis per plugin — pins parity across the two classifiers.
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-parity-conflict-loses")
+            .WithPlugin("Base.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("ParityTest");
+                npc.Aggression = Npc.AggressionType.Unaggressive;
+                npc.VirtualMachineAdapter = ScriptVmad(10);
+                npcKey = npc.FormKey;
+            })
+            .WithPlugin("Mid.esp", (mod, prev) =>
+            {
+                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
+                o.Aggression = Npc.AggressionType.Frenzied;
+                o.VirtualMachineAdapter = ScriptVmad(20);
+            })
+            .WithPlugin("Top.esp", (mod, prev) =>
+            {
+                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
+                o.Aggression = Npc.AggressionType.Aggressive;
+                o.VirtualMachineAdapter = ScriptVmad(30);
+            })
+            .Build();
+        using (data)
+            WithCompareService(data, svc =>
+            {
+                var compare = svc.GetCompare(npcKey.ToString())!;
+                var fieldStates = compare.Diffs.First(d => d.FieldName == "aggression").CellStates;
+                var vmadStates = compare.Vmad!.Scripts[0].Properties.First(p => p.Name == "Power").CellStates;
+
+                Assert.Equal(ConflictThis.ConflictLoses, fieldStates["Mid.esp"]);
+                Assert.Equal(ConflictThis.ConflictWins, fieldStates["Top.esp"]);
+                Assert.Equal(fieldStates["Mid.esp"], vmadStates["Mid.esp"]);
+                Assert.Equal(fieldStates["Top.esp"], vmadStates["Top.esp"]);
+            });
+    }
+
     private static void WithCompareService(PluginFixtureData data, Action<RecordQueryService> test)
     {
         var reflector = new SchemaReflector();
