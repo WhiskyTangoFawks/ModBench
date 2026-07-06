@@ -52,6 +52,12 @@ describe('setEnabledInText — byte-faithful surgical edit', () => {
     // "Unassigned (Modlist Development)" exists only as a separator; toggling it as a mod must fail
     expect(() => setEnabledInText(defaultModlist(), 'Unassigned (Modlist Development)', false)).toThrow();
   });
+
+  it('preserves a leading BOM byte-for-byte when editing a later line', () => {
+    const input = '\uFEFF+First\r\n+Second\r\n';
+    const out = setEnabledInText(input, 'Second', false);
+    expect(out).toBe('\uFEFF+First\r\n-Second\r\n');
+  });
 });
 
 describe('moveModInText — byte-faithful reorder by entry index', () => {
@@ -122,6 +128,18 @@ describe('parseModlist', () => {
 
   it('returns no entries for a file of only comment/* /blank lines', () => {
     expect(parseModlist('# header\r\n*DLC: Automatron\r\n\r\n')).toEqual([]);
+  });
+
+  it('strips a leading UTF-8 BOM so the top-priority mod is not silently dropped', () => {
+    const entries = parseModlist('\uFEFF+First\r\n+Second\r\n');
+    expect(entries).toEqual([
+      { kind: 'mod', name: 'First', enabled: true },
+      { kind: 'mod', name: 'Second', enabled: true },
+    ] satisfies Mod[]);
+  });
+
+  it('does not surface a false entry when a BOM is followed by a non-entry line', () => {
+    expect(parseModlist('\uFEFF# header\r\n*DLC: Automatron\r\n')).toEqual([]);
   });
 });
 
