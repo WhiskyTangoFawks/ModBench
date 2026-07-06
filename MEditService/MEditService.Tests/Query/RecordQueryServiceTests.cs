@@ -294,6 +294,37 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
     }
 
     [Fact]
+    public void GetCompare_ConflictedFieldWithUncontestedVmad_DoesNotDowngradeFromConflict()
+    {
+        // Verifies Escalate(Conflict, NoConflict) = Conflict (not NoConflict) — escalation must take
+        // the more severe axis even when the *generic* side is the more severe one and VMAD is milder.
+        // Both Mid and Top disagree on aggression → generic = Conflict. Their VMAD is identical → vmad = NoConflict.
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-escalate-no-downgrade")
+            .WithPlugin("Base.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("EscalateNoDowngradeTest");
+                npc.Aggression = Npc.AggressionType.Unaggressive;
+                npc.VirtualMachineAdapter = ScriptVmad(10);
+                npcKey = npc.FormKey;
+            })
+            .WithPlugin("Mid.esp", (mod, prev) =>
+            {
+                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
+                o.Aggression = Npc.AggressionType.Frenzied; // differs from Top below → generic Conflict
+            })
+            .WithPlugin("Top.esp", (mod, prev) =>
+            {
+                var o = mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First());
+                o.Aggression = Npc.AggressionType.Aggressive; // differs from Mid → generic Conflict
+            })
+            .Build();
+        using (data)
+            WithCompareService(data, svc =>
+                Assert.Equal(ConflictAll.Conflict, svc.GetCompare(npcKey.ToString())!.ConflictAll));
+    }
+
+    [Fact]
     public void GetCompare_EquivalentGenericFieldAndVmadPropertyConflictLoss_ClassifyToSameConflictThis()
     {
         // ADR-0016: a generic field and a VMAD property in the same conflict shape (Mid overridden
