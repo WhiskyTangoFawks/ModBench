@@ -35,7 +35,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { ModListProvider, CountNode, SeparatorNode, ModNode } from './ModListProvider';
+import { ModListProvider, CountNode, SeparatorNode, ModNode, ErrorNode } from './ModListProvider';
 
 const mod = (name: string, enabled = true, extra: Partial<Mod> = {}): Mod => ({
   kind: 'mod', name, enabled, ...extra,
@@ -137,14 +137,16 @@ describe('ModListProvider', () => {
     expect(fired).toBe(true);
   });
 
-  it('returns no children and does not throw when the source read fails', async () => {
+  it('renders an error node instead of an empty list when the source read fails', async () => {
     const logs: string[] = [];
     const source = new FakeSource([], /* throwOnRead */ true);
     const provider = new ModListProvider(source, (m) => logs.push(m));
 
     const roots = await provider.getChildren();
 
-    expect(roots).toEqual([]);
+    expect(roots).toHaveLength(1);
+    expect(roots[0]).toBeInstanceOf(ErrorNode);
+    expect(roots[0].tooltip).toContain('boom');
     expect(logs.some((l) => l.includes('boom'))).toBe(true);
   });
 
@@ -340,6 +342,27 @@ describe('ModListProvider', () => {
       const modA = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
 
       expect(modA.iconPath).toEqual({ id: 'package' }); // default icon, unaffected by status wiring
+    });
+
+    it('still shows the mod tree (badges degraded) when status computation fails, instead of an error node', async () => {
+      const logs: string[] = [];
+      const reports: { severity: string; message: string }[] = [];
+      const source = new FakeSource([mod('ModA'), mod('ModB')]);
+      // A *file*, not a directory: join(instanceRoot, 'mods', modName) hits ENOTDIR,
+      // which modFolderExists/walkMod only swallow for ENOENT — a real, unmocked
+      // failure in the status-computation path distinct from a modlist-read failure.
+      const brokenInstanceRoot = join(conflictFixture, 'ModOrganizer.ini');
+      const reporter = { report: (severity: string, message: string) => reports.push({ severity, message }) };
+      const provider = new ModListProvider(source, (m) => logs.push(m), brokenInstanceRoot, reporter);
+
+      const roots = await provider.getChildren();
+
+      expect(roots.some((n) => n instanceof ErrorNode)).toBe(false);
+      const modA = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
+      expect(modA.iconPath).toEqual({ id: 'package' }); // no badge - status computation never completed
+      expect(logs.some((l) => l.includes('status computation failed'))).toBe(true);
+      // ADR-0026: badges silently missing would otherwise look identical to "no conflicts" — warn the user.
+      expect(reports).toEqual([{ severity: 'warning', message: expect.stringContaining('badges may be inaccurate') }]);
     });
   });
 });

@@ -33,6 +33,18 @@ function exitToLoadout(): void {
   backendManager?.stop();
 }
 
+/** ADR-0026 surfacing reporter: logs always, shows a toast for warning/error. */
+function makeReporter(log: (msg: string) => void, tag: string): Reporter {
+  return {
+    report: (severity, message, detail) => {
+      const suffix = detail ? ` — ${detail}` : '';
+      log(`[${tag}] ${severity}: ${message}${suffix}`);
+      if (severity === 'error') void vscode.window.showErrorMessage(`Modbench: ${message}`);
+      else void vscode.window.showWarningMessage(`Modbench: ${message}`);
+    },
+  };
+}
+
 /** Game-path resolver: explicit `game.*` overrides if both set, else autodetect.
  *  Shared by the session wizard, the deploy commands, and editing launch. */
 function makeDetectPaths(): DetectPaths {
@@ -517,7 +529,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): void {
     return;
   }
     const modlistSource = new Mo2ModlistSource(instanceRoot);
-    const modListProvider = new ModListProvider(modlistSource, log, instanceRoot);
+    const modListProvider = new ModListProvider(modlistSource, log, instanceRoot, makeReporter(log, 'modList'));
     const modListView = vscode.window.createTreeView('modbench.modList', {
       treeDataProvider: modListProvider,
       showCollapseAll: true,
@@ -689,14 +701,7 @@ function registerDeployCommands(
   const config = meditConfig;
   const detectPaths = makeDetectPaths();
 
-  const reporter: Reporter = {
-    report: (severity, message, detail) => {
-      const suffix = detail ? ` — ${detail}` : '';
-      log(`[deploy] ${severity}: ${message}${suffix}`);
-      if (severity === 'error') void vscode.window.showErrorMessage(`Modbench: ${message}`);
-      else void vscode.window.showWarningMessage(`Modbench: ${message}`);
-    },
-  };
+  const reporter = makeReporter(log, 'deploy');
 
   const resolveGd = async () => {
     const gd = await resolveGameDirectory(instanceRoot, config(), detectPaths);
