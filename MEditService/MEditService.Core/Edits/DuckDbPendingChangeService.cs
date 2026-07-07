@@ -30,11 +30,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         _sem.Wait();
         try
         {
-            if (_connection != null)
-            {
-                DropTable(_connection);
-                _connection = null;
-            }
+            _connection = null;
         }
         finally { _sem.Release(); }
     }
@@ -76,17 +72,6 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 description VARCHAR,
                 created_at  TIMESTAMP NOT NULL
             );
-            """;
-        cmd.ExecuteNonQuery();
-    }
-
-    private static void DropTable(DuckDBConnection connection)
-    {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            DROP TABLE IF EXISTS pending_form_references;
-            DROP TABLE IF EXISTS pending_changes;
-            DROP TABLE IF EXISTS change_groups;
             """;
         cmd.ExecuteNonQuery();
     }
@@ -178,8 +163,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         cmd.Parameters.Add(new DuckDBParameter { Value = now });
         cmd.Parameters.Add(new DuckDBParameter { Value = change.ChangeType });
         cmd.Parameters.Add(new DuckDBParameter { Value = change.GroupId.HasValue ? (object)change.GroupId.Value.ToString() : DBNull.Value });
-        cmd.Parameters.Add(new DuckDBParameter { Value = (object?)change.ParentCell ?? DBNull.Value });
-        cmd.Parameters.Add(new DuckDBParameter { Value = (object?)change.PlacementGroup ?? DBNull.Value });
+        cmd.Parameters.Add(new DuckDBParameter { Value = change.ParentCell });
+        cmd.Parameters.Add(new DuckDBParameter { Value = change.PlacementGroup });
 
         using var reader = cmd.ExecuteReader();
         return reader.Read() ? ReadChange(reader) : null;
@@ -630,8 +615,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 ins.Parameters.Add(new DuckDBParameter { Value = createdAt });
                 ins.Parameters.Add(new DuckDBParameter { Value = groupId.ToString() });
                 ins.Parameters.Add(new DuckDBParameter { Value = m.ChangeType });
-                ins.Parameters.Add(new DuckDBParameter { Value = (object?)m.ParentCell ?? DBNull.Value });
-                ins.Parameters.Add(new DuckDBParameter { Value = (object?)m.PlacementGroup ?? DBNull.Value });
+                ins.Parameters.Add(new DuckDBParameter { Value = m.ParentCell });
+                ins.Parameters.Add(new DuckDBParameter { Value = m.PlacementGroup });
                 ins.ExecuteNonQuery();
             }
 
