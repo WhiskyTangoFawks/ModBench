@@ -649,7 +649,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
 
     public async Task<SaveGroupResult> ExecuteGroupSaveAsync(
         Guid groupId,
-        Func<IReadOnlyDictionary<string, IReadOnlyList<PendingChange>>, Task<IReadOnlyDictionary<string, SaveResult>>> writeAll)
+        Func<IReadOnlyDictionary<string, IReadOnlyList<PendingChange>>, Task<IReadOnlyList<(string Plugin, PreparedPluginSave Prepared)>>> prepareAll)
     {
         await _sem.WaitAsync();
         try
@@ -665,9 +665,25 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             await using var txn = await conn.BeginTransactionAsync();
             DeleteChangesForGroup(conn, groupId);
 
-            var results = await writeAll(byPlugin);
-            await txn.CommitAsync();
-            return new SaveGroupResult.Saved(results);
+            var prepared = await prepareAll(byPlugin);
+            var saveTxn = new SaveTransaction(prepared);
+            try
+            {
+                var results = saveTxn.CommitFiles();
+                await txn.CommitAsync();
+                saveTxn.Dispose();
+                return new SaveGroupResult.Saved(results);
+            }
+            catch
+            {
+                // Undoes any files already moved so they match the pending rows this
+                // transaction's rollback (on disposal below) is about to restore.
+                // Undoes any files already moved so they match the pending rows this
+                // transaction's rollback (on disposal below) is about to restore.
+                saveTxn.Rollback();
+                saveTxn.Dispose();
+                throw;
+            }
         }
         finally { _sem.Release(); }
     }

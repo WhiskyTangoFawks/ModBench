@@ -29,27 +29,19 @@ public sealed class PluginSaver(IPendingChangeService changes, ISessionManager s
 
         var result = await changes.ExecuteGroupSaveAsync(groupId, async byPlugin =>
         {
-            var prepared = new List<PreparedPluginSave>();
+            var prepared = new List<(string Plugin, PreparedPluginSave Prepared)>();
             try
             {
                 foreach (var (plugin, pluginChanges) in byPlugin)
-                    prepared.Add(await session.PreparePluginSave(plugin, pluginChanges));
+                    prepared.Add((plugin, await session.PreparePluginSave(plugin, pluginChanges)));
             }
             catch
             {
-                foreach (var p in prepared) p.Dispose();
+                foreach (var (_, p) in prepared) p.Dispose();
                 throw;
             }
 
-            var results = new Dictionary<string, SaveResult>();
-            foreach (var (plugin, p) in byPlugin.Keys.Zip(prepared))
-            {
-                p.Commit();
-                results[plugin] = p.Result;
-                p.Dispose();
-            }
-
-            return results;
+            return prepared;
         });
 
         if (result is SaveGroupResult.Saved saved)

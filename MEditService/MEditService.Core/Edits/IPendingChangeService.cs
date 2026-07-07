@@ -52,9 +52,15 @@ public interface IPendingChangeService
 
     DrainResult DrainForPlugin(string plugin);
 
+    /// <summary>
+    /// Atomically saves a change group: deletes its pending rows and commits <paramref name="prepareAll"/>'s
+    /// prepared plugin writes together, rolling both back together if either half fails.
+    /// <paramref name="prepareAll"/> runs under the service's single writer lock — it must only prepare
+    /// writes (no commit-side-effecting work) and must not call back into this service, or it will deadlock.
+    /// </summary>
     Task<SaveGroupResult> ExecuteGroupSaveAsync(
         Guid groupId,
-        Func<IReadOnlyDictionary<string, IReadOnlyList<PendingChange>>, Task<IReadOnlyDictionary<string, SaveResult>>> writeAll);
+        Func<IReadOnlyDictionary<string, IReadOnlyList<PendingChange>>, Task<IReadOnlyList<(string Plugin, PreparedPluginSave Prepared)>>> prepareAll);
 
     IReadOnlyList<(string FormKey, string RecordType)> GetStagedFormKeys(string plugin, string? recordType = null);
 

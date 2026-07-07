@@ -1,4 +1,5 @@
 using System.Text.Json;
+using DuckDB.NET.Data;
 using MEditService.Core.Edits;
 
 namespace MEditService.Tests.Edits;
@@ -7,8 +8,7 @@ public sealed class ExecuteGroupSaveAsyncTests
 {
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
-    private static IReadOnlyDictionary<string, SaveResult> NoResults() =>
-        new Dictionary<string, SaveResult>();
+    private static IReadOnlyList<(string Plugin, PreparedPluginSave Prepared)> NoResults() => [];
 
     private static ChangeGroup StageGroupChange(DuckDbPendingChangeService svc, string plugin, string field = "aggression")
     {
@@ -60,7 +60,7 @@ public sealed class ExecuteGroupSaveAsyncTests
 
         await Assert.ThrowsAsync<IOException>(() =>
             svc.ExecuteGroupSaveAsync(group.Id, _ =>
-                Task.FromException<IReadOnlyDictionary<string, SaveResult>>(new IOException("disk full"))));
+                Task.FromException<IReadOnlyList<(string Plugin, PreparedPluginSave Prepared)>>(new IOException("disk full"))));
 
         Assert.NotEmpty(svc.GetChanges(groupId: group.Id));
     }
@@ -94,7 +94,7 @@ public sealed class ExecuteGroupSaveAsyncTests
 
         await Assert.ThrowsAsync<IOException>(() =>
             svc.ExecuteGroupSaveAsync(groupId, _ =>
-                Task.FromException<IReadOnlyDictionary<string, SaveResult>>(new IOException("disk full"))));
+                Task.FromException<IReadOnlyList<(string Plugin, PreparedPluginSave Prepared)>>(new IOException("disk full"))));
 
         var drained = svc.DrainForPlugin("A.esp");
         Assert.NotEmpty(drained.FormRefsByFormKey["000001:Test.esp"]);
@@ -173,5 +173,43 @@ public sealed class ExecuteGroupSaveAsyncTests
 
         var drained = svc.DrainForPlugin("A.esp");
         Assert.Empty(drained.FormRefsByFormKey["000001:Test.esp"]);
+    }
+
+    // A10 — the exact scenario #35 describes: the file is already moved (first half
+    // succeeded) when the DB commit (second half) fails. Closing the connection inside
+    // prepareAll — after DeleteChangesForGroup but before CommitFiles/CommitAsync — makes
+    // txn.CommitAsync() fail for real, without disturbing the file move itself.
+    [Fact]
+    public async Task DbCommitFails_AfterFileAlreadyMoved_RollsBackFile()
+    {
+        using var conn = new DuckDBConnection("DataSource=:memory:");
+        conn.Open();
+        var svc = new DuckDbPendingChangeService(conn);
+        var group = StageGroupChange(svc, "A.esp");
+
+        var finalPath = Path.GetTempFileName();
+        File.WriteAllText(finalPath, "original-content");
+        var tmpDir = Path.Combine(Path.GetTempPath(), ".medit_tmp_" + Path.GetRandomFileName());
+        Directory.CreateDirectory(tmpDir);
+        var tmpPath = Path.Combine(tmpDir, "A.esp");
+        File.WriteAllText(tmpPath, "new-content");
+        var prepared = new PreparedPluginSave(tmpPath, finalPath, new SaveResult(string.Empty, [], [], [], []));
+
+        try
+        {
+            await Assert.ThrowsAnyAsync<Exception>(() =>
+                svc.ExecuteGroupSaveAsync(group.Id, _ =>
+                {
+                    conn.Close();
+                    return Task.FromResult<IReadOnlyList<(string, PreparedPluginSave)>>([("A.esp", prepared)]);
+                }));
+
+            Assert.Equal("original-content", File.ReadAllText(finalPath));
+        }
+        finally
+        {
+            File.Delete(finalPath);
+            if (Directory.Exists(tmpDir)) Directory.Delete(tmpDir, recursive: true);
+        }
     }
 }
