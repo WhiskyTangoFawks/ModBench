@@ -12,7 +12,9 @@ public sealed class PreparedPluginSave(string tmpPath, string finalPath, SaveRes
         // overwrite:true so a stale backup left behind by a prior crash doesn't permanently
         // block saves of this plugin
         File.Move(finalPath, _backupPath, overwrite: true);
-        File.Move(tmpPath, finalPath, overwrite: true);
+        // finalPath is guaranteed gone at this point (the line above just moved it away, or
+        // threw), so no overwrite is needed here
+        File.Move(tmpPath, finalPath);
     }
 
     // Undoes a completed Commit(): restores the pre-save file and drops the phantom
@@ -22,7 +24,8 @@ public sealed class PreparedPluginSave(string tmpPath, string finalPath, SaveRes
         if (_backupPath == null) return;
         File.Move(_backupPath, finalPath, overwrite: true);
         _backupPath = null;
-        if (!string.IsNullOrEmpty(result.BackupPath) && File.Exists(result.BackupPath))
+        // File.Delete no-ops on a missing path, so no need to check File.Exists first
+        if (!string.IsNullOrEmpty(result.BackupPath))
             File.Delete(result.BackupPath);
     }
 
