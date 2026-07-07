@@ -678,8 +678,6 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             {
                 // Undoes any files already moved so they match the pending rows this
                 // transaction's rollback (on disposal below) is about to restore.
-                // Undoes any files already moved so they match the pending rows this
-                // transaction's rollback (on disposal below) is about to restore.
                 saveTxn.Rollback();
                 saveTxn.Dispose();
                 throw;

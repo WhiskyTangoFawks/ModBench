@@ -106,4 +106,76 @@ public sealed class SaveTransactionTests
         Assert.False(File.Exists(pluginA.FinalPath + ".medit-rollback"));
         Assert.True(results.ContainsKey("A.esp"));
     }
+
+    // S4 — crash recovery: a stale .medit-rollback left behind by a prior crash must not
+    // permanently block future saves of this plugin.
+    [Fact]
+    public void Commit_WhenStaleRollbackBackupExists_OverwritesItAndSucceeds()
+    {
+        using var pluginA = MakeTempPlugin("original-A", "new-A");
+        var staleBackupPath = pluginA.FinalPath + ".medit-rollback";
+        File.WriteAllText(staleBackupPath, "stale-crash-leftover");
+
+        var prepared = new PreparedPluginSave(pluginA.TmpPath, pluginA.FinalPath, EmptySaveResult());
+        prepared.Commit();
+
+        Assert.Equal("new-A", File.ReadAllText(pluginA.FinalPath));
+        Assert.Equal("original-A", File.ReadAllText(staleBackupPath));
+    }
+
+    // S5 — an item whose Commit() was never attempted (CommitFiles() threw on an earlier
+    // item first) must be a safe no-op under Rollback(), not touched or thrown from.
+    [Fact]
+    public void Rollback_WithNeverAttemptedItem_LeavesItUntouchedAndDoesNotThrow()
+    {
+        using var pluginA = MakeTempPlugin("original-A", "new-A");
+        using var pluginC = MakeTempPlugin("original-C", "new-C");
+        var finalB = Path.GetTempFileName();
+        File.WriteAllText(finalB, "original-B");
+        var bogusTmpPath = Path.Combine(Path.GetTempPath(), ".medit_tmp_" + Path.GetRandomFileName(), "missing.esp");
+
+        var items = new List<(string Plugin, PreparedPluginSave Prepared)>
+        {
+            ("A.esp", new PreparedPluginSave(pluginA.TmpPath, pluginA.FinalPath, EmptySaveResult())),
+            ("B.esp", new PreparedPluginSave(bogusTmpPath, finalB, EmptySaveResult())),
+            ("C.esp", new PreparedPluginSave(pluginC.TmpPath, pluginC.FinalPath, EmptySaveResult())),
+        };
+        var saveTxn = new SaveTransaction(items);
+
+        try
+        {
+            Assert.Throws<FileNotFoundException>(() => saveTxn.CommitFiles());
+            saveTxn.Rollback();
+
+            Assert.Equal("original-A", File.ReadAllText(pluginA.FinalPath));
+            Assert.Equal("original-C", File.ReadAllText(pluginC.FinalPath)); // never attempted, untouched
+        }
+        finally
+        {
+            File.Delete(finalB);
+        }
+    }
+
+    // S6 — Rollback() must also drop the phantom user-facing .bak PrepareAsync already
+    // created for this now-abandoned save attempt, not just restore plugin content.
+    [Fact]
+    public void Rollback_DeletesPhantomUserFacingBackup()
+    {
+        using var pluginA = MakeTempPlugin("original-A", "new-A");
+        var phantomBakPath = Path.GetTempFileName();
+        File.WriteAllText(phantomBakPath, "user-facing-backup-copy");
+
+        try
+        {
+            var prepared = new PreparedPluginSave(pluginA.TmpPath, pluginA.FinalPath, EmptySaveResult(phantomBakPath));
+            prepared.Commit();
+            prepared.Rollback();
+
+            Assert.False(File.Exists(phantomBakPath));
+        }
+        finally
+        {
+            if (File.Exists(phantomBakPath)) File.Delete(phantomBakPath);
+        }
+    }
 }

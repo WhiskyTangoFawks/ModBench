@@ -205,6 +205,7 @@ public sealed class ExecuteGroupSaveAsyncTests
                 }));
 
             Assert.Equal("original-content", File.ReadAllText(finalPath));
+            Assert.False(Directory.Exists(tmpDir)); // Dispose() cleaned up the tmp dir even on the rollback path
         }
         finally
         {
