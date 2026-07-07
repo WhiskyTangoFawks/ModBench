@@ -2,14 +2,38 @@ namespace MEditService.Core.Edits;
 
 public sealed class PreparedPluginSave(string tmpPath, string finalPath, SaveResult result) : IDisposable
 {
+    private string? _backupPath;
+
     public SaveResult Result => result;
 
-    public void Commit() => File.Move(tmpPath, finalPath, overwrite: true);
+    public void Commit()
+    {
+        _backupPath = finalPath + ".medit-rollback";
+        // overwrite:true so a stale backup left behind by a prior crash doesn't permanently
+        // block saves of this plugin
+        File.Move(finalPath, _backupPath, overwrite: true);
+        // finalPath is guaranteed gone at this point (the line above just moved it away, or
+        // threw), so no overwrite is needed here
+        File.Move(tmpPath, finalPath);
+    }
+
+    // Undoes a completed Commit(): restores the pre-save file and drops the phantom
+    // user-facing .bak that PrepareAsync already created for this now-abandoned attempt.
+    public void Rollback()
+    {
+        if (_backupPath == null) return;
+        File.Move(_backupPath, finalPath, overwrite: true);
+        _backupPath = null;
+        // File.Delete no-ops on a missing path, so no need to check File.Exists first
+        if (!string.IsNullOrEmpty(result.BackupPath))
+            File.Delete(result.BackupPath);
+    }
 
     public void Dispose()
     {
         try
         {
+            if (_backupPath != null) File.Delete(_backupPath); // committed but never rolled back; best-effort
             File.Delete(tmpPath); // no-op if already moved
             var tmpDir = Path.GetDirectoryName(tmpPath)!;
             if (Directory.Exists(tmpDir))
