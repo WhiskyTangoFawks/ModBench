@@ -14,13 +14,26 @@ import type { ModlistEntry } from '../model';
 import { lineRanges } from './lineScan';
 
 const SEPARATOR_SUFFIX = '_separator';
+const BOM = '\uFEFF';
+
+const stripBom = (text: string): string => (text.startsWith(BOM) ? text.slice(BOM.length) : text);
+
+/** The BOM is a whole-file property (always at absolute position 0), never a
+ *  line's. Every surgical edit strips it up front, edits the bomless text
+ *  with the (BOM-unaware) helpers below, then re-prepends it — so the BOM
+ *  stays pinned to position 0 even when the line that carried it is edited,
+ *  moved, or removed. */
+function withBomPreserved(text: string, edit: (bomless: string) => string): string {
+  if (!text.startsWith(BOM)) return edit(text);
+  return BOM + edit(stripBom(text));
+}
 
 /** Parse modlist.txt into the ordered model view (top = highest priority).
  *  Only +/- mod and separator lines are surfaced; comment/*-prefixed/blank
  *  lines carry no model meaning and are ignored (but preserved on write). */
 export function parseModlist(text: string): ModlistEntry[] {
   const entries: ModlistEntry[] = [];
-  const withoutBom = text.startsWith('\uFEFF') ? text.slice(1) : text; // model view only; write path preserves the BOM byte
+  const withoutBom = stripBom(text); // model view only; write path preserves the BOM byte
   for (const raw of withoutBom.split(/\r\n|\r|\n/)) {
     const prefix = raw[0];
     if (prefix !== '+' && prefix !== '-') continue; // comment, *, blank
@@ -48,11 +61,13 @@ function findModPrefixIndex(text: string, modName: string): number {
 
 /** Set a mod's enabled state by flipping its +/- prefix. Throws if the mod is absent. */
 export function setEnabledInText(text: string, modName: string, enabled: boolean): string {
-  const idx = findModPrefixIndex(text, modName);
-  if (idx === -1) throw new Error(`Mod not found in modlist: ${modName}`);
-  const desired = enabled ? '+' : '-';
-  if (text[idx] === desired) return text;
-  return text.slice(0, idx) + desired + text.slice(idx + 1);
+  return withBomPreserved(text, (bomless) => {
+    const idx = findModPrefixIndex(bomless, modName);
+    if (idx === -1) throw new Error(`Mod not found in modlist: ${modName}`);
+    const desired = enabled ? '+' : '-';
+    if (bomless[idx] === desired) return bomless;
+    return bomless.slice(0, idx) + desired + bomless.slice(idx + 1);
+  });
 }
 
 /** Lines each INCLUDING their trailing EOL (last may lack one); join('') is exact. */
@@ -80,46 +95,52 @@ export function insertSeparatorAtIndexInText(
   name: string,
   afterIndex: number,
 ): string {
-  const lines = splitLinesKeepEol(text);
-  const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
-  const newLine = `+${name}${SEPARATOR_SUFFIX}${detectEol(text)}`;
-  let insertAt: number;
-  if (entryLineIdx.length === 0) {
-    insertAt = lines.length;
-  } else {
-    const clamped = Math.max(0, Math.min(afterIndex, entryLineIdx.length - 1));
-    insertAt = entryLineIdx[clamped] + 1;
-  }
-  lines.splice(insertAt, 0, newLine);
-  return lines.join('');
+  return withBomPreserved(text, (bomless) => {
+    const lines = splitLinesKeepEol(bomless);
+    const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
+    const newLine = `+${name}${SEPARATOR_SUFFIX}${detectEol(bomless)}`;
+    let insertAt: number;
+    if (entryLineIdx.length === 0) {
+      insertAt = lines.length;
+    } else {
+      const clamped = Math.max(0, Math.min(afterIndex, entryLineIdx.length - 1));
+      insertAt = entryLineIdx[clamped] + 1;
+    }
+    lines.splice(insertAt, 0, newLine);
+    return lines.join('');
+  });
 }
 
 /** Rename a separator in place, preserving its +/- prefix and every other byte. */
 export function renameSeparatorInText(text: string, oldName: string, newName: string): string {
-  for (const { start, end, contentEnd } of lineRanges(text)) {
-    const content = text.slice(start, contentEnd);
-    if (
-      content === '+' + oldName + SEPARATOR_SUFFIX ||
-      content === '-' + oldName + SEPARATOR_SUFFIX
-    ) {
-      const eol = text.slice(contentEnd, end);
-      return text.slice(0, start) + text[start] + newName + SEPARATOR_SUFFIX + eol + text.slice(end);
+  return withBomPreserved(text, (bomless) => {
+    for (const { start, end, contentEnd } of lineRanges(bomless)) {
+      const content = bomless.slice(start, contentEnd);
+      if (
+        content === '+' + oldName + SEPARATOR_SUFFIX ||
+        content === '-' + oldName + SEPARATOR_SUFFIX
+      ) {
+        const eol = bomless.slice(contentEnd, end);
+        return bomless.slice(0, start) + bomless[start] + newName + SEPARATOR_SUFFIX + eol + bomless.slice(end);
+      }
     }
-  }
-  throw new Error(`Separator not found in modlist: ${oldName}`);
+    throw new Error(`Separator not found in modlist: ${oldName}`);
+  });
 }
 
 /** Remove a separator line only; its child mods are naturally promoted. */
 export function deleteSeparatorInText(text: string, name: string): string {
-  const lines = splitLinesKeepEol(text);
-  const idx = lines.findIndex(
-    (l) =>
-      lineContent(l) === '+' + name + SEPARATOR_SUFFIX ||
-      lineContent(l) === '-' + name + SEPARATOR_SUFFIX,
-  );
-  if (idx === -1) throw new Error(`Separator not found in modlist: ${name}`);
-  lines.splice(idx, 1);
-  return lines.join('');
+  return withBomPreserved(text, (bomless) => {
+    const lines = splitLinesKeepEol(bomless);
+    const idx = lines.findIndex(
+      (l) =>
+        lineContent(l) === '+' + name + SEPARATOR_SUFFIX ||
+        lineContent(l) === '-' + name + SEPARATOR_SUFFIX,
+    );
+    if (idx === -1) throw new Error(`Separator not found in modlist: ${name}`);
+    lines.splice(idx, 1);
+    return lines.join('');
+  });
 }
 
 /** Append a disabled mod line at the bottom (lowest priority), preserving every
@@ -135,13 +156,15 @@ export function appendModToText(text: string, modName: string): string {
 
 /** Remove a mod's entry line entirely. Throws if absent; throws if the name resolves to a separator. */
 export function removeModFromText(text: string, modName: string): string {
-  const lines = splitLinesKeepEol(text);
-  const idx = lines.findIndex(
-    (l) => lineContent(l) === '+' + modName || lineContent(l) === '-' + modName,
-  );
-  if (idx === -1) throw new Error(`Mod not found in modlist: ${modName}`);
-  lines.splice(idx, 1);
-  return lines.join('');
+  return withBomPreserved(text, (bomless) => {
+    const lines = splitLinesKeepEol(bomless);
+    const idx = lines.findIndex(
+      (l) => lineContent(l) === '+' + modName || lineContent(l) === '-' + modName,
+    );
+    if (idx === -1) throw new Error(`Mod not found in modlist: ${modName}`);
+    lines.splice(idx, 1);
+    return lines.join('');
+  });
 }
 
 function ungroupedInsertAt(lines: string[]): number {
@@ -178,21 +201,23 @@ export function moveModToSeparatorEndInText(
   modName: string,
   separatorName: string | null,
 ): string {
-  const lines = splitLinesKeepEol(text);
+  return withBomPreserved(text, (bomless) => {
+    const lines = splitLinesKeepEol(bomless);
 
-  const modIdx = lines.findIndex(
-    (l) => lineContent(l) === '+' + modName || lineContent(l) === '-' + modName,
-  );
-  if (modIdx === -1) throw new Error(`Mod not found in modlist: ${modName}`);
-  const [modLine] = lines.splice(modIdx, 1);
+    const modIdx = lines.findIndex(
+      (l) => lineContent(l) === '+' + modName || lineContent(l) === '-' + modName,
+    );
+    if (modIdx === -1) throw new Error(`Mod not found in modlist: ${modName}`);
+    const [modLine] = lines.splice(modIdx, 1);
 
-  const insertAt =
-    separatorName === null
-      ? ungroupedInsertAt(lines)
-      : separatorSectionInsertAt(lines, separatorName);
+    const insertAt =
+      separatorName === null
+        ? ungroupedInsertAt(lines)
+        : separatorSectionInsertAt(lines, separatorName);
 
-  lines.splice(insertAt, 0, modLine);
-  return lines.join('');
+    lines.splice(insertAt, 0, modLine);
+    return lines.join('');
+  });
 }
 
 /** Move a separator and all its children as a block so the separator occupies
@@ -202,33 +227,35 @@ export function moveSeparatorBlockInText(
   separatorName: string,
   toIndex: number,
 ): string {
-  const lines = splitLinesKeepEol(text);
+  return withBomPreserved(text, (bomless) => {
+    const lines = splitLinesKeepEol(bomless);
 
-  const sepIdx = lines.findIndex(
-    (l) =>
-      lineContent(l) === '+' + separatorName + SEPARATOR_SUFFIX ||
-      lineContent(l) === '-' + separatorName + SEPARATOR_SUFFIX,
-  );
-  if (sepIdx === -1) throw new Error(`Separator not found in modlist: ${separatorName}`);
+    const sepIdx = lines.findIndex(
+      (l) =>
+        lineContent(l) === '+' + separatorName + SEPARATOR_SUFFIX ||
+        lineContent(l) === '-' + separatorName + SEPARATOR_SUFFIX,
+    );
+    if (sepIdx === -1) throw new Error(`Separator not found in modlist: ${separatorName}`);
 
-  // Extent of the block: sep line + everything up to (but not including) the next separator line
-  const nextSep = lines.findIndex((l, i) => i > sepIdx && isSeparatorLine(l));
-  const blockEnd = nextSep === -1 ? lines.length : nextSep;
-  const block = lines.splice(sepIdx, blockEnd - sepIdx);
+    // Extent of the block: sep line + everything up to (but not including) the next separator line
+    const nextSep = lines.findIndex((l, i) => i > sepIdx && isSeparatorLine(l));
+    const blockEnd = nextSep === -1 ? lines.length : nextSep;
+    const block = lines.splice(sepIdx, blockEnd - sepIdx);
 
-  // Insert at toIndex among remaining entry lines
-  const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
-  const clamped = Math.max(0, Math.min(toIndex, entryLineIdx.length));
-  let insertAt: number;
-  if (clamped < entryLineIdx.length) {
-    insertAt = entryLineIdx[clamped];
-  } else if (entryLineIdx.length === 0) {
-    insertAt = lines.length;
-  } else {
-    insertAt = entryLineIdx.at(-1)! + 1;
-  }
-  lines.splice(insertAt, 0, ...block);
-  return lines.join('');
+    // Insert at toIndex among remaining entry lines
+    const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
+    const clamped = Math.max(0, Math.min(toIndex, entryLineIdx.length));
+    let insertAt: number;
+    if (clamped < entryLineIdx.length) {
+      insertAt = entryLineIdx[clamped];
+    } else if (entryLineIdx.length === 0) {
+      insertAt = lines.length;
+    } else {
+      insertAt = entryLineIdx.at(-1)! + 1;
+    }
+    lines.splice(insertAt, 0, ...block);
+    return lines.join('');
+  });
 }
 
 /** Move a mod's line so it occupies entry-index `toIndex` among the +/- entry
@@ -236,25 +263,27 @@ export function moveSeparatorBlockInText(
  *  removed*. Out-of-range clamps to the last entry slot. Non-entry lines
  *  (comment, *) keep their relative position; bytes are preserved. */
 export function moveModInText(text: string, modName: string, toIndex: number): string {
-  const lines = splitLinesKeepEol(text);
-  const srcLine = lines.findIndex(
-    (l) => lineContent(l) === '+' + modName || lineContent(l) === '-' + modName,
-  );
-  if (srcLine === -1) throw new Error(`Mod not found in modlist: ${modName}`);
+  return withBomPreserved(text, (bomless) => {
+    const lines = splitLinesKeepEol(bomless);
+    const srcLine = lines.findIndex(
+      (l) => lineContent(l) === '+' + modName || lineContent(l) === '-' + modName,
+    );
+    if (srcLine === -1) throw new Error(`Mod not found in modlist: ${modName}`);
 
-  const [moved] = lines.splice(srcLine, 1);
-  const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
+    const [moved] = lines.splice(srcLine, 1);
+    const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
 
-  const clamped = Math.max(0, Math.min(toIndex, entryLineIdx.length));
-  const lastEntry = entryLineIdx.at(-1);
-  let insertAt: number;
-  if (clamped < entryLineIdx.length) {
-    insertAt = entryLineIdx[clamped]; // before the entry currently at that slot
-  } else if (lastEntry === undefined) {
-    insertAt = lines.length; // no entries at all
-  } else {
-    insertAt = lastEntry + 1; // after the last entry, before any trailing * block
-  }
-  lines.splice(insertAt, 0, moved);
-  return lines.join('');
+    const clamped = Math.max(0, Math.min(toIndex, entryLineIdx.length));
+    const lastEntry = entryLineIdx.at(-1);
+    let insertAt: number;
+    if (clamped < entryLineIdx.length) {
+      insertAt = entryLineIdx[clamped]; // before the entry currently at that slot
+    } else if (lastEntry === undefined) {
+      insertAt = lines.length; // no entries at all
+    } else {
+      insertAt = lastEntry + 1; // after the last entry, before any trailing * block
+    }
+    lines.splice(insertAt, 0, moved);
+    return lines.join('');
+  });
 }

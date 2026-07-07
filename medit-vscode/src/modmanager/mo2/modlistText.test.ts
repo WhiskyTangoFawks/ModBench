@@ -58,6 +58,11 @@ describe('setEnabledInText — byte-faithful surgical edit', () => {
     const out = setEnabledInText(input, 'Second', false);
     expect(out).toBe('\uFEFF+First\r\n-Second\r\n');
   });
+
+  it('matches the top mod when the file starts with a UTF-8 BOM', () => {
+    const out = setEnabledInText('\uFEFF+First\r\n+Second\r\n', 'First', false);
+    expect(out).toBe('\uFEFF-First\r\n+Second\r\n');
+  });
 });
 
 describe('moveModInText — byte-faithful reorder by entry index', () => {
@@ -103,6 +108,11 @@ describe('moveModInText — byte-faithful reorder by entry index', () => {
 
   it('throws when the mod is absent', () => {
     expect(() => moveModInText(defaultModlist(), 'No Such Mod', 0)).toThrow(/No Such Mod/);
+  });
+
+  it('relocates the top mod without dropping or moving a leading BOM', () => {
+    const out = moveModInText('\uFEFF+First\r\n+Second\r\n+Third\r\n', 'First', 2);
+    expect(out).toBe('\uFEFF+Second\r\n+Third\r\n+First\r\n');
   });
 });
 
@@ -174,6 +184,11 @@ describe('insertSeparatorAtIndexInText', () => {
     expect(out.endsWith('*Unmanaged: ccSBJFO4003-Grenade\r\n')).toBe(true);
   });
 
+  it('inserts after the top entry without dropping or moving a leading BOM', () => {
+    const out = insertSeparatorAtIndexInText('\uFEFF+First\r\n+Second\r\n', 'NewSep', 0);
+    expect(out).toBe('\uFEFF+First\r\n+NewSep_separator\r\n+Second\r\n');
+  });
+
   it('inserts after the last entry when afterIndex is at the end', () => {
     const out = insertSeparatorAtIndexInText(defaultModlist(), 'Tail Sep', 7);
     expect(names(out).at(-1)).toBe('Tail Sep');
@@ -217,6 +232,11 @@ describe('renameSeparatorInText', () => {
   it('throws when the separator is not present', () => {
     expect(() => renameSeparatorInText(defaultModlist(), 'No Such Sep', 'X')).toThrow(/No Such Sep/);
   });
+
+  it('renames the top separator without dropping or moving a leading BOM', () => {
+    const out = renameSeparatorInText('\uFEFF+Sep_separator\r\n+A\r\n', 'Sep', 'NewSep');
+    expect(out).toBe('\uFEFF+NewSep_separator\r\n+A\r\n');
+  });
 });
 
 describe('deleteSeparatorInText', () => {
@@ -238,6 +258,11 @@ describe('deleteSeparatorInText', () => {
 
   it('throws when the separator is not present', () => {
     expect(() => deleteSeparatorInText(defaultModlist(), 'No Such Sep')).toThrow(/No Such Sep/);
+  });
+
+  it('deletes the top separator without dropping or moving a leading BOM', () => {
+    const out = deleteSeparatorInText('\uFEFF+Sep_separator\r\n+A\r\n', 'Sep');
+    expect(out).toBe('\uFEFF+A\r\n');
   });
 });
 
@@ -266,6 +291,11 @@ describe('removeModFromText', () => {
     expect(() =>
       removeModFromText(defaultModlist(), 'Unassigned (Modlist Development)'),
     ).toThrow();
+  });
+
+  it('removes the top mod without dropping or moving a leading BOM', () => {
+    const out = removeModFromText('\uFEFF+First\r\n+Second\r\n', 'First');
+    expect(out).toBe('\uFEFF+Second\r\n');
   });
 });
 
@@ -320,6 +350,15 @@ describe('moveModToSeparatorEndInText', () => {
     expect(() =>
       moveModToSeparatorEndInText(defaultModlist(), 'ENBoost - 12k', 'No Such Sep'),
     ).toThrow(/No Such Sep/);
+  });
+
+  it('relocates the top mod without dropping or moving a leading BOM', () => {
+    const out = moveModToSeparatorEndInText(
+      '\uFEFF+First\r\n+Sep_separator\r\n+Second\r\n',
+      'First',
+      'Sep',
+    );
+    expect(out).toBe('\uFEFF+Sep_separator\r\n+Second\r\n+First\r\n');
   });
 });
 
@@ -378,6 +417,15 @@ describe('moveSeparatorBlockInText', () => {
     expect(() =>
       moveSeparatorBlockInText(defaultModlist(), 'No Such Sep', 0),
     ).toThrow(/No Such Sep/);
+  });
+
+  it('relocates the top separator block without dropping or moving a leading BOM', () => {
+    const out = moveSeparatorBlockInText(
+      '\uFEFF+Sep_separator\r\n+A\r\n+B_separator\r\n+C\r\n',
+      'Sep',
+      2,
+    );
+    expect(out).toBe('\uFEFF+B_separator\r\n+C\r\n+Sep_separator\r\n+A\r\n');
   });
 });
 
