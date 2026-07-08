@@ -1,6 +1,7 @@
 import { readFile, writeFile, readdir, rm, cp, access } from 'node:fs/promises'; // access used by exists()
 import { join } from 'node:path';
 import type { IModlistSource, InstallMeta, ModlistEntry } from '../model';
+import type { Reporter } from '../deployer';
 import {
   appendModToText,
   deleteSeparatorInText,
@@ -41,7 +42,16 @@ const NEXUS_SLUGS: Record<string, string> = {
 export class Mo2ModlistSource implements IModlistSource {
   private modlistMutex: Promise<void> = Promise.resolve();
 
-  constructor(private readonly instanceRoot: string) {}
+  private readonly log: (msg: string) => void;
+
+  constructor(
+    private readonly instanceRoot: string,
+    log?: (msg: string) => void,
+    private readonly reporter?: Reporter,
+    private readonly rmFn: typeof rm = rm,
+  ) {
+    this.log = log ?? (() => {});
+  }
 
   private get iniPath(): string {
     return join(this.instanceRoot, 'ModOrganizer.ini');
@@ -120,8 +130,23 @@ export class Mo2ModlistSource implements IModlistSource {
   }
 
   async removeMod(modName: string): Promise<void> {
+    // De-list before deleting the folder, not after: if the folder-delete step
+    // fails, the worst case is an orphaned folder (MO2 surfaces it as an
+    // unmanaged mod — recoverable). The reverse order risks a dangling modlist
+    // entry pointing at a folder that no longer exists.
     await this.modifyModlist((t) => removeModFromText(t, modName));
-    await rm(join(this.instanceRoot, 'mods', modName), { recursive: true, force: true });
+    const modDir = join(this.instanceRoot, 'mods', modName);
+    try {
+      await this.rmFn(modDir, { recursive: true, force: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log(`[Mo2ModlistSource] removeMod: could not delete folder for "${modName}": ${message}`);
+      this.reporter?.report(
+        'warning',
+        `"${modName}" was removed from the mod list, but its folder could not be deleted and is now orphaned: ${modDir}`,
+        message,
+      );
+    }
   }
 
   async installMod(name: string, sourceDir: string, meta: InstallMeta): Promise<void> {

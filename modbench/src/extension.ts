@@ -527,8 +527,9 @@ function registerLoadoutView(deps: LoadoutViewDeps): void {
     log('[extension] No workspace folder open — Mod List view not registered.');
     return;
   }
-    const modlistSource = new Mo2ModlistSource(instanceRoot);
-    const modListProvider = new ModListProvider(modlistSource, log, instanceRoot, makeReporter(log, 'modList'));
+    const modListReporter = makeReporter(log, 'modList');
+    const modlistSource = new Mo2ModlistSource(instanceRoot, log, modListReporter);
+    const modListProvider = new ModListProvider(modlistSource, log, instanceRoot, modListReporter);
     const modListView = vscode.window.createTreeView('modbench.modList', {
       treeDataProvider: modListProvider,
       showCollapseAll: true,
