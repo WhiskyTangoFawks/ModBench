@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cp, mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -178,6 +178,23 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     const entries = await src.readModlist();
     expect(entries.some((e) => e.name === 'Harder VATS')).toBe(false);
     await expect(readFile(join(dir, 'mods', 'Harder VATS', 'meta.ini'), 'utf8')).rejects.toThrow();
+  });
+
+  it('removeMod still de-lists the mod and reports a distinct warning when folder deletion fails', async () => {
+    const report = vi.fn();
+    const failingRm = vi.fn().mockRejectedValue(new Error('EBUSY: resource busy or locked'));
+    const flaky = new Mo2ModlistSource(dir, undefined, { report }, failingRm);
+
+    await expect(flaky.removeMod('Harder VATS')).resolves.toBeUndefined();
+
+    const entries = await flaky.readModlist();
+    expect(entries.some((e) => e.name === 'Harder VATS')).toBe(false);
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith(
+      'warning',
+      expect.stringContaining('Harder VATS'),
+      expect.stringContaining('EBUSY'),
+    );
   });
 
   it('installMod copies files, writes meta.ini, and appends a disabled bottom line', async () => {
