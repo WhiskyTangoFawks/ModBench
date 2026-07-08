@@ -55,6 +55,8 @@ export interface IModlistSource {
   /** Nexus Mods game slug (e.g. "fallout4") for constructing mod page URLs. */
   getNexusSlug(): Promise<string>;
   listProfiles(): Promise<string[]>;
+  /** Separator names in modlist priority order (top = first). */
+  listSeparators(): Promise<string[]>;
   getActiveProfile(): Promise<string>;
   setActiveProfile(name: string): Promise<void>;
   /** plugins.txt load order, read-only (the Plugin List view owns plugin order). */

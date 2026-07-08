@@ -49,6 +49,13 @@ describe('Mo2ModlistSource — reads (against the committed fixture)', () => {
     expect((await src.listProfiles()).sort((a, b) => a.localeCompare(b))).toEqual(['Default', 'Secondary']);
   });
 
+  it('lists separator names in priority order', async () => {
+    expect(await src.listSeparators()).toEqual([
+      'Unassigned (Modlist Development)',
+      'Radfall - All-In-One Survival Overhaul',
+    ]);
+  });
+
   it('reads plugins.txt order (read-only), stripping markers and comments', async () => {
     expect(await src.readPluginOrder()).toEqual([
       'Unofficial Fallout 4 Patch.esp',

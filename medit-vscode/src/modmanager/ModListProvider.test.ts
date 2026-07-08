@@ -65,6 +65,9 @@ class FakeSource implements IModlistSource {
   reorderSeparatorBlock(_sep: string, _idx: number): Promise<void> { return Promise.resolve(); }
   getNexusSlug(): Promise<string> { return Promise.resolve('fallout4'); }
   listProfiles(): Promise<string[]> { return Promise.resolve(this.profiles); }
+  listSeparators(): Promise<string[]> {
+    return Promise.resolve(this.entries.filter((e) => e.kind === 'separator').map((e) => e.name));
+  }
   getActiveProfile(): Promise<string> { return Promise.resolve(this.activeProfile); }
   setActiveProfile(name: string): Promise<void> { this.activeProfile = name; return Promise.resolve(); }
   readPluginOrder(): Promise<string[]> { return Promise.resolve([]); }
