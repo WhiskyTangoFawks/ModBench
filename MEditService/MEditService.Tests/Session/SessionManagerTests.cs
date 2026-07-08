@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Session;
@@ -244,18 +245,13 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
     public void ReserveFormKey_ExhaustedSpace_ThrowsInvalidOperationException()
     {
         var data = new PluginFixtureBuilder("fk-exhausted")
-            .WithPlugin("Full.esp")
+            .WithPlugin("Full.esp", mod => mod.ModHeader.Stats.NextFormID = 0x1000000u,
+                writeParams: new BinaryWriteParameters { NextFormID = NextFormIDOption.NoCheck })
             .Build();
         using (data)
         {
             using var manager = MakeManager();
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-
-            // Manually exhaust by stuffing a large seed via reflection
-            var field = typeof(SessionManager)
-                .GetField("_nextFormIds", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-            var dict = (Dictionary<string, uint>)field.GetValue(manager)!;
-            dict["Full.esp"] = 0x1000000u;
 
             Assert.Throws<InvalidOperationException>(() => manager.ReserveFormKey("Full.esp"));
         }
@@ -265,17 +261,13 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
     public void ReserveFormKey_AtMaxValidFormId_Succeeds()
     {
         var data = new PluginFixtureBuilder("fk-max")
-            .WithPlugin("Max.esp")
+            .WithPlugin("Max.esp", mod => mod.ModHeader.Stats.NextFormID = 0xFFFFFFu,
+                writeParams: new BinaryWriteParameters { NextFormID = NextFormIDOption.NoCheck })
             .Build();
         using (data)
         {
             using var manager = MakeManager();
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-
-            var field = typeof(SessionManager)
-                .GetField("_nextFormIds", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-            var dict = (Dictionary<string, uint>)field.GetValue(manager)!;
-            dict["Max.esp"] = 0xFFFFFFu;
 
             var fk = manager.ReserveFormKey("Max.esp");
 
