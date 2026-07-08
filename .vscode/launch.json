@@ -5,8 +5,8 @@
       "name": "Manual Test",
       "type": "extensionHost",
       "request": "launch",
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}/medit-vscode"],
-      "outFiles": ["${workspaceFolder}/medit-vscode/out/**/*.js"],
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/modbench"],
+      "outFiles": ["${workspaceFolder}/modbench/out/**/*.js"],
       "preLaunchTask": "Manual Test: Pre-launch"
     }
   ]

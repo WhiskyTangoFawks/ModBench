@@ -26,11 +26,11 @@ fi
 
 if $FRONTEND; then
   echo "=== Gate 4: Frontend lint ==="
-  (cd "$ROOT/medit-vscode" && npm run lint) && \
+  (cd "$ROOT/modbench" && npm run lint) && \
   echo "=== Gate 5: Frontend build (type-check) ===" && \
-  (cd "$ROOT/medit-vscode" && npm run build) && \
+  (cd "$ROOT/modbench" && npm run build) && \
   echo "=== Gate 6: Frontend tests ===" && \
-  (cd "$ROOT/medit-vscode" && npm run test:unit && npm run test:integration) \
+  (cd "$ROOT/modbench" && npm run test:unit && npm run test:integration) \
   || { echo "--- FRONTEND GATES FAILED ---"; FAILED=true; }
 fi
 

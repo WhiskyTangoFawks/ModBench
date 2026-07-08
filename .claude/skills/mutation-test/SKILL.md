@@ -33,10 +33,7 @@ force a kill — that re-introduces the implementation-coupling TDD exists to pr
 > sufficient; `run.sh` parses the report and prints the summary.
 
 > 🏎️ **Confirm fixes with targeted runs, never a full re-run.** A full run can take ~an hour, so
-> after triaging a survivor confirm it with `run.sh --mutant-ids <id>` / `--file <File>.cs`. The
-> ~316 MB real-game test was removed from the suite (it inflated every indexing mutant's timeout
-> budget); real-data coverage now comes from the small committed
-> `MEditService.Tests/TestData/mEditTestSubset.esm` (see `RealData/CutDownPluginGenerator.cs`).
+> after triaging a survivor confirm it with `run.sh --mutant-ids <id>` / `--file <File>.cs`.
 > The full-install smoke test (`RealData/RealInstallSmokeTests.cs`) is gated behind `MEDIT_SMOKE=1`
 > so it never runs under mutation.
 

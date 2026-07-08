@@ -1,6 +1,6 @@
 # Mod Manager Feature Inventory — MO2 / Vortex / Modbench
 
-A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's current status. This seeds the surface specs in [docs/specs/](../specs/) and the epics on [GitHub Milestones](https://github.com/WhiskyTangoFawks/mEdit/milestones).
+A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's current status. This seeds the surface specs in [docs/specs/](../specs/) and the epics on [GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones).
 
 **Status legend:** ✅ exists · 🔜 planned (tracked issue) · ❓ open question (needs a grilling session) · ➖ out of scope / covered natively by VS Code
 
@@ -43,7 +43,7 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 | LOOT auto-sort | ✓ one-click, full masterlist | ✓ built-in, native grouping | 🔜 modbench-9 = dependency-only topological sort; full LOOT masterlist ❓ |
 | ESL flags / capacity display | ✓ | ✓ | ❓ ESL convert is Phase 14 (Editing); display in a Plugins surface undecided |
 | Missing-master warnings | ✓ | ✓ | ✅ (badge, via `MasterReader`) |
-| Rule-based ordering (after/before rules) | ✗ | ✓ | ➖ MO2 explicit-order model chosen ([MM ADR-0001](../../medit-vscode/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md)) |
+| Rule-based ordering (after/before rules) | ✗ | ✓ | ➖ MO2 explicit-order model chosen ([MM ADR-0001](../../modbench/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md)) |
 
 **Open question for a grilling session:** is Plugins its own Modbench tab (MO2 model: Mods pane + Plugins pane side by side), or part of the mEdit surface (its Plugins tree already shows load order), or a mode of the Mods surface? Currently load-order data lives in the mEdit view's Plugin tree; `plugins.txt` writing arrives with modbench-9.
 

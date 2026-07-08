@@ -2,6 +2,19 @@
 
 C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invariants.
 
+## Invariants
+
+- Binary plugins = source of truth. DuckDB is an indexed read model of committed
+  (on-disk) record data — the only read path for queries, always through
+  `IRecordRepository`, never Mutagen directly. Staged edits are buffered in a separate
+  table.
+- Records table uses `(form_key, plugin)` composite key — one row per plugin
+  containing that FormKey.
+- DuckDB schema is reflection-generated at startup from Mutagen types — never
+  hand-edit it.
+- Must support all Mutagen-supported games without code changes; tests may use FO4 as
+  a concrete game.
+
 ## Folder Structure
 
 | Folder | Owns | Examples |

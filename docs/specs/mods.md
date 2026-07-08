@@ -1,12 +1,12 @@
 # Mods (Loadout) — Surface Specification
 
-The Loadout view: the Mod Management context's primary surface. A VS Code `TreeView` (`modbench.modList`, "Mods") that installs, orders, enables, and deploys mods for the active profile. It operates on mods and files, never on records or FormKeys (see [CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary: [modmanager CONTEXT.md](../../medit-vscode/src/modmanager/CONTEXT.md)).
+The Loadout view: the Mod Management context's primary surface. A VS Code `TreeView` (`modbench.modList`, "Mods") that installs, orders, enables, and deploys mods for the active profile. It operates on mods and files, never on records or FormKeys (see [CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary: [modmanager CONTEXT.md](../../modbench/src/modmanager/CONTEXT.md)).
 
 Architecture is fixed by:
 - [ADR-0021](../adr/0021-mod-manager-in-extension.md) — mod manager lives in the extension, not the backend
 - [ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md) — the extension owns the editing backend's lifecycle; MO2 compat is by file import, not VFS
 - [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) — MO2's Mods/Plugins/Downloads panels map to native VS Code views and editor tabs, not a custom panel switcher
-- [Mod-Management ADR-0001](../../medit-vscode/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md) — the modlist format **is** MO2's format, behind a source adapter
+- [Mod-Management ADR-0001](../../modbench/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md) — the modlist format **is** MO2's format, behind a source adapter
 
 The Editing surface is specified in [medit.md](medit.md); the planned Downloads surface in [downloads.md](downloads.md); the planned Plugins (load order) surface in [plugins.md](plugins.md).
 
@@ -16,7 +16,7 @@ The Editing surface is specified in [medit.md](medit.md); the planned Downloads 
 
 One tool handles the entire modding workflow: install → manual sort → launch → inspect conflicts → edit records → patch. The sidebar switches between the **Mods** view (install/sort/enable, this spec) and the **mEdit** views (load order/edit). Deploy/purge writes the merged mod view into the game directory using hardlinks so the game can run; **editing never requires a deploy** (see "Editing vs deploying" below).
 
-The mod manager is a subsystem of the VS Code extension (`medit-vscode/src/modmanager/`). It is file/HTTP/JSON work and never parses plugin binaries. The C# backend remains a pure Mutagen + DuckDB record-editing service.
+The mod manager is a subsystem of the VS Code extension (`modbench/src/modmanager/`). It is file/HTTP/JSON work and never parses plugin binaries. The C# backend remains a pure Mutagen + DuckDB record-editing service.
 
 **The open VS Code workspace root _is_ the MO2 instance directory** — `mods/`, `profiles/`, and `ModOrganizer.ini` are read relative to it; there is no separate instance-path config.
 
@@ -69,7 +69,7 @@ A hardlink is a second directory entry pointing to the same inode. No data is du
 
 ## Modlist format & source adapters
 
-Modbench does not invent a modlist format — its format **is** MO2's ([MM ADR-0001](../../medit-vscode/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md)). Persistence goes through an `IModlistSource` over an in-memory modlist model:
+Modbench does not invent a modlist format — its format **is** MO2's ([MM ADR-0001](../../modbench/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md)). Persistence goes through an `IModlistSource` over an in-memory modlist model:
 
 | Adapter | Status | Behaviour |
 |---|---|---|

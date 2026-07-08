@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildColumns } from '../../webview/src/recordUtils';
-import type { RecordDetail } from '../../webview/src/types';
+import { buildColumns } from '../../../webview/src/recordUtils';
+import type { RecordDetail } from '../../../webview/src/types';
 
 function makeOverride(plugin: string, pendingFields?: Record<string, unknown>): RecordDetail {
   return {

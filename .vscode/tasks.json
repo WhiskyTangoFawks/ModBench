@@ -29,7 +29,7 @@
       "label": "TS: Build",
       "type": "shell",
       "command": "npm run build",
-      "options": { "cwd": "${workspaceFolder}/medit-vscode" },
+      "options": { "cwd": "${workspaceFolder}/modbench" },
       "group": "build",
       "problemMatcher": ["$tsc"]
     },
@@ -37,7 +37,7 @@
       "label": "TS: Unit Tests (Vitest)",
       "type": "shell",
       "command": "npm run test:unit",
-      "options": { "cwd": "${workspaceFolder}/medit-vscode" },
+      "options": { "cwd": "${workspaceFolder}/modbench" },
       "group": "test",
       "problemMatcher": []
     },
@@ -45,7 +45,7 @@
       "label": "TS: Integration Tests",
       "type": "shell",
       "command": "npm run test:integration",
-      "options": { "cwd": "${workspaceFolder}/medit-vscode" },
+      "options": { "cwd": "${workspaceFolder}/modbench" },
       "group": "test",
       "problemMatcher": []
     },

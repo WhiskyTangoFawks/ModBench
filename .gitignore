@@ -27,11 +27,11 @@ MEditService/StrykerOutput/[0-9]*/
 src/generated/
 
 # VS Code integration test runner artifacts
-medit-vscode/.vscode-test/
-medit-vscode/.vscode-test.mjs
-medit-vscode/out/
-medit-vscode/backend/
-medit-vscode/tsconfig.integration.json
+modbench/.vscode-test/
+modbench/.vscode-test.mjs
+modbench/out/
+modbench/backend/
+modbench/tsconfig.integration.json
 
 # OS
 .DS_Store

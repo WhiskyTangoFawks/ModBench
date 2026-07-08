@@ -11,5 +11,5 @@
     "sourceMap": true
   },
   "include": ["src"],
-  "exclude": ["node_modules", "out", "webview", "src/test/webviewUtils.test.ts"]
+  "exclude": ["node_modules", "out", "webview", "src/medit/test/webviewUtils.test.ts"]
 }

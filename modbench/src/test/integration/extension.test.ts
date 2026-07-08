@@ -37,7 +37,7 @@ before(async function () {
   // The extension must auto-activate via onStartupFinished (no manual
   // activate() call here) — that's the behavior under test. Poll rather than
   // assume, since activation timing after workbench restore isn't instant.
-  ext = vscode.extensions.all.find(e => e.packageJSON?.name === 'medit-vscode');
+  ext = vscode.extensions.all.find(e => e.packageJSON?.name === 'modbench');
   const deadline = Date.now() + 5000;
   while (ext && !ext.isActive && Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 100));
