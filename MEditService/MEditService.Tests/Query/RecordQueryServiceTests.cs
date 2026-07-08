@@ -596,8 +596,8 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
     private (RecordQueryService Svc, SpyRecordReader Spy, IDisposable Mod) MakeSpySvc()
     {
         var reflector = new SchemaReflector();
-        var inner = new InMemoryRecordRepository(reflector);
-        inner.Initialize(GameRelease.Fallout4);
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var inner = factory.Create(GameRelease.Fallout4);
         var mod = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
             new Mutagen.Bethesda.Plugins.ModPath(
                 Mutagen.Bethesda.Plugins.ModKey.FromFileName(TestPluginFixture.PluginName),
@@ -608,7 +608,15 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         var spy = new SpyRecordReader(inner);
         var stubSession = new StubSessionManager(spy, GameRelease.Fallout4);
         var svc = new RecordQueryService(stubSession, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
-        return (svc, spy, mod);
+        return (svc, spy, new CompositeDisposable(mod, inner));
+    }
+
+    private sealed class CompositeDisposable(params IDisposable[] items) : IDisposable
+    {
+        public void Dispose()
+        {
+            foreach (var item in items) item.Dispose();
+        }
     }
 
     [Fact]
