@@ -147,6 +147,11 @@ export class Mo2ModlistSource implements IModlistSource {
     return dirents.filter((d) => d.isDirectory()).map((d) => d.name);
   }
 
+  async listSeparators(): Promise<string[]> {
+    const entries = await this.readModlist();
+    return entries.filter((e) => e.kind === 'separator').map((e) => e.name);
+  }
+
   async getActiveProfile(): Promise<string> {
     return readSelectedProfile(await readFile(this.iniPath, 'utf8'));
   }

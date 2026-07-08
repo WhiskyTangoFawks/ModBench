@@ -444,10 +444,9 @@ function registerModContextCommands(deps: ModContextDeps): vscode.Disposable[] {
         if (node?.kind !== 'mod') return;
         let separators: string[];
         try {
-          const entries = await modlistSource.readModlist();
-          separators = entries.filter((e) => e.kind === 'separator').map((e) => e.name);
+          separators = await modlistSource.listSeparators();
         } catch (err) {
-          log(`[extension] moveToSeparator readModlist failed: ${err instanceof Error ? err.message : String(err)}`);
+          log(`[extension] moveToSeparator listSeparators failed: ${err instanceof Error ? err.message : String(err)}`);
           void vscode.window.showErrorMessage(`Modbench: Failed to read mod list.`);
           return;
         }
