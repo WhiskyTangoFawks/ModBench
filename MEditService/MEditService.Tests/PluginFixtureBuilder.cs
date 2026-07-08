@@ -1,28 +1,29 @@
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
 namespace MEditService.Tests;
 
 public sealed class PluginFixtureBuilder
 {
     private readonly string _prefix;
-    private readonly List<(string Name, bool Listed, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>>? Configure)> _plugins = [];
+    private readonly List<(string Name, bool Listed, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>>? Configure, BinaryWriteParameters? WriteParams)> _plugins = [];
 
     public PluginFixtureBuilder(string prefix = "medit")
     {
         _prefix = prefix;
     }
 
-    public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, bool listed = true)
+    public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, bool listed = true, BinaryWriteParameters? writeParams = null)
     {
-        _plugins.Add((name, listed, configure is null ? null : (mod, _) => configure(mod)));
+        _plugins.Add((name, listed, configure is null ? null : (mod, _) => configure(mod), writeParams));
         return this;
     }
 
     public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, bool listed = true)
     {
-        _plugins.Add((name, listed, configure));
+        _plugins.Add((name, listed, configure, null));
         return this;
     }
 
@@ -32,11 +33,11 @@ public sealed class PluginFixtureBuilder
         Directory.CreateDirectory(dataFolder);
 
         var builtMods = new List<Fallout4Mod>();
-        foreach (var (name, _, configure) in _plugins)
+        foreach (var (name, _, configure, writeParams) in _plugins)
         {
             var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
             configure?.Invoke(mod, builtMods.AsReadOnly());
-            mod.WriteToBinary(Path.Combine(dataFolder, name));
+            mod.WriteToBinary(Path.Combine(dataFolder, name), writeParams);
             builtMods.Add(mod);
         }
 
@@ -68,7 +69,7 @@ public sealed class PluginFixtureBuilder
         var builtMods = new List<Fallout4Mod>();
         var explicitPlugins = new List<(string Name, string Path)>();
         var i = 0;
-        foreach (var (name, _, configure) in _plugins)
+        foreach (var (name, _, configure, writeParams) in _plugins)
         {
             var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
             configure?.Invoke(mod, builtMods.AsReadOnly());
@@ -86,7 +87,7 @@ public sealed class PluginFixtureBuilder
                 explicitPlugins.Add((name, targetPath));
             }
 
-            mod.WriteToBinary(targetPath);
+            mod.WriteToBinary(targetPath, writeParams);
             builtMods.Add(mod);
             i++;
         }
