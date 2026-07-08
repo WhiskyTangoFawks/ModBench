@@ -4,7 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import sonarjs from 'eslint-plugin-sonarjs';
 
 export default tseslint.config(
-    { ignores: ['src/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**', 'src/test/webviewUtils.test.ts'] },
+    { ignores: ['src/medit/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**', 'src/medit/test/webviewUtils.test.ts'] },
 
     eslint.configs.recommended,
     tseslint.configs.recommendedTypeChecked,

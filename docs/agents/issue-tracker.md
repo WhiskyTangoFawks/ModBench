@@ -14,14 +14,14 @@ When an initiative's slices ship, fold the outcome back into the relevant surfac
 
 ## Milestones = epics (the roadmap)
 
-There is **no `ROADMAP.md`** — the [GitHub Milestones](https://github.com/WhiskyTangoFawks/mEdit/milestones) tab _is_ the roadmap. A milestone is used as an **epic**: a themed body of work whose assigned issues are its slices. This is a deliberate re-purposing — milestones here carry **no release/commitment semantics and no due dates**; a milestone is just "a named group of issues with a completion %."
+The [GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones) tab is the roadmap. A milestone is used as an epic: a themed body of work whose assigned issues are its slices. This is a deliberate re-purposing — milestones here carry **no release/commitment semantics and no due dates**; a milestone is just "a named group of issues with a completion %."
 
-- **One issue → one milestone.** An issue belongs to at most one epic (or none). Any finer hierarchy (epic → sub-epic) uses sub-issues or labels, not milestones.
-- **Ordering lives in the title prefix** (GitHub has no priority field). A **number = prioritized/sequenced** (`1 — Mod-management maturity` … `6 — …`); **no number = unprioritized/speculative** (bare topic name, e.g. `Navmesh editing`), which sorts below every numbered epic. Former `wishlist` items are unnumbered milestones.
+- **One issue → one milestone.** An issue belongs to at most one milestone (or none). Any finer hierarchy (epic → sub-epic) uses sub-issues or labels, not milestones.
+- **Ordering lives in the title prefix** (GitHub has no priority field). A **number = prioritized/sequenced** (`1 — Mod-management maturity` … `6 — …`); **no number = unprioritized/speculative** (bare topic name, e.g. `Navmesh editing`), which sorts below every numbered epic.
 - The per-epic narrative lives in the **milestone description**; un-scheduled roadmap items are tracked as real issues under their epic, not as prose.
 
 Traverse it with `gh`:
-- **List epics in order**: `gh api repos/WhiskyTangoFawks/mEdit/milestones --jq 'sort_by(.title)[] | "\(.title): \(.open_issues)o/\(.closed_issues)c"'`
+- **List epics in order**: `gh api repos/WhiskyTangoFawks/ModBench/milestones --jq 'sort_by(.title)[] | "\(.title): \(.open_issues)o/\(.closed_issues)c"'`
 - **Issues in an epic**: `gh issue list --milestone "1 — Mod-management maturity"`
 - **Assign / move**: `gh issue edit <n> --milestone "<title>"`; **create an epic**: `gh api --method POST repos/…/milestones -f title=… -f description=…`.
 
@@ -57,14 +57,3 @@ Create a GitHub issue.
 ## When a skill says "fetch the relevant ticket"
 
 Run `gh issue view <number> --comments`.
-
-## Wayfinding operations
-
-Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.
-
-- **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body. `gh issue create --label wayfinder:map`.
-- **Child ticket**: an issue linked to the map as a GitHub sub-issue (`gh api` on the sub-issues endpoint). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`), plus `wayfinder:claimed` once claimed.
-- **Blocking**: native issue relationships where available; otherwise a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every issue it lists is closed.
-- **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open `Blocked by` issue or the `wayfinder:claimed` label; first in map order wins.
-- **Claim**: `gh issue edit <n> --add-label wayfinder:claimed` — the session's first write.
-- **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.

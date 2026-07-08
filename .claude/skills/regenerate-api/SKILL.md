@@ -21,7 +21,7 @@ cd /home/wayne/Games/FO4/mEdit/MEditService/MEditService.Api && dotnet run &
 until curl -sf http://localhost:5172/health >/dev/null 2>&1; do sleep 1; done
 
 # regen, then stop
-cd /home/wayne/Games/FO4/mEdit/medit-vscode && npm run generate-api
+cd /home/wayne/Games/FO4/mEdit/modbench && npm run generate-api
 pkill -f "MEditService.Api"
 ```
 

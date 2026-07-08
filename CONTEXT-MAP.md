@@ -12,7 +12,7 @@ Each UI surface has a living spec in [docs/specs/](./docs/specs/) — a surface 
 ## Contexts
 
 - [Editing](./CONTEXT.md) — the **mEdit** view: viewing, comparing, and editing plugin records (FormKeys, override stacks, conflicts). Lives in the C# backend (`MEditService/`) plus the editor webviews. Operates on **plugins** and **records**; deliberately avoids the word "mod."
-- [Mod Management](./medit-vscode/src/modmanager/CONTEXT.md) — the **Loadout** view: installing, ordering, enabling, and deploying mods, and locating the game. Lives in the VS Code extension (`medit-vscode/src/modmanager/`). Operates on **mods**, **modlists**, and **files**; deliberately avoids records and FormKeys.
+- [Mod Management](./modbench/src/modmanager/CONTEXT.md) — the **Loadout** view: installing, ordering, enabling, and deploying mods, and locating the game. Lives in the VS Code extension (`modbench/src/modmanager/`). Operates on **mods**, **modlists**, and **files**; deliberately avoids records and FormKeys.
 
 ## Relationship
 

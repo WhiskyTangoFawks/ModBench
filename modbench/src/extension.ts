@@ -3,17 +3,17 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import * as cp from 'child_process';
-import { BackendManager } from './BackendManager';
-import { createApiClient } from './ApiClient';
-import { detectGamePaths } from './GamePathDetector';
-import { SessionController } from './SessionController';
-import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeNode, PluginTreeProvider, RecordNode } from './PluginTreeProvider';
-import { ChangeGroupNode, ChangeGroupsTreeProvider } from './ChangeGroupsTreeProvider';
-import { ApiPluginRepository } from './PluginRepository';
-import { FilterCodeLensProvider } from './FilterCodeLensProvider';
-import { buildWebviewHtml } from './webviewHtml';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from './messages';
-import { openReferencedByPanel } from './ReferencedByPanel';
+import { BackendManager } from './medit/BackendManager';
+import { createApiClient } from './medit/ApiClient';
+import { detectGamePaths } from './medit/GamePathDetector';
+import { SessionController } from './medit/SessionController';
+import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeNode, PluginTreeProvider, RecordNode } from './medit/PluginTreeProvider';
+import { ChangeGroupNode, ChangeGroupsTreeProvider } from './medit/ChangeGroupsTreeProvider';
+import { ApiPluginRepository } from './medit/PluginRepository';
+import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
+import { buildWebviewHtml } from './medit/webviewHtml';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from './medit/messages';
+import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { ModListProvider, ModNode, SeparatorNode } from './modmanager/ModListProvider';
 import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './modmanager/gameDirectory';
@@ -107,7 +107,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   // ── Mod List (Loadout) view ──────────────────────────────────────────────────
-  // The open workspace root IS the MO2 instance (see medit-vscode/CLAUDE.md). Until
+  // The open workspace root IS the MO2 instance (see modbench/CLAUDE.md). Until
   // the Loadout↔Editing toggle lands (Modbench-5), Mod List is the only visible view.
   void vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
 

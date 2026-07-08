@@ -17,13 +17,13 @@ A blanket "every error is a popup" rule is rejected: notification fatigue is sel
 | **Background / recoverable / high-frequency** | a tree fetch failed, a health poll blipped | **Inline UI + output log** (error tree node, status bar) — *not* a toast |
 | **Never** | silent `catch {}` | banned |
 
-Surfacing goes through an **injected reporter**, not raw `vscode.window.*` calls in business logic: a `report(severity, userMessage, detail)`-style dependency that writes `detail` to the `mEdit` output channel and shows the surface appropriate to `severity`. This keeps `vscode` types out of `SessionController`/repositories (per `medit-vscode/CLAUDE.md`) and makes "did this reach the user?" unit-testable — as the `SessionWizard` skipped-plugin tests already demonstrate.
+Surfacing goes through an **injected reporter**, not raw `vscode.window.*` calls in business logic: a `report(severity, userMessage, detail)`-style dependency that writes `detail` to the `mEdit` output channel and shows the surface appropriate to `severity`. This keeps `vscode` types out of `SessionController`/repositories (per `modbench/CLAUDE.md`) and makes "did this reach the user?" unit-testable — as the `SessionWizard` skipped-plugin tests already demonstrate.
 
 The backend half: **endpoints return structured failure information; the frontend decides how to surface it.** The backend never swallows a partial outcome and never relies on stringly-typed error text for the UI. `SessionLoadResponse.Failures` (the `load-explicit` resilient-load work) is the reference pattern.
 
 ## Consequences
 
-- `medit-vscode/CLAUDE.md` gains an "Error surfacing" rule extending the existing "no silent `catch`" logging rule with the severity tiers and the injected-reporter requirement.
+- `modbench/CLAUDE.md` gains an "Error surfacing" rule extending the existing "no silent `catch`" logging rule with the severity tiers and the injected-reporter requirement.
 - New frontend code uses the injected reporter; existing `showError`/`showWarning` call sites migrate opportunistically (no big-bang refactor).
 - Backend endpoints that can partially succeed return a structured failures collection (named record) alongside success, rather than logging-and-forgetting or failing the whole call.
 - Adopted incrementally: this ADR is the policy; a shared reporter utility is introduced when the next surfacing need lands rather than retrofitted all at once.

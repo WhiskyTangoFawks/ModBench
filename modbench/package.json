@@ -1,5 +1,5 @@
 {
-  "name": "medit-vscode",
+  "name": "modbench",
   "displayName": "Modbench",
   "description": "Modbench: install, order, and deploy mods; view, edit, and compare Bethesda plugin files (.esp/.esm/.esl)",
   "version": "0.0.1",
@@ -444,7 +444,7 @@
     "build:webview": "VITE_CJS_IGNORE_WARNING=1 vite build --config webview/vite.config.ts",
     "build:backend": "dotnet publish ../MEditService/MEditService.Api/MEditService.Api.csproj -c Release --self-contained -r linux-x64 -o backend",
     "watch": "node esbuild.mjs --watch",
-    "generate-api": "openapi-typescript http://localhost:5172/swagger/v1/swagger.json -o src/generated/api.ts",
+    "generate-api": "openapi-typescript http://localhost:5172/swagger/v1/swagger.json -o src/medit/generated/api.ts",
     "test:unit": "vitest run",
     "test:integration": "tsc -p tsconfig.integration.json && vscode-test",
     "lint": "eslint src webview/src"

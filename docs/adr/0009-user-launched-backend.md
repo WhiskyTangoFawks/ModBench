@@ -12,7 +12,7 @@ The VS Code extension and the C# backend service are started independently by th
 
 **Path resolution:** The game folder is the canonical anchor, not any mod manager's internal data. All mod managers ultimately surface plugins at the paths the game reads. MO2 on Linux (no VFS, physical paths) is deferred post-v1 and will require a `POST /session/load-explicit` endpoint accepting `[{name, physicalPath}]` pairs.
 
-> **[Resolved — mod-manager work, modbench-1–6]** This shipped and is now the primary editing-session path: `POST /session/load-explicit` exists, and [`explicitSession`](../../medit-vscode/src/modmanager/explicitSession.ts) resolves each plugin's winning **physical path** via the MO2-priority `FileConflictIndex` (falling back to the game Data folder). MO2-on-Linux physical-path loading is no longer deferred.
+> **[Resolved — mod-manager work, modbench-1–6]** This shipped and is now the primary editing-session path: `POST /session/load-explicit` exists, and [`explicitSession`](../../modbench/src/modmanager/explicitSession.ts) resolves each plugin's winning **physical path** via the MO2-priority `FileConflictIndex` (falling back to the game Data folder). MO2-on-Linux physical-path loading is no longer deferred.
 
 ## Considered options
 

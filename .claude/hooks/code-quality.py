@@ -31,7 +31,7 @@ CS_PROJECTS = {
     "MEditService/MEditService.Api": "MEditService.Api",
 }
 # --- Frontend: extension package that carries the ESLint config. --------------
-TS_PACKAGE = "medit-vscode"
+TS_PACKAGE = "modbench"
 TS_IGNORE = ("src/generated/", "out/", "webview/dist/", "node_modules/")
 
 MAX_LINES = 40  # cap feedback so a large backlog can't flood the turn

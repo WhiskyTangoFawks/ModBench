@@ -29,9 +29,10 @@ MEditService/                       C# backend (ASP.NET Core minimal API) — mE
   MEditService.sln                  Solution file
   MEditService.Core/                Domain logic, services, DuckDB index
   MEditService.Api/                 HTTP host, route handlers, Swashbuckle
-medit-vscode/                       VS Code extension + React webviews
-  src/                              Extension host (TypeScript / VS Code API)
+modbench/                           VS Code extension + React webviews
+  src/                              Extension host (TypeScript / VS Code API), composition root: extension.ts
   src/modmanager/                   Loadout view — mod install/order/deploy (no backend calls)
+  src/medit/                        mEdit view frontend modules (ApiClient, PluginTreeProvider, webviewHtml, ...)
   webview/                          React UI (Vite build, outputs to out/webview)
 ```
 
@@ -54,7 +55,7 @@ The backend is only needed once you enter the mEdit (editing) view — the exten
 ## VS Code extension setup
 
 ```bash
-cd medit-vscode
+cd modbench
 npm install
 npm run build          # compile extension + webview
 npm run generate-api   # regenerate typed client from OpenAPI spec (backend must be running)
@@ -63,20 +64,20 @@ npm run generate-api   # regenerate typed client from OpenAPI spec (backend must
 **F5 does not reliably launch the extension.** Use the Extension Development Host CLI instead:
 
 ```bash
-code --extensionDevelopmentPath="$(pwd)/medit-vscode" "$(pwd)"
+code --extensionDevelopmentPath="$(pwd)/modbench" "$(pwd)"
 ```
 
 The open workspace folder is treated as the MO2 instance directory (`mods/`, `profiles/`, `ModOrganizer.ini`) for the Loadout view.
 
 ## Development
 
-See [docs/adr/](docs/adr/) for architectural decisions, [docs/specs/](docs/specs/) for the per-surface UI specs, and the **[GitHub Milestones](https://github.com/WhiskyTangoFawks/mEdit/milestones)** epic board for the roadmap (each milestone is an epic; issues are the slices).
+See [docs/adr/](docs/adr/) for architectural decisions, [docs/specs/](docs/specs/) for the per-surface UI specs, and the **[GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones)** epic board for the roadmap (each milestone is an epic; issues are the slices).
 
 Tests follow TDD — write a failing test before any implementation.
 
 ```bash
 cd MEditService && dotnet test -v minimal
-cd medit-vscode && npm run test:unit && npm run test:integration
+cd modbench && npm run test:unit && npm run test:integration
 ```
 
 ## Agent friendliness

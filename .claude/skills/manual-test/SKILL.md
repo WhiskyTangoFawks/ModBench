@@ -17,10 +17,10 @@ modlist's enabled plugins + vanilla masters), not a standalone data-folder scan.
 ## 1 — Build the extension (if needed)
 
 ```bash
-cd medit-vscode && npm run build
+cd modbench && npm run build
 ```
 
-The published self-contained backend binary lives at `medit-vscode/backend/` (produced by
+The published self-contained backend binary lives at `modbench/backend/` (produced by
 `npm run build:backend`, part of `vscode:prepublish`) — rebuild it only if `MEditService/`
 changed.
 
@@ -29,12 +29,12 @@ changed.
 F5 doesn't reliably work in this environment — use the CLI directly:
 
 ```bash
-code --extensionDevelopmentPath="/home/wayne/Games/FO4/mEdit/medit-vscode" \
+code --extensionDevelopmentPath="/home/wayne/Games/FO4/mEdit/modbench" \
      "<path-to-an-MO2-instance-directory>" &
 ```
 
 **The workspace root must be a real MO2 instance directory** (contains `ModOrganizer.ini`,
-`mods/`, `profiles/`) — per `medit-vscode/CLAUDE.md`, the mod manager reads these relative to
+`mods/`, `profiles/`) — per `modbench/CLAUDE.md`, the mod manager reads these relative to
 the workspace folder; there is no separate "instance path" setting. Do not open the mEdit
 source repo itself as the workspace — it has no `ModOrganizer.ini` and the Loadout view will
 have nothing to show. A known local instance: `/home/wayne/Games/FO4/LitR`.

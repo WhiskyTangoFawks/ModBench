@@ -6,7 +6,7 @@ How the engineering skills should consume this repo's domain documentation when 
 
 - **`CONTEXT-MAP.md`** at the repo root — it maps the two bounded contexts and their language boundary. Read the `CONTEXT.md` of each context relevant to the topic:
   - **Editing** context → `CONTEXT.md` (repo root)
-  - **Mod Management** context → `medit-vscode/src/modmanager/CONTEXT.md`
+  - **Mod Management** context → `modbench/src/modmanager/CONTEXT.md`
 - **`docs/adr/`** — system-wide architectural decisions. Read ADRs that touch the area you're about to work in.
 - **`docs/specs/`** — living surface specs for each Modbench UI surface (present-tense behavior).
 
@@ -22,7 +22,7 @@ This is a **multi-context** repo:
 ├── CONTEXT.md                              ← Editing context glossary
 ├── docs/adr/                               ← system-wide decisions
 ├── docs/specs/                             ← per-UI-surface living specs
-└── medit-vscode/src/modmanager/
+└── modbench/src/modmanager/
     └── CONTEXT.md                          ← Mod Management context glossary
 ```
 

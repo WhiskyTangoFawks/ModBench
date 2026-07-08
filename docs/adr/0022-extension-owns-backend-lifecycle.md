@@ -10,6 +10,6 @@ ADR-0009 kept the backend user-launched for one reason — so it could run insid
 
 ## Consequences
 
-- `BackendManager` gains spawn/teardown; the "Never spawns backend process" rule in `medit-vscode/CLAUDE.md` is reversed.
+- `BackendManager` gains spawn/teardown; the "Never spawns backend process" rule in `modbench/CLAUDE.md` is reversed.
 - The backend gains a `load-explicit` session source (ordered `{name, physicalPath}` list) alongside the existing single-data-folder scan. This is also the foundation for loading an arbitrary overriding-plugin set (the "delta" comparison feature).
 - Deploy (hardlinks into the game directory) is decoupled from editing — it is needed only to run the game, never to edit.
