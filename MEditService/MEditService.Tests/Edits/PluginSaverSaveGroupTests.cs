@@ -62,12 +62,40 @@ public sealed class PluginSaverSaveGroupTests
         await saver.Save(group.Id);
 
         Assert.Empty(changes.GetChanges(groupId: group.Id));
-        Assert.Equal("committed-marker", await File.ReadAllTextAsync(session.LastDestPath!)); // Commit() moved content to dest
-        Assert.False(Directory.Exists(session.LastTmpDir!)); // Dispose() cleaned up the tmp dir
         File.Delete(session.LastDestPath!);
     }
 
     // C4
+    [Fact]
+    public async Task Save_Success_CommitsContentToDestination()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        var group = StageGroupChange(changes, "A.esp");
+        var session = new StubSession();
+        var saver = new PluginSaver(changes, session);
+
+        await saver.Save(group.Id);
+
+        Assert.Equal("committed-marker", await File.ReadAllTextAsync(session.LastDestPath!));
+        File.Delete(session.LastDestPath!);
+    }
+
+    // C5
+    [Fact]
+    public async Task Save_Success_CleansUpTempDir()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        var group = StageGroupChange(changes, "A.esp");
+        var session = new StubSession();
+        var saver = new PluginSaver(changes, session);
+
+        await saver.Save(group.Id);
+
+        Assert.False(Directory.Exists(session.LastTmpDir!));
+        File.Delete(session.LastDestPath!);
+    }
+
+    // C6
     [Fact]
     public async Task Save_WhenPrepareFails_ChangesPreserved()
     {
@@ -82,7 +110,7 @@ public sealed class PluginSaverSaveGroupTests
         Assert.NotEmpty(changes.GetChanges(groupId: group.Id));
     }
 
-    // C5
+    // C7
     [Fact]
     public async Task Save_WhenSecondPrepareFails_FirstTempCleanedup()
     {
@@ -121,7 +149,7 @@ public sealed class PluginSaverSaveGroupTests
         Assert.False(File.Exists(firstTmpPath), "First temp file should have been cleaned up by Dispose()");
     }
 
-    // C6
+    // C8
     [Fact]
     public async Task Save_MultiPlugin_ReindexedAsBatch()
     {
@@ -146,7 +174,7 @@ public sealed class PluginSaverSaveGroupTests
         Assert.Contains("B.esp", call);
     }
 
-    // C7
+    // C9
     [Fact]
     public async Task Save_ImmutablePlugin_ReturnsImmutablePluginResult()
     {
