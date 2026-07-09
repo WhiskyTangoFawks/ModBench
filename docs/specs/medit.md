@@ -270,7 +270,7 @@ The compare grid uses the two-axis model from ADR-0016.
 | OnlyOne, NoConflict | No tint | Only in one plugin, or all overrides agree |
 | Override | Subtle green | Overrides exist but no real conflict |
 | Conflict | Subtle orange | Overrides disagree on a field |
-| ConflictCritical | Subtle red | Injected record (FormKey origin not in a plugin's master list) |
+| ConflictCritical | Subtle red | Injected record (FormKey origin not in a plugin's master list) whose overrides actually differ — content-identical injected records stay NoConflict |
 
 **Axis 2 — ConflictThis → cell background + text color** (computed per-field per-plugin — a plugin may be Override on one field and ConflictLoses on another)
 

@@ -40,7 +40,9 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             o => o.Plugin,
             o => AggregateConflictThis(o.Plugin, master.Plugin, diffs));
 
-        if (IsInjectedRecord(conflictingRecords, pluginMasters))
+        // Escalates an existing Override/Conflict to Critical; never overrides a NoConflict result
+        // (a content-identical injected record isn't a real conflict — see xeMainForm.pas ConflictLevelForNodeDatas).
+        if (conflictAll != ConflictAll.NoConflict && IsInjectedRecord(conflictingRecords, pluginMasters))
             conflictAll = ConflictAll.ConflictCritical;
 
         return new ClassifyResult(conflictAll, pluginConflictThis, diffs);
