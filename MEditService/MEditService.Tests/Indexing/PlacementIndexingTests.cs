@@ -169,6 +169,39 @@ public class PlacementIndexingTests
         finally { dir.Delete(recursive: true); }
     }
 
+    // Mirrors FormReferencesTests.Index_ReIndexSamePlugin_ReplacesRatherThanDuplicates: IndexPlacement
+    // must clear a plugin's prior placement/cell_location rows before rebuilding, the same way every
+    // other indexed table does — otherwise a re-index (e.g. re-scanning after an external edit)
+    // duplicates rows instead of replacing them.
+    [Fact]
+    public void Index_ReIndexSamePlugin_ReplacesPlacementAndCellLocationRatherThanDuplicating()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("ReindexPlacement.esp"), Fallout4Release.Fallout4);
+        var wrld = mod.Worldspaces.AddNew("ReindexWrld");
+        var cell = new Cell(mod) { EditorID = "ReindexCell", Grid = new CellGrid { Point = new P2Int(1, 1) } };
+        var placed = new PlacedObject(mod) { EditorID = "reindexRef", Position = new P3Float(1f, 2f, 3f) };
+        cell.Persistent.Add(placed);
+        var sub = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
+        sub.Items.Add(cell);
+        var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
+        block.Items.Add(sub);
+        wrld.SubCells.Add(block);
+
+        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        repo.Index((IModGetter)mod, 0);
+        repo.Index((IModGetter)mod, 0);  // re-index same plugin
+        repo.UpdateWinners();
+
+        var cellRows = Query(repo,
+            "SELECT COUNT(*) AS c FROM cell_location WHERE cell_form_key = $1", cell.FormKey.ToString());
+        Assert.Equal(1L, cellRows[0]["c"]);
+
+        var placementRows = Query(repo,
+            "SELECT COUNT(*) AS c FROM placement WHERE form_key = $1", placed.FormKey.ToString());
+        Assert.Equal(1L, placementRows[0]["c"]);
+    }
+
     // Index_PersistentPlacedObject persistent-row content (parent cell / group / position) is
     // covered behaviorally by GetPlacement_PlacedRef_ReturnsParentCellGroupAndPosition.
 
@@ -204,13 +237,14 @@ public class PlacementIndexingTests
     {
         using var b = IndexFixture();
         var rows = Query(b.Repo,
-            "SELECT parent_worldspace, block_x, sub_x, grid_x, is_interior FROM cell_location WHERE cell_form_key = $1",
+            "SELECT parent_worldspace, block_x, sub_x, grid_x, grid_y, is_interior FROM cell_location WHERE cell_form_key = $1",
             b.TopCellFk);
         var row = Assert.Single(rows);
         Assert.Equal(b.WorldspaceFk, row["parent_worldspace"]);
         Assert.Null(row["block_x"]);
         Assert.Null(row["sub_x"]);
         Assert.Null(row["grid_x"]);
+        Assert.Null(row["grid_y"]);
         Assert.False(ToB(row["is_interior"]));
     }
 
@@ -267,18 +301,21 @@ public class PlacementIndexingTests
         Assert.Equal("ExtCell", ext.EditorId);
         Assert.Equal(0, ext.BlockX);
         Assert.Equal(0, ext.BlockY);
+        Assert.Equal(0, ext.SubX);
         Assert.Equal(12, ext.CellX);
         Assert.Equal(-5, ext.CellY);
 
         var top = cells.Single(c => c.FormKey == b.TopCellFk);
         Assert.Null(top.BlockX);   // TopCell has no block coordinates
         Assert.Null(top.CellX);    // and no grid
+        Assert.Null(top.CellY);
 
         var bare = cells.Single(c => c.FormKey == b.BareCellFk);
         Assert.Null(bare.EditorId);  // no EditorID
         Assert.Equal(1, bare.BlockX);
         Assert.Equal(1, bare.SubY);
         Assert.Null(bare.CellX);     // no grid
+        Assert.Null(bare.CellY);
     }
 
     // ── GetPlacement (Phase 16.2.2: orchestrator placed-path lookup) ───────────
@@ -321,9 +358,11 @@ public class PlacementIndexingTests
         var named = page.Items.Single(c => c.FormKey == b.IntCellFk);
         Assert.Equal("IntCell", named.EditorId);
         Assert.Equal(0, named.CellX);
+        Assert.Equal(0, named.CellY);
 
         var bare = page.Items.Single(c => c.FormKey == b.BareIntCellFk);
         Assert.Null(bare.EditorId);
         Assert.Null(bare.CellX);
+        Assert.Null(bare.CellY);
     }
 }

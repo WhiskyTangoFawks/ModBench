@@ -217,17 +217,18 @@ public class FormReferencesTests
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT target_form_key, field_path FROM form_references WHERE source_form_key = $1";
+        cmd.CommandText = "SELECT target_form_key, field_path, record_type FROM form_references WHERE source_form_key = $1";
         cmd.Parameters.Add(new DuckDBParameter { Value = npcFormKey.ToString() });
         using var reader = cmd.ExecuteReader();
 
-        var rows = new List<(string Target, string FieldPath)>();
+        var rows = new List<(string Target, string FieldPath, string RecordType)>();
         while (reader.Read())
-            rows.Add((reader.GetString(0), reader.GetString(1)));
+            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
 
         var row = rows.FirstOrDefault(r => r.FieldPath == @"VMAD\DefaultScript\Config\TargetRef");
         Assert.NotEqual(default, row);
         Assert.Equal(targetFormKey.ToString(), row.Target);
+        Assert.Equal("npc_", row.RecordType);  // ResolveRecordType must tag the source record's own table
     }
 
     [Fact]
