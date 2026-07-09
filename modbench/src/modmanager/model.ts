@@ -31,7 +31,7 @@ export interface InstallMeta {
   installationFile?: string;
 }
 
-/** Persistence over an MO2 instance for the active profile. Top = highest priority. */
+/** Persistence over an MO2 instance for the active profile. Bottom = highest priority. */
 export interface IModlistSource {
   readModlist(): Promise<ModlistEntry[]>;
   setEnabled(modName: string, enabled: boolean): Promise<void>;
@@ -47,7 +47,7 @@ export interface IModlistSource {
   /** Remove the mod from modlist.txt and delete its mods/<name>/ directory. */
   removeMod(modName: string): Promise<void>;
   /** Install a new mod: copy `sourceDir`'s contents to mods/<name>/, write its
-   *  meta.ini, and append a disabled line at the bottom of modlist.txt (lowest
+   *  meta.ini, and append a disabled line at the bottom of modlist.txt (highest
    *  priority). Rejects if a mod named `name` already exists. */
   installMod(name: string, sourceDir: string, meta: InstallMeta): Promise<void>;
   /** Move a separator and all its children as a block to entry-index `toIndex`. */

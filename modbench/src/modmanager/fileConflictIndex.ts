@@ -64,11 +64,10 @@ export async function buildFileConflictIndex(
   // merge below needs priority order.
   const walked = await Promise.all(enabledMods.map((mod) => walkMod(instanceRoot, mod.name)));
 
-  // Array index 0 = highest priority (top of modlist.txt). The spec's merge
-  // ("ascending priority... later wins") needs lowest-priority processed
-  // first, so we merge in reverse and let the highest-priority mod's writes
-  // land last and win.
-  for (let i = enabledMods.length - 1; i >= 0; i--) {
+  // Array index 0 = lowest priority (top of modlist.txt); the last enabled
+  // mod = highest priority (bottom of modlist.txt). Merge in list order so
+  // the highest-priority mod's writes land last and win.
+  for (let i = 0; i < enabledMods.length; i++) {
     const mod = enabledMods[i];
     const modFiles = walked[i];
     filesByMod.set(mod.name, modFiles);

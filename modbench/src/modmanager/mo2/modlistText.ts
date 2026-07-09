@@ -1,6 +1,6 @@
 // Pure, byte-faithful text transforms over an MO2 profile's modlist.txt.
 //
-// modlist.txt lines (top = highest priority):
+// modlist.txt lines (bottom = highest priority):
 //   # comment              (preserved verbatim, not surfaced)
 //   +Mod Name              (enabled mod)
 //   -Mod Name              (disabled mod)
@@ -28,7 +28,7 @@ function withBomPreserved(text: string, edit: (bomless: string) => string): stri
   return BOM + edit(stripBom(text));
 }
 
-/** Parse modlist.txt into the ordered model view (top = highest priority).
+/** Parse modlist.txt into the ordered model view (bottom = highest priority).
  *  Only +/- mod and separator lines are surfaced; comment/*-prefixed/blank
  *  lines carry no model meaning and are ignored (but preserved on write). */
 export function parseModlist(text: string): ModlistEntry[] {
@@ -143,7 +143,7 @@ export function deleteSeparatorInText(text: string, name: string): string {
   });
 }
 
-/** Append a disabled mod line at the bottom (lowest priority), preserving every
+/** Append a disabled mod line at the bottom (highest priority), preserving every
  *  existing byte. Ensures the prior last line is EOL-terminated first, and uses
  *  the file's own EOL (CRLF if present, else LF). */
 export function appendModToText(text: string, modName: string): string {
@@ -259,7 +259,7 @@ export function moveSeparatorBlockInText(
 }
 
 /** Move a mod's line so it occupies entry-index `toIndex` among the +/- entry
- *  lines (top = highest priority), counting the entries *with the moved mod
+ *  lines (bottom = highest priority), counting the entries *with the moved mod
  *  removed*. Out-of-range clamps to the last entry slot. Non-entry lines
  *  (comment, *) keep their relative position; bytes are preserved. */
 export function moveModInText(text: string, modName: string, toIndex: number): string {

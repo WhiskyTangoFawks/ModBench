@@ -429,7 +429,7 @@ describe('moveSeparatorBlockInText', () => {
   });
 });
 
-describe('appendModToText — add a disabled mod at the bottom (lowest priority)', () => {
+describe('appendModToText — add a disabled mod at the bottom (highest priority)', () => {
   it('appends a disabled line and preserves every existing byte', () => {
     const input = defaultModlist();
     const out = appendModToText(input, 'My New Mod');

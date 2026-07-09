@@ -73,7 +73,7 @@ Modbench does not invent a modlist format — its format **is** MO2's ([MM ADR-0
 
 | Adapter | Status | Behaviour |
 |---|---|---|
-| **MO2** | First-class | Read/write an instance in place: `mods/<name>/`, the active profile's `modlist.txt` (`+`/`-`, top = highest priority) and `plugins.txt`, per-mod `meta.ini` (Nexus id/version). Preserves separators/categories/metadata verbatim. |
+| **MO2** | First-class | Read/write an instance in place: `mods/<name>/`, the active profile's `modlist.txt` (`+`/`-`, bottom = highest priority) and `plugins.txt`, per-mod `meta.ini` (Nexus id/version). Preserves separators/categories/metadata verbatim. |
 | **Native** | First-class | Fresh setups; writes MO2-format instances so they open in MO2 too. No separate format. |
 | **Vortex** | Deferred | Read-only snapshot via the `vortex.deployment.json` deployment manifest. No simple text modlist exists; full management is out of scope. |
 
