@@ -20,14 +20,17 @@ public readonly record struct CellLocationRow(
     int? BlockX, int? BlockY, int? SubX, int? SubY, int? GridX, int? GridY, bool IsInterior);
 
 /// <summary>
+/// <para>
 /// Walks the worldspace/cell GRUP hierarchy of a mod and yields the structural parentage that
 /// <see cref="EnumerateMajorRecords"/> flattens away (which cell a placed ref is in, persistent vs
 /// temporary, which worldspace a cell is in, block/sub-block, grid).
-///
+/// </para>
+/// <para>
 /// Game-agnostic by design: Mutagen generates the same property names across every game
 /// (<c>Worldspaces</c>, <c>SubCells</c>, <c>Persistent</c>, <c>Grid</c>, ...), so this reflects on
 /// those names rather than depending on a game-specific interface — consistent with the
 /// reflection-driven <c>SchemaReflector</c> and the "support all games without code changes" invariant.
+/// </para>
 /// </summary>
 public sealed class PlacementWalker
 {

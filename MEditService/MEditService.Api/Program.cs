@@ -106,13 +106,14 @@ try
             _ => null
         };
 
-        if (gameFolder == null) return null;
-
-        return OperatingSystem.IsWindows()
-            ? Path.Combine(
+        return gameFolder switch
+        {
+            null => null,
+            _ when OperatingSystem.IsWindows() => Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                gameFolder, "Plugins.txt")
-            : FindProtonPluginsTxt(dataFolderPath, gameRelease, gameFolder);
+                gameFolder, "Plugins.txt"),
+            _ => FindProtonPluginsTxt(dataFolderPath, gameRelease, gameFolder),
+        };
     }
 
     // Linux/Proton: data folder is {steamLibrary}/steamapps/common/{Game}/Data

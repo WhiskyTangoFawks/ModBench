@@ -111,15 +111,14 @@ public sealed class EditOrchestratorVmadTests
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => inner.GetPluginRecordTypes(plugin);
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
-        public VmadData? GetVmad(string formKey, string plugin)
-        {
-            if (!formKey.Equals(vmadFormKey, StringComparison.OrdinalIgnoreCase)) return inner.GetVmad(formKey, plugin);
-            return new VmadData([
-                new VmadScriptData("TestScript", "Local", [
-                    new VmadNamedValue("VarProp", new VmadPropertyValue("Variable", "", null))
-                ])
-            ]);
-        }
+        public VmadData? GetVmad(string formKey, string plugin) =>
+            !formKey.Equals(vmadFormKey, StringComparison.OrdinalIgnoreCase)
+                ? inner.GetVmad(formKey, plugin)
+                : new VmadData([
+                    new VmadScriptData("TestScript", "Local", [
+                        new VmadNamedValue("VarProp", new VmadPropertyValue("Variable", "", null))
+                    ])
+                ]);
         public PlacementRow? GetPlacement(string formKey, string plugin) => inner.GetPlacement(formKey, plugin);
     }
 

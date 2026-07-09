@@ -54,7 +54,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
     public void GetRecordTypes_ReturnsTypesInAscendingOrder()
     {
         var types = _svc.GetRecordTypes();
-        Assert.Equal(types.Order().ToList(), types);
+        Assert.Equal([.. types.Order()], types);
     }
 
     // --- GET /records ---
@@ -502,7 +502,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         changes.Upsert(new PendingChangeUpsert(fk, TestPluginFixture.PluginName, "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = newVal },
             "test", null,
-            new Dictionary<string, System.Text.Json.JsonElement>()));
+            []));
 
         var svcWithChanges = new RecordQueryService(_manager, changes, new SchemaReflector(), new ConflictClassifier());
         var compare = svcWithChanges.GetCompare(fk);
@@ -553,7 +553,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
 
             var editorIds = result.Items.Select(r => r.EditorId).ToList();
             Assert.Equal(2, editorIds.Count);
-            Assert.Equal(editorIds.OrderBy(e => e, StringComparer.OrdinalIgnoreCase).ToList(), editorIds);
+            Assert.Equal([.. editorIds.OrderBy(e => e, StringComparer.OrdinalIgnoreCase)], editorIds);
         }
     }
 
@@ -579,7 +579,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             var types = result.Select(r => r.Type).ToList();
 
             Assert.True(types.Count >= 2, "Expected at least 2 record types");
-            Assert.Equal(types.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList(), types);
+            Assert.Equal([.. types.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)], types);
         }
     }
 
@@ -696,7 +696,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             var changes = DuckDbTestFactory.MakePendingChangeService();
             changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
+                "user", null, []));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetPluginRecordTypes("Override.esp");
@@ -730,7 +730,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             // stage npcKey2 into Override.esp (not yet committed)
             changes.Upsert(new PendingChangeUpsert(npcKey2.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
+                "user", null, []));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetPluginRecordTypes("Override.esp");
@@ -748,8 +748,8 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         FormKey baseNpcKey = default;
         var data = new PluginFixtureBuilder("rqs-staged-types-dedup")
             .WithPlugin("Base.esp", mod => baseNpcKey = mod.Npcs.AddNew("BaseNPC").FormKey)
-            .WithPlugin("Override.esp", (mod, prev) => { mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).EditorID = "OverrideNPC"; })
-            .WithPlugin("Winner.esp", (mod, prev) => { mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).EditorID = "WinnerNPC"; })
+            .WithPlugin("Override.esp", (mod, prev) => mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).EditorID = "OverrideNPC")
+            .WithPlugin("Winner.esp", (mod, prev) => mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).EditorID = "WinnerNPC")
             .Build();
         using (data)
         {
@@ -760,7 +760,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             var changes = DuckDbTestFactory.MakePendingChangeService();
             changes.Upsert(new PendingChangeUpsert(baseNpcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
+                "user", null, []));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetPluginRecordTypes("Override.esp");
@@ -789,7 +789,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             var changes = DuckDbTestFactory.MakePendingChangeService();
             changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
+                "user", null, []));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetRecords(type: "npc_", plugin: "Override.esp", search: null, limit: 100, offset: 0);
@@ -820,7 +820,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             var changes = DuckDbTestFactory.MakePendingChangeService();
             changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
+                "user", null, []));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetRecords(type: "npc_", plugin: "Override.esp", search: null, limit: 100, offset: 1);
@@ -837,7 +837,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         var changes = DuckDbTestFactory.MakePendingChangeService();
         changes.Upsert(new PendingChangeUpsert(fk.ToString(), "Unknown.esp", "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-            "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
+            "user", null, []));
         var svc = new RecordQueryService(_manager, changes, new SchemaReflector(), new ConflictClassifier());
 
         var result = svc.GetRecords(type: "npc_", plugin: "Unknown.esp", search: null, limit: 100, offset: 0);
@@ -857,7 +857,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         var changes = DuckDbTestFactory.MakePendingChangeService();
         changes.Upsert(new PendingChangeUpsert(fk, TestPluginFixture.PluginName, "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-            "user", null, new Dictionary<string, System.Text.Json.JsonElement>()));
+            "user", null, []));
         var svc = new RecordQueryService(_manager, changes, new SchemaReflector(), new ConflictClassifier());
 
         var result = svc.GetRecords(type: "npc_", plugin: TestPluginFixture.PluginName, search: null, limit: 100, offset: 0);

@@ -41,15 +41,10 @@ internal static class TypedLinkCacheFactory
 
     // ToImmutableLinkCache<TMod, TModGetter>(this IEnumerable<TModGetter>) — the overload whose
     // first parameter element is the bare type parameter (not a wrapping IModListingGetter<>).
-    private static bool IsBareEnumerableToImmutableLinkCache(MethodInfo m)
-    {
-        if (m is not { Name: "ToImmutableLinkCache", IsGenericMethodDefinition: true })
-            return false;
-        if (m.GetGenericArguments().Length != 2)
-            return false;
-        if (m.GetParameters() is not [{ ParameterType: { IsGenericType: true } p }, _])
-            return false;
-        return p.GetGenericTypeDefinition() == typeof(IEnumerable<>)
-            && p.GetGenericArguments()[0].IsGenericParameter;
-    }
+    private static bool IsBareEnumerableToImmutableLinkCache(MethodInfo m) =>
+        m is { Name: "ToImmutableLinkCache", IsGenericMethodDefinition: true }
+        && m.GetGenericArguments().Length == 2
+        && m.GetParameters() is [{ ParameterType: { IsGenericType: true } p }, _]
+        && p.GetGenericTypeDefinition() == typeof(IEnumerable<>)
+        && p.GetGenericArguments()[0].IsGenericParameter;
 }

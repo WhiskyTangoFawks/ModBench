@@ -4,14 +4,9 @@ using System.Text.Json;
 
 namespace MEditService.Tests.Api;
 
-public sealed class SaveChangeGroupApiTests : IClassFixture<LoadedNpcApiFixture>
+public sealed class SaveChangeGroupApiTests(LoadedNpcApiFixture loaded) : IClassFixture<LoadedNpcApiFixture>
 {
-    private readonly HttpClient _client;
-
-    public SaveChangeGroupApiTests(LoadedNpcApiFixture loaded)
-    {
-        _client = loaded.Client;
-    }
+    private readonly HttpClient _client = loaded.Client;
 
     [Fact]
     public async Task SaveChangeGroup_AfterCreateRecord_Returns200AndClearsGroup()

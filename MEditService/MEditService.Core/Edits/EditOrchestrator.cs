@@ -187,16 +187,14 @@ public sealed partial class EditOrchestrator(
 
     private static JsonElement SerializeVmadOldValue(VmadPropertyValue v)
     {
-        if (v.ListItems != null)
+        return (v.ListItems, v.Type) switch
         {
-            return v.Type == "ArrayOfObject"
-                ? JsonSerializer.SerializeToElement(
-                    v.ListItems.Select(i => new { formKey = (string?)i.Value, alias = i.Alias }))
-                : JsonSerializer.SerializeToElement(v.ListItems.Select(i => i.Value));
-        }
-        return v.Type == "Object"
-            ? JsonSerializer.SerializeToElement(new { formKey = (string?)v.Value, alias = v.Alias })
-            : JsonSerializer.SerializeToElement(v.Value);
+            ({ } items, "ArrayOfObject") => JsonSerializer.SerializeToElement(
+                items.Select(i => new { formKey = (string?)i.Value, alias = i.Alias })),
+            ({ } items, _) => JsonSerializer.SerializeToElement(items.Select(i => i.Value)),
+            (null, "Object") => JsonSerializer.SerializeToElement(new { formKey = (string?)v.Value, alias = v.Alias }),
+            _ => JsonSerializer.SerializeToElement(v.Value),
+        };
     }
 
     public StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source)
@@ -596,8 +594,6 @@ public sealed partial class EditOrchestrator(
             return (new StageEditResult.PluginImmutable(plugin), null, null);
 
         var recordType = _query.GetRecordType(formKey);
-        if (recordType == null) return (new StageEditResult.RecordNotFound(), null, null);
-
-        return (null, session, recordType);
+        return recordType == null ? ((StageEditResult? earlyOut, IGameSession? session, string? recordType))(new StageEditResult.RecordNotFound(), null, null) : ((StageEditResult? earlyOut, IGameSession? session, string? recordType))(null, session, recordType);
     }
 }

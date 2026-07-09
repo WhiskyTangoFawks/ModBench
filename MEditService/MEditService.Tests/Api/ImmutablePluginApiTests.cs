@@ -3,16 +3,10 @@ using System.Net.Http.Json;
 
 namespace MEditService.Tests.Api;
 
-public sealed class ImmutablePluginApiTests : IClassFixture<LoadedImmutableApiFixture>
+public sealed class ImmutablePluginApiTests(LoadedImmutableApiFixture loaded) : IClassFixture<LoadedImmutableApiFixture>
 {
-    private readonly HttpClient _client;
-    private readonly ImmutablePluginFixture _fixture;
-
-    public ImmutablePluginApiTests(LoadedImmutableApiFixture loaded)
-    {
-        _client = loaded.Client;
-        _fixture = loaded.Plugin;
-    }
+    private readonly HttpClient _client = loaded.Client;
+    private readonly ImmutablePluginFixture _fixture = loaded.Plugin;
 
     [Fact]
     public async Task GetPlugins_ImmutablePlugin_HasIsImmutableTrue()

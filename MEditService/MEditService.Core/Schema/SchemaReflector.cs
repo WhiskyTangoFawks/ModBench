@@ -22,7 +22,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // worldspace tree, record editor, and agent queries are uniform DuckDB reads; their
     // cell parentage lives in the `placement` side table. Landscape/navmesh and the rare
     // projectile/hazard placements stay excluded — they aren't standard editable refs.
-    private static readonly HashSet<string> _excludedTables = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> ExcludedTables = new(StringComparer.OrdinalIgnoreCase)
     {
         "land", "navm", "navi",
         "pgre", "pmis", "parw", "pbar", "pbea",
@@ -65,7 +65,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             var recordType = (RecordType)grupField.GetValue(null)!;
             var tableName = recordType.Type.ToLowerInvariant();
 
-            if (_excludedTables.Contains(tableName)) continue;
+            if (ExcludedTables.Contains(tableName)) continue;
             if (!seenTables.Add(tableName)) continue;
 
             var getterInterface = assembly.GetType($"Mutagen.Bethesda.{category}.I{type.Name}Getter")!;
@@ -113,12 +113,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             .FirstOrDefault(p => targetGroupType.IsAssignableFrom(p.PropertyType));
         if (groupProp == null) return default;
 
-        void addNew(IMod mod, FormKey fk)
+        void AddNewToGroup(IMod mod, FormKey fk)
         {
             var group = (IGroup)groupProp.GetValue(mod)!;
             group.AddNew(fk);
         }
-        void addExisting(IMod mod, IMajorRecord rec)
+        void AddExistingToGroup(IMod mod, IMajorRecord rec)
         {
             var group = (IGroup)groupProp.GetValue(mod)!;
             group.AddUntyped(rec);
@@ -138,7 +138,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             };
         }
 
-        return (addNew, remove, addExisting);
+        return (AddNewToGroup, remove, AddExistingToGroup);
     }
 
     private static RecordTableSchema BuildSchema(
@@ -226,9 +226,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     // ── Type-detection helpers ────────────────────────────────────────────────
 
-    private static readonly string[] _empty = [];
+    private static readonly string[] Empty = [];
 
-    private static readonly HashSet<string> _loquiSkipProps =
+    private static readonly HashSet<string> LoquiSkipProps =
         new(StringComparer.OrdinalIgnoreCase)
         {
             "CommonInstance", "CommonSetterInstance", "CommonSetterTranslationInstance",
@@ -275,7 +275,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         var linked = core.IsGenericType ? core.GetGenericArguments()[0] : null;
         return linked != null && getterTypeToTable.TryGetValue(linked, out var tn)
-            ? [tn] : _empty;
+            ? [tn] : Empty;
     }
 
     // Retrieve the concrete mutable class (e.g. RankPlacement) via ILoquiRegistration.SetterType.
@@ -298,7 +298,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         if (depth > 3) return [];
 
         var grouped = GetAllInterfaceProperties(getterInterface)
-            .Where(p => !_loquiSkipProps.Contains(p.Name))
+            .Where(p => !LoquiSkipProps.Contains(p.Name))
             .GroupBy(p => ToSnakeCase(p.Name), StringComparer.OrdinalIgnoreCase);
 
         var result = new List<SubFieldSpec>();
@@ -325,7 +325,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             // data error) — getter interfaces can't statically distinguish this from a non-nullable
             // scalar anyway (see IsNullableFormLink), so default permissive here regardless.
             return new FieldMetadata("", "formKey", false,
-                GetFormLinkValidTypes(core, getterTypeToTable), _empty,
+                GetFormLinkValidTypes(core, getterTypeToTable), Empty,
                 IsSortable: true, AllowsNull: true);
         }
 
@@ -334,18 +334,20 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             var sub = BuildSubSchema(core, getterTypeToTable, logger);
             return sub.Count == 0
                 ? null
-                : new FieldMetadata("", "struct", false, _empty, _empty,
+                : new FieldMetadata("", "struct", false, Empty, Empty,
                 Fields: [.. sub.Select(s => s.ToFieldMetadata())]);
         }
 
-        if (core == typeof(float))
-            return new("", "float", false, _empty, _empty);
-        if (core == typeof(string) || IsTranslatedString(core))
-            return new("", "string", false, _empty, _empty);
-        return _integerTypes.Contains(core) ? new("", "int", false, _empty, _empty) : null;
+        return core switch
+        {
+            _ when core == typeof(float) => new("", "float", false, Empty, Empty),
+            _ when core == typeof(string) || IsTranslatedString(core) => new("", "string", false, Empty, Empty),
+            _ when IntegerTypes.Contains(core) => new("", "int", false, Empty, Empty),
+            _ => null,
+        };
     }
 
-    private static readonly HashSet<Type> _integerTypes =
+    private static readonly HashSet<Type> IntegerTypes =
     [
         typeof(byte), typeof(sbyte), typeof(short), typeof(ushort),
         typeof(int), typeof(uint), typeof(long), typeof(ulong),
@@ -353,7 +355,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     // ── Primitive type dispatch shared by GetColumnInfo and GetSubFieldInfo ─────
 
-    private static readonly Dictionary<Type, (string DuckDbType, string ApiType, Func<JsonElement, object?> Converter)> _primitiveMap = new()
+    private static readonly Dictionary<Type, (string DuckDbType, string ApiType, Func<JsonElement, object?> Converter)> PrimitiveMap = new()
     {
         [typeof(bool)] = ("BOOLEAN", "bool", v => (object)v.GetBoolean()),
         [typeof(byte)] = ("INTEGER", "int", v => (object)(byte)v.GetInt32()),
@@ -373,7 +375,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         out string apiType,
         out Func<JsonElement, object?> converter)
     {
-        if (_primitiveMap.TryGetValue(core, out var mapped))
+        if (PrimitiveMap.TryGetValue(core, out var mapped))
         {
             (duckDbType, apiType, converter) = mapped;
             return true;
@@ -432,12 +434,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         PropertyInfo prop, Type core, IReadOnlyDictionary<Type, string> getterTypeToTable)
     {
         if (TryMapPrimitive(core, out var duckDb, out var apiType, out var conv))
-            return new(apiType, duckDb, _empty, _empty, SubGetter(prop), conv);
+            return new(apiType, duckDb, Empty, Empty, SubGetter(prop), conv);
 
         if (IsTranslatedString(core))
         {
             var g = SubGetter(prop);
-            return new("string", "VARCHAR", _empty, _empty,
+            return new("string", "VARCHAR", Empty, Empty,
                 obj => { try { return (g(obj) as ITranslatedStringGetter)?.String; } catch { return null; } }, // Stryker disable once Block: silent accessor lambda — lookup-backed strings throw when game strings files are absent (see MEditService CLAUDE.md)
                 v => new TranslatedString(Language.English, v.GetString()));
         }
@@ -448,7 +450,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         if (IsFormLink(core))
         {
             var g = SubGetter(prop);
-            return new("formKey", "VARCHAR", GetFormLinkValidTypes(core, getterTypeToTable), _empty,
+            return new("formKey", "VARCHAR", GetFormLinkValidTypes(core, getterTypeToTable), Empty,
                 obj => (g(obj) as IFormLinkGetter)?.FormKeyNullable?.ToString(),
                 Convert: null,
                 AllowsNull: IsNullableFormLink(core));
@@ -464,11 +466,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var g = SubGetter(prop);
         var (names, bits) = GetEnumMeta(core);
         return bits != null
-            ? new("enum", "BIGINT", _empty, names,
+            ? new("enum", "BIGINT", Empty, names,
                 obj => g(obj) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
                 v => Enum.ToObject(core, ReadBitmaskLong(v)),
                 IsBitmask: true, EnumBitValues: bits)
-            : new("enum", "VARCHAR", _empty, names,
+            : new("enum", "VARCHAR", Empty, names,
             obj => g(obj)?.ToString(),
             v => Enum.Parse(core, v.GetString()!, ignoreCase: true));
     }
@@ -515,10 +517,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var nullable = Nullable.GetUnderlyingType(type) != null || !type.IsValueType;
         var colName = ToSnakeCase(prop.Name);
 
-        if (ClassifyLeaf(prop, core, getterTypeToTable) is { } leaf)
-            return ProjectSubField(prop, colName, core, nullable, leaf, logger);
-
-        return IsLoquiInterface(core) ? BuildStructSubField(prop, core, colName, getterTypeToTable, depth, logger) : null;
+        return ClassifyLeaf(prop, core, getterTypeToTable) switch
+        {
+            { } leaf => ProjectSubField(prop, colName, core, nullable, leaf, logger),
+            null when IsLoquiInterface(core) => BuildStructSubField(prop, core, colName, getterTypeToTable, depth, logger),
+            _ => null,
+        };
     }
 
     // Projects a shared LeafSpec into a sub-field. Generic leaves (primitive / enum / translated-
@@ -528,10 +532,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         PropertyInfo prop, string colName, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
         var pName = prop.Name;
-        Action<object, JsonElement>? apply;
-        if (leaf.Convert is { } c)
-            apply = MakeApplier(pName, nullable, c);
-        else apply = IsFormLink(core) ? ((obj, val) => ApplyFormLinkJson(obj, val, pName, logger)) : null;
+        Action<object, JsonElement>? apply = leaf.Convert switch
+        {
+            { } c => MakeApplier(pName, nullable, c),
+            null when IsFormLink(core) => (obj, val) => ApplyFormLinkJson(obj, val, pName, logger),
+            _ => null,
+        };
         return new(colName, leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
             leaf.Get, apply,
             AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask, EnumBitValues: leaf.EnumBitValues);
@@ -563,7 +569,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var sub = BuildSubSchema(core, getterTypeToTable, logger, depth);
         if (sub.Count == 0) return null;
         var g = SubGetter(prop);
-        return new(colName, "struct", _empty, _empty,
+        return new(colName, "struct", Empty, Empty,
             obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, sub); },
             Apply: null,
             SubFields: sub);
@@ -602,13 +608,13 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var core = Nullable.GetUnderlyingType(type) ?? type;
         var nullable = Nullable.GetUnderlyingType(type) != null || !type.IsValueType;
 
-        if (ClassifyLeaf(prop, core, getterTypeToTable) is { } leaf)
-            return ProjectColumn(prop, nullable, leaf);
-
-        if (IsListType(core, out var elementType))
-            return BuildListColumn(prop, elementType, getterTypeToTable, logger);
-
-        return IsLoquiInterface(core) ? BuildStructColumn(prop, core, getterTypeToTable, logger) : null;
+        return ClassifyLeaf(prop, core, getterTypeToTable) switch
+        {
+            { } leaf => ProjectColumn(prop, nullable, leaf),
+            null when IsListType(core, out var elementType) => BuildListColumn(prop, elementType, getterTypeToTable, logger),
+            null when IsLoquiInterface(core) => BuildStructColumn(prop, core, getterTypeToTable, logger),
+            _ => null,
+        };
     }
 
     // Projects a shared LeafSpec into a top-level column. A form-link leaf (Convert null) yields a
@@ -632,7 +638,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var elemMeta = BuildElementMeta(elementType, getterTypeToTable, logger);
         if (elemMeta == null) return null;
 
-        object? extractor(IMajorRecordGetter r)
+        object? Extractor(IMajorRecordGetter r)
         {
             try // Stryker disable once Block: per-call accessor lambda stays silent per MEditService CLAUDE.md; SerializeListItems can throw on unusual record types in real game data
             {
@@ -648,7 +654,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             ? (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields)
             : null;
 
-        return new("VARCHAR", extractor, "array", _empty, _empty, apply,
+        return new("VARCHAR", Extractor, "array", Empty, Empty, apply,
             ElementMeta: elemMeta);
     }
 
@@ -712,7 +718,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         var subFieldMetas = subFields.ConvertAll(s => s.ToFieldMetadata());
 
-        object? extractor(IMajorRecordGetter r)
+        object? Extractor(IMajorRecordGetter r)
         {
             var obj = TryGet(r, prop);
             return obj == null ? null
@@ -735,7 +741,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             };
         }
 
-        return new("VARCHAR", extractor, "struct", _empty, _empty, apply,
+        return new("VARCHAR", Extractor, "struct", Empty, Empty, apply,
             SubFieldMetas: subFieldMetas);
     }
 

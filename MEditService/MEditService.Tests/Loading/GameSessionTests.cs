@@ -25,12 +25,9 @@ public sealed class GameSessionImplicitFixture : IDisposable
     public void Dispose() => _data.Dispose();
 }
 
-public sealed class GameSessionTests : IClassFixture<GameSessionImplicitFixture>
+public sealed class GameSessionTests(GameSessionImplicitFixture fixture) : IClassFixture<GameSessionImplicitFixture>
 {
-    private readonly GameSessionImplicitFixture _fixture;
-
-    public GameSessionTests(GameSessionImplicitFixture fixture)
-        => _fixture = fixture;
+    private readonly GameSessionImplicitFixture _fixture = fixture;
 
     [Fact]
     public void LoadSession_ImplicitPlugin_LoadedImmutableAndOrdered()

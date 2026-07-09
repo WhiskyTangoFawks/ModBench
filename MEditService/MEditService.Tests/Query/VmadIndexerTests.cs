@@ -16,8 +16,8 @@ namespace MEditService.Tests.Query;
 // top-level Object property.
 public sealed class VmadIndexerTests : IDisposable
 {
-    private static readonly ISchemaReflector _reflector = new SchemaReflector();
-    private static readonly ITableDdlBuilder _ddl = new TableDdlBuilder(_reflector);
+    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private readonly FormKey _npc1FormKey;
     private readonly FormKey _npc2FormKey;
@@ -76,7 +76,7 @@ public sealed class VmadIndexerTests : IDisposable
 
     private DuckDbRecordRepository LoadedRepository()
     {
-        var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         var modPath = new ModPath(
             ModKey.FromFileName("VmadTest.esp"),

@@ -25,7 +25,7 @@ public class ArrayChildDiffTests
     private static FieldMetadata StructArrayMeta(string name, params FieldMetadata[] subFields) =>
         new(name, "array", true, [], [],
             ElementType: new FieldMetadata("", "struct", false, [], [],
-                Fields: subFields.ToList()));
+                Fields: [.. subFields]));
 
     private static RecordDetail MakeRecord(string plugin, int loadOrder, bool isWinner,
         FieldMetadata meta, object? value) =>

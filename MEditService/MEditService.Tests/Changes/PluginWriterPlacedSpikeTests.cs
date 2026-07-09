@@ -17,7 +17,7 @@ namespace MEditService.Tests.Changes;
 // hardest unknown in 16.2 before the columns / orchestrator / frontend are built around it.
 public class PluginWriterPlacedSpikeTests
 {
-    private static readonly ISchemaReflector _reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = new SchemaReflector();
 
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
@@ -67,7 +67,7 @@ public class PluginWriterPlacedSpikeTests
             "user", null, DateTime.UtcNow, "create", null,
             ParentCell: extCellFk.ToString(), PlacementGroup: "persistent");
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var result = await writer.SaveAsync(activePath, [createChange], GameRelease.Fallout4, linkCache);
 
         Assert.Contains("$create", result.Applied);

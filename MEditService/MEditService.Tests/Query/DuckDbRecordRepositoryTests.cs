@@ -14,14 +14,14 @@ namespace MEditService.Tests.Query;
 public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
 {
     private readonly TestPluginFixture _fixture;
-    private static readonly ISchemaReflector _reflector = new SchemaReflector();
-    private static readonly ITableDdlBuilder _ddl = new TableDdlBuilder(_reflector);
+    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     public DuckDbRecordRepositoryTests(TestPluginFixture fixture) => _fixture = fixture;
 
     private DuckDbRecordRepository LoadedRepository()
     {
-        var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         var modPath = new ModPath(
             ModKey.FromFileName(TestPluginFixture.PluginName),
@@ -131,7 +131,7 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
                 new ModPath(ModKey.FromFileName("Flags.esp"), Path.Combine(dataFolder, "Flags.esp")),
                 Fallout4Release.Fallout4);
 
-            using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+            using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
             repo.Index(loaded, 0);
             repo.UpdateWinners();
@@ -178,7 +178,7 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
             modB.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("PluginA.esm") });
             modB.Npcs.Set(modALoaded.EnumerateMajorRecords<INpcGetter>().First().DeepCopy());
 
-            using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+            using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
             repo.Index(modALoaded, 0);
             repo.Index(modB, 1);
@@ -219,7 +219,7 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
             { Master = ModKey.FromFileName("PluginA.esm") });
             modB.Npcs.Set(modALoaded.EnumerateMajorRecords<INpcGetter>().First().DeepCopy());
 
-            using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+            using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
             repo.Index(modALoaded, 0);
             repo.Index(modB, 1);
@@ -309,7 +309,7 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
                 Path.Combine(fixture.DataFolder, "ArrayTest.esm")),
             Fallout4Release.Fallout4);
 
-        using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index(loaded, 0);
         repo.UpdateWinners();
@@ -360,7 +360,7 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
                 new ModPath(ModKey.FromFileName("SearchB.esp"), Path.Combine(dataFolder, "SearchB.esp")),
                 Fallout4Release.Fallout4);
 
-            using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+            using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
             repo.Index(modALoaded, 0);
             repo.Index(modBLoaded, 1);
@@ -396,7 +396,7 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
                 Path.Combine(fixture.DataFolder, "NullEdId.esm")),
             Fallout4Release.Fallout4);
 
-        using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index(loaded, 0);
         repo.UpdateWinners();
@@ -414,7 +414,7 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
     [Fact]
     public void GetRecord_BeforeInitialize_Throws()
     {
-        var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         var ex = Assert.Throws<InvalidOperationException>(() =>
             repo.GetRecord("npc_", "000001:Test.esp", null, winnerOnly: false));
         Assert.Equal("Call Initialize before using the repository.", ex.Message);
@@ -437,7 +437,7 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
     [Fact]
     public void Dispose_CalledTwice_DoesNotThrow()
     {
-        var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Dispose();
         var ex = Record.Exception(() => repo.Dispose());
@@ -558,7 +558,7 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
                 Path.Combine(fixture.DataFolder, "Dangling.esm")),
             Fallout4Release.Fallout4);
 
-        using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index(loaded, 0);
         repo.UpdateWinners();
@@ -589,7 +589,7 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
                 Path.Combine(fixture.DataFolder, "Clean.esm")),
             Fallout4Release.Fallout4);
 
-        using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index(loaded, 0);
         repo.UpdateWinners();
@@ -627,7 +627,7 @@ public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
             new ModPath(ModKey.FromFileName("Patch.esp"), Path.Combine(fixture.DataFolder, "Patch.esp")),
             Fallout4Release.Fallout4);
 
-        using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index(baseMod, 0);
         repo.Index(patchMod, 1);

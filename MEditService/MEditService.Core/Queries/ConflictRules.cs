@@ -73,8 +73,12 @@ public static class ConflictRules
             else if (state == ConflictThis.Override) hasOverride = true;
         }
 
-        if (hasConflict) return ConflictAll.Conflict;
-        return hasOverride ? ConflictAll.Override : ConflictAll.NoConflict;
+        return (hasConflict, hasOverride) switch
+        {
+            (true, _) => ConflictAll.Conflict,
+            (_, true) => ConflictAll.Override,
+            _ => ConflictAll.NoConflict,
+        };
     }
 
     // Combines a generic-field ConflictAll with another axis's contribution (e.g. VMAD), taking the
@@ -82,8 +86,11 @@ public static class ConflictRules
     // unchanged — explicit severity table so this doesn't depend on enum declaration order.
     public static ConflictAll Escalate(ConflictAll generic, ConflictAll contribution)
     {
-        if (generic is ConflictAll.OnlyOne or ConflictAll.ConflictCritical) return generic;
-        return Severity(contribution) > Severity(generic) ? contribution : generic;
+        return generic switch
+        {
+            ConflictAll.OnlyOne or ConflictAll.ConflictCritical => generic,
+            _ => Severity(contribution) > Severity(generic) ? contribution : generic,
+        };
     }
 
     private static int Severity(ConflictAll conflictAll) => conflictAll switch

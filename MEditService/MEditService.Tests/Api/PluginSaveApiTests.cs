@@ -4,14 +4,9 @@ using System.Text.Json;
 
 namespace MEditService.Tests.Api;
 
-public sealed class PluginSaveApiTests : IClassFixture<LoadedNpcApiFixture>
+public sealed class PluginSaveApiTests(LoadedNpcApiFixture loaded) : IClassFixture<LoadedNpcApiFixture>
 {
-    private readonly HttpClient _client;
-
-    public PluginSaveApiTests(LoadedNpcApiFixture loaded)
-    {
-        _client = loaded.Client;
-    }
+    private readonly HttpClient _client = loaded.Client;
 
     [Fact]
     public async Task SaveGroups_AfterCreateRecord_Returns200WithBackupPath()

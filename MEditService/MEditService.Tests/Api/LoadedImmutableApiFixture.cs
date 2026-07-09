@@ -5,20 +5,19 @@ namespace MEditService.Tests.Api;
 
 public sealed class LoadedImmutableApiFixture : IAsyncLifetime, IDisposable
 {
-    private readonly ImmutablePluginFixture _plugin = new();
     private readonly WebApplicationFactory<Program> _app = new();
     private bool _disposed;
 
     public HttpClient Client { get; private set; } = null!;
-    public ImmutablePluginFixture Plugin => _plugin;
+    public ImmutablePluginFixture Plugin { get; } = new();
 
     public async Task InitializeAsync()
     {
         Client = _app.CreateClient();
         var resp = await Client.PostAsJsonAsync("/session/load", new
         {
-            dataFolderPath = _plugin.DataFolder,
-            pluginsTxtPath = _plugin.PluginsTxtPath,
+            dataFolderPath = Plugin.DataFolder,
+            pluginsTxtPath = Plugin.PluginsTxtPath,
             gameRelease = "Fallout4",
         });
         resp.EnsureSuccessStatusCode();
@@ -30,7 +29,7 @@ public sealed class LoadedImmutableApiFixture : IAsyncLifetime, IDisposable
         _disposed = true;
         Client?.Dispose();
         _app.Dispose();
-        _plugin.Dispose();
+        Plugin.Dispose();
     }
 
     public Task DisposeAsync()

@@ -60,11 +60,14 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             .Select(d => d.CellStates[plugin])
             .ToList();
 
-        if (states.Count == 0) return ConflictThis.IdenticalToMaster;
-        if (states.Contains(ConflictThis.ConflictLoses)) return ConflictThis.ConflictLoses;
-        if (states.Contains(ConflictThis.ConflictWins)) return ConflictThis.ConflictWins;
-        if (states.Contains(ConflictThis.Override)) return ConflictThis.Override;
-        return ConflictThis.IdenticalToMaster;
+        return states switch
+        {
+            { Count: 0 } => ConflictThis.IdenticalToMaster,
+            _ when states.Contains(ConflictThis.ConflictLoses) => ConflictThis.ConflictLoses,
+            _ when states.Contains(ConflictThis.ConflictWins) => ConflictThis.ConflictWins,
+            _ when states.Contains(ConflictThis.Override) => ConflictThis.Override,
+            _ => ConflictThis.IdenticalToMaster,
+        };
     }
 
     private static bool IsInjectedRecord(
@@ -272,14 +275,14 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
     private static System.Text.Json.JsonElement? ExtractSubFieldValue(object? structValue, string subFieldName)
     {
-        if (structValue is System.Text.Json.JsonElement je &&
-            je.ValueKind == System.Text.Json.JsonValueKind.Object &&
-            je.TryGetProperty(subFieldName, out var sub))
-        {
-            return sub.ValueKind == System.Text.Json.JsonValueKind.Null ? null : sub;
-        }
+        static System.Text.Json.JsonElement? NonNull(System.Text.Json.JsonElement e) =>
+            e.ValueKind == System.Text.Json.JsonValueKind.Null ? null : e;
 
-        return null;
+        return structValue is System.Text.Json.JsonElement je &&
+            je.ValueKind == System.Text.Json.JsonValueKind.Object &&
+            je.TryGetProperty(subFieldName, out var sub)
+            ? NonNull(sub)
+            : null;
     }
 
     private static Dictionary<string, ConflictThis> ComputeCellStates(

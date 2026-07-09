@@ -11,12 +11,12 @@ namespace MEditService.Tests.Indexing;
 
 public class FormReferencesTests
 {
-    private static readonly ISchemaReflector _reflector = new SchemaReflector();
-    private static readonly ITableDdlBuilder _ddl = new TableDdlBuilder(_reflector);
+    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private static DuckDbRecordRepository OpenRepo()
     {
-        var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         return repo;
     }

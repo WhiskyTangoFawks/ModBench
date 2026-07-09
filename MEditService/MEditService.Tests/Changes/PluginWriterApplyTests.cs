@@ -14,9 +14,9 @@ namespace MEditService.Tests.Changes;
 /// </summary>
 public class PluginWriterApplyTests
 {
-    private static readonly ISchemaReflector _reflector = new SchemaReflector();
-    private static readonly IReadOnlyDictionary<string, RecordTableSchema> _schemas =
-        _reflector.GetSchemas(GameRelease.Fallout4);
+    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
+        Reflector.GetSchemas(GameRelease.Fallout4);
 
     private static Npc MakeNpc() =>
         new(FormKey.Factory("000001:TestPlugin.esp"), Fallout4Release.Fallout4);
@@ -24,7 +24,7 @@ public class PluginWriterApplyTests
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
     private static Core.Schema.ColumnSpec Col(string table, string column) =>
-        _schemas[table].RecordColumns.Single(c => c.Name == column);
+        Schemas[table].RecordColumns.Single(c => c.Name == column);
 
     // --- bool ---
 
@@ -162,7 +162,7 @@ public class PluginWriterApplyTests
     public async Task SaveAsync_WritableField_AppearsInApplied()
     {
         var (pluginPath, npcKey) = BuildFixture();
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var change = MakeChange(npcKey, "aggression", "\"Frenzied\"");
 
         var result = await writer.SaveAsync(pluginPath, [change], GameRelease.Fallout4);
@@ -178,7 +178,7 @@ public class PluginWriterApplyTests
     public async Task SaveAsync_FormLinkField_AppearsInReadOnly()
     {
         var (pluginPath, npcKey) = BuildFixture();
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var change = MakeChange(npcKey, "race", "\"000001:Fallout4.esm\"");
 
         var result = await writer.SaveAsync(pluginPath, [change], GameRelease.Fallout4);
@@ -192,7 +192,7 @@ public class PluginWriterApplyTests
     public async Task SaveAsync_UnknownField_AppearsInNotFound()
     {
         var (pluginPath, npcKey) = BuildFixture();
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var change = MakeChange(npcKey, "nonexistent_field", "\"value\"");
 
         var result = await writer.SaveAsync(pluginPath, [change], GameRelease.Fallout4);
@@ -207,14 +207,14 @@ public class PluginWriterApplyTests
     [Fact]
     public void IsReadOnly_FormLinkField_ReturnsTrue()
     {
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         Assert.True(writer.IsReadOnly(GameRelease.Fallout4, "npc_", "race"));
     }
 
     [Fact]
     public void IsReadOnly_BoolField_ReturnsFalse()
     {
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "npc_", "aggro_radius_behavior_enabled"));
     }
 
@@ -223,7 +223,7 @@ public class PluginWriterApplyTests
     [InlineData("npc_", "nonexistent_field")]
     public void IsReadOnly_UnknownInput_ReturnsTrue(string recordType, string field)
     {
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         Assert.True(writer.IsReadOnly(GameRelease.Fallout4, recordType, field));
     }
 
@@ -233,7 +233,7 @@ public class PluginWriterApplyTests
     public async Task SaveAsync_MalformedFormKey_FieldAppearsInNotFound()
     {
         var (pluginPath, _) = BuildFixture();
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var change = MakeChangeRaw("INVALID", "aggression", "\"Frenzied\"");
 
         var result = await writer.SaveAsync(pluginPath, [change], GameRelease.Fallout4);
@@ -250,7 +250,7 @@ public class PluginWriterApplyTests
     public async Task SaveAsync_FormKeyNotInMod_FieldAppearsInNotFound()
     {
         var (pluginPath, _) = BuildFixture();
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         // FormKey is valid but this NPC doesn't exist in the plugin
         var absentKey = FormKey.Factory("FFFFFF:TestPlugin.esp");
         var change = MakeChange(absentKey, "aggression", "\"Frenzied\"");
@@ -287,12 +287,12 @@ public class PluginWriterApplyTests
         }
     }
 
-    // --- PruneOldBackups deletes oldest files, keeps newest MaxBackups (mutants 138, 159, 160, 162) ---
+    // --- PruneOldBackups deletes oldest files, keeps newest maxBackups (mutants 138, 159, 160, 162) ---
 
     [Fact]
     public void PruneOldBackups_ExcessBackups_DeletesOldestKeepsNewest()
     {
-        const int MaxBackups = 5;
+        const int maxBackups = 5;
         var dir = Path.Combine(Path.GetTempPath(), $"pw-prune-{Guid.NewGuid():N}");
         Directory.CreateDirectory(dir);
         try
@@ -300,7 +300,7 @@ public class PluginWriterApplyTests
             var pluginPath = Path.Combine(dir, "TestPlugin.esp");
             File.WriteAllText(pluginPath, "dummy");
 
-            // Create MaxBackups + 2 backup files with known ascending timestamps
+            // Create maxBackups + 2 backup files with known ascending timestamps
             var timestamps = new[]
             {
                 "2020-01-01T00-00-01",
@@ -316,18 +316,18 @@ public class PluginWriterApplyTests
                 .Select(ts => PluginWriter.CreateBackup(pluginPath, ts))
                 .ToList();
 
-            var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+            var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
             writer.PruneOldBackups(pluginPath);
 
-            // Newest MaxBackups should survive; oldest 2 should be deleted
+            // Newest maxBackups should survive; oldest 2 should be deleted
             var surviving = Directory.GetFiles(dir, "TestPlugin.*.bak.esp");
-            Assert.Equal(MaxBackups, surviving.Length);
+            Assert.Equal(maxBackups, surviving.Length);
 
             // The two oldest (timestamps[0] and timestamps[1]) must be gone
             Assert.False(File.Exists(createdPaths[0]), "Oldest backup should be deleted");
             Assert.False(File.Exists(createdPaths[1]), "Second oldest backup should be deleted");
 
-            // The newest MaxBackups must still exist
+            // The newest maxBackups must still exist
             for (int i = 2; i < timestamps.Length; i++)
                 Assert.True(File.Exists(createdPaths[i]), $"Backup {i} should survive");
         }
@@ -343,11 +343,11 @@ public class PluginWriterApplyTests
     public async Task SaveAsync_WithExcessBackups_PrunesAfterSave()
     {
         var (pluginPath, npcKey) = BuildFixture();
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var dir = Path.GetDirectoryName(pluginPath)!;
         var name = Path.GetFileNameWithoutExtension(pluginPath);
 
-        // Pre-create MaxBackups + 1 backups (SaveAsync will add one more → MaxBackups + 2 total before prune)
+        // Pre-create maxBackups + 1 backups (SaveAsync will add one more → maxBackups + 2 total before prune)
         for (int i = 1; i <= 6; i++)
         {
             var ts = $"2020-01-0{i}T00-00-00";
@@ -357,7 +357,7 @@ public class PluginWriterApplyTests
         var change = MakeChange(npcKey, "aggression", "\"Frenzied\"");
         await writer.SaveAsync(pluginPath, [change], GameRelease.Fallout4);
 
-        // After save + prune, backup count must not exceed MaxBackups
+        // After save + prune, backup count must not exceed maxBackups
         var backups = Directory.GetFiles(dir, $"{name}.*.bak.esp");
         Assert.True(backups.Length <= 5, $"Expected at most 5 backups after prune, got {backups.Length}");
     }
@@ -384,7 +384,7 @@ public class PluginWriterApplyTests
             J("null"), J("null"),
             "user", null, DateTime.UtcNow, "create", null);
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var result = await writer.SaveAsync(pluginPath, [createChange], GameRelease.Fallout4);
 
         Assert.Contains("$create", result.Applied);
@@ -409,7 +409,7 @@ public class PluginWriterApplyTests
             J("null"), J("null"),
             "user", null, DateTime.UtcNow, "create", null);
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var result = await writer.SaveAsync(pluginPath, [createChange], GameRelease.Fallout4);
 
         Assert.Contains("not_a_real_type", result.CreateFailed);
@@ -444,7 +444,7 @@ public class PluginWriterApplyTests
             J("null"), J("\"Frenzied\""),
             "user", null, DateTime.UtcNow, "field_edit", groupId);
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(pluginPath, [createChange, fieldChange], GameRelease.Fallout4);
 
         using var saved = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
@@ -469,7 +469,7 @@ public class PluginWriterApplyTests
             J("null"), J("null"),
             "user", null, DateTime.UtcNow, "create", null);
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var result = await writer.SaveAsync(pluginPath, [createChange], GameRelease.Fallout4);
 
         Assert.Contains("$create", result.NotFound);
@@ -499,7 +499,7 @@ public class PluginWriterApplyTests
             J("null"), J("null"),
             "user", null, DateTime.UtcNow, "create", null);
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(pluginPath, [createChange], GameRelease.Fallout4);
 
         using var saved = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
@@ -530,7 +530,7 @@ public class PluginWriterApplyTests
             J("null"), J("null"),
             "user", null, DateTime.UtcNow, "create", null);
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(pluginPath, [createChange], GameRelease.Fallout4);
 
         using var saved = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
@@ -556,7 +556,7 @@ public class PluginWriterApplyTests
         var modKey = ModKey.FromFileName("TestPlugin.esp");
         var modPath = new ModPath(modKey, pluginPath);
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var result = await writer.SaveAsync(pluginPath, [MakeDeleteChange(npcKey)], GameRelease.Fallout4);
 
         Assert.Contains("$delete", result.Applied);
@@ -575,7 +575,7 @@ public class PluginWriterApplyTests
         var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
         var absentKey = FormKey.Factory("FFFFFF:TestPlugin.esp");
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var result = await writer.SaveAsync(pluginPath, [MakeDeleteChange(absentKey)], GameRelease.Fallout4);
 
         Assert.Contains("$delete", result.NotFound);
@@ -601,7 +601,7 @@ public class PluginWriterApplyTests
         var deleteChange = MakeDeleteChange(npcToDelete);
         var editChange = MakeChange(npcToEdit, "aggression", "\"Frenzied\"");
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var result = await writer.SaveAsync(pluginPath, [deleteChange, editChange], GameRelease.Fallout4);
 
         Assert.Contains("$delete", result.Applied);
@@ -641,7 +641,7 @@ public class PluginWriterApplyTests
         var newFormKey = FormKey.Factory($"{newId:X6}:Source.esp");
         var change = MakeRenumber(kwKey, "Source.esp", newId, "kywd");
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var result = await writer.SaveAsync(pluginPath, [change], GameRelease.Fallout4);
 
         Assert.Contains("$renumber", result.Applied);
@@ -675,7 +675,7 @@ public class PluginWriterApplyTests
         var newFormKey = FormKey.Factory($"{newId:X6}:Source.esp");
         var change = MakeRenumber(kwKey, "Source.esp", newId, "kywd");
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(pluginPath, [change], GameRelease.Fallout4);
 
         using var saved = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(modPath, GameRelease.Fallout4);

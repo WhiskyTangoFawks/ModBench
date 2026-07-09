@@ -10,8 +10,8 @@ namespace MEditService.Tests.Query;
 
 public sealed class GetVmadTests : IDisposable
 {
-    private static readonly ISchemaReflector _reflector = new SchemaReflector();
-    private static readonly ITableDdlBuilder _ddl = new TableDdlBuilder(_reflector);
+    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private readonly FormKey _npcFormKey;
     private readonly FormKey _targetFormKey;
@@ -106,7 +106,7 @@ public sealed class GetVmadTests : IDisposable
 
     private DuckDbRecordRepository LoadedRepository()
     {
-        var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         var modPath = new ModPath(
             ModKey.FromFileName("VmadQuery.esp"),
@@ -268,7 +268,7 @@ public sealed class GetVmadTests : IDisposable
             })
             .Build();
 
-        var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         var modPath = new ModPath(
             ModKey.FromFileName("VmadEmptyList.esp"),
