@@ -97,6 +97,53 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture) : IClassFixt
     }
 
     [Fact]
+    public void GetRecord_ReturnsFieldForEveryColumnInSchema()
+    {
+        using var repo = LoadedRepository();
+        var formKey = _fixture.Npc1FormKey.ToString();
+        var schema = Reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
+
+        var record = repo.GetRecord("npc_", formKey, null, winnerOnly: true);
+
+        Assert.NotNull(record);
+        Assert.NotEmpty(schema.RecordColumns);
+        var fieldNames = record.Fields.Select(f => f.Metadata.Name).ToHashSet();
+        Assert.All(schema.RecordColumns, col => Assert.Contains(col.Name, fieldNames));
+    }
+
+    [Fact]
+    public void GetRecord_ScalarFormLinkColumn_ReturnsExactStoredValue()
+    {
+        FormKey npcFormKey = default, raceFormKey = default;
+        using var fixture = new PluginFixtureBuilder("medit-columnlist-value")
+            .WithPlugin("ColumnValue.esm", mod =>
+            {
+                raceFormKey = mod.Races.AddNew("TestRace").FormKey;
+                var npc = mod.Npcs.AddNew("ColumnValueNPC");
+                npcFormKey = npc.FormKey;
+                npc.Race = new FormLink<IRaceGetter>(raceFormKey);
+            })
+            .Build();
+
+        var loaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("ColumnValue.esm"),
+                Path.Combine(fixture.DataFolder, "ColumnValue.esm")),
+            Fallout4Release.Fallout4);
+
+        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        repo.Index(loaded, 0);
+        repo.UpdateWinners();
+
+        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, winnerOnly: true);
+
+        Assert.NotNull(record);
+        var raceField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "race");
+        Assert.NotNull(raceField);
+        Assert.Equal(raceFormKey.ToString(), raceField.Value);
+    }
+
+    [Fact]
     public void GetRecord_WithPlugin_ReturnsMatchingPlugin()
     {
         using var repo = LoadedRepository();
@@ -492,21 +539,13 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture) : IClassFixt
         Assert.Equal(true, q.ExecuteScalar());
     }
 
-    // --- ColumnList: zero-column and non-empty branches ---
+    // --- ColumnList: zero-column branch ---
 
     [Fact]
     public void ColumnList_ZeroColumns_ReturnsEmptyString()
     {
         var schema = new RecordTableSchema { TableName = "t", RecordType = typeof(object), RecordColumns = [] };
         Assert.Equal("", DuckDbRecordRepository.ColumnList(schema));
-    }
-
-    [Fact]
-    public void ColumnList_WithColumns_ReturnsCommaSeparatedQuotedNames()
-    {
-        var col = new ColumnSpec("my_col", "MyProp", "VARCHAR", _ => null, "string", [], [], null);
-        var schema = new RecordTableSchema { TableName = "t", RecordType = typeof(object), RecordColumns = [col] };
-        Assert.Equal(", \"my_col\"", DuckDbRecordRepository.ColumnList(schema));
     }
 
     // --- ReadDetail: null scalar field returns C# null, not DBNull ---
