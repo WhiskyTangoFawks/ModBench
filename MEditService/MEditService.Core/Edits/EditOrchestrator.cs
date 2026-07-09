@@ -594,6 +594,9 @@ public sealed partial class EditOrchestrator(
             return (new StageEditResult.PluginImmutable(plugin), null, null);
 
         var recordType = _query.GetRecordType(formKey);
-        return recordType == null ? ((StageEditResult? earlyOut, IGameSession? session, string? recordType))(new StageEditResult.RecordNotFound(), null, null) : ((StageEditResult? earlyOut, IGameSession? session, string? recordType))(null, session, recordType);
+        (StageEditResult? earlyOut, IGameSession? session, string? recordType) result = recordType == null
+            ? (new StageEditResult.RecordNotFound(), null, null)
+            : (null, session, recordType);
+        return result;
     }
 }

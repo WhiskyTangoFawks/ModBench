@@ -513,13 +513,13 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         return script == null
             ? ApplyOutcome.NotFound
             : opName switch
-        {
-            "add_property" => AddProperty(script, op),
-            "remove_property" => RemoveProperty(script, propName),
-            "set_type" => SetType(script, propName, op),
-            "set_flags" => SetPropertyFlags(script, propName, op),
-            _ => ApplyOutcome.NotFound,
-        };
+            {
+                "add_property" => AddProperty(script, op),
+                "remove_property" => RemoveProperty(script, propName),
+                "set_type" => SetType(script, propName, op),
+                "set_flags" => SetPropertyFlags(script, propName, op),
+                _ => ApplyOutcome.NotFound,
+            };
     }
 
     private static ApplyOutcome SetPropertyFlags(ScriptEntry script, string propName, JsonElement op)

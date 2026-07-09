@@ -44,7 +44,10 @@ internal static class TypedLinkCacheFactory
     private static bool IsBareEnumerableToImmutableLinkCache(MethodInfo m) =>
         m is { Name: "ToImmutableLinkCache", IsGenericMethodDefinition: true }
         && m.GetGenericArguments().Length == 2
-        && m.GetParameters() is [{ ParameterType: { IsGenericType: true } p }, _]
+        && HasBareEnumerableParameter(m);
+
+    private static bool HasBareEnumerableParameter(MethodInfo m) =>
+        m.GetParameters() is [{ ParameterType: { IsGenericType: true } p }, _]
         && p.GetGenericTypeDefinition() == typeof(IEnumerable<>)
         && p.GetGenericArguments()[0].IsGenericParameter;
 }

@@ -159,7 +159,7 @@ public sealed class GetVmadTests : IDisposable
         var prop = vmad!.Scripts[0].Properties.First(p => p.Name == "Scores").Value;
         Assert.Equal("ArrayOfInt", prop.Type);
         Assert.NotNull(prop.ListItems);
-        Assert.Equal(new object?[] { 10, 20, 30 }, prop.ListItems!.Select(i => i.Value));
+        Assert.Equal([10, 20, 30], prop.ListItems!.Select(i => i.Value));
     }
 
     [Fact]
@@ -217,9 +217,9 @@ public sealed class GetVmadTests : IDisposable
         using var repo = LoadedRepository();
         var props = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp")!.Scripts[0].Properties;
 
-        Assert.Equal(new object?[] { true, false }, props.First(p => p.Name == "Bits").Value.ListItems!.Select(i => i.Value));
-        Assert.Equal(new object?[] { 1.5f, 2.5f }, props.First(p => p.Name == "Mults").Value.ListItems!.Select(i => i.Value));
-        Assert.Equal(new object?[] { "a", "b" }, props.First(p => p.Name == "Names").Value.ListItems!.Select(i => i.Value));
+        Assert.Equal([true, false], props.First(p => p.Name == "Bits").Value.ListItems!.Select(i => i.Value));
+        Assert.Equal([1.5f, 2.5f], props.First(p => p.Name == "Mults").Value.ListItems!.Select(i => i.Value));
+        Assert.Equal(["a", "b"], props.First(p => p.Name == "Names").Value.ListItems!.Select(i => i.Value));
 
         var target = Assert.Single(props.First(p => p.Name == "Targets").Value.ListItems!);
         Assert.Equal("Object", target.Type);

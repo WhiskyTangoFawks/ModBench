@@ -478,7 +478,7 @@ public class ConflictClassifierTests
     // --- Struct Children ---
 
     private static FieldMetadata StructMeta(string name, params FieldMetadata[] subFields) =>
-        new(name, "struct", false, [], [], Fields: subFields.ToList());
+        new(name, "struct", false, [], [], Fields: [.. subFields]);
 
     private static RecordDetail MakeStructOverride(
         string plugin, int loadOrder, bool isWinner,

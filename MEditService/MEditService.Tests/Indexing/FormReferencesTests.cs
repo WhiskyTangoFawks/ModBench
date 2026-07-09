@@ -67,10 +67,7 @@ public class FormReferencesTests
     public void Index_NoFormLinkFieldsSet_FormReferencesIsEmpty()
     {
         using var fixture = new PluginFixtureBuilder("form-refs-empty")
-            .WithPlugin("NoRefs.esp", mod =>
-            {
-                mod.Npcs.AddNew("BareNPC");
-            })
+            .WithPlugin("NoRefs.esp", mod => mod.Npcs.AddNew("BareNPC"))
             .Build();
 
         using var repo = OpenRepo();

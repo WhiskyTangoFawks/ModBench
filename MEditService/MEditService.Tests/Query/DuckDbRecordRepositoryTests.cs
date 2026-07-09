@@ -11,13 +11,11 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
-public class DuckDbRecordRepositoryTests : IClassFixture<TestPluginFixture>
+public class DuckDbRecordRepositoryTests(TestPluginFixture fixture) : IClassFixture<TestPluginFixture>
 {
-    private readonly TestPluginFixture _fixture;
+    private readonly TestPluginFixture _fixture = fixture;
     private static readonly ISchemaReflector Reflector = new SchemaReflector();
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-
-    public DuckDbRecordRepositoryTests(TestPluginFixture fixture) => _fixture = fixture;
 
     private DuckDbRecordRepository LoadedRepository()
     {

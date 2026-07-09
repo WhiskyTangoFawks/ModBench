@@ -616,7 +616,7 @@ public sealed class EditOrchestratorVmadTests
     {
         FormKey npcFk = default;
         using var data = new PluginFixtureBuilder("eo-vmad-addscript")
-            .WithPlugin("TestPlugin.esp", mod => { npcFk = mod.Npcs.AddNew("PlainNpc").FormKey; })
+            .WithPlugin("TestPlugin.esp", mod => npcFk = mod.Npcs.AddNew("PlainNpc").FormKey)
             .Build();
 
         var (orchestrator, manager, _) = MakeOrchestrator();
