@@ -33,13 +33,26 @@ force a kill — that re-introduces the implementation-coupling TDD exists to pr
 > sufficient; `run.sh` parses the report and prints the summary.
 
 > 🏎️ **Confirm fixes with targeted runs, never a full re-run.** A full run can take ~an hour, so
-> after triaging a survivor confirm it with `run.sh --mutant-ids <id>` / `--file <File>.cs`.
+> after triaging a survivor confirm it with `run.sh --file <File>.cs` (since disabled
+> automatically — see below) and check the specific line no longer appears in the output.
+> There is no `--mutant-ids` option — Stryker.NET's config schema has no such key (confirmed
+> against the installed CLI's `--help` and a live rejection); an earlier version of this
+> skill documented one but it never worked. Even `--file` isn't necessarily fast — a
+> since-disabled single-file run can still take significant time; budget for it, don't
+> assume it's instant.
 > The full-install smoke test (`RealData/RealInstallSmokeTests.cs`) is gated behind `MEDIT_SMOKE=1`
 > so it never runs under mutation.
 
 ## Running the report
 
 > ⚠️ **Never read `mutation-report.json` directly.** Files are 2–3 MB with full source embedded. Always run `run.sh` (calls `parse-report.py`) — only the summary reaches context.
+
+> 📎 **`since`/`--file` scope at the *file* level, not the diff.** Touching one line makes
+> every testable line in that file eligible for mutation — Stryker has no line-level diff
+> filter. This is intentional (it's what makes the tool a full entropy audit of files you
+> touch, not a diff-coverage gate) but means survivor counts on a large touched file can
+> look alarming even for a small, mechanical change. Use `--diff-only` (below) for a
+> narrower "did my actual diff introduce anything new" view when that's what you want.
 
 ```bash
 cd MEditService && bash ../.claude/skills/mutation-test/run.sh
@@ -51,16 +64,12 @@ Scope to all Core (disables `since`, full corpus — slow):
 cd MEditService && bash ../.claude/skills/mutation-test/run.sh --all
 ```
 
-Single file:
+Single file (since disabled automatically — tests that file regardless of whether it
+has a diff vs `since.target`; leaving `since` enabled here would silently produce zero
+mutants, and no report at all, for a file with no diff):
 
 ```bash
 cd MEditService && bash ../.claude/skills/mutation-test/run.sh --file ConflictClassifier.cs
-```
-
-Specific mutant IDs (still pays ~60s initial run):
-
-```bash
-cd MEditService && bash ../.claude/skills/mutation-test/run.sh --mutant-ids 42 57
 ```
 
 `run.sh` prints scope before running. Exits 0 if all killed, 1 if any survivors or NoCoverage remain.
@@ -72,6 +81,14 @@ cd MEditService && python ../.claude/skills/mutation-test/parse-report.py
 cd MEditService && python ../.claude/skills/mutation-test/parse-report.py StrykerOutput/<dated-run>/reports/mutation-report.json
 ```
 
+Narrow a report to survivors on lines that actually changed vs. `since.target` (default
+`main`, override with `--target <ref>`) — no re-run, just a filter on the same report:
+
+```bash
+cd MEditService && python ../.claude/skills/mutation-test/parse-report.py --diff-only
+cd MEditService && bash ../.claude/skills/mutation-test/run.sh --diff-only
+```
+
 ## Handling survivors
 
 Analyze the survivors. Obvious fixes can be dealt with directly. Complexity or architectural refactors should be surfaced to the developer, along with analysis and a recommendation.
@@ -81,6 +98,16 @@ Analyze the survivors. Obvious fixes can be dealt with directly. Complexity or a
 triage. `NoCoverage` ≠ `Survived`: `NoCoverage` skews toward a real gap (#6); a
 covered-but-`Survived` mutant skews toward "code that doesn't matter" (#1/#5) — the
 entropy signal you most want to act on.
+
+**Fast path — equivalent-under-invariant:** for `Equality`/`Conditional`/`Null
+coalescing` survivors specifically, check first whether the two branches are provably
+equal *at exactly the point where the mutation would change behavior*, given some
+invariant elsewhere in the code (an enum-severity ordering, an out-param sentinel that
+can never match a real value, a "these two sources are mutually exclusive" data-model
+rule). If so, it's an **Equivalent mutant (#9)**, not a coverage gap — go find the
+invariant before assuming a test is missing. This isn't a reason to blanket-suppress
+these mutator types (most instances elsewhere are real, meaningful checks) — it's a
+triage shortcut for this specific shape.
 
 **Record exactly one disposition per survivor** using this order (stop at first that applies):
 
@@ -135,3 +162,4 @@ not style nits.
 ## Known issues
 
 - `CompileError` mutants from `DuckDbRecordRepository.Index` and `SchemaReflector.GetSubFieldInfo` are expected — Stryker can't mutate `out` variable patterns there. Counted and ignored automatically.
+- There is no `--mutant-ids` / `mutant-id` option — don't re-add it. Stryker.NET 4.14.2's config schema rejects `mutant-id` outright (confirmed via `dotnet stryker --help` and a live run); a prior version of `run.sh` had this flag and it never worked. Use `--file <File>.cs` to confirm a specific fix instead.

@@ -5,8 +5,13 @@
 # Usage (from MEditService/):
 #   bash ../.claude/skills/mutation-test/run.sh
 #   bash ../.claude/skills/mutation-test/run.sh --all              # same scope (since disabled)
-#   bash ../.claude/skills/mutation-test/run.sh --file ConflictClassifier.cs
-#   bash ../.claude/skills/mutation-test/run.sh --mutant-ids 42 57
+#   bash ../.claude/skills/mutation-test/run.sh --file ConflictClassifier.cs   # since disabled, that file only
+#   bash ../.claude/skills/mutation-test/run.sh --diff-only        # narrow report to survivors on diffed lines
+#
+# NOTE: there is no --mutant-ids / mutant-id option. Stryker.NET's config schema has no
+# such key (confirmed against the installed CLI's --help and a live rejection) — an
+# earlier version of this script's --mutant-ids flag never actually worked. To confirm a
+# specific fix, use --file (below) and check the specific line is no longer reported.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,24 +19,19 @@ CONFIG="stryker-config.json"
 PARSE="python3 $SCRIPT_DIR/parse-report.py"
 
 # --- arg parsing ---
-MUTANT_IDS=()
 FILE_FILTER=""
 ALL=false
+DIFF_ONLY=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --all) ALL=true; shift ;;
         --file) shift; FILE_FILTER="$1"; shift ;;
-        --mutant-ids)
-            shift
-            while [[ $# -gt 0 && "$1" != --* ]]; do
-                MUTANT_IDS+=("$1"); shift
-            done
-            ;;
+        --diff-only) DIFF_ONLY=true; shift ;;
         *) shift ;;
     esac
 done
 
-# --- optional config patch for --mutant-ids ---
+# --- optional config patch ---
 ORIGINAL_CONFIG=""
 restore_config() {
     if [[ -n "$ORIGINAL_CONFIG" ]]; then
@@ -40,20 +40,7 @@ restore_config() {
 }
 trap restore_config EXIT
 
-if [[ ${#MUTANT_IDS[@]} -gt 0 ]]; then
-    echo "Targeted run — mutant IDs: ${MUTANT_IDS[*]}"
-    ORIGINAL_CONFIG=$(cat "$CONFIG")
-    # Inject mutant-id array into config
-    ID_JSON=$(printf '%s\n' "${MUTANT_IDS[@]}" | python3 -c "import json,sys; print(json.dumps([int(l) for l in sys.stdin]))")
-    python3 -c "
-import json, sys
-cfg = json.load(open('$CONFIG'))
-cfg['stryker-config']['mutant-id'] = $ID_JSON
-with open('$CONFIG', 'w') as f:
-    json.dump(cfg, f, indent=2)
-    f.write('\n')
-"
-elif [[ "$ALL" == "true" ]]; then
+if [[ "$ALL" == "true" ]]; then
     echo "Scope: all of MEditService.Core (since disabled)"
     ORIGINAL_CONFIG=$(cat "$CONFIG")
     python3 -c "
@@ -65,7 +52,20 @@ with open('$CONFIG', 'w') as f:
     f.write('\n')
 "
 elif [[ -n "$FILE_FILTER" ]]; then
-    echo "Scope: $FILE_FILTER (since: changes vs main)"
+    # since disabled: an explicit --file request should test that file regardless of
+    # whether it has a diff vs since.target — since-enabled would silently produce zero
+    # mutants (and no report at all) for an unchanged file, which is exactly the trap a
+    # "confirm this specific file" run needs to not fall into.
+    echo "Scope: $FILE_FILTER (since disabled — file requested explicitly)"
+    ORIGINAL_CONFIG=$(cat "$CONFIG")
+    python3 -c "
+import json
+cfg = json.load(open('$CONFIG'))
+cfg['stryker-config']['since']['enabled'] = False
+with open('$CONFIG', 'w') as f:
+    json.dump(cfg, f, indent=2)
+    f.write('\n')
+"
 else
     # When HEAD == main (all changes uncommitted), git diff main..HEAD is empty and
     # Stryker's `since` filter finds nothing. Detect this and fall back to the
@@ -165,4 +165,8 @@ fi
 echo "Report: $REPORT"
 
 # --- parse and print filtered results ---
-$PARSE "$REPORT"
+PARSE_ARGS=("$REPORT")
+if [[ "$DIFF_ONLY" == "true" ]]; then
+    PARSE_ARGS+=(--diff-only)
+fi
+$PARSE "${PARSE_ARGS[@]}"
