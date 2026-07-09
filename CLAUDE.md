@@ -33,10 +33,12 @@ Rationale: [docs/adr/](docs/adr/).
 
 ## References
 
-`Mutagen/` and `TES5Edit/` are local clones for API/record-definition reference only —
-grep them, never modify them. Mutagen docs start at
+`Mutagen/`, `TES5Edit/`, and `modorganizer/` are local clones for API/record-definition
+and behavioral reference only — grep them, never modify them. Mutagen docs start at
 `Mutagen/docs/Big-Cheat-Sheet.md`; TES5Edit's `wbDefinitionsFO4.pas` has FO4 record
-defs (`wbArrayS` = sorted, `wbArray` = unsorted).
+defs (`wbArrayS` = sorted, `wbArray` = unsorted); `modorganizer/` is the MO2 C++ source
+(reference for matching MO2 behavior — e.g. `src/downloadmanager.cpp` for download
+`.meta` state semantics).
 
 ## Development Workflow
 
