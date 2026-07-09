@@ -11,7 +11,7 @@ describe('readVanillaMasters', () => {
     if (dir) await rm(dir, { recursive: true, force: true });
   });
 
-  it('lists lowercased .esm basenames from <gamePath>/Data', async () => {
+  it('lists lowercased .esm and .esp basenames from <gamePath>/Data', async () => {
     dir = await mkdtemp(join(tmpdir(), 'medit-vanillamasters-'));
     const gamePath = join(dir, 'Game');
     await mkdir(join(gamePath, 'Data'), { recursive: true });
@@ -24,7 +24,26 @@ describe('readVanillaMasters', () => {
     );
 
     const masters = await readVanillaMasters(dir);
-    expect(masters).toEqual(new Set(['fallout4.esm', 'dlcrobot.esm']));
+    expect(masters).toEqual(new Set(['fallout4.esm', 'dlcrobot.esm', 'notamaster.esp']));
+  });
+
+  it('includes .esl (Creation Club) and .esp plugins alongside .esm masters', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'medit-vanillamasters-'));
+    const gamePath = join(dir, 'Game');
+    await mkdir(join(gamePath, 'Data'), { recursive: true });
+    await writeFile(join(gamePath, 'Data', 'Fallout4.esm'), '');
+    await writeFile(join(gamePath, 'Data', 'ccBGSFO4044-HellfirePowerArmor.esl'), '');
+    await writeFile(join(gamePath, 'Data', 'Update.esp'), '');
+    await writeFile(join(gamePath, 'Data', 'readme.txt'), '');
+    await writeFile(
+      join(dir, 'ModOrganizer.ini'),
+      `[General]\r\ngamePath=@ByteArray(${gamePath})\r\n`,
+    );
+
+    const masters = await readVanillaMasters(dir);
+    expect(masters).toEqual(
+      new Set(['fallout4.esm', 'ccbgsfo4044-hellfirepowerarmor.esl', 'update.esp']),
+    );
   });
 
   it('normalizes a Wine drive-mapped gamePath so masters resolve on Linux', async () => {

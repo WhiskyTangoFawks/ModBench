@@ -8,9 +8,11 @@
 // take that here instead of re-reading/normalizing the ini gamePath.
 
 import { readFile, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import { readGamePath } from './mo2/modOrganizerIni';
 import { normalizeGamePath } from './gameDirectory';
+
+const PLUGIN_EXTENSIONS = new Set(['.esp', '.esm', '.esl']);
 
 export async function readVanillaMasters(
   instanceRoot: string,
@@ -20,7 +22,9 @@ export async function readVanillaMasters(
     const iniText = await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8');
     const gamePath = normalizeGamePath(readGamePath(iniText));
     const dataFiles = await readdir(join(gamePath, 'Data'));
-    return new Set(dataFiles.filter((f) => f.toLowerCase().endsWith('.esm')).map((f) => f.toLowerCase()));
+    return new Set(
+      dataFiles.filter((f) => PLUGIN_EXTENSIONS.has(extname(f).toLowerCase())).map((f) => f.toLowerCase()),
+    );
   } catch (e) {
     log?.(`[vanillaMasters] could not resolve vanilla masters: ${e instanceof Error ? e.message : String(e)}`);
     return new Set();

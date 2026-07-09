@@ -22,6 +22,7 @@ describe('computeModStatuses', () => {
 
   // "MasterOK" depends on a master provided by another enabled mod ("Provider").
   // "VanillaOK" depends on a vanilla master (Fallout4.esm, not backed by any mod).
+  // "CcOK" depends on a Creation Club vanilla master (a .esl, not a .esm).
   // "Broken" depends on a master nobody provides.
   // "DisabledBroken" is the same as Broken but disabled.
   // "High"/"Low" conflict on meshes/shared.nif; High is the higher-priority entry.
@@ -31,6 +32,7 @@ describe('computeModStatuses', () => {
     mod('MasterOK'),
     mod('Provider'),
     mod('VanillaOK'),
+    mod('CcOK'),
     mod('Broken'),
     mod('DisabledBroken', false),
     mod('High'),
@@ -38,7 +40,7 @@ describe('computeModStatuses', () => {
     mod('Clean'),
     mod('Ghost'),
   ];
-  const vanillaMasters = new Set(['fallout4.esm']);
+  const vanillaMasters = new Set(['fallout4.esm', 'ccbgsfo4044-hellfirepowerarmor.esl']);
 
   beforeAll(async () => {
     instanceRoot = await mkdtemp(join(tmpdir(), 'medit-statuschecker-'));
@@ -50,6 +52,9 @@ describe('computeModStatuses', () => {
     });
     await writeMod(instanceRoot, 'VanillaOK', {
       'VanillaOK.esp': buildTes4Buffer(['Fallout4.esm']),
+    });
+    await writeMod(instanceRoot, 'CcOK', {
+      'CcOK.esp': buildTes4Buffer(['ccBGSFO4044-HellfirePowerArmor.esl']),
     });
     await writeMod(instanceRoot, 'Broken', {
       'Broken.esp': buildTes4Buffer(['DoesNotExist.esm']),
@@ -78,6 +83,10 @@ describe('computeModStatuses', () => {
 
   it('is ok when a master is satisfied by the vanilla master set', async () => {
     expect((await statuses()).get('VanillaOK')?.status).toEqual({ kind: 'ok' });
+  });
+
+  it('is ok when a master is a Creation Club .esl in the vanilla master set', async () => {
+    expect((await statuses()).get('CcOK')?.status).toEqual({ kind: 'ok' });
   });
 
   it('reports missingMaster when a master is satisfied by neither', async () => {
