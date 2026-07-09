@@ -256,11 +256,11 @@ public sealed class VmadConflictClassifierTests
 
         var result = VmadConflictClassifier.Classify([a, b]);
 
-        Assert.Equal(new[] { "Alpha", "Beta" }, result.Compare.Scripts.Select(s => s.Name));
+        Assert.Equal(["Alpha", "Beta"], result.Compare.Scripts.Select(s => s.Name));
         var alpha = result.Compare.Scripts.First(s => s.Name == "Alpha");
-        Assert.Equal(new[] { "Config", "Zeta" }, alpha.Properties.Select(p => p.Name));
+        Assert.Equal(["Config", "Zeta"], alpha.Properties.Select(p => p.Name));
         var config = alpha.Properties.First(p => p.Name == "Config");
-        Assert.Equal(new[] { "Aaa", "Mid" }, config.Children!.Select(c => c.Name));
+        Assert.Equal(["Aaa", "Mid"], config.Children!.Select(c => c.Name));
     }
 
     [Fact]

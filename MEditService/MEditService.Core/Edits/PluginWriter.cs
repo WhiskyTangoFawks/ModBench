@@ -166,11 +166,8 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         var placed = MajorRecordInstantiator.Activator(formKey, ctx.Release, schema.RecordType);
 
         var cell = ResolveWinnerAsOverride(mod, ctx.LinkCache, cellFormKey);
-        if (cell == null) return ApplyOutcome.NotFound;
-
-        return AddToPlacementGroup(cell, createChange.PlacementGroup, placed)
-            ? ApplyOutcome.Applied
-            : ApplyOutcome.NotFound;
+        var applied = cell != null && AddToPlacementGroup(cell, createChange.PlacementGroup, placed);
+        return applied ? ApplyOutcome.Applied : ApplyOutcome.NotFound;
     }
 
     // Resolves a record's winning context from the link cache and pulls it into `mod` as an override,
@@ -232,8 +229,7 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         if (ctx.LinkCache == null) return null;
         var copyChange = group.FirstOrDefault(c =>
             c.ChangeType == PendingChangeConstants.FieldEditChangeType && c.ParentCell != null);
-        if (copyChange == null) return null;
-        return ResolveWinnerAsOverride(mod, ctx.LinkCache, formKey);
+        return copyChange == null ? null : ResolveWinnerAsOverride(mod, ctx.LinkCache, formKey);
     }
 
     private static void ApplyFieldChanges(
@@ -300,10 +296,10 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         if (change.ParentCell != null)
             return TryDeletePlaced(mod, ctx, change, formKey);
 
-        if (!schemas.TryGetValue(change.RecordType, out var schema) || schema.Remove == null)
-            return ApplyOutcome.NotFound;
-
-        return schema.Remove(mod, formKey) ? ApplyOutcome.Applied : ApplyOutcome.NotFound;
+        var applied = schemas.TryGetValue(change.RecordType, out var schema)
+            && schema.Remove != null
+            && schema.Remove(mod, formKey);
+        return applied ? ApplyOutcome.Applied : ApplyOutcome.NotFound;
     }
 
     // Cell-aware delete for a placed record: pull the parent cell into `mod` as an override and remove
@@ -315,11 +311,8 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         if (!FormKey.TryFactory(change.ParentCell!, out var cellFormKey)) return ApplyOutcome.NotFound;
 
         var cell = ResolveWinnerAsOverride(mod, ctx.LinkCache, cellFormKey);
-        if (cell == null) return ApplyOutcome.NotFound;
-
-        return RemoveFromPlacementGroup(cell, change.PlacementGroup, formKey)
-            ? ApplyOutcome.Applied
-            : ApplyOutcome.NotFound;
+        var applied = cell != null && RemoveFromPlacementGroup(cell, change.PlacementGroup, formKey);
+        return applied ? ApplyOutcome.Applied : ApplyOutcome.NotFound;
     }
 
     private static void ApplyRenumberChanges(
@@ -443,10 +436,7 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
 
         var prop = script.Properties.FirstOrDefault(p =>
             string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase));
-        if (prop == null)
-            return ApplyOutcome.NotFound;
-
-        return ApplyValue(prop, change.NewValue);
+        return prop == null ? ApplyOutcome.NotFound : ApplyValue(prop, change.NewValue);
     }
 
     // Applies a value (per-type payload shape from 13.4/13.6/13.7) into an existing property.
@@ -492,13 +482,14 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         }
 
         // Route by path shape: "VMAD\<ScriptName>" is script-level, "VMAD\<ScriptName>\<Prop>" property-level.
-        if (VmadPath.TryParseScript(change.FieldPath, out var scriptOnly))
-            return ApplyScriptLevelOp(vmadRecord, scriptOnly, opName, op);
-
-        if (!VmadPath.TryParse(change.FieldPath, out var scriptName, out var propName))
-            return ApplyOutcome.NotFound;
-
-        return ApplyPropertyLevelOp(vmadRecord, scriptName, propName, opName, op);
+        return true switch
+        {
+            _ when VmadPath.TryParseScript(change.FieldPath, out var scriptOnly)
+                => ApplyScriptLevelOp(vmadRecord, scriptOnly, opName, op),
+            _ when VmadPath.TryParse(change.FieldPath, out var scriptName, out var propName)
+                => ApplyPropertyLevelOp(vmadRecord, scriptName, propName, opName, op),
+            _ => ApplyOutcome.NotFound,
+        };
     }
 
     private static ApplyOutcome ApplyScriptLevelOp(
@@ -519,17 +510,16 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
     {
         var script = vmadRecord.VirtualMachineAdapter?.Scripts.FirstOrDefault(s =>
             string.Equals(s.Name, scriptName, StringComparison.OrdinalIgnoreCase));
-        if (script == null)
-            return ApplyOutcome.NotFound;
-
-        return opName switch
-        {
-            "add_property" => AddProperty(script, op),
-            "remove_property" => RemoveProperty(script, propName),
-            "set_type" => SetType(script, propName, op),
-            "set_flags" => SetPropertyFlags(script, propName, op),
-            _ => ApplyOutcome.NotFound,
-        };
+        return script == null
+            ? ApplyOutcome.NotFound
+            : opName switch
+            {
+                "add_property" => AddProperty(script, op),
+                "remove_property" => RemoveProperty(script, propName),
+                "set_type" => SetType(script, propName, op),
+                "set_flags" => SetPropertyFlags(script, propName, op),
+                _ => ApplyOutcome.NotFound,
+            };
     }
 
     private static ApplyOutcome SetPropertyFlags(ScriptEntry script, string propName, JsonElement op)

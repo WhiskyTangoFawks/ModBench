@@ -6,18 +6,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.Api;
 
-public sealed class ChangeApiTests : IClassFixture<LoadedNpcApiFixture>
+public sealed class ChangeApiTests(LoadedNpcApiFixture loaded) : IClassFixture<LoadedNpcApiFixture>
 {
-    private readonly HttpClient _client;
-    private readonly TestPluginFixture _fixture;
-    private readonly IServiceProvider _services;
-
-    public ChangeApiTests(LoadedNpcApiFixture loaded)
-    {
-        _client = loaded.Client;
-        _fixture = loaded.Plugin;
-        _services = loaded.Services;
-    }
+    private readonly HttpClient _client = loaded.Client;
+    private readonly TestPluginFixture _fixture = loaded.Plugin;
+    private readonly IServiceProvider _services = loaded.Services;
 
     private IPendingChangeService GetService() =>
         _services.GetRequiredService<IPendingChangeService>();
@@ -162,11 +155,11 @@ public sealed class ChangeApiTests : IClassFixture<LoadedNpcApiFixture>
     {
         await ClearChangesAsync();
         var svc = GetService();
-        svc.StageGroup("create", null, new[]
-        {
+        svc.StageGroup("create", null,
+        [
             ApiMember("FK-PC1", "A.esp", "$create"),
             ApiMember("FK-PC2", "B.esp", "$create"),
-        });
+        ]);
 
         var groups = await _client.GetFromJsonAsync<JsonElement[]>("/change-groups");
         Assert.NotNull(groups);

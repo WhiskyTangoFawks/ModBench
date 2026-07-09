@@ -13,11 +13,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Session;
 
-public class SessionManagerTests : IClassFixture<TestPluginFixture>
+public class SessionManagerTests(TestPluginFixture fixture) : IClassFixture<TestPluginFixture>
 {
-    private readonly TestPluginFixture _fixture;
-
-    public SessionManagerTests(TestPluginFixture fixture) => _fixture = fixture;
+    private readonly TestPluginFixture _fixture = fixture;
 
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
@@ -382,13 +380,11 @@ public class SessionManagerTests : IClassFixture<TestPluginFixture>
 
     // --- helpers ---
 
-    private sealed class SpyRepositoryFactory : IRecordRepositoryFactory
+    private sealed class SpyRepositoryFactory(IRecordRepositoryFactory inner) : IRecordRepositoryFactory
     {
-        private readonly IRecordRepositoryFactory _inner;
+        private readonly IRecordRepositoryFactory _inner = inner;
         public int CreateCallCount { get; private set; }
         public GameRelease? LastGameRelease { get; private set; }
-
-        public SpyRepositoryFactory(IRecordRepositoryFactory inner) => _inner = inner;
 
         public IRecordRepository Create(GameRelease gameRelease)
         {

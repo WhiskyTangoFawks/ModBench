@@ -13,11 +13,9 @@ namespace MEditService.Tests.RealData;
 /// exact FormKeys would make it brittle. Per-field correctness lives in the synthetic
 /// <c>PlacementIndexingTests</c> / <c>GetVmadTests</c>.
 /// </summary>
-public sealed class CutDownPluginIndexTests : IClassFixture<CutDownPluginFixture>
+public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
 {
-    private readonly CutDownPluginFixture _fixture;
-
-    public CutDownPluginIndexTests(CutDownPluginFixture fixture) => _fixture = fixture;
+    private readonly CutDownPluginFixture _fixture = fixture;
 
     private long Count(string table)
     {

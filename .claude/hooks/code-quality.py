@@ -6,7 +6,10 @@ instead of waiting for /validate:
 
 - Backend (C#): builds each changed analyzed project with a SARIF error log,
   capturing *all* severities incl. the info/note rules (Sonar complexity, RCS,
-  IDE...) that never appear in normal `dotnet build` output.
+  IDE...) that never appear in normal `dotnet build` output, plus a second,
+  narrowly-scoped `dotnet format` pass for the handful of rules (naming,
+  RCS1226) that don't surface even in the SARIF log — see
+  FORMAT_ONLY_DIAGNOSTICS.
 - Frontend (TypeScript): runs ESLint on changed .ts/.tsx, capturing errors and
   the `sonarjs`/complexity warnings that gate the extension-host logic.
 
@@ -29,7 +32,14 @@ from urllib.request import url2pathname
 CS_PROJECTS = {
     "MEditService/MEditService.Core": "MEditService.Core",
     "MEditService/MEditService.Api": "MEditService.Api",
+    "MEditService/MEditService.Tests": "MEditService.Tests",
 }
+# Rules that never show up in the build+SARIF pass below even at configured
+# 'suggestion' severity (verified empirically: absent from a from-clean build
+# with -p:ErrorLog, present under `dotnet format`) — every other note-level
+# style/analyzer rule in this repo *is* caught by build_sarif. Scanned
+# separately, restricted to just these IDs so the extra pass stays cheap.
+FORMAT_ONLY_DIAGNOSTICS = ("IDE1006", "RCS1226")
 # --- Frontend: extension package that carries the ESLint config. --------------
 TS_PACKAGE = "modbench"
 TS_IGNORE = ("src/generated/", "out/", "webview/dist/", "node_modules/")
@@ -57,17 +67,6 @@ def changed_files(root: str) -> list[str]:
 
 
 # ---------------------------------------------------------------- backend (C#)
-def cs_projects_for(files: list[str]) -> dict[str, str]:
-    hit = {}
-    for f in files:
-        if not f.endswith(".cs"):
-            continue
-        for prefix, name in CS_PROJECTS.items():
-            if f.startswith(prefix + "/"):
-                hit[name] = os.path.join("MEditService", name, name + ".csproj")
-    return hit
-
-
 def build_sarif(root: str, csproj: str, sarif_path: str) -> None:
     """Compile one project in isolation, emitting a SARIF error log.
 
@@ -119,20 +118,63 @@ def read_sarif(sarif_path: str) -> list[dict]:
     return out
 
 
-def backend_findings(root: str, changed: list[str]) -> list[dict]:
-    targets = cs_projects_for(changed)
-    if not targets:
+def format_findings(root: str, csproj: str, changed_rel: list[str], report_dir: str) -> list[dict]:
+    """Catch FORMAT_ONLY_DIAGNOSTICS, which build_sarif never sees.
+
+    --include scopes analysis to just the changed files (cheap, mirrors the
+    changed_abs filtering done for SARIF) and --diagnostics restricts the
+    analyzer run to the two known blind-spot rules instead of re-running the
+    full suite build_sarif already covers.
+    """
+    subprocess.run(
+        ["dotnet", "format", os.path.join(root, csproj),
+         "--severity", "info", "--verify-no-changes",
+         "--diagnostics", *FORMAT_ONLY_DIAGNOSTICS,
+         "--include", *changed_rel,
+         "--report", report_dir],
+        cwd=root, capture_output=True, text=True, timeout=120,
+    )
+    report_path = os.path.join(report_dir, "format-report.json")
+    if not os.path.exists(report_path):
         return []
-    changed_abs = {os.path.realpath(os.path.join(root, f))
-                   for f in changed if f.endswith(".cs")}
+    try:
+        with open(report_path) as fh:
+            doc = json.load(fh)
+    except (json.JSONDecodeError, OSError):
+        return []
+    out = []
+    for entry in doc:
+        for ch in entry.get("FileChanges", []):
+            rule = ch.get("DiagnosticId", "?")
+            desc = ch.get("FormatDescription", "")
+            prefix = f"info {rule}: "
+            out.append({
+                "path": entry.get("FilePath", ""),
+                "line": ch.get("LineNumber", 0),
+                "level": "note",
+                "rule": rule,
+                "msg": (desc[len(prefix):] if desc.startswith(prefix) else desc).strip(),
+            })
+    return out
+
+
+def backend_findings(root: str, changed: list[str]) -> list[dict]:
     found = []
     with tempfile.TemporaryDirectory() as tmp:
-        for name, csproj in targets.items():
+        for prefix, name in CS_PROJECTS.items():
+            proj_changed = [f for f in changed if f.endswith(".cs") and f.startswith(prefix + "/")]
+            if not proj_changed:
+                continue
+            csproj = os.path.join("MEditService", name, name + ".csproj")
+            changed_abs = {os.path.realpath(os.path.join(root, f)) for f in proj_changed}
+
             sarif = os.path.join(tmp, name + ".sarif")
             build_sarif(root, csproj, sarif)
             for r in read_sarif(sarif):
                 if os.path.realpath(r["path"]) in changed_abs:
                     found.append(r)
+
+            found.extend(format_findings(root, csproj, proj_changed, os.path.join(tmp, name + "-fmt")))
     return found
 
 

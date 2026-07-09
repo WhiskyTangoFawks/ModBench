@@ -66,7 +66,7 @@ public class ReferenceValidatorTests
         var errors = Validate(col, "000001:Test.esp", _ => "npc_");
         Assert.Single(errors);
         Assert.Equal("type_mismatch", errors[0].Reason);
-        Assert.Equal(new[] { "race" }, errors[0].ExpectedTypes);
+        Assert.Equal(["race"], errors[0].ExpectedTypes);
     }
 
     // --- Array of formKey ---

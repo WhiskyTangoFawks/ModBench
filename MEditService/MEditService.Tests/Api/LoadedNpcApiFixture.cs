@@ -5,11 +5,10 @@ namespace MEditService.Tests.Api;
 
 public sealed class LoadedNpcApiFixture : IAsyncLifetime, IDisposable
 {
-    private readonly TestPluginFixture _plugin = new();
     private readonly WebApplicationFactory<Program> _app = new();
 
     public HttpClient Client { get; private set; } = null!;
-    public TestPluginFixture Plugin => _plugin;
+    public TestPluginFixture Plugin { get; } = new();
     public IServiceProvider Services => _app.Services;
 
     private bool _disposed;
@@ -19,8 +18,8 @@ public sealed class LoadedNpcApiFixture : IAsyncLifetime, IDisposable
         Client = _app.CreateClient();
         var resp = await Client.PostAsJsonAsync("/session/load", new
         {
-            dataFolderPath = _plugin.DataFolder,
-            pluginsTxtPath = _plugin.PluginsTxtPath,
+            dataFolderPath = Plugin.DataFolder,
+            pluginsTxtPath = Plugin.PluginsTxtPath,
             gameRelease = "Fallout4",
         });
         resp.EnsureSuccessStatusCode();
@@ -32,7 +31,7 @@ public sealed class LoadedNpcApiFixture : IAsyncLifetime, IDisposable
         _disposed = true;
         Client?.Dispose();
         _app.Dispose();
-        _plugin.Dispose();
+        Plugin.Dispose();
     }
 
     public Task DisposeAsync()

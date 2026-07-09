@@ -5,15 +5,10 @@ using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
 namespace MEditService.Tests;
 
-public sealed class PluginFixtureBuilder
+public sealed class PluginFixtureBuilder(string prefix = "medit")
 {
-    private readonly string _prefix;
+    private readonly string _prefix = prefix;
     private readonly List<(string Name, bool Listed, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>>? Configure, BinaryWriteParameters? WriteParams)> _plugins = [];
-
-    public PluginFixtureBuilder(string prefix = "medit")
-    {
-        _prefix = prefix;
-    }
 
     public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, bool listed = true, BinaryWriteParameters? writeParams = null)
     {

@@ -20,8 +20,8 @@ namespace MEditService.Tests.Indexing;
 // non-null columns.
 public class PlacementIndexingTests
 {
-    private static readonly ISchemaReflector _reflector = new SchemaReflector();
-    private static readonly ITableDdlBuilder _ddl = new TableDdlBuilder(_reflector);
+    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private sealed record Built(
         DuckDbRecordRepository Repo,
@@ -91,7 +91,7 @@ public class PlacementIndexingTests
         intBlock.SubBlocks.Add(intSub);
         mod.Cells.Records.Add(intBlock);
 
-        var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index((IModGetter)mod, 0);
         repo.UpdateWinners();
@@ -149,7 +149,7 @@ public class PlacementIndexingTests
             using var overlay = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(
                 new ModPath(mod.ModKey, path), GameRelease.Fallout4);
 
-            using var repo = new DuckDbRecordRepository(_reflector, _ddl, NullLogger.Instance);
+            using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
             repo.Index(overlay, 0);
             repo.UpdateWinners();

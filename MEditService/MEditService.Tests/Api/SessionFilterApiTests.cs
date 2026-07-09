@@ -4,14 +4,9 @@ using System.Text.Json;
 
 namespace MEditService.Tests.Api;
 
-public sealed class SessionFilterApiTests : IClassFixture<LoadedNpcApiFixture>
+public sealed class SessionFilterApiTests(LoadedNpcApiFixture loaded) : IClassFixture<LoadedNpcApiFixture>
 {
-    private readonly HttpClient _client;
-
-    public SessionFilterApiTests(LoadedNpcApiFixture loaded)
-    {
-        _client = loaded.Client;
-    }
+    private readonly HttpClient _client = loaded.Client;
 
     private Task ClearFilterAsync() => _client.DeleteAsync("/session/filter");
 

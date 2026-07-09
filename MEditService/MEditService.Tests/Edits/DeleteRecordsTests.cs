@@ -535,7 +535,6 @@ public sealed class DeleteRecordsTests
     private sealed class StubImmutableSessionManager : ISessionManager, IDisposable
     {
         private readonly SessionManager _inner;
-        private readonly IGameSession? _stubSession;
 
         public StubImmutableSessionManager(
             string dataFolder, string pluginsTxtPath, GameRelease gameRelease,
@@ -544,10 +543,10 @@ public sealed class DeleteRecordsTests
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             _inner = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);
             _inner.Load(dataFolder, pluginsTxtPath, gameRelease);
-            _stubSession = new ImmutableOverrideSession(_inner.Session!, immutablePlugin);
+            Session = new ImmutableOverrideSession(_inner.Session!, immutablePlugin);
         }
 
-        public IGameSession? Session => _stubSession;
+        public IGameSession? Session { get; }
         public IRecordReader? Repository => _inner.Repository;
 
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) =>
@@ -571,12 +570,11 @@ public sealed class DeleteRecordsTests
     private sealed class ImmutableOverrideSession : IGameSession
     {
         private readonly IGameSession _inner;
-        private readonly IReadOnlyList<PluginMetadata> _plugins;
 
         public ImmutableOverrideSession(IGameSession inner, string immutablePlugin)
         {
             _inner = inner;
-            _plugins = inner.Plugins
+            Plugins = inner.Plugins
                 .Select(p => p.Name.Equals(immutablePlugin, StringComparison.OrdinalIgnoreCase)
                     ? p with { IsImmutable = true }
                     : p)
@@ -585,7 +583,7 @@ public sealed class DeleteRecordsTests
 
         public string DataFolderPath => _inner.DataFolderPath;
         public GameRelease GameRelease => _inner.GameRelease;
-        public IReadOnlyList<PluginMetadata> Plugins => _plugins;
+        public IReadOnlyList<PluginMetadata> Plugins { get; }
         public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
         public Mutagen.Bethesda.Plugins.Cache.ILinkCache LinkCache => _inner.LinkCache;
         public string? FilterSql { get => _inner.FilterSql; set => _inner.FilterSql = value; }

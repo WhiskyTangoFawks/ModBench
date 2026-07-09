@@ -13,18 +13,18 @@ namespace MEditService.Tests.Changes;
 
 public class PluginWriterVmadTests
 {
-    private static readonly ISchemaReflector _reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = new SchemaReflector();
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
     // Serializes a per-plugin Raw subtree the way the API does (camelCase) so apply round-trips it.
-    private static readonly JsonSerializerOptions _wire = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private static readonly JsonSerializerOptions Wire = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     // ---- IsReadOnly ----
 
     [Fact]
     public void IsReadOnly_VmadScalarPath_ReturnsFalse()
     {
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "npc_", @"VMAD\DefaultScript\IsActive"));
     }
 
@@ -92,7 +92,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-bool");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path, [MakeVmadChange(npcKey, @"VMAD\DefaultScript\IsActive", "false")], GameRelease.Fallout4);
 
@@ -114,7 +114,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-string");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         await writer.SaveAsync(path, [MakeVmadChange(npcKey, @"VMAD\DefaultScript\Tag", "\"world\"")], GameRelease.Fallout4);
 
@@ -132,7 +132,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, altTargetKey, fixture) = BuildFixture("vmad-object");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var json = $"{{\"formKey\":\"{altTargetKey}\",\"alias\":5}}";
         await writer.SaveAsync(path, [MakeVmadChange(npcKey, @"VMAD\DefaultScript\TargetActor", json)], GameRelease.Fallout4);
@@ -152,7 +152,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-sibling");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         // Edit one Bool — leave everything else alone
         await writer.SaveAsync(path, [MakeVmadChange(npcKey, @"VMAD\DefaultScript\IsActive", "false")], GameRelease.Fallout4);
@@ -177,7 +177,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-notfound-script");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path, [MakeVmadChange(npcKey, @"VMAD\NoSuchScript\IsActive", "false")], GameRelease.Fallout4);
 
@@ -190,7 +190,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-notfound-prop");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path, [MakeVmadChange(npcKey, @"VMAD\DefaultScript\NoSuchProp", "false")], GameRelease.Fallout4);
 
@@ -221,7 +221,7 @@ public class PluginWriterVmadTests
             .Build();
 
         var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path,
             [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Items", "[3, 4, 5]")],
@@ -257,7 +257,7 @@ public class PluginWriterVmadTests
             .Build();
 
         var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         await writer.SaveAsync(path,
             [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Tags", "[\"a\", \"b\"]")],
@@ -297,7 +297,7 @@ public class PluginWriterVmadTests
             .Build();
 
         var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var json = $"[{{\"formKey\":\"{fk2}\",\"alias\":1}}]";
         var result = await writer.SaveAsync(path,
@@ -321,7 +321,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-obj-badkey");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path,
             [MakeVmadChange(npcKey, @"VMAD\DefaultScript\TargetActor", "{\"formKey\":\"BADKEY\",\"alias\":0}")],
@@ -336,7 +336,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, targetKey, _, fixture) = BuildFixture("vmad-obj-nullalias");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var json = $"{{\"formKey\":\"{targetKey}\",\"alias\":null}}";
         var result = await writer.SaveAsync(path,
@@ -384,7 +384,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-edit");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         // Atomic column: the whole struct subtree is restaged with Factor changed to 2.5.
         var json = """[{"name":"Factor","type":"Float","floatValue":2.5},{"name":"Count","type":"Int","intValue":3}]""";
@@ -404,7 +404,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-nested");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         // Config = { Factor, Count, Inner = { Depth } } — edit the deeply-nested Depth.
         var json = """
@@ -460,7 +460,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcFk, fixture) = BuildStructListFixture("vmad-structlist-edit");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         // Atomic column: whole list restaged, element [0]'s Qty changed to 42.
         var json = """[[{"name":"Qty","type":"Int","intValue":42}]]""";
@@ -479,7 +479,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcFk, fixture) = BuildStructListFixture("vmad-structlist-add");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         // Original list has one element; restage with a second (cloned-shape) element appended.
         var json = """[[{"name":"Qty","type":"Int","intValue":7}],[{"name":"Qty","type":"Int","intValue":0}]]""";
@@ -537,13 +537,13 @@ public class PluginWriterVmadTests
 
         var (pathA, npcA, fxA) = BuildRich("vmad-bytes-a");
         var (pathB, npcB, fxB) = BuildRich("vmad-bytes-b");
-        using var _a = fxA;
-        using var _b = fxB;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        using var a = fxA;
+        using var b = fxB;
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         // Derive the struct's Raw subtree the way the compare endpoint does.
-        var ddl = new TableDdlBuilder(_reflector);
-        using var repo = new DuckDbRecordRepository(_reflector, ddl, NullLogger.Instance);
+        var ddl = new TableDdlBuilder(Reflector);
+        using var repo = new DuckDbRecordRepository(Reflector, ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         var modPath = new ModPath(ModKey.FromFileName("VmadWrite.esp"), pathA);
         repo.Index((IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4), 0);
@@ -555,7 +555,7 @@ public class PluginWriterVmadTests
         // A: passthrough save. B: restage the struct from its own Raw.
         await writer.SaveAsync(pathA, [], GameRelease.Fallout4);
         var resultB = await writer.SaveAsync(pathB,
-            [MakeVmadChange(npcB, @"VMAD\DefaultScript\Config", JsonSerializer.Serialize(rawConfig, _wire))],
+            [MakeVmadChange(npcB, @"VMAD\DefaultScript\Config", JsonSerializer.Serialize(rawConfig, Wire))],
             GameRelease.Fallout4);
 
         Assert.Contains(@"VMAD\DefaultScript\Config", resultB.Applied);   // restage actually ran
@@ -569,7 +569,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-bool");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var json = """[{"name":"Flag","type":"Bool","boolValue":true}]""";
         var result = await writer.SaveAsync(path,
@@ -585,7 +585,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-string");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var json = """[{"name":"Label","type":"String","stringValue":"hello"}]""";
         var result = await writer.SaveAsync(path,
@@ -625,7 +625,7 @@ public class PluginWriterVmadTests
             new ModPath(ModKey.FromFileName("VmadWrite.esp"), path), Fallout4Release.Fallout4)
             .Npcs.First(n => n.EditorID == "ObjAlias").FormKey;
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         // No "aliasValue" key — should default alias to 0
         var json = $$"""[{"name":"Ref","type":"Object","formKeyValue":"{{targetFk}}"}]""";
         var result = await writer.SaveAsync(path,
@@ -643,7 +643,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-badfk");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var json = """[{"name":"Ref","type":"Object","formKeyValue":"not-a-formkey"}]""";
         var result = await writer.SaveAsync(path,
@@ -657,7 +657,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-badtype");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         // Missing name field → TryBuildMemberProperty returns false
         var json = """[{"type":"Int","intValue":1}]""";
@@ -672,7 +672,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-unknowntype");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         // Type "Unknown" hits the default: return false branch
         var json = """[{"name":"X","type":"Unknown"}]""";
@@ -687,7 +687,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcFk, fixture) = BuildStructFixture("vmad-struct-nonarray");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         // Struct member with "members" as a string (not array) → TryBuildMembers returns false
         var json = """[{"name":"Inner","type":"Struct","members":"oops"}]""";
@@ -722,7 +722,7 @@ public class PluginWriterVmadTests
             .Build();
 
         var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var json = $$"""[{"name":"Ref","type":"Object","formKeyValue":"{{targetFk}}","aliasValue":"five"}]""";
         var result = await writer.SaveAsync(path,
             [MakeVmadChange(npcFk, @"VMAD\DefaultScript\Config", json)], GameRelease.Fallout4);
@@ -749,7 +749,7 @@ public class PluginWriterVmadTests
             .Build();
 
         var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path, [MakeVmadChange(npcFk, @"VMAD\DefaultScript\IsActive", "false")], GameRelease.Fallout4);
 
@@ -768,7 +768,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-add-prop");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var op = """{"op":"add_property","type":"Int","name":"Alpha","flags":"Edited","value":7}""";
         var result = await writer.SaveAsync(path,
@@ -791,7 +791,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, targetKey, _, fixture) = BuildFixture("vmad-add-obj");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var op = $$$"""{"op":"add_property","type":"Object","name":"NewRef","flags":"Edited","value":{"formKey":"{{{targetKey}}}","alias":3}}""";
         var result = await writer.SaveAsync(path,
@@ -810,7 +810,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-remove-prop");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path,
             [MakeStructOp(npcKey, @"VMAD\DefaultScript\Tag", """{"op":"remove_property"}""")], GameRelease.Fallout4);
@@ -830,10 +830,10 @@ public class PluginWriterVmadTests
     {
         FormKey npcFk = default;
         using var fixture = new PluginFixtureBuilder("vmad-addscript-novmad")
-            .WithPlugin("VmadWrite.esp", mod => { npcFk = mod.Npcs.AddNew("PlainNpc").FormKey; })
+            .WithPlugin("VmadWrite.esp", mod => npcFk = mod.Npcs.AddNew("PlainNpc").FormKey)
             .Build();
         var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var op = """{"op":"add_script","name":"NewScript","flags":"Local","properties":[]}""";
         var result = await writer.SaveAsync(path, [MakeStructOp(npcFk, @"VMAD\NewScript", op)], GameRelease.Fallout4);
@@ -850,7 +850,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-addscript-existing");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var op = """{"op":"add_script","name":"AAAScript","flags":"Local","properties":[]}""";
         var result = await writer.SaveAsync(path, [MakeStructOp(npcKey, @"VMAD\AAAScript", op)], GameRelease.Fallout4);
@@ -869,7 +869,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-addscript-dup");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         // Re-adding an existing script name replaces it (single entry) and leaves siblings intact.
         var op = """{"op":"add_script","name":"DefaultScript","flags":"Inherited","properties":[]}""";
@@ -887,7 +887,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-removescript");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path,
             [MakeStructOp(npcKey, @"VMAD\SiblingScript", """{"op":"remove_script"}""")], GameRelease.Fallout4);
@@ -913,7 +913,7 @@ public class PluginWriterVmadTests
             })
             .Build();
         var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path,
             [MakeStructOp(npcFk, @"VMAD\OnlyScript", """{"op":"remove_script"}""")], GameRelease.Fallout4);
@@ -932,7 +932,7 @@ public class PluginWriterVmadTests
         // "Counter" is an Int property (Data 42) in BuildVmad; retype it to Float → default 0, Name kept.
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-settype");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path,
             [MakeStructOp(npcKey, @"VMAD\DefaultScript\Counter", """{"op":"set_type","type":"Float"}""")],
@@ -962,7 +962,7 @@ public class PluginWriterVmadTests
             })
             .Build();
         var path = Path.Combine(fixture.DataFolder, "VmadWrite.esp");
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         await writer.SaveAsync(path,
             [MakeStructOp(npcFk, @"VMAD\DefaultScript\P", """{"op":"set_type","type":"Bool"}""")],
@@ -981,7 +981,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-setpropflags");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path,
             [MakeStructOp(npcKey, @"VMAD\DefaultScript\Counter", """{"op":"set_flags","flags":"Removed"}""")],
@@ -998,7 +998,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-setscriptflags");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path,
             [MakeStructOp(npcKey, @"VMAD\DefaultScript", """{"op":"set_flags","flags":"Inherited"}""")],
@@ -1023,7 +1023,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture($"vmad-missing-{Guid.NewGuid():N}");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path, [MakeStructOp(npcKey, fieldPath, op)], GameRelease.Fallout4);
 
@@ -1037,7 +1037,7 @@ public class PluginWriterVmadTests
         // "Counter" is an existing Int; re-adding it as Float must replace (single entry, new value).
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-addprop-dup");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var op = """{"op":"add_property","type":"Float","name":"Counter","flags":"Edited","value":2.5}""";
         var result = await writer.SaveAsync(path, [MakeStructOp(npcKey, @"VMAD\DefaultScript\Counter", op)], GameRelease.Fallout4);
@@ -1055,7 +1055,7 @@ public class PluginWriterVmadTests
         // "IsActive" is the first property (index 0) — exercises the RemoveByName loop's lower bound.
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-remove-first");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var result = await writer.SaveAsync(path,
             [MakeStructOp(npcKey, @"VMAD\DefaultScript\IsActive", """{"op":"remove_property"}""")], GameRelease.Fallout4);
@@ -1071,7 +1071,7 @@ public class PluginWriterVmadTests
     {
         var (path, npcKey, _, _, fixture) = BuildFixture("vmad-addprop-string");
         using var _ = fixture;
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
 
         var op = """{"op":"add_property","type":"String","name":"Label","flags":"Edited","value":"hi"}""";
         var result = await writer.SaveAsync(path, [MakeStructOp(npcKey, @"VMAD\DefaultScript\Label", op)], GameRelease.Fallout4);

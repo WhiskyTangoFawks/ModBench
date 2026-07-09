@@ -8,11 +8,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Session;
 
-public class SessionManagerThreadSafetyTests : IClassFixture<TestPluginFixture>
+public class SessionManagerThreadSafetyTests(TestPluginFixture fixture) : IClassFixture<TestPluginFixture>
 {
-    private readonly TestPluginFixture _fixture;
-
-    public SessionManagerThreadSafetyTests(TestPluginFixture fixture) => _fixture = fixture;
+    private readonly TestPluginFixture _fixture = fixture;
 
     private static SessionManager MakeManager()
     {

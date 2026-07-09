@@ -5,16 +5,10 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
 
-public sealed class DeleteRecordsApiTests : IClassFixture<LoadedDeleteRecordsApiFixture>
+public sealed class DeleteRecordsApiTests(LoadedDeleteRecordsApiFixture loaded) : IClassFixture<LoadedDeleteRecordsApiFixture>
 {
-    private readonly HttpClient _client;
-    private readonly DeleteRecordsFixture _fixture;
-
-    public DeleteRecordsApiTests(LoadedDeleteRecordsApiFixture loaded)
-    {
-        _client = loaded.Client;
-        _fixture = loaded.Plugin;
-    }
+    private readonly HttpClient _client = loaded.Client;
+    private readonly DeleteRecordsFixture _fixture = loaded.Plugin;
 
     private async Task ClearChangesAsync()
     {

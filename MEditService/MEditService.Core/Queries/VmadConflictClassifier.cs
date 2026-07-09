@@ -146,11 +146,11 @@ public static class VmadConflictClassifier
         Func<IReadOnlyList<T>, int, VmadPropertyValue> elementAt)
     {
         var maxLen = perPlugin.Values.Select(v => v is null ? 0 : select(v)?.Count ?? 0).DefaultIfEmpty(0).Max();
-        if (maxLen == 0) return null;
-
-        return [.. Enumerable.Range(0, maxLen)
+        return maxLen == 0
+            ? null
+            : ([.. Enumerable.Range(0, maxLen)
             .Select(idx => ChildDiff($"[{idx}]", perPlugin, inputs, masterPlugin, conflict,
-                v => select(v) is { } list && idx < list.Count ? elementAt(list, idx) : null))];
+                v => select(v) is { } list && idx < list.Count ? elementAt(list, idx) : null))]);
     }
 
     // Aligns struct members by name (union, sorted).
@@ -167,11 +167,11 @@ public static class VmadConflictClassifier
             .Distinct(StringComparer.Ordinal)
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToList();
-        if (names.Count == 0) return null;
-
-        return [.. names
+        return names.Count == 0
+            ? null
+            : ([.. names
             .Select(mn => ChildDiff(mn, perPlugin, inputs, masterPlugin, conflict,
-                v => v.Members?.FirstOrDefault(m => m.Name == mn)?.Value))];
+                v => v.Members?.FirstOrDefault(m => m.Name == mn)?.Value))]);
     }
 
     private static VmadPropertyDiff ChildDiff(

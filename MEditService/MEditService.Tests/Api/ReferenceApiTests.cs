@@ -5,16 +5,10 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
 
-public sealed class ReferenceApiTests : IClassFixture<LoadedReferenceApiFixture>
+public sealed class ReferenceApiTests(LoadedReferenceApiFixture loaded) : IClassFixture<LoadedReferenceApiFixture>
 {
-    private readonly HttpClient _client;
-    private readonly ReferencePluginFixture _fixture;
-
-    public ReferenceApiTests(LoadedReferenceApiFixture loaded)
-    {
-        _client = loaded.Client;
-        _fixture = loaded.Plugin;
-    }
+    private readonly HttpClient _client = loaded.Client;
+    private readonly ReferencePluginFixture _fixture = loaded.Plugin;
 
     private async Task ClearChangesAsync()
     {

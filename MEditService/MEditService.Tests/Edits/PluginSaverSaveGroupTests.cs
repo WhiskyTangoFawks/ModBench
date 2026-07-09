@@ -202,14 +202,13 @@ public sealed class PluginSaverSaveGroupTests
     {
         private readonly Queue<Func<Task<PreparedPluginSave>>> _prepareQueue = new();
         private readonly List<IReadOnlyList<string>> _batchReindexed = [];
-        private IGameSession _session = new StubGameSession([]);
 
         public IReadOnlyList<IReadOnlyList<string>> BatchReindexCalls => _batchReindexed;
         public string? LastTmpDir { get; private set; }
         public string? LastDestPath { get; private set; }
 
         public void SetPrepareResponse(Func<Task<PreparedPluginSave>> fn) => _prepareQueue.Enqueue(fn);
-        public void SetSession(IGameSession session) => _session = session;
+        public void SetSession(IGameSession session) => Session = session;
 
         public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes)
         {
@@ -227,9 +226,9 @@ public sealed class PluginSaverSaveGroupTests
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
         public Task ReindexPlugins(IReadOnlyList<string> plugins) { _batchReindexed.Add(plugins); return Task.CompletedTask; }
 
-        public void Dispose() => _session.Dispose();
+        public void Dispose() => Session!.Dispose();
 
-        public IGameSession? Session => _session;
+        public IGameSession? Session { get; private set; } = new StubGameSession([]);
         public IRecordReader? Repository => throw new NotSupportedException();
         public void Load(string d, string p, GameRelease g) => throw new NotSupportedException();
         public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path)> plugins, GameRelease gameRelease) => throw new NotSupportedException();

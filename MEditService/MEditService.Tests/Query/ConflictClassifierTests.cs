@@ -8,11 +8,11 @@ public class ConflictClassifierTests
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> NoMasters =
         new Dictionary<string, IReadOnlyList<string>>();
 
-    private static readonly IConflictClassifier _classifier = new ConflictClassifier();
+    private static readonly IConflictClassifier Classifier = new ConflictClassifier();
 
     private static ClassifyResult Classify(IReadOnlyList<RecordDetail> records,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? masters = null) =>
-        _classifier.Classify(records, masters ?? NoMasters);
+        Classifier.Classify(records, masters ?? NoMasters);
 
     private static FieldMetadata Meta(string name, string type = "string") =>
         new(name, type, false, [], []);
@@ -24,7 +24,7 @@ public class ConflictClassifierTests
     private static RecordDetail MakeOverride(string plugin, int loadOrder, bool isWinner,
         params (string name, object? value)[] fields) =>
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
-            fields.Select(f => new FieldValue(Meta(f.name), f.value)).ToList());
+            [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))]);
 
     // --- OnlyOne ---
 
@@ -478,7 +478,7 @@ public class ConflictClassifierTests
     // --- Struct Children ---
 
     private static FieldMetadata StructMeta(string name, params FieldMetadata[] subFields) =>
-        new(name, "struct", false, [], [], Fields: subFields.ToList());
+        new(name, "struct", false, [], [], Fields: [.. subFields]);
 
     private static RecordDetail MakeStructOverride(
         string plugin, int loadOrder, bool isWinner,

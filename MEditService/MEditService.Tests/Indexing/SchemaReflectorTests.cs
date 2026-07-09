@@ -151,9 +151,11 @@ public class SchemaReflectorTests
         var col = schemas["npc_"].RecordColumns.First(c => c.Name == "name");
         var npc = new Mutagen.Bethesda.Fallout4.Npc(
             Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Test.esp"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        npc.Name = new Mutagen.Bethesda.Strings.TranslatedString(
-            Mutagen.Bethesda.Strings.Language.English, "Testname");
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4)
+        {
+            Name = new Mutagen.Bethesda.Strings.TranslatedString(
+                Mutagen.Bethesda.Strings.Language.English, "Testname")
+        };
         Assert.Equal("Testname", col.Extract(npc));
     }
 
@@ -164,8 +166,10 @@ public class SchemaReflectorTests
         var col = schemas["npc_"].RecordColumns.First(c => c.Name == "name");
         var npc = new Mutagen.Bethesda.Fallout4.Npc(
             Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Test.esp"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        npc.Name = null;
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4)
+        {
+            Name = null
+        };
         Assert.Null(col.Extract(npc));
     }
 
@@ -251,8 +255,10 @@ public class SchemaReflectorTests
         var col = schemas["npc_"].RecordColumns.First(c => c.Name == "keywords");
         var npc = new Mutagen.Bethesda.Fallout4.Npc(
             Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Test.esp"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        npc.Keywords = null;
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4)
+        {
+            Keywords = null
+        };
         Assert.Null(col.Extract(npc));
     }
 
@@ -303,8 +309,10 @@ public class SchemaReflectorTests
 
         var npc = new Mutagen.Bethesda.Fallout4.Npc(
             Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        npc.HeightMin = 1.5f;
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4)
+        {
+            HeightMin = 1.5f
+        };
 
         var result = col.Extract(npc);
         Assert.Equal(1.5f, result);
@@ -320,8 +328,10 @@ public class SchemaReflectorTests
 
         var npc = new Mutagen.Bethesda.Fallout4.Npc(
             Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        npc.HeightMin = 1.0f;
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4)
+        {
+            HeightMin = 1.0f
+        };
 
         col.Apply(npc, System.Text.Json.JsonDocument.Parse("2.5").RootElement);
 
@@ -501,8 +511,10 @@ public class SchemaReflectorTests
         var col = schemas["npc_"].RecordColumns.First(c => c.Name == "weight");
         var npc = new Mutagen.Bethesda.Fallout4.Npc(
             Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        npc.Weight = new Mutagen.Bethesda.Fallout4.NpcWeight { Thin = 0.9f, Fat = 0.1f, Muscular = 0.2f };
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4)
+        {
+            Weight = new Mutagen.Bethesda.Fallout4.NpcWeight { Thin = 0.9f, Fat = 0.1f, Muscular = 0.2f }
+        };
 
         col.Apply!(npc, System.Text.Json.JsonDocument.Parse("{\"thin\":0.5}").RootElement);
 
@@ -594,8 +606,10 @@ public class SchemaReflectorTests
         var col = schemas["must"].RecordColumns.FirstOrDefault(c => c.Name == "cue_points");
         Assert.NotNull(col);
 
-        var track = new MusicTrack(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
-        track.CuePoints = [1.0f, 2.5f];
+        var track = new MusicTrack(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4)
+        {
+            CuePoints = [1.0f, 2.5f]
+        };
 
         var result = col!.Extract(track) as string;
 
@@ -625,8 +639,10 @@ public class SchemaReflectorTests
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "weight");
         Assert.NotNull(col);
 
-        var npc = new Npc(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
-        npc.Weight = new NpcWeight { Thin = 0.1f, Muscular = 0.2f, Fat = 0.3f };
+        var npc = new Npc(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4)
+        {
+            Weight = new NpcWeight { Thin = 0.1f, Muscular = 0.2f, Fat = 0.3f }
+        };
 
         var result = col!.Extract(npc) as string;
 

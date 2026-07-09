@@ -5,18 +5,12 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
 
-public sealed class ProblemDetailsApiTests : IClassFixture<LoadedNpcApiFixture>
+public sealed class ProblemDetailsApiTests(LoadedNpcApiFixture loaded) : IClassFixture<LoadedNpcApiFixture>
 {
     private const string ProblemContentType = "application/problem+json";
 
-    private readonly HttpClient _client;
-    private readonly TestPluginFixture _fixture;
-
-    public ProblemDetailsApiTests(LoadedNpcApiFixture loaded)
-    {
-        _client = loaded.Client;
-        _fixture = loaded.Plugin;
-    }
+    private readonly HttpClient _client = loaded.Client;
+    private readonly TestPluginFixture _fixture = loaded.Plugin;
 
     private static void AssertIsProblemDetails(HttpResponseMessage response, int expectedStatus)
     {

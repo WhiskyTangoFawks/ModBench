@@ -7,11 +7,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Records;
 
-public class SearchRecordsTests : IClassFixture<TestPluginFixture>
+public class SearchRecordsTests(TestPluginFixture fixture) : IClassFixture<TestPluginFixture>
 {
-    private readonly TestPluginFixture _fixture;
-
-    public SearchRecordsTests(TestPluginFixture fixture) => _fixture = fixture;
+    private readonly TestPluginFixture _fixture = fixture;
 
     private SessionManager MakeLoadedManager()
     {

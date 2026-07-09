@@ -17,7 +17,7 @@ namespace MEditService.Tests.Changes;
 // the reflection-driven link-cache path, then add/remove the placed ref in its Persistent list.
 public class PluginWriterPlacedTests
 {
-    private static readonly ISchemaReflector _reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = new SchemaReflector();
 
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
@@ -124,7 +124,7 @@ public class PluginWriterPlacedTests
             "user", null, DateTime.UtcNow, "field_edit", null,
             ParentCell: fx.CellFk.ToString(), PlacementGroup: "persistent");
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(fx.ActivePath, [change], GameRelease.Fallout4, fx.LinkCache);
 
         var copied = (IPlacedObjectGetter)SavedCell(fx).Persistent.Single(p => p.FormKey == fx.RefAFk);
@@ -170,7 +170,7 @@ public class PluginWriterPlacedTests
             "user", null, DateTime.UtcNow, "delete", null,
             ParentCell: cellFk.ToString(), PlacementGroup: "persistent");
 
-        var writer = new PluginWriter(_reflector, NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(activePath, [change], GameRelease.Fallout4, linkCache);
 
         using var saved = ModFactory.ImportGetter(new ModPath(activeModKey, activePath), GameRelease.Fallout4);

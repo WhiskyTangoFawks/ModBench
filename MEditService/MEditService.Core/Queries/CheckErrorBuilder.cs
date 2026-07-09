@@ -27,10 +27,12 @@ public static class CheckErrorBuilder
             return allowsNull ? null : $"Found a NULL reference, expected: {string.Join(", ", validTypes)}";
 
         var resolvedType = getRecordType(value);
-        if (resolvedType == null)
-            return $"[{value}] <Error: Could not be resolved>";
-        return validTypes.Count > 0 && !validTypes.Contains(resolvedType, StringComparer.OrdinalIgnoreCase)
-            ? $"Found a {resolvedType} reference, expected: {string.Join(", ", validTypes)}"
-            : null;
+        return resolvedType switch
+        {
+            null => $"[{value}] <Error: Could not be resolved>",
+            _ when validTypes.Count > 0 && !validTypes.Contains(resolvedType, StringComparer.OrdinalIgnoreCase)
+                => $"Found a {resolvedType} reference, expected: {string.Join(", ", validTypes)}",
+            _ => null,
+        };
     }
 }

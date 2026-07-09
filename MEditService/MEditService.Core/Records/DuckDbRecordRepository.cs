@@ -19,7 +19,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     private readonly ILogger _logger;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
     private readonly PlacementWalker _placementWalker = new();
-    private static readonly string[] _placedTableNames = ["refr", "achr"];
+    private static readonly string[] PlacedTableNames = ["refr", "achr"];
     private bool _filterActive;
 
     public DuckDBConnection Connection { get; }
@@ -405,8 +405,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     private static List<IReadOnlyList<VmadNamedValue>>? MapStructList(string? structJson)
     {
-        if (structJson is null) return null;
-        return [.. VmadJson.DeserializeStructList(structJson).Select(inst => (IReadOnlyList<VmadNamedValue>)MapNodes(inst.Members))];
+        return structJson is null
+            ? null
+            : ([.. VmadJson.DeserializeStructList(structJson).Select(inst => (IReadOnlyList<VmadNamedValue>)MapNodes(inst.Members))]);
     }
 
     private static List<VmadNamedValue> MapNodes(VmadPropertyNode[] nodes) =>
@@ -508,15 +509,13 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         for (int i = 0; i < schema.RecordColumns.Count; i++)
         {
             var col = schema.RecordColumns[i];
-            object? value;
-            if (!reader.IsDBNull(5 + i) && (col.IsArray || col.SubFields != null))
+            var isDbNull = reader.IsDBNull(5 + i);
+            object? value = (isDbNull, col.IsArray || col.SubFields != null) switch
             {
-                value = JsonSerializer.Deserialize<JsonElement>(reader.GetString(5 + i));
-            }
-            else
-            {
-                value = reader.IsDBNull(5 + i) ? null : reader.GetValue(5 + i);
-            }
+                (true, _) => null,
+                (false, true) => JsonSerializer.Deserialize<JsonElement>(reader.GetString(5 + i)),
+                _ => reader.GetValue(5 + i),
+            };
             // Bitmask flag values can exceed 2^53 (e.g. FO4 Race.Flag bits 53/54). Surface them as
             // decimal strings so they survive JSON round-tripping without IEEE 754 precision loss.
             if (value != null && col.IsBitmask)
@@ -812,7 +811,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     public CellReferences GetCellReferences(string plugin, string cellFormKey)
     {
         var schemas = RequireSchemas();
-        var placedTables = _placedTableNames.Where(schemas.ContainsKey).ToList();
+        var placedTables = PlacedTableNames.Where(schemas.ContainsKey).ToList();
         if (placedTables.Count == 0)
             return new CellReferences([], []);
 
@@ -855,14 +854,20 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             """;
         AddParams(cmd, [formKey, plugin]);
         using var reader = cmd.ExecuteReader();
-        if (!reader.Read()) return null;
-        return new PlacementRow(
-            formKey,
-            reader.GetString(0),
-            reader.GetString(1),
-            reader.IsDBNull(2) ? null : reader.GetFloat(2),
-            reader.IsDBNull(3) ? null : reader.GetFloat(3),
-            reader.IsDBNull(4) ? null : reader.GetFloat(4));
+
+        // Local function so the merged conditional expression below doesn't nest a ternary per
+        // coordinate (SonarS3358) while still collapsing the guard clause per IDE0046.
+        float? NullableFloat(int i) => reader.IsDBNull(i) ? null : reader.GetFloat(i);
+
+        return !reader.Read()
+            ? null
+            : new PlacementRow(
+                formKey,
+                reader.GetString(0),
+                reader.GetString(1),
+                NullableFloat(2),
+                NullableFloat(3),
+                NullableFloat(4));
     }
 
     public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
