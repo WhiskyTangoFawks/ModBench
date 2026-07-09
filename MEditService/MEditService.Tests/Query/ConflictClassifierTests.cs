@@ -310,6 +310,25 @@ public class ConflictClassifierTests
     }
 
     [Fact]
+    public void Classify_InjectedRecord_ContentIdentical_DoesNotBumpToCritical()
+    {
+        // B.esp is injected (origin missing from its masters) but its value matches the master
+        // exactly — xEdit only escalates injected records to caConflictCritical when a real value
+        // difference exists (xeMainForm.pas ConflictLevelForNodeDatas); content-identical stays NoConflict.
+        var master = new RecordDetail("000001:Origin.esm", "A.esm", 0, false, null,
+            [new FieldValue(Meta("name"), "Alice")]);
+        var override1 = new RecordDetail("000001:Origin.esm", "B.esp", 1, true, null,
+            [new FieldValue(Meta("name"), "Alice")]);
+        var masters = new Dictionary<string, IReadOnlyList<string>>
+        {
+            ["A.esm"] = ["Origin.esm"],
+            ["B.esp"] = ["SomeOther.esm"],  // Origin.esm NOT in masters → injected
+        };
+        var result = Classify([master, override1], masters: masters);
+        Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
+    }
+
+    [Fact]
     public void Classify_NonInjectedRecord_DoesNotBumpToCritical()
     {
         var master = new RecordDetail("000001:Origin.esm", "A.esm", 0, false, null,
