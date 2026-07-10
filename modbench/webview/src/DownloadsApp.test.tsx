@@ -275,3 +275,51 @@ describe('DownloadsApp — show hidden toggle', () => {
     expect(screen.getByText('visible.zip').closest('tr')).toHaveStyle({ opacity: '1' });
   });
 });
+
+describe('DownloadsApp — filter box', () => {
+  const rows = [
+    { name: 'Sleep Or Save.zip', status: 'Downloaded', size: 100, mtimeMs: 200, hidden: false },
+    { name: 'other.zip', status: 'Downloaded', size: 50, mtimeMs: 100, hidden: false },
+  ];
+
+  it('has a Filter text box in the toolbar', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    expect(screen.getByRole('textbox', { name: /filter/i })).toBeInTheDocument();
+  });
+
+  it('narrows the table to rows whose name contains the input, case-insensitively', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.change(screen.getByRole('textbox', { name: /filter/i }), { target: { value: 'sLeEp' } });
+    expect(screen.getByText('Sleep Or Save.zip')).toBeInTheDocument();
+    expect(screen.queryByText('other.zip')).not.toBeInTheDocument();
+  });
+
+  it('restores the full list when the filter is cleared', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    const box = screen.getByRole('textbox', { name: /filter/i });
+    fireEvent.change(box, { target: { value: 'sleep' } });
+    expect(screen.queryByText('other.zip')).not.toBeInTheDocument();
+    fireEvent.change(box, { target: { value: '' } });
+    expect(screen.getByText('Sleep Or Save.zip')).toBeInTheDocument();
+    expect(screen.getByText('other.zip')).toBeInTheDocument();
+  });
+
+  it('applies after hidden-filtering: a hidden row whose name matches stays hidden', () => {
+    render(<DownloadsApp />);
+    postFromExtension({
+      type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED,
+      rows: [
+        { name: 'sleep-visible.zip', status: 'Downloaded', size: 100, mtimeMs: 200, hidden: false },
+        { name: 'sleep-hidden.zip', status: 'Downloaded', size: 50, mtimeMs: 100, hidden: true },
+      ],
+    });
+    // Show hidden is off; both names match the query, but the hidden row must
+    // still be excluded — hidden-filtering runs before the name-filter.
+    fireEvent.change(screen.getByRole('textbox', { name: /filter/i }), { target: { value: 'sleep' } });
+    expect(screen.getByText('sleep-visible.zip')).toBeInTheDocument();
+    expect(screen.queryByText('sleep-hidden.zip')).not.toBeInTheDocument();
+  });
+});

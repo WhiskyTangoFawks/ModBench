@@ -6,7 +6,7 @@ import {
   type ExtensionToWebview,
   type WebviewToExtension,
 } from './downloadsMessages';
-import { filterHiddenRows, sortDownloadRows, type DownloadRow, type DownloadSortColumn } from './downloadsModel';
+import { filterHiddenRows, filterRowsByName, sortDownloadRows, type DownloadRow, type DownloadSortColumn } from './downloadsModel';
 
 type State =
   | { kind: 'loading' }
@@ -100,6 +100,7 @@ export function DownloadsApp() {
   });
   const [menu, setMenu] = useState<{ x: number; y: number; row: DownloadRow } | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const [filterText, setFilterText] = useState('');
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -146,6 +147,14 @@ export function DownloadsApp() {
     <div>
       <button onClick={handleRefresh}>Refresh</button>
       <label>
+        <span>Filter</span>
+        <input
+          type="text"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+        />
+      </label>
+      <label>
         <input
           type="checkbox"
           checked={showHidden}
@@ -167,7 +176,11 @@ export function DownloadsApp() {
             </tr>
           </thead>
           <tbody>
-            {sortDownloadRows(filterHiddenRows(state.rows, showHidden), sort.column, sort.descending).map((row) => (
+            {sortDownloadRows(
+              filterRowsByName(filterHiddenRows(state.rows, showHidden), filterText),
+              sort.column,
+              sort.descending,
+            ).map((row) => (
               <tr
                 key={row.name}
                 // Hidden rows are only present here under Show hidden; dim them
