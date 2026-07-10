@@ -16,6 +16,7 @@ import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, ty
 import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { ModListProvider, ModNode, SeparatorNode } from './modmanager/ModListProvider';
+import { PluginListProvider } from './modmanager/PluginListProvider';
 import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './modmanager/gameDirectory';
 import { deploy, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
@@ -528,6 +529,24 @@ function registerSeparatorCommands(deps: SeparatorCmdDeps): vscode.Disposable[] 
 }
 
 
+interface PluginListDeps {
+  modlistSource: Mo2ModlistSource;
+  log: (msg: string) => void;
+}
+/** Plugin List (Loadout) tree: a read-only view of plugins.txt, stacked below
+ *  the Mods tree, with a title-bar Refresh that forces a re-read. */
+function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
+  const { modlistSource, log } = deps;
+  const pluginListProvider = new PluginListProvider(modlistSource, log);
+  const pluginListView = vscode.window.createTreeView('modbench.pluginListTree', {
+    treeDataProvider: pluginListProvider,
+  });
+  return [
+    pluginListView,
+    vscode.commands.registerCommand('modbench.pluginListTree.refresh', () => pluginListProvider.refresh()),
+  ];
+}
+
 interface LoadoutViewDeps {
   context: vscode.ExtensionContext;
   log: (msg: string) => void;
@@ -612,6 +631,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): void {
       ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
       ...registerModContextCommands({ instanceRoot, modlistSource, log, runModAction }),
       ...registerSeparatorCommands({ modlistSource, runModAction }),
+      ...registerPluginListView({ modlistSource, log }),
       ...registerDownloadsCommands({ context, openPanels, instanceRoot, log }),
     );
 }
