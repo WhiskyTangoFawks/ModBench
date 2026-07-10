@@ -125,3 +125,68 @@ describe('DownloadsApp — row context menu', () => {
     expect(screen.queryByRole('menuitem', { name: 'Install' })).not.toBeInTheDocument();
   });
 });
+
+describe('DownloadsApp — navigational row actions', () => {
+  const openMenu = (row: object) => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows: [row] });
+    fireEvent.contextMenu(screen.getByText('foo.zip'));
+  };
+  const row = (over: object = {}) => ({
+    name: 'foo.zip',
+    status: 'Downloaded',
+    size: 100,
+    mtimeMs: 200,
+    hasMeta: true,
+    modID: '12345',
+    ...over,
+  });
+
+  it('shows the four navigational actions in the menu', () => {
+    openMenu(row());
+    for (const name of ['Visit on Nexus', 'Open File', 'Open Meta File', 'Reveal in Explorer']) {
+      expect(screen.getByRole('menuitem', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('Open File / Reveal in Explorer post their message with the row name', () => {
+    openMenu(row());
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open File' }));
+    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.OPEN_FILE, name: 'foo.zip' });
+    fireEvent.contextMenu(screen.getByText('foo.zip'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reveal in Explorer' }));
+    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.REVEAL, name: 'foo.zip' });
+  });
+
+  it('Visit on Nexus is enabled with a modID and posts VISIT_NEXUS', () => {
+    openMenu(row({ modID: '12345' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Visit on Nexus' }));
+    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.VISIT_NEXUS, name: 'foo.zip' });
+  });
+
+  it('Visit on Nexus is disabled and inert when the row has no modID', () => {
+    openMenu(row({ modID: undefined }));
+    const item = screen.getByRole('menuitem', { name: 'Visit on Nexus' });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(item);
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.VISIT_NEXUS }),
+    );
+  });
+
+  it('Open Meta File is enabled with a sidecar and posts OPEN_META', () => {
+    openMenu(row({ hasMeta: true }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open Meta File' }));
+    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.OPEN_META, name: 'foo.zip' });
+  });
+
+  it('Open Meta File is disabled and inert when the row has no sidecar', () => {
+    openMenu(row({ hasMeta: false }));
+    const item = screen.getByRole('menuitem', { name: 'Open Meta File' });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(item);
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.OPEN_META }),
+    );
+  });
+});

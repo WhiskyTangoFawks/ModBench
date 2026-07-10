@@ -24,6 +24,10 @@ export interface DownloadRow {
   status: DownloadStatus;
   size: number;
   mtimeMs: number;
+  /** Whether a `.meta` sidecar exists — gates the Open Meta File action. */
+  hasMeta: boolean;
+  /** Nexus mod id from the `.meta`; absent (or `0`) gates Visit on Nexus off. */
+  modID?: string;
 }
 
 export type DownloadSortColumn = 'name' | 'status' | 'size' | 'mtimeMs';
@@ -45,7 +49,7 @@ export function sortDownloadRows(
   return descending ? sorted.reverse() : sorted;
 }
 
-export function parseDownloadMeta(text: string): { status: DownloadStatus } {
+export function parseDownloadMeta(text: string): { status: DownloadStatus; modID?: string } {
   const values = new Map<string, string>();
   for (const raw of text.split(/\r\n|\r|\n/)) {
     const eq = raw.indexOf('=');
@@ -55,7 +59,8 @@ export function parseDownloadMeta(text: string): { status: DownloadStatus } {
   let status: DownloadStatus = 'Downloaded';
   if (values.get('uninstalled') === 'true') status = 'Removed';
   else if (values.get('installed') === 'true') status = 'Installed';
-  return { status };
+  const modID = values.get('modID');
+  return { status, modID: modID && modID !== '0' ? modID : undefined };
 }
 
 /** Surgically set `installed=true` in a `.meta` text (the Install writeback).
@@ -84,6 +89,9 @@ export function setInstalledInText(text: string): string {
 export function buildDownloadRows(entries: DownloadEntry[]): DownloadRow[] {
   const rows = entries
     .filter((e) => !e.name.endsWith('.meta'))
-    .map((e) => ({ name: e.name, status: parseDownloadMeta(e.metaText ?? '').status, size: e.size, mtimeMs: e.mtimeMs }));
+    .map((e) => {
+      const { status, modID } = parseDownloadMeta(e.metaText ?? '');
+      return { name: e.name, status, size: e.size, mtimeMs: e.mtimeMs, hasMeta: e.metaText !== undefined, modID };
+    });
   return sortDownloadRows(rows, 'mtimeMs', true);
 }

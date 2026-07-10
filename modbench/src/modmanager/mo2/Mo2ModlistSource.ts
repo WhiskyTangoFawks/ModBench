@@ -16,25 +16,13 @@ import {
 } from './modlistText';
 import { parseMetaIni, writeMetaIni } from './metaIni';
 import { readGameName, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
+import { nexusSlugForGame } from './nexusSlug';
 
 const exists = (path: string): Promise<boolean> =>
   access(path).then(
     () => true,
     () => false,
   );
-
-const NEXUS_SLUGS: Record<string, string> = {
-  'Fallout 4': 'fallout4',
-  'Fallout 4 VR': 'fallout4',
-  'Fallout 3': 'fallout3',
-  'Fallout New Vegas': 'newvegas',
-  'Skyrim': 'skyrim',
-  'Skyrim Special Edition': 'skyrimspecialedition',
-  'Skyrim VR': 'skyrimspecialedition',
-  'Enderal': 'enderal',
-  'Oblivion': 'oblivion',
-  'Morrowind': 'morrowind',
-};
 
 /** MO2 instance adapter. `instanceRoot` is the folder containing
  *  ModOrganizer.ini, mods/ and profiles/ — i.e. the open VS Code workspace.
@@ -163,8 +151,7 @@ export class Mo2ModlistSource implements IModlistSource {
   }
 
   async getNexusSlug(): Promise<string> {
-    const gameName = readGameName(await readFile(this.iniPath, 'utf8'));
-    return NEXUS_SLUGS[gameName] ?? gameName.toLowerCase().replace(/\s+/g, '');
+    return nexusSlugForGame(readGameName(await readFile(this.iniPath, 'utf8')));
   }
 
   async listProfiles(): Promise<string[]> {

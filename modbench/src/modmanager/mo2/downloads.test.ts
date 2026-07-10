@@ -10,16 +10,25 @@ import {
 
 describe('parseDownloadMeta', () => {
   it('installed=true -> Installed status', () => {
-    expect(parseDownloadMeta('[General]\r\ninstalled=true\r\n')).toEqual({ status: 'Installed' });
+    expect(parseDownloadMeta('[General]\r\ninstalled=true\r\n').status).toBe('Installed');
   });
 
   it('uninstalled=true -> Removed status', () => {
-    expect(parseDownloadMeta('[General]\r\nuninstalled=true\r\n')).toEqual({ status: 'Removed' });
+    expect(parseDownloadMeta('[General]\r\nuninstalled=true\r\n').status).toBe('Removed');
   });
 
   it('neither flag, or no .meta text at all -> Downloaded status', () => {
-    expect(parseDownloadMeta('[General]\r\ngameName=Fallout4\r\n')).toEqual({ status: 'Downloaded' });
-    expect(parseDownloadMeta('')).toEqual({ status: 'Downloaded' });
+    expect(parseDownloadMeta('[General]\r\ngameName=Fallout4\r\n').status).toBe('Downloaded');
+    expect(parseDownloadMeta('').status).toBe('Downloaded');
+  });
+
+  it('reads modID as the Nexus mod id', () => {
+    expect(parseDownloadMeta('[General]\r\nmodID=12345\r\n').modID).toBe('12345');
+  });
+
+  it('treats modID=0 or an absent modID as no id (Visit-on-Nexus gated off)', () => {
+    expect(parseDownloadMeta('[General]\r\nmodID=0\r\n').modID).toBeUndefined();
+    expect(parseDownloadMeta('[General]\r\ninstalled=true\r\n').modID).toBeUndefined();
   });
 });
 
@@ -28,6 +37,7 @@ const row = (name: string, mtimeMs: number): DownloadRow => ({
   status: 'Downloaded',
   size: 0,
   mtimeMs,
+  hasMeta: false,
 });
 
 describe('sortDownloadRows', () => {
@@ -79,9 +89,21 @@ describe('buildDownloadRows', () => {
     metaText,
   });
 
-  it('maps a plain archive with no .meta sidecar to a Downloaded row', () => {
+  it('maps a plain archive with no .meta sidecar to a Downloaded row (gating off)', () => {
     const rows = buildDownloadRows([entry('foo.zip', 100)]);
-    expect(rows).toEqual([{ name: 'foo.zip', status: 'Downloaded', size: 123, mtimeMs: 100 }]);
+    expect(rows).toEqual([
+      { name: 'foo.zip', status: 'Downloaded', size: 123, mtimeMs: 100, hasMeta: false, modID: undefined },
+    ]);
+  });
+
+  it('flags hasMeta and carries modID for an archive with a .meta sidecar', () => {
+    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nmodID=12345\r\n')]);
+    expect(rows[0]).toMatchObject({ name: 'foo.zip', hasMeta: true, modID: '12345' });
+  });
+
+  it('flags hasMeta true for a present-but-empty .meta (there is still a file to open)', () => {
+    const rows = buildDownloadRows([entry('foo.zip', 100, '')]);
+    expect(rows[0]).toMatchObject({ hasMeta: true, modID: undefined });
   });
 
   it('never turns a .meta file into its own row', () => {

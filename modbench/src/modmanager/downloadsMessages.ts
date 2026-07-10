@@ -10,6 +10,10 @@ export const WEBVIEW_TO_EXTENSION = {
   READY: 'downloadsReady',
   REFRESH: 'downloadsRefresh',
   INSTALL: 'downloadsInstall',
+  VISIT_NEXUS: 'downloadsVisitNexus',
+  OPEN_FILE: 'downloadsOpenFile',
+  OPEN_META: 'downloadsOpenMeta',
+  REVEAL: 'downloadsReveal',
 } as const;
 
 export type ExtensionToWebview =
@@ -20,4 +24,8 @@ export type ExtensionToWebview =
 export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.READY }
   | { type: typeof WEBVIEW_TO_EXTENSION.REFRESH }
-  | { type: typeof WEBVIEW_TO_EXTENSION.INSTALL; name: string };
+  | { type: typeof WEBVIEW_TO_EXTENSION.INSTALL; name: string }
+  | { type: typeof WEBVIEW_TO_EXTENSION.VISIT_NEXUS; name: string }
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FILE; name: string }
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_META; name: string }
+  | { type: typeof WEBVIEW_TO_EXTENSION.REVEAL; name: string };
