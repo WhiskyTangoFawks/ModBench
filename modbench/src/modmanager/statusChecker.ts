@@ -5,7 +5,7 @@
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ModlistEntry } from './model';
-import type { FileConflictIndex } from './fileConflictIndex';
+import { rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
 import { readMasters } from './masterReader';
 
 const PLUGIN_EXTENSIONS = new Set(['.esp', '.esm', '.esl']);
@@ -142,4 +142,79 @@ function classifyStatus(missingMasters: Set<string>, conflicts: number, override
   if (conflicts > 0) return { kind: 'conflicts', count: conflicts };
   if (overrides > 0) return { kind: 'overrides', count: overrides };
   return { kind: 'ok' };
+}
+
+// --- Order-aware missing-master check (Plugin List surface, docs/specs/plugins.md) ---
+//
+// Stronger than the per-mod presence check above: the Plugin List has an actual
+// plugin sequence, so it flags a master that is present-but-loaded-too-late, not
+// just one that is absent. Both are CTD conditions the game hits at load.
+
+export type PluginOrderStatus =
+  | { kind: 'ok' }
+  | { kind: 'masterNotLoadedBefore'; masters: string[] };
+
+/** Verdict for one plugin at `pluginIndex` in the raw plugins.txt line order
+ *  `orderedPluginNames`: flag every declared master that is NOT positioned
+ *  strictly before it — whether absent from the order entirely or present but
+ *  sequenced at/after this plugin's own line. Case-insensitive; no vanilla
+ *  special-casing (vanilla plugins are ordinary rows). Pure. */
+export function checkMasterOrder(
+  declaredMasters: string[],
+  orderedPluginNames: string[],
+  pluginIndex: number,
+): PluginOrderStatus {
+  const positionByName = new Map<string, number>();
+  orderedPluginNames.forEach((name, i) => positionByName.set(name.toLowerCase(), i));
+
+  const offenders = declaredMasters.filter((master) => {
+    const pos = positionByName.get(master.toLowerCase());
+    return pos === undefined || pos >= pluginIndex;
+  });
+  return offenders.length > 0 ? { kind: 'masterNotLoadedBefore', masters: offenders } : { kind: 'ok' };
+}
+
+/** Per-plugin order-aware missing-master verdicts for the Plugin List. Resolves
+ *  each name to its physical file (mod winner via `index`, else `dataFolder`),
+ *  reads its declared masters, and checks their order against `order`. Every row
+ *  is checked regardless of enabled state (the row set IS plugins.txt's lines).
+ *  Only offending plugins get a map entry — an `ok` plugin is absent. Degrades
+ *  gracefully: an unreadable plugin (or one whose path can't be resolved, e.g. a
+ *  vanilla plugin when `dataFolder` is undefined) is logged and treated as having
+ *  no masters, never throwing and never blanking other plugins' verdicts. */
+export async function computePluginOrderStatuses(
+  order: string[],
+  index: FileConflictIndex,
+  dataFolder: string | undefined,
+  log?: (msg: string) => void,
+): Promise<Map<string, PluginOrderStatus>> {
+  // Mod-provided plugins always resolve via the index; a vanilla/DLC/CC plugin
+  // no mod ships falls back to the game Data folder — only when it's known, so
+  // an unresolved game path degrades vanilla lookups without failing the rest.
+  const winnerByName = rootLevelWinners(index);
+  const pathFor = (name: string): string | undefined =>
+    winnerByName.get(name.toLowerCase()) ?? (dataFolder ? join(dataFolder, name) : undefined);
+
+  const results = new Map<string, PluginOrderStatus>();
+  const verdicts = await Promise.all(
+    order.map(async (name, i) => {
+      const path = pathFor(name);
+      if (!path) {
+        log?.(`[statusChecker] could not resolve a path for "${name}" — skipping its master-order check`);
+        return { name, status: { kind: 'ok' } as PluginOrderStatus };
+      }
+      let masters: string[];
+      try {
+        masters = await readMasters(path);
+      } catch (e) {
+        log?.(`[statusChecker] could not read masters from ${path}: ${e instanceof Error ? e.message : String(e)}`);
+        masters = [];
+      }
+      return { name, status: checkMasterOrder(masters, order, i) };
+    }),
+  );
+  for (const { name, status } of verdicts) {
+    if (status.kind !== 'ok') results.set(name, status);
+  }
+  return results;
 }

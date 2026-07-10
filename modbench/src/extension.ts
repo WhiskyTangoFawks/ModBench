@@ -533,14 +533,16 @@ interface PluginListDeps {
   modlistSource: Mo2ModlistSource;
   log: (msg: string) => void;
   reporter: Reporter;
+  instanceRoot: string;
 }
 /** Plugin List (Loadout) tree: a view of plugins.txt, stacked below the Mods
  *  tree. A row's checkbox toggles its enabled state (writing plugins.txt
  *  immediately); rows drag-and-drop to reorder (single or multi-select, writing
- *  plugins.txt immediately); a title-bar Refresh forces a re-read. */
+ *  plugins.txt immediately); a title-bar Refresh forces a re-read. `instanceRoot`
+ *  enables the order-aware missing-master badge (issue #67). */
 function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
-  const { modlistSource, log, reporter } = deps;
-  const pluginListProvider = new PluginListProvider(modlistSource, log, reporter);
+  const { modlistSource, log, reporter, instanceRoot } = deps;
+  const pluginListProvider = new PluginListProvider(modlistSource, log, reporter, instanceRoot);
   const pluginListView = vscode.window.createTreeView('modbench.pluginListTree', {
     treeDataProvider: pluginListProvider,
     canSelectMany: true,
@@ -650,7 +652,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): void {
       ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
       ...registerModContextCommands({ instanceRoot, modlistSource, log, runModAction }),
       ...registerSeparatorCommands({ modlistSource, runModAction }),
-      ...registerPluginListView({ modlistSource, log, reporter: makeReporter(log, 'pluginList') }),
+      ...registerPluginListView({ modlistSource, log, reporter: makeReporter(log, 'pluginList'), instanceRoot }),
       ...registerDownloadsCommands({ context, openPanels, instanceRoot, log }),
     );
 }

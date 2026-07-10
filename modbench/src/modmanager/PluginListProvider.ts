@@ -1,21 +1,38 @@
 import * as vscode from 'vscode';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { IModlistSource, PluginEntry } from './model';
 import type { Reporter } from './deployer';
 import { dropIndexForMove } from './mo2/pluginsText';
+import { buildFileConflictIndex } from './fileConflictIndex';
+import { computePluginOrderStatuses, type PluginOrderStatus } from './statusChecker';
+import { readGamePath } from './mo2/modOrganizerIni';
+import { normalizeGamePath } from './gameDirectory';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
 /** A single plugins.txt line, with a native checkbox mirroring its `*` (enabled)
  *  state. Toggling the checkbox writes plugins.txt immediately (wired via the
- *  view's `onDidChangeCheckboxState` handler in extension.ts). */
+ *  view's `onDidChangeCheckboxState` handler in extension.ts). An order-aware
+ *  missing-master `status` (issue #67) overlays an error icon/description/tooltip
+ *  when a declared master isn't loaded before this plugin — deliberately worded
+ *  distinctly from the Mods tree's presence-only "Missing master:" badge. */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
-  constructor(public readonly plugin: PluginEntry) {
+  constructor(public readonly plugin: PluginEntry, status?: PluginOrderStatus) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'plugin';
     this.checkboxState = plugin.enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
+    if (status?.kind === 'masterNotLoadedBefore') {
+      const { masters } = status;
+      this.iconPath = new vscode.ThemeIcon('error');
+      this.description = masters.length === 1
+        ? '✗ Master not loaded before this plugin'
+        : `✗ ${masters.length} masters not loaded before this plugin`;
+      this.tooltip = [plugin.name, ...masters.map((m) => `Master ${m} is not loaded before this plugin`)].join('\n');
+    }
   }
 }
 
@@ -60,10 +77,14 @@ export class PluginListProvider
    *  what the user dragged against (not a fresh read that an external edit could skew). */
   private lastOrder: string[] = [];
 
+  /** `instanceRoot`, when provided, enables the order-aware missing-master badge
+   *  (issue #67): each plugin's declared masters are read and checked against the
+   *  Plugin load order. Omitted in tests using an in-memory-only source. */
   constructor(
     private readonly source: IModlistSource,
     log?: (msg: string) => void,
     private readonly reporter?: Reporter,
+    private readonly instanceRoot?: string,
   ) {
     this.log = log ?? (() => {});
   }
@@ -103,7 +124,42 @@ export class PluginListProvider
     this.lastOrder = order;
     if (order.length === 0) return [new EmptyNode()];
     const enabledSet = new Set(enabled);
-    return order.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }));
+    const statuses = await this.computeStatuses(order);
+    return order.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }, statuses?.get(name)));
+  }
+
+  /** Order-aware missing-master verdicts for the current order, or undefined when
+   *  no instanceRoot is configured. A secondary, non-blocking step (modmanager/
+   *  CLAUDE.md): on any failure the badges degrade to absent — the tree still
+   *  renders every row — with a warning surfaced (ADR-0026: silently missing
+   *  badges would look identical to "all masters correctly ordered"). */
+  private async computeStatuses(order: string[]): Promise<Map<string, PluginOrderStatus> | undefined> {
+    if (!this.instanceRoot) return undefined;
+    try {
+      const entries = await this.source.readModlist();
+      const index = await buildFileConflictIndex(entries, this.instanceRoot);
+      const dataFolder = await this.resolveDataFolder(this.instanceRoot);
+      return await computePluginOrderStatuses(order, index, dataFolder, this.log);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[PluginListProvider] master-order status computation failed: ${message}`);
+      this.reporter?.report('warning', 'Could not compute plugin master-order status — badges may be inaccurate.', message);
+      return undefined;
+    }
+  }
+
+  /** The game's Data folder (for resolving vanilla/DLC/CC plugins no mod ships),
+   *  from MO2's own gamePath — Wine-normalized like vanillaMasters.ts. Undefined
+   *  when the ini is absent/unreadable: vanilla-row master lookups then degrade,
+   *  mod-provided ones still resolve. */
+  private async resolveDataFolder(instanceRoot: string): Promise<string | undefined> {
+    try {
+      const iniText = await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8');
+      return join(normalizeGamePath(readGamePath(iniText)), 'Data');
+    } catch (e) {
+      this.log(`[PluginListProvider] could not resolve the game Data folder: ${e instanceof Error ? e.message : String(e)}`);
+      return undefined;
+    }
   }
 
   /** Serialise the dragged selection. VS Code passes the whole selection when the

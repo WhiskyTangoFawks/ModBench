@@ -25,6 +25,18 @@ export interface FileConflictIndex {
   filesByMod: Map<string, { relativePath: string; absolutePath: string }[]>;
 }
 
+/** Winning absolute path of every root-level plugin the index knows, keyed by
+ *  lowercased basename. Root-level only: plugins live at a mod's root, so a
+ *  nested file sharing a plugin's basename must not shadow the real plugin.
+ *  Shared by the editing-session builder and the Plugin List's order check. */
+export function rootLevelWinners(index: FileConflictIndex): Map<string, string> {
+  const winnerByName = new Map<string, string>();
+  for (const [relativePath, entry] of index.files) {
+    if (!relativePath.includes('/')) winnerByName.set(relativePath.toLowerCase(), entry.winner);
+  }
+  return winnerByName;
+}
+
 async function walk(dir: string, root = dir): Promise<{ relativePath: string; absolutePath: string }[]> {
   const dirents = await readdir(dir, { withFileTypes: true });
   const results: { relativePath: string; absolutePath: string }[] = [];
