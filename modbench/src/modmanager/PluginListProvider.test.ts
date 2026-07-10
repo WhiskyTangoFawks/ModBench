@@ -140,6 +140,42 @@ describe('PluginListProvider', () => {
   });
 });
 
+describe('PluginListProvider — filter', () => {
+  it('narrows rows to plugins whose filename contains the text, case-insensitively', async () => {
+    const provider = new PluginListProvider(new FakeSource(['Alpha.esp', 'Beta.esp', 'AlphaExtra.esp']));
+    provider.setFilter('ALPHA');
+    const rows = await provider.getChildren();
+
+    expect(rows.map((r) => r.label)).toEqual(['Alpha.esp', 'AlphaExtra.esp']);
+  });
+
+  it('restores the full list when the filter is cleared', async () => {
+    const provider = new PluginListProvider(new FakeSource(['Alpha.esp', 'Beta.esp']));
+    provider.setFilter('alpha');
+    expect(await provider.getChildren()).toHaveLength(1);
+
+    provider.setFilter('');
+    expect((await provider.getChildren()).map((r) => r.label)).toEqual(['Alpha.esp', 'Beta.esp']);
+  });
+
+  it('returns an empty list (not the "No plugins" node) when the filter matches nothing', async () => {
+    const provider = new PluginListProvider(new FakeSource(['Alpha.esp', 'Beta.esp']));
+    provider.setFilter('nomatch');
+    const rows = await provider.getChildren();
+
+    expect(rows).toEqual([]);
+    expect(rows.some((r) => r instanceof EmptyNode)).toBe(false);
+  });
+
+  it('fires onDidChangeTreeData when the filter is set', () => {
+    const provider = new PluginListProvider(new FakeSource(['Alpha.esp']));
+    let fired = false;
+    provider.onDidChangeTreeData(() => { fired = true; });
+    provider.setFilter('a');
+    expect(fired).toBe(true);
+  });
+});
+
 describe('PluginNode — order-aware missing-master badge', () => {
   it('overlays an error icon, description, and per-master tooltip when a master is not loaded before it', () => {
     const node = new PluginNode({ name: 'Child.esp', enabled: true }, { kind: 'masterNotLoadedBefore', masters: ['Base.esp'] });
@@ -372,6 +408,15 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
     const nodes = await pluginNodes(provider());
     expect(byName(nodes, 'Child.esp').iconPath).toBeUndefined();
     expect(byName(nodes, 'Base.esp').iconPath).toBeUndefined();
+  });
+
+  it('keeps a badge on a filtered-in row (badges computed on the full order, not the visible subset)', async () => {
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
+    const p = provider();
+    p.setFilter('child'); // hides Fallout4.esm + Base.esp, leaving only the out-of-order Child.esp
+    const nodes = await pluginNodes(p);
+    expect(nodes.map((n) => n.plugin.name)).toEqual(['Child.esp']);
+    expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
   });
 
   it('checks a vanilla row the same way (no special-casing)', async () => {
