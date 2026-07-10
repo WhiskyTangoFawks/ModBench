@@ -9,8 +9,12 @@ A distributable package of files (plugins + loose assets + archives) occupying o
 _Avoid_: plugin, package
 
 **Modlist**:
-The ordered, enable-able set of mods mEdit manages for a game. Later position wins file conflicts.
-_Avoid_: load order (that is plugin-level, and belongs to the Editing context)
+The ordered, enable-able set of mods mEdit manages for a game. Later position wins file conflicts — this ordering is the **Mod load order**.
+_Avoid_: load order (ambiguous — say "Mod load order")
+
+**Plugin load order**:
+The order plugins (`.esm`/`.esp`/`.esl`) are loaded by the game engine, as written in `plugins.txt`; determines which override wins at the record level (Editing context concern). Owned and written by the Plugins tab ([plugins.md](../../../docs/specs/plugins.md)); Editing consumes it read-only to build a session. Distinct from Modlist's mod load order (file-level winner).
+_Avoid_: load order (ambiguous), plugin list
 
 **Deploy** (a.k.a. Build):
 Make the enabled mods' files present in the game directory so the running game reads them.

@@ -1,401 +1,439 @@
-# mEdit — Functional UI Specification
-
-This document is the canonical description of the **mEdit view**'s frontend surfaces — one of Modbench's UI surfaces (see [CONTEXT-MAP.md](../../CONTEXT-MAP.md) and the [spec layer overview](README.md)). The Loadout surface (mod install/order/deploy) has its own spec at [mods.md](mods.md). Each section here describes what is shown, what interactions are available, and what data drives them. Implementation work should be designed against this spec; when an initiative changes the intended behavior, update this document first.
-
----
-
-## Overall Layout
-
-Modbench is a VS Code extension with a single activity-bar container (`modbench`). A `modbench.viewMode` context key toggles the sidebar between the Loadout surface (`modbench.modList`, spec: [mods.md](mods.md)) and the mEdit surface. **Launch mEdit** (in the Loadout header) switches to editing mode, lazily spawning the backend and loading the active modlist as the session; **Close mEdit** switches back and tears the session down.
-
-The mEdit view is composed of four surfaces:
-
-1. **Plugins tree** (`modbench.pluginTree`, sidebar) — the entry point for all navigation
-2. **Change Groups tree** (`modbench.changeGroupTree`, sidebar, below the Plugins tree) — in-flight ChangeGroups (§4)
-3. **Record editor panel** (VS Code editor tab, webview) — the main work surface; one tab per open record
-4. **Status bar item** — backend connection state; bottom of VS Code window
-
-There is no toolbar or top-level menu bar. All actions are reachable from the sidebar tree context menu, the command palette, or the record editor panel itself.
-
----
-
-## 1. Status Bar
-
-The status bar item sits in the bottom-right of the VS Code window.
-
-| Backend state | Label | Color |
-|--------------|-------|-------|
-| Not running | "mEdit: backend not running" | warning (yellow) |
-| Connecting | "mEdit: connecting…" | default |
-| Attached, no session | "mEdit: no session" | default |
-| Attached, session loaded | "mEdit: {GameRelease} — {N} plugins" | success (green) |
-
-Clicking the item when the backend is not running shows a notification with instructions to start it. Sessions are created via **Launch mEdit** (from the Loadout surface), not from the status bar.
-
----
-
-## 2. Sidebar Tree
-
-The sidebar tree is the primary navigation surface. It is a VS Code `TreeView` registered as `modbench.pluginTree` ("Plugins") in the `modbench` container, visible while `modbench.viewMode == 'editing'`.
-
-### 2.0 Multi-Select
-
-The tree view has `canSelectMany: true`. Ctrl+click and Shift+click select multiple nodes. Context menu commands that support batch operation (currently: Remove Record) receive the full selection as their second argument. Selection may span different plugins and record types.
-
-### 2.1 Top-Level Nodes
-
-The session is built on entry: **Launch mEdit** constructs it from the active modlist's enabled plugins plus vanilla masters (`load-explicit`). There is no separate load-session step.
-
-When a session is loaded, top-level nodes are:
-
-| Node | Label | Children |
-|------|-------|---------|
-| Plugins | One node per loaded plugin | "Worldspaces" + "Interior Cells" nodes (Phase 16) + record type nodes |
-| Conflicts | "Conflicts ({N})" — lazy-loaded count | Conflict record nodes (Phase 9) |
-
-The worldspace/cell tree is **per-plugin** (under each plugin node), showing what that
-plugin declares — its records and overrides — not a cross-plugin winner. `WRLD`, `CELL`,
-`REFR`, and `ACHR` are shown spatially (see §2.6) and hidden from the flat record-type list.
-
-### 2.2 Plugin Nodes
-
-Label: `{PluginName}` (e.g. `Fallout4.esm`, `MyMod.esp`)
-
-Icon: lock icon for immutable plugins. No icon for editable plugins.
-
-Context menu (`contextValue: "plugin"` / `"pluginImmutable"`):
-
-| Action | Available on | Notes |
-|--------|-------------|-------|
-| New Plugin… | Always | Opens name/type picker; calls `POST /plugins/create` |
-| Add New Record… | Editable only | Opens type picker; calls `POST /plugins/{plugin}/records` (Phase 10) |
-| Copy as Override Into… | Always | Plugin picker; calls copy-to |
-| Compact FormIDs | Editable only | Confirmation dialog; calls `POST /plugins/{plugin}/compact-formids` (Phase 14) |
-| Convert to ESL / ESM | Editable only | Type picker; calls `POST /plugins/{plugin}/convert` (Phase 14) |
-| Add Master… | Editable only | Master name input; calls `POST /plugins/{plugin}/masters/add` (Phase 14) |
-| Sort Masters | Editable only | Immediate; calls `POST /plugins/{plugin}/masters/sort` (Phase 14) |
-| Clean Masters | Editable only | Confirmation; calls `POST /plugins/{plugin}/masters/clean` (Phase 14) |
-| Inject Forms into Master… | Editable only | Confirmation; calls `POST /plugins/{plugin}/records/inject-to-master` (Phase 14) |
-| Run Script… | Editable only | QuickPick from `GET /scripts`; calls `POST /script/run` (Phase 15) |
-| Merge Into… | Editable only | Target picker; confirmation; calls `POST /plugins/merge` (Phase 14) |
-
-### 2.3 Record Type Nodes
-
-Label: `{RecordTypeName}` (e.g. `NPC_`, `WEAP`, `CELL`)
-
-Context menu: none currently defined.
-
-Children: Record nodes (paginated; "Load more…" node at end of page).
-
-### 2.4 Record Nodes
-
-Label: `{EditorID}  [{RecordType}:{FormID}]` — EditorID first, then FormKey components. If EditorID is absent, show FormKey only.
-
-Conflict badge icon overlaid on node icon when the record has a conflict or change-lost state (Phase 9).
-
-Context menu (`contextValue: "record"`):
-
-| Action | Notes |
-|--------|-------|
-| Open Record | Default action (also triggered by single click); runs `modbench.openEditor` |
-| Copy as Override Into… | Plugin picker; calls copy-to |
-| Copy as New Record Into… | Plugin picker; calls `POST /plugins/{plugin}/records` with template (Phase 10) |
-| Remove Record | Confirmation dialog listing all selected records; calls `POST /records/delete` with all selected `(FormKey, Plugin)` pairs as one batch (Phase 10); Delete key also triggers this when record nodes are selected |
-| Show Referenced By | Opens record editor on the "Referenced By" tab (Phase 11) |
-| Run Script… | Context is this record; QuickPick from `GET /scripts` (Phase 15) |
-
-### 2.5 Record Filter (Phase 9.6)
-
-The record tree is filtered by a **filter file** — a plain `.sql` file containing a DuckDB SELECT that returns `form_key`. While a filter is active, the tree is pruned: plugins and record types with no matching records are hidden.
-
-**Entry points:**
-
-- Tree view title bar: funnel icon button (always visible) → opens `modbench.setFilter` QuickPick; funnel-slash icon (visible only when filter active) → `modbench.clearFilter`
-- Command palette: `modbench.setFilter`, `modbench.clearFilter`
-- Code Lens on open `.sql` files in `modbench.scriptsPath` (see below)
-
-**`modbench.setFilter` QuickPick:**
-
-Lists all `.sql` files in `modbench.scriptsPath` plus a "New filter…" option. Selecting a file POSTs its SQL to the backend and refreshes the tree. "New filter…" opens a new untitled `.sql` editor tab.
-
-**Code Lens on `.sql` files:**
-
-Two inline lenses appear at the top of every `.sql` file under `modbench.scriptsPath`:
-
-- `▶ Apply as Filter` — when the file's content does not match the currently active filter SQL
-- `✓ Active — click to clear` — when this file is the active filter
-
-An editor title bar funnel-slash button is also shown when any filter is active.
-
-**Active filter indicator:** the tree title bar funnel icon and the editor title bar button both reflect active/inactive state via the `modbench.filterActive` VS Code context key.
-
-**Clearing the filter** restores the full unfiltered tree.
-
-**Built-in presets** (copied to `modbench.scriptsPath` on first use):
-
-| File | SQL |
-|------|-----|
-| `pending-changes.sql` | `SELECT DISTINCT form_key FROM pending_changes` |
-
-Conflict-status filtering, EditorID search, and record-type narrowing are all expressed as user-written SQL against the per-type DuckDB tables. No structured toggle UI is provided. See ADR-0018.
-
-### 2.6 Worldspace/Interior Cell Tree (Phase 16)
-
-Per-plugin, under each plugin node sit "Worldspaces" and "Interior Cells" group nodes that
-show what *that plugin* declares (records and overrides), never a cross-plugin winner.
-Placed records (REFR/ACHR) are indexed; parentage lives in `placement` / `cell_location`
-side tables (ADR-0023). Under the plugin's "Worldspaces" node:
-
-```
-Worldspaces
-  └─ SomeWorld [WRLD:000007]
-       └─ Block (0, 0)
-            └─ Sub-block (0, 0)
-                 └─ Cell (12, -5)   ← XCLC coordinates
-                      ├─ Persistent
-                      │    └─ barrelRef [REFR:001234]
-                      └─ Temporary
-                           └─ npcRef [REFR:002345]
-```
-
-Block and Sub-block nodes are grouping nodes only (no record, no click action). Clicking a CELL or REFR node opens the record editor.
-
-**Context menu actions on worldspace/cell nodes (Phase 16.2.4):**
-
-| Node | contextValue | Actions |
-| ---- | ------------ | ------- |
-| CellNode | `cell` | *(none)* |
-| PlacedGroupNode | `placedGroup-persistent` / `placedGroup-temporary` | **Create Placed…** — QuickPick REFR/ACHR + optional template FormKey; calls `POST /plugins/{plugin}/cells/{cellFormKey}/placed` |
-| PlacedNode | `refr` | **Copy as Override Into…** (same handler as `modbench.copyAsOverrideInto`); **Delete** (same handler as `modbench.deleteRecord`) |
-
----
-
-## 3. Record Editor Panel
-
-The record editor is a VS Code webview panel opened by `modbench.openEditor`. One panel can be open at a time (reused when navigating between records — see extension invariant). The panel is a React app.
-
-### 3.1 Panel Header
-
-- Record identity: `{RecordType} / {EditorID}` (or FormKey if no EditorID)
-- FormKey display: `{FormID}:{OriginPlugin}` — always visible in view mode as plain text
-
-**FormID rename (Phase 10.4):** In edit mode, the FormID portion (`{FormID}`) becomes an `<input type="text">` constrained to 6 hex characters. The `:{OriginPlugin}` suffix is displayed adjacent, non-editable. A "Renumber" button appears beside the input; it is disabled until the hex value differs from the current FormID and enabled only when the record belongs to a mutable plugin. Clicking "Renumber" calls `POST /records/{formKey}/renumber` and stages a ChangeGroup. On 422 (FormID in use), an inline error appears below the input: "FormID `{value}` is already in use". On 409 (immutable reference blocks rename), a notification lists the blocking plugins.
-
-### 3.2 Fields Tab — Compare Grid
-
-The compare grid is the primary view. Layout:
-
-- **Rows**: one per field. Fields without any value across all plugins are hidden by default.
-- **Columns**: one per plugin that contains this record's FormKey. Plugins appear in load order (left = lowest / master, right = highest / winning override). An additional "Pending" column appears for any plugin with staged changes.
-
-#### Column Header
-
-Displays plugin name as a chip. Immutable plugins show a lock icon.
-
-**Interactions:**
-- Left-click: collapse/expand the column (collapsed = chip only, no cell content). Collapsed state persisted in session.
-- Right-click: context menu (Phase 17):
-  - "Copy All to Pending" — copies all field values as pending changes into the active editable plugin
-  - "Copy as New Record" — copies as a new record pending change
-  - "Remove Override" — stages deletion of this plugin's override (Phase 10; disabled for immutable)
-
-#### Field Rows
-
-Each row:
-
-| Sub-column | Content |
-|-----------|---------|
-| Field name | Label derived from Mutagen property name (e.g. "Height", "Race", "Keywords") |
-| Plugin cells | One cell per plugin column |
-
-Conflict color coding applied to the entire row background and to individual cells (see §3.3).
-
-#### Cell Types (by field schema `type`)
-
-| Schema type | Read mode | Edit mode |
-|-------------|-----------|-----------|
-| `string` | Plain text | `<input type="text">` |
-| `int` / `float` | Number | `<input type="number">` |
-| `bool` | "Yes" / "No" | Toggle / checkbox |
-| `enum` | Enum name (not raw integer) | `<select>` with option per `enumValues` entry |
-| `flags` | Comma-separated active flag names | Multi-select dropdown with per-flag checkboxes |
-| `formKey` | EditorID (hyperlink) — clicking opens that record | `<FormKeyPicker>` — search by EditorID, filtered by `validFormKeyTypes` |
-| `struct` | Collapsed summary | `<StructRowGroup>` — child rows per sub-field (Phase 12) |
-| `array` | "{N} items" | `<ArrayRowGroup>` — child rows per element, add/remove buttons (Phase 12) |
-
-Pending-change cells show the new value with a yellow background and a revert (×) button.
-
-#### VMAD Section (Phase 13.3)
-
-When the record's compare response includes VMAD (Papyrus script) data, a read-only **Scripts (VMAD)** section is rendered below the field rows, inside the same `<tbody>`. It is absent for record types with no VMAD.
-
-**Structure** — two levels of rows, both expandable:
-
-- **Script rows** — bold script name in the label column; per-plugin script flag (e.g. `Local`) per value column; blank for plugins that lack the script. Collapsed by default.
-- **Property rows** — indented property name (85% opacity) in the label column; per-plugin property value per value column. Hidden when the parent script is collapsed.
-
-Properties of container kind (array, struct, structList) are themselves collapsible; their collapsed cell shows a summary badge. Expanding reveals child rows for elements or members.
-
-**Property kinds:**
-
-| Kind         | Collapsed cell   | Expanded         |
-|--------------|------------------|------------------|
-| `scalar`     | leaf value       | —                |
-| `object`     | FormKey link     | —                |
-| `array`      | `[N items]`      | N element rows   |
-| `struct`     | `{…}`            | N member rows    |
-| `structList` | `[N structs]`    | N struct rows    |
-| `variable`   | `(Variable)`     | —                |
-
-A plugin column cell is blank (no em-dash) when the plugin has no value for that property. An em-dash `—` (opacity 0.35) is shown when the property exists in the record but has no value for that plugin.
-
-**Object-kind FormKey links:** rendered as underlined text buttons (same style as `formKey` field cells). Clicking opens the referenced record in the record editor panel.
-
-**Type cues:** when property types differ across plugins (e.g. one plugin declares `Int32`, another declares `Float`), each cell appends `(TypeName)` in dimmed text.
-
-**Conflict coloring:** follows the same ConflictThis rules as §3.3 — cell background and text color driven by the per-plugin `cellStates` value for each property.
-
-**Read-only:** the VMAD section never renders edit inputs. Editing Papyrus script data is out of scope.
-
-**Drag-drop (Phase 17):** In edit mode, cells can be dragged between plugin columns. Dropping copies the source value as a pending field change into the target column's plugin. Target must be editable.
-
-#### Conflict Color Coding (Phase 9 / Phase 9.7)
-
-The compare grid uses the two-axis model from ADR-0016.
-
-**Axis 1 — ConflictAll → row background color** (one value per record)
+# mEdit — Surface Specification
+
+**Status: Implemented.** Living spec for the mEdit view — Modbench's record
+viewing/editing/comparing surface, and the only surface that depends on the C# backend.
+Shipped incrementally; this document describes current behavior plus clearly-marked
+planned pieces.
+
+Editing context — operates on **records**, **FormKeys**, and **plugins** (physical
+`.esp`/`.esm`/`.esl` files loaded by the backend); the Mod-Management vocabulary ("mod",
+"loadout", "deploy") belongs to the sibling surfaces, not here
+([CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary: [CONTEXT.md](../../CONTEXT.md)).
+
+Placement: [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) — native VS
+Code views (sidebar trees + editor-tab webviews), not a custom panel switcher. The
+Loadout surface that launches this one is specified in [mods.md](mods.md); the planned
+Mod-Management Plugins load-order tree — a *different* "Plugins" surface — in
+[plugins.md](plugins.md).
+
+**Vocabulary note:** the Editing "Plugins tree" here is the entry point into per-record
+browsing and requires a spawned backend; it is distinct from the Mod-Management **Plugin
+List** ([plugins.md](plugins.md)), which manages `plugins.txt` load order and runs without
+the backend. Both display as "Plugins" but are visible in mutually exclusive view modes and
+stay fully distinct in code.
+
+## Problem Statement
+
+A mod author building a loadout needs to see what each plugin actually declares, understand
+how overrides across plugins interact, and edit records — but the established tool for this
+(xEdit) is a standalone Windows application, disconnected from where the loadout is managed.
+Conflicts between plugins are the crux of patching: a modder needs to know, for a given
+record and field, which plugin wins, which lost an override, and whether an apparent
+conflict is a real disagreement or an identical duplicate — and then make a targeted edit
+that stages cleanly and writes back to the right physical file. Without an integrated
+editor, they leave their loadout tool, load a separate program, hand-correlate what it
+shows against their mod list, and edit blind to the loadout context.
+
+## Solution
+
+The **mEdit view** — a set of native VS Code surfaces driven by a lazily-spawned C# backend
+session over the active loadout:
+
+- a **Plugins tree** (sidebar) as the entry point for all navigation, browsing each
+  plugin's records — including a spatial worldspace/interior-cell tree — plus a Conflicts
+  node;
+- a **Change Groups tree** (sidebar, below it) showing in-flight staged operations;
+- a **Record editor panel** (editor-tab webview) presenting a per-field, per-plugin
+  **compare grid** with conflict color-coding, in-place editing that stages pending
+  changes, and a companion **Referenced By** panel;
+- a **status bar item** reporting backend/session state.
+
+**Launch mEdit** (from the Loadout header) switches into editing mode, spawns the backend,
+and builds the session from the active modlist's enabled plugins plus vanilla masters
+(`load-explicit`); **Close mEdit** switches back and tears the session down. Editing writes
+records straight to their physical plugin files and never requires a deploy.
+
+## User Stories
+
+1. As a mod author, I want to enter editing mode from my loadout with a single action, so
+   that the editor opens against exactly the plugins my active profile loads, with no
+   separate session-setup step.
+2. As a user, I want a status bar item that tells me whether the backend is running,
+   connecting, attached, or has a session loaded (and for which game, with a plugin count),
+   so that I always know the editor's state.
+3. As a user, I want clicking the status bar item when the backend isn't running to tell me
+   how to start it, so that I'm not stuck guessing.
+4. As a user, I want a Plugins tree listing every loaded plugin as my entry point, so that
+   all navigation starts from one place.
+5. As a user, I want to select multiple tree nodes with Ctrl/Shift-click and run a batch
+   action (e.g. Remove Record) across the whole selection, so that I can act on many
+   records at once, even across different plugins.
+6. As a user, I want a filter that narrows the top-level plugin nodes by filename as I type,
+   so that I can find a plugin without scrolling — the same filter widget every other
+   Modbench list surface uses.
+7. As a user, I want to expand a plugin and see its record types, then its records
+   (paginated, with a "Load more…" step), so that browsing a large plugin stays responsive.
+8. As a user, I want each record labeled with its EditorID and FormKey (or just the FormKey
+   when it has no EditorID), so that I can recognize records the way I do in xEdit.
+9. As a user, I want vanilla, DLC, and immutable plugins marked with a lock icon and their
+   editing actions hidden, so that I can't accidentally try to modify a read-only plugin.
+10. As a user, I want a Conflicts node showing records that conflict across plugins, so that
+    I can go straight to what needs patching.
+11. As a user, I want a conflict badge overlaid on any record node that has a conflict or a
+    lost change, so that I can spot trouble while browsing.
+12. As a user, I want to browse a plugin's worldspaces and interior cells spatially — down
+    through blocks, sub-blocks, cells, and their persistent/temporary placed references — so
+    that I can navigate the world the way it's actually laid out, seeing only what *that*
+    plugin declares rather than a cross-plugin winner.
+13. As a user, I want to open a record by single-clicking its node, so that inspecting a
+    record is immediate.
+14. As a user, I want a record editor that shows one column per plugin containing this
+    record, in load order (master on the left, winning override on the right), so that I can
+    compare every plugin's version of the record side by side.
+15. As a user, I want each field's cells color-coded to show which plugin wins, which lost
+    an override, which merely duplicates the master, and which genuinely disagree, so that I
+    can read a conflict at a glance instead of diffing by eye.
+16. As a user, I want the row background to summarize the record's overall conflict state
+    (no conflict, harmless override, real conflict, critical/injected conflict), so that I
+    can triage records without opening every field.
+17. As a user, I want enums and flags rendered as their names, never raw integers, so that I
+    can read values without a lookup table.
+18. As a user, I want a FormKey field to render as the referenced record's EditorID as a
+    hyperlink, and clicking it to open that record, so that I can follow references without
+    copying IDs around.
+19. As a user, I want structs and arrays shown collapsed with a summary and expandable to
+    their sub-fields/elements, so that a complex record stays readable.
+20. As a user, I want to enter edit mode and change a field with the right input for its
+    type (text, number, toggle, dropdown, flag multi-select, FormKey picker), so that
+    editing is type-appropriate and I can't enter a nonsensical value.
+21. As a user, I want my edits shown as pending changes (highlighted, with a per-field
+    revert) rather than written immediately, so that I can review a batch before committing
+    and back out a single field.
+22. As a user, I want a pending column to appear for a plugin with staged changes, so that I
+    can compare my in-progress edit against every existing version.
+23. As a user, I want to collapse a plugin column to just its header chip, with the state
+    remembered, so that I can focus the grid on the plugins I care about.
+24. As a user, I want a column-header menu to copy a plugin's whole record into my editable
+    plugin as pending changes, copy it as a new record, or stage removal of that plugin's
+    override, so that common override operations are one action.
+25. As a user in edit mode, I want to drag a value from one plugin's column into another to
+    copy it as a pending change, so that reconciling a conflict is direct manipulation.
+26. As a user, I want to save my pending changes (writing every plugin that has them),
+    revert all changes for the record, or copy the current values into another plugin, so
+    that I control exactly what gets written and where.
+27. As a user, I want to rename a record's FormID in edit mode, with validation that the new
+    id is free and that immutable references don't block it, so that renumbering is safe and
+    the errors are explained rather than silent.
+28. As a user, I want a read-only view of a record's Papyrus (VMAD) script data — scripts,
+    their properties, and nested array/struct/structList values — so that I can inspect
+    scripting without it being editable (editing Papyrus is out of scope).
+29. As a user, I want a "Referenced By" panel listing every record that points a FormLink at
+    this one, grouped so that multiple plugin overrides of the same referencer collapse into
+    one entry, so that I can see what would break if I changed or removed this record.
+30. As a user, I want to open a referencing record from that panel — in the active pane or
+    beside it — so that I can trace a reference chain quickly.
+31. As a user, I want to filter the record tree by a SQL query against the backend's
+    per-type tables (returning `form_key`), pruning plugins and record types with no
+    matches, so that I can slice the loadout by any condition I can express (conflict
+    status, EditorID search, record type) without a fixed toggle UI.
+32. As a user, I want to save filters as `.sql` files, apply one from a picker or from an
+    inline Code Lens on the file, and see which filter is active, so that my useful queries
+    are reusable and obvious.
+33. As a user, I want a built-in "pending changes" filter preset, so that I can immediately
+    narrow the tree to records I've touched.
+34. As a user, I want a Change Groups tree listing my in-flight staged operations (create,
+    delete, renumber) with a description and change/plugin counts, so that I can see and
+    manage work that spans multiple records.
+35. As a user, I want to save or revert a single change group, or all of them at once, so
+    that I can commit related edits as a unit.
+36. As a user, I want a partial-save failure (some plugins saved, some not) reported clearly
+    with the group left intact and its unsaved changes re-queued, so that a failure never
+    silently loses my work.
+37. As a user, I want to create a new plugin, add a record to a plugin, copy a record as an
+    override or as a new record into another plugin, and remove records (with a confirmation
+    that lists everything selected), so that the common authoring operations are all in the
+    tree.
+38. As a user, I want plugin-level master and form operations — add/sort/clean masters,
+    inject forms into a master, compact FormIDs, convert to ESL/ESM, merge into another
+    plugin — available on editable plugins only, so that I can maintain a plugin's headers
+    and form space without leaving the tree.
+39. As a user, I want to create and manage placed references (REFR/ACHR) inside a cell's
+    persistent or temporary group, so that I can edit world placement spatially.
+40. As a user, I want to run a script against the whole session or a specific record/plugin
+    (planned), so that I can automate repetitive edits.
+41. As a user, I want all of these actions reachable from the command palette as well as the
+    tree, so that I can drive the editor by keyboard.
+42. As a user, I want null/missing fields shown as empty cells (never "null"/"undefined")
+    and read-only cells in immutable columns to render no input on click, so that the grid
+    reads cleanly and never invites an edit that can't happen.
+
+## Implementation Decisions
+
+### Scope & overall layout
+
+- This spec covers the **mEdit view's frontend surfaces** and the behavior they present.
+  The backend endpoint contract that drives them is governed by
+  `MEditService/CLAUDE.md` and the generated API client, not restated here.
+- Modbench is a single activity-bar container (`modbench`). A `modbench.viewMode` context
+  key toggles the sidebar between the Loadout surface and this mEdit surface. **Launch
+  mEdit** (in the Loadout header) switches to editing mode, lazily spawning the backend and
+  loading the active modlist as the session; **Close mEdit** switches back and tears the
+  session down.
+- The mEdit view is composed of four surfaces: the **Plugins tree** (sidebar entry point),
+  the **Change Groups tree** (sidebar, below it), the **Record editor panel** (editor-tab
+  webview, one per open record), and the **status bar item**. There is no toolbar or
+  top-level menu bar — every action is reachable from a tree context menu, the command
+  palette, or the record editor panel itself.
+
+### Status bar
+
+- A bottom-right item reflects backend/session state: **not running** ("backend not
+  running", warning color), **connecting**, **attached with no session**, and **attached
+  with a session** ("{GameRelease} — {N} plugins", success color).
+- Clicking it while the backend is not running shows start-up instructions. Sessions are
+  created via **Launch mEdit** from the Loadout surface, never from the status bar.
+
+### Plugins tree (navigation)
+
+- A `TreeView` (`modbench.pluginTree`, "Plugins"), visible while
+  `modbench.viewMode == 'editing'`. It is the primary navigation surface; there is no
+  separate load-session step — the session is constructed on entry from the active
+  modlist's enabled plugins plus vanilla masters (`load-explicit`).
+- **Multi-select** (`canSelectMany`): Ctrl/Shift-click selects multiple nodes, possibly
+  spanning plugins and record types; batch-capable context commands (currently Remove
+  Record) receive the full selection.
+- **Plugin-name filter**: a title-bar magnifier opens a transient `InputBox` that
+  live-filters the top-level plugin nodes by case-insensitive filename substring; dismissing
+  it restores the full list. This is the shared cross-surface filter convention (Mods tree,
+  Downloads, Plugin List, and here). It is a **distinct axis** from the record filter below:
+  this narrows *which plugins* appear; the record filter narrows *which records* appear
+  under a plugin. The two compose.
+- **Top-level nodes**: one node per loaded plugin (children: Worldspaces + Interior Cells
+  group nodes plus flat record-type nodes), and a lazy-counted **Conflicts** node listing
+  conflict records. `WRLD`/`CELL`/`REFR`/`ACHR` are shown spatially (below) and hidden from
+  the flat record-type list.
+- **Plugin nodes**: labeled by filename, with a **lock icon on immutable plugins**. Their
+  context menu exposes New Plugin…, Copy as Override Into…, and — on editable plugins only —
+  Add New Record…, Compact FormIDs, Convert to ESL/ESM, Add/Sort/Clean Masters, Inject Forms
+  into Master…, Run Script…, and Merge Into…. Each is a confirmation or picker as
+  appropriate; destructive ones confirm.
+- **Record-type nodes**: labeled by type; children are paginated record nodes with a "Load
+  more…" node at the end of a page.
+- **Record nodes**: labeled `{EditorID}  [{RecordType}:{FormID}]` (FormKey only when no
+  EditorID), with a conflict badge overlaid when the record conflicts or has a lost change.
+  Single-click (or Open Record) opens the editor; the context menu adds Copy as Override
+  Into…, Copy as New Record Into…, Remove Record (a confirmation listing every selected
+  record, deleting the whole selection as one batch; the Delete key also triggers it), Show
+  Referenced By, and Run Script… (context = this record).
+
+### Record filter (SQL)
+
+- The record tree is filtered by a **filter file** — a plain `.sql` file containing a DuckDB
+  `SELECT` returning `form_key`. While active, the tree is pruned: plugins and record types
+  with no matching records are hidden ([ADR-0018](../adr/0018-sql-file-based-record-filter.md)).
+- Entry points: a tree title-bar funnel (opens a `setFilter` quick pick of `.sql` files in
+  `modbench.scriptsPath` plus "New filter…"), a funnel-slash to clear (shown only while a
+  filter is active), command-palette equivalents, and **Code Lens** on open `.sql` files
+  under `modbench.scriptsPath` ("▶ Apply as Filter" when the file differs from the active
+  filter; "✓ Active — click to clear" when it is the active filter). A `filterActive`
+  context key drives the active indicators.
+- Conflict-status filtering, EditorID search, and record-type narrowing are all expressed as
+  user-written SQL against the per-type DuckDB tables — **no structured toggle UI**. A
+  built-in `pending-changes.sql` preset (`SELECT DISTINCT form_key FROM pending_changes`) is
+  copied into `modbench.scriptsPath` on first use.
+
+### Worldspace / interior-cell tree
+
+- **Per-plugin**, under each plugin node: "Worldspaces" and "Interior Cells" group nodes
+  show what *that plugin* declares (records and overrides), never a cross-plugin winner.
+  Placed records (REFR/ACHR) are indexed; parentage lives in `placement` / `cell_location`
+  side tables ([ADR-0023](../adr/0023-placed-objects-indexed-with-placement-side-tables.md)).
+- The spatial hierarchy descends Worldspace → Block → Sub-block → Cell (by XCLC coordinates)
+  → Persistent/Temporary placed-reference groups → placed references. Block and Sub-block
+  nodes are grouping-only (no record, no click); clicking a CELL or REFR node opens the
+  editor.
+- Context menus: a **placed group** offers Create Placed… (quick pick REFR/ACHR + optional
+  template FormKey); a **placed reference** offers Copy as Override Into… and Delete (the
+  same handlers as elsewhere). CELL nodes have no menu.
+
+### Record editor panel
+
+- A webview panel opened by `modbench.openEditor`; **one panel at a time**, reused when
+  navigating between records (an extension invariant). It is a React app.
+- **Header**: record identity (`{RecordType} / {EditorID}`, or FormKey) and the FormKey
+  (`{FormID}:{OriginPlugin}`) as plain text in view mode. In edit mode the FormID becomes a
+  6-hex-char input with a **Renumber** button (enabled only when the value changed and the
+  record is mutable); renumber stages a change group. An in-use FormID surfaces an inline
+  error; an immutable-reference block surfaces a notification naming the blocking plugins.
+- **Compare grid** (the primary view): one **row per field** (fields with no value in any
+  plugin hidden by default); one **column per plugin** that contains the record's FormKey,
+  in load order (left = master, right = winning override), plus a **Pending** column for any
+  plugin with staged changes. Column headers show the plugin name as a chip (lock icon on
+  immutable); left-click collapses/expands a column (state persisted in session); right-click
+  offers Copy All to Pending, Copy as New Record, and Remove Override (disabled for
+  immutable).
+- **Cells render by field schema type**: strings/numbers/bools as text/number/toggle inputs
+  in edit mode; enums as their name via a `<select>`; flags as active flag names via a
+  per-flag multi-select; FormKeys as an EditorID hyperlink (edit: a FormKey picker filtered
+  by `validFormKeyTypes`); structs and arrays as a collapsed summary expandable to child
+  rows with add/remove. Pending-change cells show the new value on a yellow background with a
+  revert (×) button.
+- **Editing stages pending changes** rather than writing immediately. Edit mode is entered
+  from the toolbar (or by selecting an editable cell); its controls are Save (writes every
+  plugin with pending changes), Revert All (drops this record's changes), and Copy to… (a
+  plugin picker), plus the per-field revert. In edit mode a cell value can be **dragged
+  between plugin columns** to copy it as a pending change into the target (which must be
+  editable).
+
+### Conflict color coding
+
+The compare grid uses the two-axis model from
+[ADR-0016](../adr/0016-two-axis-conflict-model.md). These two mappings are
+kept as tables deliberately — they are enum→visual encodings that prose would only make less
+precise.
+
+**Axis 1 — ConflictAll → row background** (one value per record):
 
 | ConflictAll | Row background | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | OnlyOne, NoConflict | No tint | Only in one plugin, or all overrides agree |
 | Override | Subtle green | Overrides exist but no real conflict |
 | Conflict | Subtle orange | Overrides disagree on a field |
 | ConflictCritical | Subtle red | Injected record (FormKey origin not in a plugin's master list) whose overrides actually differ — content-identical injected records stay NoConflict |
 
-**Axis 2 — ConflictThis → cell background + text color** (computed per-field per-plugin — a plugin may be Override on one field and ConflictLoses on another)
+**Axis 2 — ConflictThis → cell background + text color** (computed per-field, per-plugin — a
+plugin may be Override on one field and ConflictLoses on another):
 
 | ConflictThis | Cell background | Text color | Meaning |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Master, OnlyOne | None | Default | The master (origin) plugin or only plugin |
 | IdenticalToMaster | Grey | Default | Override present but field unchanged |
 | Override | Green | Default | Changed from master; no other plugin disagrees |
-| ConflictWins | Orange | Default | Disagrees with another override; this plugin is the winner |
+| ConflictWins | Orange | Default | Disagrees with another override; this plugin wins |
 | ConflictLoses | Red | Red | Disagrees with another override; this plugin's value was overridden |
 
-Absent fields (null value in a non-master plugin — PartialForm absent-field rule) render with no background and no text color.
+Absent fields (a null value in a non-master plugin — the PartialForm absent-field rule)
+render with no background and no text color. Column headers use the worst ConflictThis across
+that plugin's fields as a quick summary; individual cell colors are authoritative.
 
-Column headers use the per-record ConflictThis aggregate (the worst ConflictThis across all fields for that plugin) as a quick summary; individual cell colors are the authoritative per-field states.
+### VMAD (Papyrus) section
 
-### 3.3 Referenced By Panel (Phase 11)
+- When a record's compare response includes VMAD data, a **read-only** "Scripts (VMAD)"
+  section renders below the field rows in the same table body; it is absent for record types
+  without VMAD. **Editing Papyrus is out of scope** — this section never renders inputs.
+- Two expandable levels: **script rows** (bold script name; per-plugin script flag; blank
+  for plugins lacking the script; collapsed by default) and indented **property rows**
+  (per-plugin value; hidden while the parent script is collapsed).
+- Container-kind properties (array, struct, structList) are themselves collapsible with a
+  summary badge when collapsed, expanding to element/member child rows; scalar and
+  object/variable kinds are leaf values. A cell is **blank** when the plugin has no value for
+  the property, versus an em-dash `—` when the property exists but is empty for that plugin.
+  Object-kind values render as FormKey link-buttons that open the referenced record; when
+  property types differ across plugins each cell appends `(TypeName)` in dimmed text.
+- Conflict coloring follows the same ConflictThis rules as the field rows, driven by
+  per-plugin `cellStates`. In edit mode a VMAD cell can be dragged between columns to copy
+  its value as a pending field change (target must be editable).
 
-A separate VS Code webview panel — not a tab inside the record editor. Title: `"Referenced By: {EditorID}"` (or FormKey if no EditorID).
+### Referenced By panel
 
-**How to open:** right-click a record node in the sidebar tree → "Show Referenced By"; or a button in the record editor panel header. Opens alongside the record panel (`ViewColumn.Beside`).
+- A **separate** webview panel (not a tab in the record editor), titled
+  `"Referenced By: {EditorID}"` (or FormKey), opened from a record node's Show Referenced By
+  or a header button, alongside the record panel (`ViewColumn.Beside`). It lazy-loads its
+  references only when first opened.
+- It lists records holding a FormLink to this record, **grouped by (FormKey, RecordType)** so
+  multiple plugin overrides of the same referencer collapse into one group. A group header
+  shows `{RecordType} / {EditorID}` and a plugin count (omitted when one); left-click opens
+  that record in the active pane, right-click offers "Open to the Side". Expanded child rows
+  show each holding plugin and field path (informational, not clickable). Empty state: "No
+  references found."
 
-Calls `GET /records/{formKey}/references` on mount (lazy — only when the panel is first opened).
+### Change Groups tree
 
-Displays a grouped list of records that hold a FormLink pointing to this record. Results are grouped by `(FormKey, RecordType)` — multiple plugin overrides of the same record collapse into one group.
+- A second sidebar `TreeView` below the Plugins tree, always visible, showing all in-flight
+  ChangeGroups (create/delete/renumber). Each row is labeled `{operation} — {description}`
+  with a `{N} changes · {P} plugins` detail line and inline Save/Revert buttons; title-bar
+  Save All / Revert All act on every group in sequence (hidden/disabled when none are
+  active). Rows are not expandable (per-change detail is a future enhancement).
+- Empty state: "No pending group changes." **Partial-save failure** (some plugins saved,
+  some not) shows an error notification naming which saved and which failed; the group stays
+  in the tree with its re-queued changes intact.
 
-**Group header** (one per unique referencing record):
-```
-▶  {RecordType} / {EditorID}   (N plugins)
-```
-- Collapsed by default; expand/collapse toggle per group
-- Count omitted when only one plugin holds the reference
-- **Left-click**: opens that record in the currently active record panel (`ViewColumn.Active`)
-- **Right-click**: context menu → "Open to the Side" (`ViewColumn.Beside`)
+### Command palette
 
-**Expanded child rows** (one per plugin override that holds the reference):
-```
-    {PluginName}   field: {FieldPath}
-```
-- Indented; informational only — not clickable
+- All `modbench.*` commands are available in the palette; `package.json`'s
+  `contributes.commands` is the canonical registry. Navigation/workflow commands include
+  Launch mEdit (enter editing; spawn backend; load the session), Close mEdit (return to
+  Loadout; tear down), Reload Session (refresh the tree), Open Editor (internal; also bound
+  to tree click), New Plugin…, Copy as Override Into…, and Run Script… (planned; context =
+  the active record if a panel is open, else global).
 
-Empty state: "No references found."
+### Field type rendering rules
 
-### 3.4 Edit Mode Controls
+These apply everywhere a field value is rendered (the compare grid, pending cells, and any
+future surface):
 
-Edit mode is entered by clicking "Edit" in the panel toolbar (or selecting an editable cell).
+1. **Never display raw integers for enums or flags** — always resolve to name(s).
+2. **FormKeys render as EditorID hyperlinks** when the referenced record is indexed; fall
+   back to the FormKey string otherwise.
+3. **Structs and arrays are always collapsible**, default collapsed; expand state is
+   per-session, not persisted across restarts.
+4. **Pending values** always show the new value (not the old), on a yellow background with a
+   revert button.
+5. **Null / missing fields** render as an empty cell, never "null"/"undefined".
+6. **Read-only cells** in immutable plugin columns are never editable and render no input on
+   click.
 
-Toolbar buttons when in edit mode:
+### Architecture / seams
 
-| Button | Action |
-|--------|--------|
-| Save | Calls `POST /plugins/{plugin}/save` for all plugins with pending changes |
-| Revert All | Calls `DELETE /changes` for this record |
-| Copy to… | Plugin picker; copies current field values as override into selected plugin |
+- **The backend is the seam for record data and mutations**: the frontend talks to it only
+  through the generated API client; the compare grid, conflict states, references, and all
+  mutations are behaviors of endpoints owned by `MEditService/`. The frontend holds
+  rendering and staging logic, not record semantics.
+- **Conflict classification** (the two-axis ConflictAll/ConflictThis model,
+  [ADR-0016](../adr/0016-two-axis-conflict-model.md)) is
+  computed backend-side and consumed by the grid as `cellStates` — the frontend maps states
+  to color, it does not derive them.
+- **The webview React app** is the client-side surface under test for rendering rules
+  (enum/flag names, FormKey links, collapsibility, pending highlighting) and for staging
+  behavior (pending changes, per-field revert), independent of the backend.
 
-Per-field revert (×) button appears on each pending cell.
+## Testing Decisions
 
----
+- **Good tests assert external behavior, not implementation details** — for the webview
+  that means: given a compare response, assert what the grid renders (rows/columns, per-cell
+  color from `cellStates`, enum/flag names resolved, FormKey links, pending highlighting);
+  given a staging interaction, assert the pending state and the save/revert payloads. No
+  assertions about private component internals.
+- **Record semantics and conflict classification** are the backend's responsibility and are
+  tested there (see `MEditService/CLAUDE.md`), not re-asserted from the webview; the frontend
+  tests consume representative compare responses as fixtures.
+- **Integration seam** (`npm run test:integration`, real VS Code process): the Plugins tree
+  builds from a session, navigation opens a record panel, the record filter prunes the tree,
+  the Change Groups tree reflects staged operations, and command registration holds — add
+  any new command id(s) to `EXPECTED_COMMANDS` (per `modbench/CLAUDE.md`).
 
-## 4. Change Groups Panel (Phase 10.5)
+## Out of Scope
 
-A second VS Code tree view registered in the mEdit view container, below the plugin/record tree. Displays all in-flight ChangeGroups (create, delete, renumber operations). Always visible; shows an empty state when no groups are active.
+- **Editing Papyrus (VMAD) script data** — the VMAD section is deliberately read-only.
+- **Multiple simultaneous record editor panels** — one panel is open at a time and reused
+  when navigating (an extension invariant).
+- **A structured conflict/EditorID/record-type filter UI** — filtering is deliberately
+  user-written SQL against the per-type tables, not a fixed toggle set (ADR-0018).
+- **Expandable per-change detail in the Change Groups tree** — rows show counts only; drilling
+  into individual changes is a future enhancement.
+- **Run Script…** across session/record/plugin — planned, not yet shipped.
+- **Delta / overlay editing** — loading an arbitrary overriding-plugin set side-by-side is a
+  Loadout-adjacent concern (see [mods.md](mods.md) Out of Scope); deferred.
 
-### 4.1 Title Bar
+## Further Notes
 
-Two title bar icon buttons:
-
-| Button | Action |
-|--------|--------|
-| Save All | Calls `POST /change-groups/{id}/save` for each group in sequence; refreshes tree on completion |
-| Revert All | Calls `DELETE /changes/group/{id}` for each group; refreshes tree |
-
-Both buttons are hidden (or disabled) when there are no active groups.
-
-### 4.2 Group Rows
-
-One tree item per ChangeGroup. Label format: `{operation} — {description}` (description omitted if null). Detail line: `{N} changes · {P} plugins`.
-
-Inline action buttons on each row (VS Code tree item buttons):
-
-| Button | Action |
-|--------|--------|
-| Save | `POST /change-groups/{id}/save`; refreshes tree and plugin/record tree on success |
-| Revert | `DELETE /changes/group/{id}`; refreshes tree |
-
-Group rows are not expandable in Phase 10.5. Individual change detail is a future enhancement.
-
-### 4.3 Empty State
-
-When no groups are active: single informational node — "No pending group changes."
-
-### 4.4 Error State
-
-If `POST /change-groups/{id}/save` returns a partial failure (some plugins saved, some did not): show a VS Code error notification naming which plugins saved and which failed. The group row remains in the tree with its re-queued changes intact. See [phase-10.5](../tasks/completed-tasks/phase-10.5.md) for the partial-save failure contract.
-
----
-
-## 5. Command Palette Commands
-
-All `modbench.*` commands are available in the command palette. The full list is the canonical registry in `package.json` `contributes.commands`. Commands relevant to navigation and common workflows:
-
-| Command ID | Title | Notes |
-|-----------|-------|-------|
-| `modbench.modList.launchMedit` | Modbench: Launch mEdit | Enters editing mode; spawns backend, loads the modlist session |
-| `modbench.closeMedit` | Modbench: Close mEdit | Returns to Loadout; tears down the session |
-| `modbench.reloadSession` | Modbench: Reload Session | Refreshes the Plugins tree |
-| `modbench.openEditor` | Modbench: Open Editor | Internal; also bound to tree click |
-| `modbench.newPlugin` | Modbench: New Plugin… | Prompts for name and type |
-| `modbench.copyAsOverrideInto` | Modbench: Copy as Override Into… | Plugin picker |
-| `modbench.runScript` | Modbench: Run Script… | Planned (Phase 15); QuickPick; context = active record if panel open, else global |
-
----
-
-## 6. Mod List View (Loadout)
-
-Specified separately in [mods.md](mods.md).
-
----
-
-## 7. Field Type Rendering Rules (Summary)
-
-These rules apply everywhere a field value is rendered — in the compare grid, the pending changes panel, and any future surfaces.
-
-1. **Never display raw integers for enums or flags.** Always resolve to name(s).
-2. **FormKeys render as EditorID hyperlinks** when the referenced record is in the index; fall back to FormKey string if not resolved.
-3. **Structs and arrays are always collapsible.** Default collapsed. Expand state is per-session, not persisted across restarts.
-4. **Pending values** always show the new value (not the old), with a yellow background and a revert button.
-5. **Null / missing fields** render as an empty cell, not "null" or "undefined".
-6. **Read-only cells** in immutable plugin columns are never editable; no input is rendered on click.
+- This surface is the **only** one that requires the C# backend; the Mod-Management surfaces
+  ([mods.md](mods.md), [downloads.md](downloads.md), [plugins.md](plugins.md)) all run
+  without it. The backend lifecycle (spawn on Launch mEdit, teardown on Close mEdit / profile
+  switch / workspace close, restart on crash) is owned by the extension per
+  [ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md) and specified from the Loadout
+  side in [mods.md](mods.md).
+- The Editing "Plugins tree" and the Mod-Management "Plugin List" ([plugins.md](plugins.md))
+  both display as "Plugins" but are distinct views (`modbench.pluginTree` vs
+  `modbench.pluginListTree`), visible in mutually exclusive view modes — see the Vocabulary
+  note at the top and [CONTEXT-MAP.md](../../CONTEXT-MAP.md).

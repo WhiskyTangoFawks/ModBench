@@ -32,13 +32,13 @@
 
 ### Load order & overrides
 
-**Load order**: Ordered list of plugins the game loads; determines which override wins. _Avoid: plugin list._
+**Plugin load order**: Ordered list of plugins the game loads (`plugins.txt`); determines which override wins. Written by Mod Management (the Plugins tab); Editing consumes it read-only to build a session (`load-explicit`). Distinct from Mod Management's mod-level ordering (file conflicts, not overrides) — see [CONTEXT-MAP.md](CONTEXT-MAP.md). _Avoid: load order (ambiguous with Mod load order), plugin list._
 
 **Override**: Record definition in a plugin other than the originating plugin. _Avoid: copy, patch entry._
 
 **Override stack**: Full ordered sequence of overrides for one FormKey across all loaded plugins. Primary structure for the compare view and conflict detection.
 
-**Winning override**: Last override in load order — what the game actually uses. _Avoid: active record, final record._
+**Winning override**: Last override in plugin load order — what the game actually uses. _Avoid: active record, final record._
 
 **ITM (Identical to Master)**: Override byte-for-byte equal to the master; wastes a load-order slot with no effect. _Avoid: clean record._
 
@@ -70,7 +70,7 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 ### Session & index
 
-**Session**: Active game environment: chosen game release + load order, loaded and indexed. _Avoid: workspace, environment._
+**Session**: Active game environment: chosen game release + plugin load order, loaded and indexed. _Avoid: workspace, environment._
 
 **Index**: DuckDB read model of committed record data. Rebuilt on session load. Cache, not source of truth — deleting it loses nothing. _Avoid: database, store._
 

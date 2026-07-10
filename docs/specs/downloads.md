@@ -108,6 +108,8 @@ so the loadout and the Downloads view stay consistent with MO2's own bookkeeping
     so that I understand why the tab is empty and what's expected.
 32. As a user opening the tab from the command palette (or a Mods-view toolbar button), I
     want a single obvious entry point, so that I can get to my downloads quickly.
+33. As a user with a long downloads folder, I want to type a substring into a filter box and
+    have the list narrow to matching archive names, so that I can find one without scrolling.
 
 ## Implementation Decisions
 
@@ -158,6 +160,11 @@ so the loadout and the Downloads view stay consistent with MO2's own bookkeeping
 ### Toolbar
 
 - **Refresh** — force a re-scan of `downloads/` (safety valve).
+- **Filter** — a text box matching archive **Name** (raw filename) by case-insensitive
+  substring; the table narrows live as the user types. No separator/grouping concept here
+  (unlike the Mods tree's filter toggle) — Downloads is a flat list, so this is a plain
+  substring match, applied after hidden-filtering. Every Modbench list surface gets this same
+  filter box (Mods tree, Downloads, Plugin List) for consistency.
 - **Show hidden** — a tick box; off by default. When on, hidden rows are shown **dimmed**.
 - Batch cleanup buttons are **deferred** to a separate issue (see Out of Scope).
 
@@ -229,6 +236,7 @@ Kept scoped to the clicked row — batch/category actions are deliberately **not
     neither / no-`.meta` → Downloaded.
   - hidden filtering: `removed=true` excluded by default; included (flagged hidden) under
     show-hidden.
+  - name filter: case-insensitive substring match against Name; empty filter shows all rows.
   - default sort Filetime descending; header re-sort by each column.
   - action gating: no `modID` → Visit-on-Nexus disabled; no `.meta` → Open-Meta disabled.
   - mutations: Install writeback sets `installed=true`; Hide sets and Unhide clears
