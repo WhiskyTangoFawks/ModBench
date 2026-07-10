@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildDownloadRows,
   parseDownloadMeta,
+  setInstalledInText,
   sortDownloadRows,
   type DownloadEntry,
   type DownloadRow,
@@ -42,6 +43,31 @@ describe('sortDownloadRows', () => {
       'banana',
       'cherry',
     ]);
+  });
+});
+
+describe('setInstalledInText', () => {
+  it('creates a fresh [General] section with installed=true when there is no .meta text', () => {
+    expect(setInstalledInText('')).toBe('[General]\r\ninstalled=true\r\n');
+  });
+
+  it('inserts installed=true after an existing [General] header, preserving other lines', () => {
+    const text = '[General]\r\ngameName=Fallout4\r\nmodid=12345\r\n';
+    expect(setInstalledInText(text)).toBe(
+      '[General]\r\ninstalled=true\r\ngameName=Fallout4\r\nmodid=12345\r\n',
+    );
+  });
+
+  it('flips an existing installed=false to true in place, byte-faithful', () => {
+    const text = '[General]\r\ngameName=Fallout4\r\ninstalled=false\r\nmodid=12345\r\n';
+    expect(setInstalledInText(text)).toBe(
+      '[General]\r\ngameName=Fallout4\r\ninstalled=true\r\nmodid=12345\r\n',
+    );
+  });
+
+  it('is a no-op when installed=true is already present', () => {
+    const text = '[General]\r\ninstalled=true\r\nmodid=12345\r\n';
+    expect(setInstalledInText(text)).toBe(text);
   });
 });
 

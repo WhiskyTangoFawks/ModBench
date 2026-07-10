@@ -20,12 +20,44 @@ function handleRefresh() {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.REFRESH });
 }
 
+interface RowContextMenuProps {
+  readonly x: number;
+  readonly y: number;
+  readonly name: string;
+  readonly onClose: () => void;
+}
+
+/** Row-scoped context menu — the seam future row actions (nav actions,
+ *  Delete, Hide/Unhide) each add one more item to. */
+function RowContextMenu({ x, y, name, onClose }: RowContextMenuProps) {
+  function install() {
+    vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.INSTALL, name });
+    onClose();
+  }
+  return (
+    <ul role="menu" style={{ position: 'fixed', top: y, left: x, listStyle: 'none', margin: 0, padding: 4 }}>
+      <li
+        role="menuitem"
+        tabIndex={0}
+        style={{ cursor: 'pointer' }}
+        onClick={install}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') install();
+        }}
+      >
+        Install
+      </li>
+    </ul>
+  );
+}
+
 export function DownloadsApp() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [sort, setSort] = useState<{ column: DownloadSortColumn; descending: boolean }>({
     column: 'mtimeMs',
     descending: true,
   });
+  const [menu, setMenu] = useState<{ x: number; y: number; name: string } | null>(null);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -44,6 +76,20 @@ export function DownloadsApp() {
     vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.READY });
     return () => window.removeEventListener('message', handler);
   }, []);
+
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
+      setMenu(null);
+    };
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [menu]);
 
   if (state.kind === 'loading') return <div>Loading…</div>;
   if (state.kind === 'error') return <div>{state.message}</div>;
@@ -72,7 +118,13 @@ export function DownloadsApp() {
           </thead>
           <tbody>
             {sortDownloadRows(state.rows, sort.column, sort.descending).map((row) => (
-              <tr key={row.name}>
+              <tr
+                key={row.name}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMenu({ x: e.clientX, y: e.clientY, name: row.name });
+                }}
+              >
                 <td>{row.name}</td>
                 <td>{row.status}</td>
                 <td>{row.size}</td>
@@ -82,6 +134,7 @@ export function DownloadsApp() {
           </tbody>
         </table>
       )}
+      {menu && <RowContextMenu x={menu.x} y={menu.y} name={menu.name} onClose={() => setMenu(null)} />}
     </div>
   );
 }
