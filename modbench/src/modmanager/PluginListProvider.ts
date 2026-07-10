@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import type { IModlistSource, PluginEntry } from './model';
 
 /** A single plugins.txt line, with a native checkbox mirroring its `*` (enabled)
- *  state. Display-only for now: no `onDidChangeCheckboxState` handler is wired,
- *  so a click snaps back on the next refresh (interactivity is a later ticket). */
+ *  state. Toggling the checkbox writes plugins.txt immediately (wired via the
+ *  view's `onDidChangeCheckboxState` handler in extension.ts). */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
   constructor(public readonly plugin: PluginEntry) {
@@ -40,7 +40,8 @@ export class EmptyNode extends vscode.TreeItem {
 export type PluginListNode = PluginNode | ErrorNode | EmptyNode;
 
 /** Sidebar Plugin List (Loadout) tree: one row per plugins.txt line, in Plugin
- *  load order (top = loads first), read-only. Checkbox is display-only. */
+ *  load order (top = loads first). Toggling a row's checkbox writes plugins.txt
+ *  immediately via `setPluginEnabled`. */
 export class PluginListProvider implements vscode.TreeDataProvider<PluginListNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginListNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -54,6 +55,13 @@ export class PluginListProvider implements vscode.TreeDataProvider<PluginListNod
   /** Force a re-read of plugins.txt (the title-bar Refresh button). */
   refresh(): void {
     this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** Toggle a plugin's `*` (enabled) state, writing plugins.txt immediately, then
+   *  refresh so the tree re-reads the persisted state. */
+  async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
+    await this.source.setPluginEnabled(pluginName, enabled);
+    this.refresh();
   }
 
   getTreeItem(element: PluginListNode): vscode.TreeItem {
