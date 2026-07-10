@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { IModlistSource, InstallMeta, ModlistEntry } from './model';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
+import { buildTes4Buffer } from './test/buildTes4Buffer';
 
 vi.mock('vscode', () => ({
   TreeItem: class {
@@ -136,6 +137,41 @@ describe('PluginListProvider', () => {
     provider.onDidChangeTreeData(() => { fired = true; });
     provider.refresh();
     expect(fired).toBe(true);
+  });
+});
+
+describe('PluginNode — order-aware missing-master badge', () => {
+  it('overlays an error icon, description, and per-master tooltip when a master is not loaded before it', () => {
+    const node = new PluginNode({ name: 'Child.esp', enabled: true }, { kind: 'masterNotLoadedBefore', masters: ['Base.esp'] });
+    expect(node.iconPath).toEqual({ id: 'error' });
+    expect(node.description).toContain('not loaded before');
+    expect(node.tooltip).toContain('Base.esp');
+    expect(node.tooltip).toContain('is not loaded before this plugin');
+  });
+
+  it("uses wording distinct from the Mods tree's presence-only badge", () => {
+    const node = new PluginNode({ name: 'Child.esp', enabled: true }, { kind: 'masterNotLoadedBefore', masters: ['Base.esp'] });
+    // The Mods tree says "Missing master:" — this order-aware badge must not, so the
+    // two never read as contradicting each other when they legitimately disagree.
+    expect(String(node.tooltip)).not.toContain('Missing master:');
+    expect(String(node.description)).not.toContain('Missing master:');
+  });
+
+  it('summarises the count when more than one master is out of order', () => {
+    const node = new PluginNode({ name: 'Child.esp', enabled: true }, { kind: 'masterNotLoadedBefore', masters: ['Base.esp', 'Other.esp'] });
+    expect(node.description).toContain('2');
+    expect(node.tooltip).toContain('Base.esp');
+    expect(node.tooltip).toContain('Other.esp');
+  });
+
+  it('renders a plain row (no badge) with no status or an ok status', () => {
+    const plain = new PluginNode({ name: 'A.esp', enabled: true });
+    expect(plain.iconPath).toBeUndefined();
+    expect(plain.description).toBeUndefined();
+
+    const ok = new PluginNode({ name: 'A.esp', enabled: true }, { kind: 'ok' });
+    expect(ok.iconPath).toBeUndefined();
+    expect(ok.description).toBeUndefined();
   });
 });
 
@@ -278,5 +314,88 @@ describe('PluginListProvider — drag reorder round-trips through plugins.txt on
   it('drop past the last row appends the moved row', async () => {
     await dragToDisk(['B.esp'], undefined);
     expect(await source.readPluginOrder()).toEqual(['A.esp', 'C.esp', 'D.esp', 'E.esp', 'B.esp']);
+  });
+});
+
+// Order-aware missing-master badge wired through the provider over a real MO2
+// instance (temp dir, real plugins.txt + mod plugins + a vanilla Data/ plugin),
+// mirroring ModListProvider.test.ts's status-badge block but for plugin order.
+describe('PluginListProvider — order-aware missing-master badge (instanceRoot provided)', () => {
+  let dir: string;
+  const pluginNodes = async (provider: PluginListProvider): Promise<PluginNode[]> =>
+    (await provider.getChildren()).filter((n): n is PluginNode => n.kind === 'plugin');
+  const byName = (nodes: PluginNode[], name: string) => nodes.find((n) => n.plugin.name === name)!;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'plugin-badge-'));
+    const dataFolder = join(dir, 'Game', 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
+    // A vanilla plugin no mod provides — resolved via gamePath/Data.
+    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
+    // Two mods: Provider ships Base.esp; Consumer ships Child.esp mastering Base.esp.
+    for (const [modName, file, masters] of [
+      ['Provider', 'Base.esp', ['Fallout4.esm']],
+      ['Consumer', 'Child.esp', ['Base.esp']],
+    ] as const) {
+      await mkdir(join(dir, 'mods', modName), { recursive: true });
+      await writeFile(join(dir, 'mods', modName, file), buildTes4Buffer([...masters]));
+    }
+    await writeFile(
+      join(dir, 'ModOrganizer.ini'),
+      `[General]\r\nselected_profile=@ByteArray(Default)\r\ngamePath=@ByteArray(${join(dir, 'Game')})\r\n`,
+    );
+    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+Consumer\r\n+Provider\r\n');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const provider = () => new PluginListProvider(new Mo2ModlistSource(dir), undefined, undefined, dir);
+
+  it('badges a plugin whose master is sequenced after it', async () => {
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
+    const nodes = await pluginNodes(provider());
+    expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
+    expect(byName(nodes, 'Child.esp').tooltip).toContain('Base.esp');
+  });
+
+  it('badges a plugin whose master is absent from plugins.txt entirely', async () => {
+    // Child.esp masters Base.esp, but Base.esp has no line at all → flagged.
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\n');
+    const nodes = await pluginNodes(provider());
+    expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
+  });
+
+  it('leaves a correctly-ordered plugin unbadged', async () => {
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nBase.esp\r\nChild.esp\r\n');
+    const nodes = await pluginNodes(provider());
+    expect(byName(nodes, 'Child.esp').iconPath).toBeUndefined();
+    expect(byName(nodes, 'Base.esp').iconPath).toBeUndefined();
+  });
+
+  it('checks a vanilla row the same way (no special-casing)', async () => {
+    // Base.esp (mod) before Fallout4.esm (vanilla) — Base's vanilla master loads too late.
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Base.esp\r\nFallout4.esm\r\nChild.esp\r\n');
+    const nodes = await pluginNodes(provider());
+    expect(byName(nodes, 'Base.esp').iconPath).toEqual({ id: 'error' });
+    expect(byName(nodes, 'Base.esp').tooltip).toContain('Fallout4.esm');
+  });
+
+  it('renders the plain tree (badges degraded) with a warning when status computation fails', async () => {
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
+    const logs: string[] = [];
+    const reports: { severity: string; message: string }[] = [];
+    // instanceRoot pointed at a *file*, not a directory: readModlist hits ENOTDIR,
+    // failing the status pass without failing the plugins.txt read (which uses the real dir).
+    const source = new Mo2ModlistSource(dir);
+    const provider = new PluginListProvider(source, (m) => logs.push(m), { report: (severity, message) => reports.push({ severity, message }) }, join(dir, 'ModOrganizer.ini'));
+    const rows = await provider.getChildren();
+    const nodes = rows.filter((n): n is PluginNode => n.kind === 'plugin');
+
+    expect(rows.every((n) => n.kind !== 'error')).toBe(true); // tree still rendered
+    expect(byName(nodes, 'Child.esp').iconPath).toBeUndefined(); // no badge — computation failed
+    expect(reports).toEqual([{ severity: 'warning', message: expect.stringContaining('master-order status') }]);
+    expect(logs.some((l) => l.includes('status'))).toBe(true);
   });
 });

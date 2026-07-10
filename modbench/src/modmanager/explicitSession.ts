@@ -7,11 +7,27 @@
 
 import { join } from 'node:path';
 import type { IModlistSource } from './model';
-import { buildFileConflictIndex, type FileConflictIndex } from './fileConflictIndex';
+import { buildFileConflictIndex, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
 
 export interface ExplicitPlugin {
   name: string;
   path: string;
+}
+
+/** Resolve each plugin name to its winning physical path: the MO2-priority
+ *  FileConflictIndex winner for a mod-provided plugin, else the game's Data
+ *  folder for a base-game/DLC/CC plugin no mod provides. Keyed by lowercased
+ *  name (plugins.txt casing is not authoritative). Only root-level index files
+ *  are considered — a nested file sharing a plugin's basename must not shadow
+ *  the real plugin. Shared by the editing-session builder and the Plugin List's
+ *  order-aware missing-master check. */
+export function resolvePluginPaths(
+  names: string[],
+  index: FileConflictIndex,
+  dataFolder: string,
+): Map<string, string> {
+  const winnerByName = rootLevelWinners(index);
+  return new Map(names.map((name) => [name, winnerByName.get(name.toLowerCase()) ?? join(dataFolder, name)]));
 }
 
 type Source = Pick<IModlistSource, 'readEnabledPlugins' | 'readModlist'>;
@@ -30,15 +46,6 @@ export async function buildExplicitPlugins(
     source.readModlist().then((entries) => buildIndex(entries, instanceRoot)),
   ]);
 
-  // Root-level files only (plugins live at a mod's root) — a nested file that
-  // happens to share a plugin's basename must not shadow the real plugin.
-  const winnerByName = new Map<string, string>();
-  for (const [relativePath, entry] of index.files) {
-    if (!relativePath.includes('/')) winnerByName.set(relativePath.toLowerCase(), entry.winner);
-  }
-
-  return names.map((name) => ({
-    name,
-    path: winnerByName.get(name.toLowerCase()) ?? join(dataFolder, name),
-  }));
+  const pathByName = resolvePluginPaths(names, index, dataFolder);
+  return names.map((name) => ({ name, path: pathByName.get(name)! }));
 }
