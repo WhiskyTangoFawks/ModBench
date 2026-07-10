@@ -82,6 +82,11 @@
           "when": "modbench.viewMode == 'loadout'"
         },
         {
+          "id": "modbench.pluginListTree",
+          "name": "Plugins",
+          "when": "modbench.viewMode == 'loadout'"
+        },
+        {
           "id": "modbench.pluginTree",
           "name": "Plugins",
           "when": "modbench.viewMode == 'editing'"
@@ -260,10 +265,20 @@
         "command": "modbench.downloads.open",
         "title": "Modbench: Open Downloads",
         "icon": "$(archive)"
+      },
+      {
+        "command": "modbench.pluginListTree.refresh",
+        "title": "Modbench: Refresh Plugin List",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "modbench.pluginListTree.refresh",
+          "when": "view == modbench.pluginListTree",
+          "group": "navigation"
+        },
         {
           "command": "modbench.refreshTree",
           "when": "view == modbench.pluginTree",
