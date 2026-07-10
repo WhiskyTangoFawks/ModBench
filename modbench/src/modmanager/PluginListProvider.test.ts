@@ -30,6 +30,7 @@ import { PluginListProvider, PluginNode, ErrorNode, EmptyNode } from './PluginLi
 /** Minimal IModlistSource stub: only the two plugin read methods matter here;
  *  everything else throws to prove PluginListProvider never touches them. */
 class FakeSource implements IModlistSource {
+  setPluginEnabledCalls: { pluginName: string; enabled: boolean }[] = [];
   constructor(
     private readonly order: string[] | Error,
     private readonly enabled: string[] = [],
@@ -55,7 +56,10 @@ class FakeSource implements IModlistSource {
   listSeparators(): Promise<string[]> { throw new Error('unused'); }
   getActiveProfile(): Promise<string> { throw new Error('unused'); }
   setActiveProfile(): Promise<void> { throw new Error('unused'); }
-  setPluginEnabled(): Promise<void> { throw new Error('unused'); }
+  setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
+    this.setPluginEnabledCalls.push({ pluginName, enabled });
+    return Promise.resolve();
+  }
   reorderPlugins(): Promise<void> { throw new Error('unused'); }
 }
 
@@ -96,6 +100,18 @@ describe('PluginListProvider', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toBeInstanceOf(EmptyNode);
     expect(rows[0].label).toBe('No plugins');
+  });
+
+  it('setPluginEnabled delegates to the source and fires a refresh', async () => {
+    const source = new FakeSource(['A.esp']);
+    const provider = new PluginListProvider(source);
+    let fired = false;
+    provider.onDidChangeTreeData(() => { fired = true; });
+
+    await provider.setPluginEnabled('A.esp', false);
+
+    expect(source.setPluginEnabledCalls).toEqual([{ pluginName: 'A.esp', enabled: false }]);
+    expect(fired).toBe(true);
   });
 
   it('refresh() fires onDidChangeTreeData so the Refresh button can re-read', () => {

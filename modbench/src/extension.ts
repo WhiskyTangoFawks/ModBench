@@ -533,8 +533,9 @@ interface PluginListDeps {
   modlistSource: Mo2ModlistSource;
   log: (msg: string) => void;
 }
-/** Plugin List (Loadout) tree: a read-only view of plugins.txt, stacked below
- *  the Mods tree, with a title-bar Refresh that forces a re-read. */
+/** Plugin List (Loadout) tree: a view of plugins.txt, stacked below the Mods
+ *  tree. A row's checkbox toggles its enabled state (writing plugins.txt
+ *  immediately); a title-bar Refresh forces a re-read. */
 function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
   const { modlistSource, log } = deps;
   const pluginListProvider = new PluginListProvider(modlistSource, log);
@@ -543,6 +544,20 @@ function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
   });
   return [
     pluginListView,
+    pluginListView.onDidChangeCheckboxState(async (e) => {
+      for (const [node, state] of e.items) {
+        if (node.kind !== 'plugin') continue;
+        try {
+          await pluginListProvider.setPluginEnabled(node.plugin.name, state === vscode.TreeItemCheckboxState.Checked);
+        } catch (err) {
+          // ADR-0026: a failed user action must surface, not silently leave the checkbox
+          // out of sync with disk. Log detail, notify, and refresh to resync the checkbox.
+          log(`[extension] toggling "${node.plugin.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
+          void vscode.window.showErrorMessage(`Modbench: Failed to update "${node.plugin.name}".`);
+          pluginListProvider.refresh();
+        }
+      }
+    }),
     vscode.commands.registerCommand('modbench.pluginListTree.refresh', () => pluginListProvider.refresh()),
   ];
 }
