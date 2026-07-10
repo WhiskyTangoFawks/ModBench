@@ -99,6 +99,7 @@ describe('modbench command registration', () => {
     'modbench.modList.separator.rename',
     'modbench.modList.separator.addSeparatorBelow',
     'modbench.modList.separator.delete',
+    'modbench.downloads.open',
   ];
 
   it('registers all expected commands on activation', async () => {
@@ -161,5 +162,33 @@ describe('modbench.openEditor', () => {
     const editTab = tabs.find(t => String(t.label).startsWith('First Record') || String(t.label).startsWith('Second Record'));
     assert.ok(editTab, 'Expected an mEdit tab to exist');
     assert.strictEqual(editTab.label, 'Second Record', 'Panel title should update to the most recently opened record');
+  });
+});
+
+// ── downloads.open ──────────────────────────────────────────────────────────
+
+describe('modbench.downloads.open', () => {
+  it('opens a new webview tab (test workspace has no downloads/ folder)', async () => {
+    const tabsBefore = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+
+    await vscode.commands.executeCommand('modbench.downloads.open');
+    await new Promise(r => setTimeout(r, 500));
+
+    const tabsAfter = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+    assert.ok(tabsAfter > tabsBefore, 'Expected a new tab to be opened by modbench.downloads.open');
+  });
+
+  it('reuses the existing panel on a second call', async () => {
+    const tabsAfterFirst = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+
+    await vscode.commands.executeCommand('modbench.downloads.open');
+    await new Promise(r => setTimeout(r, 300));
+
+    const tabsAfterSecond = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+    assert.strictEqual(
+      tabsAfterSecond,
+      tabsAfterFirst,
+      'Second modbench.downloads.open call should reuse the existing panel, not open a new tab'
+    );
   });
 });

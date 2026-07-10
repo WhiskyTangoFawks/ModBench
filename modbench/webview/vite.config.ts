@@ -12,6 +12,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "src/index.html"),
         referencedBy: resolve(__dirname, "src/referenced-by.html"),
+        downloads: resolve(__dirname, "src/downloads.html"),
       },
       output: {
         entryFileNames: "assets/[name].js",
