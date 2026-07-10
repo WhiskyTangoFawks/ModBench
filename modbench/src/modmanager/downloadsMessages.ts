@@ -14,6 +14,7 @@ export const WEBVIEW_TO_EXTENSION = {
   OPEN_FILE: 'downloadsOpenFile',
   OPEN_META: 'downloadsOpenMeta',
   REVEAL: 'downloadsReveal',
+  DELETE: 'downloadsDelete',
 } as const;
 
 export type ExtensionToWebview =
@@ -28,4 +29,5 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.VISIT_NEXUS; name: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FILE; name: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_META; name: string }
-  | { type: typeof WEBVIEW_TO_EXTENSION.REVEAL; name: string };
+  | { type: typeof WEBVIEW_TO_EXTENSION.REVEAL; name: string }
+  | { type: typeof WEBVIEW_TO_EXTENSION.DELETE; name: string };

@@ -190,3 +190,30 @@ describe('DownloadsApp — navigational row actions', () => {
     );
   });
 });
+
+describe('DownloadsApp — delete row action', () => {
+  const rows = [{ name: 'foo.zip', status: 'Downloaded', size: 100, mtimeMs: 200 }];
+
+  it('right-clicking a row shows a Delete menu item', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.contextMenu(screen.getByText('foo.zip'));
+    expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument();
+  });
+
+  it('clicking Delete posts a DELETE message with the row name', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.contextMenu(screen.getByText('foo.zip'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.DELETE, name: 'foo.zip' });
+  });
+
+  it('closes the menu after Delete is clicked', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.contextMenu(screen.getByText('foo.zip'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).not.toBeInTheDocument();
+  });
+});

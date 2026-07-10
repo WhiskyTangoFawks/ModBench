@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { buildDownloadRows, parseDownloadMeta, setInstalledInText, type DownloadEntry } from './mo2/downloads';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type WebviewToExtension } from './downloadsMessages';
 import { createDownloadsWatcher } from './downloadsWatcher';
+import { deleteDownload } from './deleteDownload';
 import { readGameName } from './mo2/modOrganizerIni';
 import { nexusSlugForGame } from './mo2/nexusSlug';
 
@@ -111,6 +112,36 @@ async function runRowAction(
   }
 }
 
+/** Row Delete action: move the archive and its `.meta` sidecar (if any) to the
+ *  system trash, behind a modal confirmation. All sequencing/ordering lives in
+ *  the injected-dep `deleteDownload` (unit-tested); this adapter only supplies
+ *  the VS Code surface — the native confirm, trash via `workspace.fs.delete`
+ *  with `useTrash`, and ADR-0026 failure surfacing. The file-watcher removes the
+ *  row on its own once the archive leaves disk. Never touches the installed mod. */
+async function deleteArchive(instanceRoot: string, name: string, log: (msg: string) => void): Promise<void> {
+  const archivePath = join(instanceRoot, 'downloads', name);
+  const metaPath = `${archivePath}.meta`;
+  await deleteDownload({
+    archivePath,
+    metaPath,
+    confirm: async () =>
+      (await vscode.window.showWarningMessage(
+        `Delete "${name}"? The archive and its .meta file (if any) will be moved to the system trash.`,
+        { modal: true },
+        'Delete',
+      )) === 'Delete',
+    metaExists: async () => (await readMetaText(metaPath)) !== undefined,
+    trash: async (path) => {
+      await vscode.workspace.fs.delete(vscode.Uri.file(path), { useTrash: true });
+    },
+    reportFailure: (message) => {
+      log(`[DownloadsPanel] deleting "${name}" failed: ${message}`);
+      // ADR-0026: explicit user action failed -> error notification + log.
+      void vscode.window.showErrorMessage(`Modbench: Failed to delete "${name}".`);
+    },
+  });
+}
+
 /** Row Visit-on-Nexus action: read the archive's `.meta` for the Nexus mod id
  *  and the instance's game for the slug, then open the mod's Nexus page. No-op
  *  when there's no mod id (the webview also gates the action off). */
@@ -120,6 +151,41 @@ async function visitOnNexus(instanceRoot: string, name: string): Promise<void> {
   if (!modID) return;
   const slug = nexusSlugForGame(readGameName(await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8')));
   await vscode.env.openExternal(vscode.Uri.parse(`https://www.nexusmods.com/${slug}/mods/${modID}`));
+}
+
+/** Map each webview message type to its handler. READY fires the first scan:
+ *  the extension waits for the webview's own message listener to be live rather
+ *  than posting immediately after `webview.html` is set, which would race the
+ *  page still loading. REFRESH is the manual re-scan. The rest are per-row
+ *  actions carrying the row `name`. */
+function buildMessageHandlers(
+  instanceRoot: string,
+  log: (msg: string) => void,
+  refresh: () => Promise<void>,
+): Record<string, (name: string) => void> {
+  return {
+    [WEBVIEW_TO_EXTENSION.READY]: () => void refresh(),
+    [WEBVIEW_TO_EXTENSION.REFRESH]: () => void refresh(),
+    [WEBVIEW_TO_EXTENSION.INSTALL]: (name) => void installArchive(instanceRoot, name, log),
+    [WEBVIEW_TO_EXTENSION.VISIT_NEXUS]: (name) =>
+      void runRowAction('Visit on Nexus', name, log, () => visitOnNexus(instanceRoot, name)),
+    // OS-open the archive in the system's associated application.
+    [WEBVIEW_TO_EXTENSION.OPEN_FILE]: (name) =>
+      void runRowAction('Open File', name, log, async () => {
+        await vscode.env.openExternal(vscode.Uri.file(join(instanceRoot, 'downloads', name)));
+      }),
+    // Open the `.meta` sidecar in the editor (webview gates this off when absent).
+    [WEBVIEW_TO_EXTENSION.OPEN_META]: (name) =>
+      void runRowAction('Open Meta File', name, log, async () => {
+        await vscode.window.showTextDocument(vscode.Uri.file(join(instanceRoot, 'downloads', `${name}.meta`)));
+      }),
+    // Reveal the archive in the OS file manager.
+    [WEBVIEW_TO_EXTENSION.REVEAL]: (name) =>
+      void runRowAction('Reveal in Explorer', name, log, async () => {
+        await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(join(instanceRoot, 'downloads', name)));
+      }),
+    [WEBVIEW_TO_EXTENSION.DELETE]: (name) => void deleteArchive(instanceRoot, name, log),
+  };
 }
 
 export function openDownloadsPanel(
@@ -159,31 +225,11 @@ export function openDownloadsPanel(
     }
   };
 
+  const handlers = buildMessageHandlers(instanceRoot, log, refresh);
   panel.webview.onDidReceiveMessage((msg: unknown) => {
     if (typeof msg === 'object' && msg !== null && 'type' in msg) {
       const m = msg as WebviewToExtension;
-      // READY fires the first scan: the extension waits for the webview's own
-      // message listener to be live rather than posting immediately after
-      // `webview.html` is set, which would race the page still loading.
-      if (m.type === WEBVIEW_TO_EXTENSION.READY || m.type === WEBVIEW_TO_EXTENSION.REFRESH) void refresh();
-      else if (m.type === WEBVIEW_TO_EXTENSION.INSTALL) void installArchive(instanceRoot, m.name, log);
-      else if (m.type === WEBVIEW_TO_EXTENSION.VISIT_NEXUS)
-        void runRowAction('Visit on Nexus', m.name, log, () => visitOnNexus(instanceRoot, m.name));
-      else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_FILE)
-        // OS-open the archive in the system's associated application.
-        void runRowAction('Open File', m.name, log, async () => {
-          await vscode.env.openExternal(vscode.Uri.file(join(instanceRoot, 'downloads', m.name)));
-        });
-      else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_META)
-        // Open the `.meta` sidecar in the editor (webview gates this off when absent).
-        void runRowAction('Open Meta File', m.name, log, async () => {
-          await vscode.window.showTextDocument(vscode.Uri.file(join(instanceRoot, 'downloads', `${m.name}.meta`)));
-        });
-      else if (m.type === WEBVIEW_TO_EXTENSION.REVEAL)
-        // Reveal the archive in the OS file manager.
-        void runRowAction('Reveal in Explorer', m.name, log, async () => {
-          await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(join(instanceRoot, 'downloads', m.name)));
-        });
+      handlers[m.type]?.('name' in m ? m.name : '');
     }
   });
 
