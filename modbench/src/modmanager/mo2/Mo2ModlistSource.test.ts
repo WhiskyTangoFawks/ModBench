@@ -122,6 +122,31 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(await src.readEnabledPlugins()).toEqual(['Foo.esp', 'Baz.esl']);
   });
 
+  const pluginsPath = () => join(dir, 'profiles', 'Default', 'plugins.txt');
+
+  it('setPluginEnabled removes only the target * on disk, preserving all other bytes', async () => {
+    const before = await readFile(pluginsPath(), 'utf8');
+    await src.setPluginEnabled('Unofficial Fallout 4 Patch.esp', false);
+    const after = await readFile(pluginsPath(), 'utf8');
+    expect(after).toBe(before.replace('*Unofficial Fallout 4 Patch.esp', 'Unofficial Fallout 4 Patch.esp'));
+  });
+
+  it('reorderPlugins writes the new load order to disk', async () => {
+    await src.reorderPlugins(['ccSBJFO4003-Grenade.esl'], 0);
+    expect(await src.readPluginOrder()).toEqual([
+      'ccSBJFO4003-Grenade.esl',
+      'Unofficial Fallout 4 Patch.esp',
+    ]);
+  });
+
+  it('setPluginEnabled throws for an absent plugin, and does not block a later mutation', async () => {
+    await expect(src.setPluginEnabled('No Such.esp', false)).rejects.toThrow(/not found/);
+    await src.setPluginEnabled('Unofficial Fallout 4 Patch.esp', false);
+    const after = await readFile(pluginsPath(), 'utf8');
+    expect(after).toContain('Unofficial Fallout 4 Patch.esp\r\n');
+    expect(after).not.toContain('*Unofficial Fallout 4 Patch.esp');
+  });
+
   it('insertSeparator after a mod places the new separator immediately below it', async () => {
     await src.insertSeparator('New Group', 'SKK Fast Start new game (Fallout 4)');
     const entries = await src.readModlist();

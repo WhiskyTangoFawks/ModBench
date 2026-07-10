@@ -22,6 +22,14 @@ export interface Separator {
 
 export type ModlistEntry = Mod | Separator;
 
+/** A single plugins.txt line (a plugin file), in Plugin load order. The `*`
+ *  prefix (MO2's enabled marker) is modelled as `enabled`; the marker itself is
+ *  never surfaced in `name`. Distinct from a Mod: plugins.txt has no separators. */
+export interface PluginEntry {
+  name: string;
+  enabled: boolean;
+}
+
 /** Metadata known at install time for a new mod's meta.ini. For a manual local
  *  install only `installationFile` is typically known; Nexus id/version arrive
  *  with the download flow (Modbench-7). */
@@ -64,4 +72,13 @@ export interface IModlistSource {
   /** plugins.txt load order, enabled-only (the `*`-prefixed lines) — the plugins
    *  that actually load, used to build a `load-explicit` editing session. */
   readEnabledPlugins(): Promise<string[]>;
+  /** Set a plugin's enabled state (plugins.txt's `*` marker), byte-faithfully.
+   *  Throws if the plugin is absent. */
+  setPluginEnabled(pluginName: string, enabled: boolean): Promise<void>;
+  /** Move one or more plugins (by name) so the moved block occupies entry-index
+   *  `toIndex` among plugins.txt's lines (top = loads first), counting entries
+   *  with the moved lines removed. Preserves the moved lines' relative order
+   *  regardless of selection contiguity or the order names are given in. Throws
+   *  if any name is absent. */
+  reorderPlugins(pluginNames: string[], toIndex: number): Promise<void>;
 }

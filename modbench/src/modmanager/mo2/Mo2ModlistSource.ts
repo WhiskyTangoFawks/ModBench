@@ -14,6 +14,7 @@ import {
   renameSeparatorInText,
   setEnabledInText,
 } from './modlistText';
+import { movePluginsInText, setPluginEnabledInText } from './pluginsText';
 import { parseMetaIni, writeMetaIni } from './metaIni';
 import { readGameName, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
 import { nexusSlugForGame } from './nexusSlug';
@@ -29,6 +30,8 @@ const exists = (path: string): Promise<boolean> =>
  *  Reads/writes the active profile; all writes are byte-faithful. */
 export class Mo2ModlistSource implements IModlistSource {
   private modlistMutex: Promise<void> = Promise.resolve();
+
+  private pluginsMutex: Promise<void> = Promise.resolve();
 
   private readonly log: (msg: string) => void;
 
@@ -172,6 +175,22 @@ export class Mo2ModlistSource implements IModlistSource {
     await writeFile(this.iniPath, setSelectedProfileInText(await readFile(this.iniPath, 'utf8'), name));
   }
 
+  private async pluginsPath(): Promise<string> {
+    const profile = await this.getActiveProfile();
+    return join(this.instanceRoot, 'profiles', profile, 'plugins.txt');
+  }
+
+  private modifyPlugins(fn: (text: string) => string): Promise<void> {
+    const task = this.pluginsMutex.then(async () => {
+      const path = await this.pluginsPath();
+      await writeFile(path, fn(await readFile(path, 'utf8')));
+    });
+    // Chain tail must never stay rejected, or every later call would hang forever
+    // waiting on a dead link — only the caller's own `task` should see the error.
+    this.pluginsMutex = task.catch(() => undefined);
+    return task;
+  }
+
   async readPluginOrder(): Promise<string[]> {
     return (await this.readPluginLines()).map((l) => (l.startsWith('*') ? l.slice(1) : l));
   }
@@ -182,10 +201,17 @@ export class Mo2ModlistSource implements IModlistSource {
       .map((l) => l.slice(1));
   }
 
+  async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
+    await this.modifyPlugins((t) => setPluginEnabledInText(t, pluginName, enabled));
+  }
+
+  async reorderPlugins(pluginNames: string[], toIndex: number): Promise<void> {
+    await this.modifyPlugins((t) => movePluginsInText(t, pluginNames, toIndex));
+  }
+
   /** Non-comment, non-blank plugins.txt lines in order (leading `*` retained). */
   private async readPluginLines(): Promise<string[]> {
-    const profile = await this.getActiveProfile();
-    const text = await readFile(join(this.instanceRoot, 'profiles', profile, 'plugins.txt'), 'utf8');
+    const text = await readFile(await this.pluginsPath(), 'utf8');
     return text
       .split(/\r\n|\r|\n/)
       .map((l) => l.trim()) // also strips a leading UTF-8 BOM (U+FEFF) so the comment header still matches
