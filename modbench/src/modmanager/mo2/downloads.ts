@@ -108,9 +108,18 @@ export function setHiddenInText(text: string, hidden: boolean): string {
 /** Filter hidden rows for rendering — a view concern, so it runs client-side on
  *  the already-built rows (like `sortDownloadRows`), not in row building. Off
  *  by default excludes hidden rows; on includes all, flags left intact so the
- *  webview can dim them. #61's future name-filter composes after this. */
+ *  webview can dim them. The name-filter (`filterRowsByName`) composes after this. */
 export function filterHiddenRows(rows: DownloadRow[], showHidden: boolean): DownloadRow[] {
   return showHidden ? rows : rows.filter((r) => !r.hidden);
+}
+
+/** Filter rows by a case-insensitive substring match on Name — the toolbar
+ *  Filter box. A view concern like `filterHiddenRows`, run client-side and
+ *  composed AFTER it (hidden-filtering wins first). An empty or whitespace-only
+ *  query returns all rows. */
+export function filterRowsByName(rows: DownloadRow[], query: string): DownloadRow[] {
+  const q = query.trim().toLowerCase();
+  return q === '' ? rows : rows.filter((r) => r.name.toLowerCase().includes(q));
 }
 
 /** Build render-ready rows: suppresses `.meta` sidecars as their own rows,

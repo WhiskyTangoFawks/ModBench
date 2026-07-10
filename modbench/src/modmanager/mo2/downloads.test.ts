@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildDownloadRows,
   filterHiddenRows,
+  filterRowsByName,
   parseDownloadMeta,
   setHiddenInText,
   setInstalledInText,
@@ -88,6 +89,19 @@ describe('filterHiddenRows', () => {
     const shown = filterHiddenRows(rows, true);
     expect(shown.map((r) => r.name)).toEqual(['visible.zip', 'hidden.zip']);
     expect(shown.find((r) => r.name === 'hidden.zip')?.hidden).toBe(true);
+  });
+});
+
+describe('filterRowsByName', () => {
+  const rows = [row('Sleep Or Save.zip', 1), row('other.zip', 2)];
+
+  it('matches name by case-insensitive substring', () => {
+    expect(filterRowsByName(rows, 'SlEeP').map((r) => r.name)).toEqual(['Sleep Or Save.zip']);
+  });
+
+  it('shows all rows for an empty (or whitespace-only) filter', () => {
+    expect(filterRowsByName(rows, '').map((r) => r.name)).toEqual(['Sleep Or Save.zip', 'other.zip']);
+    expect(filterRowsByName(rows, '   ').map((r) => r.name)).toEqual(['Sleep Or Save.zip', 'other.zip']);
   });
 });
 
