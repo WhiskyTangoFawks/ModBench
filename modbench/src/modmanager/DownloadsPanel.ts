@@ -4,6 +4,7 @@ import { readdir, stat, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildDownloadRows, type DownloadEntry } from './mo2/downloads';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type WebviewToExtension } from './downloadsMessages';
+import { createDownloadsWatcher } from './downloadsWatcher';
 
 const PANEL_KEY = '__downloads__';
 
@@ -71,7 +72,6 @@ export function openDownloadsPanel(
     localResourceRoots: [vscode.Uri.file(join(context.extensionPath, 'out', 'webview'))],
   });
   openPanels.set(PANEL_KEY, panel);
-  panel.onDidDispose(() => openPanels.delete(PANEL_KEY));
 
   const refresh = async (): Promise<void> => {
     try {
@@ -100,6 +100,12 @@ export function openDownloadsPanel(
       // `webview.html` is set, which would race the page still loading.
       if (m.type === WEBVIEW_TO_EXTENSION.READY || m.type === WEBVIEW_TO_EXTENSION.REFRESH) void refresh();
     }
+  });
+
+  const watcher = createDownloadsWatcher(instanceRoot, () => void refresh());
+  panel.onDidDispose(() => {
+    watcher.dispose();
+    openPanels.delete(PANEL_KEY);
   });
 
   const scriptUri = panel.webview.asWebviewUri(
