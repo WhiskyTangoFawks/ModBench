@@ -2,9 +2,11 @@ import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import { readdir, stat, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { buildDownloadRows, setInstalledInText, type DownloadEntry } from './mo2/downloads';
+import { buildDownloadRows, parseDownloadMeta, setInstalledInText, type DownloadEntry } from './mo2/downloads';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type WebviewToExtension } from './downloadsMessages';
 import { createDownloadsWatcher } from './downloadsWatcher';
+import { readGameName } from './mo2/modOrganizerIni';
+import { nexusSlugForGame } from './mo2/nexusSlug';
 
 const PANEL_KEY = '__downloads__';
 
@@ -90,6 +92,36 @@ async function installArchive(instanceRoot: string, name: string, log: (msg: str
   }
 }
 
+/** Run a per-row navigational action, surfacing any failure per ADR-0026
+ *  (an explicit user action failing → error notification + output log). The
+ *  thin nav actions (open/reveal/visit) can all reject — e.g. a `.meta` raced
+ *  away, an OS with no handler — so none may be fire-and-forget. */
+async function runRowAction(
+  label: string,
+  name: string,
+  log: (msg: string) => void,
+  action: () => Promise<void>,
+): Promise<void> {
+  try {
+    await action();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log(`[DownloadsPanel] ${label} for "${name}" failed: ${message}`);
+    void vscode.window.showErrorMessage(`Modbench: ${label} for "${name}" failed.`);
+  }
+}
+
+/** Row Visit-on-Nexus action: read the archive's `.meta` for the Nexus mod id
+ *  and the instance's game for the slug, then open the mod's Nexus page. No-op
+ *  when there's no mod id (the webview also gates the action off). */
+async function visitOnNexus(instanceRoot: string, name: string): Promise<void> {
+  const metaText = await readMetaText(join(instanceRoot, 'downloads', `${name}.meta`));
+  const modID = metaText ? parseDownloadMeta(metaText).modID : undefined;
+  if (!modID) return;
+  const slug = nexusSlugForGame(readGameName(await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8')));
+  await vscode.env.openExternal(vscode.Uri.parse(`https://www.nexusmods.com/${slug}/mods/${modID}`));
+}
+
 export function openDownloadsPanel(
   context: vscode.ExtensionContext,
   openPanels: Map<string, vscode.WebviewPanel>,
@@ -135,6 +167,23 @@ export function openDownloadsPanel(
       // `webview.html` is set, which would race the page still loading.
       if (m.type === WEBVIEW_TO_EXTENSION.READY || m.type === WEBVIEW_TO_EXTENSION.REFRESH) void refresh();
       else if (m.type === WEBVIEW_TO_EXTENSION.INSTALL) void installArchive(instanceRoot, m.name, log);
+      else if (m.type === WEBVIEW_TO_EXTENSION.VISIT_NEXUS)
+        void runRowAction('Visit on Nexus', m.name, log, () => visitOnNexus(instanceRoot, m.name));
+      else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_FILE)
+        // OS-open the archive in the system's associated application.
+        void runRowAction('Open File', m.name, log, async () => {
+          await vscode.env.openExternal(vscode.Uri.file(join(instanceRoot, 'downloads', m.name)));
+        });
+      else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_META)
+        // Open the `.meta` sidecar in the editor (webview gates this off when absent).
+        void runRowAction('Open Meta File', m.name, log, async () => {
+          await vscode.window.showTextDocument(vscode.Uri.file(join(instanceRoot, 'downloads', `${m.name}.meta`)));
+        });
+      else if (m.type === WEBVIEW_TO_EXTENSION.REVEAL)
+        // Reveal the archive in the OS file manager.
+        void runRowAction('Reveal in Explorer', m.name, log, async () => {
+          await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(join(instanceRoot, 'downloads', m.name)));
+        });
     }
   });
 

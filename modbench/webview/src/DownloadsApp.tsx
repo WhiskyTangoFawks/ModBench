@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { vscode } from './downloadsVscode';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './downloadsMessages';
+import {
+  EXTENSION_TO_WEBVIEW,
+  WEBVIEW_TO_EXTENSION,
+  type ExtensionToWebview,
+  type WebviewToExtension,
+} from './downloadsMessages';
 import { sortDownloadRows, type DownloadRow, type DownloadSortColumn } from './downloadsModel';
 
 type State =
@@ -23,30 +28,60 @@ function handleRefresh() {
 interface RowContextMenuProps {
   readonly x: number;
   readonly y: number;
-  readonly name: string;
+  readonly row: DownloadRow;
   readonly onClose: () => void;
 }
 
-/** Row-scoped context menu — the seam future row actions (nav actions,
- *  Delete, Hide/Unhide) each add one more item to. */
-function RowContextMenu({ x, y, name, onClose }: RowContextMenuProps) {
-  function install() {
-    vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.INSTALL, name });
+interface MenuItemProps {
+  readonly label: string;
+  readonly disabled?: boolean;
+  readonly onActivate: () => void;
+}
+
+function MenuItem({ label, disabled, onActivate }: MenuItemProps) {
+  const activate = () => {
+    if (disabled) return;
+    onActivate();
+  };
+  return (
+    <li
+      role="menuitem"
+      aria-disabled={disabled ? 'true' : undefined}
+      tabIndex={disabled ? -1 : 0}
+      style={{ cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1 }}
+      onClick={activate}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') activate();
+      }}
+    >
+      {label}
+    </li>
+  );
+}
+
+/** Row-scoped context menu — the seam future row actions (Delete, Hide/Unhide)
+ *  each add one more item to. Nav actions gate on the row's `.meta`-derived
+ *  flags: Visit on Nexus needs a `modID`, Open Meta File needs a sidecar. */
+function RowContextMenu({ x, y, row, onClose }: RowContextMenuProps) {
+  const post = (type: WebviewToExtension['type']) => {
+    vscode.postMessage({ type, name: row.name });
     onClose();
-  }
+  };
   return (
     <ul role="menu" style={{ position: 'fixed', top: y, left: x, listStyle: 'none', margin: 0, padding: 4 }}>
-      <li
-        role="menuitem"
-        tabIndex={0}
-        style={{ cursor: 'pointer' }}
-        onClick={install}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') install();
-        }}
-      >
-        Install
-      </li>
+      <MenuItem label="Install" onActivate={() => post(WEBVIEW_TO_EXTENSION.INSTALL)} />
+      <MenuItem
+        label="Visit on Nexus"
+        disabled={!row.modID}
+        onActivate={() => post(WEBVIEW_TO_EXTENSION.VISIT_NEXUS)}
+      />
+      <MenuItem label="Open File" onActivate={() => post(WEBVIEW_TO_EXTENSION.OPEN_FILE)} />
+      <MenuItem
+        label="Open Meta File"
+        disabled={!row.hasMeta}
+        onActivate={() => post(WEBVIEW_TO_EXTENSION.OPEN_META)}
+      />
+      <MenuItem label="Reveal in Explorer" onActivate={() => post(WEBVIEW_TO_EXTENSION.REVEAL)} />
     </ul>
   );
 }
@@ -57,7 +92,7 @@ export function DownloadsApp() {
     column: 'mtimeMs',
     descending: true,
   });
-  const [menu, setMenu] = useState<{ x: number; y: number; name: string } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; row: DownloadRow } | null>(null);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -122,7 +157,7 @@ export function DownloadsApp() {
                 key={row.name}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  setMenu({ x: e.clientX, y: e.clientY, name: row.name });
+                  setMenu({ x: e.clientX, y: e.clientY, row });
                 }}
               >
                 <td>{row.name}</td>
@@ -134,7 +169,7 @@ export function DownloadsApp() {
           </tbody>
         </table>
       )}
-      {menu && <RowContextMenu x={menu.x} y={menu.y} name={menu.name} onClose={() => setMenu(null)} />}
+      {menu && <RowContextMenu x={menu.x} y={menu.y} row={menu.row} onClose={() => setMenu(null)} />}
     </div>
   );
 }
