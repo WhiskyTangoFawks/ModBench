@@ -108,3 +108,22 @@ export function movePluginsInText(text: string, pluginNames: string[], toIndex: 
     return lines.join('');
   });
 }
+
+/** Convert a UI drop onto a row into the `toIndex` `movePluginsInText` expects.
+ *  A drag hands us a *pre-removal* target ("insert the block before this row"),
+ *  but `movePluginsInText` counts `toIndex` among the entries with the moved
+ *  names already removed — so any moved row sitting above the target shifts it
+ *  left. `targetName` is the row dropped onto, or `undefined` to drop past the
+ *  last row (append). An unknown target name also appends (defensive). */
+export function dropIndexForMove(
+  order: string[],
+  movedNames: string[],
+  targetName: string | undefined,
+): number {
+  const moved = new Set(movedNames);
+  const found = targetName === undefined ? -1 : order.indexOf(targetName);
+  const targetIndex = found < 0 ? order.length : found;
+  let movedBefore = 0;
+  for (let i = 0; i < targetIndex; i++) if (moved.has(order[i])) movedBefore++;
+  return targetIndex - movedBefore;
+}
