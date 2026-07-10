@@ -22,6 +22,7 @@ import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
 import { buildExplicitPlugins } from './modmanager/explicitSession';
 import { detectRoot } from './modmanager/install/detectRoot';
 import { extractArchive } from './modmanager/install/extractArchive';
+import { openDownloadsPanel } from './modmanager/DownloadsPanel';
 
 let backendManager: BackendManager | undefined;
 
@@ -113,7 +114,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   registerDeploymentModeContext(context);
 
-  registerLoadoutView({ context, log, controller, changeGroupTreeProvider });
+  registerLoadoutView({ context, log, controller, changeGroupTreeProvider, openPanels });
 
   context.subscriptions.push(
     treeView,
@@ -517,11 +518,12 @@ interface LoadoutViewDeps {
   log: (msg: string) => void;
   controller: SessionController;
   changeGroupTreeProvider: ChangeGroupsTreeProvider;
+  openPanels: Map<string, vscode.WebviewPanel>;
 }
 /** Register the Loadout (Mod List) view and its commands. No-op with a neutral log
  *  when no workspace (MO2 instance) is open. */
 function registerLoadoutView(deps: LoadoutViewDeps): void {
-  const { context, log, controller, changeGroupTreeProvider } = deps;
+  const { context, log, controller, changeGroupTreeProvider, openPanels } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
     log('[extension] No workspace folder open — Mod List view not registered.');
@@ -595,7 +597,24 @@ function registerLoadoutView(deps: LoadoutViewDeps): void {
       ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
       ...registerModContextCommands({ instanceRoot, modlistSource, log, runModAction }),
       ...registerSeparatorCommands({ modlistSource, runModAction }),
+      ...registerDownloadsCommands({ context, openPanels, instanceRoot, log }),
     );
+}
+
+interface DownloadsDeps {
+  context: vscode.ExtensionContext;
+  openPanels: Map<string, vscode.WebviewPanel>;
+  instanceRoot: string;
+  log: (msg: string) => void;
+}
+/** Downloads tab: opens the editor-tab webview listing downloads/ archives. */
+function registerDownloadsCommands(deps: DownloadsDeps): vscode.Disposable[] {
+  const { context, openPanels, instanceRoot, log } = deps;
+  return [
+    vscode.commands.registerCommand('modbench.downloads.open', () => {
+      openDownloadsPanel(context, openPanels, instanceRoot, log);
+    }),
+  ];
 }
 
 interface EnterEditingDeps {

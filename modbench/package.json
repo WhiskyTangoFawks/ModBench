@@ -245,6 +245,11 @@
       {
         "command": "modbench.modList.separator.delete",
         "title": "Delete Separator"
+      },
+      {
+        "command": "modbench.downloads.open",
+        "title": "Modbench: Open Downloads",
+        "icon": "$(archive)"
       }
     ],
     "menus": {
@@ -308,6 +313,11 @@
           "command": "modbench.modList.launchGame",
           "when": "view == modbench.modList && modbench.deploymentStandalone",
           "group": "navigation@7"
+        },
+        {
+          "command": "modbench.downloads.open",
+          "when": "view == modbench.modList",
+          "group": "navigation@8"
         },
         {
           "command": "modbench.saveAllGroups",
