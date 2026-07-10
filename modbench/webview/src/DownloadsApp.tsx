@@ -82,6 +82,7 @@ function RowContextMenu({ x, y, row, onClose }: RowContextMenuProps) {
         onActivate={() => post(WEBVIEW_TO_EXTENSION.OPEN_META)}
       />
       <MenuItem label="Reveal in Explorer" onActivate={() => post(WEBVIEW_TO_EXTENSION.REVEAL)} />
+      <MenuItem label="Delete" onActivate={() => post(WEBVIEW_TO_EXTENSION.DELETE)} />
     </ul>
   );
 }
