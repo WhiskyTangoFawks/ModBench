@@ -9,6 +9,7 @@ export const EXTENSION_TO_WEBVIEW = {
 export const WEBVIEW_TO_EXTENSION = {
   READY: 'downloadsReady',
   REFRESH: 'downloadsRefresh',
+  INSTALL: 'downloadsInstall',
 } as const;
 
 export type ExtensionToWebview =
@@ -18,4 +19,5 @@ export type ExtensionToWebview =
 
 export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.READY }
-  | { type: typeof WEBVIEW_TO_EXTENSION.REFRESH };
+  | { type: typeof WEBVIEW_TO_EXTENSION.REFRESH }
+  | { type: typeof WEBVIEW_TO_EXTENSION.INSTALL; name: string };

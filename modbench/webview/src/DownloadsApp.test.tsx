@@ -98,3 +98,30 @@ describe('DownloadsApp — refresh', () => {
     expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.REFRESH });
   });
 });
+
+describe('DownloadsApp — row context menu', () => {
+  const rows = [{ name: 'foo.zip', status: 'Downloaded', size: 100, mtimeMs: 200 }];
+
+  it('right-clicking a row shows an Install menu item', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.contextMenu(screen.getByText('foo.zip'));
+    expect(screen.getByRole('menuitem', { name: 'Install' })).toBeInTheDocument();
+  });
+
+  it('clicking Install posts an INSTALL message with the row name', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.contextMenu(screen.getByText('foo.zip'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Install' }));
+    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.INSTALL, name: 'foo.zip' });
+  });
+
+  it('closes the menu after Install is clicked', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.contextMenu(screen.getByText('foo.zip'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Install' }));
+    expect(screen.queryByRole('menuitem', { name: 'Install' })).not.toBeInTheDocument();
+  });
+});

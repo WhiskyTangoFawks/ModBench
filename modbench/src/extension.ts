@@ -378,27 +378,34 @@ interface ModInstallDeps {
 function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { modlistSource, runModAction, promptModName, warnIfFomod } = deps;
   return [
-      vscode.commands.registerCommand('modbench.modList.installFromArchive', async () => {
-        const picked = await vscode.window.showOpenDialog({
-          canSelectMany: false,
-          filters: { 'Mod archives': ['zip', '7z', 'rar'] },
-          openLabel: 'Install',
-        });
-        const archive = picked?.[0]?.fsPath;
-        if (!archive) return;
-        const name = await promptModName(path.basename(archive).replace(/\.(zip|7z|rar)$/i, ''));
-        if (!name) return;
+      vscode.commands.registerCommand('modbench.modList.installFromArchive', async (archivePath?: string): Promise<boolean> => {
+        let archive = archivePath;
+        if (!archive) {
+          const picked = await vscode.window.showOpenDialog({
+            canSelectMany: false,
+            filters: { 'Mod archives': ['zip', '7z', 'rar'] },
+            openLabel: 'Install',
+          });
+          archive = picked?.[0]?.fsPath;
+        }
+        if (!archive) return false;
+        const resolvedArchive = archive;
+        const name = await promptModName(path.basename(resolvedArchive).replace(/\.(zip|7z|rar)$/i, ''));
+        if (!name) return false;
+        let succeeded = false;
         await runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
           const staging = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'medit-install-'));
           try {
-            await extractArchive(archive, staging);
+            await extractArchive(resolvedArchive, staging);
             const { sourceDir, isFomod } = await detectRoot(staging);
-            await modlistSource.installMod(name, sourceDir, { installationFile: path.basename(archive) });
+            await modlistSource.installMod(name, sourceDir, { installationFile: path.basename(resolvedArchive) });
             warnIfFomod(name, isFomod);
+            succeeded = true;
           } finally {
             await fs.promises.rm(staging, { recursive: true, force: true });
           }
         });
+        return succeeded;
       }),
       vscode.commands.registerCommand('modbench.modList.installFromFolder', async () => {
         const picked = await vscode.window.showOpenDialog({

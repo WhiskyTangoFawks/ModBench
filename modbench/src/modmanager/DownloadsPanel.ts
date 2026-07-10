@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import { readdir, stat, readFile } from 'node:fs/promises';
+import { readdir, stat, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { buildDownloadRows, type DownloadEntry } from './mo2/downloads';
+import { buildDownloadRows, setInstalledInText, type DownloadEntry } from './mo2/downloads';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type WebviewToExtension } from './downloadsMessages';
 import { createDownloadsWatcher } from './downloadsWatcher';
 
@@ -55,6 +55,41 @@ async function scanDownloads(instanceRoot: string): Promise<DownloadEntry[] | un
   );
 }
 
+/** Row Install action: delegate to the existing installFromArchive command
+ *  (pre-supplying the archive path so no file-picker appears), and on
+ *  success write `installed=true` back to the .meta sidecar. The Downloads
+ *  panel's file-watcher picks up that .meta change and refreshes the row's
+ *  Status on its own — no explicit refresh needed here. */
+async function installArchive(instanceRoot: string, name: string, log: (msg: string) => void): Promise<void> {
+  const archivePath = join(instanceRoot, 'downloads', name);
+  let installed = false;
+  try {
+    installed = (await vscode.commands.executeCommand<boolean>(
+      'modbench.modList.installFromArchive',
+      archivePath,
+    )) ?? false;
+    if (!installed) return;
+    const metaPath = `${archivePath}.meta`;
+    const metaText = (await readMetaText(metaPath)) ?? '';
+    await writeFile(metaPath, setInstalledInText(metaText), 'utf8');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (installed) {
+      // ADR-0026: integrity/silent-wrong-state (partial save) — the mod IS
+      // installed, only its Downloads bookkeeping failed. Must not read as
+      // "install failed", or the user may retry and get a duplicate mod.
+      log(`[DownloadsPanel] "${name}" installed but updating its Downloads status failed: ${message}`);
+      void vscode.window.showWarningMessage(
+        `Modbench: "${name}" was installed, but its Downloads status could not be updated — see the Modbench output log.`,
+      );
+    } else {
+      log(`[DownloadsPanel] installing "${name}" failed: ${message}`);
+      // ADR-0026: explicit user action failed -> error notification + log.
+      void vscode.window.showErrorMessage(`Modbench: Failed to install "${name}".`);
+    }
+  }
+}
+
 export function openDownloadsPanel(
   context: vscode.ExtensionContext,
   openPanels: Map<string, vscode.WebviewPanel>,
@@ -99,6 +134,7 @@ export function openDownloadsPanel(
       // message listener to be live rather than posting immediately after
       // `webview.html` is set, which would race the page still loading.
       if (m.type === WEBVIEW_TO_EXTENSION.READY || m.type === WEBVIEW_TO_EXTENSION.REFRESH) void refresh();
+      else if (m.type === WEBVIEW_TO_EXTENSION.INSTALL) void installArchive(instanceRoot, m.name, log);
     }
   });
 

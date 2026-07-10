@@ -6,6 +6,8 @@
 // values; the `removed=true` (hidden) flag is a separate axis owned by the
 // Hide/Unhide ticket, not this one — not modeled here.
 
+import { lineRanges } from './lineScan';
+
 export type DownloadStatus = 'Installed' | 'Removed' | 'Downloaded';
 
 /** A file in downloads/, pre-suppression: `.meta` sidecars still included so
@@ -54,6 +56,27 @@ export function parseDownloadMeta(text: string): { status: DownloadStatus } {
   if (values.get('uninstalled') === 'true') status = 'Removed';
   else if (values.get('installed') === 'true') status = 'Installed';
   return { status };
+}
+
+/** Surgically set `installed=true` in a `.meta` text (the Install writeback).
+ *  Byte-faithful: flips an existing `installed=` line's value in place, or
+ *  inserts the key right after `[General]`, or — if the archive had no
+ *  `.meta` at all (`text === ''`) — creates a minimal one from scratch. */
+export function setInstalledInText(text: string): string {
+  for (const { start, contentEnd } of lineRanges(text)) {
+    if (text.slice(start, contentEnd).startsWith('installed=')) {
+      return text.slice(0, start) + 'installed=true' + text.slice(contentEnd);
+    }
+  }
+  let eol = '\r\n';
+  if (!text.includes('\r\n') && text.includes('\n')) eol = '\n';
+  if (text.trim() === '') return `[General]${eol}installed=true${eol}`;
+  for (const { start, contentEnd, end } of lineRanges(text)) {
+    if (text.slice(start, contentEnd).trim() === '[General]') {
+      return text.slice(0, end) + `installed=true${eol}` + text.slice(end);
+    }
+  }
+  return `[General]${eol}installed=true${eol}` + text;
 }
 
 /** Build render-ready rows: suppresses `.meta` sidecars as their own rows,
