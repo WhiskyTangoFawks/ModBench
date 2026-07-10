@@ -86,6 +86,8 @@ describe('modbench command registration', () => {
     'modbench.modList.switchProfile',
     'modbench.modList.launchMedit',
     'modbench.modList.refresh',
+    'modbench.modList.sortDescending',
+    'modbench.modList.sortAscending',
     'modbench.modList.deploy',
     'modbench.modList.purge',
     'modbench.modList.launchGame',

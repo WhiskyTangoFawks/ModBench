@@ -322,6 +322,14 @@ function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[]
         modListProvider.refresh();
         void updateProfileDescription();
       }),
+      vscode.commands.registerCommand('modbench.modList.sortDescending', () => {
+        modListProvider.toggleSortOrder();
+        void vscode.commands.executeCommand('setContext', 'modbench.modList.sortDescending', true);
+      }),
+      vscode.commands.registerCommand('modbench.modList.sortAscending', () => {
+        modListProvider.toggleSortOrder();
+        void vscode.commands.executeCommand('setContext', 'modbench.modList.sortDescending', false);
+      }),
       vscode.commands.registerCommand('modbench.modList.switchProfile', async () => {
         const [profiles, active] = await Promise.all([
           modlistSource.listProfiles(),

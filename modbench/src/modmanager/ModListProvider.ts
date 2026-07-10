@@ -112,6 +112,7 @@ export class ModListProvider
   private filterText = '';
   private filterLower = '';
   private groupingOn = true;
+  private sortDescending = false;
   private readonly log: (msg: string) => void;
 
   /** `instanceRoot`, when provided, enables status badges (Modbench-3):
@@ -216,28 +217,44 @@ export class ModListProvider
   }
 
   private unfilteredRoots(tree: ModlistTree): ModlistNode[] {
-    return [
-      new CountNode(tree.activeCount, tree.installedCount),
-      ...tree.ungrouped.map(this.toModNode),
-      ...tree.groups.map((g) => new SeparatorNode(g.separator, g.mods)),
-    ];
+    const ungroupedNodes = this.orderedMods(tree.ungrouped).map(this.toModNode);
+    const groupNodes = this.orderedGroups(tree.groups).map(
+      (g) => new SeparatorNode(g.separator, this.orderedMods(g.mods)),
+    );
+    const blocks = this.sortDescending ? [groupNodes, ungroupedNodes] : [ungroupedNodes, groupNodes];
+    return [new CountNode(tree.activeCount, tree.installedCount), ...blocks[0], ...blocks[1]];
+  }
+
+  /** Priority-order a sibling list: file order (lowest priority first) unless
+   *  `sortDescending`, mirroring MO2's clickable Priority-column sort. */
+  private orderedMods(mods: Mod[]): Mod[] {
+    return this.sortDescending ? [...mods].reverse() : mods;
+  }
+
+  private orderedGroups(groups: ModlistTree['groups']): ModlistTree['groups'] {
+    return this.sortDescending ? [...groups].reverse() : groups;
   }
 
   private flatFilteredRoots(tree: ModlistTree): ModlistNode[] {
-    const allMods = [...tree.ungrouped, ...tree.groups.flatMap((g) => g.mods)];
-    return allMods.filter((m) => this.matches(m.name)).map(this.toModNode);
+    const ungroupedNodes = this.orderedMods(tree.ungrouped);
+    const groupedNodes = this.orderedGroups(tree.groups).flatMap((g) => this.orderedMods(g.mods));
+    const blocks = this.sortDescending ? [groupedNodes, ungroupedNodes] : [ungroupedNodes, groupedNodes];
+    return [...blocks[0], ...blocks[1]].filter((m) => this.matches(m.name)).map(this.toModNode);
   }
 
   private groupedFilteredRoots(tree: ModlistTree): ModlistNode[] {
-    const roots: ModlistNode[] = [...tree.ungrouped.filter((m) => this.matches(m.name)).map(this.toModNode)];
-    for (const g of tree.groups) {
+    const ungroupedNodes = this.orderedMods(tree.ungrouped).filter((m) => this.matches(m.name)).map(this.toModNode);
+    const groupNodes: ModlistNode[] = [];
+    for (const g of this.orderedGroups(tree.groups)) {
       const sepNameMatches = this.matches(g.separator.name);
-      const matchingMods = sepNameMatches ? g.mods : g.mods.filter((m) => this.matches(m.name));
+      const orderedGroupMods = this.orderedMods(g.mods);
+      const matchingMods = sepNameMatches ? orderedGroupMods : orderedGroupMods.filter((m) => this.matches(m.name));
       if (sepNameMatches || matchingMods.length > 0) {
-        roots.push(new SeparatorNode(g.separator, matchingMods));
+        groupNodes.push(new SeparatorNode(g.separator, matchingMods));
       }
     }
-    return roots;
+    const blocks = this.sortDescending ? [groupNodes, ungroupedNodes] : [ungroupedNodes, groupNodes];
+    return [...blocks[0], ...blocks[1]];
   }
 
   private matches(name: string): boolean {
@@ -253,6 +270,12 @@ export class ModListProvider
   /** Persist the active profile and refresh the tree. */
   async switchProfile(name: string): Promise<void> {
     await this.source.setActiveProfile(name);
+    this.refresh();
+  }
+
+  /** Flip the priority sort direction (ascending &lt;-&gt; descending) and refresh the tree. */
+  toggleSortOrder(): void {
+    this.sortDescending = !this.sortDescending;
     this.refresh();
   }
 

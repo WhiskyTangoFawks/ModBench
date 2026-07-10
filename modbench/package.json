@@ -192,6 +192,16 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "modbench.modList.sortDescending",
+        "title": "Modbench: Sort Mods by Priority (Descending)",
+        "icon": "$(triangle-down)"
+      },
+      {
+        "command": "modbench.modList.sortAscending",
+        "title": "Modbench: Sort Mods by Priority (Ascending)",
+        "icon": "$(triangle-up)"
+      },
+      {
         "command": "modbench.modList.deploy",
         "title": "Modbench: Deploy Mods",
         "icon": "$(cloud-download)"
@@ -318,6 +328,16 @@
           "command": "modbench.downloads.open",
           "when": "view == modbench.modList",
           "group": "navigation@8"
+        },
+        {
+          "command": "modbench.modList.sortDescending",
+          "when": "view == modbench.modList && !modbench.modList.sortDescending",
+          "group": "navigation@9"
+        },
+        {
+          "command": "modbench.modList.sortAscending",
+          "when": "view == modbench.modList && modbench.modList.sortDescending",
+          "group": "navigation@9"
         },
         {
           "command": "modbench.saveAllGroups",

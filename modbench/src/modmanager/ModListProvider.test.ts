@@ -322,6 +322,93 @@ describe('ModListProvider', () => {
     });
   });
 
+  describe('sort order toggle', () => {
+    it('toggleSortOrder fires a refresh', () => {
+      const provider = new ModListProvider(new FakeSource([mod('A')]));
+      let fired = false;
+      provider.onDidChangeTreeData(() => { fired = true; });
+
+      provider.toggleSortOrder();
+
+      expect(fired).toBe(true);
+    });
+
+    it('descending: separators first (reversed), then ungrouped (reversed), count node still pinned first', async () => {
+      const source = new FakeSource([
+        mod('Ungrouped A'),
+        mod('Ungrouped B', false),
+        sep('Section 1'),
+        mod('Child'),
+        sep('Section 2'),
+        mod('Other Child'),
+      ]);
+      const provider = new ModListProvider(source);
+      provider.toggleSortOrder();
+      const roots = await provider.getChildren();
+
+      expect(roots[0]).toBeInstanceOf(CountNode);
+      expect(roots[1]).toBeInstanceOf(SeparatorNode);
+      expect(roots[1].label).toBe('Section 2');
+      expect(roots[2]).toBeInstanceOf(SeparatorNode);
+      expect(roots[2].label).toBe('Section 1');
+      expect(roots[3]).toBeInstanceOf(ModNode);
+      expect(roots[3].label).toBe('Ungrouped B');
+      expect(roots[4]).toBeInstanceOf(ModNode);
+      expect(roots[4].label).toBe('Ungrouped A');
+    });
+
+    it('descending: mods within a separator are also reversed', async () => {
+      const source = new FakeSource([
+        sep('Section'),
+        mod('First'),
+        mod('Second'),
+        mod('Third'),
+      ]);
+      const provider = new ModListProvider(source);
+      provider.toggleSortOrder();
+      const roots = await provider.getChildren();
+      const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode)!;
+      const children = await provider.getChildren(sepNode);
+
+      expect(children.map((n) => n.label)).toEqual(['Third', 'Second', 'First']);
+    });
+
+    it('descending applies to flatFilteredRoots (grouping off)', async () => {
+      const entries = [
+        mod('Alpha'),
+        sep('Group A'),
+        mod('Alpha Child'),
+        mod('Alpha Other'),
+      ] satisfies ModlistEntry[];
+      const provider = new ModListProvider(new FakeSource(entries));
+      provider.toggleSortOrder();
+      provider.setFilter('alpha', false);
+      const roots = await provider.getChildren();
+
+      expect(roots.map((n) => n.label)).toEqual(['Alpha Other', 'Alpha Child', 'Alpha']);
+    });
+
+    it('descending applies to groupedFilteredRoots (grouping on)', async () => {
+      const entries = [
+        mod('Alpha'),
+        sep('Group A'),
+        mod('Alpha Child'),
+        mod('Alpha Other'),
+      ] satisfies ModlistEntry[];
+      const provider = new ModListProvider(new FakeSource(entries));
+      provider.toggleSortOrder();
+      provider.setFilter('alpha', true);
+      const roots = await provider.getChildren();
+
+      expect(roots[0]).toBeInstanceOf(SeparatorNode);
+      expect(roots[1]).toBeInstanceOf(ModNode);
+      expect(roots[1].label).toBe('Alpha');
+      const sepNode = roots[0] as SeparatorNode;
+      const children = await provider.getChildren(sepNode);
+      expect(children.map((n) => n.label)).toEqual(['Alpha Other', 'Alpha Child']);
+    });
+  });
+
   describe('status badges (instanceRoot provided)', () => {
     it('attaches a warning icon and conflict tooltip line to conflicted mods', async () => {
       const source = new FakeSource([mod('ModA'), mod('ModB')]);

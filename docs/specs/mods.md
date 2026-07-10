@@ -140,6 +140,10 @@ requires a deploy.**
 33. As a user, I want an "update available" indicator on mods (planned) once Nexus
     integration lands, so that I can tell when an installed mod is behind its Nexus
     version.
+34. As a user, I want a title-bar toggle to flip the mod list between priority-ascending
+    (the default in #4 — master/base mods at top, overrides at bottom) and
+    priority-descending, so that I can view the list in the direction I'm used to from MO2
+    without having to interpret it in reverse.
 
 ## Implementation Decisions
 
@@ -252,10 +256,17 @@ The extension owns the editing backend process
 
 - **Header**: title "MODS"; description = current profile name; a first non-interactive
   count node ("N active / M installed"); title-bar icon buttons for Filter, Switch Profile,
-  Launch mEdit, Collapse All, Refresh, plus Deploy and Purge in standalone mode only.
+  Launch mEdit, Collapse All, Refresh, Sort Direction, plus Deploy and Purge in standalone
+  mode only.
 - **Structure**: ungrouped mods (before the first `modlist.txt` separator) render as
   root-level items above all separator nodes — no synthetic container. Separator nodes are
-  collapsible and expanded by default.
+  collapsible and expanded by default. This is the **ascending** (default) priority order —
+  lowest priority (masters/base) first, highest priority (overrides) last, matching MO2's
+  own default Priority-column sort. A **Sort Direction** title-bar toggle (triangle icon,
+  mirroring MO2's clickable sortable column) flips the entire tree — root block order and
+  the mods within each separator — to **descending**: highest priority first. The toggle is
+  transient (not persisted across sessions), matching the Filter/grouping toggle's
+  behavior.
 - **Mod row**: a checkbox (enable/disable, writing the `+`/`-` prefix immediately), the
   full mod name as the label, the `meta.ini` version as the description (blank if absent), a
   generic mod icon with a status overlay (see below), and a tooltip of name · version ·
