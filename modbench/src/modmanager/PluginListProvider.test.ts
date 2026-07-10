@@ -1,5 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { IModlistSource, InstallMeta, ModlistEntry } from './model';
+import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 
 vi.mock('vscode', () => ({
   TreeItem: class {
@@ -23,6 +27,12 @@ vi.mock('vscode', () => ({
     fire(e?: unknown) { this.handlers.forEach(h => h(e)); }
   },
   ThemeIcon: class { constructor(public id: string) {} },
+  DataTransferItem: class { constructor(public value: unknown) {} },
+  DataTransfer: class {
+    private readonly map = new Map<string, unknown>();
+    set(mime: string, item: unknown) { this.map.set(mime, item); }
+    get(mime: string) { return this.map.get(mime); }
+  },
 }));
 
 import { PluginListProvider, PluginNode, ErrorNode, EmptyNode } from './PluginListProvider';
@@ -31,6 +41,8 @@ import { PluginListProvider, PluginNode, ErrorNode, EmptyNode } from './PluginLi
  *  everything else throws to prove PluginListProvider never touches them. */
 class FakeSource implements IModlistSource {
   setPluginEnabledCalls: { pluginName: string; enabled: boolean }[] = [];
+  reorderPluginsCalls: { names: string[]; toIndex: number }[] = [];
+  reorderPluginsError?: Error;
   constructor(
     private readonly order: string[] | Error,
     private readonly enabled: string[] = [],
@@ -60,7 +72,11 @@ class FakeSource implements IModlistSource {
     this.setPluginEnabledCalls.push({ pluginName, enabled });
     return Promise.resolve();
   }
-  reorderPlugins(): Promise<void> { throw new Error('unused'); }
+  reorderPlugins(names: string[], toIndex: number): Promise<void> {
+    if (this.reorderPluginsError) return Promise.reject(this.reorderPluginsError);
+    this.reorderPluginsCalls.push({ names, toIndex });
+    return Promise.resolve();
+  }
 }
 
 describe('PluginListProvider', () => {
@@ -120,5 +136,147 @@ describe('PluginListProvider', () => {
     provider.onDidChangeTreeData(() => { fired = true; });
     provider.refresh();
     expect(fired).toBe(true);
+  });
+});
+
+// Minimal DataTransfer double: handleDrag writes a DataTransferItem, handleDrop reads it.
+class FakeDataTransfer {
+  private readonly map = new Map<string, { value: unknown }>();
+  set(mime: string, item: { value: unknown }) { this.map.set(mime, item); }
+  get(mime: string) { return this.map.get(mime); }
+}
+const NONE = undefined as never; // the drag/drop methods ignore the CancellationToken
+
+describe('PluginListProvider — drag-and-drop reorder', () => {
+  const ORDER = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
+  const node = (name: string) => new PluginNode({ name, enabled: true });
+
+  /** Render once so the provider caches the order, then run a drag → drop. */
+  async function drag(source: FakeSource, moved: string[], target: string | undefined) {
+    const reports: { severity: string; message: string }[] = [];
+    const provider = new PluginListProvider(source, undefined, {
+      report: (severity, message) => reports.push({ severity, message }),
+    });
+    await provider.getChildren(); // populate the cached order
+    let fired = false;
+    provider.onDidChangeTreeData(() => { fired = true; });
+
+    const dt = new FakeDataTransfer();
+    provider.handleDrag(moved.map(node), dt as never, NONE);
+    await provider.handleDrop(target === undefined ? undefined : node(target), dt as never, NONE);
+    return { reports, fired };
+  }
+
+  it('handleDrag serialises the whole selection, not just the grabbed row', () => {
+    const provider = new PluginListProvider(new FakeSource(ORDER));
+    const dt = new FakeDataTransfer();
+    provider.handleDrag([node('A.esp'), node('C.esp')], dt as never, NONE);
+    const item = dt.get('application/vnd.medit.pluginlist-node');
+    expect((item?.value as { names: string[] }).names).toEqual(['A.esp', 'C.esp']);
+  });
+
+  it('handleDrag ignores non-plugin nodes (Empty/Error) in the selection', () => {
+    const provider = new PluginListProvider(new FakeSource(ORDER));
+    const dt = new FakeDataTransfer();
+    provider.handleDrag([new EmptyNode(), node('B.esp')], dt as never, NONE);
+    const item = dt.get('application/vnd.medit.pluginlist-node');
+    expect((item?.value as { names: string[] }).names).toEqual(['B.esp']);
+  });
+
+  it('single-row down-drag onto a lower row reorders with the post-removal index', async () => {
+    const source = new FakeSource(ORDER);
+    const { fired } = await drag(source, ['A.esp'], 'D.esp');
+    expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], toIndex: 2 }]);
+    expect(fired).toBe(true);
+  });
+
+  it('drop past the last row (undefined target) appends', async () => {
+    const source = new FakeSource(ORDER);
+    await drag(source, ['B.esp'], undefined);
+    expect(source.reorderPluginsCalls).toEqual([{ names: ['B.esp'], toIndex: 4 }]);
+  });
+
+  it('drop onto a non-plugin node (empty state) appends', async () => {
+    const source = new FakeSource(['A.esp']);
+    const provider = new PluginListProvider(source);
+    await provider.getChildren();
+    const dt = new FakeDataTransfer();
+    provider.handleDrag([node('A.esp')], dt as never, NONE);
+    await provider.handleDrop(new EmptyNode(), dt as never, NONE);
+    expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], toIndex: 0 }]);
+  });
+
+  it('contiguous multi-selection moves as a block to the target index', async () => {
+    const source = new FakeSource(ORDER);
+    await drag(source, ['B.esp', 'C.esp', 'D.esp'], 'A.esp');
+    expect(source.reorderPluginsCalls).toEqual([{ names: ['B.esp', 'C.esp', 'D.esp'], toIndex: 0 }]);
+  });
+
+  it('non-contiguous multi-selection counts only moved rows above the target', async () => {
+    const source = new FakeSource(ORDER);
+    await drag(source, ['A.esp', 'C.esp', 'E.esp'], 'D.esp');
+    expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp', 'C.esp', 'E.esp'], toIndex: 1 }]);
+  });
+
+  it('an empty drag payload is a no-op (no write)', async () => {
+    const source = new FakeSource(ORDER);
+    const provider = new PluginListProvider(source);
+    await provider.getChildren();
+    await provider.handleDrop(node('A.esp'), new FakeDataTransfer() as never, NONE);
+    expect(source.reorderPluginsCalls).toEqual([]);
+  });
+
+  it('surfaces a write failure via the reporter and resyncs the tree (ADR-0026)', async () => {
+    const source = new FakeSource(ORDER);
+    source.reorderPluginsError = new Error('disk full');
+    const { reports, fired } = await drag(source, ['A.esp'], 'D.esp');
+    expect(reports).toHaveLength(1);
+    expect(reports[0].severity).toBe('error');
+    expect(fired).toBe(true); // refresh fired to resync the moved row
+  });
+});
+
+// End-to-end: the real Mo2ModlistSource over a temp plugins.txt, driven through the
+// provider's drag → drop, asserting the on-disk order and byte-faithfulness. This is
+// the "round-trip through the tree and the file" the issue asks for (no VS Code process).
+describe('PluginListProvider — drag reorder round-trips through plugins.txt on disk', () => {
+  let dir: string;
+  let source: Mo2ModlistSource;
+  const pluginsTxt = () => join(dir, 'profiles', 'Default', 'plugins.txt');
+  const node = (name: string) => new PluginNode({ name, enabled: true });
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'plugin-dnd-'));
+    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
+    await writeFile(join(dir, 'ModOrganizer.ini'), '[General]\nselected_profile=@ByteArray(Default)\n');
+    await writeFile(pluginsTxt(), '# header\r\n*A.esp\r\nB.esp\r\n*C.esp\r\nD.esp\r\nE.esp\r\n');
+    source = new Mo2ModlistSource(dir);
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  async function dragToDisk(moved: string[], target: string | undefined) {
+    const provider = new PluginListProvider(source);
+    await provider.getChildren(); // cache the rendered order
+    const dt = new FakeDataTransfer();
+    provider.handleDrag(moved.map(node), dt as never, NONE);
+    await provider.handleDrop(target === undefined ? undefined : node(target), dt as never, NONE);
+  }
+
+  it('single-row down-drag lands the row before the target and keeps the comment header', async () => {
+    await dragToDisk(['A.esp'], 'D.esp');
+    // byte-faithful: B stays disabled (no *), A keeps its *, the comment header stays first
+    expect(await readFile(pluginsTxt(), 'utf8')).toBe('# header\r\nB.esp\r\n*C.esp\r\n*A.esp\r\nD.esp\r\nE.esp\r\n');
+  });
+
+  it('non-contiguous multi-selection moves as a block, preserving relative order', async () => {
+    await dragToDisk(['A.esp', 'C.esp', 'E.esp'], 'D.esp');
+    expect(await source.readPluginOrder()).toEqual(['B.esp', 'A.esp', 'C.esp', 'E.esp', 'D.esp']);
+  });
+
+  it('drop past the last row appends the moved row', async () => {
+    await dragToDisk(['B.esp'], undefined);
+    expect(await source.readPluginOrder()).toEqual(['A.esp', 'C.esp', 'D.esp', 'E.esp', 'B.esp']);
   });
 });
