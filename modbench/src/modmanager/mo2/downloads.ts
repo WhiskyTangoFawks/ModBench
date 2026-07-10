@@ -3,8 +3,8 @@
 //
 // .meta is a QSettings::IniFormat file MO2 writes beside each archive
 // (mirrors modorganizer/src/downloadmanager.cpp). Status is one of three MVP
-// values; the `removed=true` (hidden) flag is a separate axis owned by the
-// Hide/Unhide ticket, not this one — not modeled here.
+// values; the `removed=true` (hidden) flag is a SEPARATE axis from Status —
+// MO2's `removed` means HIDDEN, never the "Removed" Status (`uninstalled=true`).
 
 import { lineRanges } from './lineScan';
 
@@ -26,6 +26,9 @@ export interface DownloadRow {
   mtimeMs: number;
   /** Whether a `.meta` sidecar exists — gates the Open Meta File action. */
   hasMeta: boolean;
+  /** Hidden (`.meta` `removed=true`) — a separate axis from Status. Hidden rows
+   *  are filtered out unless Show hidden is on, then shown dimmed. */
+  hidden: boolean;
   /** Nexus mod id from the `.meta`; absent (or `0`) gates Visit on Nexus off. */
   modID?: string;
 }
@@ -49,7 +52,7 @@ export function sortDownloadRows(
   return descending ? sorted.reverse() : sorted;
 }
 
-export function parseDownloadMeta(text: string): { status: DownloadStatus; modID?: string } {
+export function parseDownloadMeta(text: string): { status: DownloadStatus; hidden: boolean; modID?: string } {
   const values = new Map<string, string>();
   for (const raw of text.split(/\r\n|\r|\n/)) {
     const eq = raw.indexOf('=');
@@ -60,38 +63,65 @@ export function parseDownloadMeta(text: string): { status: DownloadStatus; modID
   if (values.get('uninstalled') === 'true') status = 'Removed';
   else if (values.get('installed') === 'true') status = 'Installed';
   const modID = values.get('modID');
-  return { status, modID: modID && modID !== '0' ? modID : undefined };
+  // `removed` is HIDDEN — a separate key/axis from the `uninstalled` Status above.
+  const hidden = values.get('removed') === 'true';
+  return { status, hidden, modID: modID && modID !== '0' ? modID : undefined };
 }
 
-/** Surgically set `installed=true` in a `.meta` text (the Install writeback).
- *  Byte-faithful: flips an existing `installed=` line's value in place, or
- *  inserts the key right after `[General]`, or — if the archive had no
- *  `.meta` at all (`text === ''`) — creates a minimal one from scratch. */
-export function setInstalledInText(text: string): string {
+/** Surgically set `key=value` in a `.meta` text — the shared byte-faithful
+ *  `[General]` flag write behind the Install/Hide/Unhide mutations. Flips an
+ *  existing `key=` line's value in place, or inserts the key right after
+ *  `[General]`, or — if the archive had no `.meta` at all (`text === ''`) —
+ *  creates a minimal one from scratch. Writes the value verbatim (`false`
+ *  clears, not a key deletion), matching MO2's `QSettings::setValue`. */
+function setMetaFlag(text: string, key: string, value: boolean): string {
+  const line = `${key}=${value}`;
   for (const { start, contentEnd } of lineRanges(text)) {
-    if (text.slice(start, contentEnd).startsWith('installed=')) {
-      return text.slice(0, start) + 'installed=true' + text.slice(contentEnd);
+    if (text.slice(start, contentEnd).startsWith(`${key}=`)) {
+      return text.slice(0, start) + line + text.slice(contentEnd);
     }
   }
   let eol = '\r\n';
   if (!text.includes('\r\n') && text.includes('\n')) eol = '\n';
-  if (text.trim() === '') return `[General]${eol}installed=true${eol}`;
+  if (text.trim() === '') return `[General]${eol}${line}${eol}`;
   for (const { start, contentEnd, end } of lineRanges(text)) {
     if (text.slice(start, contentEnd).trim() === '[General]') {
-      return text.slice(0, end) + `installed=true${eol}` + text.slice(end);
+      return text.slice(0, end) + `${line}${eol}` + text.slice(end);
     }
   }
-  return `[General]${eol}installed=true${eol}` + text;
+  return `[General]${eol}${line}${eol}` + text;
+}
+
+/** Set `installed=true` in a `.meta` text (the Install writeback). */
+export function setInstalledInText(text: string): string {
+  return setMetaFlag(text, 'installed', true);
+}
+
+/** Set (`hidden=true`) or clear (`hidden=false`) the `.meta`'s `removed` flag —
+ *  the Hide/Unhide mutation. `removed` (HIDDEN) is a SEPARATE axis from the
+ *  `uninstalled` "Removed" Status. Unhide writes `removed=false`, not a key
+ *  deletion, matching MO2's `setValue("removed", false)`. */
+export function setHiddenInText(text: string, hidden: boolean): string {
+  return setMetaFlag(text, 'removed', hidden);
+}
+
+/** Filter hidden rows for rendering — a view concern, so it runs client-side on
+ *  the already-built rows (like `sortDownloadRows`), not in row building. Off
+ *  by default excludes hidden rows; on includes all, flags left intact so the
+ *  webview can dim them. #61's future name-filter composes after this. */
+export function filterHiddenRows(rows: DownloadRow[], showHidden: boolean): DownloadRow[] {
+  return showHidden ? rows : rows.filter((r) => !r.hidden);
 }
 
 /** Build render-ready rows: suppresses `.meta` sidecars as their own rows,
- *  and default-sorts Filetime desc. */
+ *  and default-sorts Filetime desc. Hidden rows are built (flagged `hidden`),
+ *  not filtered — hidden-filtering is a view concern (see `filterHiddenRows`). */
 export function buildDownloadRows(entries: DownloadEntry[]): DownloadRow[] {
   const rows = entries
     .filter((e) => !e.name.endsWith('.meta'))
     .map((e) => {
-      const { status, modID } = parseDownloadMeta(e.metaText ?? '');
-      return { name: e.name, status, size: e.size, mtimeMs: e.mtimeMs, hasMeta: e.metaText !== undefined, modID };
+      const { status, hidden, modID } = parseDownloadMeta(e.metaText ?? '');
+      return { name: e.name, status, size: e.size, mtimeMs: e.mtimeMs, hasMeta: e.metaText !== undefined, hidden, modID };
     });
   return sortDownloadRows(rows, 'mtimeMs', true);
 }

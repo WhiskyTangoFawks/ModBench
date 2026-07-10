@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildDownloadRows,
+  filterHiddenRows,
   parseDownloadMeta,
+  setHiddenInText,
   setInstalledInText,
   sortDownloadRows,
   type DownloadEntry,
@@ -30,14 +32,33 @@ describe('parseDownloadMeta', () => {
     expect(parseDownloadMeta('[General]\r\nmodID=0\r\n').modID).toBeUndefined();
     expect(parseDownloadMeta('[General]\r\ninstalled=true\r\n').modID).toBeUndefined();
   });
+
+  it('reads removed=true as hidden (a separate axis from Status)', () => {
+    expect(parseDownloadMeta('[General]\r\nremoved=true\r\n').hidden).toBe(true);
+  });
+
+  it('is not hidden when removed is false or absent', () => {
+    expect(parseDownloadMeta('[General]\r\nremoved=false\r\n').hidden).toBe(false);
+    expect(parseDownloadMeta('[General]\r\ninstalled=true\r\n').hidden).toBe(false);
+  });
+
+  // The load-bearing guard for the acceptance criterion: "Removed" Status
+  // (uninstalled=true) and hidden (removed=true) are never conflated — they are
+  // orthogonal axes derived from different keys.
+  it('never conflates the Removed Status with hidden: both flags coexist', () => {
+    const meta = parseDownloadMeta('[General]\r\nuninstalled=true\r\nremoved=true\r\n');
+    expect(meta.status).toBe('Removed');
+    expect(meta.hidden).toBe(true);
+  });
 });
 
-const row = (name: string, mtimeMs: number): DownloadRow => ({
+const row = (name: string, mtimeMs: number, hidden = false): DownloadRow => ({
   name,
   status: 'Downloaded',
   size: 0,
   mtimeMs,
   hasMeta: false,
+  hidden,
 });
 
 describe('sortDownloadRows', () => {
@@ -53,6 +74,53 @@ describe('sortDownloadRows', () => {
       'banana',
       'cherry',
     ]);
+  });
+});
+
+describe('filterHiddenRows', () => {
+  const rows = [row('visible.zip', 1, false), row('hidden.zip', 2, true)];
+
+  it('excludes hidden rows by default (show-hidden off)', () => {
+    expect(filterHiddenRows(rows, false).map((r) => r.name)).toEqual(['visible.zip']);
+  });
+
+  it('includes hidden rows when show-hidden is on, leaving the hidden flag intact', () => {
+    const shown = filterHiddenRows(rows, true);
+    expect(shown.map((r) => r.name)).toEqual(['visible.zip', 'hidden.zip']);
+    expect(shown.find((r) => r.name === 'hidden.zip')?.hidden).toBe(true);
+  });
+});
+
+describe('setHiddenInText', () => {
+  it('creates a fresh [General] section with removed=true when there is no .meta text', () => {
+    expect(setHiddenInText('', true)).toBe('[General]\r\nremoved=true\r\n');
+  });
+
+  it('inserts removed=true after an existing [General] header, preserving other lines', () => {
+    const text = '[General]\r\ngameName=Fallout4\r\nmodid=12345\r\n';
+    expect(setHiddenInText(text, true)).toBe(
+      '[General]\r\nremoved=true\r\ngameName=Fallout4\r\nmodid=12345\r\n',
+    );
+  });
+
+  it('flips an existing removed=false to true in place, byte-faithful', () => {
+    const text = '[General]\r\ngameName=Fallout4\r\nremoved=false\r\nmodid=12345\r\n';
+    expect(setHiddenInText(text, true)).toBe(
+      '[General]\r\ngameName=Fallout4\r\nremoved=true\r\nmodid=12345\r\n',
+    );
+  });
+
+  it('is a no-op when removed=true is already present', () => {
+    const text = '[General]\r\nremoved=true\r\nmodid=12345\r\n';
+    expect(setHiddenInText(text, true)).toBe(text);
+  });
+
+  // Unhide: MO2 writes removed=false (setValue), it does not delete the key.
+  it('flips removed=true to false in place when unhiding, byte-faithful', () => {
+    const text = '[General]\r\ngameName=Fallout4\r\nremoved=true\r\nmodid=12345\r\n';
+    expect(setHiddenInText(text, false)).toBe(
+      '[General]\r\ngameName=Fallout4\r\nremoved=false\r\nmodid=12345\r\n',
+    );
   });
 });
 
@@ -92,7 +160,7 @@ describe('buildDownloadRows', () => {
   it('maps a plain archive with no .meta sidecar to a Downloaded row (gating off)', () => {
     const rows = buildDownloadRows([entry('foo.zip', 100)]);
     expect(rows).toEqual([
-      { name: 'foo.zip', status: 'Downloaded', size: 123, mtimeMs: 100, hasMeta: false, modID: undefined },
+      { name: 'foo.zip', status: 'Downloaded', size: 123, mtimeMs: 100, hasMeta: false, hidden: false, modID: undefined },
     ]);
   });
 
@@ -117,5 +185,11 @@ describe('buildDownloadRows', () => {
   it('defaults to Filetime (mtimeMs) descending', () => {
     const rows = buildDownloadRows([entry('old.zip', 1), entry('new.zip', 2)]);
     expect(rows.map((r) => r.name)).toEqual(['new.zip', 'old.zip']);
+  });
+
+  it('carries the hidden flag through without filtering (filtering is a view concern)', () => {
+    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nremoved=true\r\n')]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ name: 'foo.zip', hidden: true });
   });
 });

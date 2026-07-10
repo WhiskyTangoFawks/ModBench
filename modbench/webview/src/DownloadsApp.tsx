@@ -6,7 +6,7 @@ import {
   type ExtensionToWebview,
   type WebviewToExtension,
 } from './downloadsMessages';
-import { sortDownloadRows, type DownloadRow, type DownloadSortColumn } from './downloadsModel';
+import { filterHiddenRows, sortDownloadRows, type DownloadRow, type DownloadSortColumn } from './downloadsModel';
 
 type State =
   | { kind: 'loading' }
@@ -83,6 +83,11 @@ function RowContextMenu({ x, y, row, onClose }: RowContextMenuProps) {
       />
       <MenuItem label="Reveal in Explorer" onActivate={() => post(WEBVIEW_TO_EXTENSION.REVEAL)} />
       <MenuItem label="Delete" onActivate={() => post(WEBVIEW_TO_EXTENSION.DELETE)} />
+      {/* One item; label + message flip on the row's hidden flag (removed=true). */}
+      <MenuItem
+        label={row.hidden ? 'Unhide' : 'Hide'}
+        onActivate={() => post(row.hidden ? WEBVIEW_TO_EXTENSION.UNHIDE : WEBVIEW_TO_EXTENSION.HIDE)}
+      />
     </ul>
   );
 }
@@ -94,6 +99,7 @@ export function DownloadsApp() {
     descending: true,
   });
   const [menu, setMenu] = useState<{ x: number; y: number; row: DownloadRow } | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -139,6 +145,14 @@ export function DownloadsApp() {
   return (
     <div>
       <button onClick={handleRefresh}>Refresh</button>
+      <label>
+        <input
+          type="checkbox"
+          checked={showHidden}
+          onChange={(e) => setShowHidden(e.target.checked)}
+        />
+        <span>Show hidden</span>
+      </label>
       {state.kind === 'noFolder' && <div>This instance has no downloads folder.</div>}
       {state.kind === 'rows' && state.rows.length === 0 && <div>No downloads yet.</div>}
       {state.kind === 'rows' && state.rows.length > 0 && (
@@ -153,9 +167,12 @@ export function DownloadsApp() {
             </tr>
           </thead>
           <tbody>
-            {sortDownloadRows(state.rows, sort.column, sort.descending).map((row) => (
+            {sortDownloadRows(filterHiddenRows(state.rows, showHidden), sort.column, sort.descending).map((row) => (
               <tr
                 key={row.name}
+                // Hidden rows are only present here under Show hidden; dim them
+                // (same inline-opacity convention as a disabled MenuItem).
+                style={{ opacity: row.hidden ? 0.5 : 1 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   setMenu({ x: e.clientX, y: e.clientY, row });
