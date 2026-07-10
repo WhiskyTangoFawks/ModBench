@@ -7,6 +7,7 @@ import {
   type WebviewToExtension,
 } from './downloadsMessages';
 import { filterHiddenRows, filterRowsByName, sortDownloadRows, type DownloadRow, type DownloadSortColumn } from './downloadsModel';
+import { baseCell, headerCell } from './gridStyles';
 
 type State =
   | { kind: 'loading' }
@@ -48,10 +49,16 @@ function MenuItem({ label, disabled, onActivate }: MenuItemProps) {
       role="menuitem"
       aria-disabled={disabled ? 'true' : undefined}
       tabIndex={disabled ? -1 : 0}
-      style={{ cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1 }}
+      style={{ cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, padding: baseCell.padding }}
       onClick={activate}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') activate();
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) e.currentTarget.style.background = 'var(--vscode-list-hoverBackground,#2a2d2e)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = '';
       }}
     >
       {label}
@@ -68,7 +75,25 @@ function RowContextMenu({ x, y, row, onClose }: RowContextMenuProps) {
     onClose();
   };
   return (
-    <ul role="menu" style={{ position: 'fixed', top: y, left: x, listStyle: 'none', margin: 0, padding: 4 }}>
+    <ul
+      role="menu"
+      style={{
+        position: 'fixed',
+        top: y,
+        left: x,
+        listStyle: 'none',
+        margin: 0,
+        padding: 4,
+        // No space after the comma in the var() fallback: happy-dom (the
+        // webview test environment) silently drops color-valued styles that
+        // contain "var(--x, y)" with a space, but accepts "var(--x,y)".
+        backgroundColor: 'var(--vscode-menu-background,#3c3c3c)',
+        color: 'var(--vscode-menu-foreground,#ccc)',
+        border: '1px solid var(--vscode-menu-border,#454545)',
+        borderRadius: 2,
+        zIndex: 1000,
+      }}
+    >
       <MenuItem label="Install" onActivate={() => post(WEBVIEW_TO_EXTENSION.INSTALL)} />
       <MenuItem
         label="Visit on Nexus"
@@ -165,11 +190,11 @@ export function DownloadsApp() {
       {state.kind === 'noFolder' && <div>This instance has no downloads folder.</div>}
       {state.kind === 'rows' && state.rows.length === 0 && <div>No downloads yet.</div>}
       {state.kind === 'rows' && state.rows.length > 0 && (
-        <table>
+        <table style={{ borderCollapse: 'collapse' }}>
           <thead>
             <tr>
               {HEADERS.map(({ label, column }) => (
-                <th key={column} onClick={() => handleHeaderClick(column)} style={{ cursor: 'pointer' }}>
+                <th key={column} onClick={() => handleHeaderClick(column)} style={{ ...headerCell, cursor: 'pointer' }}>
                   {label}
                 </th>
               ))}
@@ -191,10 +216,10 @@ export function DownloadsApp() {
                   setMenu({ x: e.clientX, y: e.clientY, row });
                 }}
               >
-                <td>{row.name}</td>
-                <td>{row.status}</td>
-                <td>{row.size}</td>
-                <td>{new Date(row.mtimeMs).toLocaleString()}</td>
+                <td style={baseCell}>{row.name}</td>
+                <td style={baseCell}>{row.status}</td>
+                <td style={baseCell}>{row.size}</td>
+                <td style={baseCell}>{new Date(row.mtimeMs).toLocaleString()}</td>
               </tr>
             ))}
           </tbody>

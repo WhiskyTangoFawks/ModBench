@@ -126,6 +126,39 @@ describe('DownloadsApp — row context menu', () => {
   });
 });
 
+describe('DownloadsApp — theming', () => {
+  const rows = [{ name: 'foo.zip', status: 'Downloaded', size: 100, mtimeMs: 200 }];
+
+  it('the row context menu has an opaque, theme-aware background above the table', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.contextMenu(screen.getByText('foo.zip'));
+    const menu = screen.getByRole('menu');
+    expect(menu.style.backgroundColor).not.toBe('');
+    expect(menu).toHaveStyle({ zIndex: 1000 });
+  });
+
+  it('table cells have a visible border', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    const cell = screen.getAllByRole('cell')[0];
+    expect(cell.style.borderStyle).not.toBe('');
+    expect(cell.style.borderStyle).not.toBe('none');
+  });
+
+  it('hovering a menu item highlights it, and unhovering clears the highlight', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.contextMenu(screen.getByText('foo.zip'));
+    const item = screen.getByRole('menuitem', { name: 'Install' });
+    expect(item.style.background).toBe('');
+    fireEvent.mouseEnter(item);
+    expect(item.style.background).not.toBe('');
+    fireEvent.mouseLeave(item);
+    expect(item.style.background).toBe('');
+  });
+});
+
 describe('DownloadsApp — navigational row actions', () => {
   const openMenu = (row: object) => {
     render(<DownloadsApp />);
