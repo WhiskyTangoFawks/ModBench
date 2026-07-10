@@ -217,3 +217,61 @@ describe('DownloadsApp — delete row action', () => {
     expect(screen.queryByRole('menuitem', { name: 'Delete' })).not.toBeInTheDocument();
   });
 });
+
+describe('DownloadsApp — hide / unhide row action', () => {
+  it('a visible row shows "Hide" and posts HIDE with the row name', () => {
+    render(<DownloadsApp />);
+    postFromExtension({
+      type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED,
+      rows: [{ name: 'foo.zip', status: 'Downloaded', size: 100, mtimeMs: 200, hidden: false }],
+    });
+    fireEvent.contextMenu(screen.getByText('foo.zip'));
+    expect(screen.queryByRole('menuitem', { name: 'Unhide' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Hide' }));
+    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.HIDE, name: 'foo.zip' });
+  });
+
+  it('a hidden row shows "Unhide" and posts UNHIDE with the row name', () => {
+    render(<DownloadsApp />);
+    // A hidden row is only present in the table when Show hidden is on.
+    postFromExtension({
+      type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED,
+      rows: [{ name: 'foo.zip', status: 'Downloaded', size: 100, mtimeMs: 200, hidden: true }],
+    });
+    fireEvent.click(screen.getByRole('checkbox', { name: /show hidden/i }));
+    fireEvent.contextMenu(screen.getByText('foo.zip'));
+    expect(screen.queryByRole('menuitem', { name: 'Hide' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Unhide' }));
+    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.UNHIDE, name: 'foo.zip' });
+  });
+});
+
+describe('DownloadsApp — show hidden toggle', () => {
+  const rows = [
+    { name: 'visible.zip', status: 'Downloaded', size: 100, mtimeMs: 200, hidden: false },
+    { name: 'hidden.zip', status: 'Downloaded', size: 50, mtimeMs: 100, hidden: true },
+  ];
+
+  it('is off by default, filtering hidden rows out of the table', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    expect(screen.getByText('visible.zip')).toBeInTheDocument();
+    expect(screen.queryByText('hidden.zip')).not.toBeInTheDocument();
+  });
+
+  it('reveals hidden rows when checked, rendered dimmed', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.click(screen.getByRole('checkbox', { name: /show hidden/i }));
+    const hiddenRow = screen.getByText('hidden.zip').closest('tr');
+    expect(hiddenRow).toBeInTheDocument();
+    expect(hiddenRow).toHaveStyle({ opacity: '0.5' });
+  });
+
+  it('does not dim visible rows when Show hidden is on', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.click(screen.getByRole('checkbox', { name: /show hidden/i }));
+    expect(screen.getByText('visible.zip').closest('tr')).toHaveStyle({ opacity: '1' });
+  });
+});

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import { readdir, stat, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { buildDownloadRows, parseDownloadMeta, setInstalledInText, type DownloadEntry } from './mo2/downloads';
+import { buildDownloadRows, parseDownloadMeta, setHiddenInText, setInstalledInText, type DownloadEntry } from './mo2/downloads';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type WebviewToExtension } from './downloadsMessages';
 import { createDownloadsWatcher } from './downloadsWatcher';
 import { deleteDownload } from './deleteDownload';
@@ -153,6 +153,18 @@ async function visitOnNexus(instanceRoot: string, name: string): Promise<void> {
   await vscode.env.openExternal(vscode.Uri.parse(`https://www.nexusmods.com/${slug}/mods/${modID}`));
 }
 
+/** Row Hide/Unhide action: surgically set `.meta` `removed=true/false` and write
+ *  it back byte-faithfully. `hidden` is the SEPARATE axis from the "Removed"
+ *  Status (`uninstalled=true`) — this never touches Status. A metaless archive
+ *  gets a fresh minimal `.meta` (setHiddenInText('', true)), matching MO2's own
+ *  QSettings auto-create. The file-watcher rescan makes the row disappear/appear;
+ *  runRowAction gives ADR-0026 explicit-action-failed surfacing. */
+async function setArchiveHidden(instanceRoot: string, name: string, hidden: boolean): Promise<void> {
+  const metaPath = join(instanceRoot, 'downloads', `${name}.meta`);
+  const metaText = (await readMetaText(metaPath)) ?? '';
+  await writeFile(metaPath, setHiddenInText(metaText, hidden), 'utf8');
+}
+
 /** Map each webview message type to its handler. READY fires the first scan:
  *  the extension waits for the webview's own message listener to be live rather
  *  than posting immediately after `webview.html` is set, which would race the
@@ -185,6 +197,10 @@ function buildMessageHandlers(
         await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(join(instanceRoot, 'downloads', name)));
       }),
     [WEBVIEW_TO_EXTENSION.DELETE]: (name) => void deleteArchive(instanceRoot, name, log),
+    [WEBVIEW_TO_EXTENSION.HIDE]: (name) =>
+      void runRowAction('Hide', name, log, () => setArchiveHidden(instanceRoot, name, true)),
+    [WEBVIEW_TO_EXTENSION.UNHIDE]: (name) =>
+      void runRowAction('Unhide', name, log, () => setArchiveHidden(instanceRoot, name, false)),
   };
 }
 
