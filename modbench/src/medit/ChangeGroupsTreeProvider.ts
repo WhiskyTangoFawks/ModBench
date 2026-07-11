@@ -18,7 +18,7 @@ export class ChangeGroupNode extends vscode.TreeItem {
 
 export class EmptyStateNode extends vscode.TreeItem {
   constructor() {
-    super('No pending group changes.', vscode.TreeItemCollapsibleState.None);
+    super('No pending changes.', vscode.TreeItemCollapsibleState.None);
     this.iconPath = new vscode.ThemeIcon('check');
   }
 }

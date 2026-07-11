@@ -42,7 +42,7 @@ session over the active loadout:
 - a **Plugins tree** (sidebar) as the entry point for all navigation, browsing each
   plugin's records — including a spatial worldspace/interior-cell tree — plus a Conflicts
   node;
-- a **Change Groups tree** (sidebar, below it) showing in-flight staged operations;
+- a **Pending Changes tree** (sidebar, below it) showing in-flight staged operations;
 - a **Record editor panel** (editor-tab webview) presenting a per-field, per-plugin
   **compare grid** with conflict color-coding, in-place editing that stages pending
   changes, and a companion **Referenced By** panel;
@@ -141,7 +141,7 @@ records straight to their physical plugin files and never requires a deploy.
     are reusable and obvious.
 33. As a user, I want a built-in "pending changes" filter preset, so that I can immediately
     narrow the tree to records I've touched.
-34. As a user, I want a Change Groups tree listing my in-flight staged operations (create,
+34. As a user, I want a Pending Changes tree listing my in-flight staged operations (create,
     delete, renumber) with a description and change/plugin counts, so that I can see and
     manage work that spans multiple records.
 35. As a user, I want to save or revert a single change group, or all of them at once, so
@@ -180,7 +180,7 @@ records straight to their physical plugin files and never requires a deploy.
   loading the active modlist as the session; **Close mEdit** switches back and tears the
   session down.
 - The mEdit view is composed of four surfaces: the **Plugins tree** (sidebar entry point),
-  the **Change Groups tree** (sidebar, below it), the **Record editor panel** (editor-tab
+  the **Pending Changes tree** (sidebar, below it), the **Record editor panel** (editor-tab
   webview, one per open record), and the **status bar item**. There is no toolbar or
   top-level menu bar — every action is reachable from a tree context menu, the command
   palette, or the record editor panel itself.
@@ -347,14 +347,14 @@ that plugin's fields as a quick summary; individual cell colors are authoritativ
   show each holding plugin and field path (informational, not clickable). Empty state: "No
   references found."
 
-### Change Groups tree
+### Pending Changes tree
 
 - A second sidebar `TreeView` below the Plugins tree, always visible, showing all in-flight
   ChangeGroups (create/delete/renumber). Each row is labeled `{operation} — {description}`
   with a `{N} changes · {P} plugins` detail line and inline Save/Revert buttons; title-bar
   Save All / Revert All act on every group in sequence (hidden/disabled when none are
   active). Rows are not expandable (per-change detail is a future enhancement).
-- Empty state: "No pending group changes." **Partial-save failure** (some plugins saved,
+- Empty state: "No pending changes." **Partial-save failure** (some plugins saved,
   some not) shows an error notification naming which saved and which failed; the group stays
   in the tree with its re-queued changes intact.
 
@@ -409,7 +409,7 @@ future surface):
   tests consume representative compare responses as fixtures.
 - **Integration seam** (`npm run test:integration`, real VS Code process): the Plugins tree
   builds from a session, navigation opens a record panel, the record filter prunes the tree,
-  the Change Groups tree reflects staged operations, and command registration holds — add
+  the Pending Changes tree reflects staged operations, and command registration holds — add
   any new command id(s) to `EXPECTED_COMMANDS` (per `modbench/CLAUDE.md`).
 
 ## Out of Scope
@@ -419,7 +419,7 @@ future surface):
   when navigating (an extension invariant).
 - **A structured conflict/EditorID/record-type filter UI** — filtering is deliberately
   user-written SQL against the per-type tables, not a fixed toggle set (ADR-0018).
-- **Expandable per-change detail in the Change Groups tree** — rows show counts only; drilling
+- **Expandable per-change detail in the Pending Changes tree** — rows show counts only; drilling
   into individual changes is a future enhancement.
 - **Run Script…** across session/record/plugin — planned, not yet shipped.
 - **Delta / overlay editing** — loading an arbitrary overriding-plugin set side-by-side is a
