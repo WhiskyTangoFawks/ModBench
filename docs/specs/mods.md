@@ -266,7 +266,8 @@ The extension owns the editing backend process
   mirroring MO2's clickable sortable column) flips the entire tree — root block order and
   the mods within each separator — to **descending**: highest priority first. The toggle is
   transient (not persisted across sessions), matching the Filter/grouping toggle's
-  behavior.
+  behavior. A pinned **Overwrite** row (see *Overwrite folder* below) sits below everything
+  when `mods/overwrite/` is non-empty, outside all separator grouping.
 - **Mod row**: a checkbox (enable/disable, writing the `+`/`-` prefix immediately), the
   full mod name as the label, the `meta.ini` version as the description (blank if absent), a
   generic mod icon with a status overlay (see below), and a tooltip of name · version ·
@@ -327,6 +328,49 @@ The extension owns the editing backend process
   launches the configured executable (`modbench.mods.launchCommand` template for
   Proton/Wine/F4SE loaders), and purges on exit.
 
+### Overwrite folder (#40)
+
+Purge sweeps `Data/` files that are neither a deployed link nor vanilla into
+`mods/overwrite/` (runtime outputs — F4SE logs, MCM INI writes). This surfaces that
+folder so the user can reassign or discard those files without leaving Modbench.
+
+- **Surface**: a single **leaf row** in the Loadout tree, pinned as the **very last row**,
+  outside separator grouping. It is a read-only fixture over `mods/overwrite/`, **not** a
+  `modlist.txt` entry — so it never enables/disables, reorders, moves to a separator, or
+  uninstalls like a mod.
+- **Visibility**: shown **only when the folder holds ≥1 file** (counted recursively; empty
+  subdirectories don't count). Driven **live** by a filesystem watcher on `mods/overwrite/`
+  (`createFileSystemWatcher`) — the row appears the instant purge deposits files and
+  disappears the instant they're cleared, with **no manual refresh** in the workflow (the
+  Mods tree's existing general Refresh remains only as the universal safety net for
+  filesystems with unreliable watch events). Purge therefore needs no explicit refresh call.
+- **Differentiation**: label `Overwrite`, its text tinted **reddish** via a
+  `FileDecorationProvider` keyed on the row's `resourceUri` (`gitDecoration.deletedResourceForeground`
+  — theme-adaptive for light/dark; `list.errorForeground` is the fallback if it reads too
+  much like "deleted"). No badge (a right-side badge would collide with the mod rows'
+  version/status description) and no text prefix (redundant once the tint marks it). The
+  file count and a one-line "reassign in the Explorer or clear" help string live in the
+  **tooltip**.
+- **Action**: exactly one — **Open in Explorer** (reuses `revealInExplorer` → the
+  left-sidebar Explorer view); single-clicking the row also reveals it. All per-file work —
+  clearing, hand-reassigning — happens there with VS Code's native file operations. This is
+  deliberate: we don't rebuild file management VS Code already provides (see
+  [modbench/CLAUDE.md](../../modbench/CLAUDE.md) invariants).
+- **Deliberately not built** (each redundant with the Explorer view, or a no-op in our
+  model): a dedicated **Clear** action (→ multi-select delete in the Explorer view);
+  **Move-to-existing-mod** (→ drag files into `mods/<target>/` in the Explorer, which is
+  already registered — no `modlist.txt` write needed); **Sync-Overwrite** (MO2 needs it
+  because its VFS lets a tool overwrite a mod's file; our **hardlink** deploy edits the
+  mod's file in place, so overwrite only ever holds orphan runtime outputs with no owning
+  mod — nothing to sync). **Create-Mod-from-Overwrite** is **deferred**: it needs a
+  `modlist.txt` write so it isn't Explorer-doable, but overwrite is usually junk-contaminated
+  so whole-folder packaging is rarely clean; the better future shape is **draggable file
+  sub-rows** (drag wanted files onto a newly-created empty mod), tracked separately.
+- **Seam**: a tiny pure "is-non-empty + recursive file count" helper (unit-tested, no
+  `vscode` import), a new `OverwriteNode` in `ModListProvider`, the watcher wiring, and a
+  one-line `FileDecorationProvider`. No C# backend involvement (Mod Management is
+  extension-only).
+
 ### Architecture / seams
 
 - The **`IModlistSource` adapter** over an in-memory modlist model is the primary seam:
@@ -377,9 +421,8 @@ The extension owns the editing backend process
 
 - **Open questions carried forward**: MO2 round-trip fidelity needs a corpus of real MO2
   instances so separators/categories/unmodelled constructs are proven to survive verbatim;
-  the Vortex adapter awaits confirmation that `vortex.deployment.json` is stable enough to
-  bother with; and the **overwrite-folder UX** — files moved to `mods/overwrite/` on purge
-  need a surface to reassign or discard them.
+  and the Vortex adapter awaits confirmation that `vortex.deployment.json` is stable enough
+  to bother with.
 - **Vision**: one tool handles the whole modding workflow — install → manual sort → launch
   → inspect conflicts → edit records → patch — with the sidebar switching between this Mods
   view and the mEdit views, and editing never requiring a deploy.
