@@ -93,7 +93,7 @@
         },
         {
           "id": "modbench.changeGroupTree",
-          "name": "Change Groups",
+          "name": "Pending Changes",
           "when": "modbench.viewMode == 'editing'"
         }
       ]
@@ -153,22 +153,22 @@
       },
       {
         "command": "modbench.saveGroup",
-        "title": "Modbench: Save Group",
+        "title": "Modbench: Save Pending Change",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "modbench.revertGroup",
-        "title": "Modbench: Revert Group",
+        "title": "Modbench: Revert Pending Change",
         "icon": "$(discard)"
       },
       {
         "command": "modbench.saveAllGroups",
-        "title": "Modbench: Save All Groups",
+        "title": "Modbench: Save All Pending Changes",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "modbench.revertAllGroups",
-        "title": "Modbench: Revert All Groups",
+        "title": "Modbench: Revert All Pending Changes",
         "icon": "$(discard)"
       },
       {

@@ -173,7 +173,7 @@ export class SessionController {
   async saveAllGroups(): Promise<void> {
     const { data, response } = await this.deps.client.GET('/change-groups', {});
     if (!response.ok || !Array.isArray(data)) {
-      this.deps.showError('mEdit: Failed to fetch change groups');
+      this.deps.showError('mEdit: Failed to fetch pending changes');
       return;
     }
     const groups = data.filter(g => g.id);
@@ -196,14 +196,14 @@ export class SessionController {
       this.deps.refreshTree();
     }
     if (failed.length > 0) {
-      this.deps.showError(`mEdit: Failed to save groups: ${failed.join(', ')}`);
+      this.deps.showError(`mEdit: Failed to save pending changes: ${failed.join(', ')}`);
     }
   }
 
   async revertAllGroups(): Promise<void> {
     const { data, response } = await this.deps.client.GET('/change-groups', {});
     if (!response.ok || !Array.isArray(data)) {
-      this.deps.showError('mEdit: Failed to fetch change groups');
+      this.deps.showError('mEdit: Failed to fetch pending changes');
       return;
     }
     for (const g of data.filter(g => g.id)) {
