@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 import type { IModlistSource, Mod, ModlistEntry, Separator } from './model';
+import { parseModlist, moveModInText, moveSeparatorBlockInText } from './mo2/modlistText';
 
 const conflictFixture = join(__dirname, 'test', 'fixtures', 'conflict-instance');
 
@@ -258,6 +259,44 @@ describe('ModListProvider', () => {
       return { provider, reorderCalls, moveToSepCalls, reorderBlockCalls };
     }
 
+    // Serialise entries to a real modlist.txt so a drop can be observed by its
+    // resulting order, not just the pre-removal index argument (issue #76: the
+    // suite asserted the argument and so missed the down-drag off-by-one).
+    const toModlistText = (entries: ModlistEntry[]): string =>
+      entries
+        .map((e) => `${e.enabled ? '+' : '-'}${e.name}${e.kind === 'separator' ? '_separator' : ''}`)
+        .join('\n') + '\n';
+
+    /** A source that applies real modlist.txt transforms, so tests assert the
+     *  final entry order the drop produces end-to-end. */
+    class ApplyingSource extends FakeSource {
+      text = toModlistText(dndEntries);
+      override readModlist(): Promise<ModlistEntry[]> { return Promise.resolve(parseModlist(this.text)); }
+      override reorder(name: string, idx: number): Promise<void> { this.text = moveModInText(this.text, name, idx); return Promise.resolve(); }
+      override reorderSeparatorBlock(sepName: string, idx: number): Promise<void> { this.text = moveSeparatorBlockInText(this.text, sepName, idx); return Promise.resolve(); }
+      order(): string[] { return parseModlist(this.text).map((e) => e.name); }
+    }
+
+    function makeApplyingProvider() {
+      const source = new ApplyingSource(dndEntries);
+      const provider = new ModListProvider(source);
+      return { provider, source };
+    }
+
+    async function childrenOf(provider: ModListProvider, sepName: string): Promise<ModNode[]> {
+      const roots = await provider.getChildren();
+      const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === sepName)!;
+      return (await provider.getChildren(sepNode)) as ModNode[];
+    }
+
+    const modItem = (name: string): DragItem => item({ kind: 'mod', name });
+    const sepItem = (name: string): DragItem => item({ kind: 'separator', name });
+    async function drop(provider: ModListProvider, target: any, payload: DragItem): Promise<void> {
+      const dt = new FakeDataTransfer();
+      dt.set('application/vnd.medit.modlist-node', payload);
+      await provider.handleDrop(target, dt as any, token as any);
+    }
+
     it('handleDrag serialises the dragged mod into dataTransfer', async () => {
       const { provider } = makeProvider();
       const roots = await provider.getChildren();
@@ -278,35 +317,41 @@ describe('ModListProvider', () => {
       expect(moveToSepCalls).toEqual([{ mod: 'Alpha', sep: 'Group A' }]);
     });
 
-    it('drop mod onto mod → reorder to target flat index', async () => {
-      const { provider, reorderCalls } = makeProvider();
-      const roots = await provider.getChildren();
-      const groupA = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A')!;
-      const children = await provider.getChildren(groupA);
-      const gammaNode = children.find((n): n is ModNode => n instanceof ModNode && n.label === 'Gamma')!;
-      const dt = new FakeDataTransfer();
-      dt.set('application/vnd.medit.modlist-node', item({ kind: 'mod', name: 'Alpha' }));
-      await provider.handleDrop(gammaNode, dt as any, token as any);
-      expect(reorderCalls[0]).toEqual({ name: 'Alpha', idx: 3 }); // Gamma is at flat index 3
+    // #76 characterization: dragging a mod DOWNWARD (Alpha, above the target,
+    // onto Gamma) must land Alpha immediately before Gamma. The old code passed
+    // the pre-removal target index, so Alpha landed one slot too low.
+    it('down-drag: drop mod onto a lower mod lands it before that mod', async () => {
+      const { provider, source } = makeApplyingProvider();
+      const gammaNode = (await childrenOf(provider, 'Group A')).find((n) => n.label === 'Gamma')!;
+      await drop(provider, gammaNode, modItem('Alpha'));
+      expect(source.order()).toEqual(['Group A', 'Beta', 'Alpha', 'Gamma', 'Group B', 'Delta']);
     });
 
-    it('drop mod onto undefined → reorder to end', async () => {
-      const { provider, reorderCalls } = makeProvider();
+    // Regression: up-drags were never affected (nothing moved sits above the
+    // target, so no shift) — must stay correct.
+    it('up-drag: drop mod onto a higher mod lands it before that mod', async () => {
+      const { provider, source } = makeApplyingProvider();
+      const betaNode = (await childrenOf(provider, 'Group A')).find((n) => n.label === 'Beta')!;
+      await drop(provider, betaNode, modItem('Delta'));
+      expect(source.order()).toEqual(['Alpha', 'Group A', 'Delta', 'Beta', 'Gamma', 'Group B']);
+    });
+
+    it('drop mod onto empty space appends it to the end', async () => {
+      const { provider, source } = makeApplyingProvider();
       await provider.getChildren(); // populate cache
-      const dt = new FakeDataTransfer();
-      dt.set('application/vnd.medit.modlist-node', item({ kind: 'mod', name: 'Alpha' }));
-      await provider.handleDrop(undefined, dt as any, token as any);
-      expect(reorderCalls[0]).toEqual({ name: 'Alpha', idx: dndEntries.length });
+      await drop(provider, undefined, modItem('Alpha'));
+      expect(source.order()).toEqual(['Group A', 'Beta', 'Gamma', 'Group B', 'Delta', 'Alpha']);
     });
 
-    it('drop separator → reorderSeparatorBlock', async () => {
-      const { provider, reorderBlockCalls } = makeProvider();
-      const roots = await provider.getChildren();
-      const groupBNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group B')!;
-      const dt = new FakeDataTransfer();
-      dt.set('application/vnd.medit.modlist-node', item({ kind: 'separator', name: 'Group A' }));
-      await provider.handleDrop(groupBNode, dt as any, token as any);
-      expect(reorderBlockCalls[0]).toEqual({ sep: 'Group A', idx: 4 }); // Group B is at flat index 4
+    // #76 for separator blocks: the whole block (separator + its children) is
+    // removed before toIndex is counted, so every block member above the target
+    // shifts it — dragging Group A's block down onto Delta must land the block
+    // before Delta, not fling it to the bottom.
+    it('down-drag: drop separator block onto a lower mod lands the block before it', async () => {
+      const { provider, source } = makeApplyingProvider();
+      const deltaNode = (await childrenOf(provider, 'Group B')).find((n) => n.label === 'Delta')!;
+      await drop(provider, deltaNode, sepItem('Group A'));
+      expect(source.order()).toEqual(['Alpha', 'Group B', 'Group A', 'Beta', 'Gamma', 'Delta']);
     });
   });
 
