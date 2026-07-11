@@ -1,7 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { IModlistSource, Mod, ModlistEntry, Separator } from './model';
 import { parseModlist, moveModInText, moveSeparatorBlockInText } from './mo2/modlistText';
+import { buildTes4Buffer } from './test/buildTes4Buffer';
 
 const conflictFixture = join(__dirname, 'test', 'fixtures', 'conflict-instance');
 
@@ -501,5 +504,43 @@ describe('ModListProvider', () => {
       // ADR-0026: badges silently missing would otherwise look identical to "no conflicts" — warn the user.
       expect(reports).toEqual([{ severity: 'warning', message: expect.stringContaining('badges may be inaccurate') }]);
     });
+  });
+});
+
+// The consolidation (#78) threads the game's resolved Data folder from the
+// composition root instead of ModListProvider re-reading the ini. This exercises
+// that seam end-to-end over a real temp instance: a mod plugin masters a vanilla
+// master that lives only in the injected Data folder, so the missing-master badge
+// hinges entirely on the dataFolder the provider was handed.
+describe('ModListProvider — missing-master badge over the injected game Data folder (#78)', () => {
+  let dir: string;
+  const modA = (): ModlistEntry => ({ kind: 'mod', name: 'Consumer', enabled: true });
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'medit-modlist-datafolder-'));
+    await mkdir(join(dir, 'Game', 'Data'), { recursive: true });
+    await writeFile(join(dir, 'Game', 'Data', 'Fallout4.esm'), buildTes4Buffer([]));
+    // Consumer ships Child.esp, which masters the vanilla Fallout4.esm (no mod ships it).
+    await mkdir(join(dir, 'mods', 'Consumer'), { recursive: true });
+    await writeFile(join(dir, 'mods', 'Consumer', 'Child.esp'), buildTes4Buffer(['Fallout4.esm']));
+  });
+  afterEach(async () => {
+    if (dir) await rm(dir, { recursive: true, force: true });
+  });
+
+  const modNode = async (provider: ModListProvider): Promise<ModNode> =>
+    (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Consumer')!;
+
+  it('resolves the vanilla master from the injected Data folder, so no missing-master badge', async () => {
+    const provider = new ModListProvider(new FakeSource([modA()]), undefined, dir, undefined, Promise.resolve(join(dir, 'Game', 'Data')));
+    const node = await modNode(provider);
+    expect(node.iconPath).toEqual({ id: 'package' }); // Fallout4.esm found → status ok
+  });
+
+  it('badges the master as missing when no Data folder is resolved (degraded, empty vanilla set)', async () => {
+    const provider = new ModListProvider(new FakeSource([modA()]), undefined, dir); // dataFolder defaults to undefined
+    const node = await modNode(provider);
+    expect(node.iconPath).toEqual({ id: 'error' }); // Fallout4.esm unresolved → missing master
+    expect(node.tooltip).toContain('Missing master: Fallout4.esm');
   });
 });

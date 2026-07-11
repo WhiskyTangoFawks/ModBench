@@ -123,12 +123,16 @@ export class ModListProvider
    *  files on disk. Omitted in tests that use an in-memory-only source.
    *  `reporter`, when provided, surfaces a status-computation failure as a
    *  warning (ADR-0026: badges silently absent would otherwise look
-   *  identical to "no conflicts"). */
+   *  identical to "no conflicts"). `dataFolder` is the game's resolved Data
+   *  folder (the single GameDirectory resolved once at the composition root,
+   *  #78) — its vanilla/DLC masters seed the missing-master check; a resolved
+   *  `Promise<undefined>` degrades that check to an empty set. */
   constructor(
     private readonly source: IModlistSource,
     log?: (msg: string) => void,
     private readonly instanceRoot?: string,
     private readonly reporter?: Reporter,
+    private readonly dataFolder: Promise<string | undefined> = Promise.resolve(undefined),
   ) {
     this.log = log ?? (() => {});
   }
@@ -316,7 +320,7 @@ export class ModListProvider
       try {
         const [index, vanillaMasters] = await Promise.all([
           buildFileConflictIndex(entries, this.instanceRoot),
-          readVanillaMasters(this.instanceRoot, this.log),
+          this.dataFolder.then((df) => readVanillaMasters(df, this.log)),
         ]);
         this.statuses = await computeModStatuses(entries, this.instanceRoot, index, vanillaMasters, this.log);
       } catch (e) {

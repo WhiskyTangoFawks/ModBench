@@ -1,14 +1,10 @@
 import * as vscode from 'vscode';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { IModlistSource, PluginEntry } from './model';
 import type { Reporter } from './deployer';
 import { dropIndexForMove } from './mo2/pluginsText';
 import { buildFileConflictIndex } from './fileConflictIndex';
 import { computePluginOrderStatuses, type PluginOrderStatus } from './statusChecker';
 import { resolvePluginPaths } from './explicitSession';
-import { readGamePath } from './mo2/modOrganizerIni';
-import { normalizeGamePath } from './gameDirectory';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -83,12 +79,16 @@ export class PluginListProvider
 
   /** `instanceRoot`, when provided, enables the order-aware missing-master badge
    *  (issue #67): each plugin's declared masters are read and checked against the
-   *  Plugin load order. Omitted in tests using an in-memory-only source. */
+   *  Plugin load order. Omitted in tests using an in-memory-only source.
+   *  `dataFolder` is the game's resolved Data folder (the single GameDirectory
+   *  resolved once at the composition root, #78) — for locating vanilla/DLC/CC
+   *  plugins no mod ships; a resolved `Promise<undefined>` degrades those lookups. */
   constructor(
     private readonly source: IModlistSource,
     log?: (msg: string) => void,
     private readonly reporter?: Reporter,
     private readonly instanceRoot?: string,
+    private readonly dataFolder: Promise<string | undefined> = Promise.resolve(undefined),
   ) {
     this.log = log ?? (() => {});
   }
@@ -126,7 +126,7 @@ export class PluginListProvider
     try {
       const entries = await this.source.readModlist();
       const index = await buildFileConflictIndex(entries, this.instanceRoot);
-      const dataFolder = await this.resolveDataFolder(this.instanceRoot);
+      const dataFolder = await this.dataFolder;
       if (!dataFolder) return undefined;
       return resolvePluginPaths([name], index, dataFolder).get(name);
     } catch (e) {
@@ -175,26 +175,12 @@ export class PluginListProvider
     try {
       const entries = await this.source.readModlist();
       const index = await buildFileConflictIndex(entries, this.instanceRoot);
-      const dataFolder = await this.resolveDataFolder(this.instanceRoot);
+      const dataFolder = await this.dataFolder;
       return await computePluginOrderStatuses(order, index, dataFolder, this.log);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       this.log(`[PluginListProvider] master-order status computation failed: ${message}`);
       this.reporter?.report('warning', 'Could not compute plugin master-order status — badges may be inaccurate.', message);
-      return undefined;
-    }
-  }
-
-  /** The game's Data folder (for resolving vanilla/DLC/CC plugins no mod ships),
-   *  from MO2's own gamePath — Wine-normalized like vanillaMasters.ts. Undefined
-   *  when the ini is absent/unreadable: vanilla-row master lookups then degrade,
-   *  mod-provided ones still resolve. */
-  private async resolveDataFolder(instanceRoot: string): Promise<string | undefined> {
-    try {
-      const iniText = await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8');
-      return join(normalizeGamePath(readGamePath(iniText)), 'Data');
-    } catch (e) {
-      this.log(`[PluginListProvider] could not resolve the game Data folder: ${e instanceof Error ? e.message : String(e)}`);
       return undefined;
     }
   }

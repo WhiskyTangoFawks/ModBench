@@ -387,7 +387,8 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
     await rm(dir, { recursive: true, force: true });
   });
 
-  const provider = () => new PluginListProvider(new Mo2ModlistSource(dir), undefined, undefined, dir);
+  const provider = () =>
+    new PluginListProvider(new Mo2ModlistSource(dir), undefined, undefined, dir, Promise.resolve(join(dir, 'Game', 'Data')));
 
   it('badges a plugin whose master is sequenced after it', async () => {
     await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
@@ -468,12 +469,12 @@ describe('PluginListProvider — resolvePluginPath (Reveal in Explorer, issue #6
   });
 
   it('resolves a mod-provided plugin to the winning mod copy', async () => {
-    const provider = new PluginListProvider(new Mo2ModlistSource(dir), undefined, undefined, dir);
+    const provider = new PluginListProvider(new Mo2ModlistSource(dir), undefined, undefined, dir, Promise.resolve(join(dir, 'Game', 'Data')));
     expect(await provider.resolvePluginPath('Base.esp')).toBe(join(dir, 'mods', 'Provider', 'Base.esp'));
   });
 
   it('resolves an unmanaged vanilla plugin to the game Data folder', async () => {
-    const provider = new PluginListProvider(new Mo2ModlistSource(dir), undefined, undefined, dir);
+    const provider = new PluginListProvider(new Mo2ModlistSource(dir), undefined, undefined, dir, Promise.resolve(join(dir, 'Game', 'Data')));
     expect(await provider.resolvePluginPath('Fallout4.esm')).toBe(join(dir, 'Game', 'Data', 'Fallout4.esm'));
   });
 
