@@ -39,7 +39,8 @@ export interface InstallMeta {
   installationFile?: string;
 }
 
-/** Persistence over an MO2 instance for the active profile. Bottom = highest priority. */
+/** Persistence over an MO2 instance for the active profile. File order is
+ *  winning-first: top of modlist.txt = winning end, bottom = losing end. */
 export interface IModlistSource {
   readModlist(): Promise<ModlistEntry[]>;
   setEnabled(modName: string, enabled: boolean): Promise<void>;
@@ -63,7 +64,7 @@ export interface IModlistSource {
   /** Nexus Mods game slug (e.g. "fallout4") for constructing mod page URLs. */
   getNexusSlug(): Promise<string>;
   listProfiles(): Promise<string[]>;
-  /** Separator names in modlist priority order (top = first). */
+  /** Separator names in file order (winning end / top of file first). */
   listSeparators(): Promise<string[]>;
   getActiveProfile(): Promise<string>;
   setActiveProfile(name: string): Promise<void>;

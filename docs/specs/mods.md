@@ -63,9 +63,9 @@ requires a deploy.**
    sync.
 3. As a user, I want the mod list grouped by the separators I already use in MO2, so that
    my organizational structure carries over intact.
-4. As a user, I want mods that sit before the first separator to appear at the top of the
-   list as ungrouped items, so that the tree mirrors `modlist.txt` without inventing a
-   synthetic container.
+4. As a user, I want mods that sit before the first separator to render as ungrouped
+   root-level items (at the winning end of the list — the bottom, in the default
+   losing-at-top view), so that they carry over without a synthetic container.
 5. As a user, I want a count node at the top showing how many mods are active out of how
    many are installed, so that I can gauge my loadout at a glance.
 6. As a user, I want each mod shown with its name and its version from `meta.ini`, so that
@@ -140,10 +140,10 @@ requires a deploy.**
 33. As a user, I want an "update available" indicator on mods (planned) once Nexus
     integration lands, so that I can tell when an installed mod is behind its Nexus
     version.
-34. As a user, I want a title-bar toggle to flip the mod list between priority-ascending
-    (the default in #4 — master/base mods at top, overrides at bottom) and
-    priority-descending, so that I can view the list in the direction I'm used to from MO2
-    without having to interpret it in reverse.
+34. As a user, I want a title-bar toggle to flip the mod list between the default
+    losing-at-top view (base/master mods on top, winning overrides at the bottom, matching
+    MO2) and winning-at-top, so that I can view the list in either direction — a view-order
+    choice that never changes which mod wins.
 
 ## Implementation Decisions
 
@@ -224,7 +224,7 @@ the configured game directory's `Data/`.
   ([MM ADR-0001](../../modbench/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md)).
   Persistence goes through an `IModlistSource` over an in-memory modlist model.
 - **MO2 adapter** (first-class): reads/writes an instance in place — `mods/<name>/`, the
-  active profile's `modlist.txt` (`+`/`-` prefixes, bottom = highest priority) and
+  active profile's `modlist.txt` (`+`/`-` prefixes, top of file = winning end, bottom = losing end) and
   `plugins.txt`, and per-mod `meta.ini` (Nexus id/version). Separators, categories, and
   metadata survive verbatim.
 - **Native adapter** (first-class): for fresh setups; writes MO2-format instances so they
@@ -258,14 +258,17 @@ The extension owns the editing backend process
   count node ("N active / M installed"); title-bar icon buttons for Filter, Switch Profile,
   Launch mEdit, Collapse All, Refresh, Sort Direction, plus Deploy and Purge in standalone
   mode only.
-- **Structure**: ungrouped mods (before the first `modlist.txt` separator) render as
-  root-level items above all separator nodes — no synthetic container. Separator nodes are
-  collapsible and expanded by default. This is the **ascending** (default) priority order —
-  lowest priority (masters/base) first, highest priority (overrides) last, matching MO2's
-  own default Priority-column sort. A **Sort Direction** title-bar toggle (triangle icon,
-  mirroring MO2's clickable sortable column) flips the entire tree — root block order and
-  the mods within each separator — to **descending**: highest priority first. The toggle is
-  transient (not persisted across sessions), matching the Filter/grouping toggle's
+- **Structure**: separator nodes (each grouping the mods that follow it in `modlist.txt`)
+  render first; ungrouped mods (before the first separator — the **winning end**) render as
+  root-level items at the bottom, below every separator — no synthetic container. Separator
+  nodes are collapsible and expanded by default. This is the default **losing-at-top** view
+  — the losing end (base/vanilla-adjacent mods) on top, the winning end (overrides) at the
+  bottom, matching MO2's default Priority-column sort. A **Sort Direction** title-bar toggle
+  (triangle icon, mirroring MO2's clickable sortable column) flips the entire tree — root
+  block order and the mods within each separator — to **winning-at-top** (raw `modlist.txt`
+  file order). View order only — it never changes which mod wins a conflict (see
+  [modmanager/CONTEXT.md](../../modbench/src/modmanager/CONTEXT.md), "View order"). The toggle
+  is transient (not persisted across sessions), matching the Filter/grouping toggle's
   behavior. A pinned **Overwrite** row (see *Overwrite folder* below) sits below everything
   when `overwrite/` is non-empty, outside all separator grouping.
 - **Mod row**: a checkbox (enable/disable, writing the `+`/`-` prefix immediately), the
@@ -303,12 +306,13 @@ The extension owns the editing backend process
 
 ### Conflict index & status badges (Modbench-3)
 
-- A `FileConflictIndex` (a winner map of the highest-priority enabled mod per relative
-  path) is built on load and rebuilt on enable/disable/reorder. BA2/BSA archives are
-  ordinary entries — the game's archive loader handles them.
+- A `FileConflictIndex` (a winner map of the winning enabled mod per relative
+  path — the one nearest the winning end of the Mod override order) is built on load and
+  rebuilt on enable/disable/reorder. BA2/BSA archives are ordinary entries — the game's
+  archive loader handles them.
 - Per-mod status: **no conflicts** when all its files win; **N conflicts** when N files are
-  overridden by a higher-priority mod; **overrides N** when it overrides N files from
-  lower-priority mods; **missing master** when a plugin depends on a master not in the load
+  overridden by a winning mod; **overrides N** when it overrides N files that losing mods
+  also provide; **missing master** when a plugin depends on a master not in the load
   order (detected via a tiny TES4-header read, no Mutagen); **missing mod** when
   `modlist.txt` references a folder absent on disk; and **update available** (*planned*)
   when the Nexus version exceeds the installed `meta.ini` version.

@@ -1,6 +1,6 @@
 // Pure, byte-faithful text transforms over an MO2 profile's modlist.txt.
 //
-// modlist.txt lines (bottom = highest priority):
+// modlist.txt lines (top of file = winning end; bottom = losing end):
 //   # comment              (preserved verbatim, not surfaced)
 //   +Mod Name              (enabled mod)
 //   -Mod Name              (disabled mod)
@@ -28,7 +28,7 @@ function withBomPreserved(text: string, edit: (bomless: string) => string): stri
   return BOM + edit(stripBom(text));
 }
 
-/** Parse modlist.txt into the ordered model view (bottom = highest priority).
+/** Parse modlist.txt into the ordered model view (file order; top = winning end).
  *  Only +/- mod and separator lines are surfaced; comment/*-prefixed/blank
  *  lines carry no model meaning and are ignored (but preserved on write). */
 export function parseModlist(text: string): ModlistEntry[] {
@@ -143,15 +143,25 @@ export function deleteSeparatorInText(text: string, name: string): string {
   });
 }
 
-/** Append a disabled mod line at the bottom (highest priority), preserving every
- *  existing byte. Ensures the prior last line is EOL-terminated first, and uses
- *  the file's own EOL (CRLF if present, else LF). */
-export function appendModToText(text: string, modName: string): string {
-  const eol = detectEol(text);
-  const newLine = `-${modName}${eol}`;
-  if (text === '') return newLine;
-  const needsEol = !/\r\n$|\r$|\n$/.test(text);
-  return text + (needsEol ? eol : '') + newLine;
+/** Insert a disabled mod line at the winning end — the first entry line (top of
+ *  file), where MO2 places a freshly installed mod. It lands
+ *  below any leading comment/blank/`*` lines but above the first `+`/`-` entry,
+ *  disabled so it never silently changes the load until enabled. Preserves every
+ *  existing byte and uses the file's own EOL (CRLF if present, else LF). */
+export function insertModAtWinningEnd(text: string, modName: string): string {
+  return withBomPreserved(text, (bomless) => {
+    const eol = detectEol(bomless);
+    const newLine = `-${modName}${eol}`;
+    if (bomless === '') return newLine;
+    const lines = splitLinesKeepEol(bomless);
+    const firstEntry = lines.findIndex(isEntryLine);
+    const insertAt = firstEntry === -1 ? lines.length : firstEntry;
+    if (insertAt > 0 && !/\r\n$|\r$|\n$/.test(lines[insertAt - 1])) {
+      lines[insertAt - 1] += eol; // EOL-terminate the line we insert after
+    }
+    lines.splice(insertAt, 0, newLine);
+    return lines.join('');
+  });
 }
 
 /** Remove a mod's entry line entirely. Throws if absent; throws if the name resolves to a separator. */
@@ -259,7 +269,7 @@ export function moveSeparatorBlockInText(
 }
 
 /** Move a mod's line so it occupies entry-index `toIndex` among the +/- entry
- *  lines (bottom = highest priority), counting the entries *with the moved mod
+ *  lines (top of file = winning end), counting the entries *with the moved mod
  *  removed*. Out-of-range clamps to the last entry slot. Non-entry lines
  *  (comment, *) keep their relative position; bytes are preserved. */
 export function moveModInText(text: string, modName: string, toIndex: number): string {

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { IModlistSource, InstallMeta, ModlistEntry } from '../model';
 import type { Reporter } from '../deployer';
 import {
-  appendModToText,
+  insertModAtWinningEnd,
   deleteSeparatorInText,
   insertSeparatorAtIndexInText,
   moveModInText,
@@ -146,7 +146,7 @@ export class Mo2ModlistSource implements IModlistSource {
     await cp(sourceDir, modDir, { recursive: true });
     const gameName = readGameName(await readFile(this.iniPath, 'utf8'));
     await writeFile(join(modDir, 'meta.ini'), writeMetaIni({ gameName, ...meta }));
-    await this.modifyModlist((t) => appendModToText(t, name));
+    await this.modifyModlist((t) => insertModAtWinningEnd(t, name));
   }
 
   async reorderSeparatorBlock(separatorName: string, toIndex: number): Promise<void> {

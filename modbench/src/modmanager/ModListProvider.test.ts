@@ -82,7 +82,10 @@ class FakeSource implements IModlistSource {
 }
 
 describe('ModListProvider', () => {
-  it('builds root children: count node, ungrouped mods, then separators', async () => {
+  it('builds root children: count node, then separators, then ungrouped mods (losing-at-top default)', async () => {
+    // Ungrouped mods sit before the first separator = top of file = winning end,
+    // so the default losing-at-top view pushes them below the separators and
+    // reverses each sibling list.
     const source = new FakeSource([
       mod('Ungrouped A'),
       mod('Ungrouped B', false),
@@ -94,12 +97,12 @@ describe('ModListProvider', () => {
 
     expect(roots[0]).toBeInstanceOf(CountNode);
     expect(roots[0].label).toBe('2 active / 3 installed');
-    expect(roots[1]).toBeInstanceOf(ModNode);
-    expect(roots[1].label).toBe('Ungrouped A');
+    expect(roots[1]).toBeInstanceOf(SeparatorNode);
+    expect(roots[1].label).toBe('Section 1');
     expect(roots[2]).toBeInstanceOf(ModNode);
     expect(roots[2].label).toBe('Ungrouped B');
-    expect(roots[3]).toBeInstanceOf(SeparatorNode);
-    expect(roots[3].label).toBe('Section 1');
+    expect(roots[3]).toBeInstanceOf(ModNode);
+    expect(roots[3].label).toBe('Ungrouped A');
   });
 
   it('returns a separator’s mods as ModNodes with checkbox, version, tooltip', async () => {
@@ -114,7 +117,9 @@ describe('ModListProvider', () => {
     const children = await provider.getChildren(separator);
 
     expect(children).toHaveLength(2);
-    const [enabled, disabled] = children as ModNode[];
+    // Default losing-at-top view reverses each sibling list, so the later file
+    // entry (Disabled Mod) renders first.
+    const [disabled, enabled] = children as ModNode[];
     expect(enabled.label).toBe('UFO4P');
     expect(enabled.description).toBe('v2.1.5');
     expect(enabled.checkboxState).toBe(1); // Checked
@@ -200,7 +205,7 @@ describe('ModListProvider', () => {
       const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode)!;
       expect(sepNode.label).toBe('Group A');
       const children = await provider.getChildren(sepNode);
-      expect(children.map((n) => n.label)).toEqual(['Alpha Child', 'Gamma']);
+      expect(children.map((n) => n.label)).toEqual(['Gamma', 'Alpha Child']); // reversed: losing-at-top default
     });
 
     it('fires onDidChangeTreeData when filter is set', () => {
@@ -228,7 +233,7 @@ describe('ModListProvider', () => {
       const roots = await provider.getChildren();
 
       expect(roots.every((n) => n instanceof ModNode)).toBe(true);
-      expect(roots.map((n) => n.label)).toEqual(['Alpha', 'Alpha Child']);
+      expect(roots.map((n) => n.label)).toEqual(['Alpha Child', 'Alpha']); // reversed: losing-at-top default
     });
   });
 
@@ -321,11 +326,17 @@ describe('ModListProvider', () => {
       expect(moveToSepCalls).toEqual([{ mod: 'Alpha', sep: 'Group A' }]);
     });
 
+    // These four characterize the file-space "insert before the target" math in
+    // the WINNING-AT-TOP view (view == file order), including the #76 down-drag
+    // off-by-one fix. The reversed default view is covered by "honors the view
+    // direction" below.
+
     // #76 characterization: dragging a mod DOWNWARD (Alpha, above the target,
     // onto Gamma) must land Alpha immediately before Gamma. The old code passed
     // the pre-removal target index, so Alpha landed one slot too low.
-    it('down-drag: drop mod onto a lower mod lands it before that mod', async () => {
+    it('winning-at-top down-drag: drop mod onto a lower mod lands it before that mod', async () => {
       const { provider, source } = makeApplyingProvider();
+      provider.toggleSortOrder(); // -> winning-at-top (view == file order)
       const gammaNode = (await childrenOf(provider, 'Group A')).find((n) => n.label === 'Gamma')!;
       await drop(provider, gammaNode, modItem('Alpha'));
       expect(source.order()).toEqual(['Group A', 'Beta', 'Alpha', 'Gamma', 'Group B', 'Delta']);
@@ -333,15 +344,17 @@ describe('ModListProvider', () => {
 
     // Regression: up-drags were never affected (nothing moved sits above the
     // target, so no shift) — must stay correct.
-    it('up-drag: drop mod onto a higher mod lands it before that mod', async () => {
+    it('winning-at-top up-drag: drop mod onto a higher mod lands it before that mod', async () => {
       const { provider, source } = makeApplyingProvider();
+      provider.toggleSortOrder(); // -> winning-at-top (view == file order)
       const betaNode = (await childrenOf(provider, 'Group A')).find((n) => n.label === 'Beta')!;
       await drop(provider, betaNode, modItem('Delta'));
       expect(source.order()).toEqual(['Alpha', 'Group A', 'Delta', 'Beta', 'Gamma', 'Group B']);
     });
 
-    it('drop mod onto empty space appends it to the end', async () => {
+    it('winning-at-top: drop mod onto empty space appends it to the end', async () => {
       const { provider, source } = makeApplyingProvider();
+      provider.toggleSortOrder(); // -> winning-at-top (view == file order)
       await provider.getChildren(); // populate cache
       await drop(provider, undefined, modItem('Alpha'));
       expect(source.order()).toEqual(['Group A', 'Beta', 'Gamma', 'Group B', 'Delta', 'Alpha']);
@@ -351,8 +364,9 @@ describe('ModListProvider', () => {
     // removed before toIndex is counted, so every block member above the target
     // shifts it — dragging Group A's block down onto Delta must land the block
     // before Delta, not fling it to the bottom.
-    it('down-drag: drop separator block onto a lower mod lands the block before it', async () => {
+    it('winning-at-top down-drag: drop separator block onto a lower mod lands the block before it', async () => {
       const { provider, source } = makeApplyingProvider();
+      provider.toggleSortOrder(); // -> winning-at-top (view == file order)
       const deltaNode = (await childrenOf(provider, 'Group B')).find((n) => n.label === 'Delta')!;
       await drop(provider, deltaNode, sepItem('Group A'));
       expect(source.order()).toEqual(['Alpha', 'Group B', 'Group A', 'Beta', 'Gamma', 'Delta']);
@@ -366,6 +380,52 @@ describe('ModListProvider', () => {
       const overwriteNode = new OverwriteNode({ fsPath: '/x', toString: () => 'file:///x' } as any, 1);
       await drop(provider, overwriteNode, modItem('Alpha'));
       expect(source.order()).toEqual(before);
+    });
+
+    // A drop must honor what the user SEES, not raw file position. In the default
+    // losing-at-top view the file runs opposite to the view, so dropping X onto Y
+    // must place X just above Y *in the view*. Asserting the displayed order (not
+    // the file order) is what makes this view-relative rather than file-relative.
+    describe('honors the view direction', () => {
+      class SimpleApplyingSource extends FakeSource {
+        text = '+Winning\n+Middle\n+Losing\n'; // file order: winning-first
+        override readModlist(): Promise<ModlistEntry[]> { return Promise.resolve(parseModlist(this.text)); }
+        override reorder(name: string, idx: number): Promise<void> { this.text = moveModInText(this.text, name, idx); return Promise.resolve(); }
+      }
+      const displayedMods = async (p: ModListProvider): Promise<string[]> =>
+        (await p.getChildren()).filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label as string);
+
+      it('default (losing-at-top): dropping the winning mod onto the middle row lands it just above that row in the view', async () => {
+        const provider = new ModListProvider({ source: new SimpleApplyingSource([]) });
+        expect(await displayedMods(provider)).toEqual(['Losing', 'Middle', 'Winning']); // sanity: reversed default
+        const middle = (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Middle')!;
+        await drop(provider, middle, modItem('Winning'));
+        expect(await displayedMods(provider)).toEqual(['Losing', 'Winning', 'Middle']);
+      });
+
+      it('default (losing-at-top): dragging a top (losing) row down onto a lower row lands it just above that row in the view', async () => {
+        const provider = new ModListProvider({ source: new SimpleApplyingSource([]) });
+        const winning = (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Winning')!;
+        await drop(provider, winning, modItem('Losing')); // Losing (view top) dropped onto Winning (view bottom)
+        expect(await displayedMods(provider)).toEqual(['Middle', 'Losing', 'Winning']);
+      });
+
+      it('default (losing-at-top): dropping onto empty space sends the mod to the winning end (bottom of the view)', async () => {
+        const provider = new ModListProvider({ source: new SimpleApplyingSource([]) });
+        await provider.getChildren(); // populate cache
+        await drop(provider, undefined, modItem('Losing'));
+        expect(await displayedMods(provider)).toEqual(['Middle', 'Winning', 'Losing']);
+      });
+
+      it('default (losing-at-top): dropping a separator block onto a row lands the block just above it in the view', async () => {
+        // dndEntries file order: [Alpha, Group A{Beta,Gamma}, Group B{Delta}]. In the default
+        // view Delta is the losing-most row; dropping Group A's block onto Delta puts the block
+        // just above Delta in the view = just after Delta in the file.
+        const { provider, source } = makeApplyingProvider();
+        const deltaNode = (await childrenOf(provider, 'Group B')).find((n) => n.label === 'Delta')!;
+        await drop(provider, deltaNode, sepItem('Group A'));
+        expect(source.order()).toEqual(['Alpha', 'Group B', 'Delta', 'Group A', 'Beta', 'Gamma']);
+      });
     });
   });
 
@@ -383,6 +443,19 @@ describe('ModListProvider', () => {
     });
   });
 
+  describe('view direction', () => {
+    // modlist.txt file order is winning-first (top of file wins). The default
+    // view puts the LOSING end on top (base/vanilla-adjacent mods first),
+    // matching MO2 — so a sibling list renders reversed from file order.
+    it('default view renders the losing end (last file entry) at the top', async () => {
+      const source = new FakeSource([mod('Winning'), mod('Middle'), mod('Losing')]);
+      const provider = new ModListProvider({ source });
+      const roots = await provider.getChildren();
+      expect(roots.filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label))
+        .toEqual(['Losing', 'Middle', 'Winning']);
+    });
+  });
+
   describe('sort order toggle', () => {
     it('toggleSortOrder fires a refresh', () => {
       const provider = new ModListProvider({ source: new FakeSource([mod('A')]) });
@@ -394,7 +467,7 @@ describe('ModListProvider', () => {
       expect(fired).toBe(true);
     });
 
-    it('descending: separators first (reversed), then ungrouped (reversed), count node still pinned first', async () => {
+    it('toggled to winning-at-top: ungrouped first, then separators, all in file order', async () => {
       const source = new FakeSource([
         mod('Ungrouped A'),
         mod('Ungrouped B', false),
@@ -404,21 +477,21 @@ describe('ModListProvider', () => {
         mod('Other Child'),
       ]);
       const provider = new ModListProvider({ source });
-      provider.toggleSortOrder();
+      provider.toggleSortOrder(); // -> winning-at-top (file order)
       const roots = await provider.getChildren();
 
       expect(roots[0]).toBeInstanceOf(CountNode);
-      expect(roots[1]).toBeInstanceOf(SeparatorNode);
-      expect(roots[1].label).toBe('Section 2');
-      expect(roots[2]).toBeInstanceOf(SeparatorNode);
-      expect(roots[2].label).toBe('Section 1');
-      expect(roots[3]).toBeInstanceOf(ModNode);
-      expect(roots[3].label).toBe('Ungrouped B');
-      expect(roots[4]).toBeInstanceOf(ModNode);
-      expect(roots[4].label).toBe('Ungrouped A');
+      expect(roots[1]).toBeInstanceOf(ModNode);
+      expect(roots[1].label).toBe('Ungrouped A');
+      expect(roots[2]).toBeInstanceOf(ModNode);
+      expect(roots[2].label).toBe('Ungrouped B');
+      expect(roots[3]).toBeInstanceOf(SeparatorNode);
+      expect(roots[3].label).toBe('Section 1');
+      expect(roots[4]).toBeInstanceOf(SeparatorNode);
+      expect(roots[4].label).toBe('Section 2');
     });
 
-    it('descending: mods within a separator are also reversed', async () => {
+    it('toggled to winning-at-top: mods within a separator are in file order', async () => {
       const source = new FakeSource([
         sep('Section'),
         mod('First'),
@@ -426,15 +499,15 @@ describe('ModListProvider', () => {
         mod('Third'),
       ]);
       const provider = new ModListProvider({ source });
-      provider.toggleSortOrder();
+      provider.toggleSortOrder(); // -> winning-at-top (file order)
       const roots = await provider.getChildren();
       const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode)!;
       const children = await provider.getChildren(sepNode);
 
-      expect(children.map((n) => n.label)).toEqual(['Third', 'Second', 'First']);
+      expect(children.map((n) => n.label)).toEqual(['First', 'Second', 'Third']);
     });
 
-    it('descending applies to flatFilteredRoots (grouping off)', async () => {
+    it('toggle applies to flatFilteredRoots (grouping off)', async () => {
       const entries = [
         mod('Alpha'),
         sep('Group A'),
@@ -442,14 +515,14 @@ describe('ModListProvider', () => {
         mod('Alpha Other'),
       ] satisfies ModlistEntry[];
       const provider = new ModListProvider({ source: new FakeSource(entries) });
-      provider.toggleSortOrder();
+      provider.toggleSortOrder(); // -> winning-at-top (file order)
       provider.setFilter('alpha', false);
       const roots = await provider.getChildren();
 
-      expect(roots.map((n) => n.label)).toEqual(['Alpha Other', 'Alpha Child', 'Alpha']);
+      expect(roots.map((n) => n.label)).toEqual(['Alpha', 'Alpha Child', 'Alpha Other']);
     });
 
-    it('descending applies to groupedFilteredRoots (grouping on)', async () => {
+    it('toggle applies to groupedFilteredRoots (grouping on)', async () => {
       const entries = [
         mod('Alpha'),
         sep('Group A'),
@@ -457,16 +530,16 @@ describe('ModListProvider', () => {
         mod('Alpha Other'),
       ] satisfies ModlistEntry[];
       const provider = new ModListProvider({ source: new FakeSource(entries) });
-      provider.toggleSortOrder();
+      provider.toggleSortOrder(); // -> winning-at-top (file order)
       provider.setFilter('alpha', true);
       const roots = await provider.getChildren();
 
-      expect(roots[0]).toBeInstanceOf(SeparatorNode);
-      expect(roots[1]).toBeInstanceOf(ModNode);
-      expect(roots[1].label).toBe('Alpha');
-      const sepNode = roots[0] as SeparatorNode;
+      expect(roots[0]).toBeInstanceOf(ModNode);
+      expect(roots[0].label).toBe('Alpha');
+      expect(roots[1]).toBeInstanceOf(SeparatorNode);
+      const sepNode = roots[1] as SeparatorNode;
       const children = await provider.getChildren(sepNode);
-      expect(children.map((n) => n.label)).toEqual(['Alpha Other', 'Alpha Child']);
+      expect(children.map((n) => n.label)).toEqual(['Alpha Child', 'Alpha Other']);
     });
   });
 
@@ -475,7 +548,9 @@ describe('ModListProvider', () => {
       const source = new FakeSource([mod('ModA'), mod('ModB')]);
       const provider = new ModListProvider({ source, instanceRoot: conflictFixture });
       const roots = await provider.getChildren();
-      const [modA, modB] = roots.filter((n): n is ModNode => n instanceof ModNode);
+      const modNodes = roots.filter((n): n is ModNode => n instanceof ModNode);
+      const modA = modNodes.find((n) => n.label === 'ModA')!;
+      const modB = modNodes.find((n) => n.label === 'ModB')!;
 
       expect(modA.label).toBe('ModA');
       expect(modA.iconPath).toEqual({ id: 'warning' });

@@ -8,22 +8,23 @@ const fixture = join(__dirname, 'test', 'fixtures', 'conflict-instance');
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
 
 describe('buildFileConflictIndex', () => {
-  it('resolves the winner for an overridden file to the bottommost (highest-priority) mod', async () => {
-    // ModB is index 1 (bottom of modlist.txt = highest priority); both provide
-    // textures/shared/foo.dds. Getting the iteration direction wrong would make
-    // ModA (the array's *first* enabled mod) win instead.
+  it('resolves the winner for an overridden file to the topmost (winning) mod', async () => {
+    // Entries are in modlist.txt file order, top-first. Top of the file is the
+    // winning end (MO2: vanilla/base is losing-most, everything above overrides
+    // it), so ModA — the array's first enabled mod — wins over ModB. Both provide
+    // textures/shared/foo.dds. Getting the direction wrong would make ModB win.
     const entries: ModlistEntry[] = [mod('ModA'), mod('ModB')];
     const index = await buildFileConflictIndex(entries, fixture);
 
     const entry = index.files.get('textures/shared/foo.dds');
-    expect(entry?.winnerMod).toBe('ModB');
-    expect(entry?.winner).toBe(join(fixture, 'mods', 'ModB', 'textures', 'shared', 'foo.dds'));
+    expect(entry?.winnerMod).toBe('ModA');
+    expect(entry?.winner).toBe(join(fixture, 'mods', 'ModA', 'textures', 'shared', 'foo.dds'));
     expect(entry?.providers.sort()).toEqual(['ModA', 'ModB']);
   });
 
   it('flips the winner when the mods are reordered', async () => {
     const index = await buildFileConflictIndex([mod('ModB'), mod('ModA')], fixture);
-    expect(index.files.get('textures/shared/foo.dds')?.winnerMod).toBe('ModA');
+    expect(index.files.get('textures/shared/foo.dds')?.winnerMod).toBe('ModB');
   });
 
   it('excludes disabled mods entirely', async () => {

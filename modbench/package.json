@@ -198,12 +198,12 @@
       },
       {
         "command": "modbench.modList.sortDescending",
-        "title": "Modbench: Sort Mods by Priority (Descending)",
+        "title": "Modbench: Show Winning Mods at Top",
         "icon": "$(triangle-down)"
       },
       {
         "command": "modbench.modList.sortAscending",
-        "title": "Modbench: Sort Mods by Priority (Ascending)",
+        "title": "Modbench: Show Losing Mods at Top",
         "icon": "$(triangle-up)"
       },
       {

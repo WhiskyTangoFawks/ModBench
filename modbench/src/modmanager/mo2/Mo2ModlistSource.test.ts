@@ -222,7 +222,7 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     );
   });
 
-  it('installMod copies files, writes meta.ini, and appends a disabled bottom line', async () => {
+  it('installMod copies files, writes meta.ini, and inserts a disabled winning-end line', async () => {
     const staging = await mkdtemp(join(tmpdir(), 'stage-'));
     await writeFile(join(staging, 'MyNew.esp'), 'plugin');
     await src.installMod('My New Mod', staging, { installationFile: 'MyNewMod-1-0.7z' });
@@ -234,9 +234,9 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     const meta = await readFile(join(dir, 'mods', 'My New Mod', 'meta.ini'), 'utf8');
     expect(meta).toContain('gameName=Fallout 4'); // the instance's authoritative gameName from ModOrganizer.ini
     expect(meta).toContain('installationFile=MyNewMod-1-0.7z');
-    // appended at the bottom, disabled
+    // inserted at the winning end (first entry), disabled
     const entries = await src.readModlist();
-    expect(entries.at(-1)).toMatchObject({ kind: 'mod', name: 'My New Mod', enabled: false });
+    expect(entries.at(0)).toMatchObject({ kind: 'mod', name: 'My New Mod', enabled: false });
   });
 
   it('installMod rejects when a mod of that name already exists', async () => {

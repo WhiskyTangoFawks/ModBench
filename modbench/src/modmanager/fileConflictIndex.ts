@@ -11,7 +11,7 @@ import type { ModlistEntry } from './model';
 const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
 
 export interface ConflictEntry {
-  /** Absolute path of the highest-priority enabled provider. */
+  /** Absolute path of the winning enabled provider (nearest the winning end). */
   winner: string;
   winnerMod: string;
   /** Every enabled mod providing this relative path. */
@@ -76,9 +76,11 @@ export async function buildFileConflictIndex(
   // merge below needs priority order.
   const walked = await Promise.all(enabledMods.map((mod) => walkMod(instanceRoot, mod.name)));
 
-  // Array index 0 = lowest priority (top of modlist.txt); the last enabled
-  // mod = highest priority (bottom of modlist.txt). Merge in list order so
-  // the highest-priority mod's writes land last and win.
+  // Entries are in modlist.txt file order, top-first. The top of the file is the
+  // winning end of the Mod override order (MO2 pins vanilla/base to losing-most;
+  // every mod above overrides it), so the FIRST enabled provider wins. Merge in
+  // list order, keeping the earliest writer as the winner — later providers only
+  // register as contenders. See modmanager/CONTEXT.md ("Override order").
   for (let i = 0; i < enabledMods.length; i++) {
     const mod = enabledMods[i];
     const modFiles = walked[i];
@@ -87,9 +89,7 @@ export async function buildFileConflictIndex(
     for (const file of modFiles) {
       const existing = files.get(file.relativePath);
       if (existing) {
-        existing.providers.push(mod.name);
-        existing.winner = file.absolutePath;
-        existing.winnerMod = mod.name;
+        existing.providers.push(mod.name); // loses to the earlier (winning) provider
       } else {
         files.set(file.relativePath, {
           winner: file.absolutePath,

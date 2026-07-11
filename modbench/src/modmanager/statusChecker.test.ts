@@ -25,7 +25,8 @@ describe('computeModStatuses', () => {
   // "CcOK" depends on a Creation Club vanilla master (a .esl, not a .esm).
   // "Broken" depends on a master nobody provides.
   // "DisabledBroken" is the same as Broken but disabled.
-  // "High"/"Low" conflict on meshes/shared.nif; Low is the higher-priority entry (listed later/bottom).
+  // "High"/"Low" conflict on meshes/shared.nif; High is listed first (top of file =
+  // winning end of the Mod override order), so High wins and Low is overridden.
   // "Clean" has no masters and no conflicts.
   // "Ghost" is referenced in entries but has no folder on disk.
   const entries: ModlistEntry[] = [
@@ -104,15 +105,15 @@ describe('computeModStatuses', () => {
     expect((await statuses()).get('Ghost')?.status).toEqual({ kind: 'missingMod' });
   });
 
-  it('reports conflicts for the overridden (lower-priority) mod, with a tooltip line', async () => {
-    const result = (await statuses()).get('High');
+  it('reports conflicts for the overridden (losing) mod, with a tooltip line naming the winner', async () => {
+    const result = (await statuses()).get('Low');
     expect(result?.status).toEqual({ kind: 'conflicts', count: 1 });
     expect(result?.conflictLines.join('\n')).toContain('meshes/shared.nif');
-    expect(result?.conflictLines.join('\n')).toContain('Low');
+    expect(result?.conflictLines.join('\n')).toContain('High');
   });
 
-  it('reports overrides for the winning (higher-priority) mod', async () => {
-    expect((await statuses()).get('Low')?.status).toEqual({ kind: 'overrides', count: 1 });
+  it('reports overrides for the winning mod', async () => {
+    expect((await statuses()).get('High')?.status).toEqual({ kind: 'overrides', count: 1 });
   });
 
   it('is ok for a mod with no masters and no conflicts', async () => {

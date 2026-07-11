@@ -152,7 +152,10 @@ export class ModListProvider
   private filterText = '';
   private filterLower = '';
   private groupingOn = true;
-  private sortDescending = false;
+  // View order only (no override weight). false (default) = losing end at top —
+  // base/vanilla-adjacent mods on top, winning overrides at the bottom, matching
+  // MO2's default. See modmanager/CONTEXT.md ("View order").
+  private winningAtTop = false;
   private readonly source: IModlistSource;
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
@@ -225,12 +228,25 @@ export class ModListProvider
       if (target instanceof SeparatorNode) {
         await this.source.moveModToSeparator(name, target.separator.name);
       } else {
-        await this.source.reorder(name, dropIndexForMove(order, [name], targetName));
+        await this.source.reorder(name, this.dropToIndex(order, [name], targetName));
       }
     } else {
-      await this.source.reorderSeparatorBlock(name, dropIndexForMove(order, this.separatorBlockNames(name), targetName));
+      await this.source.reorderSeparatorBlock(name, this.dropToIndex(order, this.separatorBlockNames(name), targetName));
     }
     this.refresh();
+  }
+
+  /** File-order insert index for a drop, honoring the view direction. `order` is
+   *  modlist.txt file order (winning-first). "Drop X onto Y" means X takes Y's
+   *  visual slot: in the winning-at-top view that is just *before* Y in the file;
+   *  in the default losing-at-top view the file runs opposite to the view, so it
+   *  is just *after* Y. A drop past the last row lands at the empty end of the
+   *  view — the file's losing end (winning-at-top) or its winning end
+   *  (losing-at-top, index 0). */
+  private dropToIndex(order: string[], movedNames: string[], targetName: string | undefined): number {
+    const before = dropIndexForMove(order, movedNames, targetName);
+    if (this.winningAtTop) return before;
+    return targetName === undefined ? 0 : before + 1;
   }
 
   /** The dropped-onto row's entry name, or undefined to drop past the last row. */
@@ -298,24 +314,25 @@ export class ModListProvider
     const groupNodes = this.orderedGroups(tree.groups).map(
       (g) => new SeparatorNode(g.separator, this.orderedMods(g.mods)),
     );
-    const blocks = this.sortDescending ? [groupNodes, ungroupedNodes] : [ungroupedNodes, groupNodes];
+    const blocks = this.winningAtTop ? [ungroupedNodes, groupNodes] : [groupNodes, ungroupedNodes];
     return [new CountNode(tree.activeCount, tree.installedCount), ...blocks[0], ...blocks[1]];
   }
 
-  /** Priority-order a sibling list: file order (lowest priority first) unless
-   *  `sortDescending`, mirroring MO2's clickable Priority-column sort. */
+  /** Order a sibling list for display. modlist.txt file order is winning-first
+   *  (top of file wins), so the default losing-at-top view reverses it; the
+   *  winning-at-top view shows file order as-is. View order only. */
   private orderedMods(mods: Mod[]): Mod[] {
-    return this.sortDescending ? [...mods].reverse() : mods;
+    return this.winningAtTop ? mods : [...mods].reverse();
   }
 
   private orderedGroups(groups: ModlistTree['groups']): ModlistTree['groups'] {
-    return this.sortDescending ? [...groups].reverse() : groups;
+    return this.winningAtTop ? groups : [...groups].reverse();
   }
 
   private flatFilteredRoots(tree: ModlistTree): ModlistNode[] {
     const ungroupedNodes = this.orderedMods(tree.ungrouped);
     const groupedNodes = this.orderedGroups(tree.groups).flatMap((g) => this.orderedMods(g.mods));
-    const blocks = this.sortDescending ? [groupedNodes, ungroupedNodes] : [ungroupedNodes, groupedNodes];
+    const blocks = this.winningAtTop ? [ungroupedNodes, groupedNodes] : [groupedNodes, ungroupedNodes];
     return [...blocks[0], ...blocks[1]].filter((m) => this.matches(m.name)).map(this.toModNode);
   }
 
@@ -330,7 +347,7 @@ export class ModListProvider
         groupNodes.push(new SeparatorNode(g.separator, matchingMods));
       }
     }
-    const blocks = this.sortDescending ? [groupNodes, ungroupedNodes] : [ungroupedNodes, groupNodes];
+    const blocks = this.winningAtTop ? [ungroupedNodes, groupNodes] : [groupNodes, ungroupedNodes];
     return [...blocks[0], ...blocks[1]];
   }
 
@@ -350,9 +367,10 @@ export class ModListProvider
     this.refresh();
   }
 
-  /** Flip the priority sort direction (ascending &lt;-&gt; descending) and refresh the tree. */
+  /** Flip the view direction (losing-at-top &lt;-&gt; winning-at-top) and refresh
+   *  the tree. Presentation only — never changes which mod wins a conflict. */
   toggleSortOrder(): void {
-    this.sortDescending = !this.sortDescending;
+    this.winningAtTop = !this.winningAtTop;
     this.refresh();
   }
 

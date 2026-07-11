@@ -9,12 +9,28 @@ A distributable package of files (plugins + loose assets + archives) occupying o
 _Avoid_: plugin, package
 
 **Modlist**:
-The ordered, enable-able set of mods mEdit manages for a game. Later position wins file conflicts — this ordering is the **Mod load order**.
-_Avoid_: load order (ambiguous — say "Mod load order")
+The ordered, enable-able set of mods mEdit manages for a game. Its ordering is the **Mod override order** (below).
+_Avoid_: load order (ambiguous — say "Mod override order")
+
+**Override order**:
+The semantic ordering that decides who wins a conflict. Defined **only** by its two ends — never by position in a file or a view. Two instances:
+
+- **Mod override order** (Modlist priority, `modlist.txt`) — decides **file** conflicts (which mod's loose file the game sees).
+- **Plugin override order** (a.k.a. Plugin load order, `plugins.txt`) — decides **record** conflicts (which plugin's version of a record wins); the game loads plugins in this order.
+
+_Avoid_: "higher/lower priority"; "load order" unqualified.
+
+**Winning / Losing**:
+The two ends of an override order. "A **wins over** B" / "B **loses to** A"; the extremes are **winning-most** and **losing-most**. Anchor invariant: **vanilla content is losing-most on every axis** — `Fallout4.esm`'s records lose to every plugin; vanilla `Data/` files lose to every mod. `overwrite/` is winning-most on the Mod axis. This invariant, not any file/view position, is what makes an override order _correct_.
+_Avoid_: high/low priority, top/bottom (those are view words).
+
+**View order**:
+How a list is displayed (winning-at-top or losing-at-top). A configurable presentation choice with **no** semantic weight — it never changes who wins. Keep strictly separate from override order.
+_Avoid_: conflating with priority/override order.
 
 **Plugin load order**:
-The order plugins (`.esm`/`.esp`/`.esl`) are loaded by the game engine, as written in `plugins.txt`; determines which override wins at the record level (Editing context concern). Owned and written by the Plugins tab ([plugins.md](../../../docs/specs/plugins.md)); Editing consumes it read-only to build a session. Distinct from Modlist's mod load order (file-level winner).
-_Avoid_: load order (ambiguous), plugin list
+The **Plugin override order** as written in `plugins.txt` — the order the game engine loads plugins (`.esm`/`.esp`/`.esl`); the last-loaded wins at the record level and base masters (`Fallout4.esm`) are losing-most (Editing context concern). Owned and written by the Plugins tab ([plugins.md](../../../docs/specs/plugins.md)); Editing consumes it read-only to build a session. Distinct from the Mod override order (file-level winner).
+_Avoid_: load order (ambiguous), plugin list, higher/lower priority (say "winning"/"losing")
 
 **Deploy** (a.k.a. Build):
 Make the enabled mods' files present in the game directory so the running game reads them.
@@ -33,5 +49,5 @@ A copy of the vanilla game files kept outside Steam's management, used to pin a 
 _Avoid_: game copy, vanilla folder
 
 **File conflict**:
-Two enabled mods providing the same relative file; the higher-priority mod's file wins. Distinct from a record-level conflict in the Editing context.
-_Avoid_: override (override is record-level)
+Two enabled mods providing the same relative file; the **winning** mod's file wins (the one nearer the winning end of the Mod override order). Distinct from a record-level conflict in the Editing context.
+_Avoid_: override (override is record-level); higher-priority (say "winning")

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
-  appendModToText,
+  insertModAtWinningEnd,
   deleteSeparatorInText,
   insertSeparatorAtIndexInText,
   moveModInText,
@@ -429,26 +429,29 @@ describe('moveSeparatorBlockInText', () => {
   });
 });
 
-describe('appendModToText — add a disabled mod at the bottom (highest priority)', () => {
-  it('appends a disabled line and preserves every existing byte', () => {
+describe('insertModAtWinningEnd — add a disabled mod at the winning end (first entry)', () => {
+  it('inserts a disabled line as the first entry and preserves every other byte', () => {
     const input = defaultModlist();
-    const out = appendModToText(input, 'My New Mod');
-    expect(out.startsWith(input)).toBe(true); // nothing before the append changed
-    expect(parseModlist(out).at(-1)).toEqual({ kind: 'mod', name: 'My New Mod', enabled: false });
+    const out = insertModAtWinningEnd(input, 'My New Mod');
+    // New mod is the winning-most (first) entry; every original entry follows, in order.
+    expect(parseModlist(out)[0]).toEqual({ kind: 'mod', name: 'My New Mod', enabled: false });
+    expect(parseModlist(out).slice(1)).toEqual(parseModlist(input));
+    // The leading comment line is untouched (new entry goes below it, not above).
+    expect(out.startsWith('# This file was automatically generated')).toBe(true);
   });
 
-  it('uses the file EOL (CRLF) and ends with a single trailing newline', () => {
+  it('uses the file EOL (CRLF) and inserts before the first entry', () => {
     const input = '+A\r\n+B\r\n';
-    expect(appendModToText(input, 'C')).toBe('+A\r\n+B\r\n-C\r\n');
+    expect(insertModAtWinningEnd(input, 'C')).toBe('-C\r\n+A\r\n+B\r\n');
   });
 
-  it('adds a missing EOL to the prior last line before appending', () => {
-    const input = '+A\n+B'; // no trailing newline
-    expect(appendModToText(input, 'C')).toBe('+A\n+B\n-C\n');
+  it('inserts before the first entry (LF)', () => {
+    const input = '+A\n+B\n';
+    expect(insertModAtWinningEnd(input, 'C')).toBe('-C\n+A\n+B\n');
   });
 
-  it('appends to an empty file', () => {
-    expect(appendModToText('', 'C')).toBe('-C\n');
+  it('inserts into an empty file', () => {
+    expect(insertModAtWinningEnd('', 'C')).toBe('-C\n');
   });
 });
 
