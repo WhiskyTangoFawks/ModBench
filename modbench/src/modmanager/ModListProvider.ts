@@ -4,6 +4,9 @@ import { groupModlist, type ModlistTree } from './modlistTree';
 import { buildFileConflictIndex } from './fileConflictIndex';
 import { computeModStatuses, type ModStatus, type ModStatusResult } from './statusChecker';
 import { readVanillaMasters } from './vanillaMasters';
+// Pure drop-index reconciliation, shared with PluginListProvider. A neutral
+// home would be warranted if a third consumer appears; not worth the churn yet.
+import { dropIndexForMove } from './mo2/pluginsText';
 import type { Reporter } from './deployer';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
@@ -166,30 +169,43 @@ export class ModListProvider
     if (!payload) return;
     if (target?.kind === 'count') return;
     const { kind, name } = payload.value as { kind: 'mod' | 'separator'; name: string };
+    // A drop hands us the *pre-removal* target ("insert before this row"), but
+    // moveModInText/moveSeparatorBlockInText count toIndex among the entries with
+    // the moved line(s) already removed — so any moved entry above the target
+    // shifts it left. dropIndexForMove reconciles that; a separator drops its
+    // whole block, so all block members count as "moved" (#76).
+    const order = this.cachedEntries?.map((e) => e.name) ?? [];
+    const targetName = this.targetName(target);
     if (kind === 'mod') {
       if (target instanceof SeparatorNode) {
         await this.source.moveModToSeparator(name, target.separator.name);
       } else {
-        await this.source.reorder(name, this.flatIndexOf(target));
+        await this.source.reorder(name, dropIndexForMove(order, [name], targetName));
       }
     } else {
-      await this.source.reorderSeparatorBlock(name, this.flatIndexOf(target));
+      await this.source.reorderSeparatorBlock(name, dropIndexForMove(order, this.separatorBlockNames(name), targetName));
     }
     this.refresh();
   }
 
-  private flatIndexOf(node: ModlistNode | undefined): number {
-    if (!this.cachedEntries) return 0;
-    if (!node) return this.cachedEntries.length;
-    if (!isEntryNode(node)) return 0;
-    if (node.kind === 'mod') {
-      const idx = this.cachedEntries.findIndex((e) => e.kind === 'mod' && e.name === node.mod.name);
-      return idx >= 0 ? idx : this.cachedEntries.length;
+  /** The dropped-onto row's entry name, or undefined to drop past the last row. */
+  private targetName(node: ModlistNode | undefined): string | undefined {
+    if (!node || !isEntryNode(node)) return undefined;
+    return node.kind === 'mod' ? node.mod.name : node.separator.name;
+  }
+
+  /** A separator moves with its children as a block: the separator plus every
+   *  following entry up to (not including) the next separator — matching
+   *  moveSeparatorBlockInText's block extent. */
+  private separatorBlockNames(sepName: string): string[] {
+    const entries = this.cachedEntries ?? [];
+    const start = entries.findIndex((e) => e.kind === 'separator' && e.name === sepName);
+    if (start < 0) return [sepName];
+    const names = [sepName];
+    for (let i = start + 1; i < entries.length && entries[i].kind !== 'separator'; i++) {
+      names.push(entries[i].name);
     }
-    const idx = this.cachedEntries.findIndex(
-      (e) => e.kind === 'separator' && e.name === node.separator.name,
-    );
-    return idx >= 0 ? idx : this.cachedEntries.length;
+    return names;
   }
 
   getTreeItem(element: ModlistNode): vscode.TreeItem {
