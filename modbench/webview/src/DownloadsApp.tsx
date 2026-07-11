@@ -22,6 +22,20 @@ const HEADERS: { label: string; column: DownloadSortColumn }[] = [
   { label: 'Filetime', column: 'mtimeMs' },
 ];
 
+// Per-column width/alignment polish (issue #73), layered on top of the shared
+// baseCell/headerCell. Kept Downloads-local rather than pushed into gridStyles.ts,
+// which is shared across the mEdit/Mod-Management boundary. Name is the one long
+// column (raw archive filenames); Size reads best right-aligned as a number.
+// Resizeable columns were assessed and deliberately left out: this is a bare
+// <table> with no drag/width-persistence infrastructure, and fixed widths +
+// right-aligned Size already make the columns legible.
+const COLUMN_STYLE: Record<DownloadSortColumn, React.CSSProperties> = {
+  name: { minWidth: '180px', maxWidth: '400px' },
+  status: { maxWidth: '100px' },
+  size: { maxWidth: '90px', textAlign: 'right' },
+  mtimeMs: { maxWidth: '160px' },
+};
+
 function handleRefresh() {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.REFRESH });
 }
@@ -126,6 +140,9 @@ export function DownloadsApp() {
   const [menu, setMenu] = useState<{ x: number; y: number; row: DownloadRow } | null>(null);
   const [showHidden, setShowHidden] = useState(false);
   const [filterText, setFilterText] = useState('');
+  // Single-row selection (issue #73), keyed on the row's name — transient view
+  // state, stable across re-sorts/filters. Multi-select stays deferred to #57.
+  const [selectedName, setSelectedName] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -194,7 +211,11 @@ export function DownloadsApp() {
           <thead>
             <tr>
               {HEADERS.map(({ label, column }) => (
-                <th key={column} onClick={() => handleHeaderClick(column)} style={{ ...headerCell, cursor: 'pointer' }}>
+                <th
+                  key={column}
+                  onClick={() => handleHeaderClick(column)}
+                  style={{ ...headerCell, ...COLUMN_STYLE[column], cursor: 'pointer' }}
+                >
                   {label}
                 </th>
               ))}
@@ -205,23 +226,47 @@ export function DownloadsApp() {
               filterRowsByName(filterHiddenRows(state.rows, showHidden), filterText),
               sort.column,
               sort.descending,
-            ).map((row) => (
-              <tr
-                key={row.name}
-                // Hidden rows are only present here under Show hidden; dim them
-                // (same inline-opacity convention as a disabled MenuItem).
-                style={{ opacity: row.hidden ? 0.5 : 1 }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setMenu({ x: e.clientX, y: e.clientY, row });
-                }}
-              >
-                <td style={baseCell}>{row.name}</td>
-                <td style={baseCell}>{row.status}</td>
-                <td style={baseCell}>{row.size}</td>
-                <td style={baseCell}>{new Date(row.mtimeMs).toLocaleString()}</td>
-              </tr>
-            ))}
+            ).map((row) => {
+              const selected = row.name === selectedName;
+              // Selected foreground must be applied on the <td> layer: every cell
+              // spreads baseCell, which hard-sets `color`, so a `color` on the <tr>
+              // would be overridden and the activeSelectionForeground token would be
+              // inert. Background stays on the <tr> (cells are transparent).
+              const cell = (colStyle: React.CSSProperties) => ({
+                ...baseCell,
+                ...colStyle,
+                ...(selected && { color: 'var(--vscode-list-activeSelectionForeground,#fff)' }),
+              });
+              return (
+                <tr
+                  key={row.name}
+                  // Hidden rows are only present here under Show hidden; dim them
+                  // (same inline-opacity convention as a disabled MenuItem).
+                  // Selected row gets the theme-aware list-selection highlight;
+                  // selection only moves (no click-to-deselect), so a scalar
+                  // selectedName is all the state single-row selection needs.
+                  // aria-selected is the semantic signal (also what tests assert on;
+                  // happy-dom drops unresolved var() colors from toHaveStyle).
+                  aria-selected={selected}
+                  style={{
+                    opacity: row.hidden ? 0.5 : 1,
+                    ...(selected && {
+                      backgroundColor: 'var(--vscode-list-activeSelectionBackground,#04395e)',
+                    }),
+                  }}
+                  onClick={() => setSelectedName(row.name)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setMenu({ x: e.clientX, y: e.clientY, row });
+                  }}
+                >
+                  <td style={cell(COLUMN_STYLE.name)}>{row.name}</td>
+                  <td style={cell(COLUMN_STYLE.status)}>{row.status}</td>
+                  <td style={cell(COLUMN_STYLE.size)}>{row.size}</td>
+                  <td style={cell(COLUMN_STYLE.mtimeMs)}>{new Date(row.mtimeMs).toLocaleString()}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
