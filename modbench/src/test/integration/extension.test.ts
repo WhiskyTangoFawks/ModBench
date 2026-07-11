@@ -1,5 +1,7 @@
 import * as assert from 'assert';
 import * as http from 'http';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { before, after, describe, it } from 'mocha';
 
@@ -101,6 +103,7 @@ describe('modbench command registration', () => {
     'modbench.modList.separator.rename',
     'modbench.modList.separator.addSeparatorBelow',
     'modbench.modList.separator.delete',
+    'modbench.modList.overwrite.reveal',
     'modbench.downloads.open',
     'modbench.pluginListTree.refresh',
     'modbench.pluginListTree.filter',
@@ -195,5 +198,70 @@ describe('modbench.downloads.open', () => {
       tabsAfterFirst,
       'Second modbench.downloads.open call should reuse the existing panel, not open a new tab'
     );
+  });
+});
+
+// ── Overwrite row (#82) ────────────────────────────────────────────────────────
+
+interface ModListLike {
+  refresh(): void;
+  getChildren(element?: unknown): Promise<Array<{ label?: unknown; kind?: string; resourceUri?: vscode.Uri }>>;
+}
+
+describe('Overwrite row (#82)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const overwriteDir = root ? path.join(root, 'overwrite') : '';
+  const provider = () => (ext?.exports as { modListProvider?: ModListLike } | undefined)?.modListProvider;
+
+  // The pinned Overwrite row is appended only once the modlist loads (it sits
+  // after the mod roots). The bare test workspace is not an MO2 instance, so lay
+  // down a minimal one — ModOrganizer.ini + an empty Default profile modlist —
+  // just for this suite, and remove it after.
+  before(() => {
+    if (!root) return;
+    fs.writeFileSync(path.join(root, 'ModOrganizer.ini'), '[General]\ngameName=Fallout4\nselected_profile=Default\n');
+    fs.mkdirSync(path.join(root, 'profiles', 'Default'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'modlist.txt'), '');
+    fs.mkdirSync(path.join(root, 'mods'), { recursive: true });
+  });
+
+  after(() => {
+    if (!root) return;
+    fs.rmSync(overwriteDir, { recursive: true, force: true });
+    fs.rmSync(path.join(root, 'ModOrganizer.ini'), { force: true });
+    fs.rmSync(path.join(root, 'profiles'), { recursive: true, force: true });
+    fs.rmSync(path.join(root, 'mods'), { recursive: true, force: true });
+  });
+
+  it('exposes the live ModListProvider from activate()', () => {
+    assert.ok(provider(), 'activate() should return { modListProvider } for the open workspace');
+  });
+
+  it('shows a pinned Overwrite row (last, outside grouping) when overwrite/ is non-empty', async () => {
+    fs.mkdirSync(overwriteDir, { recursive: true });
+    fs.writeFileSync(path.join(overwriteDir, 'f4se.log'), 'x');
+
+    const p = provider()!;
+    p.refresh();
+    const roots = await p.getChildren();
+    const last = roots[roots.length - 1];
+    assert.strictEqual(last.kind, 'overwrite', 'Overwrite row should be the very last root');
+    assert.strictEqual(last.label, 'Overwrite');
+  });
+
+  it('reveal action resolves against the overwrite folder without throwing', async () => {
+    const p = provider()!;
+    const roots = await p.getChildren();
+    const node = roots.find((n) => n.kind === 'overwrite');
+    assert.ok(node, 'expected an Overwrite node to reveal');
+    await vscode.commands.executeCommand('modbench.modList.overwrite.reveal', node);
+  });
+
+  it('drops the Overwrite row once overwrite/ is emptied', async () => {
+    fs.rmSync(overwriteDir, { recursive: true, force: true });
+    const p = provider()!;
+    p.refresh();
+    const roots = await p.getChildren();
+    assert.ok(!roots.some((n) => n.kind === 'overwrite'), 'Overwrite row should disappear when the folder is empty');
   });
 });

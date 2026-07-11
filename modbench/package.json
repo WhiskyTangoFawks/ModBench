@@ -262,6 +262,10 @@
         "title": "Delete Separator"
       },
       {
+        "command": "modbench.modList.overwrite.reveal",
+        "title": "Open in Explorer"
+      },
+      {
         "command": "modbench.downloads.open",
         "title": "Modbench: Open Downloads",
         "icon": "$(archive)"
@@ -481,6 +485,11 @@
           "command": "modbench.modList.separator.delete",
           "when": "view == modbench.modList && viewItem == separator",
           "group": "sepActions@3"
+        },
+        {
+          "command": "modbench.modList.overwrite.reveal",
+          "when": "view == modbench.modList && viewItem == overwrite",
+          "group": "overwriteActions@1"
         },
         {
           "command": "modbench.pluginListTree.revealInExplorer",

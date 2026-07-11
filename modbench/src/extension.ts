@@ -15,7 +15,8 @@ import { buildWebviewHtml } from './medit/webviewHtml';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from './medit/messages';
 import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
-import { ModListProvider, ModNode, SeparatorNode } from './modmanager/ModListProvider';
+import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from './modmanager/ModListProvider';
+import { createOverwriteWatcher } from './modmanager/overwriteWatcher';
 import { PluginListProvider, type PluginListNode } from './modmanager/PluginListProvider';
 import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './modmanager/gameDirectory';
 import { deploy, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
@@ -115,7 +116,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   registerDeploymentModeContext(context);
 
-  registerLoadoutView({ context, log, controller, changeGroupTreeProvider, openPanels });
+  const modListProvider = registerLoadoutView({ context, log, controller, changeGroupTreeProvider, openPanels });
 
   context.subscriptions.push(
     treeView,
@@ -128,6 +129,10 @@ export function activate(context: vscode.ExtensionContext) {
   // torn down on Close mEdit — the extension owns its lifecycle (ADR-0022). There
   // is no auto-connect / auto-wizard at activation; show a neutral idle state.
   statusBarItem.text = '$(plug) mEdit';
+
+  // Exposed for integration tests to assert tree shape (e.g. the pinned Overwrite
+  // row, #82) — VS Code ignores unused exports in production.
+  return { modListProvider };
 }
 
 
@@ -593,6 +598,28 @@ function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
   ];
 }
 
+/** Overwrite-folder surface (#82): a live watcher that re-renders the Mods tree
+ *  as `overwrite/` fills/empties (reactive over manual refresh), plus the sole
+ *  action — reveal the folder in the Explorer (single-click reuses this too). */
+function registerOverwriteView(
+  instanceRoot: string,
+  modListProvider: ModListProvider,
+  log: (msg: string) => void,
+): vscode.Disposable[] {
+  return [
+    createOverwriteWatcher(instanceRoot, () => modListProvider.refresh()),
+    vscode.commands.registerCommand('modbench.modList.overwrite.reveal', async (node: OverwriteNode) => {
+      if (node?.kind !== 'overwrite') return;
+      try {
+        await vscode.commands.executeCommand('revealInExplorer', node.resourceUri);
+      } catch (err) {
+        log(`[extension] revealInExplorer for overwrite/ failed: ${err instanceof Error ? err.message : String(err)}`);
+        void vscode.window.showErrorMessage('Modbench: Failed to reveal the overwrite folder in the Explorer.');
+      }
+    }),
+  ];
+}
+
 interface LoadoutViewDeps {
   context: vscode.ExtensionContext;
   log: (msg: string) => void;
@@ -600,14 +627,15 @@ interface LoadoutViewDeps {
   changeGroupTreeProvider: ChangeGroupsTreeProvider;
   openPanels: Map<string, vscode.WebviewPanel>;
 }
-/** Register the Loadout (Mod List) view and its commands. No-op with a neutral log
- *  when no workspace (MO2 instance) is open. */
-function registerLoadoutView(deps: LoadoutViewDeps): void {
+/** Register the Loadout (Mod List) view and its commands. Returns the live
+ *  ModListProvider (exposed via activate() for integration tests), or undefined
+ *  with a neutral log when no workspace (MO2 instance) is open. */
+function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined {
   const { context, log, controller, changeGroupTreeProvider, openPanels } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
     log('[extension] No workspace folder open — Mod List view not registered.');
-    return;
+    return undefined;
   }
     const modListReporter = makeReporter(log, 'modList');
     const modlistSource = new Mo2ModlistSource(instanceRoot, log, modListReporter);
@@ -689,9 +717,11 @@ function registerLoadoutView(deps: LoadoutViewDeps): void {
       ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
       ...registerModContextCommands({ instanceRoot, modlistSource, log, runModAction }),
       ...registerSeparatorCommands({ modlistSource, runModAction }),
+      ...registerOverwriteView(instanceRoot, modListProvider, log),
       ...registerPluginListView({ modlistSource, log, reporter: makeReporter(log, 'pluginList'), instanceRoot, dataFolder }),
       ...registerDownloadsCommands({ context, openPanels, instanceRoot, log }),
     );
+    return modListProvider;
 }
 
 interface DownloadsDeps {

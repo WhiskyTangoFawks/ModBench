@@ -267,7 +267,7 @@ The extension owns the editing backend process
   the mods within each separator — to **descending**: highest priority first. The toggle is
   transient (not persisted across sessions), matching the Filter/grouping toggle's
   behavior. A pinned **Overwrite** row (see *Overwrite folder* below) sits below everything
-  when `mods/overwrite/` is non-empty, outside all separator grouping.
+  when `overwrite/` is non-empty, outside all separator grouping.
 - **Mod row**: a checkbox (enable/disable, writing the `+`/`-` prefix immediately), the
   full mod name as the label, the `meta.ini` version as the description (blank if absent), a
   generic mod icon with a status overlay (see below), and a tooltip of name · version ·
@@ -322,7 +322,7 @@ The extension owns the editing backend process
   `fs.link` each winner into `Data/<relativePath>`, skipping existing non-manifest files
   (vanilla — never overwrite); write `mods/.medit-manifest.json` listing every link.
 - **Purge**: read the manifest, delete each listed hardlink, move `Data/` files that are
-  neither in the manifest nor vanilla into `mods/overwrite/` (F4SE outputs, MCM INI
+  neither in the manifest nor vanilla into `overwrite/` (F4SE outputs, MCM INI
   writes), then delete the manifest.
 - **Launch Game**: deploys, switches the sidebar to the editing views while the game runs,
   launches the configured executable (`modbench.mods.launchCommand` template for
@@ -331,15 +331,15 @@ The extension owns the editing backend process
 ### Overwrite folder (#40)
 
 Purge sweeps `Data/` files that are neither a deployed link nor vanilla into
-`mods/overwrite/` (runtime outputs — F4SE logs, MCM INI writes). This surfaces that
+`overwrite/` (runtime outputs — F4SE logs, MCM INI writes). This surfaces that
 folder so the user can reassign or discard those files without leaving Modbench.
 
 - **Surface**: a single **leaf row** in the Loadout tree, pinned as the **very last row**,
-  outside separator grouping. It is a read-only fixture over `mods/overwrite/`, **not** a
+  outside separator grouping. It is a read-only fixture over `overwrite/`, **not** a
   `modlist.txt` entry — so it never enables/disables, reorders, moves to a separator, or
   uninstalls like a mod.
 - **Visibility**: shown **only when the folder holds ≥1 file** (counted recursively; empty
-  subdirectories don't count). Driven **live** by a filesystem watcher on `mods/overwrite/`
+  subdirectories don't count). Driven **live** by a filesystem watcher on `overwrite/`
   (`createFileSystemWatcher`) — the row appears the instant purge deposits files and
   disappears the instant they're cleared, with **no manual refresh** in the workflow (the
   Mods tree's existing general Refresh remains only as the universal safety net for

@@ -4,6 +4,8 @@ import { groupModlist, type ModlistTree } from './modlistTree';
 import { buildFileConflictIndex } from './fileConflictIndex';
 import { computeModStatuses, type ModStatus, type ModStatusResult } from './statusChecker';
 import { readVanillaMasters } from './vanillaMasters';
+import { countOverwriteFiles } from './overwriteFolder';
+import * as path from 'node:path';
 // Pure drop-index reconciliation, shared with PluginListProvider. A neutral
 // home would be warranted if a third consumer appears; not worth the churn yet.
 import { dropIndexForMove } from './mo2/pluginsText';
@@ -105,7 +107,27 @@ export class ModNode extends vscode.TreeItem {
   }
 }
 
-export type ModlistNode = CountNode | SeparatorNode | ModNode | ErrorNode;
+/** Pinned read-only leaf over the instance's `overwrite/` folder (#82). Not a
+ *  modlist.txt entry — no checkbox, no drag, no mod actions. Single-click and
+ *  the sole context action both reveal the folder in the Explorer. */
+export class OverwriteNode extends vscode.TreeItem {
+  readonly kind = 'overwrite' as const;
+  constructor(public readonly resourceUri: vscode.Uri, fileCount: number) {
+    super('Overwrite', vscode.TreeItemCollapsibleState.None);
+    this.contextValue = 'overwrite';
+    // No explicit icon or color here: the spec scopes the row's look to a reddish
+    // tint applied by a FileDecorationProvider keyed on resourceUri (issue #83);
+    // #82 only carries the resourceUri. Let VS Code render the folder icon.
+    this.tooltip = `${fileCount} file(s) swept from Data/ — reassign in the Explorer or clear.`;
+    this.command = {
+      command: 'modbench.modList.overwrite.reveal',
+      title: 'Open in Explorer',
+      arguments: [this],
+    };
+  }
+}
+
+export type ModlistNode = CountNode | SeparatorNode | ModNode | ErrorNode | OverwriteNode;
 
 /** Mod/separator rows are the only nodes with a modlist.txt entry to drag or index;
  *  CountNode and ErrorNode are non-interactive summary/status rows. */
@@ -188,7 +210,9 @@ export class ModListProvider
   ): Promise<void> {
     const payload = dataTransfer.get(DND_MIME);
     if (!payload) return;
-    if (target?.kind === 'count') return;
+    // Neither the count summary nor the pinned Overwrite fixture is a modlist.txt
+    // position — dropping onto them must not fall through to "move to end".
+    if (target?.kind === 'count' || target?.kind === 'overwrite') return;
     const { kind, name } = payload.value as { kind: 'mod' | 'separator'; name: string };
     // A drop hands us the *pre-removal* target ("insert before this row"), but
     // moveModInText/moveSeparatorBlockInText count toIndex among the entries with
@@ -239,9 +263,25 @@ export class ModListProvider
 
     const tree = await this.load();
     if (!tree) return [new ErrorNode(this.loadError ?? 'unknown error')];
+    const roots = this.rootNodes(tree);
+    const overwrite = await this.overwriteNode();
+    return overwrite ? [...roots, overwrite] : roots;
+  }
+
+  private rootNodes(tree: ModlistTree): ModlistNode[] {
     if (!this.filterText) return this.unfilteredRoots(tree);
     if (!this.groupingOn) return this.flatFilteredRoots(tree);
     return this.groupedFilteredRoots(tree);
+  }
+
+  /** The pinned Overwrite leaf, or undefined when the folder is absent/empty or
+   *  no instanceRoot is wired. Sits outside all grouping/sort — always appended
+   *  last — because it is a fixture over the folder, not a modlist.txt entry. */
+  private async overwriteNode(): Promise<OverwriteNode | undefined> {
+    if (!this.instanceRoot) return undefined;
+    const dir = path.join(this.instanceRoot, 'overwrite');
+    const count = await countOverwriteFiles(dir);
+    return count > 0 ? new OverwriteNode(vscode.Uri.file(dir), count) : undefined;
   }
 
   private toModNode = (m: Mod): ModNode => new ModNode(m, this.statuses?.get(m.name));

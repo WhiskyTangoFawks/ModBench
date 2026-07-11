@@ -31,6 +31,7 @@ vi.mock('vscode', () => ({
     fire(e?: unknown) { this.handlers.forEach(h => h(e)); }
   },
   ThemeIcon: class { constructor(public id: string) {} },
+  Uri: { file: (p: string) => ({ fsPath: p, toString: () => `file://${p}` }) },
   DataTransferItem: class { constructor(public value: unknown) {} },
   DataTransfer: class {
     private readonly _items = new Map<string, { value: unknown }>();
@@ -39,7 +40,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { ModListProvider, CountNode, SeparatorNode, ModNode, ErrorNode } from './ModListProvider';
+import { ModListProvider, CountNode, SeparatorNode, ModNode, ErrorNode, OverwriteNode } from './ModListProvider';
 
 const mod = (name: string, enabled = true, extra: Partial<Mod> = {}): Mod => ({
   kind: 'mod', name, enabled, ...extra,
@@ -356,6 +357,16 @@ describe('ModListProvider', () => {
       await drop(provider, deltaNode, sepItem('Group A'));
       expect(source.order()).toEqual(['Alpha', 'Group B', 'Group A', 'Beta', 'Gamma', 'Delta']);
     });
+
+    // #82: the pinned Overwrite fixture is not a modlist.txt position — a drop
+    // onto it must be a no-op, never falling through to "move to end".
+    it('drop onto the Overwrite node is a no-op', async () => {
+      const { provider, source } = makeApplyingProvider();
+      const before = source.order();
+      const overwriteNode = new OverwriteNode({ fsPath: '/x', toString: () => 'file:///x' } as any, 1);
+      await drop(provider, overwriteNode, modItem('Alpha'));
+      expect(source.order()).toEqual(before);
+    });
   });
 
   describe('setFilter — reset behaviour', () => {
@@ -503,6 +514,78 @@ describe('ModListProvider', () => {
       expect(logs.some((l) => l.includes('status computation failed'))).toBe(true);
       // ADR-0026: badges silently missing would otherwise look identical to "no conflicts" — warn the user.
       expect(reports).toEqual([{ severity: 'warning', message: expect.stringContaining('badges may be inaccurate') }]);
+    });
+  });
+
+  // #82: a pinned Overwrite leaf, last row of the tree, outside separator
+  // grouping, over the instance's overwrite/ folder (a purge sink for runtime
+  // outputs). Read-only fixture — no modlist.txt entry, no mod actions.
+  describe('Overwrite row (#82)', () => {
+    let dir: string;
+    beforeEach(async () => {
+      dir = await mkdtemp(join(tmpdir(), 'medit-overwrite-row-'));
+    });
+    afterEach(async () => {
+      if (dir) await rm(dir, { recursive: true, force: true });
+    });
+
+    const entries = (): ModlistEntry[] => [mod('Alpha'), sep('Group A'), mod('Beta')];
+
+    it('appends an Overwrite node as the very last root when overwrite/ is non-empty', async () => {
+      await mkdir(join(dir, 'overwrite', 'F4SE'), { recursive: true });
+      await writeFile(join(dir, 'overwrite', 'F4SE', 'plugin.log'), 'x');
+      const provider = new ModListProvider({ source: new FakeSource(entries()), instanceRoot: dir });
+      const roots = await provider.getChildren();
+
+      const last = roots[roots.length - 1];
+      expect(last).toBeInstanceOf(OverwriteNode);
+      // Outside grouping: exactly one, and it is not a child of any separator.
+      expect(roots.filter((n) => n instanceof OverwriteNode)).toHaveLength(1);
+    });
+
+    it('omits the Overwrite node when overwrite/ is absent or empty', async () => {
+      const provider = new ModListProvider({ source: new FakeSource(entries()), instanceRoot: dir });
+      const roots = await provider.getChildren();
+      expect(roots.some((n) => n instanceof OverwriteNode)).toBe(false);
+    });
+
+    it('omits the Overwrite node when subdirectories are empty (recursive count = 0)', async () => {
+      await mkdir(join(dir, 'overwrite', 'empty'), { recursive: true });
+      const provider = new ModListProvider({ source: new FakeSource(entries()), instanceRoot: dir });
+      const roots = await provider.getChildren();
+      expect(roots.some((n) => n instanceof OverwriteNode)).toBe(false);
+    });
+
+    it('omits the Overwrite node when no instanceRoot is provided', async () => {
+      const provider = new ModListProvider({ source: new FakeSource(entries()) });
+      const roots = await provider.getChildren();
+      expect(roots.some((n) => n instanceof OverwriteNode)).toBe(false);
+    });
+
+    it('is read-only: no checkbox, a reveal command, contextValue, and a count+help tooltip', async () => {
+      await mkdir(join(dir, 'overwrite'), { recursive: true });
+      await writeFile(join(dir, 'overwrite', 'a.log'), 'x');
+      await writeFile(join(dir, 'overwrite', 'b.ini'), 'y');
+      const provider = new ModListProvider({ source: new FakeSource(entries()), instanceRoot: dir });
+      const roots = await provider.getChildren();
+      const node = roots.find((n): n is OverwriteNode => n instanceof OverwriteNode)!;
+
+      expect(node.label).toBe('Overwrite');
+      expect(node.checkboxState).toBeUndefined();
+      expect(node.contextValue).toBe('overwrite');
+      expect((node.command as { command: string }).command).toBe('modbench.modList.overwrite.reveal');
+      expect(node.resourceUri).toEqual({ fsPath: join(dir, 'overwrite'), toString: expect.any(Function) });
+      expect(node.tooltip).toContain('2');
+      expect(String(node.tooltip)).toMatch(/reassign|clear/i);
+    });
+
+    it('stays last even under descending sort (outside all grouping)', async () => {
+      await mkdir(join(dir, 'overwrite'), { recursive: true });
+      await writeFile(join(dir, 'overwrite', 'a.log'), 'x');
+      const provider = new ModListProvider({ source: new FakeSource(entries()), instanceRoot: dir });
+      provider.toggleSortOrder();
+      const roots = await provider.getChildren();
+      expect(roots[roots.length - 1]).toBeInstanceOf(OverwriteNode);
     });
   });
 });
