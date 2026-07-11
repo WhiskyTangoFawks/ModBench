@@ -90,14 +90,19 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   async getPlugins(): Promise<PluginMetadata[]> {
-    try {
-      const { data } = await this.client.GET('/plugins', {});
-      const raw = data ?? [];
-      return raw.map(toPluginMetadata);
-    } catch (e) {
-      this.log(`[PluginRepository] getPlugins failed: ${e instanceof Error ? e.message : String(e)}`);
-      return [];
+    // Don't swallow failures into []: a 503 "No session loaded" (or a network
+    // error) must reach the tree so it renders an ErrorNode rather than a silent
+    // empty list that looks identical to a genuinely empty session (issue #75,
+    // ADR-0026). A 200 with an empty/absent body is a legitimate empty session.
+    const { data, response } = await this.client.GET('/plugins', {});
+    if (!response.ok) {
+      const text = await response.text().catch(() => ''); // best-effort detail; a body-read failure is non-fatal — the status carries the error
+      const detail = text ? `: ${text}` : '';
+      const msg = `GET /plugins failed (${response.status})${detail}`;
+      this.log(`[PluginRepository] ${msg}`);
+      throw new Error(msg);
     }
+    return (data ?? []).map(toPluginMetadata);
   }
 
   async getRecordTypes(plugin: string): Promise<{ type: string; count: number }[]> {

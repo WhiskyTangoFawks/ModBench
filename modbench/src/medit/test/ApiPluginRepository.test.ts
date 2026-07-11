@@ -28,7 +28,7 @@ function makeRecord(i: number): RecordSummary {
 describe('ApiPluginRepository.getPlugins', () => {
   it('calls GET /plugins and returns the data', async () => {
     const plugins = [makePlugin(0), makePlugin(1)];
-    const client = { GET: vi.fn().mockResolvedValue({ data: plugins }) } as any;
+    const client = { GET: vi.fn().mockResolvedValue({ data: plugins, response: { ok: true } }) } as any;
     const repo = new ApiPluginRepository(client);
 
     const result = await repo.getPlugins();
@@ -37,11 +37,25 @@ describe('ApiPluginRepository.getPlugins', () => {
     expect(client.GET).toHaveBeenCalledWith('/plugins', expect.anything());
   });
 
-  it('returns empty array when data is undefined', async () => {
-    const client = { GET: vi.fn().mockResolvedValue({ data: undefined }) } as any;
+  it('returns empty array for a 200 response with no data (empty session)', async () => {
+    const client = { GET: vi.fn().mockResolvedValue({ data: undefined, response: { ok: true } }) } as any;
     const repo = new ApiPluginRepository(client);
 
     expect(await repo.getPlugins()).toEqual([]);
+  });
+
+  it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
+    // Querying /plugins before a session is loaded returns 503 "No session loaded";
+    // that must not be silently swallowed into [] (issue #75).
+    const client = {
+      GET: vi.fn().mockResolvedValue({
+        data: undefined,
+        response: { ok: false, status: 503, text: () => Promise.resolve('No session loaded.') },
+      }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    await expect(repo.getPlugins()).rejects.toThrow(/503/);
   });
 });
 

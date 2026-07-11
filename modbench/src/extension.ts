@@ -132,8 +132,9 @@ export function activate(context: vscode.ExtensionContext) {
   statusBarItem.text = '$(plug) mEdit';
 
   // Exposed for integration tests to assert tree shape (e.g. the pinned Overwrite
-  // row, #82) — VS Code ignores unused exports in production.
-  return { modListProvider };
+  // row, #82; the editing plugin tree after launch, #75) — VS Code ignores unused
+  // exports in production.
+  return { modListProvider, treeProvider };
 }
 
 
@@ -371,9 +372,14 @@ function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[]
         box.show();
       }),
       vscode.commands.registerCommand('modbench.modList.launchMedit', async () => {
-        void vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'editing');
+        // enterEditing reveals the editing view itself, only once the session is
+        // loaded (issue #75) — don't flip viewMode here. Show progress while the
+        // backend spawns and the session loads.
         try {
-          await enterEditing();
+          await vscode.window.withProgress(
+            { location: vscode.ProgressLocation.Notification, title: 'mEdit: Starting…' },
+            () => enterEditing(),
+          );
         } catch (err) {
           log(`[extension] launchMedit failed: ${err instanceof Error ? err.message : String(err)}`);
           exitToLoadout(); // reset the view and tear down any half-started backend
@@ -692,7 +698,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined
             `arrangement (the scripted installer is coming later).`,
         );
     };
-    const enterEditing = makeEnterEditing({ instanceRoot, modlistSource, controller, changeGroupTreeProvider });
+    const enterEditing = makeEnterEditing({ instanceRoot, modlistSource, controller, changeGroupTreeProvider, log });
 
     backendManager!.on('restarted', () => {
       void enterEditing().catch((err: unknown) =>
@@ -749,11 +755,13 @@ interface EnterEditingDeps {
   modlistSource: Mo2ModlistSource;
   controller: SessionController;
   changeGroupTreeProvider: ChangeGroupsTreeProvider;
+  log: (msg: string) => void;
 }
 /** Build the enter-editing action: spawn/attach the backend and load the active
- *  modlist as a load-explicit session. Also the crash-restart reload path. */
+ *  modlist as a load-explicit session, then reveal the editing view. Also the
+ *  crash-restart reload path. */
 function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
-  const { instanceRoot, modlistSource, controller, changeGroupTreeProvider } = deps;
+  const { instanceRoot, modlistSource, controller, changeGroupTreeProvider, log } = deps;
   return async (): Promise<void> => {
       const gd = await resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths());
       if (!gd) {
@@ -765,6 +773,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       }
       // Spawn/attach the backend and walk the mod tree concurrently — independent
       // work; the health gate is applied after they join.
+      log('[extension] entering editing: starting backend and building plugin list');
       const [, plugins] = await Promise.all([
         backendManager!.start(),
         buildExplicitPlugins(modlistSource, instanceRoot, gd.dataFolder),
@@ -774,9 +783,14 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
         void vscode.window.showErrorMessage('Modbench: Backend failed to start — see the Modbench output for details.');
         return;
       }
+      log(`[extension] backend healthy; loading session (${plugins.length} plugins)`);
       await controller.loadExplicitSession(plugins, gd.dataFolder);
       await controller.syncFilterState();
       changeGroupTreeProvider.refresh();
+      // Reveal the editing views only now — the pluginTree's first GET /plugins must
+      // not fire before the session is loaded, or it renders empty (issue #75).
+      void vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'editing');
+      log('[extension] editing session ready');
   };
 }
 

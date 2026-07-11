@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as http from 'http';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { before, after, describe, it } from 'mocha';
@@ -9,16 +10,53 @@ const TEST_PORT = 15172;
 let mockBackend: http.Server;
 let ext: vscode.Extension<unknown> | undefined;
 
+// Mock backend state, controlled by the launch suite. Models the real backend:
+// GET /plugins fails with 503 "No session loaded" until POST /session/load-explicit
+// is received, then serves the loaded plugins (issue #75).
+const MOCK_PLUGINS = [
+  { name: 'Fallout4.esm', path: '/data/Fallout4.esm' },
+  { name: 'TestMod.esp', path: '/data/TestMod.esp' },
+];
+let sessionLoaded = false;
+const requestLog: string[] = [];
+
+function resetMockBackend(): void {
+  sessionLoaded = false;
+  requestLog.length = 0;
+}
+
 function createMockBackend(): http.Server {
   return http.createServer((req, res) => {
-    if (req.url === '/health') {
+    const url = req.url ?? '';
+    const method = req.method ?? 'GET';
+    requestLog.push(`${method} ${url}`);
+    if (url === '/health') {
       res.writeHead(200);
       res.end();
       return;
     }
-    if (req.url === '/plugins') {
+    if (method === 'POST' && url === '/session/load-explicit') {
+      req.on('data', () => {}); // drain the body so 'end' fires
+      req.on('end', () => {
+        sessionLoaded = true;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ failures: [] }));
+      });
+      return;
+    }
+    if (url === '/session/filter') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify([]));
+      res.end(JSON.stringify({ sql: null }));
+      return;
+    }
+    if (url === '/plugins') {
+      if (!sessionLoaded) {
+        res.writeHead(503);
+        res.end('No session loaded.');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(MOCK_PLUGINS));
       return;
     }
     res.writeHead(404);
@@ -26,8 +64,9 @@ function createMockBackend(): http.Server {
   });
 }
 
-// Start a mock backend that answers GET /health → 200 and GET /plugins → []
-// so the extension activates in 'attached' state. Uses port 15172 (set via workspace settings).
+// Start a mock backend that answers GET /health → 200 so the extension reaches
+// 'attached'. /plugins is session-gated (see above). Uses port 15172 (set via
+// workspace settings).
 before(async function () {
   this.timeout(15000);
 
@@ -263,5 +302,73 @@ describe('Overwrite row (#82)', () => {
     p.refresh();
     const roots = await p.getChildren();
     assert.ok(!roots.some((n) => n.kind === 'overwrite'), 'Overwrite row should disappear when the folder is empty');
+  });
+});
+
+// ── Launch mEdit → editing plugin tree populated (#75) ──────────────────────────
+
+interface TreeLike {
+  getChildren(element?: unknown): Promise<Array<{ kind?: string; plugin?: { name?: string } }>>;
+}
+
+describe('Launch mEdit populates the editing plugin tree (#75)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const treeProvider = () => (ext?.exports as { treeProvider?: TreeLike } | undefined)?.treeProvider;
+  let gameDir = '';
+
+  // enterEditing needs a resolvable game directory and a readable active profile
+  // to reach POST /session/load-explicit. Lay down a minimal MO2 instance plus a
+  // game dir with a Data/ folder, scoped to this suite.
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+
+    fs.writeFileSync(path.join(root, 'ModOrganizer.ini'), '[General]\ngameName=Fallout4\nselected_profile=Default\n');
+    fs.mkdirSync(path.join(root, 'profiles', 'Default'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'modlist.txt'), '');
+    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n');
+    fs.mkdirSync(path.join(root, 'mods'), { recursive: true });
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    await vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
+    fs.rmSync(path.join(root, 'ModOrganizer.ini'), { force: true });
+    fs.rmSync(path.join(root, 'profiles'), { recursive: true, force: true });
+    fs.rmSync(path.join(root, 'mods'), { recursive: true, force: true });
+    fs.rmSync(gameDir, { recursive: true, force: true });
+  });
+
+  it('exposes the live PluginTreeProvider from activate()', () => {
+    assert.ok(treeProvider(), 'activate() should return { treeProvider } for the editing view');
+  });
+
+  it('loads the session and shows plugins (not an empty tree) after launch', async () => {
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    // Snapshot the launch's own requests before we query the tree ourselves below —
+    // any GET /plugins the editing view fired during launch would appear here.
+    const duringLaunch = [...requestLog];
+
+    const load = duringLaunch.indexOf('POST /session/load-explicit');
+    assert.ok(load >= 0, 'launch should POST /session/load-explicit');
+    // The #75 regression: the view revealed and fetched /plugins before the session
+    // was loaded. Any /plugins request the launch triggered must follow the load.
+    const prematurePlugins = duringLaunch.slice(0, load).includes('GET /plugins');
+    assert.ok(!prematurePlugins, 'GET /plugins must not fire before POST /session/load-explicit');
+
+    const nodes = await treeProvider()!.getChildren();
+    assert.ok(nodes.length > 0, 'the plugin tree should not be empty after a successful launch');
+    assert.ok(!nodes.some((n) => n.kind === 'error'), 'the plugin tree should not show an ErrorNode');
+    assert.deepStrictEqual(
+      nodes.map((n) => n.plugin?.name),
+      MOCK_PLUGINS.map((p) => p.name),
+      'the tree should list the plugins the backend returned',
+    );
   });
 });
