@@ -103,6 +103,7 @@ describe('modbench command registration', () => {
     'modbench.modList.separator.delete',
     'modbench.downloads.open',
     'modbench.pluginListTree.refresh',
+    'modbench.pluginListTree.filter',
   ];
 
   it('registers all expected commands on activation', async () => {

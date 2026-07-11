@@ -270,14 +270,24 @@
         "command": "modbench.pluginListTree.refresh",
         "title": "Modbench: Refresh Plugin List",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "modbench.pluginListTree.filter",
+        "title": "Modbench: Filter Plugins…",
+        "icon": "$(search)"
       }
     ],
     "menus": {
       "view/title": [
         {
+          "command": "modbench.pluginListTree.filter",
+          "when": "view == modbench.pluginListTree",
+          "group": "navigation@1"
+        },
+        {
           "command": "modbench.pluginListTree.refresh",
           "when": "view == modbench.pluginListTree",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "modbench.refreshTree",

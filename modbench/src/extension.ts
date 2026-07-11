@@ -565,6 +565,13 @@ function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
       }
     }),
     vscode.commands.registerCommand('modbench.pluginListTree.refresh', () => pluginListProvider.refresh()),
+    vscode.commands.registerCommand('modbench.pluginListTree.filter', () => {
+      const box = vscode.window.createInputBox();
+      box.placeholder = 'Filter plugins…';
+      box.onDidChangeValue((text) => pluginListProvider.setFilter(text));
+      box.onDidHide(() => { pluginListProvider.setFilter(''); box.dispose(); });
+      box.show();
+    }),
   ];
 }
 

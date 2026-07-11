@@ -76,6 +76,9 @@ export class PluginListProvider
   /** The last rendered plugin order, so a drop computes its index against exactly
    *  what the user dragged against (not a fresh read that an external edit could skew). */
   private lastOrder: string[] = [];
+  /** Active title-bar filter (case-insensitive substring on plugin name); empty = off. */
+  private filterText = '';
+  private filterLower = '';
 
   /** `instanceRoot`, when provided, enables the order-aware missing-master badge
    *  (issue #67): each plugin's declared masters are read and checked against the
@@ -92,6 +95,15 @@ export class PluginListProvider
   /** Force a re-read of plugins.txt (the title-bar Refresh button). */
   refresh(): void {
     this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** Set the title-bar filter (empty string clears it) and refresh. Narrows the
+   *  rendered rows to plugins whose name contains `text`, case-insensitively —
+   *  the same transient-InputBox pattern used across every Modbench list surface. */
+  setFilter(text: string): void {
+    this.filterText = text;
+    this.filterLower = text.toLowerCase();
+    this.refresh();
   }
 
   /** Toggle a plugin's `*` (enabled) state, writing plugins.txt immediately, then
@@ -124,8 +136,11 @@ export class PluginListProvider
     this.lastOrder = order;
     if (order.length === 0) return [new EmptyNode()];
     const enabledSet = new Set(enabled);
+    // Badges are computed against the full order (never the filtered subset) so a
+    // filtered-out master still counts toward a visible row's order-aware verdict.
     const statuses = await this.computeStatuses(order);
-    return order.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }, statuses?.get(name)));
+    const rows = order.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }, statuses?.get(name)));
+    return this.filterText ? rows.filter((n) => n.plugin.name.toLowerCase().includes(this.filterLower)) : rows;
   }
 
   /** Order-aware missing-master verdicts for the current order, or undefined when
