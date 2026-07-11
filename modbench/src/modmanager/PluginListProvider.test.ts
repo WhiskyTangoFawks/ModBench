@@ -82,7 +82,7 @@ class FakeSource implements IModlistSource {
 
 describe('PluginListProvider', () => {
   it('builds one row per plugins.txt line, in Plugin load order, with the enabled checkbox', async () => {
-    const provider = new PluginListProvider(new FakeSource(['A.esp', 'B.esp'], ['B.esp']));
+    const provider = new PluginListProvider({ source: new FakeSource(['A.esp', 'B.esp'], ['B.esp']) });
     const rows = await provider.getChildren();
 
     expect(rows).toHaveLength(2);
@@ -94,14 +94,14 @@ describe('PluginListProvider', () => {
   });
 
   it('has no children under a row (flat list)', async () => {
-    const provider = new PluginListProvider(new FakeSource(['A.esp'], ['A.esp']));
+    const provider = new PluginListProvider({ source: new FakeSource(['A.esp'], ['A.esp']) });
     const [row] = await provider.getChildren();
     expect(await provider.getChildren(row)).toEqual([]);
   });
 
   it('renders a single error node when plugins.txt cannot be read', async () => {
     const logged: string[] = [];
-    const provider = new PluginListProvider(new FakeSource(new Error('boom')), (m) => logged.push(m));
+    const provider = new PluginListProvider({ source: new FakeSource(new Error('boom')), log: (m) => logged.push(m) });
     const rows = await provider.getChildren();
 
     expect(rows).toHaveLength(1);
@@ -111,7 +111,7 @@ describe('PluginListProvider', () => {
   });
 
   it('renders a single "No plugins" node when plugins.txt is empty', async () => {
-    const provider = new PluginListProvider(new FakeSource([]));
+    const provider = new PluginListProvider({ source: new FakeSource([]) });
     const rows = await provider.getChildren();
 
     expect(rows).toHaveLength(1);
@@ -121,7 +121,7 @@ describe('PluginListProvider', () => {
 
   it('setPluginEnabled delegates to the source and fires a refresh', async () => {
     const source = new FakeSource(['A.esp']);
-    const provider = new PluginListProvider(source);
+    const provider = new PluginListProvider({ source });
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
 
@@ -132,7 +132,7 @@ describe('PluginListProvider', () => {
   });
 
   it('refresh() fires onDidChangeTreeData so the Refresh button can re-read', () => {
-    const provider = new PluginListProvider(new FakeSource(['A.esp']));
+    const provider = new PluginListProvider({ source: new FakeSource(['A.esp']) });
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
     provider.refresh();
@@ -142,7 +142,7 @@ describe('PluginListProvider', () => {
 
 describe('PluginListProvider — filter', () => {
   it('narrows rows to plugins whose filename contains the text, case-insensitively', async () => {
-    const provider = new PluginListProvider(new FakeSource(['Alpha.esp', 'Beta.esp', 'AlphaExtra.esp']));
+    const provider = new PluginListProvider({ source: new FakeSource(['Alpha.esp', 'Beta.esp', 'AlphaExtra.esp']) });
     provider.setFilter('ALPHA');
     const rows = await provider.getChildren();
 
@@ -150,7 +150,7 @@ describe('PluginListProvider — filter', () => {
   });
 
   it('restores the full list when the filter is cleared', async () => {
-    const provider = new PluginListProvider(new FakeSource(['Alpha.esp', 'Beta.esp']));
+    const provider = new PluginListProvider({ source: new FakeSource(['Alpha.esp', 'Beta.esp']) });
     provider.setFilter('alpha');
     expect(await provider.getChildren()).toHaveLength(1);
 
@@ -159,7 +159,7 @@ describe('PluginListProvider — filter', () => {
   });
 
   it('returns an empty list (not the "No plugins" node) when the filter matches nothing', async () => {
-    const provider = new PluginListProvider(new FakeSource(['Alpha.esp', 'Beta.esp']));
+    const provider = new PluginListProvider({ source: new FakeSource(['Alpha.esp', 'Beta.esp']) });
     provider.setFilter('nomatch');
     const rows = await provider.getChildren();
 
@@ -168,7 +168,7 @@ describe('PluginListProvider — filter', () => {
   });
 
   it('fires onDidChangeTreeData when the filter is set', () => {
-    const provider = new PluginListProvider(new FakeSource(['Alpha.esp']));
+    const provider = new PluginListProvider({ source: new FakeSource(['Alpha.esp']) });
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
     provider.setFilter('a');
@@ -226,8 +226,9 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
   /** Render once so the provider caches the order, then run a drag → drop. */
   async function drag(source: FakeSource, moved: string[], target: string | undefined) {
     const reports: { severity: string; message: string }[] = [];
-    const provider = new PluginListProvider(source, undefined, {
-      report: (severity, message) => reports.push({ severity, message }),
+    const provider = new PluginListProvider({
+      source,
+      reporter: { report: (severity, message) => reports.push({ severity, message }) },
     });
     await provider.getChildren(); // populate the cached order
     let fired = false;
@@ -240,7 +241,7 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
   }
 
   it('handleDrag serialises the whole selection, not just the grabbed row', () => {
-    const provider = new PluginListProvider(new FakeSource(ORDER));
+    const provider = new PluginListProvider({ source: new FakeSource(ORDER) });
     const dt = new FakeDataTransfer();
     provider.handleDrag([node('A.esp'), node('C.esp')], dt as never, NONE);
     const item = dt.get('application/vnd.medit.pluginlist-node');
@@ -248,7 +249,7 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
   });
 
   it('handleDrag ignores non-plugin nodes (Empty/Error) in the selection', () => {
-    const provider = new PluginListProvider(new FakeSource(ORDER));
+    const provider = new PluginListProvider({ source: new FakeSource(ORDER) });
     const dt = new FakeDataTransfer();
     provider.handleDrag([new EmptyNode(), node('B.esp')], dt as never, NONE);
     const item = dt.get('application/vnd.medit.pluginlist-node');
@@ -270,7 +271,7 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
 
   it('drop onto a non-plugin node (empty state) appends', async () => {
     const source = new FakeSource(['A.esp']);
-    const provider = new PluginListProvider(source);
+    const provider = new PluginListProvider({ source });
     await provider.getChildren();
     const dt = new FakeDataTransfer();
     provider.handleDrag([node('A.esp')], dt as never, NONE);
@@ -292,7 +293,7 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
 
   it('an empty drag payload is a no-op (no write)', async () => {
     const source = new FakeSource(ORDER);
-    const provider = new PluginListProvider(source);
+    const provider = new PluginListProvider({ source });
     await provider.getChildren();
     await provider.handleDrop(node('A.esp'), new FakeDataTransfer() as never, NONE);
     expect(source.reorderPluginsCalls).toEqual([]);
@@ -329,7 +330,7 @@ describe('PluginListProvider — drag reorder round-trips through plugins.txt on
   });
 
   async function dragToDisk(moved: string[], target: string | undefined) {
-    const provider = new PluginListProvider(source);
+    const provider = new PluginListProvider({ source });
     await provider.getChildren(); // cache the rendered order
     const dt = new FakeDataTransfer();
     provider.handleDrag(moved.map(node), dt as never, NONE);
@@ -388,7 +389,7 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
   });
 
   const provider = () =>
-    new PluginListProvider(new Mo2ModlistSource(dir), undefined, undefined, dir, Promise.resolve(join(dir, 'Game', 'Data')));
+    new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: Promise.resolve(join(dir, 'Game', 'Data')) });
 
   it('badges a plugin whose master is sequenced after it', async () => {
     await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
@@ -435,7 +436,7 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
     // instanceRoot pointed at a *file*, not a directory: readModlist hits ENOTDIR,
     // failing the status pass without failing the plugins.txt read (which uses the real dir).
     const source = new Mo2ModlistSource(dir);
-    const provider = new PluginListProvider(source, (m) => logs.push(m), { report: (severity, message) => reports.push({ severity, message }) }, join(dir, 'ModOrganizer.ini'));
+    const provider = new PluginListProvider({ source, log: (m) => logs.push(m), reporter: { report: (severity, message) => reports.push({ severity, message }) }, instanceRoot: join(dir, 'ModOrganizer.ini') });
     const rows = await provider.getChildren();
     const nodes = rows.filter((n): n is PluginNode => n.kind === 'plugin');
 
@@ -469,25 +470,25 @@ describe('PluginListProvider — resolvePluginPath (Reveal in Explorer, issue #6
   });
 
   it('resolves a mod-provided plugin to the winning mod copy', async () => {
-    const provider = new PluginListProvider(new Mo2ModlistSource(dir), undefined, undefined, dir, Promise.resolve(join(dir, 'Game', 'Data')));
+    const provider = new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: Promise.resolve(join(dir, 'Game', 'Data')) });
     expect(await provider.resolvePluginPath('Base.esp')).toBe(join(dir, 'mods', 'Provider', 'Base.esp'));
   });
 
   it('resolves an unmanaged vanilla plugin to the game Data folder', async () => {
-    const provider = new PluginListProvider(new Mo2ModlistSource(dir), undefined, undefined, dir, Promise.resolve(join(dir, 'Game', 'Data')));
+    const provider = new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: Promise.resolve(join(dir, 'Game', 'Data')) });
     expect(await provider.resolvePluginPath('Fallout4.esm')).toBe(join(dir, 'Game', 'Data', 'Fallout4.esm'));
   });
 
   it('returns undefined without touching the source when no instanceRoot is configured', async () => {
     const source = new FakeSource(['Base.esp']); // readModlist throws if ever called
-    const provider = new PluginListProvider(source, undefined, undefined, undefined);
+    const provider = new PluginListProvider({ source });
     expect(await provider.resolvePluginPath('Base.esp')).toBeUndefined();
   });
 
   it('returns undefined and logs (no throw) when resolution fails', async () => {
     const logs: string[] = [];
     // instanceRoot pointed at a *file*: readModlist hits ENOTDIR.
-    const provider = new PluginListProvider(new Mo2ModlistSource(dir), (m) => logs.push(m), undefined, join(dir, 'ModOrganizer.ini'));
+    const provider = new PluginListProvider({ source: new Mo2ModlistSource(dir), log: (m) => logs.push(m), instanceRoot: join(dir, 'ModOrganizer.ini') });
     expect(await provider.resolvePluginPath('Base.esp')).toBeUndefined();
     expect(logs.some((l) => l.includes('resolvePluginPath'))).toBe(true);
   });

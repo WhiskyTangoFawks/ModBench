@@ -11,6 +11,21 @@ import type { Reporter } from './deployer';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
+/** Shared resolved-undefined default for an omitted `dataFolder` — hoisted out of
+ *  the constructor so it isn't a fresh async operation per instance. */
+const NO_DATA_FOLDER: Promise<string | undefined> = Promise.resolve(undefined);
+
+/** Constructor options for {@link ModListProvider}. Field order matches
+ *  PluginListProvider's identically-shaped options so the two siblings read the
+ *  same (issue #80: replaces five positional args whose order diverged). */
+export interface ModListProviderOptions {
+  source: IModlistSource;
+  log?: (msg: string) => void;
+  reporter?: Reporter;
+  instanceRoot?: string;
+  dataFolder?: Promise<string | undefined>;
+}
+
 /** 'ok'/undefined -&gt; default package icon; warn for conflicts, error for broken. */
 function statusIconId(status?: ModStatusResult): string {
   switch (status?.status.kind) {
@@ -116,7 +131,11 @@ export class ModListProvider
   private filterLower = '';
   private groupingOn = true;
   private sortDescending = false;
+  private readonly source: IModlistSource;
   private readonly log: (msg: string) => void;
+  private readonly reporter?: Reporter;
+  private readonly instanceRoot?: string;
+  private readonly dataFolder: Promise<string | undefined>;
 
   /** `instanceRoot`, when provided, enables status badges (Modbench-3):
    *  file-conflict index + missing-master/missing-mod checks against real
@@ -127,14 +146,12 @@ export class ModListProvider
    *  folder (the single GameDirectory resolved once at the composition root,
    *  #78) — its vanilla/DLC masters seed the missing-master check; a resolved
    *  `Promise<undefined>` degrades that check to an empty set. */
-  constructor(
-    private readonly source: IModlistSource,
-    log?: (msg: string) => void,
-    private readonly instanceRoot?: string,
-    private readonly reporter?: Reporter,
-    private readonly dataFolder: Promise<string | undefined> = Promise.resolve(undefined),
-  ) {
-    this.log = log ?? (() => {});
+  constructor(options: ModListProviderOptions) {
+    this.source = options.source;
+    this.log = options.log ?? (() => {});
+    this.reporter = options.reporter;
+    this.instanceRoot = options.instanceRoot;
+    this.dataFolder = options.dataFolder ?? NO_DATA_FOLDER;
   }
 
   refresh(): void {
