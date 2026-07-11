@@ -90,6 +90,86 @@ describe('DownloadsApp — table', () => {
   });
 });
 
+describe('DownloadsApp — row selection', () => {
+  const rows = [
+    { name: 'new.zip', status: 'Downloaded', size: 100, mtimeMs: 200 },
+    { name: 'old.zip', status: 'Installed', size: 50, mtimeMs: 100 },
+  ];
+  // Selection is asserted via aria-selected (the semantic signal), not the
+  // inline var() highlight color: happy-dom drops unresolved var() values from
+  // toHaveStyle, so a color-var assertion is a false pass. aria-selected
+  // genuinely distinguishes selected from unselected rows.
+  const rowFor = (text: string) => screen.getByText(text).closest('tr') as HTMLTableRowElement;
+
+  it('clicking a row selects it (aria-selected true)', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    expect(rowFor('new.zip')).toHaveAttribute('aria-selected', 'false');
+    fireEvent.click(screen.getByText('new.zip'));
+    expect(rowFor('new.zip')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('is single-row only: selecting another row deselects the first', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.click(screen.getByText('new.zip'));
+    fireEvent.click(screen.getByText('old.zip'));
+    expect(rowFor('old.zip')).toHaveAttribute('aria-selected', 'true');
+    expect(rowFor('new.zip')).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('does not toggle off: clicking an already-selected row keeps it selected', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.click(screen.getByText('new.zip'));
+    fireEvent.click(screen.getByText('new.zip'));
+    expect(rowFor('new.zip')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('applies the activeSelectionForeground token on the selected row cells', () => {
+    // The foreground token must win over baseCell.color, which is hard-set on
+    // every cell — so it lives on the <td>, not the <tr>. Read style.color
+    // directly (happy-dom preserves no-space var() on the property, though it
+    // drops them from toHaveStyle).
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.click(screen.getByText('new.zip'));
+    const selectedCell = screen.getByText('new.zip').closest('td') as HTMLTableCellElement;
+    expect(selectedCell.style.color).toContain('activeSelectionForeground');
+  });
+
+  it('still opens the row context menu (selection onClick does not swallow onContextMenu)', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    fireEvent.click(screen.getByText('new.zip'));
+    fireEvent.contextMenu(screen.getByText('new.zip'));
+    expect(screen.getByRole('menuitem', { name: 'Install' })).toBeInTheDocument();
+  });
+});
+
+describe('DownloadsApp — column alignment', () => {
+  const rows = [{ name: 'a-very-long-archive-name.zip', status: 'Downloaded', size: 100, mtimeMs: 200 }];
+
+  const cellFor = (text: string) => screen.getByText(text).closest('td') as HTMLTableCellElement;
+
+  it('right-aligns the Size column in both header and body', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    expect(cellFor('100')).toHaveStyle({ textAlign: 'right' });
+    const sizeHeader = screen.getByText('Size').closest('th') as HTMLTableCellElement;
+    expect(sizeHeader).toHaveStyle({ textAlign: 'right' });
+  });
+
+  it('gives the Name column a wider max-width than Status or Size', () => {
+    render(<DownloadsApp />);
+    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
+    const px = (el: HTMLElement) => parseInt(el.style.maxWidth, 10);
+    const nameW = px(cellFor('a-very-long-archive-name.zip'));
+    expect(nameW).toBeGreaterThan(px(cellFor('Downloaded')));
+    expect(nameW).toBeGreaterThan(px(cellFor('100')));
+  });
+});
+
 describe('DownloadsApp — refresh', () => {
   it('clicking Refresh posts a REFRESH message to the extension', () => {
     render(<DownloadsApp />);
