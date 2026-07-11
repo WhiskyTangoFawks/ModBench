@@ -17,6 +17,7 @@ import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from './modmanager/ModListProvider';
 import { createOverwriteWatcher } from './modmanager/overwriteWatcher';
+import { OverwriteDecorationProvider } from './modmanager/OverwriteDecorationProvider';
 import { PluginListProvider, type PluginListNode } from './modmanager/PluginListProvider';
 import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './modmanager/gameDirectory';
 import { deploy, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
@@ -608,6 +609,9 @@ function registerOverwriteView(
 ): vscode.Disposable[] {
   return [
     createOverwriteWatcher(instanceRoot, () => modListProvider.refresh()),
+    // Tint the pinned Overwrite row reddish (#83). Stateless: keyed on the
+    // constant overwrite/ path, which matches OverwriteNode.resourceUri.
+    vscode.window.registerFileDecorationProvider(new OverwriteDecorationProvider(instanceRoot)),
     vscode.commands.registerCommand('modbench.modList.overwrite.reveal', async (node: OverwriteNode) => {
       if (node?.kind !== 'overwrite') return;
       try {
