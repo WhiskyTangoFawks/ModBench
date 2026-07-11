@@ -534,6 +534,7 @@ interface PluginListDeps {
   log: (msg: string) => void;
   reporter: Reporter;
   instanceRoot: string;
+  dataFolder: Promise<string | undefined>;
 }
 /** Plugin List (Loadout) tree: a view of plugins.txt, stacked below the Mods
  *  tree. A row's checkbox toggles its enabled state (writing plugins.txt
@@ -541,8 +542,8 @@ interface PluginListDeps {
  *  plugins.txt immediately); a title-bar Refresh forces a re-read. `instanceRoot`
  *  enables the order-aware missing-master badge (issue #67). */
 function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
-  const { modlistSource, log, reporter, instanceRoot } = deps;
-  const pluginListProvider = new PluginListProvider(modlistSource, log, reporter, instanceRoot);
+  const { modlistSource, log, reporter, instanceRoot, dataFolder } = deps;
+  const pluginListProvider = new PluginListProvider(modlistSource, log, reporter, instanceRoot, dataFolder);
   const pluginListView = vscode.window.createTreeView('modbench.pluginListTree', {
     treeDataProvider: pluginListProvider,
     canSelectMany: true,
@@ -610,7 +611,19 @@ function registerLoadoutView(deps: LoadoutViewDeps): void {
   }
     const modListReporter = makeReporter(log, 'modList');
     const modlistSource = new Mo2ModlistSource(instanceRoot, log, modListReporter);
-    const modListProvider = new ModListProvider(modlistSource, log, instanceRoot, modListReporter);
+    // Resolve the game's Data folder ONCE (#78): the single GameDirectory resolver
+    // (config override → ini gamePath → autodetect) is kicked off here and its
+    // dataFolder threaded to the providers, replacing their per-refresh ini re-reads.
+    // Non-blocking (keeps registration synchronous) and never rejects — a null
+    // resolution or a misconfigured explicit setting both fold to undefined, so the
+    // consumers degrade exactly as before (empty vanilla masters, badges absent).
+    const dataFolder: Promise<string | undefined> = resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths())
+      .then((gd) => gd?.dataFolder)
+      .catch((e: unknown) => {
+        log(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`);
+        return undefined;
+      });
+    const modListProvider = new ModListProvider(modlistSource, log, instanceRoot, modListReporter, dataFolder);
     const modListView = vscode.window.createTreeView('modbench.modList', {
       treeDataProvider: modListProvider,
       showCollapseAll: true,
@@ -676,7 +689,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): void {
       ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
       ...registerModContextCommands({ instanceRoot, modlistSource, log, runModAction }),
       ...registerSeparatorCommands({ modlistSource, runModAction }),
-      ...registerPluginListView({ modlistSource, log, reporter: makeReporter(log, 'pluginList'), instanceRoot }),
+      ...registerPluginListView({ modlistSource, log, reporter: makeReporter(log, 'pluginList'), instanceRoot, dataFolder }),
       ...registerDownloadsCommands({ context, openPanels, instanceRoot, log }),
     );
 }

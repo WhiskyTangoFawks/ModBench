@@ -11,73 +11,44 @@ describe('readVanillaMasters', () => {
     if (dir) await rm(dir, { recursive: true, force: true });
   });
 
-  it('lists lowercased .esm and .esp basenames from <gamePath>/Data', async () => {
+  it('lists lowercased .esm and .esp basenames from the resolved Data folder', async () => {
     dir = await mkdtemp(join(tmpdir(), 'medit-vanillamasters-'));
-    const gamePath = join(dir, 'Game');
-    await mkdir(join(gamePath, 'Data'), { recursive: true });
-    await writeFile(join(gamePath, 'Data', 'Fallout4.esm'), '');
-    await writeFile(join(gamePath, 'Data', 'DLCRobot.esm'), '');
-    await writeFile(join(gamePath, 'Data', 'NotAMaster.esp'), '');
-    await writeFile(
-      join(dir, 'ModOrganizer.ini'),
-      `[General]\r\ngamePath=@ByteArray(${gamePath})\r\n`,
-    );
+    const dataFolder = join(dir, 'Game', 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    await writeFile(join(dataFolder, 'Fallout4.esm'), '');
+    await writeFile(join(dataFolder, 'DLCRobot.esm'), '');
+    await writeFile(join(dataFolder, 'NotAMaster.esp'), '');
 
-    const masters = await readVanillaMasters(dir);
+    const masters = await readVanillaMasters(dataFolder);
     expect(masters).toEqual(new Set(['fallout4.esm', 'dlcrobot.esm', 'notamaster.esp']));
   });
 
   it('includes .esl (Creation Club) and .esp plugins alongside .esm masters', async () => {
     dir = await mkdtemp(join(tmpdir(), 'medit-vanillamasters-'));
-    const gamePath = join(dir, 'Game');
-    await mkdir(join(gamePath, 'Data'), { recursive: true });
-    await writeFile(join(gamePath, 'Data', 'Fallout4.esm'), '');
-    await writeFile(join(gamePath, 'Data', 'ccBGSFO4044-HellfirePowerArmor.esl'), '');
-    await writeFile(join(gamePath, 'Data', 'Update.esp'), '');
-    await writeFile(join(gamePath, 'Data', 'readme.txt'), '');
-    await writeFile(
-      join(dir, 'ModOrganizer.ini'),
-      `[General]\r\ngamePath=@ByteArray(${gamePath})\r\n`,
-    );
+    const dataFolder = join(dir, 'Game', 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    await writeFile(join(dataFolder, 'Fallout4.esm'), '');
+    await writeFile(join(dataFolder, 'ccBGSFO4044-HellfirePowerArmor.esl'), '');
+    await writeFile(join(dataFolder, 'Update.esp'), '');
+    await writeFile(join(dataFolder, 'readme.txt'), '');
 
-    const masters = await readVanillaMasters(dir);
+    const masters = await readVanillaMasters(dataFolder);
     expect(masters).toEqual(
       new Set(['fallout4.esm', 'ccbgsfo4044-hellfirepowerarmor.esl', 'update.esp']),
     );
   });
 
-  it('normalizes a Wine drive-mapped gamePath so masters resolve on Linux', async () => {
-    dir = await mkdtemp(join(tmpdir(), 'medit-vanillamasters-'));
-    const gamePath = join(dir, 'Game');
-    await mkdir(join(gamePath, 'Data'), { recursive: true });
-    await writeFile(join(gamePath, 'Data', 'Fallout4.esm'), '');
-    const winePath = 'Z:' + gamePath.replaceAll('/', '\\');
-    await writeFile(join(dir, 'ModOrganizer.ini'), `[General]\r\ngamePath=@ByteArray(${winePath})\r\n`);
-
-    // Skip on Windows, where the native path is used as-is (no Wine translation).
-    if (process.platform !== 'win32') {
-      expect(await readVanillaMasters(dir)).toEqual(new Set(['fallout4.esm']));
-    }
+  it('returns an empty set (no fs access) when no Data folder was resolved', async () => {
+    expect(await readVanillaMasters(undefined)).toEqual(new Set());
   });
 
-  it('tolerates a missing ModOrganizer.ini and returns an empty set', async () => {
-    dir = await mkdtemp(join(tmpdir(), 'medit-vanillamasters-'));
-    expect(await readVanillaMasters(dir)).toEqual(new Set());
-  });
-
-  it('tolerates an unreachable gamePath and returns an empty set', async () => {
-    dir = await mkdtemp(join(tmpdir(), 'medit-vanillamasters-'));
-    await writeFile(
-      join(dir, 'ModOrganizer.ini'),
-      '[General]\r\ngamePath=@ByteArray(/no/such/game/path)\r\n',
-    );
-    expect(await readVanillaMasters(dir)).toEqual(new Set());
+  it('tolerates an unreachable Data folder and returns an empty set', async () => {
+    expect(await readVanillaMasters('/no/such/game/path/Data')).toEqual(new Set());
   });
 
   it('logs the failure reason when falling back to an empty set', async () => {
-    dir = await mkdtemp(join(tmpdir(), 'medit-vanillamasters-'));
     const logs: string[] = [];
-    await readVanillaMasters(dir, (m) => logs.push(m));
+    await readVanillaMasters('/no/such/game/path/Data', (m) => logs.push(m));
     expect(logs.length).toBeGreaterThan(0);
   });
 });

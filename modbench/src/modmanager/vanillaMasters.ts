@@ -1,27 +1,20 @@
-// Vanilla/DLC master set for StatusChecker's missing-master check, derived
-// from MO2's own gamePath (ModOrganizer.ini). The gamePath is Wine-normalized
-// (Modbench-4) so it resolves on Linux, where MO2 stores it as a Z:\ path.
-// Tolerates an unreachable/misconfigured game path, degrading to an empty set
-// rather than failing the whole tree load.
-//
-// Follow-up (Modbench-4): once ModListProvider carries a resolved GameDirectory,
-// take that here instead of re-reading/normalizing the ini gamePath.
+// Vanilla/DLC master set for StatusChecker's missing-master check, read from the
+// game's resolved Data folder (the single GameDirectory resolved once at the
+// composition root; see gameDirectory.ts). Tolerates an unresolved/unreachable
+// Data folder, degrading to an empty set rather than failing the whole tree load.
 
-import { readFile, readdir } from 'node:fs/promises';
-import { extname, join } from 'node:path';
-import { readGamePath } from './mo2/modOrganizerIni';
-import { normalizeGamePath } from './gameDirectory';
+import { readdir } from 'node:fs/promises';
+import { extname } from 'node:path';
 
 const PLUGIN_EXTENSIONS = new Set(['.esp', '.esm', '.esl']);
 
 export async function readVanillaMasters(
-  instanceRoot: string,
+  dataFolder: string | undefined,
   log?: (msg: string) => void,
 ): Promise<Set<string>> {
+  if (!dataFolder) return new Set();
   try {
-    const iniText = await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8');
-    const gamePath = normalizeGamePath(readGamePath(iniText));
-    const dataFiles = await readdir(join(gamePath, 'Data'));
+    const dataFiles = await readdir(dataFolder);
     return new Set(
       dataFiles.filter((f) => PLUGIN_EXTENSIONS.has(extname(f).toLowerCase())).map((f) => f.toLowerCase()),
     );
