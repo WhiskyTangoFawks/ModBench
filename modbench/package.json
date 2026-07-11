@@ -275,6 +275,10 @@
         "command": "modbench.pluginListTree.filter",
         "title": "Modbench: Filter Plugins…",
         "icon": "$(search)"
+      },
+      {
+        "command": "modbench.pluginListTree.revealInExplorer",
+        "title": "Reveal in Explorer"
       }
     ],
     "menus": {
@@ -477,6 +481,11 @@
           "command": "modbench.modList.separator.delete",
           "when": "view == modbench.modList && viewItem == separator",
           "group": "sepActions@3"
+        },
+        {
+          "command": "modbench.pluginListTree.revealInExplorer",
+          "when": "view == modbench.pluginListTree && viewItem == plugin",
+          "group": "pluginActions@1"
         },
         {
           "command": "modbench.revertGroup",
