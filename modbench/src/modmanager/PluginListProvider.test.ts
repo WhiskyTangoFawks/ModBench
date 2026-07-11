@@ -444,3 +444,50 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
     expect(logs.some((l) => l.includes('status'))).toBe(true);
   });
 });
+
+describe('PluginListProvider — resolvePluginPath (Reveal in Explorer, issue #69)', () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'plugin-reveal-'));
+    const dataFolder = join(dir, 'Game', 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
+    // A vanilla plugin no mod provides — resolved via gamePath/Data.
+    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
+    // Provider ships Base.esp (a mod-provided winner).
+    await mkdir(join(dir, 'mods', 'Provider'), { recursive: true });
+    await writeFile(join(dir, 'mods', 'Provider', 'Base.esp'), buildTes4Buffer(['Fallout4.esm']));
+    await writeFile(
+      join(dir, 'ModOrganizer.ini'),
+      `[General]\r\nselected_profile=@ByteArray(Default)\r\ngamePath=@ByteArray(${join(dir, 'Game')})\r\n`,
+    );
+    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+Provider\r\n');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('resolves a mod-provided plugin to the winning mod copy', async () => {
+    const provider = new PluginListProvider(new Mo2ModlistSource(dir), undefined, undefined, dir);
+    expect(await provider.resolvePluginPath('Base.esp')).toBe(join(dir, 'mods', 'Provider', 'Base.esp'));
+  });
+
+  it('resolves an unmanaged vanilla plugin to the game Data folder', async () => {
+    const provider = new PluginListProvider(new Mo2ModlistSource(dir), undefined, undefined, dir);
+    expect(await provider.resolvePluginPath('Fallout4.esm')).toBe(join(dir, 'Game', 'Data', 'Fallout4.esm'));
+  });
+
+  it('returns undefined without touching the source when no instanceRoot is configured', async () => {
+    const source = new FakeSource(['Base.esp']); // readModlist throws if ever called
+    const provider = new PluginListProvider(source, undefined, undefined, undefined);
+    expect(await provider.resolvePluginPath('Base.esp')).toBeUndefined();
+  });
+
+  it('returns undefined and logs (no throw) when resolution fails', async () => {
+    const logs: string[] = [];
+    // instanceRoot pointed at a *file*: readModlist hits ENOTDIR.
+    const provider = new PluginListProvider(new Mo2ModlistSource(dir), (m) => logs.push(m), undefined, join(dir, 'ModOrganizer.ini'));
+    expect(await provider.resolvePluginPath('Base.esp')).toBeUndefined();
+    expect(logs.some((l) => l.includes('resolvePluginPath'))).toBe(true);
+  });
+});

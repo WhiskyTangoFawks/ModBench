@@ -6,6 +6,7 @@ import type { Reporter } from './deployer';
 import { dropIndexForMove } from './mo2/pluginsText';
 import { buildFileConflictIndex } from './fileConflictIndex';
 import { computePluginOrderStatuses, type PluginOrderStatus } from './statusChecker';
+import { resolvePluginPaths } from './explicitSession';
 import { readGamePath } from './mo2/modOrganizerIni';
 import { normalizeGamePath } from './gameDirectory';
 
@@ -111,6 +112,27 @@ export class PluginListProvider
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     await this.source.setPluginEnabled(pluginName, enabled);
     this.refresh();
+  }
+
+  /** Resolve a plugin NAME to its winning physical path — the MO2-priority
+   *  FileConflictIndex winner for a mod-provided plugin, else the game's Data
+   *  folder for an unmanaged vanilla/DLC/CC plugin (the same resolution the
+   *  editing-session builder performs via `resolvePluginPaths`). Used by the
+   *  Reveal in Explorer row action (issue #69). Returns undefined when no
+   *  instanceRoot is configured or resolution fails (ini/index unreadable) — a
+   *  fresh read each call, since reveal is a rare explicit action. */
+  async resolvePluginPath(name: string): Promise<string | undefined> {
+    if (!this.instanceRoot) return undefined;
+    try {
+      const entries = await this.source.readModlist();
+      const index = await buildFileConflictIndex(entries, this.instanceRoot);
+      const dataFolder = await this.resolveDataFolder(this.instanceRoot);
+      if (!dataFolder) return undefined;
+      return resolvePluginPaths([name], index, dataFolder).get(name);
+    } catch (e) {
+      this.log(`[PluginListProvider] resolvePluginPath("${name}") failed: ${e instanceof Error ? e.message : String(e)}`);
+      return undefined;
+    }
   }
 
   getTreeItem(element: PluginListNode): vscode.TreeItem {

@@ -104,6 +104,7 @@ describe('modbench command registration', () => {
     'modbench.downloads.open',
     'modbench.pluginListTree.refresh',
     'modbench.pluginListTree.filter',
+    'modbench.pluginListTree.revealInExplorer',
   ];
 
   it('registers all expected commands on activation', async () => {

@@ -16,7 +16,7 @@ import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, ty
 import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { ModListProvider, ModNode, SeparatorNode } from './modmanager/ModListProvider';
-import { PluginListProvider } from './modmanager/PluginListProvider';
+import { PluginListProvider, type PluginListNode } from './modmanager/PluginListProvider';
 import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './modmanager/gameDirectory';
 import { deploy, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
@@ -562,6 +562,23 @@ function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
           void vscode.window.showErrorMessage(`Modbench: Failed to update "${node.plugin.name}".`);
           pluginListProvider.refresh();
         }
+      }
+    }),
+    vscode.commands.registerCommand('modbench.pluginListTree.revealInExplorer', async (node: PluginListNode) => {
+      if (node?.kind !== 'plugin') return;
+      const name = node.plugin.name;
+      const filePath = await pluginListProvider.resolvePluginPath(name);
+      if (!filePath) {
+        // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
+        log(`[extension] revealInExplorer could not resolve a path for "${name}"`);
+        void vscode.window.showErrorMessage(`Modbench: Could not resolve a file location for "${name}".`);
+        return;
+      }
+      try {
+        await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(filePath));
+      } catch (err) {
+        log(`[extension] revealInExplorer for "${name}" failed: ${err instanceof Error ? err.message : String(err)}`);
+        void vscode.window.showErrorMessage(`Modbench: Failed to reveal "${name}" in Explorer.`);
       }
     }),
     vscode.commands.registerCommand('modbench.pluginListTree.refresh', () => pluginListProvider.refresh()),
