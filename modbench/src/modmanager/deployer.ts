@@ -81,7 +81,7 @@ async function statOrNull(p: string): Promise<{ ino: number; dev: number } | nul
 }
 
 /** Every file under `root`, as forward-slash relative paths. */
-async function listRelativeFiles(root: string): Promise<string[]> {
+export async function listRelativeFiles(root: string): Promise<string[]> {
   const out: string[] = [];
   async function walk(dir: string): Promise<void> {
     for (const dirent of await readdir(dir, { withFileTypes: true })) {
