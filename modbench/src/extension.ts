@@ -543,7 +543,7 @@ interface PluginListDeps {
  *  enables the order-aware missing-master badge (issue #67). */
 function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
   const { modlistSource, log, reporter, instanceRoot, dataFolder } = deps;
-  const pluginListProvider = new PluginListProvider(modlistSource, log, reporter, instanceRoot, dataFolder);
+  const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
   const pluginListView = vscode.window.createTreeView('modbench.pluginListTree', {
     treeDataProvider: pluginListProvider,
     canSelectMany: true,
@@ -623,7 +623,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): void {
         log(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`);
         return undefined;
       });
-    const modListProvider = new ModListProvider(modlistSource, log, instanceRoot, modListReporter, dataFolder);
+    const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
     const modListView = vscode.window.createTreeView('modbench.modList', {
       treeDataProvider: modListProvider,
       showCollapseAll: true,

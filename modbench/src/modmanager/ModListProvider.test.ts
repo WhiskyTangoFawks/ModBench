@@ -88,7 +88,7 @@ describe('ModListProvider', () => {
       sep('Section 1'),
       mod('Child'),
     ]);
-    const provider = new ModListProvider(source);
+    const provider = new ModListProvider({ source });
     const roots = await provider.getChildren();
 
     expect(roots[0]).toBeInstanceOf(CountNode);
@@ -107,7 +107,7 @@ describe('ModListProvider', () => {
       mod('UFO4P', true, { version: 'v2.1.5', nexusId: '4598', archiveFilename: 'UFO4P.7z' }),
       mod('Disabled Mod', false),
     ]);
-    const provider = new ModListProvider(source);
+    const provider = new ModListProvider({ source });
     const roots = await provider.getChildren();
     const separator = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode)!;
     const children = await provider.getChildren(separator);
@@ -124,7 +124,7 @@ describe('ModListProvider', () => {
 
   it('setModEnabled delegates to the source and fires a refresh', async () => {
     const source = new FakeSource([mod('A')]);
-    const provider = new ModListProvider(source);
+    const provider = new ModListProvider({ source });
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
 
@@ -136,7 +136,7 @@ describe('ModListProvider', () => {
 
   it('switchProfile persists the selection and fires a refresh', async () => {
     const source = new FakeSource([mod('A')]);
-    const provider = new ModListProvider(source);
+    const provider = new ModListProvider({ source });
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
 
@@ -149,7 +149,7 @@ describe('ModListProvider', () => {
   it('renders an error node instead of an empty list when the source read fails', async () => {
     const logs: string[] = [];
     const source = new FakeSource([], /* throwOnRead */ true);
-    const provider = new ModListProvider(source, (m) => logs.push(m));
+    const provider = new ModListProvider({ source, log: (m) => logs.push(m) });
 
     const roots = await provider.getChildren();
 
@@ -171,7 +171,7 @@ describe('ModListProvider', () => {
     ]);
 
     it('filter with groupingOn hides separators with no matches', async () => {
-      const provider = new ModListProvider(source());
+      const provider = new ModListProvider({ source: source() });
       provider.setFilter('alpha', true);
       const roots = await provider.getChildren();
 
@@ -183,7 +183,7 @@ describe('ModListProvider', () => {
     });
 
     it('filter with groupingOn shows only matching children under separator', async () => {
-      const provider = new ModListProvider(source());
+      const provider = new ModListProvider({ source: source() });
       provider.setFilter('alpha', true);
       const roots = await provider.getChildren();
       const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode)!;
@@ -193,7 +193,7 @@ describe('ModListProvider', () => {
     });
 
     it('separator name match causes all its children to be shown', async () => {
-      const provider = new ModListProvider(source());
+      const provider = new ModListProvider({ source: source() });
       provider.setFilter('group a', true);
       const roots = await provider.getChildren();
       const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode)!;
@@ -203,7 +203,7 @@ describe('ModListProvider', () => {
     });
 
     it('fires onDidChangeTreeData when filter is set', () => {
-      const provider = new ModListProvider(source());
+      const provider = new ModListProvider({ source: source() });
       let fired = false;
       provider.onDidChangeTreeData(() => { fired = true; });
       provider.setFilter('x', true);
@@ -222,7 +222,7 @@ describe('ModListProvider', () => {
     ] satisfies ModlistEntry[];
 
     it('flat list: only matching mods, no separators, no count', async () => {
-      const provider = new ModListProvider(new FakeSource(entries));
+      const provider = new ModListProvider({ source: new FakeSource(entries) });
       provider.setFilter('alpha', false);
       const roots = await provider.getChildren();
 
@@ -258,7 +258,7 @@ describe('ModListProvider', () => {
       fakeSource.reorder = (name: string, idx: number) => { reorderCalls.push({ name, idx }); return Promise.resolve(); };
       fakeSource.moveModToSeparator = (m: string, s: string | null) => { moveToSepCalls.push({ mod: m, sep: s }); return Promise.resolve(); };
       fakeSource.reorderSeparatorBlock = (s: string, idx: number) => { reorderBlockCalls.push({ sep: s, idx }); return Promise.resolve(); };
-      const provider = new ModListProvider(fakeSource);
+      const provider = new ModListProvider({ source: fakeSource });
       return { provider, reorderCalls, moveToSepCalls, reorderBlockCalls };
     }
 
@@ -282,7 +282,7 @@ describe('ModListProvider', () => {
 
     function makeApplyingProvider() {
       const source = new ApplyingSource(dndEntries);
-      const provider = new ModListProvider(source);
+      const provider = new ModListProvider({ source });
       return { provider, source };
     }
 
@@ -360,10 +360,10 @@ describe('ModListProvider', () => {
 
   describe('setFilter — reset behaviour', () => {
     it('clearing filter resets groupingOn to true and shows all nodes', async () => {
-      const provider = new ModListProvider(new FakeSource([
+      const provider = new ModListProvider({ source: new FakeSource([
         sep('Sep'),
         mod('Mod'),
-      ]));
+      ]) });
       provider.setFilter('x', false);
       provider.setFilter('', false); // grouping arg ignored when text cleared
       const roots = await provider.getChildren();
@@ -374,7 +374,7 @@ describe('ModListProvider', () => {
 
   describe('sort order toggle', () => {
     it('toggleSortOrder fires a refresh', () => {
-      const provider = new ModListProvider(new FakeSource([mod('A')]));
+      const provider = new ModListProvider({ source: new FakeSource([mod('A')]) });
       let fired = false;
       provider.onDidChangeTreeData(() => { fired = true; });
 
@@ -392,7 +392,7 @@ describe('ModListProvider', () => {
         sep('Section 2'),
         mod('Other Child'),
       ]);
-      const provider = new ModListProvider(source);
+      const provider = new ModListProvider({ source });
       provider.toggleSortOrder();
       const roots = await provider.getChildren();
 
@@ -414,7 +414,7 @@ describe('ModListProvider', () => {
         mod('Second'),
         mod('Third'),
       ]);
-      const provider = new ModListProvider(source);
+      const provider = new ModListProvider({ source });
       provider.toggleSortOrder();
       const roots = await provider.getChildren();
       const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode)!;
@@ -430,7 +430,7 @@ describe('ModListProvider', () => {
         mod('Alpha Child'),
         mod('Alpha Other'),
       ] satisfies ModlistEntry[];
-      const provider = new ModListProvider(new FakeSource(entries));
+      const provider = new ModListProvider({ source: new FakeSource(entries) });
       provider.toggleSortOrder();
       provider.setFilter('alpha', false);
       const roots = await provider.getChildren();
@@ -445,7 +445,7 @@ describe('ModListProvider', () => {
         mod('Alpha Child'),
         mod('Alpha Other'),
       ] satisfies ModlistEntry[];
-      const provider = new ModListProvider(new FakeSource(entries));
+      const provider = new ModListProvider({ source: new FakeSource(entries) });
       provider.toggleSortOrder();
       provider.setFilter('alpha', true);
       const roots = await provider.getChildren();
@@ -462,7 +462,7 @@ describe('ModListProvider', () => {
   describe('status badges (instanceRoot provided)', () => {
     it('attaches a warning icon and conflict tooltip line to conflicted mods', async () => {
       const source = new FakeSource([mod('ModA'), mod('ModB')]);
-      const provider = new ModListProvider(source, undefined, conflictFixture);
+      const provider = new ModListProvider({ source, instanceRoot: conflictFixture });
       const roots = await provider.getChildren();
       const [modA, modB] = roots.filter((n): n is ModNode => n instanceof ModNode);
 
@@ -477,7 +477,7 @@ describe('ModListProvider', () => {
 
     it('leaves existing no-instanceRoot behaviour unchanged (no status computed)', async () => {
       const source = new FakeSource([mod('ModA'), mod('ModB')]);
-      const provider = new ModListProvider(source);
+      const provider = new ModListProvider({ source });
       const roots = await provider.getChildren();
       const modA = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
 
@@ -493,7 +493,7 @@ describe('ModListProvider', () => {
       // failure in the status-computation path distinct from a modlist-read failure.
       const brokenInstanceRoot = join(conflictFixture, 'ModOrganizer.ini');
       const reporter = { report: (severity: string, message: string) => reports.push({ severity, message }) };
-      const provider = new ModListProvider(source, (m) => logs.push(m), brokenInstanceRoot, reporter);
+      const provider = new ModListProvider({ source, log: (m) => logs.push(m), instanceRoot: brokenInstanceRoot, reporter });
 
       const roots = await provider.getChildren();
 
@@ -532,13 +532,13 @@ describe('ModListProvider — missing-master badge over the injected game Data f
     (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Consumer')!;
 
   it('resolves the vanilla master from the injected Data folder, so no missing-master badge', async () => {
-    const provider = new ModListProvider(new FakeSource([modA()]), undefined, dir, undefined, Promise.resolve(join(dir, 'Game', 'Data')));
+    const provider = new ModListProvider({ source: new FakeSource([modA()]), instanceRoot: dir, dataFolder: Promise.resolve(join(dir, 'Game', 'Data')) });
     const node = await modNode(provider);
     expect(node.iconPath).toEqual({ id: 'package' }); // Fallout4.esm found → status ok
   });
 
   it('badges the master as missing when no Data folder is resolved (degraded, empty vanilla set)', async () => {
-    const provider = new ModListProvider(new FakeSource([modA()]), undefined, dir); // dataFolder defaults to undefined
+    const provider = new ModListProvider({ source: new FakeSource([modA()]), instanceRoot: dir }); // dataFolder defaults to undefined
     const node = await modNode(provider);
     expect(node.iconPath).toEqual({ id: 'error' }); // Fallout4.esm unresolved → missing master
     expect(node.tooltip).toContain('Missing master: Fallout4.esm');

@@ -8,6 +8,21 @@ import { resolvePluginPaths } from './explicitSession';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
+/** Shared resolved-undefined default for an omitted `dataFolder` — hoisted out of
+ *  the constructor so it isn't a fresh async operation per instance. */
+const NO_DATA_FOLDER: Promise<string | undefined> = Promise.resolve(undefined);
+
+/** Constructor options for {@link PluginListProvider}. Field order matches
+ *  ModListProvider's identically-shaped options so the two siblings read the
+ *  same (issue #80: replaces five positional args whose order diverged). */
+export interface PluginListProviderOptions {
+  source: IModlistSource;
+  log?: (msg: string) => void;
+  reporter?: Reporter;
+  instanceRoot?: string;
+  dataFolder?: Promise<string | undefined>;
+}
+
 /** A single plugins.txt line, with a native checkbox mirroring its `*` (enabled)
  *  state. Toggling the checkbox writes plugins.txt immediately (wired via the
  *  view's `onDidChangeCheckboxState` handler in extension.ts). An order-aware
@@ -69,7 +84,11 @@ export class PluginListProvider
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginListNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
+  private readonly source: IModlistSource;
   private readonly log: (msg: string) => void;
+  private readonly reporter?: Reporter;
+  private readonly instanceRoot?: string;
+  private readonly dataFolder: Promise<string | undefined>;
   /** The last rendered plugin order, so a drop computes its index against exactly
    *  what the user dragged against (not a fresh read that an external edit could skew). */
   private lastOrder: string[] = [];
@@ -83,14 +102,12 @@ export class PluginListProvider
    *  `dataFolder` is the game's resolved Data folder (the single GameDirectory
    *  resolved once at the composition root, #78) — for locating vanilla/DLC/CC
    *  plugins no mod ships; a resolved `Promise<undefined>` degrades those lookups. */
-  constructor(
-    private readonly source: IModlistSource,
-    log?: (msg: string) => void,
-    private readonly reporter?: Reporter,
-    private readonly instanceRoot?: string,
-    private readonly dataFolder: Promise<string | undefined> = Promise.resolve(undefined),
-  ) {
-    this.log = log ?? (() => {});
+  constructor(options: PluginListProviderOptions) {
+    this.source = options.source;
+    this.log = options.log ?? (() => {});
+    this.reporter = options.reporter;
+    this.instanceRoot = options.instanceRoot;
+    this.dataFolder = options.dataFolder ?? NO_DATA_FOLDER;
   }
 
   /** Force a re-read of plugins.txt (the title-bar Refresh button). */
