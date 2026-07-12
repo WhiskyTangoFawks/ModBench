@@ -244,10 +244,15 @@ Kept scoped to the clicked row — batch/category actions are deliberately **not
 - **Prior art:** `metaIni.test.ts`, `modlistText.test.ts`, `statusChecker.test.ts`,
   `modOrganizerIni.test.ts` — same fixture-in / value-out style; instance fixtures live
   under `modbench/src/modmanager/test/fixtures/`.
-- **Reused integration seam** (`npm run test:integration`, real VS Code process) for the
-  thin adapter: opening the tab, the file-watcher reflecting a folder change, and a row
-  action dispatching. The Install hand-off needs no new logic tests — it delegates to the
-  already-tested `installFromArchive`. Trash/open/reveal stay thin.
+- **Reused integration seam** (`npm run test:integration`, real VS Code process) for
+  opening the tab and the file-watcher reflecting a folder change. Row-action message
+  dispatch is unit-tested instead (`DownloadsPanel.test.ts`, `npm run test:unit`) — no
+  API exists to inject an inbound webview message into a real `WebviewPanel` from the
+  integration harness, so `dispatchWebviewMessage`/`buildMessageHandlers` are extracted
+  and exported as a directly-testable seam, `vscode` stubbed the way `ModListProvider.test.ts`
+  does (see #71). The Install hand-off needs no new logic tests beyond that dispatch
+  wiring — it delegates to the already-tested `installFromArchive`. Trash/open/reveal
+  stay thin.
 - Add the new command id(s) to `EXPECTED_COMMANDS` (per `modbench/CLAUDE.md`).
 
 ## Out of Scope
