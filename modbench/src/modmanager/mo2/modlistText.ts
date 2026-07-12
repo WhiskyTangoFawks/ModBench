@@ -164,6 +164,25 @@ export function insertModAtWinningEnd(text: string, modName: string): string {
   });
 }
 
+const RESERVED_DIR_NAMES = new Set(['overwrite']);
+
+/** Which `mods/` folder names (from a directory listing) have no modlist.txt
+ *  entry yet, given the currently parsed `entries`. Excludes `overwrite`
+ *  (not a mod) and separator marker folders (`<name>_separator`, MO2's
+ *  on-disk record of a separator — already represented by a `separator`
+ *  entry, never a mod). Sorted for deterministic registration order. */
+export function unlistedModNames(dirNames: string[], entries: ModlistEntry[]): string[] {
+  const registered = new Set(
+    entries.map((e) => (e.kind === 'separator' ? `${e.name}${SEPARATOR_SUFFIX}` : e.name)),
+  );
+  return dirNames
+    .filter(
+      (name) =>
+        !RESERVED_DIR_NAMES.has(name) && !name.endsWith(SEPARATOR_SUFFIX) && !registered.has(name),
+    )
+    .sort((a, b) => a.localeCompare(b));
+}
+
 /** Remove a mod's entry line entirely. Throws if absent; throws if the name resolves to a separator. */
 export function removeModFromText(text: string, modName: string): string {
   return withBomPreserved(text, (bomless) => {

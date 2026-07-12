@@ -56,8 +56,8 @@ export interface IModlistSource {
   /** Remove the mod from modlist.txt and delete its mods/<name>/ directory. */
   removeMod(modName: string): Promise<void>;
   /** Install a new mod: copy `sourceDir`'s contents to mods/<name>/, write its
-   *  meta.ini, and append a disabled line at the bottom of modlist.txt (highest
-   *  priority). Rejects if a mod named `name` already exists. */
+   *  meta.ini, and insert a disabled line at the winning end (top) of
+   *  modlist.txt. Rejects if a mod named `name` already exists. */
   installMod(name: string, sourceDir: string, meta: InstallMeta): Promise<void>;
   /** Move a separator and all its children as a block to entry-index `toIndex`. */
   reorderSeparatorBlock(separatorName: string, toIndex: number): Promise<void>;

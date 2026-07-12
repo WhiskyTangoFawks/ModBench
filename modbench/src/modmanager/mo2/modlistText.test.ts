@@ -13,6 +13,7 @@ import {
   removeModFromText,
   renameSeparatorInText,
   setEnabledInText,
+  unlistedModNames,
 } from './modlistText';
 import type { Mod, Separator } from '../model';
 
@@ -452,6 +453,34 @@ describe('insertModAtWinningEnd — add a disabled mod at the winning end (first
 
   it('inserts into an empty file', () => {
     expect(insertModAtWinningEnd('', 'C')).toBe('-C\n');
+  });
+});
+
+describe('unlistedModNames — which mods/ folders need a modlist.txt entry', () => {
+  it('includes a folder with no matching modlist entry', () => {
+    const entries = parseModlist(defaultModlist());
+    const dirNames = ['SKK Fast Start new game (Fallout 4)', 'My New Mod'];
+    expect(unlistedModNames(dirNames, entries)).toEqual(['My New Mod']);
+  });
+
+  it('excludes a folder already registered as a mod', () => {
+    const entries = parseModlist(defaultModlist());
+    expect(unlistedModNames(['SKK Fast Start new game (Fallout 4)'], entries)).toEqual([]);
+  });
+
+  it('excludes the overwrite folder even when unregistered', () => {
+    expect(unlistedModNames(['overwrite'], [])).toEqual([]);
+  });
+
+  it('excludes a separator marker folder even though it has no "mod" entry', () => {
+    // "Unassigned (Modlist Development)" exists only as a separator entry, not a mod;
+    // its on-disk marker folder is "Unassigned (Modlist Development)_separator".
+    const entries = parseModlist(defaultModlist());
+    expect(unlistedModNames(['Unassigned (Modlist Development)_separator'], entries)).toEqual([]);
+  });
+
+  it('returns multiple new folders sorted', () => {
+    expect(unlistedModNames(['Zeta Mod', 'Alpha Mod'], [])).toEqual(['Alpha Mod', 'Zeta Mod']);
   });
 });
 
