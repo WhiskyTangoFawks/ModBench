@@ -170,7 +170,7 @@ async function setArchiveHidden(instanceRoot: string, name: string, hidden: bool
  *  than posting immediately after `webview.html` is set, which would race the
  *  page still loading. REFRESH is the manual re-scan. The rest are per-row
  *  actions carrying the row `name`. */
-function buildMessageHandlers(
+export function buildMessageHandlers(
   instanceRoot: string,
   log: (msg: string) => void,
   refresh: () => Promise<void>,
@@ -202,6 +202,22 @@ function buildMessageHandlers(
     [WEBVIEW_TO_EXTENSION.UNHIDE]: (name) =>
       void runRowAction('Unhide', name, log, () => setArchiveHidden(instanceRoot, name, false)),
   };
+}
+
+/** Route a raw inbound webview message to its handler by `type`, carrying the
+ *  row `name` when present. Extracted as its own seam (#71) so message dispatch
+ *  is directly testable without a real `vscode.WebviewPanel` — new message types
+ *  (#54/#55/#56) only need a new entry in `buildMessageHandlers`'s returned
+ *  table; this routing never changes. Malformed/unrecognized messages are
+ *  silently ignored, matching prior inline behavior. */
+export function dispatchWebviewMessage(
+  msg: unknown,
+  handlers: Record<string, (name: string) => void>,
+): void {
+  if (typeof msg === 'object' && msg !== null && 'type' in msg) {
+    const m = msg as WebviewToExtension;
+    handlers[m.type]?.('name' in m ? m.name : '');
+  }
 }
 
 export function openDownloadsPanel(
@@ -242,12 +258,7 @@ export function openDownloadsPanel(
   };
 
   const handlers = buildMessageHandlers(instanceRoot, log, refresh);
-  panel.webview.onDidReceiveMessage((msg: unknown) => {
-    if (typeof msg === 'object' && msg !== null && 'type' in msg) {
-      const m = msg as WebviewToExtension;
-      handlers[m.type]?.('name' in m ? m.name : '');
-    }
-  });
+  panel.webview.onDidReceiveMessage((msg: unknown) => dispatchWebviewMessage(msg, handlers));
 
   const watcher = createDownloadsWatcher(instanceRoot, () => void refresh());
   panel.onDidDispose(() => {
