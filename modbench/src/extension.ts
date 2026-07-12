@@ -178,6 +178,13 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       const name = await promptPluginName();
       if (name) await controller.createPlugin(name);
     }),
+    vscode.commands.registerCommand('modbench.filterPluginTree', () => {
+      const box = vscode.window.createInputBox();
+      box.placeholder = 'Filter plugins…';
+      box.onDidChangeValue((text) => treeProvider.setFilter(text));
+      box.onDidHide(() => { treeProvider.setFilter(''); box.dispose(); });
+      box.show();
+    }),
     vscode.commands.registerCommand('modbench.setFilter', async () => {
       const files = fs.existsSync(scriptsPath)
         ? fs.readdirSync(scriptsPath).filter(f => f.endsWith('.sql'))

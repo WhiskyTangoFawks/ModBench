@@ -113,6 +113,7 @@ describe('modbench command registration', () => {
     'modbench.refreshTree',
     'modbench.newPlugin',
     'modbench.copyAsOverrideInto',
+    'modbench.filterPluginTree',
     'modbench.setFilter',
     'modbench.clearFilter',
     'modbench.setFilterFromDocument',

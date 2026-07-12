@@ -183,6 +183,13 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private readonly refCache = new Map<string, CellReferences>();
   private readonly log: (msg: string) => void;
 
+  // Plugin-name filter (issue #70): a client-side substring match over whatever
+  // fetchPlugins() returns. Distinct axis from the SQL record filter (§2.6),
+  // which is backend/session state already reflected in that same response —
+  // this never needs to know whether a record filter is active.
+  private filterText = '';
+  private filterLower = '';
+
   constructor(private readonly repository: PluginRepository, log?: (msg: string) => void) {
     this.log = log ?? (() => {});
   }
@@ -191,6 +198,15 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this.pageCache.clear();
     this.interiorCache.clear();
     this.refCache.clear();
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** Live-filter top-level plugin nodes by case-insensitive filename substring.
+   *  Does not clear pageCache/interiorCache/refCache — unlike refresh(), typing
+   *  in the filter box shouldn't discard unrelated expanded-record pagination. */
+  setFilter(text: string): void {
+    this.filterText = text;
+    this.filterLower = text.toLowerCase();
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -256,7 +272,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private async fetchPlugins(): Promise<PluginTreeNode[]> {
     try {
       const plugins = await this.repository.getPlugins();
-      return plugins.map(p => new PluginNode(p));
+      const nodes = plugins.map(p => new PluginNode(p));
+      return this.filterText
+        ? nodes.filter(n => n.plugin.name.toLowerCase().includes(this.filterLower))
+        : nodes;
     } catch (e) {
       const message = this.err(e);
       this.log(`[PluginTreeProvider] fetchPlugins failed: ${message}`);
