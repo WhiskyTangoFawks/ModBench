@@ -97,6 +97,81 @@ describe('PluginTreeProvider.getChildren(root)', () => {
   });
 });
 
+// ── setFilter (plugin-name filter, issue #70) ──────────────────────────────────
+
+describe('PluginTreeProvider.setFilter (plugin-name filter)', () => {
+  function makeNamedPlugin(name: string): PluginMetadata {
+    return { ...makePlugin(0), name };
+  }
+
+  it('narrows top-level plugin nodes to a case-insensitive filename substring match', async () => {
+    const repo = makeRepository({
+      plugins: [makeNamedPlugin('Fallout4.esm'), makeNamedPlugin('ArmorMod.esp'), makeNamedPlugin('WeaponMod.esp')],
+    });
+    const provider = new PluginTreeProvider(repo);
+
+    provider.setFilter('armor');
+    const children = await provider.getChildren(undefined) as PluginNode[];
+
+    expect(children).toHaveLength(1);
+    expect(children[0].plugin.name).toBe('ArmorMod.esp');
+  });
+
+  it('matches regardless of query case', async () => {
+    const repo = makeRepository({
+      plugins: [makeNamedPlugin('Fallout4.esm'), makeNamedPlugin('ArmorMod.esp')],
+    });
+    const provider = new PluginTreeProvider(repo);
+
+    provider.setFilter('FALLOUT');
+    const children = await provider.getChildren(undefined) as PluginNode[];
+
+    expect(children).toHaveLength(1);
+    expect(children[0].plugin.name).toBe('Fallout4.esm');
+  });
+
+  it('returns an empty array (not an ErrorNode) when nothing matches', async () => {
+    const repo = makeRepository({ plugins: [makeNamedPlugin('Fallout4.esm')] });
+    const provider = new PluginTreeProvider(repo);
+
+    provider.setFilter('nonexistent');
+    const children = await provider.getChildren(undefined);
+
+    expect(children).toEqual([]);
+  });
+
+  it('restores the full plugin list when the filter is cleared', async () => {
+    const repo = makeRepository({
+      plugins: [makeNamedPlugin('Fallout4.esm'), makeNamedPlugin('ArmorMod.esp')],
+    });
+    const provider = new PluginTreeProvider(repo);
+
+    provider.setFilter('armor');
+    expect(await provider.getChildren(undefined)).toHaveLength(1);
+
+    provider.setFilter('');
+    const children = await provider.getChildren(undefined) as PluginNode[];
+
+    expect(children).toHaveLength(2);
+  });
+
+  it('composes with an already-filtered plugin list (e.g. from an active record filter) by narrowing further, without needing to know about it', async () => {
+    // Simulates the backend having already pruned the session to plugins with
+    // matching records under an active SQL record filter (§2.6) — the name
+    // filter must layer on top of whatever getPlugins() returns, not fight it.
+    const repo = makeRepository({
+      plugins: [makeNamedPlugin('ArmorMod.esp'), makeNamedPlugin('ArmorReplacer.esp')],
+    });
+    const provider = new PluginTreeProvider(repo);
+
+    provider.setFilter('replacer');
+    const children = await provider.getChildren(undefined) as PluginNode[];
+
+    expect(children).toHaveLength(1);
+    expect(children[0].plugin.name).toBe('ArmorReplacer.esp');
+  });
+});
+
 // ── getChildren(PluginNode) ───────────────────────────────────────────────────
 
 describe('PluginTreeProvider.getChildren(PluginNode)', () => {
