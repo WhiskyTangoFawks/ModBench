@@ -49,6 +49,23 @@ function makeReporter(log: (msg: string) => void, tag: string): Reporter {
   };
 }
 
+/** Shared cross-surface filter widget (Mods tree, Plugin List, Plugins tree):
+ *  a transient InputBox that live-narrows a list as the user types and
+ *  restores the unfiltered list on dismiss. Registers `commandId` to open it. */
+function registerFilterBoxCommand(
+  commandId: string,
+  placeholder: string,
+  setFilter: (text: string) => void,
+): vscode.Disposable {
+  return vscode.commands.registerCommand(commandId, () => {
+    const box = vscode.window.createInputBox();
+    box.placeholder = placeholder;
+    box.onDidChangeValue(setFilter);
+    box.onDidHide(() => { setFilter(''); box.dispose(); });
+    box.show();
+  });
+}
+
 /** Game-path resolver: explicit `game.*` overrides if both set, else autodetect.
  *  Shared by the session wizard, the deploy commands, and editing launch. */
 function makeDetectPaths(): DetectPaths {
@@ -178,13 +195,7 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       const name = await promptPluginName();
       if (name) await controller.createPlugin(name);
     }),
-    vscode.commands.registerCommand('modbench.filterPluginTree', () => {
-      const box = vscode.window.createInputBox();
-      box.placeholder = 'Filter plugins…';
-      box.onDidChangeValue((text) => treeProvider.setFilter(text));
-      box.onDidHide(() => { treeProvider.setFilter(''); box.dispose(); });
-      box.show();
-    }),
+    registerFilterBoxCommand('modbench.filterPluginTree', 'Filter plugins…', (text) => treeProvider.setFilter(text)),
     vscode.commands.registerCommand('modbench.setFilter', async () => {
       const files = fs.existsSync(scriptsPath)
         ? fs.readdirSync(scriptsPath).filter(f => f.endsWith('.sql'))
@@ -604,13 +615,7 @@ function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
       }
     }),
     vscode.commands.registerCommand('modbench.pluginListTree.refresh', () => pluginListProvider.refresh()),
-    vscode.commands.registerCommand('modbench.pluginListTree.filter', () => {
-      const box = vscode.window.createInputBox();
-      box.placeholder = 'Filter plugins…';
-      box.onDidChangeValue((text) => pluginListProvider.setFilter(text));
-      box.onDidHide(() => { pluginListProvider.setFilter(''); box.dispose(); });
-      box.show();
-    }),
+    registerFilterBoxCommand('modbench.pluginListTree.filter', 'Filter plugins…', (text) => pluginListProvider.setFilter(text)),
   ];
 }
 
