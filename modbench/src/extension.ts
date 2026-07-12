@@ -17,6 +17,7 @@ import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from './modmanager/ModListProvider';
 import { createOverwriteWatcher } from './modmanager/overwriteWatcher';
+import { createModsWatcher } from './modmanager/modsWatcher';
 import { OverwriteDecorationProvider } from './modmanager/OverwriteDecorationProvider';
 import { PluginListProvider, type PluginListNode } from './modmanager/PluginListProvider';
 import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './modmanager/gameDirectory';
@@ -644,6 +645,28 @@ function registerOverwriteView(
   ];
 }
 
+/** Auto-registration (#81): a live watcher that adds a modlist.txt entry for
+ *  any mods/<name>/ folder that appears while Modbench is running (dragged
+ *  into Explorer, extracted by hand, or installed some other way outside
+ *  Modbench) — reactive over manual, same as the overwrite/ watcher above. */
+function registerModsAutoRegisterWatcher(
+  instanceRoot: string,
+  modlistSource: Mo2ModlistSource,
+  modListProvider: ModListProvider,
+  log: (msg: string) => void,
+): vscode.Disposable {
+  return createModsWatcher(instanceRoot, () => {
+    modlistSource
+      .registerUnlistedMods()
+      .then((added) => {
+        if (added.length > 0) modListProvider.refresh();
+      })
+      .catch((err: unknown) => {
+        log(`[extension] auto-registering mods/ folders failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
+  });
+}
+
 interface LoadoutViewDeps {
   context: vscode.ExtensionContext;
   log: (msg: string) => void;
@@ -743,6 +766,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined
       ...registerModContextCommands({ instanceRoot, modlistSource, log, runModAction }),
       ...registerSeparatorCommands({ modlistSource, runModAction }),
       ...registerOverwriteView(instanceRoot, modListProvider, log),
+      registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, log),
       ...registerPluginListView({ modlistSource, log, reporter: makeReporter(log, 'pluginList'), instanceRoot, dataFolder }),
       ...registerDownloadsCommands({ context, openPanels, instanceRoot, log }),
     );

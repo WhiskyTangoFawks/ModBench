@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cp, mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Mo2ModlistSource } from './Mo2ModlistSource';
@@ -254,6 +254,46 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     // Children follow the separator
     expect(entries[unassignedIdx + 1].name).toBe('[NODELETE] Radfall');
     expect(entries[unassignedIdx + 2].name).toBe('Unofficial Fallout 4 Patch');
+  });
+
+  it('registerUnlistedMods adds a disabled winning-end entry for an untracked mods/ folder', async () => {
+    await mkdir(join(dir, 'mods', 'Hand Extracted Mod'));
+    const before = await readFile(modlistPath(), 'utf8');
+
+    const added = await src.registerUnlistedMods();
+
+    expect(added).toEqual(['Hand Extracted Mod']);
+    const entries = await src.readModlist();
+    expect(entries.at(0)).toMatchObject({ kind: 'mod', name: 'Hand Extracted Mod', enabled: false });
+    // Every previously-registered entry survives, byte-for-byte, below the new line.
+    const after = await readFile(modlistPath(), 'utf8');
+    expect(after.endsWith(before)).toBe(false); // sanity: file did change
+    expect(after).toContain(before.split('\r\n').slice(1).join('\r\n')); // original body preserved
+  });
+
+  it('registerUnlistedMods skips the overwrite folder and separator marker folders', async () => {
+    await mkdir(join(dir, 'mods', 'overwrite'));
+    // "Unassigned (Modlist Development)_separator" already exists in the fixture as a separator marker folder.
+    const added = await src.registerUnlistedMods();
+    expect(added).toEqual([]);
+  });
+
+  it('registerUnlistedMods is idempotent — a second call registers nothing new', async () => {
+    await mkdir(join(dir, 'mods', 'Hand Extracted Mod'));
+    await src.registerUnlistedMods();
+    const second = await src.registerUnlistedMods();
+    expect(second).toEqual([]);
+  });
+
+  it('registers multiple new folders in sorted order top-to-bottom (winning-most first)', async () => {
+    await mkdir(join(dir, 'mods', 'Zeta Mod'));
+    await mkdir(join(dir, 'mods', 'Alpha Mod'));
+
+    const added = await src.registerUnlistedMods();
+
+    expect(added).toEqual(['Alpha Mod', 'Zeta Mod']);
+    const entries = await src.readModlist();
+    expect(entries.slice(0, 2).map((e) => e.name)).toEqual(['Alpha Mod', 'Zeta Mod']);
   });
 
   it('getNexusSlug returns the Nexus game slug from ModOrganizer.ini', async () => {

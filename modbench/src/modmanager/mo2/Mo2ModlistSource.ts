@@ -13,6 +13,7 @@ import {
   removeModFromText,
   renameSeparatorInText,
   setEnabledInText,
+  unlistedModNames,
 } from './modlistText';
 import { movePluginsInText, setPluginEnabledInText } from './pluginsText';
 import { parseMetaIni, writeMetaIni } from './metaIni';
@@ -147,6 +148,32 @@ export class Mo2ModlistSource implements IModlistSource {
     const gameName = readGameName(await readFile(this.iniPath, 'utf8'));
     await writeFile(join(modDir, 'meta.ini'), writeMetaIni({ gameName, ...meta }));
     await this.modifyModlist((t) => insertModAtWinningEnd(t, name));
+  }
+
+  /** Add a disabled winning-end modlist.txt entry for every `mods/` folder
+   *  that isn't already registered (excluding `overwrite/` and separator
+   *  marker folders) — covers a mod folder dropped into `mods/` outside
+   *  Modbench (Explorer drag-in, hand-extracted archive). Returns the names
+   *  it registered, so callers can skip a no-op refresh. Idempotent: a name
+   *  already registered by an earlier call is excluded on the next one. */
+  async registerUnlistedMods(): Promise<string[]> {
+    let dirents;
+    try {
+      dirents = await readdir(join(this.instanceRoot, 'mods'), { withFileTypes: true });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []; // no mods/ folder yet
+      throw err;
+    }
+    const dirNames = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
+    const entries = parseModlist(await readFile(await this.modlistPath(), 'utf8'));
+    const names = unlistedModNames(dirNames, entries);
+    // insertModAtWinningEnd always lands its new line above whatever's
+    // currently first, so inserting in reverse-sorted order leaves the batch
+    // in ascending sorted order top-to-bottom on disk.
+    for (const name of [...names].reverse()) {
+      await this.modifyModlist((t) => insertModAtWinningEnd(t, name));
+    }
+    return names;
   }
 
   async reorderSeparatorBlock(separatorName: string, toIndex: number): Promise<void> {
