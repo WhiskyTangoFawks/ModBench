@@ -94,8 +94,88 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             };
         }
 
+        AddHeaderSchemaIfAvailable(schemas, category, assembly, getterTypeToTable, logger);
+
         return new GameSchemaCache(schemas, getterTypeToTable);
     }
+
+    private static void AddHeaderSchemaIfAvailable(
+        Dictionary<string, RecordTableSchema> schemas, GameCategory category, Assembly assembly,
+        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+    {
+        if (BuildHeaderSchema(category, assembly, getterTypeToTable, logger) is { } headerSchema)
+            schemas["header"] = headerSchema;
+    }
+
+    // ── Header schema (Issue #1 slice A1) ──────────────────────────────────────
+    // A mod header is not a major record in Mutagen (no FormKey/EditorID) — it can't be
+    // discovered by the major-record-getter scan above, so it gets one hand-assembled schema
+    // entry instead. Author/Flags come from a second small reflection pass over the per-game
+    // ModHeader getter type (I{category}ModGetter.ModHeader), reusing the same leaf-classification
+    // helpers used everywhere else; Masters comes straight off the game-agnostic IModGetter — no
+    // reflection needed, since MasterReferences is already exposed generically.
+    //
+    // ColumnSpec.Extract is unused here (it's Func<IMajorRecordGetter, object?>; a header is never
+    // one, and the header table bypasses the major-record indexing loop entirely) — the real
+    // per-plugin extraction is HeaderColumnExtract, positionally aligned with RecordColumns.
+    private static RecordTableSchema? BuildHeaderSchema(
+        GameCategory category, Assembly assembly,
+        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+    {
+        var modGetterType = assembly.GetType($"Mutagen.Bethesda.{category}.I{category}ModGetter");
+        var modHeaderProp = modGetterType?.GetProperty("ModHeader", BindingFlags.Public | BindingFlags.Instance);
+        if (modHeaderProp == null)
+        {
+            logger.LogWarning("No ModHeader property found for {Category}; header record unavailable", category);
+            return null;
+        }
+
+        var headerGetterType = modHeaderProp.PropertyType;
+        var columns = new List<ColumnSpec>();
+        var extracts = new List<Func<IModGetter, object?>>();
+
+        var authorProp = headerGetterType.GetProperty("Author", BindingFlags.Public | BindingFlags.Instance);
+        if (authorProp != null && ClassifyLeaf(authorProp, authorProp.PropertyType, getterTypeToTable) is { } authorLeaf)
+        {
+            columns.Add(new ColumnSpec("author", authorProp.Name, authorLeaf.DuckDbType, _ => null,
+                authorLeaf.ApiType, authorLeaf.ValidFormKeyTypes, authorLeaf.EnumValues, Apply: null));
+            extracts.Add(HeaderPropertyExtract(modHeaderProp, authorLeaf.Get));
+        }
+        else
+        {
+            logger.LogWarning("No Author property found on {HeaderType}; header author column omitted", headerGetterType);
+        }
+
+        var flagsProp = headerGetterType.GetProperty("Flags", BindingFlags.Public | BindingFlags.Instance);
+        if (flagsProp?.PropertyType.IsEnum == true)
+        {
+            var flagsLeaf = ClassifyEnumLeaf(flagsProp, flagsProp.PropertyType);
+            columns.Add(new ColumnSpec("flags", flagsProp.Name, flagsLeaf.DuckDbType, _ => null,
+                flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, flagsLeaf.EnumValues, Apply: null,
+                IsBitmask: flagsLeaf.IsBitmask, EnumBitValues: flagsLeaf.EnumBitValues));
+            extracts.Add(HeaderPropertyExtract(modHeaderProp, flagsLeaf.Get));
+        }
+        else
+        {
+            logger.LogWarning("No Flags enum property found on {HeaderType}; header flags column omitted", headerGetterType);
+        }
+
+        var mastersElement = new FieldMetadata("", "string", false, Empty, Empty);
+        columns.Add(new ColumnSpec("masters", "MasterReferences", "VARCHAR", _ => null, "array",
+            Empty, Empty, Apply: null, IsArray: true, ElementType: mastersElement));
+        extracts.Add(mod => JsonSerializer.Serialize(mod.MasterReferences.Select(r => r.Master.FileName.ToString()).ToList()));
+
+        return new RecordTableSchema
+        {
+            TableName = "header",
+            RecordType = headerGetterType,
+            RecordColumns = columns,
+            HeaderColumnExtract = extracts,
+        };
+    }
+
+    private static Func<IModGetter, object?> HeaderPropertyExtract(PropertyInfo modHeaderProp, Func<object, object?> leafGet) =>
+        mod => modHeaderProp.GetValue(mod) is { } header ? leafGet(header) : null;
 
     // Builds the record-lifecycle delegates bound to the mod's typed group for this record
     // type. Every delegate is null when the group or a mutable setter type cannot be resolved.

@@ -7,7 +7,7 @@ import { BackendManager } from './medit/BackendManager';
 import { createApiClient } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController } from './medit/SessionController';
-import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeNode, PluginTreeProvider, RecordNode } from './medit/PluginTreeProvider';
+import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
 import { ChangeGroupNode, ChangeGroupsTreeProvider } from './medit/ChangeGroupsTreeProvider';
 import { ApiPluginRepository } from './medit/PluginRepository';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
@@ -224,6 +224,13 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       await controller.setFilter(sql);
     }),
     vscode.commands.registerCommand('modbench.clearFilter', () => controller.clearFilter()),
+    vscode.commands.registerCommand('modbench.openHeader', (node?: PluginNode) => {
+      if (!node?.plugin?.name) return;
+      const pluginName = node.plugin.name;
+      void vscode.commands.executeCommand('modbench.openEditor', {
+        formKey: headerFormKeyFor(pluginName), label: pluginName,
+      });
+    }),
     vscode.commands.registerCommand('modbench.showReferencedBy', (node?: RecordNode) => {
       if (!node?.record?.formKey) return;
       openReferencedByPanel(

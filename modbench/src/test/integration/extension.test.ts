@@ -108,6 +108,7 @@ describe('modbench command registration', () => {
   const EXPECTED_COMMANDS = [
     'modbench.openEditor',
     'modbench.openCompare',
+    'modbench.openHeader',
     'modbench.closeMedit',
     'modbench.reloadSession',
     'modbench.refreshTree',

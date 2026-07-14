@@ -28,8 +28,14 @@ public sealed class RecordQueryService(
             .Select(PluginResponse.FromMetadata)];
     }
 
+    // The header isn't a browsable record type (User Story 7's "expand a plugin -> record types"
+    // listing, or an unscoped "all types" search) — it's reached only via "Open Header" on the
+    // plugin node. It stays a real schemas.Keys entry so FindRecordType/GetRecord/GetCompare (a
+    // direct FormKey lookup) can still resolve it; only these two browse-all-types paths exclude it.
+    private const string HeaderTableName = "header";
+
     public IReadOnlyList<string> GetRecordTypes() =>
-        [.. RequireSchemas().Keys.Order()];
+        [.. RequireSchemas().Keys.Where(t => t != HeaderTableName).Order()];
 
     public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset)
     {
@@ -45,7 +51,8 @@ public sealed class RecordQueryService(
         }
         else
         {
-            committed = repository.SearchRecords([.. schemas.Keys], plugin, search, limit, offset);
+            committed = repository.SearchRecords(
+                [.. schemas.Keys.Where(t => t != HeaderTableName)], plugin, search, limit, offset);
         }
 
         if (plugin == null || offset > 0)
@@ -131,6 +138,7 @@ public sealed class RecordQueryService(
     {
         var repository = RequireRepository();
         var counts = RequireSchemas().Keys
+            .Where(t => t != HeaderTableName)
             .Select(t => (Type: t, Count: repository.CountRecordsForPlugin(t, plugin)))
             .Where(x => x.Count > 0)
             .ToDictionary(x => x.Type, x => x.Count, StringComparer.OrdinalIgnoreCase);

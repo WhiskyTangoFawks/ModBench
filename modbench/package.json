@@ -108,6 +108,11 @@
         "title": "Modbench: Open Compare"
       },
       {
+        "command": "modbench.openHeader",
+        "title": "Modbench: Open Header",
+        "icon": "$(file-text)"
+      },
+      {
         "command": "modbench.reloadSession",
         "title": "Modbench: Reload Session"
       },
@@ -401,6 +406,16 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "modbench.openHeader",
+          "when": "view == modbench.pluginTree && (viewItem == plugin || viewItem == pluginImmutable)",
+          "group": "modbench@1"
+        },
+        {
+          "command": "modbench.openHeader",
+          "when": "view == modbench.pluginTree && (viewItem == plugin || viewItem == pluginImmutable)",
+          "group": "inline"
+        },
         {
           "command": "modbench.copyAsOverrideInto",
           "when": "view == modbench.pluginTree && viewItem == record",

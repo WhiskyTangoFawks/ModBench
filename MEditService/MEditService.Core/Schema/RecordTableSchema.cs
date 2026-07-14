@@ -49,4 +49,13 @@ public sealed class RecordTableSchema
     /// Null when the group property could not be resolved via reflection.
     /// </summary>
     public Action<IMod, IMajorRecord>? AddExisting { get; init; }
+
+    /// <summary>
+    /// Per-plugin column extractors for the synthetic "header" table only (null for every
+    /// other schema). A mod header is never an <see cref="IMajorRecordGetter"/>, so
+    /// <see cref="ColumnSpec.Extract"/> is structurally unusable for it — this is the real
+    /// extraction path, positionally aligned with <see cref="RecordColumns"/>, invoked once per
+    /// plugin against the mod itself rather than per-record.
+    /// </summary>
+    public IReadOnlyList<Func<IModGetter, object?>>? HeaderColumnExtract { get; init; }
 }
