@@ -58,4 +58,20 @@ public sealed class RecordTableSchema
     /// plugin against the mod itself rather than per-record.
     /// </summary>
     public IReadOnlyList<Func<IModGetter, object?>>? HeaderColumnExtract { get; init; }
+
+    /// <summary>
+    /// Per-column write delegates for the synthetic "header" table only (null for every other
+    /// schema). The symmetric write counterpart to <see cref="HeaderColumnExtract"/>: because a
+    /// mod header is never an <see cref="IMajorRecord"/>, <see cref="ColumnSpec.Apply"/> can't
+    /// write it. Positionally aligned with <see cref="RecordColumns"/>; a null element means the
+    /// column is read-only (e.g. masters, edited via a dedicated slice).
+    /// </summary>
+    public IReadOnlyList<Action<IMod, JsonElement>?>? HeaderColumnApply { get; init; }
+
+    /// <summary>
+    /// The bit value of the light-master ("ESL") flag within the header's <c>flags</c> bitmask
+    /// (e.g. Fallout4 <c>Small</c>, Skyrim <c>LightMaster</c>). Null when the flags column or a
+    /// recognised light-master member is absent. Used for stage-time ESL-eligibility validation.
+    /// </summary>
+    public long? EslFlagValue { get; init; }
 }

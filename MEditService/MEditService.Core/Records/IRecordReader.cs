@@ -10,6 +10,10 @@ public interface IRecordReader
     VmadData? GetVmad(string formKey, string plugin);
     int CountRecordsForPlugin(string tableName, string plugin);
     string? FindRecordType(string formKey);
+
+    // Form keys of records native to the plugin (the FormKey's own ModKey == plugin), across all
+    // real record tables. Used for ESL-eligibility validation (issue #85).
+    IReadOnlyList<string> GetNativeFormKeys(string plugin);
     PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset);
     IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);

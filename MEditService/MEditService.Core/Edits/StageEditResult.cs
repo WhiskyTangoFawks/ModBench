@@ -9,4 +9,5 @@ public abstract record StageEditResult
     public sealed record NoSession() : StageEditResult;
     public sealed record BlockedByGroup(Guid GroupId) : StageEditResult;
     public sealed record InvalidReferences(IReadOnlyList<ReferenceValidationError> Errors) : StageEditResult;
+    public sealed record EslIneligible(string Plugin, IReadOnlyList<string> FormKeys) : StageEditResult;
 }

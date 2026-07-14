@@ -888,6 +888,60 @@ public class SchemaReflectorTests
     }
 
     [Fact]
+    public void GetSchemas_Header_HeaderColumnApply_HasOneEntryPerColumnInOrder()
+    {
+        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
+        Assert.NotNull(schema.HeaderColumnApply);
+        Assert.Equal(schema.RecordColumns.Count, schema.HeaderColumnApply!.Count);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_HeaderColumnApply_AuthorAndFlagsWritable_MastersReadOnly()
+    {
+        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
+        int Index(string name) => schema.RecordColumns.ToList().FindIndex(c => c.Name == name);
+
+        Assert.NotNull(schema.HeaderColumnApply![Index("author")]);
+        Assert.NotNull(schema.HeaderColumnApply![Index("flags")]);
+        Assert.Null(schema.HeaderColumnApply![Index("masters")]);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_HeaderColumnApply_AuthorWritesModHeaderAuthor()
+    {
+        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
+        var authorIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "author");
+
+        var mod = new Fallout4Mod(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
+        var json = System.Text.Json.JsonSerializer.SerializeToElement("New Author");
+        schema.HeaderColumnApply![authorIndex]!(mod, json);
+
+        Assert.Equal("New Author", mod.ModHeader.Author);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_HeaderColumnApply_FlagsWritesModHeaderFlags()
+    {
+        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
+        var flagsIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "flags");
+
+        var mod = new Fallout4Mod(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
+        var bitmask = (long)Fallout4ModHeader.HeaderFlag.Small;
+        var json = System.Text.Json.JsonSerializer.SerializeToElement(
+            bitmask.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        schema.HeaderColumnApply![flagsIndex]!(mod, json);
+
+        Assert.Equal(Fallout4ModHeader.HeaderFlag.Small, mod.ModHeader.Flags);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_EslFlagValue_IsTheSmallBit()
+    {
+        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
+        Assert.Equal((long)Fallout4ModHeader.HeaderFlag.Small, schema.EslFlagValue);
+    }
+
+    [Fact]
     public void GetSchemas_Header_HeaderColumnExtract_MastersReadsPluginFilenamesInOrder()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);

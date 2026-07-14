@@ -136,6 +136,31 @@ public sealed class EditOrchestratorTests
     }
 
     [Fact]
+    public void StageEdit_HeaderOnImmutablePlugin_ReturnsPluginImmutable()
+    {
+        // Issue #85 slice 6: an immutable plugin's header exposes no working edit.
+        var data = new PluginFixtureBuilder("eo-header-immutable")
+            .WithPlugin("TestPlugin.esp", mod => mod.Npcs.AddNew("N"))
+            .Build();
+        using (data)
+        {
+            var sessionStub = new StubSessionManagerWithImmutablePlugin(
+                data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4, "TestPlugin.esp");
+            var reflector = new SchemaReflector();
+            var changes = DuckDbTestFactory.MakePendingChangeService();
+            var query = new RecordQueryService(sessionStub, changes, reflector, new ConflictClassifier());
+            var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
+            var orchestrator = new EditOrchestrator(sessionStub, query, writer, changes, reflector);
+
+            var fields = new Dictionary<string, JsonElement> { ["author"] = J("\"Jane Modder\"") };
+            var result = orchestrator.StageEdit("000000:TestPlugin.esp", "TestPlugin.esp", fields, "user", null);
+
+            var immutable = Assert.IsType<StageEditResult.PluginImmutable>(result);
+            Assert.Equal("TestPlugin.esp", immutable.Plugin);
+        }
+    }
+
+    [Fact]
     public void StageEdit_ReadOnlyField_ReturnsReadOnlyFields()
     {
         FormKey npcKey = default;

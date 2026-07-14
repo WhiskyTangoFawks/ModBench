@@ -467,6 +467,31 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return null;
     }
 
+    public IReadOnlyList<string> GetNativeFormKeys(string plugin)
+    {
+        var tables = RequireSchemas().Keys.Where(t => t != HeaderIndexer.TableName).ToList();
+        if (tables.Count == 0) return [];
+
+        var union = string.Join("\nUNION ALL\n",
+            tables.Select(t => $"SELECT form_key FROM \"{t}\" WHERE plugin = $1"));
+
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"SELECT DISTINCT form_key FROM ({union})";
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        using var reader = cmd.ExecuteReader();
+
+        var result = new List<string>();
+        while (reader.Read())
+        {
+            var fk = reader.GetString(0);
+            var colon = fk.IndexOf(':');
+            // "Native" = the record's own FormKey ModKey is this plugin (not an override of a master).
+            if (colon > 0 && fk.AsSpan(colon + 1).Equals(plugin, StringComparison.OrdinalIgnoreCase))
+                result.Add(fk);
+        }
+        return result;
+    }
+
     public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset)
     {
         if (tableNames.Count == 0)

@@ -59,6 +59,7 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         var placedCtx = new PlacedWriteContext(gameRelease, linkCache);
         ApplyCreateChanges(byFormKey, mod, schemas, placedCtx, results, createFailed);
         ApplyFieldChanges(byFormKey, mod, schemas, placedCtx, results);
+        ApplyHeaderChanges(byFormKey, mod, schemas, results);
         ApplyDeleteChanges(byFormKey, mod, schemas, placedCtx, results);
         ApplyRenumberChanges(byFormKey, mod, schemas, results);
 
@@ -94,8 +95,24 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         if (VmadPath.IsVmadPath(fieldPath)) return false;
         var schemas = _schemaReflector.GetSchemas(release);
         if (!schemas.TryGetValue(recordType, out var schema)) return true;
+
+        // The header's columns are written via HeaderColumnApply (ModHeader isn't an IMajorRecord,
+        // so ColumnSpec.Apply is always null for it) — resolve editability from that list instead.
+        if (schema.HeaderColumnApply is { } headerApply)
+        {
+            var idx = HeaderColumnIndex(schema, fieldPath);
+            return idx < 0 || headerApply[idx] == null;
+        }
+
         var col = schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath);
         return col?.Apply == null;
+    }
+
+    private static int HeaderColumnIndex(RecordTableSchema schema, string fieldPath)
+    {
+        for (var i = 0; i < schema.RecordColumns.Count; i++)
+            if (schema.RecordColumns[i].Name == fieldPath) return i;
+        return -1;
     }
 
     // Carries the release + link cache needed by the cell-aware placed-record write paths
@@ -241,9 +258,12 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
     {
         foreach (var group in byFormKey)
         {
+            // Header field edits are applied to mod.ModHeader by ApplyHeaderChanges — the header
+            // is not an IMajorRecord, so it would never be found by the record lookup below.
             var fieldChanges = group.Where(c =>
-                c.ChangeType == PendingChangeConstants.FieldEditChangeType ||
-                c.ChangeType == PendingChangeConstants.VmadStructOpChangeType).ToList();
+                (c.ChangeType == PendingChangeConstants.FieldEditChangeType ||
+                 c.ChangeType == PendingChangeConstants.VmadStructOpChangeType) &&
+                c.RecordType != Records.HeaderIndexer.TableName).ToList();
             if (fieldChanges.Count == 0) continue;
 
             if (!FormKey.TryFactory(group.Key, out var formKey))
@@ -266,6 +286,40 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
             foreach (var change in fieldChanges)
                 results.Record(TryApplyField(record, change, schemas), change.FieldPath);
         }
+    }
+
+    // Applies header field edits (author/flags) onto mod.ModHeader via the schema's
+    // HeaderColumnApply delegates. A null delegate (e.g. masters) is read-only.
+    private static void ApplyHeaderChanges(
+        IEnumerable<IGrouping<string, PendingChange>> byFormKey,
+        IMod mod,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        ApplyResults results)
+    {
+        foreach (var group in byFormKey)
+        {
+            foreach (var change in group.Where(c =>
+                c.ChangeType == PendingChangeConstants.FieldEditChangeType &&
+                c.RecordType == Records.HeaderIndexer.TableName))
+            {
+                results.Record(TryApplyHeaderField(mod, change, schemas), change.FieldPath);
+            }
+        }
+    }
+
+    private static ApplyOutcome TryApplyHeaderField(
+        IMod mod, PendingChange change, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (!schemas.TryGetValue(change.RecordType, out var schema) || schema.HeaderColumnApply == null)
+            return ApplyOutcome.NotFound;
+
+        var idx = HeaderColumnIndex(schema, change.FieldPath);
+        if (idx < 0) return ApplyOutcome.NotFound;
+
+        var apply = schema.HeaderColumnApply[idx];
+        if (apply == null) return ApplyOutcome.ReadOnly;
+        apply(mod, change.NewValue);
+        return ApplyOutcome.Applied;
     }
 
     private static void ApplyDeleteChanges(
