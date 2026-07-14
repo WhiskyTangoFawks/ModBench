@@ -29,11 +29,10 @@ internal static class HeaderIndexer
         row.AppendValue(false);   // is_winner: corrected by UpdateWinners(), same as every other table
         row.AppendNullValue();    // editor_id: headers have no EditorID concept
 
+        // RecordColumns and HeaderColumnExtract are always built in lockstep, one extractor per
+        // column, by SchemaReflector.BuildHeaderSchema — no bounds check needed here.
         for (int i = 0; i < headerSchema.RecordColumns.Count; i++)
-        {
-            var value = i < extracts.Count ? extracts[i](pluginMod) : null;
-            DuckDbRecordRepository.AppendTyped(row, value, headerSchema.RecordColumns[i].DuckDbType);
-        }
+            DuckDbRecordRepository.AppendTyped(row, extracts[i](pluginMod), headerSchema.RecordColumns[i].DuckDbType);
 
         row.EndRow();
     }

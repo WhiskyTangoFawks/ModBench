@@ -824,6 +824,28 @@ public class SchemaReflectorTests
     }
 
     [Fact]
+    public void GetSchemas_Header_MastersColumn_ToFieldMetadata_IsArrayTrue()
+    {
+        // The column itself must be flagged as an array (not just ApiType == "array") — this is
+        // what ArrayRowGroup on the frontend keys off to render masters as a repeatable list.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["header"].RecordColumns.Single(c => c.Name == "masters");
+        Assert.True(col.ToFieldMetadata().IsArray);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_MastersColumn_ElementType_IsNotItselfAnArray()
+    {
+        // Each master is a single plugin-filename string, not a nested array — the element
+        // FieldMetadata's own IsArray must be false, or the frontend would try to render each
+        // master entry as a further repeatable list.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["header"].RecordColumns.Single(c => c.Name == "masters");
+        Assert.NotNull(col.ElementType);
+        Assert.False(col.ElementType!.IsArray);
+    }
+
+    [Fact]
     public void GetSchemas_Header_HeaderColumnExtract_HasOneDelegatePerColumnInOrder()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
