@@ -1,7 +1,6 @@
 # Downloads — Surface Specification
 
-**Status: Specced — MVP ready to build.** This spec supersedes the earlier skeleton;
-its shape was confirmed in a grilling session (2026-07-09). Feature landscape:
+ Feature landscape:
 [mod-manager feature inventory](../research/mod-manager-feature-inventory.md).
 
 Mod Management context — operates on downloads, archives, and mods; never on records.
@@ -118,10 +117,15 @@ so the loadout and the Downloads view stay consistent with MO2's own bookkeeping
 - This spec covers the **Downloads tab surface only** — the editor-tab webview, its
   table, toolbar, row actions, and the live file view over `downloads/`.
 - The `nxm://` protocol handler and Nexus API integration (issue #5) are **out of scope**
-  — a download/protocol handler, not UI. When built it will populate the same
-  `downloads/` folder this tab watches.
+  — a download/protocol handler, not UI. **Deferred past alpha to milestone "7 — Nexus
+  integration":** `nxm://` is a signed handle, not a download URL, so it (and any metadata
+  enrichment) requires the *authenticated* Nexus API, which requires registering Modbench
+  as a Nexus application (staff outreach). Modbench does not intercept Nexus downloads —
+  the browser owns the transfer and this tab's file-watcher surfaces the result. When
+  built, the handler will populate the same `downloads/` folder this tab watches.
 - Update checks (issue #6) are **out of scope** — a Mods-tab concern (you update an
-  *installed* mod).
+  *installed* mod), and likewise deferred to milestone "7 — Nexus integration" (needs the
+  authenticated Nexus API).
 - Endorsements / mod tracking are **out of scope** — a Mods-tab concern.
 
 ### Downloads directory
@@ -258,7 +262,10 @@ Kept scoped to the clicked row — batch/category actions are deliberately **not
 ## Out of Scope
 
 - **`nxm://` protocol handler + Nexus API integration** (issue #5) — populates the same
-  `downloads/` folder later; can lift from `modorganizer/` source when built.
+  `downloads/` folder later; can lift from `modorganizer/` source when built. **Deferred
+  past alpha to milestone "7 — Nexus integration"** — needs an OS-level `nxm://` broker
+  (MO2's `nxmhandler.exe` pattern) plus the authenticated Nexus API, gated on registering
+  Modbench as a Nexus application (staff outreach).
 - **Update checks** (issue #6) and **endorsements / mod tracking** — Mods-tab concerns.
 - **Batch cleanup actions** (Delete/Hide Installed / Uninstalled / All) — deferred to a
   separate "Batch downloads actions" design issue (#57); a multi-row selection model comes

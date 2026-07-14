@@ -6,16 +6,16 @@ plugin files (`.esp`/`.esm`/`.esl`).
 
 ## Product Structure
 
-**Modbench** is the product — the modding IDE, split across two bounded contexts:
+**Modbench** is the product — the modding IDE.
 
-- **Mod Management** (Loadout view, implemented; Downloads, planned) — lives entirely
-  in the extension (`modbench/src/modmanager/`); never touches the C# backend.
-- **Editing** (mEdit view, implemented; Plugins/load-order, planned) — lives in the C#
-  backend (`MEditService/`) plus the editor webviews.
+- **Mod Management** — lives entirely in the extension (`modbench/src/modmanager/`); 
+  never touches the C# backend.
+  4 Tab views: Mods, Plugins, Downloads, and mEdit.
+- mEdit is a thin view, over a c+ mutagen backend.
 
-Current surface status: [docs/specs/README.md](docs/specs/README.md). Context split
-and vocabulary boundary: [CONTEXT-MAP.md](CONTEXT-MAP.md), [CONTEXT.md](CONTEXT.md)
-(Editing), [modbench/src/modmanager/CONTEXT.md](modbench/src/modmanager/CONTEXT.md)
+UX Specifications: `docs/specs/` 
+Context split and vocabulary boundary: `CONTEXT-MAP.md`, `CONTEXT.md` (Editing), `modbench/src/modmanager/CONTEXT.md`
+
 (Mod Management) — "mod" is forbidden in Editing, "record"/"FormKey" is absent in Mod
 Management; check your context before naming things.
 
@@ -24,21 +24,18 @@ Module-level detail and per-context invariants: [modbench/CLAUDE.md](modbench/CL
 
 ## Key Invariants
 
-- Backend and extension are always started independently by the user; nothing spawns
-  the other.
 - Modbench must generalize across Bethesda games, not lock to FO4 — each bounded
   context enforces this in its own way (see the sub-project docs linked above).
 
-Rationale: [docs/adr/](docs/adr/).
+Rationale: `docs/adr/`.
 
 ## References
 
-`Mutagen/`, `TES5Edit/`, and `modorganizer/` are local clones for API/record-definition
-and behavioral reference only — grep them, never modify them. Mutagen docs start at
-`Mutagen/docs/Big-Cheat-Sheet.md`; TES5Edit's `wbDefinitionsFO4.pas` has FO4 record
-defs (`wbArrayS` = sorted, `wbArray` = unsorted); `modorganizer/` is the MO2 C++ source
-(reference for matching MO2 behavior — e.g. `src/downloadmanager.cpp` for download
-`.meta` state semantics).
+all project in the .references folder are local clones  are local clones for API/record-definition
+and behavioral reference only — grep them, never modify them.
+`Mutagen/docs/Big-Cheat-Sheet.md`; 
+TES5Edit's `wbDefinitionsFO4.pas` has FO4 record defs (`wbArrayS` = sorted, `wbArray` = unsorted); 
+`modorganizer/` is the MO2 C++ source (reference for matching MO2 behavior — e.g. `src/downloadmanager.cpp` for download `.meta` state semantics).
 
 ## Development Workflow
 

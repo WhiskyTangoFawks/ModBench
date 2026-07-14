@@ -1,9 +1,5 @@
 # Mods (Loadout) — Surface Specification
 
-**Status: Implemented.** Living spec for the Loadout surface — the Mod Management
-context's primary view (Modbench-3/4/6 shipped; Modbench-9 plugin load order planned,
-see [plugins.md](plugins.md)).
-
 Mod Management context — operates on mods and files, never on records or FormKeys. The
 mEdit-context vocabulary ("record", "FormKey") is absent here by construction
 ([CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary:

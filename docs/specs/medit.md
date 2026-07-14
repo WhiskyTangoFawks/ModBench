@@ -1,10 +1,5 @@
 # mEdit — Surface Specification
 
-**Status: Implemented.** Living spec for the mEdit view — Modbench's record
-viewing/editing/comparing surface, and the only surface that depends on the C# backend.
-Shipped incrementally; this document describes current behavior plus clearly-marked
-planned pieces.
-
 Editing context — operates on **records**, **FormKeys**, and **plugins** (physical
 `.esp`/`.esm`/`.esl` files loaded by the backend); the Mod-Management vocabulary ("mod",
 "loadout", "deploy") belongs to the sibling surfaces, not here
@@ -16,7 +11,7 @@ Loadout surface that launches this one is specified in [mods.md](mods.md); the p
 Mod-Management Plugins load-order tree — a *different* "Plugins" surface — in
 [plugins.md](plugins.md).
 
-**Vocabulary note:** the Editing "Plugins tree" here is the entry point into per-record
+**Vocabulary note:** the mEdit "Plugins tree" here is the entry point into per-record
 browsing and requires a spawned backend; it is distinct from the Mod-Management **Plugin
 List** ([plugins.md](plugins.md)), which manages `plugins.txt` load order and runs without
 the backend. Both display as "Plugins" but are visible in mutually exclusive view modes and
@@ -153,10 +148,15 @@ records straight to their physical plugin files and never requires a deploy.
     override or as a new record into another plugin, and remove records (with a confirmation
     that lists everything selected), so that the common authoring operations are all in the
     tree.
-38. As a user, I want plugin-level master and form operations — add/sort/clean masters,
-    inject forms into a master, compact FormIDs, convert to ESL/ESM, merge into another
-    plugin — available on editable plugins only, so that I can maintain a plugin's headers
-    and form space without leaving the tree.
+38. As a user, I want to open a plugin's header as a first-class record by clicking the
+    plugin node — viewing its author, masters, and flags in a single-column panel, and (on
+    editable plugins) editing them through pending changes: set the author, toggle ESL/ESM
+    (rejected at stage time when the plugin isn't ESL-eligible), and add a master chosen from
+    the loaded plugins (validated so I can't make the plugin unloadable) — so that
+    maintaining a plugin's header is staged and reviewable like any other edit. *(Multi-step
+    form-space operations — compact FormIDs, copy-as-underride, merge, and sort/clean/remove
+    masters — are deferred, delivered later as Python scripts over these primitives, not
+    bespoke commands.)*
 39. As a user, I want to create and manage placed references (REFR/ACHR) inside a cell's
     persistent or temporary group, so that I can edit world placement spatially.
 40. As a user, I want to run a script against the whole session or a specific record/plugin
@@ -212,11 +212,13 @@ records straight to their physical plugin files and never requires a deploy.
   group nodes plus flat record-type nodes), and a lazy-counted **Conflicts** node listing
   conflict records. `WRLD`/`CELL`/`REFR`/`ACHR` are shown spatially (below) and hidden from
   the flat record-type list.
-- **Plugin nodes**: labeled by filename, with a **lock icon on immutable plugins**. Their
-  context menu exposes New Plugin…, Copy as Override Into…, and — on editable plugins only —
-  Add New Record…, Compact FormIDs, Convert to ESL/ESM, Add/Sort/Clean Masters, Inject Forms
-  into Master…, Run Script…, and Merge Into…. Each is a confirmation or picker as
-  appropriate; destructive ones confirm.
+- **Plugin nodes**: labeled by filename, with a **lock icon on immutable plugins**. An
+  **Open Header** action (context menu; also available inline) opens the plugin's **header
+  record** — author, masters, flags — as a single-column record panel. Their context menu
+  exposes New Plugin…, Copy as Override Into…, Open Header, and — on editable plugins only —
+  Add New Record…, Convert to ESL/ESM, Add Master…, and Run Script…. Each is a confirmation
+  or picker as appropriate; destructive ones confirm. (Compact FormIDs, copy-as-underride,
+  merge, and sort/clean/remove masters are deferred to Python scripts — see Out of Scope.)
 - **Record-type nodes**: labeled by type; children are paginated record nodes with a "Load
   more…" node at the end of a page.
 - **Record nodes**: labeled `{EditorID}  [{RecordType}:{FormID}]` (FormKey only when no
@@ -414,7 +416,6 @@ future surface):
 
 ## Out of Scope
 
-- **Editing Papyrus (VMAD) script data** — the VMAD section is deliberately read-only.
 - **Multiple simultaneous record editor panels** — one panel is open at a time and reused
   when navigating (an extension invariant).
 - **A structured conflict/EditorID/record-type filter UI** — filtering is deliberately
@@ -424,6 +425,13 @@ future surface):
 - **Run Script…** across session/record/plugin — planned, not yet shipped.
 - **Delta / overlay editing** — loading an arbitrary overriding-plugin set side-by-side is a
   Loadout-adjacent concern (see [mods.md](mods.md) Out of Scope); deferred.
+- **Multi-step form-space operations** — compact FormIDs, copy-as-underride (moving a record
+  down into a master), merge-into-another-plugin, and sort/clean/remove masters — are
+  deferred and will be delivered as Python scripts over the header/renumber/copy/delete
+  staging primitives, not bespoke commands. They compose from those primitives and are
+  inherently multi-step (a masters reorder remaps every FormID's master index; clean requires
+  whole-plugin reference analysis). Near-term header editing (author, ESL/ESM flag, add
+  master) is a first-class feature — see User Story 38.
 
 ## Further Notes
 

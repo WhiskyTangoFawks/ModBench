@@ -24,7 +24,9 @@
 
 **EditorID (EDID)**: Human-readable string identifier (e.g. `NordRace`). Stable across load orders; not guaranteed unique. _Avoid: name, label._
 
-**Master**: Plugin declared as a dependency in another plugin's header. _Avoid: parent plugin, base plugin._
+**Master**: Plugin declared as a dependency in another plugin's header. A master reference is validated against the loaded plugins — it must name a plugin present in the load order, since a master resolving to no file makes the plugin unloadable. _Avoid: parent plugin, base plugin._
+
+**Header record**: A plugin's ModHeader (author, masters, flags) modeled as a first-class, single-column record at synthetic FormKey `000000:<plugin>`. Not an override of any other plugin's header — headers do not conflict across plugins. Editing it (author, ESL/ESM flags, master references) stages through the normal pending-change / change-group machinery. _Avoid: TES4 record (internal jargon), plugin metadata._
 
 **Immutable plugin**: Plugin mEdit treats as read-only — base-game files per Mutagen. Not a property of the file itself. _Avoid: read-only plugin, locked plugin._
 
@@ -37,6 +39,8 @@
 **Override**: Record definition in a plugin other than the originating plugin. _Avoid: copy, patch entry._
 
 **Override stack**: Full ordered sequence of overrides for one FormKey across all loaded plugins. Primary structure for the compare view and conflict detection.
+
+**Underride**: The mirror of an override — placing a record *down* into an earlier-loading plugin (a master) rather than up into a later one. Because a FormKey encodes its origin plugin, an underride entails renumbering the record into the target master's FormID range (cf. xEdit "inject into master"), so mechanically it is a move+renumber despite the copy-flavored name. _Avoid: inject, inject-to-master._
 
 **Winning override**: Last override in plugin load order — what the game actually uses. _Avoid: active record, final record._
 

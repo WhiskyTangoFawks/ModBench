@@ -7,14 +7,14 @@ Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all op
 This repo separates durable documentation from work items:
 
 - **Surface specs** (`docs/specs/<surface>.md`) — living, present-tense documentation of each Modbench UI surface (Mods, mEdit, Downloads, …). Versioned in the repo, not the tracker.
-- **PRDs** — one GitHub issue per initiative (e.g. "Downloads tab v1"), created via `/to-prd`. Written in future tense; spent once its slices ship.
+- **PRDs** — one GitHub Milestone per initiative (e.g. "Downloads tab v1"), created via `/to-prd`. Written in future tense; spent once its slices ship.
 - **Implementation issues** — vertical slices of a PRD, created via `/to-issues`. `/to-issues` may also be pointed directly at a spec file or section path.
 
 When an initiative's slices ship, fold the outcome back into the relevant surface spec in `docs/specs/` — the spec must always describe current behavior.
 
 ## Milestones = epics (the roadmap)
 
-The [GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones) tab is the roadmap. A milestone is used as an epic: a themed body of work whose assigned issues are its slices. This is a deliberate re-purposing — milestones here carry **no release/commitment semantics and no due dates**; a milestone is just "a named group of issues with a completion %."
+The [GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones) tab is the roadmap. A milestone is used as an epic: a themed body of work whose assigned issues are its slices. This is a deliberate re-purposing — milestones here carry **no release/commitment semantics and no due dates**; a milestone is just a goal.
 
 - **One issue → one milestone.** An issue belongs to at most one milestone (or none). Any finer hierarchy (epic → sub-epic) uses sub-issues or labels, not milestones.
 - **Ordering lives in the title prefix** (GitHub has no priority field). A **number = prioritized/sequenced** (`1 — Mod-management maturity` … `6 — …`); **no number = unprioritized/speculative** (bare topic name, e.g. `Navmesh editing`), which sorts below every numbered epic.
@@ -24,8 +24,6 @@ Traverse it with `gh`:
 - **List epics in order**: `gh api repos/WhiskyTangoFawks/ModBench/milestones --jq 'sort_by(.title)[] | "\(.title): \(.open_issues)o/\(.closed_issues)c"'`
 - **Issues in an epic**: `gh issue list --milestone "1 — Mod-management maturity"`
 - **Assign / move**: `gh issue edit <n> --milestone "<title>"`; **create an epic**: `gh api --method POST repos/…/milestones -f title=… -f description=…`.
-
-A `wishlist` item graduates into a prioritized epic by getting a numbered milestone (and, once scoped, `/to-issues` slices).
 
 ## Conventions
 

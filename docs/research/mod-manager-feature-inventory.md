@@ -45,8 +45,6 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 | Missing-master warnings | ✓ | ✓ | ✅ (badge, via `MasterReader`) |
 | Rule-based ordering (after/before rules) | ✗ | ✓ | ➖ MO2 explicit-order model chosen ([MM ADR-0001](../../modbench/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md)) |
 
-**Open question for a grilling session:** is Plugins its own Modbench tab (MO2 model: Mods pane + Plugins pane side by side), or part of the mEdit surface (its Plugins tree already shows load order), or a mode of the Mods surface? Currently load-order data lives in the mEdit view's Plugin tree; `plugins.txt` writing arrives with modbench-9.
-
 ## Other MO2/Vortex surfaces
 
 | Feature | MO2 | Vortex | Modbench |
