@@ -106,7 +106,7 @@ public sealed class SessionManager(
             repository.Index(mod, plugin.LoadOrderIndex);
 
             if (!plugin.IsImmutable)
-                _nextFormIds[plugin.Name] = mod.NextFormID;
+                _nextFormIds[plugin.Name] = SafeNextFormId(mod);
         }
 
         _logger.LogInformation("Computing winners");
@@ -152,7 +152,7 @@ public sealed class SessionManager(
             File.AppendAllText(_pluginsTxtPath!, $"*{name}\n");
 
             var metadata = _session.AddPlugin(filePath);
-            _nextFormIds[name] = ModFactory.Activator(modKey, _gameRelease).NextFormID;
+            _nextFormIds[name] = SafeNextFormId(ModFactory.Activator(modKey, _gameRelease));
             return PluginResponse.FromMetadata(metadata);
         }
     }
@@ -243,6 +243,13 @@ public sealed class SessionManager(
             return (meta, _repository!, _gameRelease);
         }
     }
+
+    // FormID 0 is reserved: Issue #1's plugin-header record lives at the synthetic FormKey
+    // `000000:<plugin>` (see HeaderIndexer). A plugin that has never had a record added (freshly
+    // created, or written by PluginFixtureBuilder with no explicit NextFormID) reports a raw
+    // NextFormID of 0, which would otherwise collide with its own header row on first reservation —
+    // floor it at the game's recommended starting FormID instead.
+    private static uint SafeNextFormId(IModGetter mod) => Math.Max(mod.NextFormID, mod.GetDefaultInitialNextFormID());
 
     public string ReserveFormKey(string plugin)
     {

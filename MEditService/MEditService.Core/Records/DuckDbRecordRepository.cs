@@ -57,7 +57,12 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         using var tx = Connection.BeginTransaction();
 
         foreach (var (tableName, schema) in schemas)
+        {
+            // The header table is never a major-record type (ModHeader has no FormKey/EditorID) —
+            // IndexRecordTable's EnumerateMajorRecords call assumes one, so it's indexed separately.
+            if (tableName == "header") continue;
             IndexRecordTable(tableName, schema, pluginMod, plugin, loadOrderIndex, refs);
+        }
 
         // Walk VMAD after the per-type loop so both generic and VMAD Object refs land in `refs`
         // before the single form_references flush below.
@@ -65,6 +70,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         IndexVmad(pluginMod, plugin, refs);
 
         IndexPlacement(pluginMod, plugin);
+
+        IndexHeader(pluginMod, plugin, loadOrderIndex, schemas);
 
         // Clear this plugin's stale refs, then rebuild from the refs gathered across both passes.
         DeleteFormReferencesForPlugin(plugin);
@@ -642,6 +649,19 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 DuckDbAppend.Nullable(row, placed.PosZ);
                 row.EndRow();
             });
+    }
+
+    // Issue #1 slice A1: header rows never flow through IndexRecordTable (see the Index() skip
+    // above), so they need their own delete-then-append step, matching every other side table.
+    private void IndexHeader(
+        IModGetter pluginMod, string plugin, int loadOrderIndex,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (!schemas.TryGetValue("header", out var headerSchema)) return;
+
+        DeleteExisting("header", plugin);
+        using var appender = Connection.CreateAppender("header");
+        HeaderIndexer.Index(pluginMod, plugin, loadOrderIndex, headerSchema, appender);
     }
 
     private void DeleteVmadForPlugin(string plugin)

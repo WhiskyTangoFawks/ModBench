@@ -71,6 +71,25 @@ public class TableDdlBuilderTests
     }
 
     [Fact]
+    public void CreateTables_CreatesHeaderTable_WithAuthorFlagsMastersColumns()
+    {
+        // Issue #1 slice A1: the header table is entirely schema-driven — no DDL changes
+        // needed once SchemaReflector's schemas dictionary carries a "header" entry.
+        using var conn = OpenMemory();
+        _builder.CreateTables(conn, GameRelease.Fallout4);
+
+        var cols = GetColumns(conn, "header");
+        Assert.Contains("form_key", cols);
+        Assert.Contains("plugin", cols);
+        Assert.Contains("load_order_idx", cols);
+        Assert.Contains("is_winner", cols);
+        Assert.Contains("editor_id", cols);
+        Assert.Contains("author", cols);
+        Assert.Contains("flags", cols);
+        Assert.Contains("masters", cols);
+    }
+
+    [Fact]
     public void CreateTables_IsIdempotent()
     {
         using var conn = OpenMemory();

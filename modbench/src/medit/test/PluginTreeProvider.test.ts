@@ -28,7 +28,7 @@ vi.mock('vscode', () => ({
 import {
   PluginTreeProvider, PluginNode, RecordTypeNode, RecordNode, LoadMoreNode,
   CellNode, InteriorCellsNode, InteriorLoadMoreNode,
-  WorldspacesNode, WorldspaceNode, ErrorNode,
+  WorldspacesNode, WorldspaceNode, ErrorNode, headerFormKeyFor,
 } from '../PluginTreeProvider';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -562,5 +562,17 @@ describe('PluginTreeProvider fetch failures', () => {
 
     expect(children).toHaveLength(1);
     expect(children[0]).toBeInstanceOf(ErrorNode);
+  });
+});
+
+// ── headerFormKeyFor (Issue #1 slice A1) ───────────────────────────────────────
+
+describe('headerFormKeyFor', () => {
+  it('builds the synthetic header FormKey for a plugin name', () => {
+    expect(headerFormKeyFor('Fallout4.esm')).toBe('000000:Fallout4.esm');
+  });
+
+  it('uses the plugin name verbatim, including its extension', () => {
+    expect(headerFormKeyFor('MyPatch.esp')).toBe('000000:MyPatch.esp');
   });
 });

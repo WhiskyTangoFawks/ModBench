@@ -275,6 +275,48 @@ public class SessionManagerTests(TestPluginFixture fixture) : IClassFixture<Test
     }
 
     [Fact]
+    public void ReserveFormKey_FreshlyCreatedEmptyPlugin_NeverReturnsFormIdZero()
+    {
+        // FormID 0 is reserved: Issue #1's plugin-header record lives at the synthetic FormKey
+        // `000000:<plugin>`. A freshly-activated Mutagen mod (ModFactory.Activator, used by
+        // CreatePlugin) reports NextFormID == 0 before any record has ever been added, so a naive
+        // reservation would collide with that plugin's own header row.
+        var data = new PluginFixtureBuilder("fk-fresh-zero").WithPlugin("Base.esp").Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.CreatePlugin("BrandNew.esp");
+
+            var fk = manager.ReserveFormKey("BrandNew.esp");
+
+            Assert.True(FormKey.TryFactory(fk, out var parsed));
+            Assert.NotEqual(0u, parsed.ID);
+        }
+    }
+
+    [Fact]
+    public void ReserveFormKey_LoadedEmptyPluginWithZeroNextFormId_NeverReturnsFormIdZero()
+    {
+        // A plugin with no records ever added and never explicitly given a NextFormID (as
+        // PluginFixtureBuilder.WithPlugin("Empty.esp") produces) round-trips through
+        // WriteToBinary + Load with a literal NextFormID of 0 in its on-disk header. Issue #1's
+        // header record occupies FormID 0 for every plugin, so Load must floor the reservation
+        // counter at the game's recommended minimum rather than trusting a raw 0 from disk.
+        var data = new PluginFixtureBuilder("fk-loaded-zero").WithPlugin("Empty.esp").Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            var fk = manager.ReserveFormKey("Empty.esp");
+
+            Assert.True(FormKey.TryFactory(fk, out var parsed));
+            Assert.NotEqual(0u, parsed.ID);
+        }
+    }
+
+    [Fact]
     public void ReserveFormKey_SequentialCalls_ReturnConsecutiveIds()
     {
         using var manager = MakeLoadedManager();

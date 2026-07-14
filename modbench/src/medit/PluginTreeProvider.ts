@@ -14,6 +14,11 @@ function formId(formKey: string): string {
   return formKey.split(':')[0];
 }
 
+/** Issue #1 slice A1: the synthetic FormKey a plugin's header record is indexed at. */
+export function headerFormKeyFor(pluginName: string): string {
+  return `000000:${pluginName}`;
+}
+
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
   constructor(public readonly plugin: PluginMetadata) {

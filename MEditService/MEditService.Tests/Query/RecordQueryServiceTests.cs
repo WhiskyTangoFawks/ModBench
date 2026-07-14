@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
@@ -55,6 +56,15 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
     {
         var types = _svc.GetRecordTypes();
         Assert.Equal([.. types.Order()], types);
+    }
+
+    [Fact]
+    public void GetRecordTypes_ExcludesHeader()
+    {
+        // The header isn't a browsable record type in the "expand a plugin -> record types"
+        // sense (User Story 7) — it's reached only via "Open Header" on the plugin node itself.
+        var types = _svc.GetRecordTypes();
+        Assert.DoesNotContain("header", types);
     }
 
     // --- GET /records ---
@@ -415,6 +425,17 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
     // fixture makes a dedicated ordering test here trivially true.
 
     [Fact]
+    public void GetPluginRecordTypes_ExcludesHeader()
+    {
+        // Every plugin indexes exactly one header row, so without the exclusion "header" would
+        // appear as a browsable record-type node (count 1) in the "expand a plugin" tree — the
+        // header is reached only via "Open Header" on the plugin node itself (User Story 7/38).
+        var result = _svc.GetPluginRecordTypes(TestPluginFixture.PluginName);
+
+        Assert.DoesNotContain(result, r => r.Type == "header");
+    }
+
+    [Fact]
     public void GetPluginRecordTypes_UnknownPlugin_ReturnsEmpty()
     {
         var result = _svc.GetPluginRecordTypes("DoesNotExist.esp");
@@ -554,6 +575,74 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             var editorIds = result.Items.Select(r => r.EditorId).ToList();
             Assert.Equal(2, editorIds.Count);
             Assert.Equal([.. editorIds.OrderBy(e => e, StringComparer.OrdinalIgnoreCase)], editorIds);
+        }
+    }
+
+    // --- Issue #1 slice A1: plugin header reachable through the existing generic FormKey
+    // lookup/compare path, with no new endpoint. These are expected to pass with zero new
+    // production code beyond slices 1-3 — a red result here would signal a gap in the
+    // schema/indexer design, not a missing endpoint.
+
+    [Fact]
+    public void GetRecord_PluginHeaderFormKey_ReturnsAuthorFlagsMasters()
+    {
+        var data = new PluginFixtureBuilder("rqs-header-record")
+            .WithPlugin("HeaderQuery.esp", mod =>
+            {
+                mod.ModHeader.Author = "Test Author";
+                mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small;
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Fallout4.esm") });
+            },
+                // WriteToBinary normally recomputes the master list from actual FormLink usage,
+                // stripping a manually-added master reference with no corresponding FormLink —
+                // NoCheck preserves it so this test can assert on it after the disk round-trip.
+                writeParams: new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
+                {
+                    MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,
+                })
+            .Build();
+        using (data)
+        {
+            var reflector = new SchemaReflector();
+            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+
+            var detail = svc.GetRecord("000000:HeaderQuery.esp");
+
+            Assert.NotNull(detail);
+            var author = detail.Fields.Single(f => f.Metadata.Name == "author");
+            Assert.Equal("Test Author", author.Value);
+
+            var flags = detail.Fields.Single(f => f.Metadata.Name == "flags");
+            Assert.Equal(((long)Fallout4ModHeader.HeaderFlag.Small).ToString(System.Globalization.CultureInfo.InvariantCulture), flags.Value);
+
+            var masters = detail.Fields.Single(f => f.Metadata.Name == "masters");
+            Assert.Contains("Fallout4.esm", masters.Value!.ToString());
+        }
+    }
+
+    [Fact]
+    public void GetCompare_PluginHeaderFormKey_ReturnsSingleOverride()
+    {
+        var data = new PluginFixtureBuilder("rqs-header-compare")
+            .WithPlugin("CompareA.esp")
+            .WithPlugin("CompareB.esp")
+            .Build();
+        using (data)
+        {
+            var reflector = new SchemaReflector();
+            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+
+            var compare = svc.GetCompare("000000:CompareA.esp");
+
+            Assert.NotNull(compare);
+            var overrides = Assert.Single(compare.Overrides);
+            Assert.Equal("CompareA.esp", overrides.Plugin);
         }
     }
 

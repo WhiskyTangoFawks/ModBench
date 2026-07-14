@@ -776,4 +776,128 @@ public class SchemaReflectorTests
         Assert.Null(col.EnumBitValues);
     }
 
+    // ── Issue #1 slice A1: plugin header as a first-class record ─────────────
+    // ModHeader isn't a major record in Mutagen (no FormKey/EditorID), so it can't be
+    // discovered by the major-record-getter scan — it gets one hand-assembled schema
+    // entry instead, built via a second small reflection pass.
+
+    [Fact]
+    public void GetSchemas_ContainsHeaderTable()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        Assert.True(schemas.ContainsKey("header"));
+    }
+
+    [Fact]
+    public void GetSchemas_Header_AuthorColumn_IsStringType()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "author");
+        Assert.NotNull(col);
+        Assert.Equal("VARCHAR", col!.DuckDbType);
+        Assert.Equal("string", col.ApiType);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_FlagsColumn_IsBitmaskEnumWithMasterAndSmallNames()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "flags");
+        Assert.NotNull(col);
+        Assert.Equal("BIGINT", col!.DuckDbType);
+        Assert.Equal("enum", col.ApiType);
+        Assert.True(col.IsBitmask);
+        Assert.Contains("Master", col.EnumValues);
+        Assert.Contains("Small", col.EnumValues);
+        Assert.Contains("Localized", col.EnumValues);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_MastersColumn_IsArrayOfString()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "masters");
+        Assert.NotNull(col);
+        Assert.Equal("array", col!.ApiType);
+        Assert.NotNull(col.ElementType);
+        Assert.Equal("string", col.ElementType!.Type);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_HeaderColumnExtract_HasOneDelegatePerColumnInOrder()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var schema = schemas["header"];
+        Assert.NotNull(schema.HeaderColumnExtract);
+        Assert.Equal(schema.RecordColumns.Count, schema.HeaderColumnExtract!.Count);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_HeaderColumnExtract_AuthorReadsModHeaderAuthor()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var schema = schemas["header"];
+        var authorIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "author");
+
+        var mod = new Mutagen.Bethesda.Fallout4.Fallout4Mod(
+            Mutagen.Bethesda.Plugins.ModKey.FromFileName("Test.esp"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        mod.ModHeader.Author = "Some Author";
+
+        var value = schema.HeaderColumnExtract![authorIndex]((Mutagen.Bethesda.Plugins.Records.IModGetter)mod);
+        Assert.Equal("Some Author", value);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_HeaderColumnExtract_FlagsReadsModHeaderFlags()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var schema = schemas["header"];
+        var flagsIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "flags");
+
+        var mod = new Mutagen.Bethesda.Fallout4.Fallout4Mod(
+            Mutagen.Bethesda.Plugins.ModKey.FromFileName("Test.esp"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        mod.ModHeader.Flags = Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small;
+
+        var value = schema.HeaderColumnExtract![flagsIndex]((Mutagen.Bethesda.Plugins.Records.IModGetter)mod);
+        Assert.Equal((long)Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small,
+            Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void GetSchemas_Header_HeaderColumnExtract_MastersReadsPluginFilenamesInOrder()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var schema = schemas["header"];
+        var mastersIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "masters");
+
+        var mod = new Mutagen.Bethesda.Fallout4.Fallout4Mod(
+            Mutagen.Bethesda.Plugins.ModKey.FromFileName("Test.esp"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        mod.ModHeader.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference
+        {
+            Master = Mutagen.Bethesda.Plugins.ModKey.FromFileName("Fallout4.esm"),
+        });
+        mod.ModHeader.MasterReferences.Add(new Mutagen.Bethesda.Plugins.Records.MasterReference
+        {
+            Master = Mutagen.Bethesda.Plugins.ModKey.FromFileName("DLCRobot.esm"),
+        });
+
+        var value = schema.HeaderColumnExtract![mastersIndex]((Mutagen.Bethesda.Plugins.Records.IModGetter)mod) as string;
+        Assert.NotNull(value);
+        var parsed = System.Text.Json.JsonSerializer.Deserialize<List<string>>(value);
+        Assert.Equal(["Fallout4.esm", "DLCRobot.esm"], parsed);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_RecordType_IsHeaderGetterInterface_NotAMajorRecordType()
+    {
+        // Guards against the header schema ever being routed through the major-record
+        // indexing loop (EnumerateMajorRecords), which assumes an IMajorRecordGetter.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var schema = schemas["header"];
+        Assert.False(typeof(Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter).IsAssignableFrom(schema.RecordType));
+    }
+
 }
