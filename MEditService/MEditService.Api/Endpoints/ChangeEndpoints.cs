@@ -27,7 +27,8 @@ public static class ChangeEndpoints
             .Produces<IReadOnlyList<PendingChange>>()
             .Produces<IReadOnlyList<ReferenceValidationError>>(422)
             .ProducesProblem(404)
-            .ProducesProblem(409);
+            .ProducesProblem(409)
+            .ProducesProblem(422);
 
         app.MapPost("/records/{formKey}/copy-to/{targetPlugin}", CopyRecordTo)
             .WithName("CopyRecordTo")
@@ -59,7 +60,8 @@ public static class ChangeEndpoints
             .Produces<MEditService.Core.Queries.CreateRecordResult>()
             .Produces<IReadOnlyList<ReferenceValidationError>>(422)
             .ProducesProblem(404)
-            .ProducesProblem(409);
+            .ProducesProblem(409)
+            .ProducesProblem(422);
 
         app.MapPost("/plugins/{plugin}/cells/{cellFormKey}/placed", CreatePlacedRecord)
             .WithName("CreatePlacedRecord")
@@ -67,7 +69,8 @@ public static class ChangeEndpoints
             .Produces<MEditService.Core.Queries.CreateRecordResult>()
             .Produces<IReadOnlyList<ReferenceValidationError>>(422)
             .ProducesProblem(404)
-            .ProducesProblem(409);
+            .ProducesProblem(409)
+            .ProducesProblem(422);
     }
 
     // Pending-change and change-group management: list, revert, save.
@@ -214,6 +217,7 @@ public static class ChangeEndpoints
             {
                 CreateRecordOutcome.Success ok => Results.Ok(new MEditService.Core.Queries.CreateRecordResult(ok.FormKey, ok.GroupId)),
                 CreateRecordOutcome.InvalidReferences inv => Results.UnprocessableEntity(inv.Errors),
+                CreateRecordOutcome.EslIneligible esl => StageEditResultExtensions.EslIneligibleProblem(esl.Plugin, esl.FormKeys),
                 _ => Results.Problem("Unexpected error.")
             };
         }
@@ -248,6 +252,7 @@ public static class ChangeEndpoints
             {
                 CreateRecordOutcome.Success ok => Results.Ok(new MEditService.Core.Queries.CreateRecordResult(ok.FormKey, ok.GroupId)),
                 CreateRecordOutcome.InvalidReferences inv => Results.UnprocessableEntity(inv.Errors),
+                CreateRecordOutcome.EslIneligible esl => StageEditResultExtensions.EslIneligibleProblem(esl.Plugin, esl.FormKeys),
                 _ => Results.Problem("Unexpected error.")
             };
         }
@@ -335,6 +340,7 @@ public static class ChangeEndpoints
                 extensions: new Dictionary<string, object?> { { "blockers", blocked.Blockers } }),
             RenumberResult.FormIdInUse => Results.Problem(
                 "The requested FormID is already in use.", statusCode: 422),
+            RenumberResult.EslIneligible esl => StageEditResultExtensions.EslIneligibleProblem(esl.Plugin, esl.FormKeys),
             RenumberResult.NoSession => Results.Problem(NoSessionMessage, statusCode: 400),
             var r => throw new InvalidOperationException($"Unhandled RenumberResult: {r.GetType().Name}")
         };

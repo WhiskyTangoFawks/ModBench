@@ -9,5 +9,6 @@ public abstract record RenumberResult
     public sealed record RecordNotFound : RenumberResult;
     public sealed record ImmutableReferences(IReadOnlyList<ReferenceResult> Blockers) : RenumberResult;
     public sealed record FormIdInUse : RenumberResult;
+    public sealed record EslIneligible(string Plugin, IReadOnlyList<string> FormKeys) : RenumberResult;
     public sealed record Staged(ChangeGroup Group) : RenumberResult;
 }

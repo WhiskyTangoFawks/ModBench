@@ -64,6 +64,16 @@ public interface IPendingChangeService
 
     IReadOnlyList<(string FormKey, string RecordType)> GetStagedFormKeys(string plugin, string? recordType = null);
 
+    /// <summary>
+    /// Returns how pending create/renumber changes modify <paramref name="plugin"/>'s native FormKey
+    /// set (issue #98): <c>Added</c> is the reserved FormKey of each pending <c>$create</c> plus the
+    /// target FormKey of each pending <c>$renumber</c>; <c>Removed</c> is the pre-renumber FormKey each
+    /// pending renumber supersedes, so a caller unioning against the committed native set can drop the
+    /// stale entry rather than double-counting it. Field-edit/delete/VMAD changes never affect
+    /// membership.
+    /// </summary>
+    (IReadOnlyList<string> Added, IReadOnlyList<string> Removed) GetPendingNativeFormKeyChanges(string plugin);
+
     IReadOnlyList<ChangeGroup> GetChangeGroups();
 
     bool RevertGroup(Guid groupId);

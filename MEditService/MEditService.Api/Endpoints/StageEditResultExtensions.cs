@@ -17,9 +17,7 @@ public static class StageEditResultExtensions
             detail: $"The following fields are read-only and cannot be edited: {string.Join(", ", r.Fields)}",
             statusCode: 422),
         StageEditResult.InvalidReferences inv => Results.UnprocessableEntity(inv.Errors),
-        StageEditResult.EslIneligible esl => Results.Problem(
-            detail: $"'{esl.Plugin}' can't be an ESL: {esl.FormKeys.Count} FormID(s) fall outside the ESL range (0x001–0xFFF): {string.Join(", ", esl.FormKeys)}",
-            statusCode: 422),
+        StageEditResult.EslIneligible esl => EslIneligibleProblem(esl.Plugin, esl.FormKeys),
         StageEditResult.Staged staged => Results.Ok(staged.Changes),
         var r => throw new InvalidOperationException($"Unhandled StageEditResult variant: {r.GetType().Name}")
     };
@@ -38,4 +36,12 @@ public static class StageEditResultExtensions
         DeleteRecordsResult.Staged s => Results.Ok(s.Group),
         var r => throw new InvalidOperationException($"Unhandled DeleteRecordsResult variant: {r.GetType().Name}")
     };
+
+    // Shared by every stage-time entry point that can reject on ESL-eligibility (StageEdit's header
+    // toggle, plus CreateRecord/Renumber's reverse guard — issue #98) so the 422 wording stays
+    // identical across all of them.
+    internal static IResult EslIneligibleProblem(string plugin, IReadOnlyList<string> formKeys) =>
+        Results.Problem(
+            detail: $"'{plugin}' can't be an ESL: {formKeys.Count} FormID(s) fall outside the ESL range (0x001–0xFFF): {string.Join(", ", formKeys)}",
+            statusCode: 422);
 }

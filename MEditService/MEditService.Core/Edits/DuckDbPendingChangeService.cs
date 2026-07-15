@@ -280,6 +280,49 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         finally { _sem.Release(); }
     }
 
+    public (IReadOnlyList<string> Added, IReadOnlyList<string> Removed) GetPendingNativeFormKeyChanges(string plugin)
+    {
+        _sem.Wait();
+        try
+        {
+            var conn = RequireConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"""
+                SELECT form_key, change_type, new_value
+                FROM pending_changes
+                WHERE plugin = $1
+                  AND ((change_type = '{PendingChangeConstants.CreateChangeType}' AND field_path = '{PendingChangeConstants.CreateFieldPath}')
+                    OR (change_type = '{PendingChangeConstants.RenumberChangeType}' AND field_path = '{PendingChangeConstants.RenumberFieldPath}'))
+                """;
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+
+            var added = new List<string>();
+            var removed = new List<string>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                CollectNativeFormKeyChange(reader, added, removed);
+            return (added, removed);
+        }
+        finally { _sem.Release(); }
+    }
+
+    // A pending create contributes its reserved FormKey as an addition; a pending renumber
+    // supersedes its pre-renumber FormKey (removed) with the renumber target (added).
+    private static void CollectNativeFormKeyChange(DuckDBDataReader reader, List<string> added, List<string> removed)
+    {
+        var formKey = reader.GetString(0);
+        if (reader.GetString(1) == PendingChangeConstants.CreateChangeType)
+        {
+            added.Add(formKey);
+            return;
+        }
+
+        removed.Add(formKey);
+        using var newValueDoc = JsonDocument.Parse(reader.GetString(2));
+        if (newValueDoc.RootElement.GetString() is { } newFormKey)
+            added.Add(newFormKey);
+    }
+
     public RevertChangeResult Revert(Guid changeId)
     {
         _sem.Wait();

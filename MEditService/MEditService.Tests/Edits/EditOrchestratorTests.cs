@@ -964,6 +964,113 @@ public sealed class EditOrchestratorTests
         }
     }
 
+    // --- Issue #98 slice 3: creating a record with an out-of-range native FormID on an
+    // already-ESL-flagged plugin is rejected at stage time — not just an ESL toggle. ---
+
+    [Fact]
+    public void CreateRecord_OnEslFlaggedPlugin_FormIdOutOfRange_ReturnsEslIneligible()
+    {
+        var data = new PluginFixtureBuilder("cr-esl-out-of-range")
+            .WithPlugin(
+                "Light.esp",
+                mod =>
+                {
+                    mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small; // already ESL-flagged
+                    ((Mutagen.Bethesda.Plugins.Records.IMod)mod).NextFormID = 0x1000; // out-of-range reservation
+                },
+                writeParams: new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
+                {
+                    NextFormID = Mutagen.Bethesda.Plugins.Binary.Parameters.NextFormIDOption.NoCheck,
+                })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.CreateRecord("Light.esp", "npc_", null, "user");
+
+                var esl = Assert.IsType<CreateRecordOutcome.EslIneligible>(result);
+                Assert.Equal("Light.esp", esl.Plugin);
+                Assert.Contains("001000:Light.esp", esl.FormKeys);
+            }
+        }
+    }
+
+    // --- Issue #98 mutation-triage follow-up: IsPluginEslFlagged's pending branch — a plugin that
+    // is only *pending*-flagged ESL (a staged-but-unsaved header toggle, not yet committed) still
+    // triggers the reverse guard, and a pending header edit that leaves ESL off does not. ---
+
+    [Fact]
+    public void CreateRecord_OnPendingEslFlaggedPlugin_FormIdOutOfRange_ReturnsEslIneligible()
+    {
+        var data = new PluginFixtureBuilder("cr-esl-pending-flagged")
+            .WithPlugin(
+                "Pending.esp",
+                mod => ((Mutagen.Bethesda.Plugins.Records.IMod)mod).NextFormID = 0x1000, // out-of-range reservation
+                writeParams: new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
+                {
+                    NextFormID = Mutagen.Bethesda.Plugins.Binary.Parameters.NextFormIDOption.NoCheck,
+                })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                // Stage (don't save) an ESL toggle — the plugin has no native records yet, so the
+                // toggle itself stages cleanly.
+                var eslBits = ((long)Fallout4ModHeader.HeaderFlag.Small).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var toggleFields = new Dictionary<string, JsonElement> { ["flags"] = J($"\"{eslBits}\"") };
+                Assert.IsType<StageEditResult.Staged>(
+                    orchestrator.StageEdit("000000:Pending.esp", "Pending.esp", toggleFields, "user", null));
+
+                var result = orchestrator.CreateRecord("Pending.esp", "npc_", null, "user");
+
+                var esl = Assert.IsType<CreateRecordOutcome.EslIneligible>(result);
+                Assert.Equal("Pending.esp", esl.Plugin);
+                Assert.Contains("001000:Pending.esp", esl.FormKeys);
+            }
+        }
+    }
+
+    [Fact]
+    public void CreateRecord_PendingNonEslHeaderEdit_FormIdOutOfRange_Succeeds()
+    {
+        var data = new PluginFixtureBuilder("cr-esl-pending-non-esl")
+            .WithPlugin(
+                "Pending2.esp",
+                mod => ((Mutagen.Bethesda.Plugins.Records.IMod)mod).NextFormID = 0x1000, // out-of-range reservation
+                writeParams: new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
+                {
+                    NextFormID = Mutagen.Bethesda.Plugins.Binary.Parameters.NextFormIDOption.NoCheck,
+                })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                // Stage a header edit that does NOT touch the ESL bit (Master only) — the plugin
+                // must not be treated as pending-flagged ESL.
+                var masterBits = ((long)Fallout4ModHeader.HeaderFlag.Master).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var toggleFields = new Dictionary<string, JsonElement> { ["flags"] = J($"\"{masterBits}\"") };
+                Assert.IsType<StageEditResult.Staged>(
+                    orchestrator.StageEdit("000000:Pending2.esp", "Pending2.esp", toggleFields, "user", null));
+
+                var result = orchestrator.CreateRecord("Pending2.esp", "npc_", null, "user");
+
+                Assert.IsType<CreateRecordOutcome.Success>(result);
+            }
+        }
+    }
+
     // --- Dependent change grouping ---
 
     [Fact]

@@ -269,6 +269,14 @@ public sealed partial class EditOrchestrator(
         }
 
         var reservedFormKey = _sessionManager.ReserveFormKey(plugin);
+
+        // Issue #98 reverse guard: a create on an already ESL-flagged (or pending-flagged) plugin
+        // must itself land in the ESL range — otherwise the invalidity would only surface at write.
+        // The reservation counter is already spent at this point (its ID is simply skipped); undoing
+        // the reservation isn't worth the added complexity for what should be a rare, recoverable case.
+        if (CheckReverseEslGuard(plugin, reservedFormKey, session.GameRelease) is { } outOfRange)
+            return new CreateRecordOutcome.EslIneligible(plugin, outOfRange);
+
         var groupId = Guid.NewGuid();
         _changes.Upsert(new PendingChangeUpsert(
             reservedFormKey, plugin, recordType,
@@ -427,6 +435,13 @@ public sealed partial class EditOrchestrator(
 
         var newFormKey = $"{newFormId:X6}:{plugin}";
 
+        // Issue #98 reverse guard: a renumber onto an already ESL-flagged (or pending-flagged)
+        // plugin must land its target FormID in the ESL range — checked early, before the
+        // (expensive) reference scan below, since there's nothing to gain from doing that work
+        // first.
+        if (CheckReverseEslGuard(plugin, newFormKey, session.GameRelease) is { } outOfRange)
+            return new RenumberResult.EslIneligible(plugin, outOfRange);
+
         var immutablePlugins = session.Plugins
             .Where(p => p.IsImmutable)
             .Select(p => p.Name)
@@ -530,17 +545,74 @@ public sealed partial class EditOrchestrator(
     {
         if (recordType != Records.HeaderIndexer.TableName) return null;
         if (!fields.TryGetValue(HeaderFlagsField, out var newFlagsJson)) return null;
-
-        if (_schemaReflector.GetSchemas(release).GetValueOrDefault(Records.HeaderIndexer.TableName)
-                is not { EslFlagValue: { } eslBit }) return null;
+        if (!TryGetEslBit(release, out var eslBit)) return null;
 
         var newFlags = ReadFlagsLong(newFlagsJson);
         var oldFlags = oldValues.TryGetValue(HeaderFlagsField, out var oldJson) ? ReadFlagsLong(oldJson) : 0L;
         var turningEslOn = (newFlags & eslBit) != 0 && (oldFlags & eslBit) == 0;
         if (!turningEslOn) return null;
 
-        var outOfRange = EslEligibility.OutOfRangeFormKeys(_query.GetNativeFormKeys(plugin));
+        var outOfRange = EslEligibility.OutOfRangeFormKeys(GetEffectiveNativeFormKeys(plugin));
         return outOfRange.Count == 0 ? null : new StageEditResult.EslIneligible(plugin, outOfRange);
+    }
+
+    // Issue #98: the committed record index alone misses pending creates/renumbers, so a plugin
+    // could be flagged ESL while a not-yet-saved change would make it invalid. Unions the committed
+    // native FormKeys with pending create/renumber targets, and drops any committed FormKey a
+    // pending renumber has moved away from (else a renumber that *fixes* an out-of-range record
+    // would leave the stale high FormID counted against eligibility).
+    private IReadOnlyList<string> GetEffectiveNativeFormKeys(string plugin)
+    {
+        var committed = _query.GetNativeFormKeys(plugin);
+        var (added, removed) = _changes.GetPendingNativeFormKeyChanges(plugin);
+        if (added.Count == 0 && removed.Count == 0) return committed;
+
+        var removedSet = removed.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return committed.Where(fk => !removedSet.Contains(fk)).Concat(added).ToList();
+    }
+
+    // Issue #98 reverse guard, shared by CreateRecordCore and Renumber: null when `candidateFormKey`
+    // is fine (either the plugin isn't ESL, or the FormID is in range); otherwise the single-element
+    // out-of-range list their EslIneligible outcomes expect.
+    private IReadOnlyList<string>? CheckReverseEslGuard(string plugin, string candidateFormKey, GameRelease release)
+    {
+        if (!IsPluginEslFlagged(plugin, release)) return null;
+        var outOfRange = EslEligibility.OutOfRangeFormKeys([candidateFormKey]);
+        return outOfRange.Count == 0 ? null : outOfRange;
+    }
+
+    // Issue #98 reverse guard: is `plugin` ESL right now, considering a not-yet-saved header edit
+    // that would flip the flag? Pending wins over committed (matches the read-overlay convention
+    // elsewhere) — a staged-but-unsaved ESL toggle already governs eligibility for new creates/
+    // renumbers, same as it would once written.
+    private bool IsPluginEslFlagged(string plugin, GameRelease release)
+    {
+        if (!TryGetEslBit(release, out var eslBit)) return false;
+
+        var headerFormKey = Records.HeaderIndexer.FormKeyFor(plugin);
+
+        var pending = _changes.GetPendingFields(headerFormKey, plugin);
+        if (pending != null && pending.TryGetValue(HeaderFlagsField, out var pendingFlags))
+            return (ReadFlagsLong(pendingFlags) & eslBit) != 0;
+
+        var committedFlags = _query.GetRecordForPlugin(headerFormKey, plugin)?.Fields
+            .FirstOrDefault(fv => fv.Metadata.Name == HeaderFlagsField);
+        return committedFlags != null
+            && (ReadFlagsLong(JsonSerializer.SerializeToElement(committedFlags.Value)) & eslBit) != 0;
+    }
+
+    // Shared by CheckEslEligibility and IsPluginEslFlagged: a game whose header schema carries no
+    // ESL/light-master flag bit (not all Mutagen-supported games do) never validates ESL eligibility.
+    private bool TryGetEslBit(GameRelease release, out long eslBit)
+    {
+        if (_schemaReflector.GetSchemas(release).GetValueOrDefault(Records.HeaderIndexer.TableName)
+                is { EslFlagValue: { } bit })
+        {
+            eslBit = bit;
+            return true;
+        }
+        eslBit = 0;
+        return false;
     }
 
     // Bitmask flags travel as decimal strings (to survive JSON above 2^53) from the frontend, but

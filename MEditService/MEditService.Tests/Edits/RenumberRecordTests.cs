@@ -191,6 +191,36 @@ public sealed class RenumberRecordTests
         }
     }
 
+    // --- Issue #98 slice 4: renumbering to an out-of-range native FormID on an already-ESL-flagged
+    // plugin is rejected at stage time — not just an ESL toggle. ---
+
+    [Fact]
+    public void Renumber_OnEslFlaggedPlugin_NewFormIdOutOfRange_ReturnsEslIneligible()
+    {
+        FormKey kwKey = default;
+        var data = new PluginFixtureBuilder("rn-esl-out-of-range")
+            .WithPlugin("Light.esp", mod =>
+            {
+                mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small; // already ESL-flagged
+                kwKey = mod.Keywords.AddNew().FormKey; // native, in-range
+            })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, _) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.Renumber(kwKey.ToString(), 0x1000, "Light.esp", "user");
+
+                var esl = Assert.IsType<RenumberResult.EslIneligible>(result);
+                Assert.Equal("Light.esp", esl.Plugin);
+                Assert.Contains("001000:Light.esp", esl.FormKeys);
+            }
+        }
+    }
+
     // --- plugin not in session ---
 
     [Fact]
