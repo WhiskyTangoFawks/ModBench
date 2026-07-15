@@ -663,6 +663,47 @@ describe('RecordPanel — struct sub-rows', () => {
   });
 });
 
+// ── 422 ProblemDetails surfacing (issue #85: ESL-ineligible / read-only) ─────
+
+describe('RecordPanel — 422 ProblemDetails detail is surfaced', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') {
+        return {
+          ok: false,
+          status: 422,
+          statusText: 'Unprocessable Entity',
+          // ProblemDetails object (not the reference-error array) — e.g. the ESL rejection reason.
+          json: () => Promise.resolve({
+            detail: "'MyMod.esp' can't be an ESL: 1 FormID(s) fall outside the ESL range (0x001–0xFFF): 001000:MyMod.esp",
+          }),
+        };
+      }
+      if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(compareResult) };
+      if (String(url).includes('/changes'))  return { ok: true, json: () => Promise.resolve([]) };
+      if (String(url).includes('/plugins'))  return { ok: true, json: () => Promise.resolve(pluginsResponse) };
+      return { ok: false, status: 404, statusText: 'Not Found' };
+    }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('shows the ProblemDetails detail text when a stage is rejected with 422', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Edit'));
+
+    const input = screen.getByDisplayValue('Override Name');
+    fireEvent.change(input, { target: { value: 'Changed Name' } });
+    fireEvent.blur(input);
+
+    await waitFor(() =>
+      expect(screen.getByText(/can't be an ESL/)).toBeInTheDocument(),
+    );
+  });
+});
+
 // ── Top-level pending no-op suppression ──────────────────────────────────────
 
 describe('RecordPanel — top-level pending suppressed when identical to disk', () => {

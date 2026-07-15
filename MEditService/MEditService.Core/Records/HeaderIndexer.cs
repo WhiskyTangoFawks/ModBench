@@ -13,6 +13,9 @@ namespace MEditService.Core.Records;
 /// </summary>
 internal static class HeaderIndexer
 {
+    /// <summary>The synthetic DuckDB table / record type the plugin header is indexed under.</summary>
+    internal const string TableName = "header";
+
     public static string FormKeyFor(ModKey plugin) => FormKey.Factory($"000000:{plugin}").ToString();
 
     public static void Index(

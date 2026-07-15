@@ -598,15 +598,21 @@ export function RecordPanel() {
         const detail = typeof body?.detail === 'string' ? body.detail : '';
         setActionError(detail.toLowerCase().includes('group') ? detail : 'Plugin is read-only');
       } else if (resp.status === 422) {
-        const errors = await resp.json().catch(() => []) as Array<{ fieldPath?: string; reason?: string; expectedTypes?: string[] }>;
-        if (Array.isArray(errors) && errors.length > 0) {
-          setActionError(errors.map(e => {
+        const body = await resp.json().catch(() => null) as
+          | Array<{ fieldPath?: string; reason?: string; expectedTypes?: string[] }>
+          | { detail?: string }
+          | null;
+        if (Array.isArray(body) && body.length > 0) {
+          setActionError(body.map(e => {
             const path = e.fieldPath ?? '?';
             if (e.reason === 'not_in_session') return `${path}: reference not found in session`;
             if (e.reason === 'type_mismatch') return `${path}: expected ${(e.expectedTypes ?? []).join('/')}`;
             if (e.reason === 'null_not_allowed') return `${path}: cannot be null`;
             return `${path}: ${e.reason ?? 'invalid'}`;
           }).join('; '));
+        } else if (body && !Array.isArray(body) && typeof body.detail === 'string') {
+          // ProblemDetails (e.g. ESL-ineligible or read-only fields) — surface the reason verbatim.
+          setActionError(body.detail);
         } else {
           setActionError('Invalid reference');
         }

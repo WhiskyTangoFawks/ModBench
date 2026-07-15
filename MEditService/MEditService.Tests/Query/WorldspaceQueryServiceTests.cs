@@ -24,6 +24,7 @@ public class WorldspaceQueryServiceTests
         public VmadData? GetVmad(string fk, string p) => null;
         public int CountRecordsForPlugin(string t, string p) => 0;
         public string? FindRecordType(string fk) => null;
+        public IReadOnlyList<string> GetNativeFormKeys(string plugin) => [];
         public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> t, string? p, string? s, int l, int o) => new([], 0);
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferences(string fk) => [];

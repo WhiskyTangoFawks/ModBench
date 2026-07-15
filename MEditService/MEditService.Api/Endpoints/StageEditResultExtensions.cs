@@ -17,6 +17,9 @@ public static class StageEditResultExtensions
             detail: $"The following fields are read-only and cannot be edited: {string.Join(", ", r.Fields)}",
             statusCode: 422),
         StageEditResult.InvalidReferences inv => Results.UnprocessableEntity(inv.Errors),
+        StageEditResult.EslIneligible esl => Results.Problem(
+            detail: $"'{esl.Plugin}' can't be an ESL: {esl.FormKeys.Count} FormID(s) fall outside the ESL range (0x001–0xFFF): {string.Join(", ", esl.FormKeys)}",
+            statusCode: 422),
         StageEditResult.Staged staged => Results.Ok(staged.Changes),
         var r => throw new InvalidOperationException($"Unhandled StageEditResult variant: {r.GetType().Name}")
     };

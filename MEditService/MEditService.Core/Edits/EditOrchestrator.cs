@@ -5,6 +5,7 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using Mutagen.Bethesda;
 
 namespace MEditService.Core.Edits;
 
@@ -64,6 +65,9 @@ public sealed partial class EditOrchestrator(
         }
 
         CaptureVmadOldValues(vmadFields, vmadData, oldValues);
+
+        var eslResult = CheckEslEligibility(plugin, recordType!, fields, oldValues, session!.GameRelease);
+        if (eslResult != null) return eslResult;
 
         var formRefs = ExtractFormKeyRefs(fields, schemasForValidation, recordType!);
 
@@ -514,6 +518,39 @@ public sealed partial class EditOrchestrator(
             items.RemoveAt(index);
         return JsonSerializer.SerializeToElement(items);
     }
+
+    private const string HeaderFlagsField = "flags";
+
+    // Stage-time ESL-eligibility guard (ADR-0020 style): only when a header edit turns the ESL bit
+    // ON (off→on transition) do we require every native FormID to be in the ESL range. Toggling ESM,
+    // clearing ESL, or editing on a plugin that's already ESL are never validated here.
+    private StageEditResult.EslIneligible? CheckEslEligibility(
+        string plugin, string recordType, Dictionary<string, JsonElement> fields,
+        Dictionary<string, JsonElement> oldValues, GameRelease release)
+    {
+        if (recordType != Records.HeaderIndexer.TableName) return null;
+        if (!fields.TryGetValue(HeaderFlagsField, out var newFlagsJson)) return null;
+
+        if (_schemaReflector.GetSchemas(release).GetValueOrDefault(Records.HeaderIndexer.TableName)
+                is not { EslFlagValue: { } eslBit }) return null;
+
+        var newFlags = ReadFlagsLong(newFlagsJson);
+        var oldFlags = oldValues.TryGetValue(HeaderFlagsField, out var oldJson) ? ReadFlagsLong(oldJson) : 0L;
+        var turningEslOn = (newFlags & eslBit) != 0 && (oldFlags & eslBit) == 0;
+        if (!turningEslOn) return null;
+
+        var outOfRange = EslEligibility.OutOfRangeFormKeys(_query.GetNativeFormKeys(plugin));
+        return outOfRange.Count == 0 ? null : new StageEditResult.EslIneligible(plugin, outOfRange);
+    }
+
+    // Bitmask flags travel as decimal strings (to survive JSON above 2^53) from the frontend, but
+    // captured old values are serialized numbers; accept either, and treat null as no flags set.
+    private static long ReadFlagsLong(JsonElement v) => v.ValueKind switch
+    {
+        JsonValueKind.String => long.Parse(v.GetString()!, System.Globalization.CultureInfo.InvariantCulture),
+        JsonValueKind.Number => v.GetInt64(),
+        _ => 0L,
+    };
 
     private List<ReferenceValidationError> ValidateReferences(
         Dictionary<string, JsonElement> fields,

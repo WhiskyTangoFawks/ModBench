@@ -1025,6 +1025,9 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         public int CountRecordsForPlugin(string tableName, string plugin) =>
             inner.CountRecordsForPlugin(tableName, plugin);
 
+        public IReadOnlyList<string> GetNativeFormKeys(string plugin) =>
+            inner.GetNativeFormKeys(plugin);
+
         public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset) =>
             inner.SearchRecords(tableNames, plugin, search, limit, offset);
 

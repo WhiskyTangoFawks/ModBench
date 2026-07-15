@@ -69,6 +69,19 @@ public sealed class StageEditResultMappingTests
     }
 
     [Fact]
+    public void EslIneligible_MapsTo422ProblemNamingFormKeys()
+    {
+        var result = new StageEditResult.EslIneligible("Heavy.esp", ["001000:Heavy.esp"]).ToHttpResult();
+
+        var status = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        Assert.Equal(422, status.StatusCode);
+
+        var problem = Assert.IsType<Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult>(result);
+        Assert.Contains("Heavy.esp", problem.ProblemDetails.Detail);
+        Assert.Contains("001000:Heavy.esp", problem.ProblemDetails.Detail);
+    }
+
+    [Fact]
     public void Staged_MapsTo200WithChanges()
     {
         var changes = Array.Empty<PendingChange>();
