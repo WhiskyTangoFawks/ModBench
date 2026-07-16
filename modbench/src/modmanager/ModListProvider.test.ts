@@ -494,7 +494,7 @@ describe('ModListProvider', () => {
       await provider.handleDrop(target as never, dt as never, token as never);
     }
 
-    it('a throw from reorder reports an error and logs', async () => {
+    it('a throw from reorder reports an error and logs the specific operation', async () => {
       const { provider, reports, logs } = makeFailingProvider({
         reorder: () => Promise.reject(new Error('disk full')),
       });
@@ -502,10 +502,10 @@ describe('ModListProvider', () => {
       const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
       await drop(provider, deltaNode, item({ kind: 'mod', name: 'Alpha' }));
       expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder mods.', detail: 'disk full' }]);
-      expect(logs.some((l) => l.includes('disk full'))).toBe(true);
+      expect(logs.some((l) => l.includes('reorder failed: disk full'))).toBe(true);
     });
 
-    it('a throw from moveModToSeparator reports an error and logs', async () => {
+    it('a throw from moveModToSeparator reports an error and logs the specific operation', async () => {
       const { provider, reports, logs } = makeFailingProvider({
         moveModToSeparator: () => Promise.reject(new Error('disk full')),
       });
@@ -513,10 +513,10 @@ describe('ModListProvider', () => {
       const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A')!;
       await drop(provider, sepNode, item({ kind: 'mod', name: 'Alpha' }));
       expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder mods.', detail: 'disk full' }]);
-      expect(logs.some((l) => l.includes('disk full'))).toBe(true);
+      expect(logs.some((l) => l.includes('moveModToSeparator failed: disk full'))).toBe(true);
     });
 
-    it('a throw from reorderSeparatorBlock reports an error and logs', async () => {
+    it('a throw from reorderSeparatorBlock reports an error and logs the specific operation', async () => {
       const { provider, reports, logs } = makeFailingProvider({
         reorderSeparatorBlock: () => Promise.reject(new Error('disk full')),
       });
@@ -524,7 +524,7 @@ describe('ModListProvider', () => {
       const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
       await drop(provider, deltaNode, item({ kind: 'separator', name: 'Group A' }));
       expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder mods.', detail: 'disk full' }]);
-      expect(logs.some((l) => l.includes('disk full'))).toBe(true);
+      expect(logs.some((l) => l.includes('reorderSeparatorBlock failed: disk full'))).toBe(true);
     });
 
     it('resyncs the tree after a failed drop, and a successful drop refreshes silently', async () => {
