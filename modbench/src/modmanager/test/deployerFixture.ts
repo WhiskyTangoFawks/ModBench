@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { GameDirectory } from '../gameDirectory';
-import type { ConflictEntry, FileConflictIndex } from '../fileConflictIndex';
+import { FileConflictLookup, type FileConflictIndex } from '../fileConflictIndex';
 
 export interface DeployerFixture {
   instanceRoot: string;
@@ -44,11 +44,11 @@ export async function makeDeployerFixture(): Promise<DeployerFixture> {
   };
 }
 
-/** Build a FileConflictIndex (the winner map) from relativePath → absolute source. */
+/** Build a FileConflictIndex (the winner lookup) from relativePath → absolute source. */
 export function makeIndex(files: Record<string, string>): FileConflictIndex {
-  const map = new Map<string, ConflictEntry>();
+  const lookup = new FileConflictLookup();
   for (const [relativePath, winner] of Object.entries(files)) {
-    map.set(relativePath, { winner, winnerMod: 'test', providers: ['test'] });
+    lookup.set({ relativePath, winner, winnerMod: 'test', providers: ['test'] });
   }
-  return { files: map, filesByMod: new Map() };
+  return { files: lookup, filesByMod: new Map() };
 }

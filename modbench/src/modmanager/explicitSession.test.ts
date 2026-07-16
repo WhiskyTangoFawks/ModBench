@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import type { FileConflictIndex, ConflictEntry } from './fileConflictIndex';
+import { FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
 import { buildExplicitPlugins } from './explicitSession';
 
 function index(files: Record<string, string>): FileConflictIndex {
-  const map = new Map<string, ConflictEntry>();
+  const lookup = new FileConflictLookup();
   for (const [rel, winner] of Object.entries(files)) {
-    map.set(rel, { winner, winnerMod: 'x', providers: ['x'] });
+    lookup.set({ relativePath: rel, winner, winnerMod: 'x', providers: ['x'] });
   }
-  return { files: map, filesByMod: new Map() };
+  return { files: lookup, filesByMod: new Map() };
 }
 
 const dataFolder = '/game/Data';

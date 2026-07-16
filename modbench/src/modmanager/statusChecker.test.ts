@@ -143,6 +143,29 @@ describe('computeModStatuses', () => {
   });
 });
 
+describe('computeModStatuses — case-insensitive conflicts (#128)', () => {
+  // Proton/Wine resolves paths case-insensitively over ext4's case-sensitive
+  // mods/: ModA/Textures/Foo.dds and ModB/textures/foo.dds are the SAME file
+  // on-disk from the game's point of view and must produce a badge conflict.
+  // This is a zero-production-change test of statusChecker.ts: the fold must
+  // happen entirely inside FileConflictIndex/FileConflictLookup, since
+  // statusChecker only ever calls index.files.get(file.relativePath) with the
+  // path AS WRITTEN by the walk that built filesByMod — if the fold didn't
+  // happen on the index's own behalf, this would silently miss.
+  const caseFixture = join(__dirname, 'test', 'fixtures', 'case-conflict-instance');
+  const entries: ModlistEntry[] = [mod('ModA'), mod('ModB')];
+
+  it('reports a badge conflict for case-variant paths from two mods, winner-by-priority', async () => {
+    const index = await buildFileConflictIndex(entries, caseFixture);
+    const statuses = await computeModStatuses(entries, caseFixture, index, new Set());
+
+    expect(statuses.get('ModA')?.status).toEqual({ kind: 'overrides', count: 1 });
+    const modB = statuses.get('ModB');
+    expect(modB?.status).toEqual({ kind: 'conflicts', count: 1 });
+    expect(modB?.conflictLines.join('\n')).toContain('ModA');
+  });
+});
+
 describe('checkMasterOrder', () => {
   // order: the raw plugins.txt line order (index 0 = loads first).
   const order = ['Fallout4.esm', 'Base.esp', 'Child.esp', 'Late.esp'];

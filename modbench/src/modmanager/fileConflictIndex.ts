@@ -11,6 +11,12 @@ import type { ModlistEntry } from './model';
 const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
 
 export interface ConflictEntry {
+  /** The winning provider's own relative path, in its original on-disk casing —
+   *  display + link target. Proton/Wine resolves paths case-insensitively over
+   *  ext4's case-sensitive mods/, so two mods providing case-variant paths
+   *  (Textures/Foo.dds vs textures/foo.dds) must resolve to ONE entry; this
+   *  keeps the winner's own casing rather than an arbitrarily-folded one. */
+  relativePath: string;
   /** Absolute path of the winning enabled provider (nearest the winning end). */
   winner: string;
   winnerMod: string;
@@ -18,9 +24,51 @@ export interface ConflictEntry {
   providers: string[];
 }
 
+/** Case-fold a relative path for comparison-key purposes only — never for
+ *  display, and never written back to disk. Plain toLowerCase(), matching this
+ *  module's existing rootLevelWinners convention: locale-independent, since a
+ *  case-variant collision is an ext4/Proton filesystem fact, not a
+ *  locale-dependent one. */
+export function foldPath(relativePath: string): string {
+  return relativePath.toLowerCase();
+}
+
+/** Conflict/winner lookup keyed by case-folded path, so a case-variant pair
+ *  (Textures/Foo.dds vs textures/foo.dds) resolves to one entry no matter which
+ *  casing a caller looks up with. No raw Map is exposed: there is no
+ *  bracket/`.get` access a caller could perform with an unfolded path and
+ *  silently miss — that silent miss was the original bug (#128). */
+export class FileConflictLookup {
+  private readonly byFoldedPath = new Map<string, ConflictEntry>();
+
+  set(entry: ConflictEntry): void {
+    this.byFoldedPath.set(foldPath(entry.relativePath), entry);
+  }
+
+  get(relativePath: string): ConflictEntry | undefined {
+    return this.byFoldedPath.get(foldPath(relativePath));
+  }
+
+  has(relativePath: string): boolean {
+    return this.byFoldedPath.has(foldPath(relativePath));
+  }
+
+  values(): IterableIterator<ConflictEntry> {
+    return this.byFoldedPath.values();
+  }
+
+  [Symbol.iterator](): IterableIterator<ConflictEntry> {
+    return this.values();
+  }
+
+  get size(): number {
+    return this.byFoldedPath.size;
+  }
+}
+
 export interface FileConflictIndex {
-  /** relativePath (forward-slash separated) -> conflict/winner info, for every path provided by >=1 enabled mod. */
-  files: Map<string, ConflictEntry>;
+  /** Conflict/winner info, for every path provided by >=1 enabled mod. */
+  files: FileConflictLookup;
   /** Each enabled mod's own files, so callers don't need a second filesystem walk. */
   filesByMod: Map<string, { relativePath: string; absolutePath: string }[]>;
 }
@@ -31,8 +79,8 @@ export interface FileConflictIndex {
  *  Shared by the editing-session builder and the Plugin List's order check. */
 export function rootLevelWinners(index: FileConflictIndex): Map<string, string> {
   const winnerByName = new Map<string, string>();
-  for (const [relativePath, entry] of index.files) {
-    if (!relativePath.includes('/')) winnerByName.set(relativePath.toLowerCase(), entry.winner);
+  for (const entry of index.files) {
+    if (!entry.relativePath.includes('/')) winnerByName.set(foldPath(entry.relativePath), entry.winner);
   }
   return winnerByName;
 }
@@ -67,7 +115,7 @@ export async function buildFileConflictIndex(
   entries: ModlistEntry[],
   instanceRoot: string,
 ): Promise<FileConflictIndex> {
-  const files = new Map<string, ConflictEntry>();
+  const files = new FileConflictLookup();
   const filesByMod = new Map<string, { relativePath: string; absolutePath: string }[]>();
 
   const enabledMods = entries.filter((e) => e.kind === 'mod' && e.enabled);
@@ -91,7 +139,8 @@ export async function buildFileConflictIndex(
       if (existing) {
         existing.providers.push(mod.name); // loses to the earlier (winning) provider
       } else {
-        files.set(file.relativePath, {
+        files.set({
+          relativePath: file.relativePath,
           winner: file.absolutePath,
           winnerMod: mod.name,
           providers: [mod.name],
