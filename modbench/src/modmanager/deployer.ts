@@ -7,7 +7,7 @@
 import { copyFile, link, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 import type { GameDirectory } from './gameDirectory';
-import type { FileConflictIndex } from './fileConflictIndex';
+import { foldPath, type FileConflictIndex } from './fileConflictIndex';
 
 /** ADR-0026 surfacing: injected so business logic stays free of vscode types. */
 export type Severity = 'error' | 'warning';
@@ -166,45 +166,72 @@ async function readBaseline(
   instanceRoot: string,
   dataFolder: string,
   reporter: Reporter,
-): Promise<{ previousLinks: Set<string>; preExisting: string[] } | null> {
+): Promise<{ previousLinks: Map<string, string>; preExisting: string[] } | null> {
   const result = await readManifest(instanceRoot);
   switch (result.status) {
     case 'absent':
-      return { previousLinks: new Set(), preExisting: await listRelativeFiles(dataFolder) };
+      return { previousLinks: new Map(), preExisting: await listRelativeFiles(dataFolder) };
     case 'corrupt':
       reportCorruptManifest(reporter, result.error);
       return null;
     case 'ok':
-      return { previousLinks: new Set(result.manifest.links), preExisting: result.manifest.preExisting };
+      return { previousLinks: toFoldedLinkMap(result.manifest.links), preExisting: result.manifest.preExisting };
   }
 }
 
-/** Hardlink each winner into Data/, partitioning paths into linked vs skipped. */
+/** Manifest links (original-cased) -> folded key -> original-cased path, so a
+ *  later casing change (a reorder makes a different-case-variant provider win)
+ *  can be detected against the PRIOR casing rather than just the folded key. */
+function toFoldedLinkMap(links: string[]): Map<string, string> {
+  return new Map(links.map((path) => [foldPath(path), path]));
+}
+
+/** Hardlink each winner into Data/, partitioning paths into linked vs skipped.
+ *  A prior link is matched by FOLDED key (so a lookup finds it regardless of
+ *  casing), but "is this the same link" is judged by EXACT casing — if the
+ *  winner's casing changed since the last deploy (e.g. a reorder makes a
+ *  different mod, shipping a different-case variant of the same logical file,
+ *  win), the old-cased target is a stale file at a path distinct from the new
+ *  one on ext4 and must be removed before the new-cased link is created, or it
+ *  would be orphaned in Data/ forever (the #128 bug, reproduced via a
+ *  different trigger if this weren't handled). */
 async function linkWinners(
   index: FileConflictIndex,
   dataFolder: string,
-  previousLinks: Set<string>,
+  previousLinks: Map<string, string>,
   linkFn: (source: string, target: string) => Promise<void>,
 ): Promise<{ links: string[]; skipped: string[] }> {
   const links: string[] = [];
   const skipped: string[] = [];
-  for (const [relativePath, entry] of index.files) {
+  for (const entry of index.files) {
+    const relativePath = entry.relativePath;
     // MO2 Root-Builder: a mod's root/ contents map to the game root, not Data/.
     // Deploying them into Data/root/ would be wrong; skip (deferred — see modbench-4).
     if (relativePath === 'root' || relativePath.startsWith('root/')) continue;
 
-    const outcome = await linkWinner(join(dataFolder, relativePath), entry.winner, previousLinks.has(relativePath), linkFn);
+    const foldedKey = foldPath(relativePath);
+    const priorPath = previousLinks.get(foldedKey);
+    if (priorPath !== undefined && priorPath !== relativePath) {
+      // Casing changed since the last deploy — the old-cased target is a
+      // distinct on-disk path from the new one; remove it explicitly.
+      await rm(join(dataFolder, priorPath), { force: true });
+    }
+    const wasPreviouslyLinked = priorPath === relativePath;
+
+    const outcome = await linkWinner(join(dataFolder, relativePath), entry.winner, wasPreviouslyLinked, linkFn);
     (outcome === 'linked' ? links : skipped).push(relativePath);
   }
   return { links, skipped };
 }
 
-/** Remove prior links whose path is no longer a winner (e.g. a mod was
- *  disabled/removed), so a later purge doesn't misfile them as strays. */
-async function removeStaleLinks(dataFolder: string, previousLinks: Set<string>, links: string[]): Promise<void> {
-  const nowLinked = new Set(links);
-  for (const relativePath of previousLinks) {
-    if (!nowLinked.has(relativePath)) await rm(join(dataFolder, relativePath), { force: true });
+/** Remove prior links whose folded key is no longer a winner at all (e.g. a
+ *  mod was disabled/removed), so a later purge doesn't misfile them as
+ *  strays. Distinct from linkWinners' stale-old-casing removal: this is the
+ *  "genuinely gone" case, NOT the "casing changed" case. */
+async function removeStaleLinks(dataFolder: string, previousLinks: Map<string, string>, links: string[]): Promise<void> {
+  const nowLinkedFolded = new Set(links.map(foldPath));
+  for (const [foldedKey, path] of previousLinks) {
+    if (!nowLinkedFolded.has(foldedKey)) await rm(join(dataFolder, path), { force: true });
   }
 }
 
@@ -282,10 +309,12 @@ export async function purge(
   // Anything left in Data/ that is neither one of our links nor part of the
   // vanilla baseline is a runtime output (F4SE logs, MCM INI writes). Preserve
   // it by moving it into the instance's overwrite/ (sibling of mods/, per MO2).
-  const kept = new Set([...manifest.links, ...manifest.preExisting]);
+  // Compared by folded path: a real on-disk entry's casing must match a kept
+  // path only up to case, since Proton/Wine resolves it case-insensitively.
+  const keptFolded = new Set([...manifest.links, ...manifest.preExisting].map(foldPath));
   const unmoved: string[] = [];
   for (const relativePath of await listRelativeFiles(dataFolder)) {
-    if (kept.has(relativePath)) continue;
+    if (keptFolded.has(foldPath(relativePath))) continue;
     const from = join(dataFolder, relativePath);
     const to = join(instanceRoot, 'overwrite', relativePath);
     try {

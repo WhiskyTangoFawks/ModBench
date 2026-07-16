@@ -183,6 +183,62 @@ describe('deploy', () => {
     expect(reporter.reports.some((r) => r.severity === 'error')).toBe(true);
   });
 
+  // Proton/Wine resolves paths case-insensitively over ext4's case-sensitive
+  // mods/ — two mods providing case-variant paths (Textures/Foo.dds vs
+  // textures/foo.dds) are the SAME file to the game, but DIFFERENT physical
+  // paths on ext4. The winner map only ever has one entry per folded path
+  // (fileConflictIndex's job), so the deployer must link exactly the winner's
+  // own casing and never both (#128).
+  it('links exactly one file for a case-variant winner, at the winner\'s own casing', async () => {
+    fx = await makeDeployerFixture();
+    const source = await fx.writeModFile('ModA', 'Textures/Foo.dds', 'A');
+    const index = makeIndex({ 'Textures/Foo.dds': source });
+
+    await deploy(fx.instanceRoot, fx.gameDirectory, index, fakeReporter());
+
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'Textures/Foo.dds'))).resolves.toBeTruthy();
+    // The losing provider's own casing was never separately linked.
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'))).rejects.toThrow();
+    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    expect(manifest.links).toEqual(['Textures/Foo.dds']);
+  });
+
+  it('removes the old-cased link and creates the new-cased one when the winner\'s casing changes on redeploy', async () => {
+    fx = await makeDeployerFixture();
+    const a = await fx.writeModFile('ModA', 'Textures/Foo.dds', 'A');
+    const b = await fx.writeModFile('ModB', 'textures/foo.dds', 'B');
+
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'Textures/Foo.dds': a }), fakeReporter());
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'Textures/Foo.dds'))).resolves.toBeTruthy();
+
+    // Reorder: ModB now wins the same logical file, with a different casing.
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'textures/foo.dds': b }), fakeReporter());
+
+    // Old-cased target is gone — never orphaned in Data/.
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'Textures/Foo.dds'))).rejects.toThrow();
+    // New-cased target is present with the new winner's content.
+    expect(await readFile(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'), 'utf8')).toBe('B');
+
+    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    expect(manifest.links).toEqual(['textures/foo.dds']); // never both casings
+  });
+
+  it('purge after a casing change cleans up correctly, without misfiling into overwrite/', async () => {
+    fx = await makeDeployerFixture();
+    const a = await fx.writeModFile('ModA', 'Textures/Foo.dds', 'A');
+    const b = await fx.writeModFile('ModB', 'textures/foo.dds', 'B');
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'Textures/Foo.dds': a }), fakeReporter());
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'textures/foo.dds': b }), fakeReporter());
+
+    await purge(fx.instanceRoot, fx.gameDirectory, fakeReporter());
+
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'))).rejects.toThrow();
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'Textures/Foo.dds'))).rejects.toThrow();
+    // Nothing stray got moved into overwrite/ under either casing.
+    await expect(stat(join(fx.instanceRoot, 'overwrite', 'textures/foo.dds'))).rejects.toThrow();
+    await expect(stat(join(fx.instanceRoot, 'overwrite', 'Textures/Foo.dds'))).rejects.toThrow();
+  });
+
   it('aborts and reports (never re-snapshots Data/) when the manifest is corrupt', async () => {
     fx = await makeDeployerFixture();
     const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
