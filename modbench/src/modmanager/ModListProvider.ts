@@ -255,17 +255,17 @@ export class ModListProvider
     return node.kind === 'mod' ? node.mod.name : node.separator.name;
   }
 
-  /** A separator moves with its children as a block: the separator plus every
-   *  following entry up to (not including) the next separator — matching
-   *  moveSeparatorBlockInText's block extent. */
+  /** A separator moves with its real (preceding) members as a block: every
+   *  entry back to (not including) the previous separator, then the separator
+   *  itself last — matching moveSeparatorBlockInText's block extent (#107). */
   private separatorBlockNames(sepName: string): string[] {
     const entries = this.cachedEntries ?? [];
-    const start = entries.findIndex((e) => e.kind === 'separator' && e.name === sepName);
-    if (start < 0) return [sepName];
-    const names = [sepName];
-    for (let i = start + 1; i < entries.length && entries[i].kind !== 'separator'; i++) {
-      names.push(entries[i].name);
-    }
+    const idx = entries.findIndex((e) => e.kind === 'separator' && e.name === sepName);
+    if (idx < 0) return [sepName];
+    let start = idx - 1;
+    while (start >= 0 && entries[start].kind !== 'separator') start--;
+    const names = entries.slice(start + 1, idx).map((e) => e.name);
+    names.push(sepName);
     return names;
   }
 

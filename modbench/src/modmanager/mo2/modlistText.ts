@@ -196,18 +196,16 @@ export function removeModFromText(text: string, modName: string): string {
   });
 }
 
+// Ungrouped means "after the last separator" — the file's tail among entry
+// lines — never a position relative to the first separator (#107).
 function ungroupedInsertAt(lines: string[]): number {
-  const firstSepIdx = lines.findIndex(isSeparatorLine);
-  if (firstSepIdx >= 0) {
-    const lastUngrouped = [...lines.keys()].findLast(
-      (i: number) => i < firstSepIdx && isEntryLine(lines[i]),
-    );
-    return lastUngrouped === undefined ? firstSepIdx : lastUngrouped + 1;
-  }
   const last = [...lines.keys()].findLast((i: number) => isEntryLine(lines[i]));
   return last === undefined ? lines.length : last + 1;
 }
 
+// A separator's section is the mods that PRECEDE it (#107); its last member sits
+// immediately above the separator's own line, so the insert point for "append to
+// this section" is simply the separator line's own index.
 function separatorSectionInsertAt(lines: string[], separatorName: string): number {
   const sepIdx = lines.findIndex(
     (l) =>
@@ -215,16 +213,12 @@ function separatorSectionInsertAt(lines: string[], separatorName: string): numbe
       lineContent(l) === '-' + separatorName + SEPARATOR_SUFFIX,
   );
   if (sepIdx === -1) throw new Error(`Separator not found in modlist: ${separatorName}`);
-  let lastChildIdx = sepIdx;
-  for (let i = sepIdx + 1; i < lines.length; i++) {
-    if (isSeparatorLine(lines[i])) break;
-    if (isEntryLine(lines[i])) lastChildIdx = i;
-  }
-  return lastChildIdx + 1;
+  return sepIdx;
 }
 
-/** Move a mod to the end of a separator's child section, or to the ungrouped section
- *  (before the first separator) when `separatorName` is null. */
+/** Move a mod to the end of a separator's child section (immediately preceding
+ *  the separator's own line — #107), or to the ungrouped section (the file's
+ *  tail, after the last entry) when `separatorName` is null. */
 export function moveModToSeparatorEndInText(
   text: string,
   modName: string,
@@ -266,10 +260,20 @@ export function moveSeparatorBlockInText(
     );
     if (sepIdx === -1) throw new Error(`Separator not found in modlist: ${separatorName}`);
 
-    // Extent of the block: sep line + everything up to (but not including) the next separator line
-    const nextSep = lines.findIndex((l, i) => i > sepIdx && isSeparatorLine(l));
-    const blockEnd = nextSep === -1 ? lines.length : nextSep;
-    const block = lines.splice(sepIdx, blockEnd - sepIdx);
+    // Extent of the block: everything back to (but not including) the previous
+    // separator line, or the file's first entry line if none, up to and
+    // including the sep's own line — the separator trails its real (preceding)
+    // members (#107). Falling back to line 0 instead of the first entry would
+    // sweep a leading comment/blank line into the block.
+    let prevSepIdx = -1;
+    for (let i = sepIdx - 1; i >= 0; i--) {
+      if (isSeparatorLine(lines[i])) {
+        prevSepIdx = i;
+        break;
+      }
+    }
+    const blockStart = prevSepIdx >= 0 ? prevSepIdx + 1 : lines.findIndex(isEntryLine);
+    const block = lines.splice(blockStart, sepIdx - blockStart + 1);
 
     // Insert at toIndex among remaining entry lines
     const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
