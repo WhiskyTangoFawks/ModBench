@@ -28,6 +28,10 @@ _Avoid_: high/low priority, top/bottom (those are view words).
 How a list is displayed (winning-at-top or losing-at-top). A configurable presentation choice with **no** semantic weight — it never changes who wins. Keep strictly separate from override order.
 _Avoid_: conflating with priority/override order.
 
+**Separator**:
+A named label that **wraps** a contiguous run of mods in the Mod override order — an author's grouping ("ENB", "Armor"), not a participant in it. A separator does not win or lose anything; it has no files. Its membership is **fixed and view-independent**: a mod belongs to the same separator no matter which way the list is displayed. In `modlist.txt` a separator's wrapped mods are the entries **preceding** its line, up to the previous separator — the mods that win over it — because the file is winning-first while MO2's authoring view is losing-at-top, so a separator is written *after* the mods it heads. Mods after the last separator in the file (the losing end) are **ungrouped**. See #107.
+_Avoid_: group/category (say separator), "the mods under a separator" without saying in which order, treating a separator as a priority position.
+
 **Plugin load order**:
 The **Plugin override order** as written in `plugins.txt` — the order the game engine loads plugins (`.esm`/`.esp`/`.esl`); the last-loaded wins at the record level and base masters (`Fallout4.esm`) are losing-most (Editing context concern). Owned and written by the Plugins tab ([plugins.md](../../../docs/specs/plugins.md)); Editing consumes it read-only to build a session. Distinct from the Mod override order (file-level winner).
 _Avoid_: load order (ambiguous), plugin list, higher/lower priority (say "winning"/"losing")
