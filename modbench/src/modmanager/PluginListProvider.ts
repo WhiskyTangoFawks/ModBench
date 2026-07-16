@@ -118,7 +118,7 @@ export class PluginListProvider
    *  PluginNodes with badges) so a filter keystroke re-renders instead of
    *  re-reading plugins.txt / re-walking the conflict index and status pass.
    *  `invalidate()` clears it; `render()` (setFilter) leaves it intact. */
-  private cache?: { order: string[]; enabled: string[]; rows: PluginListNode[] };
+  private cache?: { rows: PluginListNode[] };
 
   /** `instanceRoot`, when provided, enables the order-aware missing-master badge
    *  (issue #67): each plugin's declared masters are read and checked against the
@@ -218,7 +218,7 @@ export class PluginListProvider
   private async buildRows(): Promise<
     | { kind: 'error'; message: string }
     | { kind: 'empty' }
-    | { kind: 'ok'; cache: { order: string[]; enabled: string[]; rows: PluginListNode[] } }
+    | { kind: 'ok'; cache: { rows: PluginListNode[] } }
   > {
     let order: string[];
     let enabled: string[];
@@ -257,7 +257,7 @@ export class PluginListProvider
       ...implicitNames.map((name) => new ImplicitMasterNode(name)),
       ...dedupedOrder.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }, statuses?.get(name))),
     ];
-    return { kind: 'ok', cache: { order, enabled, rows } };
+    return { kind: 'ok', cache: { rows } };
   }
 
   /** Order-aware missing-master verdicts for `order` (the implicit-first, deduped
