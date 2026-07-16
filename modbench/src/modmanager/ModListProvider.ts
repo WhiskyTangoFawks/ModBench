@@ -13,6 +13,20 @@ import type { Reporter } from './deployer';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
+/** Tags a failed drop mutation with which of `applyDrop`'s three branches threw,
+ *  so `handleDrop`'s catch can log a specific `<operation> failed: ...` line
+ *  instead of a generic one — without re-deriving the branch from the drop
+ *  payload (#130 review follow-up). `message` mirrors the original error so
+ *  the reporter's user-facing detail is unaffected. */
+class DropMutationError extends Error {
+  constructor(
+    readonly operation: 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock',
+    cause: unknown,
+  ) {
+    super(cause instanceof Error ? cause.message : String(cause));
+  }
+}
+
 /** Shared resolved-undefined default for an omitted `dataFolder` — hoisted out of
  *  the constructor so it isn't a fresh async operation per instance. */
 const NO_DATA_FOLDER: Promise<string | undefined> = Promise.resolve(undefined);
@@ -217,6 +231,26 @@ export class ModListProvider
     // position — dropping onto them must not fall through to "move to end".
     if (target?.kind === 'count' || target?.kind === 'overwrite') return;
     const { kind, name } = payload.value as { kind: 'mod' | 'separator'; name: string };
+    try {
+      await this.applyDrop(kind, name, target);
+    } catch (e) {
+      // ADR-0026: an explicit user action failed — notify + log, then resync the
+      // moved rows against disk so the tree never shows a phantom reorder.
+      const message = e instanceof Error ? e.message : String(e);
+      const operation = e instanceof DropMutationError ? e.operation : 'handleDrop';
+      this.log(`[ModListProvider] ${operation} failed: ${message}`);
+      this.reporter?.report('error', 'Failed to reorder mods.', message);
+    }
+    this.refresh();
+  }
+
+  /** Dispatches a drop's mutation call: mod-onto-separator, mod-reorder, or
+   *  separator-block-reorder. Split out of `handleDrop` only to keep that
+   *  method's cyclomatic complexity under lint's threshold once the failure
+   *  handling was added (#130) — no behavior change from the prior inline body.
+   *  Each branch runs through `runMutation` so a throw carries which branch it
+   *  came from (#130 review follow-up: specific log lines over a generic one). */
+  private async applyDrop(kind: 'mod' | 'separator', name: string, target: ModlistNode | undefined): Promise<void> {
     // A drop hands us the *pre-removal* target ("insert before this row"), but
     // moveModInText/moveSeparatorBlockInText count toIndex among the entries with
     // the moved line(s) already removed — so any moved entry above the target
@@ -226,14 +260,28 @@ export class ModListProvider
     const targetName = this.targetName(target);
     if (kind === 'mod') {
       if (target instanceof SeparatorNode) {
-        await this.source.moveModToSeparator(name, target.separator.name);
+        await this.runMutation('moveModToSeparator', () => this.source.moveModToSeparator(name, target.separator.name));
       } else {
-        await this.source.reorder(name, this.dropToIndex(order, [name], targetName));
+        await this.runMutation('reorder', () => this.source.reorder(name, this.dropToIndex(order, [name], targetName)));
       }
     } else {
-      await this.source.reorderSeparatorBlock(name, this.dropToIndex(order, this.separatorBlockNames(name), targetName));
+      await this.runMutation('reorderSeparatorBlock', () =>
+        this.source.reorderSeparatorBlock(name, this.dropToIndex(order, this.separatorBlockNames(name), targetName)),
+      );
     }
-    this.refresh();
+  }
+
+  /** Runs a single drop mutation, tagging any throw with `operation` so
+   *  `handleDrop`'s catch can log which of the three mutations failed. */
+  private async runMutation(
+    operation: 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock',
+    mutate: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      await mutate();
+    } catch (e) {
+      throw new DropMutationError(operation, e);
+    }
   }
 
   /** File-order insert index for a drop, honoring the view direction. `order` is

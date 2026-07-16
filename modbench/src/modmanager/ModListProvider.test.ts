@@ -449,6 +449,112 @@ describe('ModListProvider', () => {
     });
   });
 
+  // #130: a failed drop must report on ADR-0026's "explicit action failed" tier
+  // (error notification + log) via the injected reporter, and the tree must
+  // resync against disk rather than show a phantom move — mirrors
+  // PluginListProvider.handleDrop's failure handling exactly.
+  describe('drag-and-drop — failure handling (#130)', () => {
+    type DragItem = { value: unknown };
+    class FakeDataTransfer {
+      private readonly _items = new Map<string, DragItem>();
+      get(mime: string) { return this._items.get(mime); }
+      set(mime: string, item: DragItem) { this._items.set(mime, item); }
+    }
+    const item = (value: unknown): DragItem => ({ value });
+    const token = { isCancellationRequested: false };
+
+    // Same shape as the drag-and-drop fixture above: Group A wraps Alpha,
+    // Group B wraps Beta/Gamma (#107 — a separator's real members precede it),
+    // Delta trails the last separator and is ungrouped.
+    const dndEntries: ModlistEntry[] = [
+      mod('Alpha'),
+      sep('Group A'),
+      mod('Beta'),
+      mod('Gamma'),
+      sep('Group B'),
+      mod('Delta'),
+    ];
+
+    function makeFailingProvider(overrides: Partial<FakeSource>) {
+      const fakeSource = new FakeSource(dndEntries);
+      Object.assign(fakeSource, overrides);
+      const reports: { severity: string; message: string; detail?: string }[] = [];
+      const logs: string[] = [];
+      const provider = new ModListProvider({
+        source: fakeSource,
+        log: (m) => logs.push(m),
+        reporter: { report: (severity, message, detail) => { reports.push({ severity, message, detail }); } },
+      });
+      return { provider, reports, logs };
+    }
+
+    async function drop(provider: ModListProvider, target: unknown, payload: DragItem): Promise<void> {
+      const dt = new FakeDataTransfer();
+      dt.set('application/vnd.medit.modlist-node', payload);
+      await provider.handleDrop(target as never, dt as never, token as never);
+    }
+
+    it('a throw from reorder reports an error and logs the specific operation', async () => {
+      const { provider, reports, logs } = makeFailingProvider({
+        reorder: () => Promise.reject(new Error('disk full')),
+      });
+      const roots = await provider.getChildren();
+      const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
+      await drop(provider, deltaNode, item({ kind: 'mod', name: 'Alpha' }));
+      expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder mods.', detail: 'disk full' }]);
+      expect(logs.some((l) => l.includes('reorder failed: disk full'))).toBe(true);
+    });
+
+    it('a throw from moveModToSeparator reports an error and logs the specific operation', async () => {
+      const { provider, reports, logs } = makeFailingProvider({
+        moveModToSeparator: () => Promise.reject(new Error('disk full')),
+      });
+      const roots = await provider.getChildren();
+      const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A')!;
+      await drop(provider, sepNode, item({ kind: 'mod', name: 'Alpha' }));
+      expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder mods.', detail: 'disk full' }]);
+      expect(logs.some((l) => l.includes('moveModToSeparator failed: disk full'))).toBe(true);
+    });
+
+    it('a throw from reorderSeparatorBlock reports an error and logs the specific operation', async () => {
+      const { provider, reports, logs } = makeFailingProvider({
+        reorderSeparatorBlock: () => Promise.reject(new Error('disk full')),
+      });
+      const roots = await provider.getChildren();
+      const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
+      await drop(provider, deltaNode, item({ kind: 'separator', name: 'Group A' }));
+      expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder mods.', detail: 'disk full' }]);
+      expect(logs.some((l) => l.includes('reorderSeparatorBlock failed: disk full'))).toBe(true);
+    });
+
+    it('resyncs the tree after a failed drop, and a successful drop refreshes silently', async () => {
+      const { provider: failing, reports: failingReports } = makeFailingProvider({
+        reorder: () => Promise.reject(new Error('disk full')),
+      });
+      let failingFired = false;
+      failing.onDidChangeTreeData(() => { failingFired = true; });
+      const roots = await failing.getChildren();
+      const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
+      await drop(failing, deltaNode, item({ kind: 'mod', name: 'Alpha' }));
+      expect(failingFired).toBe(true); // refresh fired to resync against disk
+      expect(failingReports).toHaveLength(1);
+
+      const okSource = new FakeSource(dndEntries);
+      const okReports: { severity: string; message: string }[] = [];
+      const ok = new ModListProvider({
+        source: okSource,
+        reporter: { report: (severity, message) => { okReports.push({ severity, message }); } },
+      });
+      let okFired = false;
+      ok.onDidChangeTreeData(() => { okFired = true; });
+      const okRoots = await ok.getChildren();
+      const okDeltaNode = okRoots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
+      await drop(ok, okDeltaNode, item({ kind: 'mod', name: 'Alpha' }));
+      expect(okFired).toBe(true);
+      expect(okReports).toEqual([]);
+    });
+  });
+
   describe('setFilter — reset behaviour', () => {
     it('clearing filter resets groupingOn to true and shows all nodes', async () => {
       const provider = new ModListProvider({ source: new FakeSource([
