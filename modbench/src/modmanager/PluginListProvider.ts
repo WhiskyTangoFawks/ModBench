@@ -5,6 +5,7 @@ import { dropIndexForMove } from './mo2/pluginsText';
 import { buildFileConflictIndex } from './fileConflictIndex';
 import { computePluginOrderStatuses, type PluginOrderStatus } from './statusChecker';
 import { resolvePluginPaths } from './explicitSession';
+import { discoverImplicitMasters } from './vanillaMasters';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -48,6 +49,22 @@ export class PluginNode extends vscode.TreeItem {
   }
 }
 
+/** A synthetic row for one of the game's implicitly-loaded vanilla/DLC masters
+ *  (issue #108) — discovered from the resolved Data folder (a plugin file that
+ *  is NOT a hardlink), never hardcoded. Rendered ahead of plugins.txt's own
+ *  rows, in topological order. Immutable: no checkbox (unset, so VS Code
+ *  renders none — nothing to toggle), and excluded from drag by
+ *  `handleDrag`'s existing `kind === 'plugin'` filter (not draggable). Its
+ *  `contextValue` (`pluginImplicit`, distinct from `plugin`) lets package.json
+ *  menu `when` clauses hide any plugin-only command (reorder, toggle) for it. */
+export class ImplicitMasterNode extends vscode.TreeItem {
+  readonly kind = 'implicitMaster' as const;
+  constructor(public readonly name: string) {
+    super(name, vscode.TreeItemCollapsibleState.None);
+    this.contextValue = 'pluginImplicit';
+  }
+}
+
 /** Inline error surface: shown instead of an empty list when the plugins.txt
  *  read fails, so a failure is never indistinguishable from "no plugins"
  *  (ADR-0026, modmanager/CLAUDE.md convention). */
@@ -70,7 +87,7 @@ export class EmptyNode extends vscode.TreeItem {
   }
 }
 
-export type PluginListNode = PluginNode | ErrorNode | EmptyNode;
+export type PluginListNode = PluginNode | ImplicitMasterNode | ErrorNode | EmptyNode;
 
 /** Sidebar Plugin List (Loadout) tree: one row per plugins.txt line, in Plugin
  *  load order (top = loads first). Toggling a row's checkbox writes plugins.txt
@@ -173,20 +190,42 @@ export class PluginListProvider
     }
 
     this.lastOrder = order;
-    if (order.length === 0) return [new EmptyNode()];
+
+    // The game's implicitly-loaded vanilla/DLC masters (issue #108): discovered from
+    // the resolved Data folder, never from plugins.txt. Rendered first, immutable. A
+    // name in both sets renders exactly once — as the implicit row — so its
+    // plugins.txt line (if any, e.g. a stale CC .esl entry) is filtered out here.
+    // `fullOrder` (implicit-first) is used for row rendering and badge computation
+    // ONLY; `this.lastOrder` above stays plugins.txt's raw order, since that's what
+    // `dropIndexForMove`/`reorderPlugins` write positions against.
+    const dataFolder = await this.dataFolder;
+    const implicitNames = await discoverImplicitMasters(dataFolder, this.log);
+    const implicitLower = new Set(implicitNames.map((n) => n.toLowerCase()));
+    const dedupedOrder = order.filter((n) => !implicitLower.has(n.toLowerCase()));
+    const fullOrder = [...implicitNames, ...dedupedOrder];
+
+    if (fullOrder.length === 0) return [new EmptyNode()];
     const enabledSet = new Set(enabled);
     // Badges are computed against the full order (never the filtered subset) so a
     // filtered-out master still counts toward a visible row's order-aware verdict.
-    const statuses = await this.computeStatuses(order);
-    const rows = order.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }, statuses?.get(name)));
-    return this.filterText ? rows.filter((n) => n.plugin.name.toLowerCase().includes(this.filterLower)) : rows;
+    const statuses = await this.computeStatuses(fullOrder);
+    const rows: PluginListNode[] = [
+      ...implicitNames.map((name) => new ImplicitMasterNode(name)),
+      ...dedupedOrder.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }, statuses?.get(name))),
+    ];
+    // Rows here are always PluginNode/ImplicitMasterNode, both constructed with a
+    // plain string label — safe to filter on directly (never TreeItemLabel/object).
+    return this.filterText
+      ? rows.filter((n) => (n.label as string).toLowerCase().includes(this.filterLower))
+      : rows;
   }
 
-  /** Order-aware missing-master verdicts for the current order, or undefined when
-   *  no instanceRoot is configured. A secondary, non-blocking step (modmanager/
-   *  CLAUDE.md): on any failure the badges degrade to absent — the tree still
-   *  renders every row — with a warning surfaced (ADR-0026: silently missing
-   *  badges would look identical to "all masters correctly ordered"). */
+  /** Order-aware missing-master verdicts for `order` (the implicit-first, deduped
+   *  full row order — see `getChildren`), or undefined when no instanceRoot is
+   *  configured. A secondary, non-blocking step (modmanager/CLAUDE.md): on any
+   *  failure the badges degrade to absent — the tree still renders every row —
+   *  with a warning surfaced (ADR-0026: silently missing badges would look
+   *  identical to "all masters correctly ordered"). */
   private async computeStatuses(order: string[]): Promise<Map<string, PluginOrderStatus> | undefined> {
     if (!this.instanceRoot) return undefined;
     try {
@@ -218,7 +257,12 @@ export class PluginListProvider
   /** Move the dragged block so it lands before `target` (or at the end when the
    *  drop is past the last row / onto a non-plugin node), writing plugins.txt
    *  immediately. `dropIndexForMove` reconciles the drop target with
-   *  `movePluginsInText`'s post-removal index convention. */
+   *  `movePluginsInText`'s post-removal index convention. A drop onto the
+   *  immutable implicit-master block (issue #108) is not a plugins.txt position —
+   *  those rows have no line — so it lands at file-index 0, the top of the
+   *  mutable region, computed against `this.lastOrder` (plugins.txt's raw order,
+   *  NEVER the display-composed implicit-first order — writing against the
+   *  wrong index would corrupt plugins.txt). */
   async handleDrop(
     target: PluginListNode | undefined,
     dataTransfer: vscode.DataTransfer,
@@ -229,7 +273,7 @@ export class PluginListProvider
     const { names } = payload.value as { names: string[] };
     if (names.length === 0) return;
     const targetName = target?.kind === 'plugin' ? target.plugin.name : undefined;
-    const toIndex = dropIndexForMove(this.lastOrder, names, targetName);
+    const toIndex = target?.kind === 'implicitMaster' ? 0 : dropIndexForMove(this.lastOrder, names, targetName);
     try {
       await this.source.reorderPlugins(names, toIndex);
     } catch (e) {

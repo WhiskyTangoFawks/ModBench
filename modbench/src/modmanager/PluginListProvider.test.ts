@@ -36,7 +36,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { PluginListProvider, PluginNode, ErrorNode, EmptyNode } from './PluginListProvider';
+import { PluginListProvider, PluginNode, ImplicitMasterNode, ErrorNode, EmptyNode } from './PluginListProvider';
 
 /** Minimal IModlistSource stub: only the two plugin read methods matter here;
  *  everything else throws to prove PluginListProvider never touches them. */
@@ -421,12 +421,29 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
     expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
   });
 
-  it('checks a vanilla row the same way (no special-casing)', async () => {
-    // Base.esp (mod) before Fallout4.esm (vanilla) — Base's vanilla master loads too late.
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Base.esp\r\nFallout4.esm\r\nChild.esp\r\n');
+  it('checkMasterOrder itself does not special-case vanilla — a real (non-implicit) plugins.txt master sequenced after its dependent is still flagged (#67 regression, with implicit rows present)', async () => {
+    // Base.esp masters a second, mod-provided plugin (Late.esp) sequenced after it in
+    // plugins.txt — the check algorithm has no vanilla special-casing; issue #108 fixes
+    // the ROW SET (vanilla masters are now an implicit, always-first block), not this
+    // per-pair order check, which still flags a genuinely-late real-file master.
+    await mkdir(join(dir, 'mods', 'Late'), { recursive: true });
+    await writeFile(join(dir, 'mods', 'Late', 'Late.esp'), buildTes4Buffer([]));
+    await writeFile(join(dir, 'mods', 'Provider', 'Base.esp'), buildTes4Buffer(['Fallout4.esm', 'Late.esp']));
+    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+Consumer\r\n+Provider\r\n+Late\r\n');
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nBase.esp\r\nLate.esp\r\nChild.esp\r\n');
     const nodes = await pluginNodes(provider());
     expect(byName(nodes, 'Base.esp').iconPath).toEqual({ id: 'error' });
-    expect(byName(nodes, 'Base.esp').tooltip).toContain('Fallout4.esm');
+    expect(byName(nodes, 'Base.esp').tooltip).toContain('Late.esp');
+  });
+
+  it('a discovered implicit (vanilla) master never false-flags a plugin declaring it, even if plugins.txt lists it out of position (issue #108 — the bug this fixes)', async () => {
+    // Fallout4.esm sequenced AFTER Base.esp in plugins.txt's raw text — under the old
+    // row set this would have flagged Base.esp. Fallout4.esm is discovered from
+    // dataFolder (nlink 1) and rendered as an always-first implicit row, so the game's
+    // actual load order (vanilla first) is what's checked, not plugins.txt's stale line.
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Base.esp\r\nFallout4.esm\r\nChild.esp\r\n');
+    const nodes = await pluginNodes(provider());
+    expect(byName(nodes, 'Base.esp').iconPath).toBeUndefined();
   });
 
   it('renders the plain tree (badges degraded) with a warning when status computation fails', async () => {
@@ -491,5 +508,185 @@ describe('PluginListProvider — resolvePluginPath (Reveal in Explorer, issue #6
     const provider = new PluginListProvider({ source: new Mo2ModlistSource(dir), log: (m) => logs.push(m), instanceRoot: join(dir, 'ModOrganizer.ini') });
     expect(await provider.resolvePluginPath('Base.esp')).toBeUndefined();
     expect(logs.some((l) => l.includes('resolvePluginPath'))).toBe(true);
+  });
+});
+
+// Issue #108: the game's implicitly-loaded vanilla masters (discovered from the
+// resolved Data folder — a plugin file that is NOT a hardlink, nlink === 1) render
+// as immutable rows ahead of plugins.txt's own lines, so their absence never makes a
+// plugin declaring one show a false "missing master".
+describe('PluginListProvider — implicit (vanilla) master rows (issue #108)', () => {
+  let dir: string;
+  const dataFolder = () => join(dir, 'Game', 'Data');
+  const providerFor = (extra: Partial<import('./PluginListProvider').PluginListProviderOptions> = {}) =>
+    new PluginListProvider({
+      source: new Mo2ModlistSource(dir),
+      instanceRoot: dir,
+      dataFolder: Promise.resolve(dataFolder()),
+      ...extra,
+    });
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'plugin-implicit-'));
+    await mkdir(dataFolder(), { recursive: true });
+    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
+    await writeFile(
+      join(dir, 'ModOrganizer.ini'),
+      `[General]\r\nselected_profile=@ByteArray(Default)\r\ngamePath=@ByteArray(${join(dir, 'Game')})\r\n`,
+    );
+    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('renders implicit masters as ImplicitMasterNode rows preceding plugins.txt rows, in topological order, with no checkbox and contextValue pluginImplicit', async () => {
+    // DLCCoast.esm masters Fallout4.esm — alphabetically DLCCoast < Fallout4, which
+    // would be wrong; the correct topological order is Fallout4.esm first.
+    await writeFile(join(dataFolder(), 'Fallout4.esm'), buildTes4Buffer([]));
+    await writeFile(join(dataFolder(), 'DLCCoast.esm'), buildTes4Buffer(['Fallout4.esm']));
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*Mod.esp\r\n');
+    await mkdir(join(dir, 'mods', 'SomeMod'), { recursive: true });
+    await writeFile(join(dir, 'mods', 'SomeMod', 'Mod.esp'), buildTes4Buffer([]));
+    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+SomeMod\r\n');
+
+    const rows = await providerFor().getChildren();
+    expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm', 'DLCCoast.esm', 'Mod.esp']);
+    expect(rows[0]).toBeInstanceOf(ImplicitMasterNode);
+    expect(rows[1]).toBeInstanceOf(ImplicitMasterNode);
+    expect(rows[0].contextValue).toBe('pluginImplicit');
+    expect((rows[0] as ImplicitMasterNode).checkboxState).toBeUndefined();
+    expect(rows[2]).toBeInstanceOf(PluginNode);
+  });
+
+  it('a name in both dataFolder and plugins.txt renders exactly once, as the implicit row (real LitR CC .esl case)', async () => {
+    await writeFile(join(dataFolder(), 'Fallout4.esm'), buildTes4Buffer([]));
+    await writeFile(join(dataFolder(), 'ccBGSFO4044-HellfirePowerArmor.esl'), buildTes4Buffer(['Fallout4.esm']));
+    // plugins.txt also lists the CC .esl (a stale/redundant entry — real LitR shape).
+    await writeFile(
+      join(dir, 'profiles', 'Default', 'plugins.txt'),
+      'Fallout4.esm\r\n*ccBGSFO4044-HellfirePowerArmor.esl\r\n',
+    );
+
+    const rows = await providerFor().getChildren();
+    const labels = rows.map((r) => r.label);
+    expect(labels.filter((l) => l === 'ccBGSFO4044-HellfirePowerArmor.esl')).toHaveLength(1);
+    expect(labels.filter((l) => l === 'Fallout4.esm')).toHaveLength(1);
+    expect(rows.find((r) => r.label === 'ccBGSFO4044-HellfirePowerArmor.esl')).toBeInstanceOf(ImplicitMasterNode);
+  });
+
+  it('real LitR shape: a mod master declaring Fallout4.esm (present only in dataFolder, absent from plugins.txt) shows no false missing-master badge', async () => {
+    await writeFile(join(dataFolder(), 'Fallout4.esm'), buildTes4Buffer([]));
+    await mkdir(join(dir, 'mods', 'SomeMod'), { recursive: true });
+    await writeFile(join(dir, 'mods', 'SomeMod', 'Mod.esp'), buildTes4Buffer(['Fallout4.esm']));
+    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+SomeMod\r\n');
+    // Fallout4.esm has NO line in plugins.txt at all — the bug's exact reproduction.
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*Mod.esp\r\n');
+
+    const rows = await providerFor().getChildren();
+    const modRow = rows.find((r) => r.label === 'Mod.esp') as PluginNode;
+    expect(modRow.iconPath).toBeUndefined();
+  });
+
+  it('a master genuinely absent from both Data/ and plugins.txt is still flagged', async () => {
+    await mkdir(join(dir, 'mods', 'SomeMod'), { recursive: true });
+    await writeFile(join(dir, 'mods', 'SomeMod', 'Mod.esp'), buildTes4Buffer(['NoSuchMaster.esm']));
+    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+SomeMod\r\n');
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*Mod.esp\r\n');
+
+    const rows = await providerFor().getChildren();
+    const modRow = rows.find((r) => r.label === 'Mod.esp') as PluginNode;
+    expect(modRow.iconPath).toEqual({ id: 'error' });
+    expect(modRow.tooltip).toContain('NoSuchMaster.esm');
+  });
+
+  it('degrades to no implicit rows (logged) when the Data folder is unresolved/unreadable, tree still renders', async () => {
+    const logs: string[] = [];
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*Mod.esp\r\n');
+    await mkdir(join(dir, 'mods', 'SomeMod'), { recursive: true });
+    await writeFile(join(dir, 'mods', 'SomeMod', 'Mod.esp'), buildTes4Buffer([]));
+    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+SomeMod\r\n');
+
+    const provider = providerFor({ dataFolder: Promise.resolve(join(dir, 'no', 'such', 'Data')), log: (m) => logs.push(m) });
+    const rows = await provider.getChildren();
+
+    expect(rows.some((r) => r instanceof ImplicitMasterNode)).toBe(false);
+    expect(rows.every((n) => n.kind !== 'error')).toBe(true);
+    expect(rows.map((r) => r.label)).toEqual(['Mod.esp']);
+  });
+
+  it('handleDrag still filters to only "plugin" nodes, excluding implicit rows for free (no code change needed)', async () => {
+    await writeFile(join(dataFolder(), 'Fallout4.esm'), buildTes4Buffer([]));
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*Mod.esp\r\n');
+    await mkdir(join(dir, 'mods', 'SomeMod'), { recursive: true });
+    await writeFile(join(dir, 'mods', 'SomeMod', 'Mod.esp'), buildTes4Buffer([]));
+    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+SomeMod\r\n');
+
+    const provider = providerFor();
+    const rows = await provider.getChildren();
+    const dt = new FakeDataTransfer();
+    provider.handleDrag(rows, dt as never, NONE);
+    const item = dt.get('application/vnd.medit.pluginlist-node');
+    expect((item?.value as { names: string[] }).names).toEqual(['Mod.esp']);
+  });
+});
+
+describe('PluginListProvider — implicit master drop-index mapping (issue #108 drop-index hazard)', () => {
+  let dir: string;
+  const pluginsTxt = () => join(dir, 'profiles', 'Default', 'plugins.txt');
+  const dataFolder = () => join(dir, 'Game', 'Data');
+  const node = (name: string) => new PluginNode({ name, enabled: true });
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'plugin-implicit-drop-'));
+    await mkdir(dataFolder(), { recursive: true });
+    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
+    await writeFile(join(dataFolder(), 'Fallout4.esm'), buildTes4Buffer([]));
+    await writeFile(
+      join(dir, 'ModOrganizer.ini'),
+      `[General]\r\nselected_profile=@ByteArray(Default)\r\ngamePath=@ByteArray(${join(dir, 'Game')})\r\n`,
+    );
+    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '');
+    // Raw plugins.txt has NO implicit-master line — Fallout4.esm is purely a
+    // synthetic display row. B.esp/C.esp are the real, draggable file rows.
+    await writeFile(pluginsTxt(), '*B.esp\r\n*C.esp\r\n');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  async function dragToDisk(moved: string[], target: PluginNode | ImplicitMasterNode | undefined) {
+    const source = new Mo2ModlistSource(dir);
+    const provider = new PluginListProvider({ source, instanceRoot: dir, dataFolder: Promise.resolve(dataFolder()) });
+    await provider.getChildren(); // cache the rendered order (raw plugins.txt order — no implicit lines)
+    const dt = new FakeDataTransfer();
+    provider.handleDrag(moved.map(node), dt as never, NONE);
+    await provider.handleDrop(target, dt as never, NONE);
+  }
+
+  it('dropping onto the implicit block lands the moved plugin at file-index 0, and the file never gains an implicit-master line', async () => {
+    const rows = await new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: Promise.resolve(dataFolder()) }).getChildren();
+    const implicitRow = rows.find((r): r is ImplicitMasterNode => r instanceof ImplicitMasterNode)!;
+
+    await dragToDisk(['C.esp'], implicitRow);
+
+    const text = await readFile(pluginsTxt(), 'utf8');
+    expect(text).toBe('*C.esp\r\n*B.esp\r\n'); // C moved to file-index 0
+    expect(text).not.toContain('Fallout4.esm'); // never written into plugins.txt
+  });
+
+  it('dropping onto a normal row is unaffected by the implicit prefix — same file index as with no dataFolder/implicit rows at all', async () => {
+    await dragToDisk(['C.esp'], node('B.esp'));
+    expect(await readFile(pluginsTxt(), 'utf8')).toBe('*C.esp\r\n*B.esp\r\n');
+
+    // Reset and verify the same drop with no dataFolder produces the identical result.
+    await writeFile(pluginsTxt(), '*B.esp\r\n*C.esp\r\n');
+    const source = new Mo2ModlistSource(dir);
+    const provider = new PluginListProvider({ source }); // no instanceRoot/dataFolder — no implicit rows
+    await provider.getChildren();
+    const dt = new FakeDataTransfer();
+    provider.handleDrag(['C.esp'].map(node), dt as never, NONE);
+    await provider.handleDrop(node('B.esp'), dt as never, NONE);
+    expect(await readFile(pluginsTxt(), 'utf8')).toBe('*C.esp\r\n*B.esp\r\n');
   });
 });
