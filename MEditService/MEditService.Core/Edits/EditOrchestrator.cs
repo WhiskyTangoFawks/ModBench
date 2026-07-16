@@ -66,8 +66,8 @@ public sealed partial class EditOrchestrator(
 
         CaptureVmadOldValues(vmadFields, vmadData, oldValues);
 
-        var eslResult = CheckEslEligibility(plugin, recordType!, fields, oldValues, session!.GameRelease);
-        if (eslResult != null) return eslResult;
+        var headerGuardResult = CheckHeaderStageGuards(plugin, recordType!, fields, oldValues, session!);
+        if (headerGuardResult != null) return headerGuardResult;
 
         var formRefs = ExtractFormKeyRefs(fields, schemasForValidation, recordType!);
 
@@ -229,9 +229,86 @@ public sealed partial class EditOrchestrator(
 
         var schemas = _schemaReflector.GetSchemas(session!.GameRelease);
         var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!);
+
+        // Issue #86 invariant B: a staged copy must never leave the target referencing a FormKey
+        // whose origin isn't declared in the target's masters — covers both the copied record's own
+        // origin (its FormKey's ModKey — the copy keeps the same FormKey, so target needs that
+        // origin as a master regardless of which plugin's override values were copied) and any
+        // plugin referenced by a FormLink inside the copied content (already-extracted formRefs).
+        var copyGroupId = StageMissingMasters(formKey, targetPlugin, formRefs, source);
+
         var staged = _changes.Upsert(new PendingChangeUpsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues, formRefs,
-            ParentCell: placement?.ParentCell, PlacementGroup: placement?.PlacementGroup));
+            GroupId: copyGroupId, ParentCell: placement?.ParentCell, PlacementGroup: placement?.PlacementGroup));
         return new StageEditResult.Staged(staged);
+    }
+
+    // Issue #86 invariant B: computes which origin plugins the copied FormKey and its FormLink
+    // content reference that the target doesn't already master (pending-aware — a still-unsaved
+    // "Add Master" already counts), stages one masters-append pending change for them if any are
+    // missing, and returns the group id to share with the copy's own pending change so both land in
+    // the same change group (null when nothing was missing — a copy into an already-fully-mastered
+    // target stays ungrouped, matching pre-#86 behavior).
+    private Guid? StageMissingMasters(
+        string copiedFormKey, string targetPlugin, IReadOnlyList<PendingFormRef> formRefs, string source)
+    {
+        var referencedPlugins = new List<string>();
+        if (OriginPluginOf(copiedFormKey) is { } originPlugin) referencedPlugins.Add(originPlugin);
+        foreach (var r in formRefs)
+        {
+            if (OriginPluginOf(r.TargetFormKey) is { } refPlugin) referencedPlugins.Add(refPlugin);
+        }
+
+        var currentMasters = GetEffectiveMasters(targetPlugin);
+        var currentMastersSet = currentMasters.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missingMasters = referencedPlugins
+            .Where(p => !p.Equals(targetPlugin, StringComparison.OrdinalIgnoreCase) && !currentMastersSet.Contains(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (missingMasters.Count == 0) return null;
+
+        var headerFormKey = Records.HeaderIndexer.FormKeyFor(targetPlugin);
+
+        // A prior copy-to in this same unsaved session may already have grouped a masters-append
+        // on this target header. Reuse that group instead of minting a new one: the pending-change
+        // upsert's ON CONFLICT keeps the *first* group id a row was tagged with (DuckDbPendingChangeService
+        // COALESCEs group_id), so generating a fresh id here every time would leave this call's own
+        // copy tagged with a group the header's masters row never actually joined — breaking "same
+        // change group" for the second of two sequential copy-tos into the same target.
+        var groupId = _changes.GetGroupIdForRecord(headerFormKey, targetPlugin) ?? Guid.NewGuid();
+        var newMasters = currentMasters.Concat(missingMasters).ToList();
+        _changes.Upsert(new PendingChangeUpsert(
+            headerFormKey, targetPlugin, Records.HeaderIndexer.TableName,
+            new Dictionary<string, JsonElement> { [HeaderMastersField] = JsonSerializer.SerializeToElement(newMasters) },
+            source, null,
+            new Dictionary<string, JsonElement> { [HeaderMastersField] = JsonSerializer.SerializeToElement(currentMasters) },
+            GroupId: groupId));
+        return groupId;
+    }
+
+    // The plugin substring of a "FormID:Plugin" FormKey string; null when malformed (no colon, or
+    // nothing after it). internal (not private) so it's directly unit-testable — every real caller
+    // passes an already-validated FormKey (DB-resolved or FormLink-extracted), so the malformed
+    // branch is defensive, but the parsing logic itself is simple enough to pin down directly.
+    internal static string? OriginPluginOf(string formKey)
+    {
+        var colon = formKey.IndexOf(':');
+        return colon >= 0 && colon < formKey.Length - 1 ? formKey[(colon + 1)..] : null;
+    }
+
+    // Issue #86: the target's masters as of right now — a still-pending "Add Master" (or a
+    // preceding copy-to's auto-add within the same unsaved session) wins over the committed value,
+    // same convention as CheckMasterEdit / IsPluginEslFlagged.
+    private List<string> GetEffectiveMasters(string plugin)
+    {
+        var headerFormKey = Records.HeaderIndexer.FormKeyFor(plugin);
+        var pending = _changes.GetPendingFields(headerFormKey, plugin);
+        if (pending != null && pending.TryGetValue(HeaderMastersField, out var pendingJson))
+            return ReadStringArray(pendingJson);
+
+        var committed = _query.GetRecordForPlugin(headerFormKey, plugin)?.Fields
+            .FirstOrDefault(fv => fv.Metadata.Name == HeaderMastersField);
+        return committed != null ? ReadStringArray(JsonSerializer.SerializeToElement(committed.Value)) : [];
     }
 
     public CreateRecordOutcome CreateRecord(string plugin, string recordType, string? templateFormKey, string source) =>
@@ -536,6 +613,17 @@ public sealed partial class EditOrchestrator(
 
     private const string HeaderFlagsField = "flags";
 
+    // Combines the two header-only stage-time guards (ESL-eligibility, issue #98; masters
+    // validation, issue #86) behind one call so StageEdit only branches on a single early-out
+    // here, not two.
+    private StageEditResult? CheckHeaderStageGuards(
+        string plugin, string recordType, Dictionary<string, JsonElement> fields,
+        Dictionary<string, JsonElement> oldValues, IGameSession session)
+    {
+        StageEditResult? eslResult = CheckEslEligibility(plugin, recordType, fields, oldValues, session.GameRelease);
+        return eslResult ?? CheckMasterEdit(plugin, recordType, fields, session);
+    }
+
     // Stage-time ESL-eligibility guard (ADR-0020 style): only when a header edit turns the ESL bit
     // ON (off→on transition) do we require every native FormID to be in the ESL range. Toggling ESM,
     // clearing ESL, or editing on a plugin that's already ESL are never validated here.
@@ -554,6 +642,71 @@ public sealed partial class EditOrchestrator(
 
         var outOfRange = EslEligibility.OutOfRangeFormKeys(GetEffectiveNativeFormKeys(plugin));
         return outOfRange.Count == 0 ? null : new StageEditResult.EslIneligible(plugin, outOfRange);
+    }
+
+    // Single source of truth lives on HeaderIndexer (shared with SchemaReflector's column
+    // definition and PluginWriter's write-time override) — aliased here for call-site brevity.
+    private const string HeaderMastersField = Records.HeaderIndexer.MastersFieldName;
+
+    // Issue #86 stage-time guard for the header's masters field: a validated, add-only
+    // plugin-reference array. First rejects any entry naming a plugin absent from the session,
+    // since a master resolving to no file makes the plugin unloadable. Then rejects any edit that
+    // is not a pure append onto GetEffectiveMasters' baseline (the same helper the copy-to
+    // auto-add-master path uses below), so reordering, removing, or duplicating an existing master
+    // is refused. Sort, clean, and remove operations remain deferred to scripts per AC5.
+    private StageEditResult.InvalidReferences? CheckMasterEdit(
+        string plugin, string recordType, Dictionary<string, JsonElement> fields, IGameSession session)
+    {
+        if (recordType != Records.HeaderIndexer.TableName) return null;
+        if (!fields.TryGetValue(HeaderMastersField, out var newMastersJson)) return null;
+
+        // The PATCH endpoint hands this JSON straight through from the request body, so it's not
+        // guaranteed to be an array (a malformed caller could send a string or number) — reject that
+        // outright rather than silently coercing it to an empty list (ADR-0026: never stage an edit
+        // that looks accepted but does nothing).
+        if (newMastersJson.ValueKind != JsonValueKind.Array)
+        {
+            return new StageEditResult.InvalidReferences([
+                new ReferenceValidationError(HeaderMastersField, newMastersJson.GetRawText(), "not_append_only", [])
+            ]);
+        }
+
+        var proposed = ReadStringArray(newMastersJson);
+
+        var loadedPlugins = session.Plugins.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var notLoaded = proposed.Where(m => !loadedPlugins.Contains(m)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (notLoaded.Count > 0)
+        {
+            return new StageEditResult.InvalidReferences(
+                notLoaded.ConvertAll(m => new ReferenceValidationError(HeaderMastersField, m, "not_in_session", [])));
+        }
+
+        var effectiveCurrent = GetEffectiveMasters(plugin);
+        return IsPureAppend(effectiveCurrent, proposed)
+            ? null
+            : new StageEditResult.InvalidReferences([
+                new ReferenceValidationError(HeaderMastersField, JsonSerializer.Serialize(proposed), "not_append_only", [])
+            ]);
+    }
+
+    private static List<string> ReadStringArray(JsonElement el) =>
+        el.ValueKind == JsonValueKind.Array
+            ? el.EnumerateArray().Select(e => e.GetString() ?? "").ToList()
+            : [];
+
+    // True when `proposed` is exactly `current` as an ordered prefix, plus one or more newly
+    // appended entries that don't duplicate anything already present.
+    private static bool IsPureAppend(List<string> current, List<string> proposed)
+    {
+        if (proposed.Count < current.Count) return false;
+        for (var i = 0; i < current.Count; i++)
+        {
+            if (!string.Equals(proposed[i], current[i], StringComparison.OrdinalIgnoreCase)) return false;
+        }
+
+        var appended = proposed.Skip(current.Count).ToList();
+        return appended.Distinct(StringComparer.OrdinalIgnoreCase).Count() == appended.Count
+            && !appended.Any(a => current.Contains(a, StringComparer.OrdinalIgnoreCase));
     }
 
     // Issue #98: the committed record index alone misses pending creates/renumbers, so a plugin

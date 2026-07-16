@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Plugins.Utility;
@@ -68,11 +69,21 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         var tmpPath = Path.Combine(tmpDir, Path.GetFileName(pluginPath));
         Directory.CreateDirectory(tmpDir);
 
-        await mod.BeginWrite
+        var writeBuilder = mod.BeginWrite
             .ToPath(tmpPath)
             .WithLoadOrderFromHeaderMasters()
-            .WithNoDataFolder()
-            .WriteAsync();
+            .WithNoDataFolder();
+
+        // Issue #86: Mutagen's default MastersListContentOption.Iterate recomputes the written
+        // masters list purely from FormLink/override content, discarding any declared master with
+        // no referencing content yet — which would silently drop a just-staged "Add Master" (the
+        // whole point of which is to pre-declare a master before content references it). Scoped to
+        // only saves that actually staged a masters edit, so every other save keeps today's
+        // content-derived master sync untouched.
+        if (HasMastersEdit(changes))
+            writeBuilder = writeBuilder.WithMastersListContent(MastersListContentOption.NoCheck);
+
+        await writeBuilder.WriteAsync();
 
         return new PreparedPluginSave(tmpPath, pluginPath,
             new SaveResult(backupPath, results.Applied, results.ReadOnly, results.NotFound, createFailed));
@@ -89,6 +100,14 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         PruneOldBackups(pluginPath);
         return prep.Result;
     }
+
+    // Issue #86: does this save include a staged edit to the header's masters field? Used to scope
+    // the MastersListContentOption.NoCheck override to only the saves that need it.
+    private static bool HasMastersEdit(IReadOnlyList<PendingChange> changes) =>
+        changes.Any(c =>
+            c.RecordType == Records.HeaderIndexer.TableName &&
+            c.FieldPath == Records.HeaderIndexer.MastersFieldName &&
+            c.ChangeType == PendingChangeConstants.FieldEditChangeType);
 
     public bool IsReadOnly(GameRelease release, string recordType, string fieldPath)
     {

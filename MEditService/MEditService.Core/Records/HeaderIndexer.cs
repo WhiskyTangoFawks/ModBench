@@ -16,6 +16,13 @@ internal static class HeaderIndexer
     /// <summary>The synthetic DuckDB table / record type the plugin header is indexed under.</summary>
     internal const string TableName = "header";
 
+    /// <summary>
+    /// The header's masters column name (issue #86) — single source of truth shared by
+    /// <c>SchemaReflector</c> (column definition), <c>EditOrchestrator</c> (stage-time validation),
+    /// and <c>PluginWriter</c> (write-time master-list-content override).
+    /// </summary>
+    internal const string MastersFieldName = "masters";
+
     public static string FormKeyFor(ModKey plugin) => FormKey.Factory($"000000:{plugin}").ToString();
 
     public static void Index(

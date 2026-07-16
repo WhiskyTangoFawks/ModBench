@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -896,14 +897,30 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Header_HeaderColumnApply_AuthorAndFlagsWritable_MastersReadOnly()
+    public void GetSchemas_Header_HeaderColumnApply_AuthorFlagsAndMastersWritable()
     {
+        // Issue #86: masters becomes a writable (add-only) header column.
         var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
         int Index(string name) => schema.RecordColumns.ToList().FindIndex(c => c.Name == name);
 
         Assert.NotNull(schema.HeaderColumnApply![Index("author")]);
         Assert.NotNull(schema.HeaderColumnApply![Index("flags")]);
-        Assert.Null(schema.HeaderColumnApply![Index("masters")]);
+        Assert.NotNull(schema.HeaderColumnApply![Index("masters")]);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_HeaderColumnApply_MastersWritesModMasterReferences()
+    {
+        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
+        var mastersIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "masters");
+
+        var mod = new Fallout4Mod(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
+
+        schema.HeaderColumnApply![mastersIndex]!(mod, JsonSerializer.SerializeToElement(new[] { "Fallout4.esm", "DLCRobot.esm" }));
+
+        Assert.Equal(
+            ["Fallout4.esm", "DLCRobot.esm"],
+            ((Mutagen.Bethesda.Plugins.Records.IMod)mod).MasterReferences.Select(r => r.Master.FileName.ToString()));
     }
 
     [Fact]

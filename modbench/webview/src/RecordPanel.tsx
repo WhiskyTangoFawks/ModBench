@@ -223,21 +223,39 @@ function renderCell(
 interface PluginHeaderProps {
   override: RecordDetail;
   isImmutable: boolean;
+  isHeaderRecord: boolean;
   editMode: boolean;
   saving: boolean;
   showCopyPicker: boolean;
   mutableTargets: PluginInfo[];
+  showMasterPicker: boolean;
+  loadedPlugins: PluginInfo[];
   onSave: () => void;
   onOpenCopyPicker: () => void;
   onCloseCopyPicker: () => void;
   onCopyTo: (target: string) => void;
+  onOpenMasterPicker: () => void;
+  onCloseMasterPicker: () => void;
+  onAddMaster: (newMasters: string[]) => void;
+}
+
+// Issue #86: the header record's "masters" field, pending-aware (a still-unsaved Add Master
+// already counts as current — matches the backend's CheckMasterEdit baseline convention).
+function currentMasters(o: RecordDetail): string[] {
+  const disk = o.fields.find(f => f.metadata.name === 'masters')?.value;
+  const pending = o.pendingFields?.masters;
+  const value = Array.isArray(pending) ? pending : disk;
+  return Array.isArray(value) ? value as string[] : [];
 }
 
 function PluginHeader({
-  override: o, isImmutable, editMode, saving,
-  showCopyPicker, mutableTargets,
+  override: o, isImmutable, isHeaderRecord, editMode, saving,
+  showCopyPicker, mutableTargets, showMasterPicker, loadedPlugins,
   onSave, onOpenCopyPicker, onCloseCopyPicker, onCopyTo,
+  onOpenMasterPicker, onCloseMasterPicker, onAddMaster,
 }: PluginHeaderProps) {
+  const masters = currentMasters(o);
+  const masterCandidates = loadedPlugins.filter(p => p.name !== o.plugin && !masters.includes(p.name));
   const btnStyle: React.CSSProperties = {
     fontSize: '10px',
     padding: '1px 5px',
@@ -307,6 +325,54 @@ function PluginHeader({
                 </div>
               ))}
             </div>
+          )}
+          {isHeaderRecord && (
+            <>
+              <button style={btnStyle} onClick={onOpenMasterPicker}>
+                Add Master…
+              </button>
+              {showMasterPicker && (
+                // onMouseDown on items fires before onBlur, so selection works correctly
+                <div
+                  onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) onCloseMasterPicker(); }}
+                  tabIndex={-1}
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    zIndex: 10,
+                    background: 'var(--vscode-dropdown-background, #3c3c3c)',
+                    border: '1px solid var(--vscode-dropdown-border, #555)',
+                    borderRadius: 2,
+                    minWidth: 180,
+                    maxHeight: 200,
+                    overflowY: 'auto',
+                    outline: 'none',
+                  }}
+                >
+                  {masterCandidates.length === 0 && (
+                    <div style={{ padding: '4px 8px', opacity: 0.5, fontSize: '11px' }}>No plugins to add</div>
+                  )}
+                  {masterCandidates.map(p => (
+                    <div
+                      key={p.name}
+                      onMouseDown={() => { onAddMaster([...masters, p.name]); onCloseMasterPicker(); }}
+                      style={{
+                        padding: '4px 8px',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        color: 'var(--vscode-dropdown-foreground, #ccc)',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--vscode-list-hoverBackground, #2a2d2e)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+                    >
+                      {p.name}
+                      <span style={{ opacity: 0.55, marginLeft: 6 }}>[{p.loadOrderIndex}]</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -511,6 +577,7 @@ export function RecordPanel() {
   const [editMode, setEditMode] = useState(false);
   const [savingPlugin, setSavingPlugin] = useState<string | null>(null);
   const [copyPickerPlugin, setCopyPickerPlugin] = useState<string | null>(null);
+  const [masterPickerPlugin, setMasterPickerPlugin] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
 
   const port = mEditWindow.mEditBackendPort;
@@ -562,6 +629,7 @@ export function RecordPanel() {
         setEditMode(false);
         setSavingPlugin(null);
         setCopyPickerPlugin(null);
+        setMasterPickerPlugin(null);
         void refreshRef.current(msg.formKey);
       }
     };
@@ -606,6 +674,7 @@ export function RecordPanel() {
           setActionError(body.map(e => {
             const path = e.fieldPath ?? '?';
             if (e.reason === 'not_in_session') return `${path}: reference not found in session`;
+            if (e.reason === 'not_append_only') return `${path}: masters can only be appended to, not reordered or removed`;
             if (e.reason === 'type_mismatch') return `${path}: expected ${(e.expectedTypes ?? []).join('/')}`;
             if (e.reason === 'null_not_allowed') return `${path}: cannot be null`;
             return `${path}: ${e.reason ?? 'invalid'}`;
@@ -719,6 +788,9 @@ export function RecordPanel() {
   const winner = overrides.find(o => o.isWinner);
   const displayId = (winner ?? overrides[0])?.editorId;
   const title = displayId ? `${displayId} [${formKey}]` : formKey;
+  // Issue #86: the header record lives at the synthetic FormKey "000000:<plugin>" (CONTEXT.md);
+  // only it has an editable masters field.
+  const isHeaderRecord = formKey.startsWith('000000:');
 
   const editToggleStyle: React.CSSProperties = {
     fontSize: '11px',
@@ -760,14 +832,20 @@ export function RecordPanel() {
                       <PluginHeader
                         override={col.override}
                         isImmutable={immutableSet.has(col.override.plugin)}
+                        isHeaderRecord={isHeaderRecord}
                         editMode={editMode}
                         saving={savingPlugin === col.override.plugin}
                         showCopyPicker={copyPickerPlugin === col.override.plugin}
                         mutableTargets={allPlugins.filter(p => !p.isImmutable)}
+                        showMasterPicker={masterPickerPlugin === col.override.plugin}
+                        loadedPlugins={allPlugins}
                         onSave={() => { void handleSave(col.override.plugin); }}
                         onOpenCopyPicker={() => setCopyPickerPlugin(col.override.plugin)}
                         onCloseCopyPicker={() => setCopyPickerPlugin(null)}
                         onCopyTo={p => { void handleCopyTo(p); }}
+                        onOpenMasterPicker={() => setMasterPickerPlugin(col.override.plugin)}
+                        onCloseMasterPicker={() => setMasterPickerPlugin(null)}
+                        onAddMaster={newMasters => { void handleEdit(col.override.plugin, 'masters', newMasters); }}
                       />
                     </th>
                   );

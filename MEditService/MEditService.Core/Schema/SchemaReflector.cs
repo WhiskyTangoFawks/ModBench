@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using MEditService.Core.Queries;
+using MEditService.Core.Records;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -166,10 +167,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         var mastersElement = new FieldMetadata("", "string", false, Empty, Empty);
-        columns.Add(new ColumnSpec("masters", "MasterReferences", "VARCHAR", _ => null, "array",
+        columns.Add(new ColumnSpec(HeaderIndexer.MastersFieldName, "MasterReferences", "VARCHAR", _ => null, "array",
             Empty, Empty, Apply: null, IsArray: true, ElementType: mastersElement));
         extracts.Add(mod => JsonSerializer.Serialize(mod.MasterReferences.Select(r => r.Master.FileName.ToString()).ToList()));
-        applies.Add(null); // masters editing is a separate slice (A3)
+        applies.Add(HeaderMastersApply()); // Issue #86: Add-only master list; stage-time validation lives in EditOrchestrator
 
         return new RecordTableSchema
         {
@@ -181,6 +182,23 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             EslFlagValue = eslFlagValue,
         };
     }
+
+    // Write counterpart to the masters extract: MasterReferences lives directly on IMod (not under
+    // ModHeader, unlike author/flags), so this doesn't go through HeaderPropertyApply's
+    // modHeaderProp.GetValue indirection — it rebuilds mod.MasterReferences in place from the staged
+    // JSON array of plugin filenames. Add-only / loaded-plugin validation happens at stage time
+    // (EditOrchestrator, issue #86); this apply trusts whatever array it's handed.
+    private static Action<IMod, JsonElement> HeaderMastersApply() => (mod, json) =>
+    {
+        if (json.ValueKind != JsonValueKind.Array) return;
+        var list = mod.MasterReferences;
+        list.Clear();
+        foreach (var el in json.EnumerateArray())
+        {
+            if (el.GetString() is not string name) continue;
+            list.Add(new MasterReference { Master = ModKey.FromFileName(name) });
+        }
+    };
 
     private static Func<IModGetter, object?> HeaderPropertyExtract(PropertyInfo modHeaderProp, Func<object, object?> leafGet) =>
         mod => modHeaderProp.GetValue(mod) is { } header ? leafGet(header) : null;

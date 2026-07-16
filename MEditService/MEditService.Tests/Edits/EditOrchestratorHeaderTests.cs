@@ -402,4 +402,420 @@ public sealed class EditOrchestratorHeaderTests
             }
         }
     }
+
+    // --- Issue #86: masters as a validated, add-only plugin-reference array ---
+
+    private static JsonElement MastersJson(params string[] plugins) =>
+        JsonSerializer.SerializeToElement(plugins);
+
+    // --- B2: a master naming a plugin not loaded in the session is rejected ---
+
+    [Fact]
+    public void StageEdit_MastersNamingUnloadedPlugin_ReturnsInvalidReferences()
+    {
+        var data = new PluginFixtureBuilder("eo-header-masters-unloaded")
+            .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("BaseNpc"))
+            .WithPlugin("TestPlugin.esp", mod => mod.Npcs.AddNew("N"))
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+                var fields = new Dictionary<string, JsonElement> { ["masters"] = MastersJson("NotLoaded.esp") };
+
+                var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
+
+                var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
+                var error = Assert.Single(invalid.Errors);
+                Assert.Equal("masters", error.FieldPath);
+                Assert.Equal("NotLoaded.esp", error.Value);
+                Assert.Equal("not_in_session", error.Reason);
+            }
+        }
+    }
+
+    // --- masters must be a JSON array — a caller sending a non-array shape (malformed direct API/
+    // agent call; the frontend never sends this) is rejected outright rather than silently coerced
+    // to an empty, no-op edit (ADR-0026: never stage an edit that looks accepted but does nothing). ---
+
+    [Fact]
+    public void StageEdit_MastersNonArrayValue_ReturnsInvalidReferences()
+    {
+        var data = new PluginFixtureBuilder("eo-header-masters-nonarray")
+            .WithPlugin("TestPlugin.esp", mod => mod.Npcs.AddNew("N"))
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+                var fields = new Dictionary<string, JsonElement> { ["masters"] = J("\"not-an-array\"") };
+
+                var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
+
+                var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
+                Assert.Equal("not_append_only", Assert.Single(invalid.Errors).Reason);
+            }
+        }
+    }
+
+    // --- B1/AC1 positive: appending a loaded plugin onto an empty masters list stages ---
+
+    [Fact]
+    public void StageEdit_MastersValidAppend_Stages()
+    {
+        var data = new PluginFixtureBuilder("eo-header-masters-valid")
+            .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("BaseNpc"))
+            .WithPlugin("TestPlugin.esp", mod => mod.Npcs.AddNew("N"))
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+                var fields = new Dictionary<string, JsonElement> { ["masters"] = MastersJson("Base.esm") };
+
+                var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
+
+                var staged = Assert.IsType<StageEditResult.Staged>(result);
+                Assert.Equal("masters", Assert.Single(staged.Changes).FieldPath);
+            }
+        }
+    }
+
+    // --- B3: add-only enforcement (AC5) — reject removal, reordering, duplication; a
+    // second sequential append builds on the *pending* value, not the stale disk baseline. ---
+
+    private static (EditOrchestrator orchestrator, SessionManager manager, PluginFixtureData data) MakeMastersFixture(string prefix)
+    {
+        var data = new PluginFixtureBuilder(prefix)
+            .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("BaseNpc"))
+            .WithPlugin("Base2.esm", mod => mod.Npcs.AddNew("Base2Npc"))
+            .WithPlugin("Extra.esp", mod => mod.Npcs.AddNew("ExtraNpc"))
+            .WithPlugin(
+                "TestPlugin.esp",
+                mod =>
+                {
+                    mod.Npcs.AddNew("N");
+                    ((Mutagen.Bethesda.Plugins.Records.IMod)mod).MasterReferences.Add(
+                        new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = ModKey.FromFileName("Base.esm") });
+                    ((Mutagen.Bethesda.Plugins.Records.IMod)mod).MasterReferences.Add(
+                        new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = ModKey.FromFileName("Base2.esm") });
+                },
+                // Default write behavior recomputes the masters list purely from FormLink/override
+                // content (MastersListContentOption.Iterate) — TestPlugin's NPC references neither
+                // declared master, so without NoCheck the fixture-build write would silently drop
+                // both before the session ever loads them (issue #86).
+                writeParams: new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
+                {
+                    MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,
+                })
+            .Build();
+        var (orchestrator, manager) = MakeOrchestrator();
+        manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        return (orchestrator, manager, data);
+    }
+
+    [Fact]
+    public void StageEdit_MastersRemovingExisting_ReturnsInvalidReferences()
+    {
+        var (orchestrator, manager, data) = MakeMastersFixture("eo-header-masters-remove");
+        using (data) using (manager)
+        {
+            var fields = new Dictionary<string, JsonElement> { ["masters"] = MastersJson("Base.esm") };
+
+            var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
+
+            var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
+            Assert.Equal("not_append_only", Assert.Single(invalid.Errors).Reason);
+        }
+    }
+
+    [Fact]
+    public void StageEdit_MastersReordering_ReturnsInvalidReferences()
+    {
+        var (orchestrator, manager, data) = MakeMastersFixture("eo-header-masters-reorder");
+        using (data) using (manager)
+        {
+            var fields = new Dictionary<string, JsonElement> { ["masters"] = MastersJson("Base2.esm", "Base.esm") };
+
+            var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
+
+            var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
+            Assert.Equal("not_append_only", Assert.Single(invalid.Errors).Reason);
+        }
+    }
+
+    [Fact]
+    public void StageEdit_MastersDuplicatingExisting_ReturnsInvalidReferences()
+    {
+        var (orchestrator, manager, data) = MakeMastersFixture("eo-header-masters-dup");
+        using (data) using (manager)
+        {
+            var fields = new Dictionary<string, JsonElement> { ["masters"] = MastersJson("Base.esm", "Base2.esm", "Base.esm") };
+
+            var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
+
+            var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
+            Assert.Equal("not_append_only", Assert.Single(invalid.Errors).Reason);
+        }
+    }
+
+    [Fact]
+    public void StageEdit_MastersValidAppendOntoExisting_Stages()
+    {
+        var (orchestrator, manager, data) = MakeMastersFixture("eo-header-masters-append-existing");
+        using (data) using (manager)
+        {
+            var fields = new Dictionary<string, JsonElement> { ["masters"] = MastersJson("Base.esm", "Base2.esm", "Extra.esp") };
+
+            var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
+
+            var staged = Assert.IsType<StageEditResult.Staged>(result);
+            Assert.Equal("masters", Assert.Single(staged.Changes).FieldPath);
+        }
+    }
+
+    [Fact]
+    public void StageEdit_MastersSequentialAppends_SecondBuildsOnPendingNotDisk()
+    {
+        var (orchestrator, manager, data) = MakeMastersFixture("eo-header-masters-sequential");
+        using (data) using (manager)
+        {
+            var first = orchestrator.StageEdit(
+                HeaderKey("TestPlugin.esp"), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["masters"] = MastersJson("Base.esm", "Base2.esm", "Extra.esp") },
+                "user", null);
+            Assert.IsType<StageEditResult.Staged>(first);
+
+            // A second append must build on the first (still-pending, unsaved) masters value —
+            // if it fell back to the stale on-disk baseline (which lacks Extra.esp), this second
+            // call would be rejected as a reorder/removal (dropping the first addition), not seen
+            // as a valid append.
+            var second = orchestrator.StageEdit(
+                HeaderKey("TestPlugin.esp"), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["masters"] = MastersJson("Base.esm", "Base2.esm", "Extra.esp") },
+                "user", null);
+
+            // Re-staging the exact same list the second time around is itself a no-op append (zero new
+            // entries) — still valid, and proves the pending value (not disk) was used as the baseline.
+            var staged = Assert.IsType<StageEditResult.Staged>(second);
+            var change = Assert.Single(staged.Changes);
+            var finalMasters = change.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
+            Assert.Equal(["Base.esm", "Base2.esm", "Extra.esp"], finalMasters);
+        }
+    }
+
+    // --- Issue #86 invariant B: copy-to auto-add-master ---
+
+    private static (EditOrchestrator orchestrator, SessionManager manager, DuckDbPendingChangeService changes)
+        MakeOrchestratorWithChanges()
+    {
+        var reflector = new SchemaReflector();
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);
+        var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
+        var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector);
+        return (orchestrator, manager, changes);
+    }
+
+    // --- B4: the copied record's own origin plugin gets auto-added, in the copy's change group ---
+
+    [Fact]
+    public void CopyRecordTo_TargetMissingSourceAsMaster_StagesMasterAddInSameGroup()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-copy-master-origin")
+            .WithPlugin("Base.esm", mod => npcKey = mod.Npcs.AddNew("BaseNpc").FormKey)
+            .WithPlugin("Target.esp") // no masters declared
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user");
+
+                Assert.IsType<StageEditResult.Staged>(result);
+
+                var headerKey = HeaderKey("Target.esp");
+                var copyGroupId = changes.GetGroupIdForRecord(npcKey.ToString(), "Target.esp");
+                var headerGroupId = changes.GetGroupIdForRecord(headerKey, "Target.esp");
+                Assert.NotNull(copyGroupId);
+                Assert.Equal(copyGroupId, headerGroupId);
+
+                // Exactly one change_groups row, covering both members — not two adjacent groups.
+                var group = Assert.Single(changes.GetChangeGroups());
+                Assert.Equal(copyGroupId, group.Id);
+                Assert.True(group.ChangeCount >= 2);
+
+                var mastersChange = changes.GetChanges(plugin: "Target.esp", formKey: headerKey).Single(c => c.FieldPath == "masters");
+                var newMasters = mastersChange.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
+                Assert.Equal(["Base.esm"], newMasters);
+                // The captured old value must be the real prior masters list (empty here), not an
+                // absent/null placeholder — it drives revert and the frontend's pending-diff display.
+                Assert.Equal(JsonValueKind.Array, mastersChange.OldValue.ValueKind);
+                Assert.Empty(mastersChange.OldValue.EnumerateArray());
+
+                // Atomicity: reverting the group removes the copy and the master-add together —
+                // proving they're genuinely one unit, not just two changes that happen to share an id.
+                Assert.True(changes.RevertGroup(copyGroupId!.Value));
+                Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: npcKey.ToString()));
+                Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: headerKey));
+            }
+        }
+    }
+
+    // --- B4 regression: two sequential copy-tos into the *same* target, each needing a different
+    // missing master, must land in one shared group, not two — the pending-change upsert's
+    // ON CONFLICT keeps the *first* group id a row is tagged with (DuckDbPendingChangeService
+    // COALESCEs group_id), so a naive "always mint a fresh group id" implementation would tag the
+    // second copy's own record with an id the header's masters row never actually joined. ---
+
+    [Fact]
+    public void CopyRecordTo_TwoSequentialCopiesNeedingDifferentMasters_ShareOneGroup()
+    {
+        FormKey npc1Key = default;
+        FormKey npc2Key = default;
+        var data = new PluginFixtureBuilder("eo-copy-master-sequential")
+            .WithPlugin("Origin1.esm", mod => npc1Key = mod.Npcs.AddNew("Origin1Npc").FormKey)
+            .WithPlugin("Origin2.esm", mod => npc2Key = mod.Npcs.AddNew("Origin2Npc").FormKey)
+            .WithPlugin("Target.esp") // no masters declared
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                Assert.IsType<StageEditResult.Staged>(orchestrator.CopyRecordTo(npc1Key.ToString(), "Target.esp", "user"));
+                Assert.IsType<StageEditResult.Staged>(orchestrator.CopyRecordTo(npc2Key.ToString(), "Target.esp", "user"));
+
+                var headerKey = HeaderKey("Target.esp");
+                var copy1GroupId = changes.GetGroupIdForRecord(npc1Key.ToString(), "Target.esp");
+                var copy2GroupId = changes.GetGroupIdForRecord(npc2Key.ToString(), "Target.esp");
+                var headerGroupId = changes.GetGroupIdForRecord(headerKey, "Target.esp");
+
+                Assert.NotNull(copy1GroupId);
+                Assert.Equal(copy1GroupId, copy2GroupId);
+                Assert.Equal(copy1GroupId, headerGroupId);
+
+                // Exactly one change_groups row overall — not two.
+                var group = Assert.Single(changes.GetChangeGroups());
+                Assert.Equal(copy1GroupId, group.Id);
+
+                var mastersChange = changes.GetChanges(plugin: "Target.esp", formKey: headerKey).Single(c => c.FieldPath == "masters");
+                var newMasters = mastersChange.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
+                Assert.Equal(["Origin1.esm", "Origin2.esm"], newMasters);
+
+                // Full atomicity: reverting the (single, shared) group removes both copies and the
+                // masters change together.
+                Assert.True(changes.RevertGroup(copy1GroupId!.Value));
+                Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: npc1Key.ToString()));
+                Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: npc2Key.ToString()));
+                Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: headerKey));
+            }
+        }
+    }
+
+    // --- B5: a FormLink inside the copied content, referencing a third plugin, gets auto-added too —
+    // independent of the record's own origin (already mastered here), same group. ---
+
+    [Fact]
+    public void CopyRecordTo_ContentReferencesUnmasteredPlugin_StagesMasterAddInSameGroup()
+    {
+        FormKey npcKey = default;
+        FormKey raceKey = default;
+        var data = new PluginFixtureBuilder("eo-copy-master-formref")
+            .WithPlugin("RaceProvider.esm", mod => raceKey = mod.Races.AddNew("ImportedRace").FormKey)
+            .WithPlugin("Origin.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("OriginNpc");
+                npc.Race.SetTo(raceKey);
+                npcKey = npc.FormKey;
+            })
+            .WithPlugin(
+                "Target.esp",
+                mod => ((Mutagen.Bethesda.Plugins.Records.IMod)mod).MasterReferences.Add(
+                    new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = ModKey.FromFileName("Origin.esp") }),
+                // Target doesn't yet reference Origin.esp's content, so the declared master would
+                // otherwise be pruned at fixture-build write time (same MastersListContentOption.Iterate
+                // gap as MakeMastersFixture) — NoCheck preserves it so this test isolates the
+                // FormLink-referenced-plugin gap (RaceProvider.esm) from the origin-plugin gap (B4).
+                writeParams: new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
+                {
+                    MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,
+                })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user");
+
+                Assert.IsType<StageEditResult.Staged>(result);
+
+                var headerKey = HeaderKey("Target.esp");
+                var copyGroupId = changes.GetGroupIdForRecord(npcKey.ToString(), "Target.esp");
+                var headerGroupId = changes.GetGroupIdForRecord(headerKey, "Target.esp");
+                Assert.NotNull(copyGroupId);
+                Assert.Equal(copyGroupId, headerGroupId);
+
+                var mastersChange = changes.GetChanges(plugin: "Target.esp", formKey: headerKey).Single(c => c.FieldPath == "masters");
+                var newMasters = mastersChange.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
+                // Origin.esp was already a master (excluded from the append); only the FormLink's
+                // origin (RaceProvider.esm) is new.
+                Assert.Equal(["Origin.esp", "RaceProvider.esm"], newMasters);
+            }
+        }
+    }
+
+    // --- B6: a copy into a target that already masters everything referenced stays ungrouped —
+    // regression guard against always wrapping copy-to in a spurious group. ---
+
+    [Fact]
+    public void CopyRecordTo_TargetAlreadyMastersSource_NoMastersChangeStaged()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-copy-master-already")
+            .WithPlugin("Base.esm", mod => npcKey = mod.Npcs.AddNew("BaseNpc").FormKey)
+            .WithPlugin(
+                "Target.esp",
+                mod => ((Mutagen.Bethesda.Plugins.Records.IMod)mod).MasterReferences.Add(
+                    new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = ModKey.FromFileName("Base.esm") }),
+                writeParams: new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
+                {
+                    MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,
+                })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user");
+
+                Assert.IsType<StageEditResult.Staged>(result);
+
+                var headerKey = HeaderKey("Target.esp");
+                Assert.Null(changes.GetGroupIdForRecord(npcKey.ToString(), "Target.esp"));
+                Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: headerKey));
+                Assert.Empty(changes.GetChangeGroups());
+            }
+        }
+    }
 }

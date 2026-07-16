@@ -704,6 +704,149 @@ describe('RecordPanel — 422 ProblemDetails detail is surfaced', () => {
   });
 });
 
+// ── Issue #86: Add Master picker (header record) ─────────────────────────────
+
+const mastersMeta: FieldMetadata = {
+  name: 'masters', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
+  elementType: { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
+};
+
+const headerCompareResult = {
+  conflictAll: 'OnlyOne',
+  overrides: [
+    {
+      formKey: '000000:MyMod.esp',
+      plugin: 'MyMod.esp',
+      loadOrderIndex: 1,
+      isWinner: true,
+      editorId: null,
+      fields: [{ metadata: mastersMeta, value: ['Fallout4.esm'] }],
+      pendingFields: {},
+      conflictThis: 'OnlyOne',
+    },
+  ],
+  diffs: [
+    {
+      fieldName: 'masters',
+      values: { 'MyMod.esp': ['Fallout4.esm'] },
+      winnerPlugin: 'MyMod.esp',
+      winnerValue: ['Fallout4.esm'],
+      cellStates: {},
+    },
+  ],
+};
+
+const headerPluginsResponse = [
+  { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
+  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1 },
+  { name: 'DLCRobot.esm', isImmutable: true, loadOrderIndex: 2 },
+];
+
+function makeHeaderFetch() {
+  return vi.fn((url: string) => {
+    if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(headerCompareResult) };
+    if (String(url).includes('/changes'))  return { ok: true, json: () => Promise.resolve([]) };
+    if (String(url).includes('/plugins'))  return { ok: true, json: () => Promise.resolve(headerPluginsResponse) };
+    return { ok: false, status: 404, statusText: 'Not Found' };
+  });
+}
+
+describe('RecordPanel — Add Master picker (issue #86)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('F1: shows "Add Master…" only in edit mode, on the header record', async () => {
+    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', makeHeaderFetch());
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Edit'));
+    expect(screen.queryByText('Add Master…')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Edit'));
+    expect(screen.getByText('Add Master…')).toBeInTheDocument();
+  });
+
+  it('F1: does not show "Add Master…" on a non-header record', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', makeFetch());
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Edit'));
+    expect(screen.queryByText('Add Master…')).not.toBeInTheDocument();
+  });
+
+  it("F2: picker offers loaded plugins minus already-mastered ones and the record's own plugin", async () => {
+    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', makeHeaderFetch());
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Add Master…'));
+
+    // Fallout4.esm is already a master → excluded. DLCRobot.esm is loaded, not yet a master →
+    // offered. MyMod.esp (the record's own plugin) never appears as a candidate.
+    expect(screen.getByText('DLCRobot.esm')).toBeInTheDocument();
+    expect(screen.queryByText('Fallout4.esm')).not.toBeInTheDocument();
+  });
+
+  it('F3: selecting a plugin stages the full appended masters array via PATCH', async () => {
+    const fetchMock = makeHeaderFetch();
+    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', fetchMock);
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Add Master…'));
+    fireEvent.mouseDown(screen.getByText('DLCRobot.esm'));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/records/'),
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const patchCall = fetchMock.mock.calls.find(
+      (c: unknown[]) => (c[1] as RequestInit)?.method === 'PATCH',
+    );
+    const body = JSON.parse((patchCall![1] as RequestInit).body as string) as {
+      plugin: string;
+      fields: Record<string, unknown>;
+    };
+    expect(body.plugin).toBe('MyMod.esp');
+    expect(body.fields['masters']).toEqual(['Fallout4.esm', 'DLCRobot.esm']);
+  });
+
+  it('F3: a not_append_only 422 rejection surfaces a readable message', async () => {
+    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') {
+        return {
+          ok: false,
+          status: 422,
+          statusText: 'Unprocessable Entity',
+          json: () => Promise.resolve([{ fieldPath: 'masters', reason: 'not_append_only' }]),
+        };
+      }
+      if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(headerCompareResult) };
+      if (String(url).includes('/changes'))  return { ok: true, json: () => Promise.resolve([]) };
+      if (String(url).includes('/plugins'))  return { ok: true, json: () => Promise.resolve(headerPluginsResponse) };
+      return { ok: false, status: 404, statusText: 'Not Found' };
+    }));
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Add Master…'));
+    fireEvent.mouseDown(screen.getByText('DLCRobot.esm'));
+
+    await waitFor(() =>
+      expect(screen.getByText(/masters can only be appended to/)).toBeInTheDocument(),
+    );
+  });
+});
+
 // ── Top-level pending no-op suppression ──────────────────────────────────────
 
 describe('RecordPanel — top-level pending suppressed when identical to disk', () => {
