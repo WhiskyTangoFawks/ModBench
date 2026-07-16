@@ -217,6 +217,23 @@ export class ModListProvider
     // position — dropping onto them must not fall through to "move to end".
     if (target?.kind === 'count' || target?.kind === 'overwrite') return;
     const { kind, name } = payload.value as { kind: 'mod' | 'separator'; name: string };
+    try {
+      await this.applyDrop(kind, name, target);
+    } catch (e) {
+      // ADR-0026: an explicit user action failed — notify + log, then resync the
+      // moved rows against disk so the tree never shows a phantom reorder.
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[ModListProvider] handleDrop failed: ${message}`);
+      this.reporter?.report('error', 'Failed to reorder mods.', message);
+    }
+    this.refresh();
+  }
+
+  /** Dispatches a drop's mutation call: mod-onto-separator, mod-reorder, or
+   *  separator-block-reorder. Split out of `handleDrop` only to keep that
+   *  method's cyclomatic complexity under lint's threshold once the failure
+   *  handling was added (#130) — no behavior change from the prior inline body. */
+  private async applyDrop(kind: 'mod' | 'separator', name: string, target: ModlistNode | undefined): Promise<void> {
     // A drop hands us the *pre-removal* target ("insert before this row"), but
     // moveModInText/moveSeparatorBlockInText count toIndex among the entries with
     // the moved line(s) already removed — so any moved entry above the target
@@ -233,7 +250,6 @@ export class ModListProvider
     } else {
       await this.source.reorderSeparatorBlock(name, this.dropToIndex(order, this.separatorBlockNames(name), targetName));
     }
-    this.refresh();
   }
 
   /** File-order insert index for a drop, honoring the view direction. `order` is
