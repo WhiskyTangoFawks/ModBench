@@ -11,7 +11,7 @@ namespace MEditService.Tests.Indexing;
 
 public class FormReferencesTests
 {
-    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private static DuckDbRecordRepository OpenRepo()

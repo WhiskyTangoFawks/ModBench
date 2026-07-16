@@ -14,7 +14,7 @@ namespace MEditService.Tests.Changes;
 /// </summary>
 public class PluginWriterApplyTests
 {
-    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         Reflector.GetSchemas(GameRelease.Fallout4);
 

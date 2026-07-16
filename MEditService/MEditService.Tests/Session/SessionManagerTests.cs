@@ -13,7 +13,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Session;
 
-public class SessionManagerTests(TestPluginFixture fixture) : IClassFixture<TestPluginFixture>
+[Collection(TestPluginFixtureCollection.Name)]
+public class SessionManagerTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
@@ -25,7 +26,7 @@ public class SessionManagerTests(TestPluginFixture fixture) : IClassFixture<Test
 
     private static SessionManager MakeManager(IModImporter? modImporter = null)
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         return new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance),
             modImporter: modImporter);
@@ -34,7 +35,7 @@ public class SessionManagerTests(TestPluginFixture fixture) : IClassFixture<Test
     [Fact]
     public void Load_DelegatesToFactory()
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var spy = new SpyRepositoryFactory(inner);
         using var manager = new SessionManager(spy, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
@@ -548,19 +549,33 @@ public class SessionManagerTests(TestPluginFixture fixture) : IClassFixture<Test
     [Fact]
     public void CreatePlugin_EsmExtension_IsAccepted()
     {
-        using var manager = MakeLoadedManager();
-        var result = manager.CreatePlugin("NewMaster.esm");
-        Assert.Equal("NewMaster.esm", result.Name);
-        Assert.True(result.IsMaster);
+        var data = new PluginFixtureBuilder("cp-esm").WithPlugin("Base.esp").Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            var result = manager.CreatePlugin("NewMaster.esm");
+
+            Assert.Equal("NewMaster.esm", result.Name);
+            Assert.True(result.IsMaster);
+        }
     }
 
     [Fact]
     public void CreatePlugin_EslExtension_IsAccepted()
     {
-        using var manager = MakeLoadedManager();
-        var result = manager.CreatePlugin("NewLight.esl");
-        Assert.Equal("NewLight.esl", result.Name);
-        Assert.True(result.IsLight);
+        var data = new PluginFixtureBuilder("cp-esl").WithPlugin("Base.esp").Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            var result = manager.CreatePlugin("NewLight.esl");
+
+            Assert.Equal("NewLight.esl", result.Name);
+            Assert.True(result.IsLight);
+        }
     }
 
     // --- SavePlugin guard clauses ---

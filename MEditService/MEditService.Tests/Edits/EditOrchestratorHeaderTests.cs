@@ -25,7 +25,7 @@ public sealed class EditOrchestratorHeaderTests
 
     private static (EditOrchestrator orchestrator, SessionManager manager) MakeOrchestrator()
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var changes = DuckDbTestFactory.MakePendingChangeService();
         // Wire `changes` into the SessionManager (not just the orchestrator) so it receives the
@@ -615,7 +615,7 @@ public sealed class EditOrchestratorHeaderTests
     private static (EditOrchestrator orchestrator, SessionManager manager, DuckDbPendingChangeService changes)
         MakeOrchestratorWithChanges()
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);

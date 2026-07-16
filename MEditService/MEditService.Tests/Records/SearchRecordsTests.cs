@@ -7,13 +7,14 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Records;
 
-public class SearchRecordsTests(TestPluginFixture fixture) : IClassFixture<TestPluginFixture>
+[Collection(TestPluginFixtureCollection.Name)]
+public class SearchRecordsTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
     private SessionManager MakeLoadedManager()
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
         manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);

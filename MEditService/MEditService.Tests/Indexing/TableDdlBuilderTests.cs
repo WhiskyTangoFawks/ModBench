@@ -8,7 +8,7 @@ namespace MEditService.Tests.Indexing;
 
 public class TableDdlBuilderTests
 {
-    private readonly ISchemaReflector _reflector = new SchemaReflector();
+    private readonly ISchemaReflector _reflector = SharedSchemaReflector.Instance;
     private readonly ITableDdlBuilder _builder;
 
     public TableDdlBuilderTests()

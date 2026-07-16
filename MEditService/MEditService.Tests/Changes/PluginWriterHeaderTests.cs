@@ -15,7 +15,7 @@ namespace MEditService.Tests.Changes;
 /// </summary>
 public sealed class PluginWriterHeaderTests
 {
-    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
 
     private const string Plugin = "TestPlugin.esp";
     private static readonly string HeaderFormKey = $"000000:{Plugin}";

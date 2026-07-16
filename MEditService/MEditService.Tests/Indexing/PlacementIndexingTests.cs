@@ -20,7 +20,7 @@ namespace MEditService.Tests.Indexing;
 // non-null columns.
 public class PlacementIndexingTests
 {
-    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private sealed record Built(

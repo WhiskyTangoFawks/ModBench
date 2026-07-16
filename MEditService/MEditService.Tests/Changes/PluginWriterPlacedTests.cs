@@ -17,7 +17,7 @@ namespace MEditService.Tests.Changes;
 // the reflection-driven link-cache path, then add/remove the placed ref in its Persistent list.
 public class PluginWriterPlacedTests
 {
-    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
 
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 

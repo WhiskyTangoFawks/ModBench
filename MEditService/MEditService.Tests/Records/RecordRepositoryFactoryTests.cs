@@ -9,7 +9,7 @@ public class RecordRepositoryFactoryTests
     [Fact]
     public void Create_ReturnsInitializedRepository()
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
 
         using var repo = factory.Create(GameRelease.Fallout4);

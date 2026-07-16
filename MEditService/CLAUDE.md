@@ -4,37 +4,33 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 
 ## Invariants
 
-- Binary plugins = source of truth. DuckDB is an indexed read model of committed
-  (on-disk) record data — the only read path for queries, always through
-  `IRecordRepository`, never Mutagen directly. Staged edits are buffered in a separate
-  table.
-- Records table uses `(form_key, plugin)` composite key — one row per plugin
-  containing that FormKey.
-- DuckDB schema is reflection-generated at startup from Mutagen types — never
-  hand-edit it.
-- Must support all Mutagen-supported games without code changes; tests may use FO4 as
-  a concrete game.
+- Binary plugins = source of truth; DuckDB = indexed read model of committed data. Reads only via `IRecordRepository`, never Mutagen directly. Staged edits: separate table.
+- Records table key: `(form_key, plugin)` — one row per plugin per FormKey.
+- DuckDB schema is reflection-generated from Mutagen types at startup — never hand-edit. Enforces root's game-generalization rule; FO4 in tests = fixture, not scope limit.
+- Reads query `<type>` (generated view = committed + staged), not `<type>_committed`. Use `_committed` only for committed-only data (e.g. conflict classifier). [ADR-0025](../docs/adr/0025-reads-overlay-pending-via-views.md)
+- Every write backs up the target plugin first (timestamped `.bak`) — cross-session undo depends on it; new write paths must not skip this. [ADR-0008](../docs/adr/0008-timestamped-binary-backups.md)
+- FormLinks validate at stage time, not apply time — existence+type checked before entering pending-change state. [ADR-0020](../docs/adr/0020-reference-validation-at-stage-time.md)
+- Partial-success endpoints return a structured failures collection (named record, e.g. `SessionLoadResponse.Failures`) — never swallow a partial outcome or use stringly-typed errors; frontend decides surfacing. [ADR-0026](../docs/adr/0026-error-surfacing-policy.md)
 
-## Folder Structure
+## Folder structure
 
 | Folder | Owns | Examples |
 | ------ | ---- | ------- |
 | `Session/` | Live game environment and lifecycle | `GameSession`, `SessionManager`, `PluginMetadata` |
-| `Schema/` | Static knowledge about Mutagen record types — read and write | `SchemaReflector`, `RecordTableSchema`, `ColumnSpec`, `FieldMetadataMapper` |
-| `Records/` | DuckDB record index: inserting committed records, querying, DDL | `IRecordRepository`, `DuckDbRecordRepository`, `TableDdlBuilder`, `SessionCache` |
+| `Schema/` | Static knowledge of Mutagen record types — read and write | `SchemaReflector`, `RecordTableSchema`, `ColumnSpec`, `FieldMetadataMapper` |
+| `Records/` | DuckDB record index: insert committed records, query, DDL | `IRecordRepository`, `DuckDbRecordRepository`, `TableDdlBuilder`, `SessionCache` |
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
 | `Edits/` | Staging and persisting user edits | `PendingChangeService`, `PluginWriter`, `SaveResult` |
-| `Resolution/` | FormKey ↔ EditorID translation | `FormKeyResolver` |
 
-Place code where **ownership** fits: `ColumnSpec` in `Schema/` carries both read extractor and Apply write delegate; `PluginWriter` writes to disk and returns without calling back into the repository; DTOs in `Queries/Models.cs`. Delete dead code.
+Place code by ownership: `ColumnSpec` (`Schema/`) carries both read extractor + write Apply delegate; `PluginWriter` writes to disk, doesn't call back into the repository; DTOs in `Queries/Models.cs`. Delete dead code.
 
-## Endpoint Invariant
+## Endpoint invariant
 
-Every endpoint in `MEditService.Api/Endpoints/` needs `.Produces<T>()` for success and `.ProducesProblem(status)` for every error. Without it, Swashbuckle emits `content?: never` — TypeScript callers get `never`. Never return anonymous types (`new { ... }`); use a named record from `Queries/Models.cs`.
+Every endpoint needs `.Produces<T>()` (success) + `.ProducesProblem(status)` (each error) — else Swashbuckle emits `content?: never`, TS callers get `never`. No anonymous types (`new {...}`) — named record from `Queries/Models.cs`.
 
 ## Logging (Serilog → `%LOCALAPPDATA%/mEdit/logs/`)
 
-- Every endpoint catch: `_logger.LogError(ex, "...")` before `Results.Problem(ex.Message)`. Never `ex.ToString()` (stack trace leak). Never return from catch without logging.
-- Best-effort catches: `_logger.LogWarning` — no silent `catch { }`. Exception: per-call property accessor lambdas in `SchemaReflector` stay silent to avoid log noise.
+- Endpoint catch: `_logger.LogError(ex, "...")` before `Results.Problem(ex.Message)`; never `ex.ToString()` (leaks stack trace); never return from catch unlogged.
+- Best-effort catches: `_logger.LogWarning`, no silent `catch {}` — except `SchemaReflector`'s per-call property-accessor lambdas (avoid log noise).
 - Structured properties: `_logger.LogInformation("Indexed {Count} records for {Plugin}", n, name)`.
-- `LogInformation` for state transitions. `LogDebug` for per-record/per-column trace.
+- `LogInformation` for state transitions, `LogDebug` for per-record/per-column trace.

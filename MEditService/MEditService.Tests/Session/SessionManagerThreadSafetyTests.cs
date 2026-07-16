@@ -8,13 +8,14 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Session;
 
-public class SessionManagerThreadSafetyTests(TestPluginFixture fixture) : IClassFixture<TestPluginFixture>
+[Collection(TestPluginFixtureCollection.Name)]
+public class SessionManagerThreadSafetyTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
     private static SessionManager MakeManager()
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         return new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
     }
@@ -31,7 +32,9 @@ public class SessionManagerThreadSafetyTests(TestPluginFixture fixture) : IClass
     [Fact]
     public async Task CreatePlugin_CompletesWithoutDeadlock()
     {
-        using var manager = MakeLoadedManager();
+        using var data = new PluginFixtureBuilder("cp-deadlock").WithPlugin("Base.esp").Build();
+        using var manager = MakeManager();
+        manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
         // If CreatePlugin() calls Load() from inside lock(_lock) with a non-reentrant lock,
         // the same thread deadlocks. Use a timeout to catch that case.
@@ -45,7 +48,9 @@ public class SessionManagerThreadSafetyTests(TestPluginFixture fixture) : IClass
     [Fact]
     public async Task CreatePlugin_ReturnsMetadataForNewPlugin()
     {
-        using var manager = MakeLoadedManager();
+        using var data = new PluginFixtureBuilder("cp-metadata").WithPlugin("Base.esp").Build();
+        using var manager = MakeManager();
+        manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
         var task = Task.Run(() => manager.CreatePlugin("Created.esp"));
         var completed = await Task.WhenAny(task, Task.Delay(5000));

@@ -17,7 +17,7 @@ namespace MEditService.Tests.Changes;
 // hardest unknown in 16.2 before the columns / orchestrator / frontend are built around it.
 public class PluginWriterPlacedSpikeTests
 {
-    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
 
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 

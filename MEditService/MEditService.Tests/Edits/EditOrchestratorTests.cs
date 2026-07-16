@@ -20,7 +20,7 @@ public sealed class EditOrchestratorTests
 
     private static (EditOrchestrator orchestrator, SessionManager manager) MakeOrchestrator()
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
         var changes = DuckDbTestFactory.MakePendingChangeService();
@@ -120,7 +120,7 @@ public sealed class EditOrchestratorTests
             var sessionStub = new StubSessionManagerWithImmutablePlugin(
                 data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4, "TestPlugin.esp");
 
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var changes = DuckDbTestFactory.MakePendingChangeService();
             var query = new RecordQueryService(sessionStub, changes, reflector, new ConflictClassifier());
             var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
@@ -146,7 +146,7 @@ public sealed class EditOrchestratorTests
         {
             var sessionStub = new StubSessionManagerWithImmutablePlugin(
                 data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4, "TestPlugin.esp");
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var changes = DuckDbTestFactory.MakePendingChangeService();
             var query = new RecordQueryService(sessionStub, changes, reflector, new ConflictClassifier());
             var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
@@ -419,7 +419,7 @@ public sealed class EditOrchestratorTests
             var sessionStub = new StubSessionManagerWithImmutablePlugin(
                 data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4, "Source.esp");
 
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var changes = DuckDbTestFactory.MakePendingChangeService();
             var query = new RecordQueryService(sessionStub, changes, reflector, new ConflictClassifier());
             var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
@@ -515,7 +515,7 @@ public sealed class EditOrchestratorTests
     private static (EditOrchestrator orchestrator, SessionManager manager, DuckDbPendingChangeService changes)
         MakeOrchestratorWithChanges()
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
         var changes = DuckDbTestFactory.MakePendingChangeService();
@@ -1238,7 +1238,7 @@ public sealed class EditOrchestratorTests
 
                 var staged = changes.GetChanges(formKey: result.FormKey);
                 var fieldEdits = staged.Where(c => c.FieldPath != "$create").ToList();
-                IPluginWriter writer = new PluginWriter(new SchemaReflector(), NullLogger<PluginWriter>.Instance);
+                IPluginWriter writer = new PluginWriter(SharedSchemaReflector.Instance, NullLogger<PluginWriter>.Instance);
                 Assert.DoesNotContain(fieldEdits, c => writer.IsReadOnly(GameRelease.Fallout4, "npc_", c.FieldPath));
                 Assert.Contains(fieldEdits, c => c.FieldPath == "aggression");
             }
@@ -1287,7 +1287,7 @@ public sealed class EditOrchestratorTests
         public StubSessionManagerWithImmutablePlugin(
             string dataFolder, string pluginsTxtPath, GameRelease gameRelease, string immutablePlugin)
         {
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             _inner = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             _inner.Load(dataFolder, pluginsTxtPath, gameRelease);

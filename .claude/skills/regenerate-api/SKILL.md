@@ -1,6 +1,6 @@
 ---
 name: regenerate-api
-description: How to regenerate TypeScript API client api.ts from OpenAPI spec.
+description: How to regenerate TypeScript API client api.ts from OpenAPI spec. Use when you need to regenerate the API.
 ---
 
 # Regenerate api.ts

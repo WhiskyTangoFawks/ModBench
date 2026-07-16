@@ -14,7 +14,7 @@ public sealed class SessionManagerLoadExplicitTests
 {
     private static SessionManager MakeManager()
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         return new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
     }

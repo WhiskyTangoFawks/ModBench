@@ -19,7 +19,7 @@ public sealed class DeleteRecordsTests
     private static (EditOrchestrator orchestrator, SessionManager manager, DuckDbPendingChangeService changes)
         MakeOrchestratorWithChanges()
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var changes = DuckDbTestFactory.MakePendingChangeService();
         // Pass changes so SessionManager.Load() calls OnSessionLoaded, sharing the DuckDB connection
@@ -34,7 +34,7 @@ public sealed class DeleteRecordsTests
     private static (EditOrchestrator orchestrator, StubImmutableSessionManager manager, DuckDbPendingChangeService changes)
         MakeOrchestratorWithImmutablePlugin(string dataFolder, string pluginsTxtPath, string immutablePlugin)
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var stubManager = new StubImmutableSessionManager(
             dataFolder, pluginsTxtPath, GameRelease.Fallout4, immutablePlugin, reflector, changes);
@@ -538,7 +538,7 @@ public sealed class DeleteRecordsTests
 
         public StubImmutableSessionManager(
             string dataFolder, string pluginsTxtPath, GameRelease gameRelease,
-            string immutablePlugin, SchemaReflector reflector, DuckDbPendingChangeService changes)
+            string immutablePlugin, ISchemaReflector reflector, DuckDbPendingChangeService changes)
         {
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             _inner = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);

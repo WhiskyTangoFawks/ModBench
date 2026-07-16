@@ -11,14 +11,15 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
-public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, IDisposable
+[Collection(TestPluginFixtureCollection.Name)]
+public sealed class RecordQueryServiceTests : IDisposable
 {
     private readonly SessionManager _manager;
     private readonly RecordQueryService _svc;
 
     public RecordQueryServiceTests(TestPluginFixture fixture)
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         _manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
         _manager.Load(fixture.DataFolder, fixture.PluginsTxtPath, GameRelease.Fallout4);
@@ -203,7 +204,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             .Build();
         using (data)
         {
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -399,7 +400,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
 
     private static void WithCompareService(PluginFixtureData data, Action<RecordQueryService> test)
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
         manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -547,7 +548,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             "test", null,
             []));
 
-        var svcWithChanges = new RecordQueryService(_manager, changes, new SchemaReflector(), new ConflictClassifier());
+        var svcWithChanges = new RecordQueryService(_manager, changes, SharedSchemaReflector.Instance, new ConflictClassifier());
         var compare = svcWithChanges.GetCompare(fk);
 
         Assert.NotNull(compare);
@@ -586,7 +587,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             .Build();
         using (data)
         {
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -625,7 +626,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             .Build();
         using (data)
         {
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -654,7 +655,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             .Build();
         using (data)
         {
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -680,7 +681,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             .Build();
         using (data)
         {
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -696,7 +697,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
 
     private static RecordQueryService MakeUnloadedService()
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
         return new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
@@ -706,7 +707,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
 
     private (RecordQueryService Svc, SpyRecordReader Spy, IDisposable Mod) MakeSpySvc()
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var inner = factory.Create(GameRelease.Fallout4);
         var mod = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
@@ -800,7 +801,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             .Build();
         using (data)
         {
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -833,7 +834,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         using (data)
         {
             // Override.esp has 1 committed record; stage a 2nd one
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -864,7 +865,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             .Build();
         using (data)
         {
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -893,7 +894,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             .Build();
         using (data)
         {
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -924,7 +925,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
             .Build();
         using (data)
         {
-            var reflector = new SchemaReflector();
+            var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -949,7 +950,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         changes.Upsert(new PendingChangeUpsert(fk.ToString(), "Unknown.esp", "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
             "user", null, []));
-        var svc = new RecordQueryService(_manager, changes, new SchemaReflector(), new ConflictClassifier());
+        var svc = new RecordQueryService(_manager, changes, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var result = svc.GetRecords(type: "npc_", plugin: "Unknown.esp", search: null, limit: 100, offset: 0);
 
@@ -969,7 +970,7 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         changes.Upsert(new PendingChangeUpsert(fk, TestPluginFixture.PluginName, "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
             "user", null, []));
-        var svc = new RecordQueryService(_manager, changes, new SchemaReflector(), new ConflictClassifier());
+        var svc = new RecordQueryService(_manager, changes, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var result = svc.GetRecords(type: "npc_", plugin: TestPluginFixture.PluginName, search: null, limit: 100, offset: 0);
 

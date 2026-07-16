@@ -8,10 +8,11 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
-public class FilterTests(TestPluginFixture fixture) : IClassFixture<TestPluginFixture>
+[Collection(TestPluginFixtureCollection.Name)]
+public class FilterTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
-    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private DuckDbRecordRepository LoadedRepository()

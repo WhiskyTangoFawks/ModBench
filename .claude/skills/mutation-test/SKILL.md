@@ -1,165 +1,117 @@
 ---
 name: mutation-test
-description: Run Stryker.NET mutation tests against MEditService.Core and triage survivors.
+description: Mutation-test review — read mutation results as a code review, triaging every surviving or uncovered mutant to a recorded disposition. Use to run and review mutation test results after a TDD implementation.
 ---
 
-# Mutation Test
+A code-review pass that uses mutation results as its reading list.
 
-Stryker.NET mutation tests against `MEditService.Core`. Commands from `MEditService/`.
+A correct `/tdd` slice writes only code a test demanded, so its mutants all die. Each survivor or uncovered result is a potential code smell pointing at one of the two ways a slice goes wrong: speculative generality, or mechanism-not-outcome. Read each finding the way a reviewer reads a PR: *show me the requirement that earns this line its place.*
 
-## Role
+The review is complete when **every finding carries exactly one recorded disposition**.
+A run that ends in documented accepts passes exactly as a run that ends in deletions
+does.
 
-This is a **specification-audit and entropy-control tool, not a coverage/score gate.**
-In a TDD-first, agent-written codebase a survivor asks *"does this code matter / is it
-specified?"* — read survivors the way a reviewer reads a PR: *show me what doesn't
-appear to matter.* The highest-value answers are usually **delete** and **accept as
-unproductive**, not "add a test."
+## Process
 
-**Success = every survivor has a recorded disposition, not zero survivors.** A run that
-ends with documented accepts is a pass. `parse-report.py` exiting 1 means *survivors
-await disposition*, not *failure*. Do **not** write a mutant-targeted micro-test just to
-force a kill — that re-introduces the implementation-coupling TDD exists to prevent.
+### 1. Collect the findings
 
-> ⚠️ **Run `run.sh` foreground, exactly as documented.** Never as an agent background task
-> (`run_in_background`) — the harness SIGKILLs the task's process group, which kills the terminal
-> window `run.sh` spawns and can take VS Code down with it. Never `pkill`/`kill` host processes
-> (especially `pkill dotnet` — it kills VS Code's C# servers). The opened terminal tails Stryker's
-> raw TTY output; the agent only waits for the script to return and reads the printed summary —
-> raw Stryker output never enters agent context.
->
-> ⚠️ **Do not re-add `"progress"` to `stryker-config.json` reporters.** ShellProgressBar crashes
-> with `ArgumentOutOfRangeException` (negative string length) when Stryker runs inside the PTY
-> that `script -q -c` creates — the default PTY width triggers the bug. `"json"` alone is
-> sufficient; `run.sh` parses the report and prints the summary.
+Run the project's mutation tool scoped to the working dif, or take the results the caller supplied. List every `Survived` and `NoCoverage` mutant with its file, line, and mutator type.
 
-> 🏎️ **Confirm fixes with targeted runs, never a full re-run.** A full run can take ~an hour, so
-> after triaging a survivor confirm it with `run.sh --file <File>.cs` (since disabled
-> automatically — see below) and check the specific line no longer appears in the output.
-> There is no `--mutant-ids` option — Stryker.NET's config schema has no such key (confirmed
-> against the installed CLI's `--help` and a live rejection); an earlier version of this
-> skill documented one but it never worked. Even `--file` isn't necessarily fast — a
-> since-disabled single-file run can still take significant time; budget for it, don't
-> assume it's instant.
-> The full-install smoke test (`RealData/RealInstallSmokeTests.cs`) is gated behind `MEDIT_SMOKE=1`
-> so it never runs under mutation.
+### 2. Interrogate each finding
 
-## Running the report
+Answer for each finding: what specified user-facing requirement does the line serve? Read the surrounding code, the tests that cover the line, the spec or issue behind it. The answer routes the finding:
 
-> ⚠️ **Never read `mutation-report.json` directly.** Files are 2–3 MB with full source embedded. Always run `run.sh` (calls `parse-report.py`) — only the summary reaches context.
+| Answer | Route |
+| --- | --- |
+| None | **A — the code hasn't earned its place** |
+| A requirement, tests cover the line, yet the mutant lived | **B — the test is weak** |
+| A requirement, but no test observes it | **C — a real gap** |
 
-> 📎 **`since`/`--file` scope at the *file* level, not the diff.** Touching one line makes
-> every testable line in that file eligible for mutation — Stryker has no line-level diff
-> filter. This is intentional (it's what makes the tool a full entropy audit of files you
-> touch, not a diff-coverage gate) but means survivor counts on a large touched file can
-> look alarming even for a small, mechanical change. Use `--diff-only` (below) for a
-> narrower "did my actual diff introduce anything new" view when that's what you want.
 
-```bash
-cd MEditService && bash ../.claude/skills/mutation-test/run.sh
-```
+Fast path — on `Equality` / `Conditional` / `Null coalescing` mutators, first check
+whether both branches are provably equal *at exactly the mutation point* under an
+invariant elsewhere (an enum-severity ordering, a sentinel no real value can match,
+mutually-exclusive data sources). If the invariant exists, record **Equivalent** and
+move on.
 
-Scope to all Core (disables `since`, full corpus — slow):
+**Done when** every finding has a route.
 
-```bash
-cd MEditService && bash ../.claude/skills/mutation-test/run.sh --all
-```
+### 3. Assign one disposition
 
-Single file (since disabled automatically — tests that file regardless of whether it
-has a diff vs `since.target`; leaving `since` enabled here would silently produce zero
-mutants, and no report at all, for a file with no diff):
+Within the finding's route, record the first disposition that fits. Across routes the
+preference is A over B over C: changing the code beats changing a test beats adding
+one.
 
-```bash
-cd MEditService && bash ../.claude/skills/mutation-test/run.sh --file ConflictClassifier.cs
-```
+**Route A — no requirement (code smells, `/code-review` vocabulary):**
 
-`run.sh` prints scope before running. Exits 0 if all killed, 1 if any survivors or NoCoverage remain.
+- **Delete** (**Dead Code**, **Speculative Generality**) — guards impossible or
+  unreachable state, or serves a need the spec doesn't have → remove it.
+- **Simplify** (**Speculative Generality**) — the construct is stronger than the need
+  (`?? ""` on a non-nullable) → rewrite so the mutation site ceases to exist.
+- **Inline the middle man** (**Middle Man**) — the line only delegates onward → call
+  the real target direct.
+- **Unify the duplicate** (**Duplicated Code**) — the same logic lives elsewhere →
+  extract one shared copy; coverage follows it.
+- **Accept as invariant** — a defensive check at a trust boundary with no behavior a
+  requirement-level test could observe → record why the code exists *and* why no test
+  can see it.
+- **Equivalent** — the mutation cannot change observable behavior → record the
+  invariant that makes it.
 
-Run parser against existing report (re-read without re-running):
+**Route B — covered, yet survived (test smells):**
 
-```bash
-cd MEditService && python ../.claude/skills/mutation-test/parse-report.py
-cd MEditService && python ../.claude/skills/mutation-test/parse-report.py StrykerOutput/<dated-run>/reports/mutation-report.json
-```
+- **Fix the assertion** — the test asserts mechanism, not outcome, so the mutant slips
+  past it. Name the smell from the taxonomy below and rewrite the assertion against
+  observable behavior.
 
-Narrow a report to survivors on lines that actually changed vs. `since.target` (default
-`main`, override with `--target <ref>`) — no re-run, just a filter on the same report:
+**Route C — a requirement with no test:**
 
-```bash
-cd MEditService && python ../.claude/skills/mutation-test/parse-report.py --diff-only
-cd MEditService && bash ../.claude/skills/mutation-test/run.sh --diff-only
-```
+- **Red-green** — the behavior is user-visible and unspecified → get the requirement,
+  then run a full feature-level red-green cycle (`/tdd`).
+- **Request a fixture** — the guard handles malformed external data you cannot
+  synthesize → the code is likely genuinely needed; ask the developer for real data,
+  then write the behavioral test against it.
+- **Refactor the seam** — the behavior is real but hidden behind a dependency no test
+  can reach → expose the seam, then test at it.
 
-## Handling survivors
+**Done when** every finding records exactly one disposition.
 
-Analyze the survivors. Obvious fixes can be dealt with directly. Complexity or architectural refactors should be surfaced to the developer, along with analysis and a recommendation.
+### 4. Act and report
 
-**Ask the gating question first, for every survivor:**
-*Is there a user-visible requirement this code/line serves?* The answer routes the
-triage. `NoCoverage` ≠ `Survived`: `NoCoverage` skews toward a real gap (#6); a
-covered-but-`Survived` mutant skews toward "code that doesn't matter" (#1/#5) — the
-entropy signal you most want to act on.
+- Local fixes (delete, simplify, inline, unify, fix the assertion): apply directly,
+  then rerun the tests.
+- Architectural work (seam refactors, red-green cycles needing a new requirement):
+  surface to the developer with the analysis and a recommendation.
+- Accepts and equivalents: propose; batch for approval.
 
-**Fast path — equivalent-under-invariant:** for `Equality`/`Conditional`/`Null
-coalescing` survivors specifically, check first whether the two branches are provably
-equal *at exactly the point where the mutation would change behavior*, given some
-invariant elsewhere in the code (an enum-severity ordering, an out-param sentinel that
-can never match a real value, a "these two sources are mutually exclusive" data-model
-rule). If so, it's an **Equivalent mutant (#9)**, not a coverage gap — go find the
-invariant before assuming a test is missing. This isn't a reason to blanket-suppress
-these mutator types (most instances elsewhere are real, meaningful checks) — it's a
-triage shortcut for this specific shape.
+Close with a table: finding → disposition → applied / proposed.
 
-**Record exactly one disposition per survivor** using this order (stop at first that applies):
-
-1. **Delete** — no requirement; guards impossible/unreachable state → remove it.
-2. **Refactor duplicate** — logic duplicated → make reusable, cover once.
-3. **Simplify** — overcomplicated (e.g. `?? ""` on non-nullable) → simplify so the mutant ceases to exist.
-4. **Fix coupling smell** — code *is* covered but the test asserts mechanism, not outcome (survives despite coverage) → rewrite the assertion to check observable behavior.
-5. **Accept (unproductive)** — code is needed as a defensive invariant at a trust boundary, with no user-visible behavior a test could assert → record the invariant **and** why no requirement-level test can observe it; **propose** a suppression (batched for developer approval — see `/validate` Step 4/5). Do not apply it mid-task.
-6. **Real red-green** — a genuine user-visible behavior is unspecified/untested → identify the feature, get the requirement, and run a proper feature-level red-green cycle. **Never** a mutant-targeted micro-test.
-7. **Request a fixture** — the guard handles **malformed/edge-case plugin data** on a Mutagen-facing seam that you cannot synthesize (the error requires bad binary data). The code is likely genuinely needed — do **not** delete or blind-accept. Ask the developer to supply a plugin exhibiting the condition, then write a real behavioral test against it. Ledger entry: `request-fixture:<condition>`; this survivor is paused until the fixture arrives.
-8. **Refactor seam** — behavior real but no test writable (hidden dependency) → expose the seam.
-9. **Equivalent mutant** — mutation cannot change observable behavior → record as accept/equivalent.
-
-**Never suppress without explicit developer approval.** Suppression (below) is the
-mechanism that makes an **Accept (#5)** or **Equivalent (#9)** durable so it stops
-re-surfacing — it still requires a reason and developer sign-off. Only logging may go
-untested by default — handled via `stryker-config.json`, never comment annotations.
-
-## Suppression format (only after explicit developer approval)
-
-Config-level (preferred):
-
-```json
-"ignore-mutants": [
-  { "mutant": "StringLiteral", "description": "Logging statements are not tested by design" }
-]
-```
-
-Source-level (last resort):
-
-```csharp
-someCode(); // Stryker disable once StringLiteral: <reason>
-```
-
-Prefer config-level for anything project-wide. Annotations without reasoning (why the code exists, why the mutation is inert) will be rejected in review.
+**Done when** every disposition is either applied or handed to the developer with its
+reasoning.
 
 ## Test-smell taxonomy
 
-Shared vocabulary between mutation triage (#4 *Fix coupling smell*) and test review. A
-surviving mutant on covered code usually points at one of these; use the same names when
-flagging or auditing tests. Be conservative — flag genuine smells with concrete evidence,
-not style nits.
+Vocabulary for route C — use these names so a mutation finding and a static-review
+finding compose. Flag with concrete evidence from the test body.
 
-- **mechanism-not-outcome** — asserts internal call counts / intermediate state / private structure instead of observable behavior (`retries == 3`). Backend flavour: asserting on internal repository calls or intermediate DTO shape rather than the queried/saved result.
-- **vacuous** — no assertion; only "does not throw"; or asserts a value it just set / a construction that cannot fail.
-- **over-mocking** — mock verifies mock; the test proves the wiring it declared, not real behavior.
-- **coupled-literals** — exact strings, magic numbers, or ordering the spec never constrained (brittle to refactor).
+- **mechanism-not-outcome** — asserts internal call counts, intermediate state, or
+  private structure instead of observable behavior (`retries == 3`).
+- **vacuous** — no assertion; only "does not throw"; or asserts a value it just set.
+- **over-mocking** — mock verifies mock; the test proves the wiring it declared.
+- **coupled-literals** — exact strings, magic numbers, or ordering the spec never
+  constrained.
 - **redundant** — multiple tests exercising the same behavior; collapse candidates.
-- **multi-behavior** — several unrelated behaviors asserted in one test, obscuring intent.
-- **testing-the-framework** — exercises Mutagen/DuckDB/library behavior rather than our own logic.
+- **multi-behavior** — several unrelated behaviors asserted in one test.
+- **testing-the-framework** — exercises library behavior rather than our own logic.
 
-## Known issues
+## Why dispositions, not a score
 
-- `CompileError` mutants from `DuckDbRecordRepository.Index` and `SchemaReflector.GetSubFieldInfo` are expected — Stryker can't mutate `out` variable patterns there. Counted and ignored automatically.
-- There is no `--mutant-ids` / `mutant-id` option — don't re-add it. Stryker.NET 4.14.2's config schema rejects `mutant-id` outright (confirmed via `dotnet stryker --help` and a live run); a prior version of `run.sh` had this flag and it never worked. Use `--file <File>.cs` to confirm a specific fix instead.
+A kill-rate invites the cheapest way to raise it: a micro-test written to kill one
+named mutant, asserting the very implementation detail the mutant touched — re-coupling
+the suite to internals, the exact coupling `/tdd` exists to prevent. A disposition
+invites the cheapest way to be honest, which is usually deletion.
+
+So the rules hold in both directions: every test enters the suite through a requirement
+and a full red-green cycle, and every accept enters the record with its invariant. That
+is why a run of documented accepts is a pass, and an unexamined 100% kill-rate proves
+nothing.

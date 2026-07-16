@@ -3,7 +3,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Loading;
 
-public sealed class GameSessionAddPluginTests(TestPluginFixture fixture) : IClassFixture<TestPluginFixture>
+[Collection(TestPluginFixtureCollection.Name)]
+public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 

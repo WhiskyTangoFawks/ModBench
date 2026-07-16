@@ -18,7 +18,7 @@ public sealed class PluginWriterSaveTests
 
         var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
 
-        var writer = new PluginWriter(new SchemaReflector(), NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(SharedSchemaReflector.Instance, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(pluginPath, [], GameRelease.Fallout4);
 
         // The original path (not a temp copy) holds a valid, re-loadable plugin after save.
@@ -36,7 +36,7 @@ public sealed class PluginWriterSaveTests
 
         var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
 
-        var writer = new PluginWriter(new SchemaReflector(), NullLogger<PluginWriter>.Instance);
+        var writer = new PluginWriter(SharedSchemaReflector.Instance, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(pluginPath, [], GameRelease.Fallout4);
 
         var leftoverDirs = Directory.GetDirectories(data.DataFolder, ".medit_tmp_*");

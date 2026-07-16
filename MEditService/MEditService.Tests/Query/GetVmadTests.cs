@@ -10,7 +10,7 @@ namespace MEditService.Tests.Query;
 
 public sealed class GetVmadTests : IDisposable
 {
-    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private readonly FormKey _npcFormKey;

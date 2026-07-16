@@ -13,7 +13,7 @@ namespace MEditService.Tests.Changes;
 
 public class PluginWriterVmadTests
 {
-    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
     // Serializes a per-plugin Raw subtree the way the API does (camelCase) so apply round-trips it.

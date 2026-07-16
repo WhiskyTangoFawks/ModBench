@@ -14,8 +14,8 @@ One living spec per Modbench UI surface. A **surface** is a top-level UI unit th
 | Layer | Tense | Lives | Lifecycle |
 |---|---|---|---|
 | **Surface spec** (this directory) | Present — "what this surface does" | Repo | Living; updated when an initiative ships |
-| **PRD** — one per initiative | Future — "what we're building and why" | GitHub issue (`/to-prd`) | Spent when its slices ship |
-| **Issue** — vertical slice of a PRD | Imperative | GitHub issue (`/to-issues`) | Closed on merge |
+| **PRD** — one per initiative | Future — "what we're building and why" | GitHub issue (`/to-spec`) | Spent when its slices ship |
+| **Issue** — vertical slice of a PRD | Imperative | GitHub issue (`/to-tickets`) | Closed on merge |
 
 Rules:
 

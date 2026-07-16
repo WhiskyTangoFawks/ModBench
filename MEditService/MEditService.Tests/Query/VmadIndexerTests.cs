@@ -16,7 +16,7 @@ namespace MEditService.Tests.Query;
 // top-level Object property.
 public sealed class VmadIndexerTests : IDisposable
 {
-    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private readonly FormKey _npc1FormKey;

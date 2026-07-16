@@ -18,7 +18,7 @@ public sealed class EditOrchestratorVmadTests
     private static (EditOrchestrator orchestrator, SessionManager manager, DuckDbPendingChangeService changes)
         MakeOrchestrator(IRecordQueryService? queryOverride = null)
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
         var changes = DuckDbTestFactory.MakePendingChangeService();
@@ -77,7 +77,7 @@ public sealed class EditOrchestratorVmadTests
             })
             .Build();
 
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
         var changes = DuckDbTestFactory.MakePendingChangeService();
@@ -139,7 +139,7 @@ public sealed class EditOrchestratorVmadTests
             })
             .Build();
 
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
         var changes = DuckDbTestFactory.MakePendingChangeService();

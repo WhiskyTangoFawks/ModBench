@@ -16,7 +16,7 @@ namespace MEditService.Tests.Indexing;
 // PlacementWalker precedent for structurally-foreign data.
 public class HeaderIndexingTests
 {
-    private static readonly ISchemaReflector Reflector = new SchemaReflector();
+    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private static long ToLong(object? v) => Convert.ToInt64(v, CultureInfo.InvariantCulture);

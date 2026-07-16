@@ -31,7 +31,7 @@ public sealed class CutDownPluginFixture : IDisposable
 
     public CutDownPluginFixture()
     {
-        var reflector = new SchemaReflector();
+        var reflector = SharedSchemaReflector.Instance;
         var ddl = new TableDdlBuilder(reflector);
 
         _overlay = ModFactory.ImportGetter(

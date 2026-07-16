@@ -1,101 +1,56 @@
 # Modbench and mEdit
 
-VS Code extension (TypeScript, React webviews) + local C# service (ASP.NET Core,
-Mutagen, DuckDB) for managing mod loadouts and for viewing/editing/comparing Bethesda
-plugin files (`.esp`/`.esm`/`.esl`).
+## What this is
 
-## Product Structure
+Modbench: VS Code extension + local C# service (mEdit) — modding IDE for Bethesda
+plugins. Setup/architecture: [README.md](README.md). Per-module invariants:
+[modbench/CLAUDE.md](modbench/CLAUDE.md), [MEditService/CLAUDE.md](MEditService/CLAUDE.md).
 
-**Modbench** is the product — the modding IDE.
-
-- **Mod Management** — lives entirely in the extension (`modbench/src/modmanager/`); 
-  never touches the C# backend.
-  4 Tab views: Mods, Plugins, Downloads, and mEdit.
-- mEdit is a thin view, over a c+ mutagen backend.
-
-UX Specifications: `docs/specs/` 
-Context split and vocabulary boundary: `CONTEXT-MAP.md`, `CONTEXT.md` (Editing), `modbench/src/modmanager/CONTEXT.md`
-
-(Mod Management) — "mod" is forbidden in Editing, "record"/"FormKey" is absent in Mod
-Management; check your context before naming things.
-
-Module-level detail and per-context invariants: [modbench/CLAUDE.md](modbench/CLAUDE.md),
-[MEditService/CLAUDE.md](MEditService/CLAUDE.md).
-
-## Key Invariants
-
-- Modbench must generalize across Bethesda games, not lock to FO4 — each bounded
-  context enforces this in its own way (see the sub-project docs linked above).
-
-Rationale: `docs/adr/`.
-
-## References
-
-all project in the .references folder are local clones  are local clones for API/record-definition
-and behavioral reference only — grep them, never modify them.
-`Mutagen/docs/Big-Cheat-Sheet.md`; 
-TES5Edit's `wbDefinitionsFO4.pas` has FO4 record defs (`wbArrayS` = sorted, `wbArray` = unsorted); 
-`modorganizer/` is the MO2 C++ source (reference for matching MO2 behavior — e.g. `src/downloadmanager.cpp` for download `.meta` state semantics).
-
-## Development Workflow
+## Tools
 
 ```bash
 # from MEditService/
-dotnet build -v minimal && dotnet test -v minimal
+dotnet format --verify-no-changes   # style gate
+dotnet build -v minimal
+dotnet test -v minimal
 
 # from modbench/
-npm run test:unit        # Vitest unit tests (no backend required)
-npm run test:integration # integration tests in real VS Code process (~10s, no backend required)
-npm run build            # type-check + bundle extension + webview
-npm run generate-api     # regenerate src/medit/generated/api.ts — needs a freshly-started backend; see /regenerate-api
+npm run lint
+npm run build             # type-check + bundle extension + webview
+npm run test:unit         # Vitest, no backend
+npm run test:integration  # real VS Code process (~10s), no backend
+npm run generate-api      # regen typed API client — needs fresh backend; see /regenerate-api
 ```
 
-For manual end-to-end testing against a real MO2 instance, see `/manual-test`.
+- `/validate` — run at end of every task; wraps gates above.
+- `/mutation-test` — mutation testing, `MEditService.Core` only.
+- `/manual-test` — e2e test against real MO2 instance.
 
-## Adding a New Command (End-to-End)
+## Rules that matter
 
-1. **Backend** — add the endpoint (shape governed by `MEditService/CLAUDE.md`'s
-   Endpoint Invariant); regenerate the API client (`/regenerate-api`).
-2. **Frontend logic** — wire through `PluginRepository`/`SessionController` per
-   `modbench/CLAUDE.md`'s placement rules.
-3. **VS Code wiring** — register in `package.json` under `contributes.commands`; add
-   to `contributes.menus["view/item/context"]` with matching `contextValue` if a tree
-   action; register the handler in `extension.ts`.
-4. **Tests** — unit + integration green; add the command ID to `EXPECTED_COMMANDS`
-   (`modbench/CLAUDE.md`).
-
-## Conventions
-
-Run `/validate` at the end of any task.
-
-Solving pre-existing problems is always in scope.
-
-Read the `/tdd` skill before deciding how to break any issue into an implementation
-plan — it governs the breakdown decision every time. Where it fits the work, apply
-actual TDD red/green slicing (write the test first, confirm it fails, then write the
-minimal code to pass, one behavior at a time); not every plan needs to come out as
-literal test-first slices (structural, config-only, or docs-only work may not), but
-the skill must always be read first regardless.
-
-## Agent skills
-
-### Issue tracker
-
-Work is tracked as GitHub issues via the `gh` CLI: PRDs are per-initiative issues,
-implementation issues are vertical slices; durable per-surface specs live in
-`docs/specs/`. GitHub **Milestones are used as epics** and are the roadmap (the
-milestones tab — there is no `ROADMAP.md`); numbered titles are prioritized,
-unnumbered are speculative. External PRs are not a triage surface. See
-`docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-The five canonical triage roles use their default label strings (`needs-triage`,
-`needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See
-`docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Multi-context: `CONTEXT-MAP.md` at the root maps the Editing and Mod Management
-contexts to their `CONTEXT.md` glossaries; system-wide ADRs in `docs/adr/`. See
-`docs/agents/domain.md`.
+- Generalize across Bethesda games, don't lock to FO4 — FO4-concrete repo
+  path/tests are a fixture choice, not a platform lock; each bounded context enforces
+  this independently.
+- Vocabulary boundary is enforced, not stylistic: "mod" forbidden in Editing;
+  "record"/"FormKey" absent from Mod Management. Check `CONTEXT-MAP.md` / relevant
+  `CONTEXT.md` before naming anything.
+- Mod Management (`modbench/src/modmanager/`) never calls the C# backend — pure
+  TS/Node. mEdit is the inverse: thin extension-side view; logic lives in
+  `MEditService/`, not webview/extension host.
+- `references/` (not `.references/`) — grep-only local clones, never modify:
+  Mutagen (`docs/Big-Cheat-Sheet.md`), TES5Edit (`wbDefinitionsFO4.pas`: `wbArrayS` =
+  sorted, `wbArray` = unsorted), `modorganizer/` (MO2 C++, e.g.
+  `src/downloadmanager.cpp` for `.meta` semantics), `SFRecordCompareEngine/`
+  (UX-parity reference).
+- New end-to-end command = 4 touch points, else half-wired: backend endpoint +
+  `/regenerate-api` → frontend (`PluginRepository`/`SessionController`) →
+  `package.json` commands/menus + `extension.ts` registration → `EXPECTED_COMMANDS` in
+  integration test.
+- Read `/tdd` before planning any implementation breakdown — always, even if it
+  won't end up as literal red/green slices.
+- Solving pre-existing problems found along the way is in scope — not scope creep.
+- If a change contradicts an ADR (`docs/adr/`), say so — don't silently override.
+- Numbered milestone titles = priority-ordered epics; unnumbered = speculative,
+  sorts last. No `ROADMAP.md` — milestones are it; no due-date/release semantics.
+  Tracker/triage/domain conventions: `docs/agents/issue-tracker.md`,
+  `docs/agents/triage-labels.md`, `docs/agents/domain.md`.
