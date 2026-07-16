@@ -227,7 +227,7 @@ async function linkWinners(
 /** Remove prior links whose folded key is no longer a winner at all (e.g. a
  *  mod was disabled/removed), so a later purge doesn't misfile them as
  *  strays. Distinct from linkWinners' stale-old-casing removal: this is the
- *  "genuinely gone" case, that is the "casing changed" case. */
+ *  "genuinely gone" case, NOT the "casing changed" case. */
 async function removeStaleLinks(dataFolder: string, previousLinks: Map<string, string>, links: string[]): Promise<void> {
   const nowLinkedFolded = new Set(links.map(foldPath));
   for (const [foldedKey, path] of previousLinks) {
