@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { deploy, purge } from './deployer';
 import { makeDeployerFixture, makeIndex, type DeployerFixture } from './test/deployerFixture';
 
+const CORRUPT_MANIFEST = '{not json';
+
 function fakeReporter() {
   const reports: { severity: string; message: string; detail?: string }[] = [];
   return { reports, report: (severity: string, message: string, detail?: string) => reports.push({ severity, message, detail }) };
@@ -179,5 +181,62 @@ describe('deploy', () => {
     await expect(stat(join(fx.gameDirectory.dataFolder, 'mod.esp'))).rejects.toThrow(); // nothing linked
     await expect(stat(join(fx.instanceRoot, ...MANIFEST))).rejects.toThrow(); // no manifest written
     expect(reporter.reports.some((r) => r.severity === 'error')).toBe(true);
+  });
+
+  it('aborts and reports (never re-snapshots Data/) when the manifest is corrupt', async () => {
+    fx = await makeDeployerFixture();
+    const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source }), fakeReporter());
+
+    const target = join(fx.gameDirectory.dataFolder, 'mod.esp');
+    const [origStat] = await Promise.all([stat(target)]);
+
+    // Corrupt the manifest in place, as if a crash truncated the write.
+    const manifestFile = join(fx.instanceRoot, ...MANIFEST);
+    await writeFile(manifestFile, CORRUPT_MANIFEST);
+
+    const source2 = await fx.writeModFile('ModB', 'other.esp', 'OTHER');
+    const reporter = fakeReporter();
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source, 'other.esp': source2 }), reporter);
+
+    // Surfaced on the integrity tier, not silent.
+    expect(reporter.reports.some((r) => r.severity === 'error' && /manifest/i.test(r.message))).toBe(true);
+
+    // Manifest on disk is untouched — not overwritten by a fresh snapshot.
+    expect(await readFile(manifestFile, 'utf8')).toBe(CORRUPT_MANIFEST);
+
+    // The original link from the first deploy is untouched (same inode).
+    const afterStat = await stat(target);
+    expect(afterStat.ino).toBe(origStat.ino);
+
+    // Nothing from the second deploy's index got linked.
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'other.esp'))).rejects.toThrow();
+  });
+});
+
+describe('purge', () => {
+  let fx: DeployerFixture;
+  afterEach(() => fx?.cleanup());
+
+  it('aborts and reports (never touches Data/ or deletes the manifest) when the manifest is corrupt', async () => {
+    fx = await makeDeployerFixture();
+    await fx.writeDataFile('Fallout4.esm', 'VANILLA'); // preExisting
+    const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source }), fakeReporter());
+
+    const manifestFile = join(fx.instanceRoot, ...MANIFEST);
+    await writeFile(manifestFile, CORRUPT_MANIFEST);
+
+    const reporter = fakeReporter();
+    await purge(fx.instanceRoot, fx.gameDirectory, reporter);
+
+    expect(reporter.reports.some((r) => r.severity === 'error' && /manifest/i.test(r.message))).toBe(true);
+
+    // The linked file is still present — purge did not clean it up.
+    expect(await readFile(join(fx.gameDirectory.dataFolder, 'mod.esp'), 'utf8')).toBe('MOD');
+    // The preExisting vanilla file is untouched.
+    expect(await readFile(join(fx.gameDirectory.dataFolder, 'Fallout4.esm'), 'utf8')).toBe('VANILLA');
+    // The corrupted manifest survives as evidence — not deleted.
+    expect(await readFile(manifestFile, 'utf8')).toBe(CORRUPT_MANIFEST);
   });
 });

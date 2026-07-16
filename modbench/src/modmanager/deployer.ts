@@ -40,6 +40,16 @@ interface Manifest {
   loadOrder?: string[];
 }
 
+/** readManifest's result: 'absent' (nothing deployed yet) and 'corrupt' (unreadable
+ *  or unparseable) are distinct outcomes — conflating them let a corrupt manifest
+ *  fall through to "nothing deployed" and re-snapshot Data/ (with our own prior
+ *  links still present) as the vanilla baseline. ADR-0026 integrity tier: corrupt
+ *  must stop the operation and surface, never silently proceed as absent. */
+type ManifestResult =
+  | { status: 'absent' }
+  | { status: 'corrupt'; error: Error }
+  | { status: 'ok'; manifest: Manifest };
+
 const MANIFEST_NAME = '.medit-manifest.json';
 
 function manifestPath(instanceRoot: string): string {
@@ -107,7 +117,9 @@ export async function deploy(
   const statFn = opts.statFn ?? ((p: string) => stat(p));
   if (!(await onSameVolume(modsDir, gameDirectory, statFn, reporter))) return;
 
-  const { previousLinks, preExisting } = await readBaseline(instanceRoot, dataFolder);
+  const baseline = await readBaseline(instanceRoot, dataFolder, reporter);
+  if (!baseline) return;
+  const { previousLinks, preExisting } = baseline;
 
   const { links, skipped } = await linkWinners(index, dataFolder, previousLinks, opts.linkFn ?? link);
   await removeStaleLinks(dataFolder, previousLinks, links);
@@ -147,16 +159,24 @@ async function onSameVolume(
 
 /** Resolve the prior-deploy baseline: our previous links, and the vanilla Data/
  *  snapshot. First deploy snapshots Data/; re-deploy preserves the prior baseline
- *  (Data/ now includes our links, so it must not be re-snapshotted). */
+ *  (Data/ now includes our links, so it must not be re-snapshotted). Returns null
+ *  (caller must abort) when the manifest is corrupt — a genuinely-absent manifest
+ *  is the only case that snapshots Data/ as vanilla. */
 async function readBaseline(
   instanceRoot: string,
   dataFolder: string,
-): Promise<{ previousLinks: Set<string>; preExisting: string[] }> {
-  const previous = await readManifest(instanceRoot);
-  return {
-    previousLinks: new Set(previous?.links ?? []),
-    preExisting: previous?.preExisting ?? (await listRelativeFiles(dataFolder)),
-  };
+  reporter: Reporter,
+): Promise<{ previousLinks: Set<string>; preExisting: string[] } | null> {
+  const result = await readManifest(instanceRoot);
+  switch (result.status) {
+    case 'absent':
+      return { previousLinks: new Set(), preExisting: await listRelativeFiles(dataFolder) };
+    case 'corrupt':
+      reportCorruptManifest(reporter, result.error);
+      return null;
+    case 'ok':
+      return { previousLinks: new Set(result.manifest.links), preExisting: result.manifest.preExisting };
+  }
 }
 
 /** Hardlink each winner into Data/, partitioning paths into linked vs skipped. */
@@ -210,12 +230,37 @@ async function deployLoadOrder(loadOrder: LoadOrderDeployment[], reporter: Repor
   return written;
 }
 
-async function readManifest(instanceRoot: string): Promise<Manifest | null> {
+async function readManifest(instanceRoot: string): Promise<ManifestResult> {
+  let raw: string;
   try {
-    return JSON.parse(await readFile(manifestPath(instanceRoot), 'utf8')) as Manifest;
-  } catch {
-    return null; // absent → nothing deployed
+    raw = await readFile(manifestPath(instanceRoot), 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { status: 'absent' };
+    return { status: 'corrupt', error: err instanceof Error ? err : new Error(String(err)) };
   }
+  try {
+    return { status: 'ok', manifest: JSON.parse(raw) as Manifest };
+  } catch (err) {
+    return { status: 'corrupt', error: err instanceof Error ? err : new Error(String(err)) };
+  }
+}
+
+function reportCorruptManifest(reporter: Reporter, error: Error): void {
+  reporter.report(
+    'error',
+    'The deployment manifest is corrupt and could not be read — aborting to avoid corrupting the vanilla baseline.',
+    error.message,
+  );
+}
+
+/** Resolves the manifest to purge, or null when there's nothing to do: genuinely
+ *  absent (silent no-op — nothing was ever deployed) or corrupt (reported on the
+ *  integrity tier; the caller must abort without touching Data/ or the manifest
+ *  file, which stays on disk as corruption evidence). */
+async function resolveManifestForPurge(instanceRoot: string, reporter: Reporter): Promise<Manifest | null> {
+  const result = await readManifest(instanceRoot);
+  if (result.status === 'corrupt') reportCorruptManifest(reporter, result.error);
+  return result.status === 'ok' ? result.manifest : null;
 }
 
 export async function purge(
@@ -223,7 +268,7 @@ export async function purge(
   gameDirectory: GameDirectory,
   reporter: Reporter,
 ): Promise<void> {
-  const manifest = await readManifest(instanceRoot);
+  const manifest = await resolveManifestForPurge(instanceRoot, reporter);
   if (!manifest) return;
 
   const { dataFolder } = gameDirectory;
