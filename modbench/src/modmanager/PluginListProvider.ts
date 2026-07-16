@@ -107,11 +107,18 @@ export class PluginListProvider
   private readonly instanceRoot?: string;
   private readonly dataFolder: Promise<string | undefined>;
   /** The last rendered plugin order, so a drop computes its index against exactly
-   *  what the user dragged against (not a fresh read that an external edit could skew). */
+   *  what the user dragged against (not a fresh read that an external edit could skew).
+   *  A separate concern from `cache` below — this is plugins.txt's raw file order
+   *  (what drop-index math writes against), not the full display row set. */
   private lastOrder: string[] = [];
   /** Active title-bar filter (case-insensitive substring on plugin name); empty = off. */
   private filterText = '';
   private filterLower = '';
+  /** Issue #79: caches the unfiltered computed row list (implicit masters +
+   *  PluginNodes with badges) so a filter keystroke re-renders instead of
+   *  re-reading plugins.txt / re-walking the conflict index and status pass.
+   *  `invalidate()` clears it; `render()` (setFilter) leaves it intact. */
+  private cache?: { order: string[]; enabled: string[]; rows: PluginListNode[] };
 
   /** `instanceRoot`, when provided, enables the order-aware missing-master badge
    *  (issue #67): each plugin's declared masters are read and checked against the
@@ -127,25 +134,38 @@ export class PluginListProvider
     this.dataFolder = options.dataFolder ?? NO_DATA_FOLDER;
   }
 
-  /** Force a re-read of plugins.txt (the title-bar Refresh button). */
-  refresh(): void {
+  /** Clears the cached row set and re-renders — a mutation (toggle, drop, ...)
+   *  invalidated what's on disk, so the next `getChildren()` must re-read
+   *  plugins.txt/enabled state. Also the title-bar Refresh button's action.
+   *  Issue #79: distinct from `render()`, which only re-renders already-built rows. */
+  invalidate(): void {
+    this.cache = undefined;
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Set the title-bar filter (empty string clears it) and refresh. Narrows the
+  /** Re-renders already-built rows without touching the cache. Issue #79: the
+   *  only call site is `setFilter` — a filter keystroke never changes what's on
+   *  disk, so it must not force a re-read of plugins.txt/enabled state. */
+  private render(): void {
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** Set the title-bar filter (empty string clears it) and re-render. Narrows the
    *  rendered rows to plugins whose name contains `text`, case-insensitively —
-   *  the same transient-InputBox pattern used across every Modbench list surface. */
+   *  the same transient-InputBox pattern used across every Modbench list surface.
+   *  Render-only (#79): the filter narrows which already-built rows show — it
+   *  never invalidates the cache. */
   setFilter(text: string): void {
     this.filterText = text;
     this.filterLower = text.toLowerCase();
-    this.refresh();
+    this.render();
   }
 
   /** Toggle a plugin's `*` (enabled) state, writing plugins.txt immediately, then
-   *  refresh so the tree re-reads the persisted state. */
+   *  invalidate so the tree re-reads the persisted state. */
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     await this.source.setPluginEnabled(pluginName, enabled);
-    this.refresh();
+    this.invalidate();
   }
 
   /** Resolve a plugin NAME to its winning physical path — the MO2-priority
@@ -176,6 +196,30 @@ export class PluginListProvider
   async getChildren(element?: PluginListNode): Promise<PluginListNode[]> {
     if (element) return []; // flat list — rows have no children
 
+    if (!this.cache) {
+      const built = await this.buildRows();
+      if (built.kind === 'error') return [new ErrorNode(built.message)];
+      if (built.kind === 'empty') return [new EmptyNode()];
+      this.cache = built.cache;
+    }
+
+    // Rows here are always PluginNode/ImplicitMasterNode, both constructed with a
+    // plain string label — safe to filter on directly (never TreeItemLabel/object).
+    return this.filterText
+      ? this.cache.rows.filter((n) => (n.label as string).toLowerCase().includes(this.filterLower))
+      : this.cache.rows;
+  }
+
+  /** Reads plugins.txt/enabled state and computes the full unfiltered row set
+   *  (issue #79: the cache-population path, run only on a cache miss). Returns a
+   *  discriminated result rather than caching an error/empty placeholder, so a
+   *  transient read failure or a momentarily-empty plugins.txt never sticks
+   *  around as stale cached state. */
+  private async buildRows(): Promise<
+    | { kind: 'error'; message: string }
+    | { kind: 'empty' }
+    | { kind: 'ok'; cache: { order: string[]; enabled: string[]; rows: PluginListNode[] } }
+  > {
     let order: string[];
     let enabled: string[];
     try {
@@ -186,7 +230,7 @@ export class PluginListProvider
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       this.log(`[PluginListProvider] readPluginOrder failed: ${message}`);
-      return [new ErrorNode(message)];
+      return { kind: 'error', message };
     }
 
     this.lastOrder = order;
@@ -204,7 +248,7 @@ export class PluginListProvider
     const dedupedOrder = order.filter((n) => !implicitLower.has(n.toLowerCase()));
     const fullOrder = [...implicitNames, ...dedupedOrder];
 
-    if (fullOrder.length === 0) return [new EmptyNode()];
+    if (fullOrder.length === 0) return { kind: 'empty' };
     const enabledSet = new Set(enabled);
     // Badges are computed against the full order (never the filtered subset) so a
     // filtered-out master still counts toward a visible row's order-aware verdict.
@@ -213,11 +257,7 @@ export class PluginListProvider
       ...implicitNames.map((name) => new ImplicitMasterNode(name)),
       ...dedupedOrder.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }, statuses?.get(name))),
     ];
-    // Rows here are always PluginNode/ImplicitMasterNode, both constructed with a
-    // plain string label — safe to filter on directly (never TreeItemLabel/object).
-    return this.filterText
-      ? rows.filter((n) => (n.label as string).toLowerCase().includes(this.filterLower))
-      : rows;
+    return { kind: 'ok', cache: { order, enabled, rows } };
   }
 
   /** Order-aware missing-master verdicts for `order` (the implicit-first, deduped
@@ -283,6 +323,6 @@ export class PluginListProvider
       this.log(`[PluginListProvider] reorderPlugins failed: ${message}`);
       this.reporter?.report('error', 'Failed to reorder plugins.', message);
     }
-    this.refresh();
+    this.invalidate();
   }
 }

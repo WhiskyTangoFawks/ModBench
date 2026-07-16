@@ -355,7 +355,7 @@ function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[]
   const { modListProvider, modlistSource, updateProfileDescription, enterEditing, log } = deps;
   return [
       vscode.commands.registerCommand('modbench.modList.refresh', () => {
-        modListProvider.refresh();
+        modListProvider.invalidate();
         void updateProfileDescription();
       }),
       vscode.commands.registerCommand('modbench.modList.sortDescending', () => {
@@ -601,7 +601,7 @@ function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
           // out of sync with disk. Log detail, notify, and refresh to resync the checkbox.
           log(`[extension] toggling "${node.plugin.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
           void vscode.window.showErrorMessage(`Modbench: Failed to update "${node.plugin.name}".`);
-          pluginListProvider.refresh();
+          pluginListProvider.invalidate();
         }
       }
     }),
@@ -622,7 +622,7 @@ function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
         void vscode.window.showErrorMessage(`Modbench: Failed to reveal "${name}" in Explorer.`);
       }
     }),
-    vscode.commands.registerCommand('modbench.pluginListTree.refresh', () => pluginListProvider.refresh()),
+    vscode.commands.registerCommand('modbench.pluginListTree.refresh', () => pluginListProvider.invalidate()),
     registerFilterBoxCommand('modbench.pluginListTree.filter', 'Filter plugins…', (text) => pluginListProvider.setFilter(text)),
   ];
 }
@@ -636,7 +636,7 @@ function registerOverwriteView(
   log: (msg: string) => void,
 ): vscode.Disposable[] {
   return [
-    createOverwriteWatcher(instanceRoot, () => modListProvider.refresh()),
+    createOverwriteWatcher(instanceRoot, () => modListProvider.invalidate()),
     // Tint the pinned Overwrite row reddish (#83). Stateless: keyed on the
     // constant overwrite/ path, which matches OverwriteNode.resourceUri.
     vscode.window.registerFileDecorationProvider(new OverwriteDecorationProvider(instanceRoot)),
@@ -666,7 +666,7 @@ function registerModsAutoRegisterWatcher(
     modlistSource
       .registerUnlistedMods()
       .then((added) => {
-        if (added.length > 0) modListProvider.refresh();
+        if (added.length > 0) modListProvider.invalidate();
       })
       .catch((err: unknown) => {
         log(`[extension] auto-registering mods/ folders failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -725,7 +725,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined
     const runModAction = async (logLabel: string, failMessage: string, action: () => Promise<void>) => {
       try {
         await action();
-        modListProvider.refresh();
+        modListProvider.invalidate();
       } catch (err) {
         log(`[extension] ${logLabel} failed: ${err instanceof Error ? err.message : String(err)}`);
         void vscode.window.showErrorMessage(`Modbench: ${failMessage}`);
@@ -763,7 +763,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined
             // out of sync with disk. Log detail, notify, and refresh to resync the checkbox.
             log(`[extension] toggling "${node.mod.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
             void vscode.window.showErrorMessage(`Modbench: Failed to update "${node.mod.name}".`);
-            modListProvider.refresh();
+            modListProvider.invalidate();
           }
         }
       }),

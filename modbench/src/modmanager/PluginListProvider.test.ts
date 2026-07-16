@@ -44,14 +44,18 @@ class FakeSource implements IModlistSource {
   setPluginEnabledCalls: { pluginName: string; enabled: boolean }[] = [];
   reorderPluginsCalls: { names: string[]; toIndex: number }[] = [];
   reorderPluginsError?: Error;
+  readPluginOrderCalls = 0;
+  readEnabledPluginsCalls = 0;
   constructor(
     private readonly order: string[] | Error,
     private readonly enabled: string[] = [],
   ) {}
   readPluginOrder(): Promise<string[]> {
+    this.readPluginOrderCalls++;
     return this.order instanceof Error ? Promise.reject(this.order) : Promise.resolve(this.order);
   }
   readEnabledPlugins(): Promise<string[]> {
+    this.readEnabledPluginsCalls++;
     return this.order instanceof Error ? Promise.reject(this.order) : Promise.resolve(this.enabled);
   }
   readModlist(): Promise<ModlistEntry[]> { throw new Error('unused'); }
@@ -131,12 +135,40 @@ describe('PluginListProvider', () => {
     expect(fired).toBe(true);
   });
 
-  it('refresh() fires onDidChangeTreeData so the Refresh button can re-read', () => {
+  // Issue #79 asymmetry test: setPluginEnabled must invalidate — the next
+  // getChildren() has to re-read the source, since the toggle changed plugins.txt.
+  it('setPluginEnabled invalidates: a subsequent getChildren() re-reads the source', async () => {
+    const source = new FakeSource(['A.esp']);
+    const provider = new PluginListProvider({ source });
+    await provider.getChildren();
+    const callsAfterFirstRead = source.readPluginOrderCalls;
+
+    await provider.setPluginEnabled('A.esp', false);
+    await provider.getChildren();
+
+    expect(source.readPluginOrderCalls).toBeGreaterThan(callsAfterFirstRead);
+  });
+
+  it('invalidate() fires onDidChangeTreeData so the Refresh button can re-read', () => {
     const provider = new PluginListProvider({ source: new FakeSource(['A.esp']) });
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
-    provider.refresh();
+    provider.invalidate();
     expect(fired).toBe(true);
+  });
+
+  // Issue #79 asymmetry test: invalidate() clears the cache, so the next
+  // getChildren() must re-read the source — unlike setFilter's render-only path.
+  it('invalidate() clears the cache: a subsequent getChildren() re-reads the source', async () => {
+    const source = new FakeSource(['A.esp']);
+    const provider = new PluginListProvider({ source });
+    await provider.getChildren();
+    const callsAfterFirstRead = source.readPluginOrderCalls;
+
+    provider.invalidate();
+    await provider.getChildren();
+
+    expect(source.readPluginOrderCalls).toBeGreaterThan(callsAfterFirstRead);
   });
 });
 
@@ -173,6 +205,39 @@ describe('PluginListProvider — filter', () => {
     provider.onDidChangeTreeData(() => { fired = true; });
     provider.setFilter('a');
     expect(fired).toBe(true);
+  });
+
+  // Issue #79: a filter keystroke must re-render already-built rows, never
+  // re-read plugins.txt/enabled state.
+  it('does not re-read the source (render-only, not invalidate)', async () => {
+    const source = new FakeSource(['Alpha.esp', 'Beta.esp']);
+    const provider = new PluginListProvider({ source });
+    await provider.getChildren();
+    const orderCallsAfterFirstRead = source.readPluginOrderCalls;
+    const enabledCallsAfterFirstRead = source.readEnabledPluginsCalls;
+
+    provider.setFilter('alpha');
+    await provider.getChildren();
+
+    expect(source.readPluginOrderCalls).toBe(orderCallsAfterFirstRead);
+    expect(source.readEnabledPluginsCalls).toBe(enabledCallsAfterFirstRead);
+  });
+
+  // Mirror of slice 3 (ModListProvider): clearing the filter must restore all
+  // rows from the cache too, without triggering a re-read.
+  it('clearing the filter restores all rows without re-reading the source', async () => {
+    const source = new FakeSource(['Alpha.esp', 'Beta.esp']);
+    const provider = new PluginListProvider({ source });
+    await provider.getChildren();
+    provider.setFilter('alpha');
+    await provider.getChildren();
+    const callsAfterFilteredRead = source.readPluginOrderCalls;
+
+    provider.setFilter('');
+    const rows = await provider.getChildren();
+
+    expect(rows.map((r) => r.label)).toEqual(['Alpha.esp', 'Beta.esp']);
+    expect(source.readPluginOrderCalls).toBe(callsAfterFilteredRead);
   });
 });
 
@@ -307,6 +372,22 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
     expect(reports[0].severity).toBe('error');
     expect(fired).toBe(true); // refresh fired to resync the moved row
   });
+
+  // Issue #79 asymmetry test: a successful drop must invalidate — the next
+  // getChildren() has to re-read the source, since the drop changed plugins.txt.
+  it('a successful drop invalidates: a subsequent getChildren() re-reads the source', async () => {
+    const source = new FakeSource(ORDER);
+    const provider = new PluginListProvider({ source });
+    await provider.getChildren();
+    const callsAfterFirstRead = source.readPluginOrderCalls;
+
+    const dt = new FakeDataTransfer();
+    provider.handleDrag(['A.esp'].map(node), dt as never, NONE);
+    await provider.handleDrop(node('D.esp'), dt as never, NONE);
+    await provider.getChildren();
+
+    expect(source.readPluginOrderCalls).toBeGreaterThan(callsAfterFirstRead);
+  });
 });
 
 // End-to-end: the real Mo2ModlistSource over a temp plugins.txt, driven through the
@@ -417,6 +498,22 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
     const p = provider();
     p.setFilter('child'); // hides Fallout4.esm + Base.esp, leaving only the out-of-order Child.esp
     const nodes = await pluginNodes(p);
+    expect(nodes.map((n) => n.plugin.name)).toEqual(['Child.esp']);
+    expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
+  });
+
+  // Issue #79: same assertion as above, but the filter is set AFTER an initial
+  // unfiltered getChildren() — exercising the cache-reuse path in getChildren()
+  // (the badge must survive from the cached rows, not a fresh compute).
+  it('keeps a badge on a filtered-in row when the filter is set after an initial unfiltered read (cache-reuse path)', async () => {
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
+    const p = provider();
+    const unfiltered = await pluginNodes(p); // populates the cache
+    expect(byName(unfiltered, 'Child.esp').iconPath).toEqual({ id: 'error' });
+
+    p.setFilter('child');
+    const nodes = await pluginNodes(p);
+
     expect(nodes.map((n) => n.plugin.name)).toEqual(['Child.esp']);
     expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
   });

@@ -245,7 +245,7 @@ describe('modbench.downloads.open', () => {
 // ── Overwrite row (#82) ────────────────────────────────────────────────────────
 
 interface ModListLike {
-  refresh(): void;
+  invalidate(): void;
   getChildren(element?: unknown): Promise<Array<{ label?: unknown; kind?: string; resourceUri?: vscode.Uri }>>;
 }
 
@@ -283,7 +283,7 @@ describe('Overwrite row (#82)', () => {
     fs.writeFileSync(path.join(overwriteDir, 'f4se.log'), 'x');
 
     const p = provider()!;
-    p.refresh();
+    p.invalidate();
     const roots = await p.getChildren();
     const last = roots[roots.length - 1];
     assert.strictEqual(last.kind, 'overwrite', 'Overwrite row should be the very last root');
@@ -301,7 +301,7 @@ describe('Overwrite row (#82)', () => {
   it('drops the Overwrite row once overwrite/ is emptied', async () => {
     fs.rmSync(overwriteDir, { recursive: true, force: true });
     const p = provider()!;
-    p.refresh();
+    p.invalidate();
     const roots = await p.getChildren();
     assert.ok(!roots.some((n) => n.kind === 'overwrite'), 'Overwrite row should disappear when the folder is empty');
   });

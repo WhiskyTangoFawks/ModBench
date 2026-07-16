@@ -51,8 +51,10 @@ class FakeSource implements IModlistSource {
   setEnabledCalls: { modName: string; enabled: boolean }[] = [];
   activeProfile = 'Default';
   profiles = ['Default', 'Secondary'];
+  readModlistCalls = 0;
   constructor(public entries: ModlistEntry[], private readonly throwOnRead = false) {}
   readModlist(): Promise<ModlistEntry[]> {
+    this.readModlistCalls++;
     if (this.throwOnRead) return Promise.reject(new Error('boom'));
     return Promise.resolve(this.entries);
   }
@@ -143,6 +145,21 @@ describe('ModListProvider', () => {
     expect(fired).toBe(true);
   });
 
+  // Issue #79 asymmetry test: unlike setFilter (render-only), a mutation must
+  // invalidate — the next getChildren() has to re-read the source, since the
+  // mutation may have changed what's on disk.
+  it('setModEnabled invalidates: a subsequent getChildren() re-reads the source', async () => {
+    const source = new FakeSource([mod('A')]);
+    const provider = new ModListProvider({ source });
+    await provider.getChildren();
+    const callsAfterFirstRead = source.readModlistCalls;
+
+    await provider.setModEnabled('A', false);
+    await provider.getChildren();
+
+    expect(source.readModlistCalls).toBeGreaterThan(callsAfterFirstRead);
+  });
+
   it('switchProfile persists the selection and fires a refresh', async () => {
     const source = new FakeSource([mod('A')]);
     const provider = new ModListProvider({ source });
@@ -223,6 +240,21 @@ describe('ModListProvider', () => {
       provider.onDidChangeTreeData(() => { fired = true; });
       provider.setFilter('x', true);
       expect(fired).toBe(true);
+    });
+
+    // Issue #79: a filter keystroke must re-render already-built rows, never
+    // re-walk the source. Only setFilter is render-only; every other call site
+    // still invalidates (see the asymmetry test in the drag-and-drop section).
+    it('setFilter does not re-read the source (render-only, not invalidate)', async () => {
+      const fakeSource = source();
+      const provider = new ModListProvider({ source: fakeSource });
+      await provider.getChildren();
+      const callsAfterFirstRead = fakeSource.readModlistCalls;
+
+      provider.setFilter('alpha', true);
+      await provider.getChildren();
+
+      expect(fakeSource.readModlistCalls).toBe(callsAfterFirstRead);
     });
   });
 
@@ -696,6 +728,31 @@ describe('ModListProvider', () => {
       expect(modB.label).toBe('ModB');
       expect(modB.iconPath).toEqual({ id: 'warning' });
       expect(modB.tooltip).toContain('textures/shared/foo.dds');
+    });
+
+    // Issue #79: the filter only narrows which already-built rows render — it
+    // must never change a row's badge, since badges are computed against the
+    // full order (a filtered-out master still counts toward a visible row's
+    // order-aware verdict).
+    it('keeps a conflicted mod\'s badge identical after filtering it in, and after clearing the filter — no re-read either way', async () => {
+      const source = new FakeSource([mod('ModA'), mod('ModB')]);
+      const provider = new ModListProvider({ source, instanceRoot: conflictFixture });
+      const before = (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
+      const callsAfterFirstRead = source.readModlistCalls;
+
+      provider.setFilter('moda', true);
+      const filtered = (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
+      expect(filtered.iconPath).toEqual(before.iconPath);
+      expect(filtered.tooltip).toEqual(before.tooltip);
+      expect(filtered.description).toEqual(before.description);
+      expect(source.readModlistCalls).toBe(callsAfterFirstRead);
+
+      provider.setFilter('', true);
+      const cleared = await provider.getChildren();
+      expect(cleared.filter((n): n is ModNode => n instanceof ModNode)).toHaveLength(2);
+      const clearedModA = cleared.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
+      expect(clearedModA.iconPath).toEqual(before.iconPath);
+      expect(source.readModlistCalls).toBe(callsAfterFirstRead);
     });
 
     it('leaves existing no-instanceRoot behaviour unchanged (no status computed)', async () => {

@@ -193,7 +193,11 @@ export class ModListProvider
     this.dataFolder = options.dataFolder ?? NO_DATA_FOLDER;
   }
 
-  refresh(): void {
+  /** Clears cached data and re-renders — a mutation (drop, toggle, profile
+   *  switch, ...) invalidated what's on disk, so the next read must re-walk
+   *  the source. Issue #79: distinct from `render()`, which only re-renders
+   *  already-built rows. */
+  invalidate(): void {
     this.tree = undefined;
     this.cachedEntries = undefined;
     this.statuses = undefined;
@@ -201,12 +205,21 @@ export class ModListProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Update the filter and refresh the tree. Clears always resets groupingOn to true. */
+  /** Re-renders already-built rows without touching cached data. Issue #79:
+   *  the only call site is `setFilter` — a filter keystroke never changes what's
+   *  on disk, so it must not force a re-read/re-walk of the source. */
+  private render(): void {
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** Update the filter and re-render. Clears always resets groupingOn to true.
+   *  Render-only (#79): the filter narrows which already-built rows show —
+   *  it never invalidates cached data. */
   setFilter(text: string, grouping: boolean): void {
     this.filterText = text;
     this.filterLower = text.toLowerCase();
     this.groupingOn = text === '' ? true : grouping;
-    this.refresh();
+    this.render();
   }
 
   handleDrag(
@@ -241,7 +254,7 @@ export class ModListProvider
       this.log(`[ModListProvider] ${operation} failed: ${message}`);
       this.reporter?.report('error', 'Failed to reorder mods.', message);
     }
-    this.refresh();
+    this.invalidate();
   }
 
   /** Dispatches a drop's mutation call: mod-onto-separator, mod-reorder, or
@@ -406,20 +419,20 @@ export class ModListProvider
   /** Toggle a mod's enabled state, writing through the source, then refresh. */
   async setModEnabled(modName: string, enabled: boolean): Promise<void> {
     await this.source.setEnabled(modName, enabled);
-    this.refresh();
+    this.invalidate();
   }
 
   /** Persist the active profile and refresh the tree. */
   async switchProfile(name: string): Promise<void> {
     await this.source.setActiveProfile(name);
-    this.refresh();
+    this.invalidate();
   }
 
   /** Flip the view direction (losing-at-top &lt;-&gt; winning-at-top) and refresh
    *  the tree. Presentation only — never changes which mod wins a conflict. */
   toggleSortOrder(): void {
     this.winningAtTop = !this.winningAtTop;
-    this.refresh();
+    this.invalidate();
   }
 
   private err(e: unknown): string {
