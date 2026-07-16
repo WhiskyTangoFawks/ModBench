@@ -301,8 +301,10 @@ describe('removeModFromText', () => {
 });
 
 describe('moveModToSeparatorEndInText', () => {
-  it('moves a mod to the end of a target separator section', () => {
-    // Move SKK (ungrouped) into Radfall separator, which has ENBoost/HarderVATS/Cracked
+  it('moves a mod to the end of a target separator section (immediately before the separator line \u2014 #107)', () => {
+    // Move SKK (currently the Unassigned separator's sole preceding member) into
+    // the Radfall separator's section: it becomes Radfall's LAST (most recent,
+    // i.e. immediately preceding) member, not appended after the whole file.
     const out = moveModToSeparatorEndInText(
       defaultModlist(),
       'SKK Fast Start new game (Fallout 4)',
@@ -312,33 +314,37 @@ describe('moveModToSeparatorEndInText', () => {
       'Unassigned (Modlist Development)',
       '[NODELETE] Radfall',
       'Unofficial Fallout 4 Patch',
+      'SKK Fast Start new game (Fallout 4)',
       'Radfall - All-In-One Survival Overhaul',
       'ENBoost - 12k',
       'Harder VATS',
       'Cracked and Smudged Pip-Boy Screen',
-      'SKK Fast Start new game (Fallout 4)',
     ]);
   });
 
-  it('moves a mod to the ungrouped section (before first separator) when separatorName is null', () => {
-    // [NODELETE] is under Unassigned; move it to ungrouped (after SKK, before Unassigned)
+  it('moves a mod to the ungrouped section (the file tail, after the last entry) when separatorName is null', () => {
+    // [NODELETE] currently precedes the Radfall separator (its member); moving it
+    // to ungrouped now means the true file tail \u2014 after every other entry.
     const out = moveModToSeparatorEndInText(defaultModlist(), '[NODELETE] Radfall', null);
     expect(names(out)).toEqual([
       'SKK Fast Start new game (Fallout 4)',
-      '[NODELETE] Radfall',
       'Unassigned (Modlist Development)',
       'Unofficial Fallout 4 Patch',
       'Radfall - All-In-One Survival Overhaul',
       'ENBoost - 12k',
       'Harder VATS',
       'Cracked and Smudged Pip-Boy Screen',
+      '[NODELETE] Radfall',
     ]);
   });
 
   it('appends to separator with no children (separator immediately followed by next separator)', () => {
-    const text = '# h\r\n+A\r\n+Sep1_separator\r\n+Sep2_separator\r\n+B\r\n';
-    const out = moveModToSeparatorEndInText(text, 'A', 'Sep1');
-    expect(names(out)).toEqual(['Sep1', 'A', 'Sep2', 'B']);
+    // Sep1 wraps [A]; Sep2 wraps nothing (nothing sits between Sep1 and Sep2).
+    // Moving ungrouped B into Sep2's (empty) section lands it just before Sep2's
+    // line, making B the new (sole) member of Sep2.
+    const text = '# h\r\n+A\r\n+Sep1_separator\r\n+Sep2_separator\r\n+B\r\n+C\r\n';
+    const out = moveModToSeparatorEndInText(text, 'B', 'Sep2');
+    expect(names(out)).toEqual(['A', 'Sep1', 'B', 'Sep2', 'C']);
   });
 
   it('throws when the mod is absent', () => {
@@ -353,54 +359,73 @@ describe('moveModToSeparatorEndInText', () => {
     ).toThrow(/No Such Sep/);
   });
 
+  // #107 acceptance criterion: a *-prefixed foreign/unmanaged line after the last
+  // separator is never surfaced as a ModlistEntry (parseModlist ignores it — it's
+  // not a +/- entry line at all), so it can never be swept into the last
+  // separator's section. Moving a mod to ungrouped must land it as the last real
+  // ENTRY, still above those trailing *-prefixed lines, which stay verbatim.
+  it('a *-prefixed foreign/unmanaged line after the last separator stays ungrouped, untouched, and trailing', () => {
+    const out = moveModToSeparatorEndInText(defaultModlist(), '[NODELETE] Radfall', null);
+    expect(names(out).at(-1)).toBe('[NODELETE] Radfall');
+    expect(out).toContain('+[NODELETE] Radfall\r\n*DLC: Automatron\r\n');
+    expect(out.endsWith('*Unmanaged: ccSBJFO4003-Grenade\r\n')).toBe(true);
+  });
+
   it('relocates the top mod without dropping or moving a leading BOM', () => {
+    // First and Second both precede Sep (both members); moving First to the end
+    // of Sep's section makes it the LAST (most recent) member, i.e. immediately
+    // above Sep's own line, after Second.
     const out = moveModToSeparatorEndInText(
-      '\uFEFF+First\r\n+Sep_separator\r\n+Second\r\n',
+      '\uFEFF+First\r\n+Second\r\n+Sep_separator\r\n+Third\r\n',
       'First',
       'Sep',
     );
-    expect(out).toBe('\uFEFF+Sep_separator\r\n+Second\r\n+First\r\n');
+    expect(out).toBe('\uFEFF+Second\r\n+First\r\n+Sep_separator\r\n+Third\r\n');
   });
 });
 
 describe('moveSeparatorBlockInText', () => {
-  it('moves a separator and all its children as a block to a new position', () => {
-    // Move Unassigned block (sep + [NODELETE] + Unofficial) to toIndex=5 (end, after Cracked)
-    // After removing block: SKK(0), Radfall sep(1), ENBoost(2), HarderVATS(3), Cracked(4)
-    // clamped=5 ≥ length(5) → insert after last entry (after Cracked)
+  it('moves a separator and its real (preceding) members as a block to a new position', () => {
+    // Unassigned's block is now [SKK, Unassigned sep] — SKK is the only entry
+    // preceding it (nothing precedes SKK, so Unassigned is the first separator).
+    // After removing that block, 6 entries remain: [NODELETE](0), Unofficial(1),
+    // Radfall sep(2), ENBoost(3), HarderVATS(4), Cracked(5). toIndex=5 inserts
+    // before the entry at slot 5 (Cracked), landing the block just above it.
     const out = moveSeparatorBlockInText(
       defaultModlist(),
       'Unassigned (Modlist Development)',
       5,
     );
     expect(names(out)).toEqual([
-      'SKK Fast Start new game (Fallout 4)',
+      '[NODELETE] Radfall',
+      'Unofficial Fallout 4 Patch',
       'Radfall - All-In-One Survival Overhaul',
       'ENBoost - 12k',
       'Harder VATS',
-      'Cracked and Smudged Pip-Boy Screen',
+      'SKK Fast Start new game (Fallout 4)',
       'Unassigned (Modlist Development)',
-      '[NODELETE] Radfall',
-      'Unofficial Fallout 4 Patch',
+      'Cracked and Smudged Pip-Boy Screen',
     ]);
     expect(out.startsWith('# This file was automatically generated by Mod Organizer.\r\n')).toBe(true);
     expect(out.endsWith('*Unmanaged: ccSBJFO4003-Grenade\r\n')).toBe(true);
   });
 
   it('moves a separator block to the front (toIndex=0)', () => {
-    // After removing Unassigned block: SKK(0), Radfall sep(1), ...
-    // toIndex=0: insert before SKK
+    // Radfall's block is [NODELETE], Unofficial, Radfall sep — everything back
+    // to (not including) the previous separator, Unassigned. After removing it,
+    // the remaining entries are SKK(0), Unassigned sep(1), ENBoost(2),
+    // HarderVATS(3), Cracked(4); toIndex=0 inserts before the first one (SKK).
     const out = moveSeparatorBlockInText(
       defaultModlist(),
-      'Unassigned (Modlist Development)',
+      'Radfall - All-In-One Survival Overhaul',
       0,
     );
     expect(names(out)).toEqual([
-      'Unassigned (Modlist Development)',
       '[NODELETE] Radfall',
       'Unofficial Fallout 4 Patch',
-      'SKK Fast Start new game (Fallout 4)',
       'Radfall - All-In-One Survival Overhaul',
+      'SKK Fast Start new game (Fallout 4)',
+      'Unassigned (Modlist Development)',
       'ENBoost - 12k',
       'Harder VATS',
       'Cracked and Smudged Pip-Boy Screen',
@@ -421,12 +446,13 @@ describe('moveSeparatorBlockInText', () => {
   });
 
   it('relocates the top separator block without dropping or moving a leading BOM', () => {
+    // Sep is the first entry — nothing precedes it, so its block is just itself.
     const out = moveSeparatorBlockInText(
       '\uFEFF+Sep_separator\r\n+A\r\n+B_separator\r\n+C\r\n',
       'Sep',
       2,
     );
-    expect(out).toBe('\uFEFF+B_separator\r\n+C\r\n+Sep_separator\r\n+A\r\n');
+    expect(out).toBe('\uFEFF+A\r\n+B_separator\r\n+Sep_separator\r\n+C\r\n');
   });
 });
 

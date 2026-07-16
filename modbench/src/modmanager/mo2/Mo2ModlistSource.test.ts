@@ -181,21 +181,25 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(entries.some((e) => e.name === 'Unofficial Fallout 4 Patch')).toBe(true);
   });
 
-  it('moveModToSeparator moves a mod to the end of the target separator section', async () => {
+  it('moveModToSeparator moves a mod to the end of the target separator section (immediately before its line — #107)', async () => {
+    // SKK precedes the Unassigned separator; moving it into Radfall's section
+    // makes it Radfall's LAST (most recent) member — immediately above Radfall's
+    // own line — not appended at the true file tail.
     await src.moveModToSeparator(
       'SKK Fast Start new game (Fallout 4)',
       'Radfall - All-In-One Survival Overhaul',
     );
     const entries = await src.readModlist();
-    expect(entries.at(-1)?.name).toBe('SKK Fast Start new game (Fallout 4)');
+    const names = entries.map((e) => e.name);
+    const skkIdx = names.indexOf('SKK Fast Start new game (Fallout 4)');
+    const radfallSepIdx = names.indexOf('Radfall - All-In-One Survival Overhaul');
+    expect(skkIdx).toBe(radfallSepIdx - 1);
   });
 
-  it('moveModToSeparator with null moves a mod to the ungrouped section', async () => {
+  it('moveModToSeparator with null moves a mod to the true file tail (ungrouped is the last-separator end, not the first)', async () => {
     await src.moveModToSeparator('[NODELETE] Radfall', null);
     const entries = await src.readModlist();
-    const nodeDeleteIdx = entries.findIndex((e) => e.name === '[NODELETE] Radfall');
-    const firstSepIdx = entries.findIndex((e) => e.kind === 'separator');
-    expect(nodeDeleteIdx).toBeLessThan(firstSepIdx);
+    expect(entries.at(-1)?.name).toBe('[NODELETE] Radfall');
   });
 
   it('removeMod removes the modlist entry and deletes the mods/ directory', async () => {
@@ -245,15 +249,23 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     await rm(staging, { recursive: true, force: true });
   });
 
-  it('reorderSeparatorBlock moves the separator and all its children as a block', async () => {
-    // Move Unassigned block to end (toIndex=5, after remaining 5 entries)
+  it('reorderSeparatorBlock moves the separator and its real (preceding) member as a block', async () => {
+    // Unassigned's real block is [SKK, Unassigned sep] — SKK is the only entry
+    // preceding it. Moving to toIndex=5 lands the block just above the last
+    // remaining entry (Cracked), which becomes ungrouped afterward.
     await src.reorderSeparatorBlock('Unassigned (Modlist Development)', 5);
     const entries = await src.readModlist();
-    const unassignedIdx = entries.findIndex((e) => e.name === 'Unassigned (Modlist Development)');
-    expect(unassignedIdx).toBeGreaterThan(entries.findIndex((e) => e.name === 'Cracked and Smudged Pip-Boy Screen'));
-    // Children follow the separator
-    expect(entries[unassignedIdx + 1].name).toBe('[NODELETE] Radfall');
-    expect(entries[unassignedIdx + 2].name).toBe('Unofficial Fallout 4 Patch');
+    const names = entries.map((e) => e.name);
+    expect(names).toEqual([
+      '[NODELETE] Radfall',
+      'Unofficial Fallout 4 Patch',
+      'Radfall - All-In-One Survival Overhaul',
+      'ENBoost - 12k',
+      'Harder VATS',
+      'SKK Fast Start new game (Fallout 4)',
+      'Unassigned (Modlist Development)',
+      'Cracked and Smudged Pip-Boy Screen',
+    ]);
   });
 
   it('registerUnlistedMods adds a disabled winning-end entry for an untracked mods/ folder', async () => {
