@@ -154,6 +154,18 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         Assert.Null(detail);
     }
 
+    // Issue #3: "Copy as New Record" needs the record's schema table name up front (CreateRecord
+    // validates RecordType before it even reads TemplateFormKey), so RecordDetail must carry it.
+    [Fact]
+    public void GetRecord_ReturnsRecordType()
+    {
+        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
+        var detail = _svc.GetRecord(all.Items[0].FormKey);
+
+        Assert.NotNull(detail);
+        Assert.Equal("npc_", detail.RecordType);
+    }
+
     // --- GET /records/{formKey}/compare ---
 
     [Fact]
@@ -166,6 +178,16 @@ public sealed class RecordQueryServiceTests : IClassFixture<TestPluginFixture>, 
         Assert.Single(compare.Overrides);
         Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
         Assert.NotEmpty(compare.Diffs);
+    }
+
+    [Fact]
+    public void GetCompare_OverridesCarryRecordType()
+    {
+        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
+        var compare = _svc.GetCompare(all.Items[0].FormKey);
+
+        Assert.NotNull(compare);
+        Assert.All(compare.Overrides, o => Assert.Equal("npc_", o.RecordType));
     }
 
     [Fact]

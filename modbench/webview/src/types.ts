@@ -28,6 +28,10 @@ export interface RecordDetail {
   editorId: string | null;
   fields: FieldValue[];
   pendingFields?: Record<string, unknown>;
+  // Issue #3: the schema table name (e.g. "npc_"), needed for "Copy as New Record" — CreateRecord
+  // requires it up front. Optional (like pendingFields) so existing fixtures/callers don't break;
+  // always populated by the real backend response.
+  recordType?: string;
 }
 
 export interface CompareOverride extends RecordDetail {

@@ -117,7 +117,8 @@ public sealed class RecordQueryService(
             var annotated = withPending
                 .ConvertAll(o => new CompareOverride(
                     o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields, o.PendingFields,
-                    classification.PluginStates.GetValueOrDefault(o.Plugin, ConflictThis.OnlyOne)));
+                    classification.PluginStates.GetValueOrDefault(o.Plugin, ConflictThis.OnlyOne),
+                    o.RecordType));
 
             // VMAD is outside the generic reflection pipeline, so classify it separately and fold
             // its conflict contribution into the record-level ConflictAll (computed on demand, never stored).

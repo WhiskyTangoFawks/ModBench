@@ -230,6 +230,8 @@ interface PluginHeaderProps {
   mutableTargets: PluginInfo[];
   showMasterPicker: boolean;
   loadedPlugins: PluginInfo[];
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   onSave: () => void;
   onOpenCopyPicker: () => void;
   onCloseCopyPicker: () => void;
@@ -251,6 +253,7 @@ function currentMasters(o: RecordDetail): string[] {
 function PluginHeader({
   override: o, isImmutable, isHeaderRecord, editMode, saving,
   showCopyPicker, mutableTargets, showMasterPicker, loadedPlugins,
+  collapsed, onToggleCollapse,
   onSave, onOpenCopyPicker, onCloseCopyPicker, onCopyTo,
   onOpenMasterPicker, onCloseMasterPicker, onAddMaster,
 }: PluginHeaderProps) {
@@ -268,16 +271,23 @@ function PluginHeader({
   };
   return (
     <div>
-      <div>{o.plugin}</div>
-      <div style={{ fontWeight: 400, opacity: 0.6, fontSize: '11px' }}>
-        [{o.loadOrderIndex}]{o.isWinner ? ' ✓ winner' : ''}
-      </div>
-      {isImmutable && (
-        <div style={{ marginTop: 3, fontSize: '10px', opacity: 0.55, fontStyle: 'italic' }}>
-          (read-only)
-        </div>
+      {/* Issue #3: left-click the plugin-name chip collapses/expands this column;
+          kept as its own click target (not the whole <th>) so it never swallows the
+          Save/Copy/Add-Master button clicks below it. */}
+      <div onClick={onToggleCollapse} style={{ cursor: 'pointer' }}>{o.plugin}</div>
+      {!collapsed && (
+        <>
+          <div style={{ fontWeight: 400, opacity: 0.6, fontSize: '11px' }}>
+            [{o.loadOrderIndex}]{o.isWinner ? ' ✓ winner' : ''}
+          </div>
+          {isImmutable && (
+            <div style={{ marginTop: 3, fontSize: '10px', opacity: 0.55, fontStyle: 'italic' }}>
+              (read-only)
+            </div>
+          )}
+        </>
       )}
-      {editMode && !isImmutable && (
+      {!collapsed && editMode && !isImmutable && (
         <div style={{ marginTop: 3, position: 'relative' }}>
           <button style={btnStyle} onClick={onSave} disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
@@ -380,6 +390,147 @@ function PluginHeader({
   );
 }
 
+// ── ColumnHeaderMenu ──────────────────────────────────────────────────────────
+
+// Issue #3: right-click on a plugin column header. Modeled on DownloadsApp.tsx's
+// RowContextMenu (role="menu"/"menuitem", position:fixed at the click coordinates,
+// closes on outside click or Escape) — that is this webview's only existing
+// context-menu precedent, kept local here since it's mEdit-specific vocabulary
+// ("Remove Override"), not shared across the Mod-Management boundary.
+interface ColumnHeaderMenuItemProps {
+  label: string;
+  disabled?: boolean;
+  onActivate: () => void;
+}
+
+function ColumnHeaderMenuItem({ label, disabled, onActivate }: ColumnHeaderMenuItemProps) {
+  const activate = () => { if (!disabled) onActivate(); };
+  return (
+    <li
+      role="menuitem"
+      aria-disabled={disabled ? 'true' : undefined}
+      tabIndex={disabled ? -1 : 0}
+      style={{ cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, padding: baseCell.padding }}
+      onClick={activate}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') activate(); }}
+      onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = 'var(--vscode-list-hoverBackground,#2a2d2e)'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+    >
+      {label}
+    </li>
+  );
+}
+
+interface ColumnHeaderMenuProps {
+  x: number;
+  y: number;
+  disabledRemove: boolean;
+  onClose: () => void;
+  onCopyAllToPending: () => void;
+  onCopyAsNewRecord: () => void;
+  onRemoveOverride: () => void;
+}
+
+function ColumnHeaderMenu({ x, y, disabledRemove, onClose, onCopyAllToPending, onCopyAsNewRecord, onRemoveOverride }: ColumnHeaderMenuProps) {
+  useEffect(() => {
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
+      onClose();
+    };
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [onClose]);
+
+  return (
+    <ul
+      role="menu"
+      style={{
+        position: 'fixed',
+        top: y,
+        left: x,
+        listStyle: 'none',
+        margin: 0,
+        padding: 4,
+        // No space after the comma in the var() fallback — see RowContextMenu in
+        // DownloadsApp.tsx: happy-dom silently drops color-valued styles containing
+        // "var(--x, y)" with a space, but accepts "var(--x,y)".
+        backgroundColor: 'var(--vscode-menu-background,#3c3c3c)',
+        color: 'var(--vscode-menu-foreground,#ccc)',
+        border: '1px solid var(--vscode-menu-border,#454545)',
+        borderRadius: 2,
+        zIndex: 1000,
+      }}
+    >
+      <ColumnHeaderMenuItem label="Copy All to Pending" onActivate={onCopyAllToPending} />
+      <ColumnHeaderMenuItem label="Copy as New Record" onActivate={onCopyAsNewRecord} />
+      <ColumnHeaderMenuItem label="Remove Override" disabled={disabledRemove} onActivate={onRemoveOverride} />
+    </ul>
+  );
+}
+
+// ── PluginTargetPicker ────────────────────────────────────────────────────────
+
+// Issue #3: the target-plugin picker for "Copy All to Pending"/"Copy as New Record". More than
+// one plugin can be mutable at once (every non-implicit-master plugin in the loadout), so there
+// is no single "active editable plugin" to assume — same reason the #86 "Copy as Override…"
+// button picker in PluginHeader exists. Positioned/closed like ColumnHeaderMenu (position:fixed
+// at the triggering click, closes on outside click or Escape) since it opens from that menu.
+interface PluginTargetPickerProps {
+  x: number;
+  y: number;
+  targets: PluginInfo[];
+  onClose: () => void;
+  onSelect: (plugin: string) => void;
+}
+
+function PluginTargetPicker({ x, y, targets, onClose, onSelect }: PluginTargetPickerProps) {
+  useEffect(() => {
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
+      onClose();
+    };
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [onClose]);
+
+  return (
+    <ul
+      role="menu"
+      style={{
+        position: 'fixed',
+        top: y,
+        left: x,
+        listStyle: 'none',
+        margin: 0,
+        padding: 4,
+        minWidth: 180,
+        maxHeight: 200,
+        overflowY: 'auto',
+        backgroundColor: 'var(--vscode-menu-background,#3c3c3c)',
+        color: 'var(--vscode-menu-foreground,#ccc)',
+        border: '1px solid var(--vscode-menu-border,#454545)',
+        borderRadius: 2,
+        zIndex: 1000,
+      }}
+    >
+      {targets.length === 0 && (
+        <li style={{ padding: '4px 8px', opacity: 0.5, fontSize: '11px' }}>No mutable plugins</li>
+      )}
+      {targets.map(p => (
+        <ColumnHeaderMenuItem key={p.name} label={p.name} onActivate={() => onSelect(p.name)} />
+      ))}
+    </ul>
+  );
+}
+
 // ── Array child helpers ───────────────────────────────────────────────────────
 
 function parseElementIndex(fieldName: string): number {
@@ -442,9 +593,12 @@ interface DiffRowProps {
   editMode: boolean;
   port: number;
   pendingChangeMap: Record<string, PendingChange>;
+  collapsedColumns: Set<string>;
   onOpen: (fk: string) => void;
   onEdit: (plugin: string, fieldName: string, value: unknown) => void;
   onRevert: (changeId: string) => void;
+  onCellDragStart: (fieldName: string, value: unknown) => void;
+  onCellDrop: (fieldName: string, targetPlugin: string, applyValue: (value: unknown) => void) => void;
   context: RowContext;
   hasChildren?: boolean;
   isExpanded?: boolean;
@@ -453,7 +607,8 @@ interface DiffRowProps {
 
 function DiffRow({
   diff, conflictAll, columns, overrideMap, fieldMetaMap, editMode, port,
-  pendingChangeMap, onOpen, onEdit, onRevert,
+  pendingChangeMap, collapsedColumns, onOpen, onEdit, onRevert,
+  onCellDragStart, onCellDrop,
   context, hasChildren, isExpanded, onToggle,
 }: DiffRowProps) {
   const meta = context.kind === 'top-level' ? fieldMetaMap[diff.fieldName] : context.overrideMeta;
@@ -474,6 +629,9 @@ function DiffRow({
         if (col.kind === 'disk') {
           const { override: o } = col;
           const cellStyle = { ...baseCell, ...getCellStyle(diff.cellStates?.[o.plugin]), userSelect: 'text' as const };
+          if (collapsedColumns.has(o.plugin)) {
+            return <td key={`disk:${o.plugin}`} style={cellStyle} />;
+          }
           const checkError = showActions
             ? overrideMap[o.plugin]?.fields.find(f => f.metadata.name === pendingLookupField)?.checkError
             : undefined;
@@ -492,8 +650,21 @@ function DiffRow({
               </td>
             );
           }
+          // Issue #3: in edit mode, a leaf field-value cell can be dragged into another
+          // plugin's column to stage its value there as a pending change (source may be a
+          // read-only column — dragging is a copy, only the drop target's mutability matters,
+          // enforced by onCellDrop). onDrop's applyValue re-uses this row's own onEdit closure,
+          // which already carries the right merge semantics for this row's context (top-level/
+          // array-element/struct-child/grandchild).
           return (
-            <td key={`disk:${o.plugin}`} style={cellStyle}>
+            <td
+              key={`disk:${o.plugin}`}
+              style={{ ...cellStyle, ...(editMode ? { cursor: 'grab' } : {}) }}
+              draggable={editMode}
+              onDragStart={editMode ? () => onCellDragStart(diff.fieldName, diff.values[o.plugin]) : undefined}
+              onDragOver={editMode ? e => e.preventDefault() : undefined}
+              onDrop={editMode ? () => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v)) : undefined}
+            >
               {renderCell(diff.values[o.plugin], meta, editMode, port, onOpen,
                 v => onEdit(o.plugin, diff.fieldName, v), checkError)}
             </td>
@@ -579,6 +750,18 @@ export function RecordPanel() {
   const [copyPickerPlugin, setCopyPickerPlugin] = useState<string | null>(null);
   const [masterPickerPlugin, setMasterPickerPlugin] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
+  // Issue #3: collapsed plugin columns, keyed by plugin name. Deliberately NOT reset by the
+  // LOAD_RECORD handler below (unlike editMode/copyPickerPlugin/masterPickerPlugin) — collapse
+  // state is meant to persist across record-to-record navigation within the same panel session.
+  const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
+  // Issue #3: transient drag payload — doesn't need to trigger a re-render, so a ref rather
+  // than state. Cleared on drop (successful or rejected).
+  const dragPayloadRef = useRef<{ fieldName: string; value: unknown } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ plugin: string; x: number; y: number } | null>(null);
+  // Issue #3: target-plugin picker shared by "Copy All to Pending" and "Copy as New Record" —
+  // same UI (position:fixed at the context menu's click coordinates, mutable-plugins-minus-source
+  // target list), branching on `mode` only in onSelect.
+  const [targetPickerSource, setTargetPickerSource] = useState<{ plugin: string; x: number; y: number; mode: 'copyAll' | 'newRecord' } | null>(null);
 
   const port = mEditWindow.mEditBackendPort;
 
@@ -741,8 +924,53 @@ export function RecordPanel() {
     }
   }
 
+  // Issue #3: "Remove Override" — stages a delete of this plugin's override of the current
+  // record (Phase 10's DeleteRecords endpoint, reached here via the same raw-fetch pattern as
+  // handleCopyTo/handleSave — the webview never routes through SessionController/ApiClient).
+  async function handleRemoveOverride(plugin: string) {
+    setActionError(null);
+    try {
+      const resp = await fetch(`http://localhost:${port}/records/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ records: [{ formKey, plugin }] }),
+      });
+      if (!resp.ok) {
+        setActionError(resp.status === 409 ? 'Plugin is read-only' : `Remove failed: ${resp.statusText}`);
+        return;
+      }
+      await refresh(formKey);
+    } catch (e) {
+      setActionError(`Remove failed: ${e instanceof Error ? e.message : 'network error'}`);
+    }
+  }
+
   function handleOpen(fk: string) {
     vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: fk });
+  }
+
+  function handleCellDragStart(fieldName: string, value: unknown) {
+    dragPayloadRef.current = { fieldName, value };
+  }
+
+  // Issue #3: target must be an editable plugin — reject a drop onto an immutable column as a
+  // silent no-op (no PATCH attempt), distinct from typed edits into a read-only cell, which are
+  // attempted and surfaced as a 409 by stageChange. Also guards against dropping onto an
+  // unrelated field's row (payload fieldName must match the row it's dropped on).
+  function handleCellDrop(fieldName: string, targetPlugin: string, applyValue: (value: unknown) => void) {
+    const payload = dragPayloadRef.current;
+    dragPayloadRef.current = null;
+    if (!payload || payload.fieldName !== fieldName) return;
+    if (immutableSet.has(targetPlugin)) return;
+    applyValue(payload.value);
+  }
+
+  function toggleColumnCollapse(plugin: string) {
+    setCollapsedColumns(prev => {
+      const next = new Set(prev);
+      if (next.has(plugin)) next.delete(plugin); else next.add(plugin);
+      return next;
+    });
   }
 
   const fieldMetaMap = useMemo((): Record<string, FieldMetadata> => {
@@ -760,6 +988,55 @@ export function RecordPanel() {
     for (const o of result?.overrides ?? []) map[o.plugin] = o;
     return map;
   }, [result]);
+
+  // Issue #3: "Copy All to Pending" — copies every field value from the source column into a
+  // pending change for the target plugin (xEdit's "copy as override" from the column header).
+  // Declared after overrideMap (not grouped with the other handlers above) — a forward reference
+  // to overrideMap from an earlier-declared function broke the React Compiler's ability to
+  // preserve overrideMap's own useMemo (react-hooks/preserve-manual-memoization).
+  async function handleCopyAllToPending(sourcePlugin: string, targetPlugin: string) {
+    const source = overrideMap[sourcePlugin];
+    if (!source) return;
+    const fields: Record<string, unknown> = {};
+    for (const fv of source.fields) fields[fv.metadata.name] = fv.value;
+    await stageChange(targetPlugin, fields);
+  }
+
+  // Issue #3: "Copy as New Record" — a fresh FormKey in the target plugin, not an override of
+  // this one. CreateRecord's TemplateFormKey only templates from the overall winner (EditOrchestrator
+  // .CreateRecordCore calls _query.GetRecord(formKey), winner-only), which isn't necessarily this
+  // source column's plugin — so instead of relying on TemplateFormKey, create a blank record of the
+  // right type, then PATCH every source-column field onto it (mirrors handleCopyAllToPending's field
+  // collection, retargeted at the new FormKey).
+  async function handleCopyAsNewRecord(sourcePlugin: string, targetPlugin: string) {
+    const source = overrideMap[sourcePlugin];
+    if (!source) return;
+    setActionError(null);
+    try {
+      const createResp = await fetch(`http://localhost:${port}/plugins/${encodeURIComponent(targetPlugin)}/records`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recordType: source.recordType, source: 'user' }),
+      });
+      if (!createResp.ok) {
+        setActionError(createResp.status === 409 ? 'Plugin is read-only' : `Copy failed: ${createResp.statusText}`);
+        return;
+      }
+      const { formKey: newFormKey } = await createResp.json() as { formKey: string };
+      const fields: Record<string, unknown> = {};
+      for (const fv of source.fields) fields[fv.metadata.name] = fv.value;
+      const patchResp = await fetch(`http://localhost:${port}/records/${encodeURIComponent(newFormKey)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plugin: targetPlugin, fields, source: 'user' }),
+      });
+      if (!patchResp.ok) {
+        setActionError(`Copy failed: ${patchResp.statusText}`);
+      }
+    } catch (e) {
+      setActionError(`Copy failed: ${e instanceof Error ? e.message : 'network error'}`);
+    }
+  }
 
   const columns = useMemo(
     () => result ? buildColumns(result.overrides, immutableSet) : [],
@@ -827,8 +1104,16 @@ export function RecordPanel() {
               <th style={{ ...headerCell, textAlign: 'left', minWidth: '160px' }}>Field</th>
               {columns.map(col => {
                 if (col.kind === 'disk') {
+                  const isCollapsed = collapsedColumns.has(col.override.plugin);
                   return (
-                    <th key={`disk:${col.override.plugin}`} style={{ ...headerCell, textAlign: 'left', minWidth: '200px', backgroundColor: getHeaderBg(col.override.conflictThis) }}>
+                    <th
+                      key={`disk:${col.override.plugin}`}
+                      style={{ ...headerCell, textAlign: 'left', minWidth: isCollapsed ? '48px' : '200px', backgroundColor: getHeaderBg(col.override.conflictThis) }}
+                      onContextMenu={e => {
+                        e.preventDefault();
+                        setContextMenu({ plugin: col.override.plugin, x: e.clientX, y: e.clientY });
+                      }}
+                    >
                       <PluginHeader
                         override={col.override}
                         isImmutable={immutableSet.has(col.override.plugin)}
@@ -839,6 +1124,8 @@ export function RecordPanel() {
                         mutableTargets={allPlugins.filter(p => !p.isImmutable)}
                         showMasterPicker={masterPickerPlugin === col.override.plugin}
                         loadedPlugins={allPlugins}
+                        collapsed={isCollapsed}
+                        onToggleCollapse={() => toggleColumnCollapse(col.override.plugin)}
                         onSave={() => { void handleSave(col.override.plugin); }}
                         onOpenCopyPicker={() => setCopyPickerPlugin(col.override.plugin)}
                         onCloseCopyPicker={() => setCopyPickerPlugin(null)}
@@ -874,6 +1161,9 @@ export function RecordPanel() {
                   editMode={editMode}
                   port={port}
                   pendingChangeMap={pendingChangeMap}
+                  collapsedColumns={collapsedColumns}
+                  onCellDragStart={handleCellDragStart}
+                  onCellDrop={handleCellDrop}
                   onOpen={handleOpen}
                   onEdit={(plugin, fieldName, value) => { void handleEdit(plugin, fieldName, value); }}
                   onRevert={changeId => { void handleRevert(changeId); }}
@@ -913,6 +1203,9 @@ export function RecordPanel() {
                         editMode={editMode}
                         port={port}
                         pendingChangeMap={pendingChangeMap}
+                        collapsedColumns={collapsedColumns}
+                        onCellDragStart={handleCellDragStart}
+                        onCellDrop={handleCellDrop}
                         onOpen={handleOpen}
                         onEdit={(plugin, elemKey, newValue) => {
                           void handleEdit(plugin, diff.fieldName, updateArrayAtKey(resolveCurrentArr(plugin), elemKey, newValue, elementMeta.isSortable ?? false));
@@ -943,6 +1236,9 @@ export function RecordPanel() {
                             editMode={editMode}
                             port={port}
                             pendingChangeMap={pendingChangeMap}
+                            collapsedColumns={collapsedColumns}
+                            onCellDragStart={handleCellDragStart}
+                            onCellDrop={handleCellDrop}
                             onOpen={handleOpen}
                             onEdit={(plugin, subField, subValue) => {
                               const cur = resolveCurrentArr(plugin);
@@ -971,6 +1267,9 @@ export function RecordPanel() {
                         editMode={editMode}
                         port={port}
                         pendingChangeMap={pendingChangeMap}
+                        collapsedColumns={collapsedColumns}
+                        onCellDragStart={handleCellDragStart}
+                        onCellDrop={handleCellDrop}
                         onOpen={handleOpen}
                         onEdit={(plugin, subField, subValue) => {
                           const disk = (diff.values[plugin] as Record<string, unknown>) ?? {};
@@ -1001,6 +1300,31 @@ export function RecordPanel() {
           </tbody>
         </table>
       </div>
+      {contextMenu && (
+        <ColumnHeaderMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          disabledRemove={immutableSet.has(contextMenu.plugin)}
+          onClose={() => setContextMenu(null)}
+          onCopyAllToPending={() => { setTargetPickerSource({ ...contextMenu, mode: 'copyAll' }); setContextMenu(null); }}
+          onCopyAsNewRecord={() => { setTargetPickerSource({ ...contextMenu, mode: 'newRecord' }); setContextMenu(null); }}
+          onRemoveOverride={() => { const plugin = contextMenu.plugin; setContextMenu(null); void handleRemoveOverride(plugin); }}
+        />
+      )}
+      {targetPickerSource && (
+        <PluginTargetPicker
+          x={targetPickerSource.x}
+          y={targetPickerSource.y}
+          targets={allPlugins.filter(p => !p.isImmutable && p.name !== targetPickerSource.plugin)}
+          onClose={() => setTargetPickerSource(null)}
+          onSelect={target => {
+            const { plugin: source, mode } = targetPickerSource;
+            setTargetPickerSource(null);
+            if (mode === 'copyAll') void handleCopyAllToPending(source, target);
+            else void handleCopyAsNewRecord(source, target);
+          }}
+        />
+      )}
     </div>
   );
 }

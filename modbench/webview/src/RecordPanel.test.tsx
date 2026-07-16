@@ -348,7 +348,7 @@ const threePluginConflictResult = {
       pendingFields: {}, conflictThis: 'Master' },
     { formKey: '000001:Fallout4.esm', plugin: 'Mod1.esp', loadOrderIndex: 1, isWinner: false,
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Bob' }],
-      pendingFields: {}, conflictThis: 'ConflictLoses' },
+      pendingFields: {}, conflictThis: 'ConflictLoses', recordType: 'npc_' },
     { formKey: '000001:Fallout4.esm', plugin: 'Mod2.esp', loadOrderIndex: 2, isWinner: true,
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Charlie' }],
       pendingFields: {}, conflictThis: 'ConflictWins' },
@@ -980,5 +980,397 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
 
     await waitFor(() => expect(screen.queryByText(/Error:/)).not.toBeInTheDocument());
     await waitFor(() => screen.getByText(/TestNPC/));
+  });
+});
+
+// ── Column collapse (issue #3) ────────────────────────────────────────────────
+
+describe('RecordPanel — column collapse (issue #3)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', makeFetch());
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('clicking a plugin column header chip collapses that column, hiding its field values', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Original Name'));
+
+    fireEvent.click(screen.getByText('Fallout4.esm'));
+    expect(screen.queryByText('Original Name')).not.toBeInTheDocument();
+    // the chip itself (and the other column) stay visible
+    expect(screen.getByText('Fallout4.esm')).toBeInTheDocument();
+    expect(screen.getByText('Override Name')).toBeInTheDocument();
+  });
+
+  it('clicking a collapsed column chip again expands it', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Original Name'));
+
+    fireEvent.click(screen.getByText('Fallout4.esm'));
+    expect(screen.queryByText('Original Name')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Fallout4.esm'));
+    expect(screen.getByText('Original Name')).toBeInTheDocument();
+  });
+
+  it('collapsed column header hides the (read-only) label', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Edit'));
+    expect(screen.getByText('(read-only)')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Fallout4.esm'));
+    expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
+  });
+
+  it('collapsed state survives a LOAD_RECORD navigation to a different formKey', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Original Name'));
+    fireEvent.click(screen.getByText('Fallout4.esm'));
+    expect(screen.queryByText('Original Name')).not.toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000002:Fallout4.esm' },
+      }));
+    });
+
+    await waitFor(() => screen.getByText('Fallout4.esm'));
+    // Still collapsed after navigating to a new record in the same panel session.
+    expect(screen.queryByText('Original Name')).not.toBeInTheDocument();
+  });
+});
+
+// ── Drag affordance (issue #3) ────────────────────────────────────────────────
+
+describe('RecordPanel — drag affordance on field cells', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', makeFetch());
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('a field cell is not draggable in view mode', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Original Name'));
+    const cell = screen.getByText('Original Name').closest('td')!;
+    expect(cell.getAttribute('draggable')).toBe('false');
+  });
+
+  it('a field cell becomes draggable with a grab cursor in edit mode', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Edit'));
+    const cell = screen.getByDisplayValue('Original Name').closest('td')!;
+    expect(cell.getAttribute('draggable')).toBe('true');
+    expect(cell.style.cursor).toBe('grab');
+  });
+});
+
+// ── Drag-drop staging (issue #3) ──────────────────────────────────────────────
+
+describe('RecordPanel — drag-drop stages a pending field change', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('dragging from a read-only source column and dropping on an editable target column stages the value there (copy, not move)', async () => {
+    const fetchMock = makeFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Edit'));
+
+    // Fallout4.esm is immutable — dragging FROM it is allowed (copy source).
+    const sourceCell = screen.getByDisplayValue('Original Name').closest('td')!;
+    // MyMod.esp is mutable — a valid drop target.
+    const targetCell = screen.getByDisplayValue('Override Name').closest('td')!;
+
+    fireEvent.dragStart(sourceCell);
+    fireEvent.drop(targetCell);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/records/'),
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const patchCall = fetchMock.mock.calls.find(
+      (c: unknown[]) => (c[1] as RequestInit)?.method === 'PATCH',
+    );
+    const body = JSON.parse((patchCall![1] as RequestInit).body as string) as {
+      plugin: string;
+      fields: Record<string, unknown>;
+    };
+    expect(body.plugin).toBe('MyMod.esp');
+    expect(body.fields['Name']).toBe('Original Name');
+  });
+
+  it('dropping on a read-only (immutable) target column is rejected as a no-op — no PATCH is sent', async () => {
+    const fetchMock = makeFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Edit'));
+
+    // MyMod.esp is mutable — a valid drag source.
+    const sourceCell = screen.getByDisplayValue('Override Name').closest('td')!;
+    // Fallout4.esm is immutable — must reject the drop.
+    const targetCell = screen.getByDisplayValue('Original Name').closest('td')!;
+
+    fireEvent.dragStart(sourceCell);
+    fireEvent.drop(targetCell);
+
+    // Let any (incorrect) async staging work run before asserting its absence.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(
+      fetchMock.mock.calls.some((c: unknown[]) => (c[1] as RequestInit)?.method === 'PATCH'),
+    ).toBe(false);
+  });
+});
+
+// ── Column header context menu (issue #3) ─────────────────────────────────────
+
+describe('RecordPanel — column header context menu', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+    vi.stubGlobal('fetch', makeFetch());
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('right-clicking a plugin column header shows Copy All to Pending, Copy as New Record, and Remove Override', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('MyMod.esp'));
+    fireEvent.contextMenu(screen.getByText('MyMod.esp').closest('th')!);
+    expect(screen.getByRole('menuitem', { name: 'Copy All to Pending' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Copy as New Record' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Remove Override' })).toBeInTheDocument();
+  });
+
+  it('Remove Override is disabled on an immutable plugin column, enabled on a mutable one', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Fallout4.esm'));
+
+    fireEvent.contextMenu(screen.getByText('Fallout4.esm').closest('th')!);
+    expect(screen.getByRole('menuitem', { name: 'Remove Override' })).toHaveAttribute('aria-disabled', 'true');
+
+    fireEvent.contextMenu(screen.getByText('MyMod.esp').closest('th')!);
+    expect(screen.getByRole('menuitem', { name: 'Remove Override' })).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('pressing Escape closes the menu', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('MyMod.esp'));
+    fireEvent.contextMenu(screen.getByText('MyMod.esp').closest('th')!);
+    expect(screen.getByRole('menuitem', { name: 'Copy All to Pending' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('menuitem', { name: 'Copy All to Pending' })).not.toBeInTheDocument();
+  });
+
+  it('clicking outside the menu closes it', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('MyMod.esp'));
+    fireEvent.contextMenu(screen.getByText('MyMod.esp').closest('th')!);
+    expect(screen.getByRole('menuitem', { name: 'Copy All to Pending' })).toBeInTheDocument();
+
+    fireEvent.click(document.body);
+    expect(screen.queryByRole('menuitem', { name: 'Copy All to Pending' })).not.toBeInTheDocument();
+  });
+});
+
+// ── Remove Override (issue #3) ────────────────────────────────────────────────
+
+function makeFetchWithDelete() {
+  return vi.fn((url: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && String(url).includes('/records/delete')) {
+      return { ok: true, json: () => Promise.resolve({}) };
+    }
+    if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(compareResult) };
+    if (String(url).includes('/changes'))  return { ok: true, json: () => Promise.resolve([]) };
+    if (String(url).includes('/plugins'))  return { ok: true, json: () => Promise.resolve(pluginsResponse) };
+    return { ok: false, status: 404, statusText: 'Not Found' };
+  });
+}
+
+describe('RecordPanel — Remove Override', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('clicking Remove Override on a mutable column stages a delete via POST /records/delete', async () => {
+    const fetchMock = makeFetchWithDelete();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('MyMod.esp'));
+    fireEvent.contextMenu(screen.getByText('MyMod.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove Override' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/records/delete'),
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    const call = fetchMock.mock.calls.find((c: unknown[]) => String(c[0]).includes('/records/delete'));
+    const body = JSON.parse((call![1] as RequestInit).body as string) as {
+      records: { formKey: string; plugin: string }[];
+    };
+    expect(body.records).toEqual([{ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp' }]);
+  });
+
+  it('Remove Override is disabled and inert on an immutable column — no delete call is made', async () => {
+    const fetchMock = makeFetchWithDelete();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Fallout4.esm'));
+    fireEvent.contextMenu(screen.getByText('Fallout4.esm').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove Override' }));
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(
+      fetchMock.mock.calls.some((c: unknown[]) => String(c[0]).includes('/records/delete')),
+    ).toBe(false);
+  });
+});
+
+// ── Copy All to Pending (issue #3) ────────────────────────────────────────────
+
+function makeThreePluginFetch() {
+  return vi.fn((url: string, init?: RequestInit) => {
+    if (init?.method === 'PATCH') return { ok: true, json: () => Promise.resolve({}) };
+    if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(threePluginConflictResult) };
+    if (String(url).includes('/changes'))  return { ok: true, json: () => Promise.resolve([]) };
+    if (String(url).includes('/plugins'))  return { ok: true, json: () => Promise.resolve([
+      { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
+      { name: 'Mod1.esp', isImmutable: false, loadOrderIndex: 1 },
+      { name: 'Mod2.esp', isImmutable: false, loadOrderIndex: 2 },
+    ]) };
+    return { ok: false, status: 404, statusText: 'Not Found' };
+  });
+}
+
+describe('RecordPanel — Copy All to Pending', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('opens a target picker offering mutable plugins other than the source column', async () => {
+    vi.stubGlobal('fetch', makeThreePluginFetch());
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Bob'));
+    fireEvent.contextMenu(screen.getByText('Mod1.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy All to Pending' }));
+
+    expect(screen.getByRole('menuitem', { name: 'Mod2.esp' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Mod1.esp' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Fallout4.esm' })).not.toBeInTheDocument();
+  });
+
+  it('selecting a target stages one PATCH with every field from the source column', async () => {
+    const fetchMock = makeThreePluginFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Bob'));
+    fireEvent.contextMenu(screen.getByText('Mod1.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy All to Pending' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mod2.esp' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/records/'),
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const patchCall = fetchMock.mock.calls.find(
+      (c: unknown[]) => (c[1] as RequestInit)?.method === 'PATCH',
+    );
+    const body = JSON.parse((patchCall![1] as RequestInit).body as string) as {
+      plugin: string;
+      fields: Record<string, unknown>;
+    };
+    expect(body.plugin).toBe('Mod2.esp');
+    expect(body.fields['Name']).toBe('Bob');
+  });
+});
+
+// ── Copy as New Record (issue #3) ─────────────────────────────────────────────
+
+describe('RecordPanel — Copy as New Record', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.stubGlobal('mEditBackendPort', 15172);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('opens the same target picker as Copy All to Pending', async () => {
+    vi.stubGlobal('fetch', makeThreePluginFetch());
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Bob'));
+    fireEvent.contextMenu(screen.getByText('Mod1.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy as New Record' }));
+
+    expect(screen.getByRole('menuitem', { name: 'Mod2.esp' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Mod1.esp' })).not.toBeInTheDocument();
+  });
+
+  it('selecting a target creates a new record of the source column\'s type, then stages every source field on it', async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && /\/plugins\/[^/]+\/records$/.test(String(url))) {
+        return { ok: true, json: () => Promise.resolve({ formKey: '000099:Mod2.esp', groupId: 'g1' }) };
+      }
+      if (init?.method === 'PATCH') return { ok: true, json: () => Promise.resolve({}) };
+      if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(threePluginConflictResult) };
+      if (String(url).includes('/changes'))  return { ok: true, json: () => Promise.resolve([]) };
+      if (String(url).includes('/plugins'))  return { ok: true, json: () => Promise.resolve([
+        { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
+        { name: 'Mod1.esp', isImmutable: false, loadOrderIndex: 1 },
+        { name: 'Mod2.esp', isImmutable: false, loadOrderIndex: 2 },
+      ]) };
+      return { ok: false, status: 404, statusText: 'Not Found' };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Bob'));
+    fireEvent.contextMenu(screen.getByText('Mod1.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy as New Record' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mod2.esp' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/plugins/Mod2.esp/records'),
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    const createCall = fetchMock.mock.calls.find(
+      (c: unknown[]) => (c[1] as RequestInit)?.method === 'POST' && /\/plugins\/[^/]+\/records$/.test(String(c[0])),
+    );
+    const createBody = JSON.parse((createCall![1] as RequestInit).body as string) as { recordType: string };
+    expect(createBody.recordType).toBe('npc_');
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/records/000099%3AMod2.esp'),
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const patchCall = fetchMock.mock.calls.find(
+      (c: unknown[]) => (c[1] as RequestInit)?.method === 'PATCH',
+    );
+    const patchBody = JSON.parse((patchCall![1] as RequestInit).body as string) as {
+      plugin: string;
+      fields: Record<string, unknown>;
+    };
+    expect(patchBody.plugin).toBe('Mod2.esp');
+    expect(patchBody.fields['Name']).toBe('Bob');
   });
 });

@@ -42,6 +42,12 @@ public record FieldMetadata(
 // string, not a number — so values above 2^53 survive JSON round-tripping without IEEE 754 loss.
 public record FieldValue(FieldMetadata Metadata, object? Value, string? CheckError = null);
 
+// RecordType (issue #3): the schema table name (e.g. "NPC_") this record belongs to — needed by
+// the webview's "Copy as New Record" column-header action, which must supply a RecordType up
+// front to CreateRecord (schema validation happens before the TemplateFormKey is even read; see
+// EditOrchestrator.CreateRecordCore). Defaults to "" for the many pre-existing call sites (mostly
+// test fixtures) that don't need it — always populated for real reads (ReadDetail knows its own
+// schema's TableName).
 public record RecordDetail(
     string FormKey,
     string Plugin,
@@ -49,7 +55,8 @@ public record RecordDetail(
     bool IsWinner,
     string? EditorId,
     IReadOnlyList<FieldValue> Fields,
-    Dictionary<string, object?>? PendingFields = null);
+    Dictionary<string, object?>? PendingFields = null,
+    string RecordType = "");
 
 public record CompareOverride(
     string FormKey,
@@ -59,8 +66,9 @@ public record CompareOverride(
     string? EditorId,
     IReadOnlyList<FieldValue> Fields,
     Dictionary<string, object?>? PendingFields,
-    ConflictThis ConflictThis)
-    : RecordDetail(FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, PendingFields);
+    ConflictThis ConflictThis,
+    string RecordType = "")
+    : RecordDetail(FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, PendingFields, RecordType);
 
 public record FieldDiff(
     string FieldName,

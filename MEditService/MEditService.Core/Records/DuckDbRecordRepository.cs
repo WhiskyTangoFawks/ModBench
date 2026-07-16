@@ -556,7 +556,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, getRecordType)));
         }
 
-        return new RecordDetail(formKey, plugin, loadOrderIndex, isWinner, editorId, fields);
+        return new RecordDetail(formKey, plugin, loadOrderIndex, isWinner, editorId, fields, RecordType: schema.TableName);
     }
 
     internal static string ColumnList(RecordTableSchema schema) =>
