@@ -136,11 +136,14 @@ records straight to their physical plugin files and never requires a deploy.
     are reusable and obvious.
 33. As a user, I want a built-in "pending changes" filter preset, so that I can immediately
     narrow the tree to records I've touched.
-34. As a user, I want a Pending Changes tree listing my in-flight staged operations (create,
-    delete, renumber) with a description and change/plugin counts, so that I can see and
-    manage work that spans multiple records.
+34. As a user, I want a Pending Changes tree listing everything I have staged and not yet
+    written to disk — every field edit as well as lifecycle operations (create, delete,
+    renumber) — with a description and change/plugin counts, so that if I edited it and
+    haven't saved it, I can always find it in one place.
 35. As a user, I want to save or revert a single change group, or all of them at once, so
-    that I can commit related edits as a unit.
+    that I can commit related edits as a unit. A change group is whatever must travel
+    together — an edit nothing depends on is a group of one, so an ordinary field edit is
+    saved and reverted exactly like any other group (ADR-0028).
 36. As a user, I want a partial-save failure (some plugins saved, some not) reported clearly
     with the group left intact and its unsaved changes re-queued, so that a failure never
     silently loses my work.

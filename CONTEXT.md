@@ -80,7 +80,7 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 **Pending change**: Staged field edit held in memory; not yet written to disk. For complex fields, stores the entire new field value atomically — no per-element pending change. _Avoid: draft, unsaved edit._
 
-**ChangeGroup**: Batch of pending changes staged by one record-lifecycle operation (create, delete, renumber), saved or reverted atomically as a unit — possibly spanning plugins (e.g. a renumber's cascading reference updates). Surfaced in the Pending Changes tree. _Avoid: transaction, batch edit._
+**ChangeGroup**: Set of pending changes that must be saved or reverted atomically because reverting a subset would invalidate the rest — possibly spanning plugins (e.g. a renumber's cascading reference updates). Derived, not stored: a connected component of the pending-change dependency graph, never a batch labelled by whichever command staged it. Every pending change is in exactly one group; a change nothing depends on is a group of one. There is no such thing as an ungrouped change. Surfaced in the Pending Changes tree. See ADR-0028. _Avoid: transaction, batch edit, standalone/ungrouped change._
 
 **Complex field**: Field of type `array` or `struct`. Always committed as one atomic pending change; revert is all-or-nothing at the column level. _Avoid: compound field, nested field._
 
