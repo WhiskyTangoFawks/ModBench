@@ -87,9 +87,15 @@ export class PendingChangesTreeProvider implements vscode.TreeDataProvider<Pendi
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private readonly log: (msg: string) => void;
+  private readonly onPendingState: (hasPending: boolean) => void;
 
-  constructor(private readonly client: ApiClient, log?: (msg: string) => void) {
+  constructor(
+    private readonly client: ApiClient,
+    log?: (msg: string) => void,
+    onPendingState?: (hasPending: boolean) => void,
+  ) {
     this.log = log ?? (() => {});
+    this.onPendingState = onPendingState ?? (() => {});
   }
 
   refresh(): void {
@@ -120,9 +126,12 @@ export class PendingChangesTreeProvider implements vscode.TreeDataProvider<Pendi
     const groupsRes = await this.client.GET('/change-groups', {});
     if (!groupsRes.response.ok || !Array.isArray(groupsRes.data)) {
       this.log(`[PendingChangesTreeProvider] /change-groups fetch failed (${groupsRes.response.status})`);
+      this.onPendingState(false);
       return [new ErrorNode()];
     }
     const groups = groupsRes.data;
+    // Drives the title-bar Save All / Revert All gating (spec: hidden when nothing staged).
+    this.onPendingState(groups.length > 0);
     if (groups.length === 0) return [new EmptyStateNode()];
 
     const changesRes = await this.client.GET('/changes', {});

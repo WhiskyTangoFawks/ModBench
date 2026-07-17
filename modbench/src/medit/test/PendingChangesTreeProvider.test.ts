@@ -244,6 +244,33 @@ describe('PendingChangesTreeProvider — group expansion', () => {
   });
 });
 
+// ── Save All / Revert All gating: report staged state on every root render ───
+describe('PendingChangesTreeProvider — pending-state signal', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('reports hasPending=true when there are groups', async () => {
+    const onPendingState = vi.fn();
+    const client = makeClient({ groups: [group({ id: 'c1' })], changes: [change({ id: 'c1' })] });
+    const provider = new PendingChangesTreeProvider(client, vi.fn(), onPendingState);
+    await provider.getChildren();
+    expect(onPendingState).toHaveBeenLastCalledWith(true);
+  });
+
+  it('reports hasPending=false when nothing is staged', async () => {
+    const onPendingState = vi.fn();
+    const provider = new PendingChangesTreeProvider(makeClient({ groups: [] }), vi.fn(), onPendingState);
+    await provider.getChildren();
+    expect(onPendingState).toHaveBeenLastCalledWith(false);
+  });
+
+  it('reports hasPending=false when the fetch fails', async () => {
+    const onPendingState = vi.fn();
+    const provider = new PendingChangesTreeProvider(makeClient({ groupsOk: false }), vi.fn(), onPendingState);
+    await provider.getChildren();
+    expect(onPendingState).toHaveBeenLastCalledWith(false);
+  });
+});
+
 // ── Slice 3 (decision 3 invariant): re-fetch, never trust a cached count ─────
 describe('PendingChangesTreeProvider — refresh re-queries', () => {
   beforeEach(() => vi.resetAllMocks());
@@ -254,6 +281,6 @@ describe('PendingChangesTreeProvider — refresh re-queries', () => {
     await provider.getChildren();
     await provider.getChildren();
     const calls = (client.GET).mock.calls.filter((c: any[]) => c[0] === '/change-groups');
-    expect(calls.length).toBe(2);
+    expect(calls).toHaveLength(2);
   });
 });
