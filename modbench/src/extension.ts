@@ -8,7 +8,7 @@ import { createApiClient } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController } from './medit/SessionController';
 import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
-import { ChangeGroupNode, ChangeGroupsTreeProvider } from './medit/ChangeGroupsTreeProvider';
+import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type PendingTreeNode } from './medit/PendingChangesTreeProvider';
 import { ApiPluginRepository } from './medit/PluginRepository';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
@@ -97,7 +97,7 @@ export function activate(context: vscode.ExtensionContext) {
   const client = createApiClient(port);
   const repository = new ApiPluginRepository(client, log);
   const treeProvider = new PluginTreeProvider(repository, log);
-  const changeGroupTreeProvider = new ChangeGroupsTreeProvider(client, log);
+  const changeGroupTreeProvider = new PendingChangesTreeProvider(client, log);
   const openPanels = new Map<string, vscode.WebviewPanel>();
 
   const { scriptsPath, filterProvider } = setupScripts(cfg);
@@ -126,6 +126,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const changeGroupTreeView = vscode.window.createTreeView('modbench.changeGroupTree', {
     treeDataProvider: changeGroupTreeProvider,
+    canSelectMany: true,
   });
 
   // ── Mod List (Loadout) view ──────────────────────────────────────────────────
@@ -244,6 +245,27 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
 }
 
 /** Delete records and save/revert change groups. */
+/** The member change id that keys save/revert on a node's whole component (ADR-0028).
+ *  Only actionable nodes (a group, or a top-level singleton edit) contribute one;
+ *  member nodes have no context menu and are excluded. */
+function pendingComponentId(node: PendingTreeNode): string | undefined {
+  if (node instanceof PendingGroupNode) return node.componentId;
+  if (node instanceof PendingLeafNode && node.contextValue === 'pendingGroup') return node.componentId;
+  return undefined;
+}
+
+/** The full multi-selection when several nodes are chosen, else the single invoked node. */
+function selectedPendingNodes(node?: PendingTreeNode, allSelected?: PendingTreeNode[]): PendingTreeNode[] {
+  if (allSelected?.length) return allSelected;
+  return node ? [node] : [];
+}
+
+function selectedComponentIds(node?: PendingTreeNode, allSelected?: PendingTreeNode[]): string[] {
+  return selectedPendingNodes(node, allSelected)
+    .map(pendingComponentId)
+    .filter((id): id is string => !!id);
+}
+
 function registerChangeGroupCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const { treeView, controller } = deps;
   return [
@@ -274,14 +296,37 @@ function registerChangeGroupCommands(deps: EditorCommandDeps): vscode.Disposable
       if (answer !== 'Delete') return;
       await controller.deleteRecords(targets.map(toTarget));
     }),
-    vscode.commands.registerCommand('modbench.saveGroup', async (node: ChangeGroupNode) => {
-      if (!node?.groupId) return;
-      await controller.saveGroup(node.groupId);
-    }),
-    vscode.commands.registerCommand('modbench.revertGroup', async (node: ChangeGroupNode) => {
-      if (!node?.groupId) return;
-      await controller.revertGroup(node.groupId);
-    }),
+    vscode.commands.registerCommand(
+      'modbench.saveGroup',
+      async (node?: PendingTreeNode, allSelected?: PendingTreeNode[]) => {
+        const ids = selectedComponentIds(node, allSelected);
+        if (ids.length === 0) return;
+        if (ids.length === 1) await controller.saveGroup(ids[0]);
+        else await controller.saveGroups(ids);
+      }),
+    vscode.commands.registerCommand(
+      'modbench.revertGroup',
+      async (node?: PendingTreeNode, allSelected?: PendingTreeNode[]) => {
+        const nodes = selectedPendingNodes(node, allSelected);
+        const ids = nodes.map(pendingComponentId).filter((id): id is string => !!id);
+        if (ids.length === 0) return;
+        // A revert takes the whole component, so when a multi-member group is in the
+        // selection, name every linked edit that travels with it (ADR-0029) — the user
+        // never sees a raw 409 for reverting part of a group.
+        const groups = nodes.filter((n): n is PendingGroupNode => n instanceof PendingGroupNode);
+        if (groups.length > 0) {
+          const members = groups.flatMap(g =>
+            g.members.map(m => `${m.recordType ?? ''} / ${m.formKey ?? ''} · ${m.fieldPath ?? ''}`));
+          const label = groups.length > 1 ? `Revert ${groups.length} groups?` : 'Revert this group?';
+          const answer = await vscode.window.showWarningMessage(
+            `${label} All linked edits are reverted together.`,
+            { modal: true, detail: members.join('\n') },
+            'Revert');
+          if (answer !== 'Revert') return;
+        }
+        if (ids.length === 1) await controller.revertGroup(ids[0]);
+        else await controller.revertGroups(ids);
+      }),
     vscode.commands.registerCommand('modbench.saveAllGroups', async () => {
       await controller.saveAllGroups();
     }),
@@ -679,7 +724,7 @@ interface LoadoutViewDeps {
   log: (msg: string) => void;
   revealLog: () => void;
   controller: SessionController;
-  changeGroupTreeProvider: ChangeGroupsTreeProvider;
+  changeGroupTreeProvider: PendingChangesTreeProvider;
   openPanels: Map<string, vscode.WebviewPanel>;
 }
 /** Register the Loadout (Mod List) view and its commands. Returns the live
@@ -800,7 +845,7 @@ interface EnterEditingDeps {
   instanceRoot: string;
   modlistSource: Mo2ModlistSource;
   controller: SessionController;
-  changeGroupTreeProvider: ChangeGroupsTreeProvider;
+  changeGroupTreeProvider: PendingChangesTreeProvider;
   log: (msg: string) => void;
   /** Surface the Modbench output channel so the user can watch the launch steps. */
   revealLog: () => void;
