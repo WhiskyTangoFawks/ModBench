@@ -77,33 +77,51 @@ internal static class PendingChangeGraph
         List<PendingRefRow> pendingRefs,
         UnionFind uf)
     {
-        // A lifecycle change's targets: the FormKey it acts on, plus — for a renumber — the
-        // successor FormKey, which is what cascading reference updates now point at.
-        var lifecycleByTarget = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var lifecycleByTarget = LifecycleNodesByTarget(nodes);
+        if (lifecycleByTarget.Count == 0) return;
+
+        void UnionReference(PendingRefRow r)
+        {
+            if (lifecycleByTarget.TryGetValue(r.TargetFormKey, out var lifecycleNodes) &&
+                index.TryGetValue((r.SourceFormKey, r.SourcePlugin, r.StagedField), out var b))
+            {
+                foreach (var a in lifecycleNodes)
+                    uf.Union(a, b);
+            }
+        }
+
+        foreach (var r in pendingRefs) UnionReference(r);
+        foreach (var r in LoadCommittedRefsToLifecycleTargets(conn)) UnionReference(r);
+    }
+
+    // Every lifecycle change indexed by the FormKey a reference to it would name: the FormKey it
+    // acts on, plus — for a renumber — the successor FormKey, which is what cascading reference
+    // updates now point at. A multimap, not a Dictionary<string,int>: a renumber successor can
+    // collide with another record's lifecycle FormKey, and one-node-per-FormKey would let the second
+    // write overwrite the first and drop an edge — under-grouping, which splits an atomic set and
+    // lets half be saved without the rest. A reference to a colliding FormKey unions against every
+    // lifecycle change on it.
+    private static Dictionary<string, List<int>> LifecycleNodesByTarget(IReadOnlyList<PendingChange> nodes)
+    {
+        var byTarget = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+        void Add(string formKey, int node)
+        {
+            if (!byTarget.TryGetValue(formKey, out var list))
+                byTarget[formKey] = list = [];
+            list.Add(node);
+        }
         for (var i = 0; i < nodes.Count; i++)
         {
             if (!PendingChangeConstants.IsLifecycle(nodes[i].ChangeType)) continue;
-            lifecycleByTarget[nodes[i].FormKey] = i;
+            Add(nodes[i].FormKey, i);
             if (nodes[i].ChangeType == PendingChangeConstants.RenumberChangeType &&
                 nodes[i].NewValue.ValueKind == JsonValueKind.String &&
                 nodes[i].NewValue.GetString() is { } successor)
-                lifecycleByTarget[successor] = i;
+            {
+                Add(successor, i);
+            }
         }
-        if (lifecycleByTarget.Count == 0) return;
-
-        foreach (var r in pendingRefs)
-        {
-            if (lifecycleByTarget.TryGetValue(r.TargetFormKey, out var a) &&
-                index.TryGetValue((r.SourceFormKey, r.SourcePlugin, r.StagedField), out var b))
-                uf.Union(a, b);
-        }
-
-        foreach (var r in LoadCommittedRefsToLifecycleTargets(conn))
-        {
-            if (lifecycleByTarget.TryGetValue(r.TargetFormKey, out var a) &&
-                index.TryGetValue((r.SourceFormKey, r.SourcePlugin, r.StagedField), out var b))
-                uf.Union(a, b);
-        }
+        return byTarget;
     }
 
     // --- Edge rule 3: B references a record reachable only via a master that A adds --------------
@@ -135,7 +153,9 @@ internal static class PendingChangeGraph
     {
         if (change.RecordType != Records.HeaderIndexer.TableName ||
             change.FieldPath != Records.HeaderIndexer.MastersFieldName)
+        {
             return null;
+        }
 
         var added = MasterList(change.NewValue);
         added.ExceptWith(MasterList(change.OldValue));
@@ -152,7 +172,7 @@ internal static class PendingChangeGraph
 
         // The record's own origin covers a copy-to of a record whose home plugin is the new master,
         // even when the record holds no FormLinks at all; the refs cover everything it points at.
-        return OriginPluginOf(b.FormKey) is { } origin && added.Contains(origin) ||
+        return (OriginPluginOf(b.FormKey) is { } origin && added.Contains(origin)) ||
                refsBySource[(b.FormKey, b.Plugin)]
                    .Any(r => OriginPluginOf(r.TargetFormKey) is { } o && added.Contains(o));
     }
@@ -183,10 +203,16 @@ internal static class PendingChangeGraph
         return ReadRefRows(cmd);
     }
 
-    // The committed reference index, narrowed by join to records with a pending lifecycle change —
-    // the index spans the whole load order, but only a reference *to* a record being created,
-    // deleted or renumbered can form an edge. Joining on pending_changes does that filtering in the
+    // The committed reference index, narrowed by join to records with a pending delete or renumber —
+    // the index spans the whole load order, but only a reference *to* a record being deleted or
+    // renumbered can form an edge here. Joining on pending_changes does that filtering in the
     // database and keeps this query static.
+    //
+    // Create is deliberately absent: a freshly-reserved create FormKey has no committed existence,
+    // so nothing in form_references can reference it and the join would yield zero rows. That is the
+    // edge-source split the ADR-0028 amendment on this branch spells out — ref-to-pending-create is
+    // carried by pending_form_references alone, delete-nullification and renumber-cascade by the
+    // committed index because staging them is precisely what removes or repoints the pending edge.
     //
     // Only the lifecycle change's own FormKey is joined, not a renumber's successor: the successor
     // is a FormKey that does not exist on disk yet, so the committed index cannot reference it.
@@ -207,7 +233,6 @@ internal static class PendingChangeGraph
             FROM form_references fr
             JOIN pending_changes pc ON fr.target_form_key = pc.form_key
             WHERE pc.change_type IN (
-                '{PendingChangeConstants.CreateChangeType}',
                 '{PendingChangeConstants.DeleteChangeType}',
                 '{PendingChangeConstants.RenumberChangeType}')
             """;
