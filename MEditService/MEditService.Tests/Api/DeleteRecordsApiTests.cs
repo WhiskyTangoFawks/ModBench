@@ -68,21 +68,24 @@ public sealed class DeleteRecordsApiTests(LoadedDeleteRecordsApiFixture loaded) 
         Assert.Equal(DeleteRecordsFixture.ImmutablePlugin, refs[0].GetProperty("sourcePlugin").GetString());
     }
 
+    // #134: deleting a record already pending renumber is blocked with 409 — re-acting on a record
+    // whose identity is in flux is incoherent. Previously this test blocked a delete of a
+    // *pending-created* record purely because it "had a group"; under ADR-0028 a create does not
+    // block a delete (only delete/renumber does), so the scenario is a pending renumber.
     [Fact]
-    public async Task PostDeleteRecords_PendingGroupBlock_Returns409Problem()
+    public async Task PostDeleteRecords_TargetPendingRenumber_Returns409Problem()
     {
         await ClearChangesAsync();
 
-        var createResp = await _client.PostAsJsonAsync(
-            $"/plugins/{Uri.EscapeDataString(DeleteRecordsFixture.EditablePlugin)}/records",
-            new { recordType = "npc_", source = "user" });
-        createResp.EnsureSuccessStatusCode();
-        var created = await createResp.Content.ReadFromJsonAsync<JsonElement>();
-        var newFormKey = created.GetProperty("formKey").GetString()!;
+        var rawFormKey = _fixture.EditableNpcFormKey.ToString();
+        var renumberResp = await _client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString(rawFormKey)}/renumber",
+            new { newFormId = 0xABC, plugin = DeleteRecordsFixture.EditablePlugin, source = "user" });
+        renumberResp.EnsureSuccessStatusCode();
 
         var resp = await _client.PostAsJsonAsync("/records/delete", new
         {
-            records = new[] { new { formKey = newFormKey, plugin = DeleteRecordsFixture.EditablePlugin } }
+            records = new[] { new { formKey = rawFormKey, plugin = DeleteRecordsFixture.EditablePlugin } }
         });
 
         Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);

@@ -654,8 +654,8 @@ public sealed class EditOrchestratorHeaderTests
                 // covering both, not two adjacent ones.
                 var group = Assert.Single(changes.GetChangeGroups());
                 Assert.True(group.ChangeCount >= 2);
-                Assert.Contains(headerKey, changes.GetChanges(groupId: group.Id).Select(c => c.FormKey));
-                Assert.Contains(npcKey.ToString(), changes.GetChanges(groupId: group.Id).Select(c => c.FormKey));
+                Assert.Contains(headerKey, changes.GetChanges(memberChangeId: group.Id).Select(c => c.FormKey));
+                Assert.Contains(npcKey.ToString(), changes.GetChanges(memberChangeId: group.Id).Select(c => c.FormKey));
 
                 var mastersChange = changes.GetChanges(plugin: "Target.esp", formKey: headerKey).Single(c => c.FieldPath == "masters");
                 var newMasters = mastersChange.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
@@ -708,7 +708,7 @@ public sealed class EditOrchestratorHeaderTests
                 var group = Assert.Single(changes.GetChangeGroups());
                 Assert.Equal(
                     [headerKey, npc1Key.ToString(), npc2Key.ToString()],
-                    changes.GetChanges(groupId: group.Id).Select(c => c.FormKey).Distinct().Order());
+                    changes.GetChanges(memberChangeId: group.Id).Select(c => c.FormKey).Distinct().Order());
 
                 var mastersChange = changes.GetChanges(plugin: "Target.esp", formKey: headerKey).Single(c => c.FieldPath == "masters");
                 var newMasters = mastersChange.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
@@ -765,10 +765,13 @@ public sealed class EditOrchestratorHeaderTests
                 Assert.IsType<StageEditResult.Staged>(result);
 
                 var headerKey = HeaderKey("Target.esp");
-                var copyGroupId = changes.GetGroupIdForRecord(npcKey.ToString(), "Target.esp");
-                var headerGroupId = changes.GetGroupIdForRecord(headerKey, "Target.esp");
-                Assert.NotNull(copyGroupId);
-                Assert.Equal(copyGroupId, headerGroupId);
+
+                // The copy and the masters-add it triggers travel together (ADR-0028 edge rule 3):
+                // the copied record only resolves in Target.esp because of the master this change
+                // adds. Observed as one derived group covering both, not a shared group_id.
+                var group = Assert.Single(changes.GetChangeGroups());
+                Assert.Contains(npcKey.ToString(), changes.GetChanges(memberChangeId: group.Id).Select(c => c.FormKey));
+                Assert.Contains(headerKey, changes.GetChanges(memberChangeId: group.Id).Select(c => c.FormKey));
 
                 var mastersChange = changes.GetChanges(plugin: "Target.esp", formKey: headerKey).Single(c => c.FieldPath == "masters");
                 var newMasters = mastersChange.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
@@ -809,7 +812,6 @@ public sealed class EditOrchestratorHeaderTests
                 Assert.IsType<StageEditResult.Staged>(result);
 
                 var headerKey = HeaderKey("Target.esp");
-                Assert.Null(changes.GetGroupIdForRecord(npcKey.ToString(), "Target.esp"));
 
                 // The subject: no masters change staged, because Target.esp already masters Base.esm.
                 Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: headerKey));
@@ -822,7 +824,7 @@ public sealed class EditOrchestratorHeaderTests
                 var groups = changes.GetChangeGroups();
                 Assert.NotEmpty(groups);
                 Assert.All(groups, g => Assert.Equal("field_edit", g.Operation));
-                Assert.DoesNotContain(headerKey, groups.SelectMany(g => changes.GetChanges(groupId: g.Id)).Select(c => c.FormKey));
+                Assert.DoesNotContain(headerKey, groups.SelectMany(g => changes.GetChanges(memberChangeId: g.Id)).Select(c => c.FormKey));
             }
         }
     }

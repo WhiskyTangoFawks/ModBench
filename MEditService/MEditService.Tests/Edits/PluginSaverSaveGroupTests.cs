@@ -20,7 +20,7 @@ public sealed class PluginSaverSaveGroupTests
             new GroupMember("000001:Test.esp", plugin, "npc_", "field_edit",
                 "aggression", J("\"Unaggressive\""), J("\"Frenzied\""))
         };
-        return svc.StageGroup("edit", null, members);
+        return svc.StageChanges(members);
     }
 
     /// <summary>
@@ -86,7 +86,7 @@ public sealed class PluginSaverSaveGroupTests
 
         await saver.Save(group.Id);
 
-        Assert.Empty(changes.GetChanges(groupId: group.Id));
+        Assert.Empty(changes.GetChanges(memberChangeId: group.Id));
         File.Delete(session.LastDestPath!);
     }
 
@@ -132,7 +132,7 @@ public sealed class PluginSaverSaveGroupTests
 
         await Assert.ThrowsAsync<IOException>(() => saver.Save(group.Id));
 
-        Assert.NotEmpty(changes.GetChanges(groupId: group.Id));
+        Assert.NotEmpty(changes.GetChanges(memberChangeId: group.Id));
     }
 
     // C7
@@ -196,7 +196,7 @@ public sealed class PluginSaverSaveGroupTests
 
         var immutable = Assert.IsType<SaveGroupResult.ImmutablePlugin>(result);
         Assert.Equal("Immutable.esm", immutable.Plugin);
-        Assert.NotEmpty(changes.GetChanges(groupId: group.Id)); // early exit preserves pending changes
+        Assert.NotEmpty(changes.GetChanges(memberChangeId: group.Id)); // early exit preserves pending changes
     }
 
     // --- helpers ---

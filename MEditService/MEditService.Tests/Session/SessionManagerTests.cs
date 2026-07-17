@@ -359,7 +359,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
             var newRefFk = manager.ReserveFormKey("Active.esp");
             var createChange = new PendingChange(
                 Guid.NewGuid(), newRefFk, "Active.esp", "$create", "refr",
-                J("null"), J("null"), "user", null, DateTime.UtcNow, "create", null,
+                J("null"), J("null"), "user", null, DateTime.UtcNow, "create",
                 ParentCell: cellFk.ToString(), PlacementGroup: "persistent");
 
             await manager.SavePlugin("Active.esp", [createChange]);

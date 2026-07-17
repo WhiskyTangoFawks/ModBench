@@ -50,7 +50,6 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 source      VARCHAR     NOT NULL,
                 description VARCHAR,
                 changed_at  TIMESTAMP   NOT NULL,
-                group_id    VARCHAR,
                 change_type VARCHAR     NOT NULL DEFAULT 'field_edit',
                 parent_cell     VARCHAR,
                 placement_group VARCHAR,
@@ -66,12 +65,6 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             );
             CREATE INDEX IF NOT EXISTS idx_pfr_target
                 ON pending_form_references(target_form_key);
-            CREATE TABLE IF NOT EXISTS change_groups (
-                id          VARCHAR   PRIMARY KEY,
-                operation   VARCHAR   NOT NULL,
-                description VARCHAR,
-                created_at  TIMESTAMP NOT NULL
-            );
             """;
         cmd.ExecuteNonQuery();
 
@@ -106,9 +99,6 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
 
             using var txn = conn.BeginTransaction();
 
-            if (change.GroupId is { } groupId)
-                EnsureChangeGroup(conn, groupId, now);
-
             foreach (var (field, newValue) in change.Fields)
             {
                 if (UpsertField(conn, change, field, newValue, now) is { } staged)
@@ -122,19 +112,6 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         finally { _sem.Release(); }
     }
 
-    private static void EnsureChangeGroup(DuckDBConnection conn, Guid groupId, DateTime now)
-    {
-        using var insGroup = conn.CreateCommand();
-        insGroup.CommandText = """
-            INSERT INTO change_groups (id, operation, description, created_at)
-            VALUES ($1, 'create', NULL, $2)
-            ON CONFLICT DO NOTHING
-            """;
-        insGroup.Parameters.Add(new DuckDBParameter { Value = groupId.ToString() });
-        insGroup.Parameters.Add(new DuckDBParameter { Value = now });
-        insGroup.ExecuteNonQuery();
-    }
-
     private static PendingChange? UpsertField(
         DuckDBConnection conn, PendingChangeUpsert change, string field, JsonElement newValue, DateTime now)
     {
@@ -144,16 +121,15 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             INSERT INTO pending_changes
-                (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id, parent_cell, placement_group)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             ON CONFLICT (form_key, plugin, field_path) DO UPDATE SET
                 new_value   = excluded.new_value,
                 changed_at  = excluded.changed_at,
                 source      = excluded.source,
                 description = excluded.description,
-                change_type = excluded.change_type,
-                group_id    = COALESCE(pending_changes.group_id, excluded.group_id)
-            RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id, parent_cell, placement_group
+                change_type = excluded.change_type
+            RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = id });
         cmd.Parameters.Add(new DuckDBParameter { Value = change.FormKey });
@@ -166,7 +142,6 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         cmd.Parameters.Add(new DuckDBParameter { Value = change.Description });
         cmd.Parameters.Add(new DuckDBParameter { Value = now });
         cmd.Parameters.Add(new DuckDBParameter { Value = change.ChangeType });
-        cmd.Parameters.Add(new DuckDBParameter { Value = change.GroupId.HasValue ? (object)change.GroupId.Value.ToString() : DBNull.Value });
         cmd.Parameters.Add(new DuckDBParameter { Value = change.ParentCell });
         cmd.Parameters.Add(new DuckDBParameter { Value = change.PlacementGroup });
 
@@ -206,7 +181,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         }
     }
 
-    public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? groupId = null)
+    public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null)
     {
         _sem.Wait();
         try
@@ -215,11 +190,11 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             var (where, paramValues) = BuildFilter(plugin, formKey);
             var changes = DoSelectChanges(conn, where, paramValues);
 
-            // groupId names a member change, not a stored group (ADR-0028): narrow to that change's
-            // component, keeping any plugin/formKey filter applied on top.
-            if (groupId is not { } memberChangeId) return changes;
+            // memberChangeId selects the whole component the named change belongs to (ADR-0028),
+            // keeping any plugin/formKey filter applied on top.
+            if (memberChangeId is not { } id) return changes;
 
-            var component = ComponentOf(conn, memberChangeId);
+            var component = ComponentOf(conn, id);
             if (component == null) return [];
             var memberIds = component.Select(m => m.Id).ToHashSet();
             return [.. changes.Where(c => memberIds.Contains(c.Id))];
@@ -231,7 +206,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"""
-            SELECT id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id, parent_cell, placement_group
+            SELECT id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group
             FROM pending_changes{where}
             ORDER BY changed_at
             """;
@@ -437,7 +412,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             cmd.CommandText = """
                 DELETE FROM pending_changes
                 WHERE plugin = $1
-                RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, group_id, parent_cell, placement_group
+                RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group
                 """;
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
 
@@ -497,16 +472,16 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
     }
 
     /// <summary>
-    /// Reverts the whole component of <paramref name="groupId"/>, which names a *member change*
-    /// rather than a stored group (ADR-0028). False when no such change is pending.
+    /// Reverts the whole component <paramref name="memberChangeId"/> belongs to. False when no such
+    /// change is pending.
     /// </summary>
-    public bool RevertGroup(Guid groupId)
+    public bool RevertGroup(Guid memberChangeId)
     {
         _sem.Wait();
         try
         {
             var conn = RequireConnection();
-            var component = ComponentOf(conn, groupId);
+            var component = ComponentOf(conn, memberChangeId);
             if (component == null) return false;
 
             using var txn = conn.BeginTransaction();
@@ -517,11 +492,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         finally { _sem.Release(); }
     }
 
-    /// <summary>
-    /// Drops a component's pending rows and the form references staged with them. Also clears the
-    /// vestigial change_groups rows the staging paths still write, so they cannot outlive their
-    /// members; nothing reads them any more (issue #134 removes them outright).
-    /// </summary>
+    /// <summary>Drops a component's pending rows and the form references staged with them.</summary>
     private static void DeleteComponent(DuckDBConnection conn, List<PendingChange> component)
     {
         foreach (var change in component)
@@ -541,39 +512,6 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             delChange.Parameters.Add(new DuckDBParameter { Value = change.Id.ToString() });
             delChange.ExecuteNonQuery();
         }
-
-        foreach (var staleGroupId in component.Select(c => c.GroupId).OfType<Guid>().Distinct())
-        {
-            using var delGroup = conn.CreateCommand();
-            delGroup.CommandText = """
-                DELETE FROM change_groups WHERE id = $1
-                AND NOT EXISTS (SELECT 1 FROM pending_changes WHERE group_id = $1)
-                """;
-            delGroup.Parameters.Add(new DuckDBParameter { Value = staleGroupId.ToString() });
-            delGroup.ExecuteNonQuery();
-        }
-    }
-
-    public Guid? GetGroupIdForRecord(string formKey, string plugin)
-    {
-        _sem.Wait();
-        try
-        {
-            var conn = RequireConnection();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = """
-                SELECT group_id FROM pending_changes
-                WHERE form_key = $1 AND plugin = $2 AND group_id IS NOT NULL
-                ORDER BY group_id
-                LIMIT 1
-                """;
-            cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-            cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-
-            using var reader = cmd.ExecuteReader();
-            return !reader.Read() ? null : Guid.Parse(reader.GetString(0));
-        }
-        finally { _sem.Release(); }
     }
 
     public string? GetPendingCreateRecordType(string formKey)
@@ -596,65 +534,28 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         finally { _sem.Release(); }
     }
 
-    public Guid? GetCreateGroupIdForAny(IReadOnlyList<string> formKeys)
-    {
-        if (formKeys.Count == 0) return null;
-        _sem.Wait();
-        try
-        {
-            var conn = RequireConnection();
-            using var cmd = conn.CreateCommand();
-            var placeholders = string.Join(", ", Enumerable.Range(1, formKeys.Count).Select(i => $"${i}"));
-            cmd.CommandText = $"""
-                SELECT group_id FROM pending_changes
-                WHERE field_path = '{PendingChangeConstants.CreateFieldPath}' AND change_type = '{PendingChangeConstants.CreateChangeType}'
-                AND form_key IN ({placeholders})
-                LIMIT 1
-                """;
-            foreach (var key in formKeys)
-                cmd.Parameters.Add(new DuckDBParameter { Value = key });
-            using var reader = cmd.ExecuteReader();
-            return !reader.Read() || reader.IsDBNull(0) ? null : Guid.Parse(reader.GetString(0));
-        }
-        finally { _sem.Release(); }
-    }
-
-    public ChangeGroup StageGroup(string operation, string? description, IReadOnlyList<GroupMember> members)
+    public ChangeGroup StageChanges(IReadOnlyList<GroupMember> members)
     {
         _sem.Wait();
         try
         {
             var conn = RequireConnection();
-            var groupId = Guid.NewGuid();
             var createdAt = DateTime.UtcNow;
 
             using var txn = conn.BeginTransaction();
-
-            using var insGroup = conn.CreateCommand();
-            insGroup.CommandText = """
-                INSERT INTO change_groups (id, operation, description, created_at)
-                VALUES ($1, $2, $3, $4)
-                """;
-            insGroup.Parameters.Add(new DuckDBParameter { Value = groupId.ToString() });
-            insGroup.Parameters.Add(new DuckDBParameter { Value = operation });
-            insGroup.Parameters.Add(new DuckDBParameter { Value = description });
-            insGroup.Parameters.Add(new DuckDBParameter { Value = createdAt });
-            insGroup.ExecuteNonQuery();
 
             foreach (var m in members)
             {
                 using var ins = conn.CreateCommand();
                 ins.CommandText = """
                     INSERT INTO pending_changes
-                        (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, group_id, change_type, parent_cell, placement_group)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                        (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, $10, $11, $12)
                     ON CONFLICT (form_key, plugin, field_path) DO UPDATE SET
                         new_value   = excluded.new_value,
                         changed_at  = excluded.changed_at,
-                        group_id    = COALESCE(pending_changes.group_id, excluded.group_id),
                         change_type = excluded.change_type,
-                        source      = excluded.source,
-                        description = excluded.description
+                        source      = excluded.source
                     """;
                 ins.Parameters.Add(new DuckDBParameter { Value = Guid.NewGuid().ToString() });
                 ins.Parameters.Add(new DuckDBParameter { Value = m.FormKey });
@@ -664,9 +565,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 ins.Parameters.Add(new DuckDBParameter { Value = m.OldValue.GetRawText() });
                 ins.Parameters.Add(new DuckDBParameter { Value = m.NewValue.GetRawText() });
                 ins.Parameters.Add(new DuckDBParameter { Value = m.Source });
-                ins.Parameters.Add(new DuckDBParameter { Value = description });
                 ins.Parameters.Add(new DuckDBParameter { Value = createdAt });
-                ins.Parameters.Add(new DuckDBParameter { Value = groupId.ToString() });
                 ins.Parameters.Add(new DuckDBParameter { Value = m.ChangeType });
                 ins.Parameters.Add(new DuckDBParameter { Value = m.ParentCell });
                 ins.Parameters.Add(new DuckDBParameter { Value = m.PlacementGroup });
@@ -675,10 +574,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
 
             txn.Commit();
 
-            // Report the group as it now *derives*, not as it was labelled. The id handed back must
-            // be a member change id like every other ChangeGroup's — the stored group_id written
-            // above is no longer a currency any read or save path accepts (ADR-0028). The passed
-            // `operation`/`description` likewise survive only insofar as the members imply them.
+            // No group was declared; the grouping is derived from the staged rows (ADR-0028). Return
+            // the component the first member landed in — its member change id is the group's id.
             var anchor = FindChange(conn, members[0].FormKey, members[0].Plugin, members[0].FieldPath);
             return Describe(ComponentOf(conn, anchor.Id)!);
         }
@@ -692,14 +589,14 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             [formKey, plugin, fieldPath]).Single();
 
     public async Task<SaveGroupResult> ExecuteGroupSaveAsync(
-        Guid groupId,
+        Guid memberChangeId,
         Func<IReadOnlyDictionary<string, IReadOnlyList<PendingChange>>, Task<IReadOnlyList<(string Plugin, PreparedPluginSave Prepared)>>> prepareAll)
     {
         await _sem.WaitAsync();
         try
         {
             var conn = RequireConnection();
-            var pending = ComponentOf(conn, groupId);
+            var pending = ComponentOf(conn, memberChangeId);
             if (pending == null || pending.Count == 0) return new SaveGroupResult.NoChanges();
 
             var byPlugin = pending
@@ -745,15 +642,14 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         var description = reader.IsDBNull(8) ? null : reader.GetString(8);
         var changedAt = reader.GetDateTime(9);
         var changeType = reader.GetString(10);
-        var groupId = reader.IsDBNull(11) ? (Guid?)null : Guid.Parse(reader.GetString(11));
-        var parentCell = reader.IsDBNull(12) ? null : reader.GetString(12);
-        var placementGroup = reader.IsDBNull(13) ? null : reader.GetString(13);
+        var parentCell = reader.IsDBNull(11) ? null : reader.GetString(11);
+        var placementGroup = reader.IsDBNull(12) ? null : reader.GetString(12);
 
         using var oldDoc = JsonDocument.Parse(oldValueJson);
         var oldValue = oldDoc.RootElement.Clone();
         using var newDoc = JsonDocument.Parse(newValueJson);
         var newValue = newDoc.RootElement.Clone();
 
-        return new PendingChange(id, formKey, plugin, fieldPath, recordType, oldValue, newValue, source, description, changedAt, changeType, groupId, parentCell, placementGroup);
+        return new PendingChange(id, formKey, plugin, fieldPath, recordType, oldValue, newValue, source, description, changedAt, changeType, parentCell, placementGroup);
     }
 }

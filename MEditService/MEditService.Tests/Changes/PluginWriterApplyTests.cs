@@ -458,18 +458,17 @@ public class PluginWriterApplyTests
         var reservedId = existing.NextFormID;
         var newFormKey = Mutagen.Bethesda.Plugins.FormKey.Factory($"{reservedId:X6}:TestPlugin.esp");
 
-        var groupId = Guid.NewGuid();
         var createChange = new PendingChange(
             Guid.NewGuid(), newFormKey.ToString(), "TestPlugin.esp",
             "$create", "npc_",
             J("null"), J("null"),
-            "user", null, DateTime.UtcNow, "create", groupId);
+            "user", null, DateTime.UtcNow, "create");
 
         var fieldChange = new PendingChange(
             Guid.NewGuid(), newFormKey.ToString(), "TestPlugin.esp",
             "aggression", "npc_",
             J("null"), J("\"Frenzied\""),
-            "user", null, DateTime.UtcNow, "field_edit", groupId);
+            "user", null, DateTime.UtcNow, "field_edit");
 
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(pluginPath, [createChange, fieldChange], GameRelease.Fallout4);

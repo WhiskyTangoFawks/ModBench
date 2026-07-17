@@ -124,7 +124,7 @@ public sealed class DeleteRecordsTests
 
                 // The staged result names a member change of the derived group (ADR-0028), so it
                 // selects that group's changes rather than matching a stored group_id column.
-                Assert.Equal([deleteChange.Id], changes.GetChanges(groupId: staged.Group.Id).Select(c => c.Id));
+                Assert.Equal([deleteChange.Id], changes.GetChanges(memberChangeId: staged.Group.Id).Select(c => c.Id));
                 var groups = changes.GetChangeGroups();
                 Assert.Single(groups);
                 Assert.Equal("delete", groups[0].Operation);
@@ -177,30 +177,58 @@ public sealed class DeleteRecordsTests
         }
     }
 
-    // --- BlockedByPendingGroup ---
+    // --- TargetPendingDeleteOrRenumber ---
 
+    // #134: deleting a target blocks only when it is already pending renumber (or delete) — re-acting
+    // on a record whose identity is already in flux is incoherent. A record with only pending field
+    // edits is now deletable; that block was the old "has a group" conflation ADR-0028 removes.
     [Fact]
-    public void DeleteRecords_RecordHasPendingGroup_ReturnsBlockedByPendingGroup()
+    public void DeleteRecords_TargetPendingRenumber_ReturnsTargetPendingDeleteOrRenumber()
     {
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("dr-pending-group")
-            .WithPlugin("Target.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC_DrPendingGroup").FormKey)
+        var data = new PluginFixtureBuilder("dr-pending-renum")
+            .WithPlugin("Target.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC_DrPendingRenum").FormKey)
             .Build();
         using (data)
         {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
             using (manager)
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-                // Stage a group containing npcKey first
-                var members = new[] { new GroupMember(npcKey.ToString(), "Target.esp", "npc_", "create", "$create", J("null"), J("null")) };
-                changes.StageGroup("create", null, members);
+                Assert.IsType<RenumberResult.Staged>(
+                    orchestrator.Renumber(npcKey.ToString(), 0xABC, "Target.esp", "user"));
 
                 var result = orchestrator.DeleteRecords([(npcKey.ToString(), "Target.esp")], "user");
 
-                var blocked = Assert.IsType<DeleteRecordsResult.BlockedByPendingGroup>(result);
+                var blocked = Assert.IsType<DeleteRecordsResult.TargetPendingDeleteOrRenumber>(result);
                 Assert.Contains(npcKey.ToString(), blocked.FormKeys);
+            }
+        }
+    }
+
+    // The case the old guard would wrongly reject: a target with only a pending field edit is
+    // deletable — the field edit is not a lifecycle op, and the delete simply supersedes it.
+    [Fact]
+    public void DeleteRecords_TargetHasPendingFieldEdit_Succeeds()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("dr-pending-edit")
+            .WithPlugin("Target.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC_DrPendingEdit").FormKey)
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                Assert.IsType<StageEditResult.Staged>(orchestrator.StageEdit(npcKey.ToString(), "Target.esp",
+                    new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") }, "user", null));
+
+                var result = orchestrator.DeleteRecords([(npcKey.ToString(), "Target.esp")], "user");
+
+                Assert.IsType<DeleteRecordsResult.Staged>(result);
             }
         }
     }
@@ -310,7 +338,7 @@ public sealed class DeleteRecordsTests
                 var deleteChange = changes.GetChanges().Single(c => c.ChangeType == "delete");
                 Assert.Equal(
                     new[] { deleteChange.Id, nullifyChange.Id }.Order(),
-                    changes.GetChanges(groupId: staged.Group.Id).Select(c => c.Id).Order());
+                    changes.GetChanges(memberChangeId: staged.Group.Id).Select(c => c.Id).Order());
             }
         }
     }

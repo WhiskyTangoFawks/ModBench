@@ -11,12 +11,12 @@ public abstract record SaveGroupResult
 
 public sealed class PluginSaver(IPendingChangeService changes, ISessionManager session)
 {
-    public async Task<SaveGroupResult> Save(Guid groupId)
+    public async Task<SaveGroupResult> Save(Guid memberChangeId)
     {
         var s = session.Session;
         if (s != null)
         {
-            foreach (var plugin in changes.GetChanges(groupId: groupId)
+            foreach (var plugin in changes.GetChanges(memberChangeId: memberChangeId)
                          .Select(c => c.Plugin)
                          .Distinct(StringComparer.OrdinalIgnoreCase))
             {
@@ -27,7 +27,7 @@ public sealed class PluginSaver(IPendingChangeService changes, ISessionManager s
             }
         }
 
-        var result = await changes.ExecuteGroupSaveAsync(groupId, async byPlugin =>
+        var result = await changes.ExecuteGroupSaveAsync(memberChangeId, async byPlugin =>
         {
             var prepared = new List<(string Plugin, PreparedPluginSave Prepared)>();
             try

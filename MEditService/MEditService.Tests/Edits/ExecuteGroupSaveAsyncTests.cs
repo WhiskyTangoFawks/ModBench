@@ -17,7 +17,7 @@ public sealed class ExecuteGroupSaveAsyncTests
             new GroupMember("000001:Test.esp", plugin, "npc_", "field_edit",
                 field, J("\"Unaggressive\""), J("\"Frenzied\""))
         };
-        return svc.StageGroup("edit", null, members);
+        return svc.StageChanges(members);
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ public sealed class ExecuteGroupSaveAsyncTests
         var result = await svc.ExecuteGroupSaveAsync(group.Id, _ => Task.FromResult(NoResults()));
 
         Assert.IsType<SaveGroupResult.Saved>(result);
-        Assert.Empty(svc.GetChanges(groupId: group.Id));
+        Assert.Empty(svc.GetChanges(memberChangeId: group.Id));
     }
 
     // A3
@@ -88,7 +88,7 @@ public sealed class ExecuteGroupSaveAsyncTests
             svc.ExecuteGroupSaveAsync(group.Id, _ =>
                 Task.FromException<IReadOnlyList<(string Plugin, PreparedPluginSave Prepared)>>(new IOException("disk full"))));
 
-        Assert.NotEmpty(svc.GetChanges(groupId: group.Id));
+        Assert.NotEmpty(svc.GetChanges(memberChangeId: group.Id));
     }
 
     // A4
@@ -101,8 +101,8 @@ public sealed class ExecuteGroupSaveAsyncTests
 
         await svc.ExecuteGroupSaveAsync(groupA.Id, _ => Task.FromResult(NoResults()));
 
-        Assert.Empty(svc.GetChanges(groupId: groupA.Id));
-        Assert.NotEmpty(svc.GetChanges(groupId: groupB.Id));
+        Assert.Empty(svc.GetChanges(memberChangeId: groupA.Id));
+        Assert.NotEmpty(svc.GetChanges(memberChangeId: groupB.Id));
     }
 
     // A5
@@ -162,7 +162,7 @@ public sealed class ExecuteGroupSaveAsyncTests
 
         await svc.ExecuteGroupSaveAsync(memberId, _ => Task.FromResult(NoResults()));
 
-        Assert.Empty(svc.GetChanges(groupId: memberId));
+        Assert.Empty(svc.GetChanges(memberChangeId: memberId));
         Assert.Empty(svc.GetChanges());
     }
 
