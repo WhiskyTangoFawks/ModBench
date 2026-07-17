@@ -469,7 +469,7 @@ public sealed partial class EditOrchestrator(
     // Group by (record, field) first: two deleted targets can each be referenced by a
     // different element of the *same* array field on the same source record, and staging
     // one GroupMember per reference would have the second overwrite the first's removal
-    // (StageGroup upserts on (form_key, plugin, field_path)).
+    // (StageChanges upserts on (form_key, plugin, field_path)).
     private void AddNullificationMembers(
         List<GroupMember> members,
         List<(string SourceFormKey, string SourcePlugin, string FieldPath, string RecordType)> toNullify,

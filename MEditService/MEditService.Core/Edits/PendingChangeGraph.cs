@@ -6,13 +6,12 @@ namespace MEditService.Core.Edits;
 /// <summary>
 /// The single home of change-group policy (ADR-0028). A change group is a connected component of
 /// the pending-change dependency graph: <c>pending_changes</c> supplies the nodes and the three
-/// edge rules below supply the edges. Nothing here reads <c>pending_changes.group_id</c> — that
-/// column is still written by the staging paths, but it is no longer the grouping.
+/// edge rules below supply the edges. There is no stored grouping to read.
 /// <para>
 /// A new kind of dependency between changes is a new edge rule here, not a new place that assigns
-/// a group at staging time. That inversion is the point: six staging paths each computing a
-/// <c>group_id</c> is what produced #112, where <c>StageEdit</c> assigned null and made ordinary
-/// field edits invisible and unsavable.
+/// a group at staging time. That inversion is the point: the removed <c>group_id</c> denormalization
+/// had six staging paths each computing it, and one — <c>StageEdit</c> — assigned null, which made
+/// ordinary field edits invisible and unsavable (#112).
 /// </para>
 /// </summary>
 internal static class PendingChangeGraph

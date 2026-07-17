@@ -78,9 +78,8 @@ public interface IPendingChangeService
 
     /// <summary>
     /// One <see cref="ChangeGroup"/> per connected component of the pending-change dependency graph
-    /// (ADR-0028) — derived, never read from the <c>change_groups</c> table. Every pending change is
-    /// in exactly one; a change nothing depends on is a group of one. Each group's <c>Id</c> is one
-    /// of its member change ids.
+    /// (ADR-0028) — derived, not stored. Every pending change is in exactly one; a change nothing
+    /// depends on is a group of one. Each group's <c>Id</c> is one of its member change ids.
     /// </summary>
     IReadOnlyList<ChangeGroup> GetChangeGroups();
 
