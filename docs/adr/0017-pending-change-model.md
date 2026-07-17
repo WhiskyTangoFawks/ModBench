@@ -76,6 +76,15 @@ A `ChangeGroup` is a named set of `pending_changes` rows that form a logically i
 
 ### 5. Pending changes panel — design
 
+> **Superseded in full by [ADR-0029](0029-pending-changes-tree-is-a-grouping-view.md).** Its
+> location (bottom panel), its structure (plugin → record → field plus a `ChangeGroups`
+> section), and its action table (per-field/record/plugin/group/global scopes) are all
+> replaced. ADR-0028's grouping model is what makes them unworkable: a derived group has no
+> identity to list, and may span plugins, so the per-plugin and per-record scopes below could
+> only be honoured by splitting a group. §§1–3 of this ADR are unaffected and remain the
+> storage model; §4 remains superseded in part by ADR-0028. The rest of this section is kept
+> as a record of the original decision — do not build from it.
+
 **Location:** bottom panel tab (alongside the integrated terminal area), not a sidebar tree. The sidebar is already used for the plugin/record tree; a bottom panel keeps the record editor and pending-changes summary simultaneously visible.
 
 **Content and grouping:**

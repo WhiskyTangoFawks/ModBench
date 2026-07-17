@@ -6,7 +6,7 @@ confirmed in a `/grill-with-docs` session (2026-07-10). Tracked as issue
 
 Mod Management context — operates on physical plugin files (`.esm`/`.esp`/`.esl`) and
 `plugins.txt`; never on records or FormKeys. Distinct from the Editing-context Plugins tree
-([medit.md](medit.md) §2), which lists plugins as the entry point into per-record browsing and
+([medit-plugins-tree.md](medit-plugins-tree.md)), which lists plugins as the entry point into per-record browsing and
 requires a spawned backend — this surface manages **Plugin load order**, not record content,
 and works without the editing backend running.
 
@@ -34,7 +34,7 @@ the mEdit Plugins tree. Reuses the `TreeDragAndDropController` pattern already b
 Mods tree ([mods.md](mods.md) §UI — Mods tree) for reorder.
 
 **Naming:** displays as **"Plugins"** in the UI — the same label as the Editing-context tree
-(`medit.md` §2). The two are visible in mutually exclusive `viewMode`s, so this costs nothing
+(`medit-plugins-tree.md`). The two are visible in mutually exclusive `viewMode`s, so this costs nothing
 at the UI layer (confirmed: VS Code's auto-generated "Focus on {view} View" palette entry is
 gated by the view's own `when` clause). At the code/spec level the two stay fully distinct:
 this view is `modbench.pluginListTree`, owned by `modmanager/`, with its own contextValues,
@@ -123,7 +123,7 @@ Plugins tab closely enough to alternate between the two on the same instance.
   doesn't compute or care about — it only manages the sequence of names.
 - Checkbox reflects the line's `*` prefix (MO2's own enabled marker).
 - No lock/immutable icon on vanilla/DLC/CC rows (unlike the Editing tree's immutable-plugin
-  lock, `medit.md` §2.3) — that icon means "read-only," and these rows are deliberately
+  lock, `medit-plugins-tree.md`) — that icon means "read-only," and these rows are deliberately
   toggleable, so borrowing that icon would misrepresent them.
 
 ### Missing-master badge (order-aware)
@@ -167,7 +167,7 @@ Mods tree structurally lacks: an actual plugin sequence to check order against.
   substring match against plugin filename. Dismissing the box (`onDidHide`) restores the full
   list. This same pattern now spans every Modbench list surface: Mods tree (existing),
   Downloads ([#61](https://github.com/WhiskyTangoFawks/ModBench/issues/61), retrofit), the
-  Editing Plugins tree (`medit.md` §2.1, new), and here.
+  Editing Plugins tree (`medit-plugins-tree.md`, new), and here.
 
 ### Row context menu
 
@@ -202,7 +202,7 @@ Mods tree structurally lacks: an actual plugin sequence to check order against.
   [ADR-0026](../adr/0026-error-surfacing-policy.md).
 - **Empty `plugins.txt`** (no lines) — realistically near-unreachable (vanilla masters always
   populate it) but handled for completeness: a single informational node, "No plugins," mirroring
-  the Change Groups tree's empty state (`medit.md` §4.3).
+  the Pending Changes tree's empty state (`medit-pending-changes-tree.md`).
 
 ### Architecture / seams
 
@@ -269,7 +269,7 @@ Mods tree structurally lacks: an actual plugin sequence to check order against.
   load order, not Modlist order (Modlist only resolves each plugin *name* to its winning
   physical file).
 - **Filter box is now a declared cross-surface convention**, not a per-surface bespoke choice:
-  Mods tree (existing), Downloads (retrofit, #61), Editing Plugins tree (`medit.md` §2.1, new),
+  Mods tree (existing), Downloads (retrofit, #61), Editing Plugins tree (`medit-plugins-tree.md`, new),
   and this surface.
 - **Deferred follow-up**: [#62](https://github.com/WhiskyTangoFawks/ModBench/issues/62)
   (cross-tree highlight).
