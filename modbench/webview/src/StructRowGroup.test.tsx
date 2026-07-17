@@ -58,6 +58,8 @@ describe('StructRowGroup', () => {
       meta={structWithFlagsMeta} editable={true} port={5172}
       onOpen={vi.fn()} onCommit={vi.fn()} storageKey="test:struct-flags" />);
     fireEvent.click(screen.getByText('{…}'));
+    // Issue #111: the flag sub-cell reads as text until clicked, like every other cell.
+    fireEvent.click(screen.getByText('A, C'));
     const checkboxes = screen.getAllByRole('checkbox');
     expect(checkboxes[0].checked).toBe(true);   // A: 5 & 1 !== 0
     expect(checkboxes[1].checked).toBe(false);  // B: 5 & 2 === 0

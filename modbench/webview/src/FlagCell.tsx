@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { FieldMetadata } from './types';
 
 interface FlagCellProps {
@@ -22,6 +22,9 @@ function toBigInt(value: unknown): bigint {
 }
 
 export function FlagCell({ value, meta, editable, onCommit }: FlagCellProps) {
+  // Issue #111: only the clicked cell becomes a multi-select; the rest of the grid stays text.
+  const [active, setActive] = useState(false);
+
   if (meta.enumValues.length === 0) return null;
   if (!meta.enumBitValues) return null;
 
@@ -30,14 +33,23 @@ export function FlagCell({ value, meta, editable, onCommit }: FlagCellProps) {
   const num = toBigInt(value);
   const bits = meta.enumBitValues.map(BigInt);
 
-  if (!editable) {
-    if (value == null) return <span style={{ opacity: 0.35 }}>—</span>;
-    const active = meta.enumValues.filter((_, i) => (num & bits[i]) !== 0n);
-    return <span>{active.join(', ') || '—'}</span>;
+  if (!editable || !active) {
+    const text = value == null
+      ? <span style={{ opacity: 0.35 }}>—</span>
+      : <span>{meta.enumValues.filter((_, i) => (num & bits[i]) !== 0n).join(', ') || '—'}</span>;
+    return editable
+      ? <span onClick={() => setActive(true)} style={{ cursor: 'pointer' }}>{text}</span>
+      : text;
   }
 
   return (
-    <span style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 8px' }}>
+    // The multi-select is a group, so it closes when focus leaves the group as a whole — not
+    // when it moves between the flags inside it.
+    <span
+      tabIndex={-1}
+      onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setActive(false); }}
+      style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 8px', outline: 'none' }}
+    >
       {meta.enumValues.map((name, i) => (
         <label key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
           <input
