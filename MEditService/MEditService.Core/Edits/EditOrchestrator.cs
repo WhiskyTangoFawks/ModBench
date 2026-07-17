@@ -355,7 +355,7 @@ public sealed partial class EditOrchestrator(
             return new CreateRecordOutcome.EslIneligible(plugin, outOfRange);
 
         var groupId = Guid.NewGuid();
-        _changes.Upsert(new PendingChangeUpsert(
+        var created = _changes.Upsert(new PendingChangeUpsert(
             reservedFormKey, plugin, recordType,
             new Dictionary<string, JsonElement> { [PendingChangeConstants.CreateFieldPath] = JsonSerializer.SerializeToElement<object?>(null) },
             source, null,
@@ -378,7 +378,11 @@ public sealed partial class EditOrchestrator(
                 GroupId: groupId));
         }
 
-        return new CreateRecordOutcome.Success(reservedFormKey, groupId);
+        // The id callers get back names the $create change itself, not the stored group_id written
+        // above: groups have no identity of their own, so save and revert take a member change id
+        // and act on its whole component (ADR-0028). Any template fields staged above join that
+        // component by edge rule 2 rather than by the label they share.
+        return new CreateRecordOutcome.Success(reservedFormKey, created[0].Id);
     }
 
     public DeleteRecordsResult DeleteRecords(IReadOnlyList<(string FormKey, string Plugin)> targets, string source)
