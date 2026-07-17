@@ -389,12 +389,12 @@
         },
         {
           "command": "modbench.saveAllGroups",
-          "when": "view == modbench.changeGroupTree",
+          "when": "view == modbench.changeGroupTree && modbench.hasPendingChanges",
           "group": "navigation"
         },
         {
           "command": "modbench.revertAllGroups",
-          "when": "view == modbench.changeGroupTree",
+          "when": "view == modbench.changeGroupTree && modbench.hasPendingChanges",
           "group": "navigation"
         }
       ],
@@ -448,7 +448,7 @@
         },
         {
           "command": "modbench.saveGroup",
-          "when": "view == modbench.changeGroupTree && viewItem == changeGroup",
+          "when": "view == modbench.changeGroupTree && viewItem == pendingGroup",
           "group": "inline"
         },
         {
@@ -523,7 +523,7 @@
         },
         {
           "command": "modbench.revertGroup",
-          "when": "view == modbench.changeGroupTree && viewItem == changeGroup",
+          "when": "view == modbench.changeGroupTree && viewItem == pendingGroup",
           "group": "inline"
         }
       ]

@@ -1,0 +1,286 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('vscode', () => ({
+  TreeItem: class {
+    label: string;
+    description?: string;
+    contextValue?: string;
+    iconPath?: unknown;
+    collapsibleState: number;
+    command?: unknown;
+    constructor(label: string, collapsibleState = 0) {
+      this.label = label;
+      this.collapsibleState = collapsibleState;
+    }
+  },
+  TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
+  EventEmitter: class {
+    private handlers: ((e: unknown) => void)[] = [];
+    get event() { return (h: (e: unknown) => void) => { this.handlers.push(h); }; }
+    fire(e?: unknown) { this.handlers.forEach(h => h(e)); }
+  },
+  ThemeIcon: class { constructor(public id: string) {} },
+}));
+
+import {
+  PendingChangesTreeProvider,
+  PendingLeafNode,
+  PendingGroupNode,
+  EmptyStateNode,
+  ErrorNode,
+} from '../PendingChangesTreeProvider';
+
+type Group = {
+  id: string;
+  operation: string;
+  description: string | null;
+  changeCount: number;
+  pluginCount: number;
+};
+
+function group(overrides: Partial<Group> & { id: string }): Group {
+  return { operation: 'field_edit', description: null, changeCount: 1, pluginCount: 1, ...overrides };
+}
+
+function change(overrides: Partial<any> & { id: string }) {
+  return {
+    formKey: '001234:MyPatch.esp',
+    plugin: 'MyPatch.esp',
+    fieldPath: 'Height',
+    recordType: 'npc_',
+    oldValue: '0.97',
+    newValue: '1.05',
+    changeType: 'field_edit',
+    ...overrides,
+  };
+}
+
+/** Stub ApiClient. `groups` answers GET /change-groups; `changes` answers the flat
+ *  GET /changes; `membersByGroupId` answers GET /changes?groupId={id}. */
+function makeClient(opts: {
+  groups?: Group[];
+  changes?: any[];
+  membersByGroupId?: Record<string, any[]>;
+  groupsOk?: boolean;
+  changesOk?: boolean;
+}) {
+  const { groups = [], changes = [], membersByGroupId = {}, groupsOk = true, changesOk = true } = opts;
+  return {
+    GET: vi.fn().mockImplementation((path: string, init?: any) => {
+      if (path === '/change-groups') {
+        return Promise.resolve({ data: groupsOk ? groups : undefined, response: { ok: groupsOk, status: groupsOk ? 200 : 500 } });
+      }
+      if (path === '/changes') {
+        const gid = init?.params?.query?.groupId;
+        if (gid !== undefined) {
+          return Promise.resolve({ data: membersByGroupId[gid] ?? [], response: { ok: true, status: 200 } });
+        }
+        return Promise.resolve({ data: changesOk ? changes : undefined, response: { ok: changesOk, status: changesOk ? 200 : 500 } });
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false, status: 404 } });
+    }),
+  } as any;
+}
+
+describe('PendingChangesTreeProvider — root', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  // ── Slice 7: empty state ──────────────────────────────────────────────────
+  it('returns a single EmptyStateNode when there are no groups', async () => {
+    const provider = new PendingChangesTreeProvider(makeClient({ groups: [] }), vi.fn());
+    const children = await provider.getChildren();
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(EmptyStateNode);
+    expect((children[0]).label).toBe('No pending changes.');
+  });
+
+  // ── Slice 6: error node on fetch failure ──────────────────────────────────
+  it('returns an ErrorNode (not the empty state) when /change-groups fails', async () => {
+    const provider = new PendingChangesTreeProvider(makeClient({ groupsOk: false }), vi.fn());
+    const children = await provider.getChildren();
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ErrorNode);
+    expect(children[0]).not.toBeInstanceOf(EmptyStateNode);
+  });
+
+  it('returns an ErrorNode when /changes fails', async () => {
+    const client = makeClient({ groups: [group({ id: 'c1' })], changesOk: false });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const children = await provider.getChildren();
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ErrorNode);
+  });
+
+  // ── Slice 1: singleton renders as a top-level leaf ────────────────────────
+  it('renders a single field edit as a top-level leaf with record, field, old→new and plugin', async () => {
+    const client = makeClient({
+      groups: [group({ id: 'c1' })],
+      changes: [change({ id: 'c1', recordType: 'npc_', formKey: '001234:MyPatch.esp', fieldPath: 'Height', oldValue: '0.97', newValue: '1.05', plugin: 'MyPatch.esp' })],
+    });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const [node] = await provider.getChildren();
+    expect(node).toBeInstanceOf(PendingLeafNode);
+    expect((node as PendingLeafNode).label).toBe('npc_ / 001234:MyPatch.esp · Height');
+    expect((node as PendingLeafNode).description).toBe('0.97 → 1.05 · MyPatch.esp');
+    expect((node as PendingLeafNode).contextValue).toBe('pendingGroup');
+    expect((node as PendingLeafNode).collapsibleState).toBe(0);
+  });
+
+  // ── Slice 2: singleton left-click opens its record ────────────────────────
+  it('gives a singleton leaf an openEditor command carrying its formKey', async () => {
+    const client = makeClient({
+      groups: [group({ id: 'c1' })],
+      changes: [change({ id: 'c1', formKey: '001234:MyPatch.esp' })],
+    });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const [node] = await provider.getChildren();
+    const cmd = (node as PendingLeafNode).command as any;
+    expect(cmd.command).toBe('modbench.openEditor');
+    expect(cmd.arguments[0].formKey).toBe('001234:MyPatch.esp');
+  });
+
+  // ── Slice 3: multi-member group renders as an expandable header ────────────
+  it('renders a multi-member group as one expandable node with operation, description and scope', async () => {
+    const client = makeClient({
+      groups: [group({ id: 'm1', operation: 'renumber', description: 'NPC_ / Bandit → 001299', changeCount: 7, pluginCount: 2 })],
+      membersByGroupId: {
+        m1: [
+          change({ id: 'm1', formKey: 'A:MyPatch.esp' }),
+          change({ id: 'a2', formKey: 'B:MyPatch.esp' }),
+          change({ id: 'a3', formKey: 'C:OtherPatch.esp' }),
+          change({ id: 'a4', formKey: 'D:OtherPatch.esp' }),
+        ],
+      },
+    });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const [node] = await provider.getChildren();
+    expect(node).toBeInstanceOf(PendingGroupNode);
+    expect((node as PendingGroupNode).label).toBe('renumber NPC_ / Bandit → 001299');
+    expect((node as PendingGroupNode).description).toBe('7 edits · 4 records · 2 plugins');
+    expect((node as PendingGroupNode).collapsibleState).toBe(1);
+    expect((node as PendingGroupNode).contextValue).toBe('pendingGroup');
+    expect(((node as PendingGroupNode).iconPath as any).id).toBe('link');
+  });
+
+  it('labels a multi-member group by operation alone when it has no description', async () => {
+    const client = makeClient({
+      groups: [group({ id: 'm1', operation: 'delete', description: null, changeCount: 3, pluginCount: 1 })],
+      membersByGroupId: { m1: [change({ id: 'm1' }), change({ id: 'x2' }), change({ id: 'x3' })] },
+    });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const [node] = await provider.getChildren();
+    expect((node as PendingGroupNode).label).toBe('delete');
+  });
+
+  // ── Slice 5: sort ──────────────────────────────────────────────────────────
+  it('sorts multi-member groups above single edits, and single edits by plugin then record', async () => {
+    const client = makeClient({
+      groups: [
+        group({ id: 's1', changeCount: 1 }),
+        group({ id: 'm1', operation: 'renumber', changeCount: 2, pluginCount: 1 }),
+        group({ id: 's2', changeCount: 1 }),
+        group({ id: 's3', changeCount: 1 }),
+      ],
+      changes: [
+        change({ id: 's1', plugin: 'ZPatch.esp', formKey: '000001:ZPatch.esp' }),
+        change({ id: 's2', plugin: 'APatch.esp', formKey: '000009:APatch.esp' }),
+        change({ id: 's3', plugin: 'APatch.esp', formKey: '000002:APatch.esp' }),
+      ],
+      membersByGroupId: { m1: [change({ id: 'm1' }), change({ id: 'q2' })] },
+    });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const children = await provider.getChildren();
+    expect(children[0]).toBeInstanceOf(PendingGroupNode);
+    // Then singletons: APatch before ZPatch; within APatch, formKey 000002 before 000009.
+    expect((children[1] as PendingLeafNode).formKey).toBe('000002:APatch.esp');
+    expect((children[2] as PendingLeafNode).formKey).toBe('000009:APatch.esp');
+    expect((children[3] as PendingLeafNode).formKey).toBe('000001:ZPatch.esp');
+  });
+});
+
+// ── Slice 4: expanding a multi-member group lists its member edits ───────────
+describe('PendingChangesTreeProvider — group expansion', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('lists member edits as pendingGroupMember leaves that open their record', async () => {
+    const client = makeClient({
+      groups: [group({ id: 'm1', operation: 'renumber', changeCount: 2, pluginCount: 1 })],
+      membersByGroupId: {
+        m1: [
+          change({ id: 'm1', formKey: 'A:MyPatch.esp', fieldPath: 'EditorID' }),
+          change({ id: 'a2', formKey: 'B:MyPatch.esp', fieldPath: 'BoundWeapon' }),
+        ],
+      },
+    });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const [groupNode] = await provider.getChildren();
+    const members = await provider.getChildren(groupNode);
+    expect(members).toHaveLength(2);
+    for (const m of members) {
+      expect(m).toBeInstanceOf(PendingLeafNode);
+      expect((m as PendingLeafNode).contextValue).toBe('pendingGroupMember');
+      expect(((m as PendingLeafNode).command as any).command).toBe('modbench.openEditor');
+    }
+  });
+
+  it('returns no children for a leaf node', async () => {
+    const client = makeClient({ groups: [group({ id: 'c1' })], changes: [change({ id: 'c1' })] });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const [leaf] = await provider.getChildren();
+    expect(await provider.getChildren(leaf)).toEqual([]);
+  });
+
+  // ── Slice 8: getParent ──────────────────────────────────────────────────────
+  it('getParent maps a member to its group node and a top-level node to undefined', async () => {
+    const client = makeClient({
+      groups: [group({ id: 'm1', operation: 'renumber', changeCount: 2, pluginCount: 1 })],
+      membersByGroupId: { m1: [change({ id: 'm1' }), change({ id: 'a2' })] },
+    });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const [groupNode] = await provider.getChildren();
+    const [member] = await provider.getChildren(groupNode);
+    expect(provider.getParent(member)).toBe(groupNode);
+    expect(provider.getParent(groupNode)).toBeUndefined();
+  });
+});
+
+// ── Save All / Revert All gating: report staged state on every root render ───
+describe('PendingChangesTreeProvider — pending-state signal', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('reports hasPending=true when there are groups', async () => {
+    const onPendingState = vi.fn();
+    const client = makeClient({ groups: [group({ id: 'c1' })], changes: [change({ id: 'c1' })] });
+    const provider = new PendingChangesTreeProvider(client, vi.fn(), onPendingState);
+    await provider.getChildren();
+    expect(onPendingState).toHaveBeenLastCalledWith(true);
+  });
+
+  it('reports hasPending=false when nothing is staged', async () => {
+    const onPendingState = vi.fn();
+    const provider = new PendingChangesTreeProvider(makeClient({ groups: [] }), vi.fn(), onPendingState);
+    await provider.getChildren();
+    expect(onPendingState).toHaveBeenLastCalledWith(false);
+  });
+
+  it('reports hasPending=false when the fetch fails', async () => {
+    const onPendingState = vi.fn();
+    const provider = new PendingChangesTreeProvider(makeClient({ groupsOk: false }), vi.fn(), onPendingState);
+    await provider.getChildren();
+    expect(onPendingState).toHaveBeenLastCalledWith(false);
+  });
+});
+
+// ── Slice 3 (decision 3 invariant): re-fetch, never trust a cached count ─────
+describe('PendingChangesTreeProvider — refresh re-queries', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('re-fetches /change-groups on every getChildren call', async () => {
+    const client = makeClient({ groups: [group({ id: 'c1' })], changes: [change({ id: 'c1' })] });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    await provider.getChildren();
+    await provider.getChildren();
+    const calls = (client.GET).mock.calls.filter((c: any[]) => c[0] === '/change-groups');
+    expect(calls).toHaveLength(2);
+  });
+});

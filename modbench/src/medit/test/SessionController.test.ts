@@ -377,6 +377,165 @@ describe('SessionController.saveAllGroups', () => {
   });
 });
 
+// ── saveGroups (multi-select) ──────────────────────────────────────────────────
+
+describe('SessionController.saveGroups', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs the whole selection to the batch save endpoint and refreshes both trees', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ data: {}, response: { ok: true, status: 200 } }),
+      DELETE: vi.fn(),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveGroups(['id1', 'id2']);
+
+    expect(client.POST).toHaveBeenCalledWith(
+      '/changes/groups/save',
+      expect.objectContaining({ body: ['id1', 'id2'] }),
+    );
+    expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+  });
+
+  it('does nothing when the selection is empty', async () => {
+    const client = { ...makeClient(), POST: vi.fn(), DELETE: vi.fn() };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveGroups([]);
+
+    expect(client.POST).not.toHaveBeenCalled();
+  });
+
+  it('shows an error and does not refresh when the batch save fails', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: false, status: 409, text: () => Promise.resolve('immutable') } }),
+      DELETE: vi.fn(),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveGroups(['id1']);
+
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('immutable'));
+    expect(deps.refreshGroupTree).not.toHaveBeenCalled();
+  });
+});
+
+// ── revertGroups (multi-select) ────────────────────────────────────────────────
+
+describe('SessionController.revertGroups', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('reverts every selected group, each on its own component', async () => {
+    const client = {
+      ...makeClient(),
+      DELETE: vi.fn().mockResolvedValue({ response: { ok: true, status: 204 } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.revertGroups(['id1', 'id2']);
+
+    expect(client.DELETE).toHaveBeenCalledTimes(2);
+    expect(client.DELETE).toHaveBeenCalledWith(
+      '/changes/group/{groupId}',
+      expect.objectContaining({ params: { path: { groupId: 'id1' } } }),
+    );
+    expect(client.DELETE).toHaveBeenCalledWith(
+      '/changes/group/{groupId}',
+      expect.objectContaining({ params: { path: { groupId: 'id2' } } }),
+    );
+  });
+
+  it('reports every failed revert in one aggregated message, not one per group', async () => {
+    const client = {
+      ...makeClient(),
+      DELETE: vi.fn().mockResolvedValue({ response: { ok: false, status: 500, text: () => Promise.resolve('err') } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.revertGroups(['id1', 'id2']);
+
+    expect(deps.showError).toHaveBeenCalledTimes(1);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('id1'));
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('id2'));
+  });
+});
+
+// ── partial-save reporting (ADR-0026 integrity tier) ────────────────────────────
+
+describe('SessionController partial-save reporting', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('reports which plugins saved and which failed when a save partially succeeds on HTTP 200', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({
+        data: {
+          'A.esp': { backupPath: '/b', applied: ['001:A.esp'], readOnly: [], notFound: [], createFailed: [] },
+          'B.esp': { backupPath: '/b', applied: [], readOnly: ['002:B.esp'], notFound: [], createFailed: [] },
+        },
+        response: { ok: true, status: 200 },
+      }),
+      DELETE: vi.fn(),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveGroup('abc-123');
+
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('A.esp'));
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('B.esp'));
+    // The group stays visible with its re-queued changes — the tree still refreshes.
+    expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
+  });
+
+  it('reports a plugin that applied some records and failed others as partial, not wholly failed', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({
+        data: {
+          'A.esp': { backupPath: '/b', applied: ['001:A.esp'], readOnly: ['002:A.esp'], notFound: [], createFailed: [] },
+        },
+        response: { ok: true, status: 200 },
+      }),
+      DELETE: vi.fn(),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveGroup('abc-123');
+
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('partially wrote A.esp'));
+    expect(deps.showError).not.toHaveBeenCalledWith(expect.stringContaining('could not write'));
+  });
+
+  it('stays silent when every plugin in the outcome applied cleanly', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({
+        data: { 'A.esp': { backupPath: '/b', applied: ['001:A.esp'], readOnly: [], notFound: [], createFailed: [] } },
+        response: { ok: true, status: 200 },
+      }),
+      DELETE: vi.fn(),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveGroup('abc-123');
+
+    expect(deps.showError).not.toHaveBeenCalled();
+    expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
+  });
+});
+
 // ── revertAllGroups ───────────────────────────────────────────────────────────
 
 describe('SessionController.revertAllGroups', () => {
