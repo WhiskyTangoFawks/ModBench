@@ -139,6 +139,66 @@ describe('ScalarCell — editable column renders text until clicked', () => {
   });
 });
 
+// Issue #111: click-to-activate puts every cell one mis-click away from staging. A change whose
+// old value equals its new value is not an edit — it is noise in the Pending Changes tree, and
+// it drags a whole ChangeGroup's dependency closure along with it (ADR-0028). The bool path
+// guarded this from the start; every type needs it, because any cell can now be mis-clicked.
+describe('ScalarCell — a no-op edit stages nothing', () => {
+  it('does not commit when a text cell is activated and blurred without editing', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('Dogmeat'));
+    fireEvent.blur(screen.getByDisplayValue('Dogmeat'));
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('does not commit when a number cell is activated and blurred without editing', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value={5} meta={intMeta} editable={true} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('5'));
+    fireEvent.blur(screen.getByDisplayValue('5'));
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('does not commit when an enum cell is activated and blurred without changing the selection', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="Male" meta={enumMeta} editable={true} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('Male'));
+    fireEvent.blur(screen.getByRole('combobox'));
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('does not commit when a text edit is typed and then reverted by hand before blur', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('Dogmeat'));
+    const input = screen.getByDisplayValue('Dogmeat');
+    fireEvent.change(input, { target: { value: 'Dogmeat!' } });
+    fireEvent.change(input, { target: { value: 'Dogmeat' } });
+    fireEvent.blur(input);
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('does not commit on Enter when the value is unchanged', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('Dogmeat'));
+    fireEvent.keyDown(screen.getByDisplayValue('Dogmeat'), { key: 'Enter' });
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  // The guard must not swallow a real edit that happens to round-trip through the same string.
+  it('still commits a genuine change', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value={5} meta={intMeta} editable={true} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('5'));
+    const input = screen.getByDisplayValue('5');
+    fireEvent.change(input, { target: { value: '10' } });
+    fireEvent.blur(input);
+    expect(onCommit).toHaveBeenCalledWith(10);
+  });
+});
+
 // ── FormKeyCell ───────────────────────────────────────────────────────────────
 
 // Issue #111: one gesture split, uniform across the grid — plain click edits (opens the

@@ -74,14 +74,22 @@ export function ScalarCell({ value, meta, editable, onCommit }: ScalarCellProps)
     boxSizing: 'border-box',
   };
 
+  // Issue #111: click-to-activate puts every cell one mis-click away from staging, so no path
+  // commits a value equal to the one already there. A change whose old value equals its new
+  // value is not an edit: it is noise in the Pending Changes tree that drags a whole
+  // ChangeGroup's dependency closure with it (ADR-0028). Comparing the rendered strings keeps
+  // this in the same terms the draft is held in, so 5 typed over 5 is a no-op like any other.
+  function commitIfChanged(next: unknown) {
+    if (toStr(next) !== toStr(value)) onCommit(next);
+  }
+
   if (meta.type === 'bool') {
-    // Activating a bool must not toggle it — a stray click would otherwise stage a change.
     return (
       <input
         type="checkbox"
         autoFocus
         checked={draft === 'true'}
-        onChange={e => { setDraft(String(e.target.checked)); onCommit(e.target.checked); }}
+        onChange={e => { setDraft(String(e.target.checked)); commitIfChanged(e.target.checked); }}
         onBlur={() => setActive(false)}
       />
     );
@@ -93,7 +101,7 @@ export function ScalarCell({ value, meta, editable, onCommit }: ScalarCellProps)
         autoFocus
         value={draft}
         onChange={e => setDraft(e.target.value)}
-        onBlur={() => { onCommit(draft); setActive(false); }}
+        onBlur={() => { commitIfChanged(draft); setActive(false); }}
         style={inputBase}
       >
         {meta.enumValues.map(ev => <option key={ev}>{ev}</option>)}
@@ -113,8 +121,8 @@ export function ScalarCell({ value, meta, editable, onCommit }: ScalarCellProps)
       type={meta.type === 'int' || meta.type === 'float' ? 'number' : 'text'}
       value={draft}
       onChange={e => setDraft(e.target.value)}
-      onBlur={() => { onCommit(coerce()); setActive(false); }}
-      onKeyDown={e => { if (e.key === 'Enter') { onCommit(coerce()); (e.target as HTMLInputElement).blur(); } }}
+      onBlur={() => { commitIfChanged(coerce()); setActive(false); }}
+      onKeyDown={e => { if (e.key === 'Enter') { commitIfChanged(coerce()); (e.target as HTMLInputElement).blur(); } }}
       style={inputBase}
     />
   );

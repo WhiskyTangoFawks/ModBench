@@ -18,9 +18,12 @@ interface VmadSectionProps {
   vmad: VmadCompare | null | undefined;
   columns: Column[];
   onOpen: (fk: string) => void;
-  // Issue #111: plugins whose columns are read-only. Replaces the old `editMode` flag —
-  // VMAD controls follow the column's mutability, not a mode.
-  immutableSet?: Set<string>;
+  // Issue #111: plugins whose columns are read-only. Replaces the old `editMode` flag — VMAD
+  // controls follow the column's mutability, not a mode. Required, not optional: the flag it
+  // replaced was fail-closed (absent meant "not editing"), and an immutability guard must not
+  // fail open. An empty set is a caller saying "every column is editable", which is a claim
+  // worth having to make out loud.
+  immutableSet: Set<string>;
   pendingChangeMap?: Record<string, PendingChange>;
   onEdit?: (plugin: string, vmadPath: string, value: unknown) => void;
   onRevert?: (changeId: string) => void;
@@ -346,10 +349,19 @@ interface LeafCellCtx {
 // Issue #111: a leaf cell reads as text and swaps to its editor only when clicked — the same
 // rule as the field grid above it, and for the same reason: a wall of inputs would bury the
 // values. Closes again when focus leaves the editor.
+//
+// Ctrl+click is not an edit anywhere in the grid: on an object leaf the FormKeyLink inside the
+// read view follows the reference on that same event, so activating here as well would open an
+// editor behind the record we just navigated to.
 function ClickToEdit({ read, children }: Readonly<{ read: React.ReactNode; children: React.ReactNode }>) {
   const [active, setActive] = useState(false);
   if (!active) {
-    return <span onClick={() => setActive(true)} style={{ cursor: 'text' }}>{read}</span>;
+    return (
+      <span
+        onClick={e => { if (!e.ctrlKey && !e.metaKey) setActive(true); }}
+        style={{ cursor: 'text' }}
+      >{read}</span>
+    );
   }
   return (
     <span onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setActive(false); }}>
@@ -416,6 +428,19 @@ function containerSummary(p: VmadPropertyDiff): string {
   return `[${n} items]`;
 }
 
+// Spec rule 2's resolve gate, as far as VMAD data can carry it. A Papyrus Object property
+// arrives as the formatted string "{FormKey} [{Alias}]", and an unset one formats as
+// "Null [-1]" — so a well-formed FormKey is the strongest resolve test available here.
+//
+// This is weaker than the field grid's, which at least has the backend's checkError. A VMAD
+// property carries no checkError and no resolution (VmadPropertyDiff is FormKey strings and
+// conflict states), so an Object pointing at a FormKey that is absent from the index still
+// looks followable. Catching that needs the resolution #141 adds to the compare response —
+// the same gap, one ticket wider than the field grid's.
+function isFormKey(s: string): boolean {
+  return /^[0-9A-Fa-f]{6,8}:.+/.test(s);
+}
+
 function leafContent(
   p: VmadPropertyDiff,
   plugin: string,
@@ -437,7 +462,7 @@ function leafContent(
     const fk = m ? m[1] : str;
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-        <FormKeyLink value={fk} onOpen={onOpen} />
+        <FormKeyLink value={fk} onOpen={onOpen} linksTo={isFormKey(fk)} />
         {m && <span>&nbsp;{m[2]}</span>}
         {typeCue && <span style={{ opacity: 0.6 }}>&nbsp;{typeCue}</span>}
       </span>
@@ -855,7 +880,7 @@ export function VmadSection({
   const scripts = vmad?.scripts ?? [];
   // Issue #111: editability is per column. The add-script row exists when any disk column is
   // editable; each column's button is gated individually below.
-  const isEditable = (plugin: string) => !(immutableSet?.has(plugin) ?? false);
+  const isEditable = (plugin: string) => !immutableSet.has(plugin);
   const showAddScript = onStructOp != null
     && columns.some(c => c.kind === 'disk' && isEditable(c.override.plugin));
 

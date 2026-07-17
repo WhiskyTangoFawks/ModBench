@@ -611,6 +611,83 @@ const boolVmad = (): VmadCompare => ({
 
 // Issue #111: VMAD leaf cells follow the same rule as field cells — text until clicked. VMAD
 // editing itself is not new here (it shipped in phase 13.8); only the mode gate is gone.
+// Issue #111: the gesture split has to hold in VMAD too, or Ctrl+click on an editable object
+// leaf both navigates and opens the editor behind the panel it navigates away from.
+describe('VmadSection — Ctrl+click follows the reference instead of editing', () => {
+  const objectVmad = (): VmadCompare => ({
+    scripts: [script({
+      name: 'S',
+      properties: [prop({
+        name: 'Target',
+        kind: 'object',
+        values: { 'A.esm': '000123:Foo.esp [2]' },
+        types: { 'A.esm': 'Object' },
+        winnerPlugin: 'A.esm',
+      })],
+    })],
+  });
+
+  it('Ctrl+click on an editable object leaf navigates and does not open the editor', () => {
+    const onOpen = vi.fn();
+    const { container } = renderSection(objectVmad(), ['A.esm'], { onEdit: vi.fn(), onOpen });
+    toggle('S');
+    fireEvent.click(screen.getByText('000123:Foo.esp'), { ctrlKey: true });
+
+    expect(onOpen).toHaveBeenCalledWith('000123:Foo.esp');
+    expect(container.querySelector('input[aria-label="Alias"]')).not.toBeInTheDocument();
+  });
+
+  it('plain click on an editable object leaf opens the editor and does not navigate', () => {
+    const onOpen = vi.fn();
+    const { container } = renderSection(objectVmad(), ['A.esm'], { onEdit: vi.fn(), onOpen });
+    toggle('S');
+    fireEvent.click(screen.getByText('000123:Foo.esp'));
+
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(container.querySelector('input[aria-label="Alias"]')).toBeInTheDocument();
+  });
+
+  // Spec rule 2 covers the VMAD section too: a link that goes nowhere must not advertise
+  // itself. A Papyrus Object property with no FormKey renders "Null [alias]".
+  it('a null object reference offers no link affordance and does not navigate', () => {
+    const nullObjectVmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [prop({
+          name: 'Target',
+          kind: 'object',
+          values: { 'A.esm': 'Null [0]' },
+          types: { 'A.esm': 'Object' },
+          winnerPlugin: 'A.esm',
+        })],
+      })],
+    };
+    const onOpen = vi.fn();
+    renderSection(nullObjectVmad, ['A.esm'], { onOpen });
+    toggle('S');
+
+    const link = screen.getByText('Null');
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    fireEvent.mouseEnter(link);
+    expect(link.style.textDecoration).toBe('none');
+
+    fireEvent.click(link, { ctrlKey: true });
+    expect(onOpen).not.toHaveBeenCalled();
+    fireEvent.keyUp(window, { key: 'Control' });
+  });
+
+  it('a real object reference still offers the affordance on Ctrl-hover', () => {
+    renderSection(objectVmad(), ['A.esm'], {});
+    toggle('S');
+
+    const link = screen.getByText('000123:Foo.esp');
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    fireEvent.mouseEnter(link);
+    expect(link.style.textDecoration).toBe('underline');
+    fireEvent.keyUp(window, { key: 'Control' });
+  });
+});
+
 describe('VmadSection leaf cells edit in place on click', () => {
   it('a scalar property reads as text, with no input, before it is clicked', () => {
     const { container } = renderSection(boolVmad(), ['A.esm'], { onEdit: vi.fn() });
