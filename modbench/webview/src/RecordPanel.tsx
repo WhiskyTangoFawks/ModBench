@@ -211,7 +211,7 @@ function renderCell(
       </span>
     );
   }
-  // struct fields in the diff table are handled via sub-rows; StructRowGroup is used by ArrayRowGroup
+  // struct fields in the diff table are handled via sub-rows
   if (meta.type === 'struct') {
     return (
       <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
