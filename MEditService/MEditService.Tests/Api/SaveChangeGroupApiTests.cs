@@ -78,4 +78,33 @@ public sealed class SaveChangeGroupApiTests(LoadedNpcApiFixture loaded) : IClass
             .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "aggression")
             .GetProperty("value").GetString());
     }
+
+    // AC-4's disk half: reverting a group of one drops the pending row and leaves the plugin file on
+    // disk byte-for-byte untouched — a revert must never write. The in-memory assertions elsewhere
+    // prove the row is gone; only reading the file bytes proves nothing reached disk behind them.
+    [Fact]
+    public async Task RevertChangeGroup_AfterOrdinaryFieldEdit_DropsRowAndLeavesFileUntouched()
+    {
+        await ClearChangesAsync();
+        var pluginPath = Path.Combine(loaded.Plugin.DataFolder, TestPluginFixture.PluginName);
+        var before = await File.ReadAllBytesAsync(pluginPath);
+
+        var formKey = loaded.Plugin.Npc1FormKey.ToString();
+        var patchResp = await _client.PatchAsJsonAsync($"/records/{Uri.EscapeDataString(formKey)}", new
+        {
+            plugin = TestPluginFixture.PluginName,
+            fields = new Dictionary<string, object?> { ["aggression"] = "Frenzied" },
+            source = "user",
+        });
+        Assert.Equal(HttpStatusCode.OK, patchResp.StatusCode);
+
+        var groups = await _client.GetFromJsonAsync<JsonElement[]>("/change-groups") ?? [];
+        var group = Assert.Single(groups, g => g.GetProperty("operation").GetString() == "field_edit");
+
+        var revertResp = await _client.DeleteAsync($"/changes/group/{group.GetProperty("id").GetString()}");
+        Assert.Equal(HttpStatusCode.NoContent, revertResp.StatusCode);
+
+        Assert.Empty(await _client.GetFromJsonAsync<JsonElement[]>("/changes") ?? []);
+        Assert.Equal(before, await File.ReadAllBytesAsync(pluginPath));
+    }
 }
