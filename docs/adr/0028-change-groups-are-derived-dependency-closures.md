@@ -28,7 +28,7 @@ The stored form put the same fact in three places — the edge table, the `group
 
 Deriving grouping makes that bug class structurally impossible: there is no group to forget to assign, and a group of one is not a special case handled somewhere but an isolated node, which is simply what a node with no edges is. The grouping policy moves from six implicit sites into one explicit rule that can be read and tested directly.
 
-The cost is a recursive CTE per read rather than an indexed column lookup. Pending sets are user-scale — tens of changes, occasionally hundreds — so this is not a consideration.
+The cost is a graph computation per read rather than an indexed column lookup: #112 loads the nodes and edges and runs union-find over them in memory (a recursive SQL CTE was the alternative considered; connected components are small and the in-memory pass reads more directly). Pending sets are user-scale — tens of changes, occasionally hundreds — so this is not a consideration.
 
 ## Alternatives rejected
 
@@ -42,8 +42,8 @@ The cost is a recursive CTE per read rather than an indexed column lookup. Pendi
 
 ## Consequences
 
-- `change_groups` and `pending_changes.group_id` are dropped, along with `StageGroup`, `GetGroupIdForRecord`, `GetCreateGroupIdForAny`, and `PendingChangeUpsert.GroupId`.
-- The `BlockedByGroup` guard is rewritten. Today it blocks a field edit when the record has any change with a non-null `group_id`, which conflates *has a group* with *is pending a lifecycle op*. Under this ADR every change has a group, so that conflation would make every record read-only after one edit. The guard keys on `change_type` ∈ {`delete`, `renumber`} on the subject record — the semantic reason a field edit is incoherent — not on group membership.
+- `change_groups` and `pending_changes.group_id` are dropped, along with `StageGroup`, `GetGroupIdForRecord`, `GetCreateGroupIdForAny`, and `PendingChangeUpsert.GroupId`. **Implemented in two steps: #112 makes derived components the read model — these stop being *read* — and #134 removes them as writers. As of #112 all of the above are still written, just no longer consulted for grouping.**
+- The `BlockedByGroup` guard is rewritten. Today it blocks a field edit when the record has any change with a non-null `group_id`, which conflates *has a group* with *is pending a lifecycle op*. Under this ADR every change has a group, so that conflation would make every record read-only after one edit. The guard keys on `change_type` ∈ {`delete`, `renumber`} on the subject record — the semantic reason a field edit is incoherent — not on group membership. **This rewrite lands in #134; through #112 the guard still reads `group_id`, which #112 still writes, so it keeps working unchanged.**
 - ADR-0017 is superseded in part: §4's rule that `DELETE /changes/{id}` returns 409 for any change with a non-null `group_id` becomes 409 only when the change's component has more than one member. §5's panel design stands and is the target UX. §1–§3 (DuckDB storage, field-level granularity, upsert-preserving-`OldValue`) are unaffected.
   > **Amended by [ADR-0029](0029-pending-changes-tree-is-a-grouping-view.md):** "§5's panel design stands" no longer holds. Working §5 through against the model introduced here shows it does not survive it — a derived group has no identity to list as a section, and a group that may span plugins cannot honour §5's per-plugin or per-record save scopes. §5 is now superseded in full; §§1–3 remain unaffected as stated.
 - `operation` graduates from a display string to a derived value with defined precedence: lifecycle ops dominate `field_edit`.
