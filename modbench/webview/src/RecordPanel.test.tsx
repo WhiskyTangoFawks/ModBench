@@ -359,6 +359,25 @@ describe('RecordPanel', () => {
     // Fallout4.esm is immutable, MyMod.esp is not — exactly one column gets the action.
     expect(screen.getAllByText('Copy as Override…')).toHaveLength(1);
   });
+
+  // Issue #111: a cell in an immutable column never activates an input, however it is clicked
+  // (spec: field-type rendering rule 6, story 17). Before this, editMode reached the cells with
+  // no per-column mutability check, so a read-only column rendered inputs whose PATCH the
+  // backend then rejected with a 409 "Plugin is read-only".
+  it('a cell in an immutable column renders no input when clicked', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Original Name'));
+    fireEvent.click(screen.getByText('Original Name'));
+    expect(screen.queryByDisplayValue('Original Name')).not.toBeInTheDocument();
+    expect(screen.getByText('Original Name')).toBeInTheDocument();
+  });
+
+  it('a cell in a mutable column does activate an input when clicked', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('Override Name'));
+    expect(screen.getByDisplayValue('Override Name')).toBeInTheDocument();
+  });
 });
 
 // ── postMessage wiring ────────────────────────────────────────────────────────

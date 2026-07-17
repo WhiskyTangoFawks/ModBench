@@ -272,8 +272,8 @@ function arrayVmad(elementKind: 'scalar' | 'object', values: unknown[]): VmadCom
   };
 }
 
-describe('VmadSection array edit mode', () => {
-  it('expanding an ArrayOfInt property in edit mode shows a number input per element', () => {
+describe('VmadSection array editing', () => {
+  it('expanding an ArrayOfInt property in an editable column shows a number input per element', () => {
     const { container } = renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
       onEdit: vi.fn(),
     });
@@ -284,6 +284,29 @@ describe('VmadSection array edit mode', () => {
     expect(inputs).toHaveLength(2);
     expect((inputs[0] as HTMLInputElement).value).toBe('10');
     expect((inputs[1] as HTMLInputElement).value).toBe('20');
+  });
+
+  // Issue #111: VMAD controls follow the column's mutability, exactly like field cells.
+  it('expanding the same property in an immutable column shows no inputs', () => {
+    const { container } = renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
+      onEdit: vi.fn(),
+      immutable: ['A.esm'],
+    });
+    toggle('S');
+    toggle('Items');
+
+    expect(container.querySelectorAll('input')).toHaveLength(0);
+  });
+
+  it('offers no Add button on an immutable column', () => {
+    renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
+      onEdit: vi.fn(),
+      immutable: ['A.esm'],
+    });
+    toggle('S');
+    toggle('Items');
+
+    expect(screen.queryByTitle('Add element')).not.toBeInTheDocument();
   });
 
   it('Add button appends a default element and stages the full new array', () => {
