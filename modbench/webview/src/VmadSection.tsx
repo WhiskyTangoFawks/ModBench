@@ -18,7 +18,12 @@ interface VmadSectionProps {
   vmad: VmadCompare | null | undefined;
   columns: Column[];
   onOpen: (fk: string) => void;
-  editMode?: boolean;
+  // Issue #111: plugins whose columns are read-only. Replaces the old `editMode` flag — VMAD
+  // controls follow the column's mutability, not a mode. Required, not optional: the flag it
+  // replaced was fail-closed (absent meant "not editing"), and an immutability guard must not
+  // fail open. An empty set is a caller saying "every column is editable", which is a claim
+  // worth having to make out loud.
+  immutableSet: Set<string>;
   pendingChangeMap?: Record<string, PendingChange>;
   onEdit?: (plugin: string, vmadPath: string, value: unknown) => void;
   onRevert?: (changeId: string) => void;
@@ -184,13 +189,15 @@ interface RowRenderCtx {
   structRootPath?: string;
   leafPath?: string;
   typesDiffer: boolean;
-  edit?: OnEdit;          // onEdit when in edit mode, else undefined
+  // Issue #111: onEdit for this plugin's column, or undefined when that column is read-only.
+  editFor: (plugin: string) => OnEdit | undefined;
   leafCtx: LeafCellCtx;
   onOpen: (fk: string) => void;
 }
 
 function containerCell(plugin: string, c: RowRenderCtx, remove: React.ReactNode): React.ReactNode {
-  const { p, isExpanded, edit, siblingsByPlugin, arrayVmadPath, elementType, structRootPath } = c;
+  const { p, isExpanded, siblingsByPlugin, arrayVmadPath, elementType, structRootPath } = c;
+  const edit = c.editFor(plugin);
   if (isExpanded) {
     if (edit && siblingsByPlugin && arrayVmadPath)
       return <ArrayAddButton plugin={plugin} arrayVmadPath={arrayVmadPath} currentArr={siblingsByPlugin[plugin] ?? []} elementType={elementType} onEdit={edit} />;
@@ -203,7 +210,8 @@ function containerCell(plugin: string, c: RowRenderCtx, remove: React.ReactNode)
 }
 
 function memberCell(plugin: string, c: RowRenderCtx, remove: React.ReactNode): React.ReactNode {
-  const { p, arrayCtx, structCtx, leafPath, typesDiffer, edit, leafCtx, onOpen } = c;
+  const { p, arrayCtx, structCtx, leafPath, typesDiffer, leafCtx, onOpen } = c;
+  const edit = c.editFor(plugin);
   const path = arrayCtx ? arrayCtx.vmadPath : leafPath;
   const typeCue = typesDiffer ? `(${p.types[plugin]})` : null;
   const editor = (path || structCtx)
@@ -215,8 +223,9 @@ function memberCell(plugin: string, c: RowRenderCtx, remove: React.ReactNode): R
 }
 
 function propertyCell(plugin: string, c: RowRenderCtx): React.ReactNode {
-  const remove = c.edit && c.structCtx
-    ? <StructRemoveButton plugin={plugin} structCtx={c.structCtx} onEdit={c.edit} />
+  const edit = c.editFor(plugin);
+  const remove = edit && c.structCtx
+    ? <StructRemoveButton plugin={plugin} structCtx={c.structCtx} onEdit={edit} />
     : null;
   return isContainerKind(c.p.kind) ? containerCell(plugin, c, remove) : memberCell(plugin, c, remove);
 }
@@ -330,10 +339,35 @@ function ArrayElementCell({ plugin, arrayCtx, onEdit, editor }: Readonly<ArrayEl
 type OnEdit = (plugin: string, vmadPath: string, value: unknown) => void;
 
 interface LeafCellCtx {
-  editMode?: boolean;
+  // Issue #111: per-column editability — a leaf cell in an immutable column never edits.
+  isEditable: (plugin: string) => boolean;
   onEdit?: OnEdit;
   port?: number;
   onOpen: (fk: string) => void;
+}
+
+// Issue #111: a leaf cell reads as text and swaps to its editor only when clicked — the same
+// rule as the field grid above it, and for the same reason: a wall of inputs would bury the
+// values. Closes again when focus leaves the editor.
+//
+// Ctrl+click is not an edit anywhere in the grid: on an object leaf the FormKeyLink inside the
+// read view follows the reference on that same event, so activating here as well would open an
+// editor behind the record we just navigated to.
+function ClickToEdit({ read, children }: Readonly<{ read: React.ReactNode; children: React.ReactNode }>) {
+  const [active, setActive] = useState(false);
+  if (!active) {
+    return (
+      <span
+        onClick={e => { if (!e.ctrlKey && !e.metaKey) setActive(true); }}
+        style={{ cursor: 'text' }}
+      >{read}</span>
+    );
+  }
+  return (
+    <span onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setActive(false); }}>
+      {children}
+    </span>
+  );
 }
 
 function renderLeafCell(
@@ -345,9 +379,10 @@ function renderLeafCell(
   ctx: LeafCellCtx,
   typesDiffer: boolean,
 ): React.ReactNode {
-  const { editMode, onEdit, port, onOpen } = ctx;
+  const { isEditable, onEdit, port, onOpen } = ctx;
   const typeCue = typesDiffer ? `(${p.types[plugin]})` : null;
-  if (!editMode || !onEdit) return leafContent(p, plugin, onOpen, typeCue);
+  const read = leafContent(p, plugin, onOpen, typeCue);
+  if (!isEditable(plugin) || !onEdit) return read;
 
   function commit(v: unknown) {
     if (structCtx) {
@@ -364,9 +399,21 @@ function renderLeafCell(
     }
   }
 
-  if (p.kind === 'scalar') return <VmadScalarEditor value={p.values[plugin]} type={scalarType(p)} onCommit={commit} />;
-  if (p.kind === 'object' && port != null) return <VmadObjectEditor value={p.values[plugin]} port={port} onCommit={commit} />;
-  return leafContent(p, plugin, onOpen, typeCue);
+  if (p.kind === 'scalar') {
+    return (
+      <ClickToEdit read={read}>
+        <VmadScalarEditor value={p.values[plugin]} type={scalarType(p)} onCommit={commit} />
+      </ClickToEdit>
+    );
+  }
+  if (p.kind === 'object' && port != null) {
+    return (
+      <ClickToEdit read={read}>
+        <VmadObjectEditor value={p.values[plugin]} port={port} onCommit={commit} />
+      </ClickToEdit>
+    );
+  }
+  return read;
 }
 
 function hasPluginData(p: VmadPropertyDiff, plugin: string): boolean {
@@ -379,6 +426,19 @@ function containerSummary(p: VmadPropertyDiff): string {
   if (p.kind === 'struct') return '{…}';
   if (p.kind === 'structList') return `[${n} structs]`;
   return `[${n} items]`;
+}
+
+// Spec rule 2's resolve gate, as far as VMAD data can carry it. A Papyrus Object property
+// arrives as the formatted string "{FormKey} [{Alias}]", and an unset one formats as
+// "Null [-1]" — so a well-formed FormKey is the strongest resolve test available here.
+//
+// This is weaker than the field grid's, which at least has the backend's checkError. A VMAD
+// property carries no checkError and no resolution (VmadPropertyDiff is FormKey strings and
+// conflict states), so an Object pointing at a FormKey that is absent from the index still
+// looks followable. Catching that needs the resolution #141 adds to the compare response —
+// the same gap, one ticket wider than the field grid's.
+function isFormKey(s: string): boolean {
+  return /^[0-9A-Fa-f]{6,8}:.+/.test(s);
 }
 
 function leafContent(
@@ -402,7 +462,7 @@ function leafContent(
     const fk = m ? m[1] : str;
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-        <FormKeyLink value={fk} onOpen={onOpen} />
+        <FormKeyLink value={fk} onOpen={onOpen} linksTo={isFormKey(fk)} />
         {m && <span>&nbsp;{m[2]}</span>}
         {typeCue && <span style={{ opacity: 0.6 }}>&nbsp;{typeCue}</span>}
       </span>
@@ -732,15 +792,15 @@ function pendingOpLabel(v: unknown): React.ReactNode {
 
 // Renders a pending add_property in the pending column: an inline editor (scalar) in edit mode that
 // re-issues the same add op with the new value, else a read-only value. Plus a revert control.
-function AddedPendingCell({ change, editMode, onStructOp, onRevert }: Readonly<{
-  change: PendingChange; editMode?: boolean; onStructOp?: OnStructOp; onRevert?: (id: string) => void;
+function AddedPendingCell({ change, editable, onStructOp, onRevert }: Readonly<{
+  change: PendingChange; editable?: boolean; onStructOp?: OnStructOp; onRevert?: (id: string) => void;
 }>) {
   const op = change.newValue as StructOp & { type: string; name: string; value: unknown };
   const kind = opScalarKind(op.type);
   const reissue = (v: unknown) => onStructOp?.(change.plugin, change.fieldPath, { ...op, value: v });
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      {editMode && onStructOp && kind
+      {editable && onStructOp && kind
         ? <VmadScalarEditor value={op.value} type={kind} onCommit={reissue} ariaLabel={`Added value for ${op.name}`} />
         : <span>{toStr(op.value)}</span>}
       {onRevert && (
@@ -813,12 +873,16 @@ function RemoveScriptButton({ plugin, scriptName, onStructOp }: Readonly<{
 
 export function VmadSection({
   vmad, columns, onOpen,
-  editMode, pendingChangeMap, onEdit, onRevert, onStructOp, port,
+  immutableSet, pendingChangeMap, onEdit, onRevert, onStructOp, port,
 }: Readonly<VmadSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const scripts = vmad?.scripts ?? [];
-  const showAddScript = editMode === true && onStructOp != null;
+  // Issue #111: editability is per column. The add-script row exists when any disk column is
+  // editable; each column's button is gated individually below.
+  const isEditable = (plugin: string) => !immutableSet.has(plugin);
+  const showAddScript = onStructOp != null
+    && columns.some(c => c.kind === 'disk' && isEditable(c.override.plugin));
 
   // Pending add_script ops (script-level paths) not yet in the compare tree → synthetic script rows.
   const existingScriptNames = new Set(scripts.map(s => s.name));
@@ -904,14 +968,14 @@ export function VmadSection({
     rows.push(
       <tr key="vmad-add-script">
         <td style={{ ...baseCell, opacity: 0.85 }}>＋ script</td>
-        {columns.map((col, i) => col.kind === 'pending'
-          ? <td key={`add-script:p${i}`} style={baseCell} />
+        {columns.map((col, i) => col.kind === 'pending' || !isEditable(col.override.plugin)
+          ? <td key={`add-script:${i}`} style={baseCell} />
           : <td key={`add-script:d${i}`} style={baseCell}><AddScriptButton plugin={col.override.plugin} onStructOp={onStructOp} /></td>)}
       </tr>,
     );
   }
 
-  const leafCtx: LeafCellCtx = { editMode, onEdit, port, onOpen };
+  const leafCtx: LeafCellCtx = { isEditable, onEdit, port, onOpen };
 
   const pushPropertyRows = (
     p: VmadPropertyDiff,
@@ -938,7 +1002,7 @@ export function VmadSection({
     const rowCtx: RowRenderCtx = {
       p, isExpanded, arrayCtx, structCtx, siblingsByPlugin, arrayVmadPath, elementType,
       structRootPath, leafPath, typesDiffer,
-      edit: editMode === true ? onEdit : undefined, leafCtx, onOpen,
+      editFor: plugin => (onEdit && isEditable(plugin) ? onEdit : undefined), leafCtx, onOpen,
     };
 
     rows.push(
@@ -950,7 +1014,7 @@ export function VmadSection({
           {p.name}
         </td>
         {valueCells(key, p.cellStates, plugin =>
-          depth === 1 && editMode && onStructOp
+          depth === 1 && isEditable(plugin) && onStructOp
             ? <span style={inlineCell}>
                 {propertyCell(plugin, rowCtx)}
                 <SetTypeControl plugin={plugin} scriptName={scriptName} propName={p.name}
@@ -1006,7 +1070,7 @@ export function VmadSection({
                 backgroundColor: change ? 'rgba(255,200,50,0.10)' : undefined,
                 opacity: change ? 1 : 0.3,
               }}>
-                {change && <AddedPendingCell change={change} editMode={editMode} onStructOp={onStructOp} onRevert={onRevert} />}
+                {change && <AddedPendingCell change={change} editable={isEditable(col.plugin)} onStructOp={onStructOp} onRevert={onRevert} />}
               </td>
             );
           }
@@ -1032,7 +1096,7 @@ export function VmadSection({
           {s.name}
         </td>
         {valueCells(key, s.cellStates, plugin =>
-          editMode && onStructOp
+          isEditable(plugin) && onStructOp
             ? <span style={inlineCell}>
                 <ScriptFlagsControl plugin={plugin} scriptName={s.name} current={s.flags[plugin] ?? null} onStructOp={onStructOp} />
                 <AddPropertyButton plugin={plugin} scriptName={s.name} onStructOp={onStructOp} port={port} />

@@ -16,6 +16,14 @@ const flagMeta: FieldMetadata = {
   isBitmask: true,
 };
 
+// Issue #111: an editable flag cell reads as text until it is clicked. Tests about the
+// multi-select itself click through that first, rather than restating it each time.
+function renderActivated(ui: React.ReactElement) {
+  const utils = render(ui);
+  fireEvent.click(utils.container.firstChild as Element);
+  return utils;
+}
+
 const sparseFlags: FieldMetadata = {
   name: 'SparseFlags',
   type: 'enum',
@@ -26,21 +34,55 @@ const sparseFlags: FieldMetadata = {
   isBitmask: true,
 };
 
-describe('FlagCell — read mode', () => {
+describe('FlagCell — read-only column', () => {
   it('renders comma-separated names of active flags', () => {
-    render(<FlagCell value={0b0101} meta={flagMeta} editMode={false} onCommit={vi.fn()} />);
+    render(<FlagCell value={0b0101} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getByText('A, C')).toBeInTheDocument();
   });
 
   it('renders "—" for null value', () => {
-    render(<FlagCell value={null} meta={flagMeta} editMode={false} onCommit={vi.fn()} />);
+    render(<FlagCell value={null} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('renders no checkboxes when clicked', () => {
+    render(<FlagCell value={0b0101} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('A, C'));
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 });
 
-describe('FlagCell — edit mode', () => {
+// Issue #111: like every other cell, a flag cell reads as text until clicked — a grid of
+// always-live flag multi-selects would bury the values it exists to show.
+describe('FlagCell — editable column renders text until clicked', () => {
+  it('renders active flag names as text, not checkboxes, before it is clicked', () => {
+    render(<FlagCell value={0b0101} meta={flagMeta} editable={true} onCommit={vi.fn()} />);
+    expect(screen.getByText('A, C')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('swaps to a per-flag multi-select when clicked', () => {
+    render(<FlagCell value={0b0101} meta={flagMeta} editable={true} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('A, C'));
+    expect(screen.getAllByRole('checkbox')).toHaveLength(4);
+  });
+
+  it('returns to text when focus leaves the multi-select', () => {
+    const { container } = render(
+      <FlagCell value={0b0101} meta={flagMeta} editable={true} onCommit={vi.fn()} />
+    );
+    fireEvent.click(screen.getByText('A, C'));
+    fireEvent.blur(container.firstChild as Element);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByText('A, C')).toBeInTheDocument();
+  });
+});
+
+describe('FlagCell — editing the multi-select', () => {
   it('renders one checkbox per flag with correct checked state', () => {
-    render(<FlagCell value={0b0101} meta={flagMeta} editMode={true} onCommit={vi.fn()} />);
+    renderActivated(
+      <FlagCell value={0b0101} meta={flagMeta} editable={true} onCommit={vi.fn()} />
+    );
     const checkboxes = screen.getAllByRole('checkbox');
     expect(checkboxes).toHaveLength(4);
     expect(checkboxes[0].checked).toBe(true);  // A: bit 0 set
@@ -51,7 +93,9 @@ describe('FlagCell — edit mode', () => {
 
   it('calls onCommit with bit cleared when unchecking A', () => {
     const onCommit = vi.fn();
-    render(<FlagCell value={0b0101} meta={flagMeta} editMode={true} onCommit={onCommit} />);
+    renderActivated(
+      <FlagCell value={0b0101} meta={flagMeta} editable={true} onCommit={onCommit} />
+    );
     const checkboxes = screen.getAllByRole('checkbox');
     fireEvent.click(checkboxes[0]); // uncheck A (bit 0)
     expect(onCommit).toHaveBeenCalledWith('4'); // 0b0101 ^ 0b0001 = 0b0100
@@ -59,7 +103,9 @@ describe('FlagCell — edit mode', () => {
 
   it('calls onCommit with bit set when checking B', () => {
     const onCommit = vi.fn();
-    render(<FlagCell value={0b0101} meta={flagMeta} editMode={true} onCommit={onCommit} />);
+    renderActivated(
+      <FlagCell value={0b0101} meta={flagMeta} editable={true} onCommit={onCommit} />
+    );
     const checkboxes = screen.getAllByRole('checkbox');
     fireEvent.click(checkboxes[1]); // check B (bit 1)
     expect(onCommit).toHaveBeenCalledWith('7'); // 0b0101 ^ 0b0010 = 0b0111
@@ -75,7 +121,7 @@ describe('FlagCell — missing enumBitValues guard (V4)', () => {
       // enumBitValues deliberately absent
     };
     const { container } = render(
-      <FlagCell value={3} meta={nobitsMeta} editMode={true} onCommit={vi.fn()} />
+      <FlagCell value={3} meta={nobitsMeta} editable={true} onCommit={vi.fn()} />
     );
     expect(container.firstChild).toBeNull();
   });
@@ -96,12 +142,14 @@ describe('FlagCell — high-bit flags (BigInt arithmetic)', () => {
   };
 
   it('read: shows LowPriorityPushable as active when value is 2^53', () => {
-    render(<FlagCell value={9007199254740992} meta={highBitMeta} editMode={false} onCommit={vi.fn()} />);
+    render(<FlagCell value={9007199254740992} meta={highBitMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getByText('LowPriorityPushable')).toBeInTheDocument();
   });
 
   it('edit: checkbox for LowPriorityPushable is checked when value is 2^53', () => {
-    render(<FlagCell value={9007199254740992} meta={highBitMeta} editMode={true} onCommit={vi.fn()} />);
+    renderActivated(
+      <FlagCell value={9007199254740992} meta={highBitMeta} editable={true} onCommit={vi.fn()} />
+    );
     const checkboxes = screen.getAllByRole('checkbox');
     expect(checkboxes[0].checked).toBe(false);  // Playable: not set
     expect(checkboxes[1].checked).toBe(true);   // LowPriorityPushable: set
@@ -109,7 +157,9 @@ describe('FlagCell — high-bit flags (BigInt arithmetic)', () => {
 
   it('edit: toggling LowPriorityPushable when it is the only flag calls onCommit with 0', () => {
     const onCommit = vi.fn();
-    render(<FlagCell value={9007199254740992} meta={highBitMeta} editMode={true} onCommit={onCommit} />);
+    renderActivated(
+      <FlagCell value={9007199254740992} meta={highBitMeta} editable={true} onCommit={onCommit} />
+    );
     fireEvent.click(screen.getAllByRole('checkbox')[1]); // uncheck LowPriorityPushable
     expect(onCommit).toHaveBeenCalledWith('0');
   });
@@ -125,7 +175,7 @@ describe('FlagCell — high-bit flags (BigInt arithmetic)', () => {
   };
 
   it('read: bit-32 flag shows as active when value equals 2^32', () => {
-    render(<FlagCell value={4294967296} meta={bit32Meta} editMode={false} onCommit={vi.fn()} />);
+    render(<FlagCell value={4294967296} meta={bit32Meta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getByText('UseAdvancedAvoidance')).toBeInTheDocument();
   });
 
@@ -133,7 +183,9 @@ describe('FlagCell — high-bit flags (BigInt arithmetic)', () => {
     // value = 2^32 + 1 (UseAdvancedAvoidance | Playable)
     // unchecking UseAdvancedAvoidance should leave Playable (= 1), not 0
     const onCommit = vi.fn();
-    render(<FlagCell value={4294967297} meta={bit32Meta} editMode={true} onCommit={onCommit} />);
+    renderActivated(
+      <FlagCell value={4294967297} meta={bit32Meta} editable={true} onCommit={onCommit} />
+    );
     fireEvent.click(screen.getAllByRole('checkbox')[1]); // uncheck UseAdvancedAvoidance
     expect(onCommit).toHaveBeenCalledWith('1');
   });
@@ -153,24 +205,26 @@ describe('FlagCell — string value contract (TD-008)', () => {
   it('read: parses a decimal string above 2^53 without losing the low bit', () => {
     // 2^53 + 1: Number("9007199254740993") rounds to 2^53 and drops Playable.
     // BigInt("9007199254740993") keeps both bits.
-    render(<FlagCell value="9007199254740993" meta={highBitMeta} editMode={false} onCommit={vi.fn()} />);
+    render(<FlagCell value="9007199254740993" meta={highBitMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getByText('Playable, LowPriorityPushable')).toBeInTheDocument();
   });
 
   it('edit: onCommit receives a decimal string preserving precision above 2^53', () => {
     const onCommit = vi.fn();
-    render(<FlagCell value="9007199254740992" meta={highBitMeta} editMode={true} onCommit={onCommit} />);
+    renderActivated(
+      <FlagCell value="9007199254740992" meta={highBitMeta} editable={true} onCommit={onCommit} />
+    );
     fireEvent.click(screen.getAllByRole('checkbox')[0]); // check Playable (bit 0)
     expect(onCommit).toHaveBeenCalledWith('9007199254740993');
   });
 
   it('does not throw on a non-numeric string value; renders as no flags', () => {
-    render(<FlagCell value="abc" meta={flagMeta} editMode={false} onCommit={vi.fn()} />);
+    render(<FlagCell value="abc" meta={flagMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 
   it('does not throw on a non-numeric, non-string value; renders as no flags', () => {
-    render(<FlagCell value={{}} meta={flagMeta} editMode={false} onCommit={vi.fn()} />);
+    render(<FlagCell value={{}} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 });
@@ -179,12 +233,14 @@ describe('FlagCell — sparse bit positions (F1)', () => {
   it('read: shows X and Z active for value 5 using actual bit values', () => {
     // With 1<<index: index 1 → bit 1, but Z is actually bit 4. Would show only X.
     // With enumBitValues [1, 4]: X=1 (5&1≠0), Z=4 (5&4≠0) → both active.
-    render(<FlagCell value={5} meta={sparseFlags} editMode={false} onCommit={vi.fn()} />);
+    render(<FlagCell value={5} meta={sparseFlags} editable={false} onCommit={vi.fn()} />);
     expect(screen.getByText('X, Z')).toBeInTheDocument();
   });
 
   it('edit: both checkboxes checked when value has bits 1 and 4 set', () => {
-    render(<FlagCell value={5} meta={sparseFlags} editMode={true} onCommit={vi.fn()} />);
+    renderActivated(
+      <FlagCell value={5} meta={sparseFlags} editable={true} onCommit={vi.fn()} />
+    );
     const checkboxes = screen.getAllByRole('checkbox');
     expect(checkboxes[0].checked).toBe(true);   // X: 5 & 1 !== 0
     expect(checkboxes[1].checked).toBe(true);   // Z: 5 & 4 !== 0
@@ -192,7 +248,9 @@ describe('FlagCell — sparse bit positions (F1)', () => {
 
   it('edit: onCommit uses enumBitValues[i] not 1<<i when toggling Z', () => {
     const onCommit = vi.fn();
-    render(<FlagCell value={5} meta={sparseFlags} editMode={true} onCommit={onCommit} />);
+    renderActivated(
+      <FlagCell value={5} meta={sparseFlags} editable={true} onCommit={onCommit} />
+    );
     fireEvent.click(screen.getAllByRole('checkbox')[1]); // toggle Z (bit 4)
     // 5 ^ 4 = 1; wrong answer with 1<<index would be 5 ^ 2 = 7
     expect(onCommit).toHaveBeenCalledWith('1');
