@@ -342,6 +342,17 @@ describe('RecordPanel', () => {
     await waitFor(() => expect(screen.getByText('Copy as Override…')).toBeInTheDocument());
   });
 
+  // Issue #136: the panel's Save button called POST /plugins/{plugin}/save — a route the
+  // backend does not implement and will not, because ADR-0029 scopes save to a ChangeGroup,
+  // never to a plugin. A control that claims to save but 404s is a false affordance
+  // (ADR-0026), so it is deleted rather than de-gated. Saving lives in the Pending Changes
+  // tree; the Pending column's group-scoped Save/Revert is its own ticket.
+  it('offers no per-plugin Save — save is scoped to a ChangeGroup, not a plugin', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Copy as Override…'));
+    expect(screen.queryByText('Save')).not.toBeInTheDocument();
+  });
+
   it('offers no Copy as Override… on an immutable column', async () => {
     render(<RecordPanel />);
     await waitFor(() => screen.getByText('(read-only)'));
@@ -956,31 +967,9 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('resets savingPlugin when LOAD_RECORD arrives while a save is in-flight', async () => {
-    vi.stubGlobal('fetch', vi.fn((url: string) => {
-      if (String(url).includes('/save')) return new Promise(() => {}); // never resolves
-      if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(compareResult) };
-      if (String(url).includes('/changes')) return { ok: true, json: () => Promise.resolve([]) };
-      if (String(url).includes('/plugins')) return { ok: true, json: () => Promise.resolve(pluginsResponse) };
-      return { ok: false, status: 404, statusText: 'Not Found' };
-    }));
-
-    render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Save'));
-    fireEvent.click(screen.getByText('Save'));
-    await waitFor(() => screen.getByText('Saving…'));
-
-    act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000002:Fallout4.esm' },
-      }));
-    });
-
-    // After LOAD_RECORD, the new record loads with the same plugins and must not show "Saving…"
-    await waitFor(() => screen.getByText(/TestNPC/));
-    expect(screen.queryByText('Saving…')).not.toBeInTheDocument();
-    expect(screen.getByText('Save')).not.toBeDisabled();
-  });
+  // Issue #136: the "resets savingPlugin when LOAD_RECORD arrives while a save is in-flight"
+  // test lived here. It exercised the per-plugin Save button, which called a route the backend
+  // never implemented — it asserted a dead path, so it goes with the button.
 
   it('re-fetches data when LOAD_RECORD arrives with the same formKey', async () => {
     const fetchMock = makeFetch();

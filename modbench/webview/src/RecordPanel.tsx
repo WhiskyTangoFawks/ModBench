@@ -231,14 +231,12 @@ interface PluginHeaderProps {
   override: RecordDetail;
   isImmutable: boolean;
   isHeaderRecord: boolean;
-  saving: boolean;
   showCopyPicker: boolean;
   mutableTargets: PluginInfo[];
   showMasterPicker: boolean;
   loadedPlugins: PluginInfo[];
   collapsed: boolean;
   onToggleCollapse: () => void;
-  onSave: () => void;
   onOpenCopyPicker: () => void;
   onCloseCopyPicker: () => void;
   onCopyTo: (target: string) => void;
@@ -257,10 +255,10 @@ function currentMasters(o: RecordDetail): string[] {
 }
 
 function PluginHeader({
-  override: o, isImmutable, isHeaderRecord, saving,
+  override: o, isImmutable, isHeaderRecord,
   showCopyPicker, mutableTargets, showMasterPicker, loadedPlugins,
   collapsed, onToggleCollapse,
-  onSave, onOpenCopyPicker, onCloseCopyPicker, onCopyTo,
+  onOpenCopyPicker, onCloseCopyPicker, onCopyTo,
   onOpenMasterPicker, onCloseMasterPicker, onAddMaster,
 }: PluginHeaderProps) {
   const masters = currentMasters(o);
@@ -296,9 +294,6 @@ function PluginHeader({
       {/* Issue #111: no mode gate — a mutable column's structural actions are always available. */}
       {!collapsed && !isImmutable && (
         <div style={{ marginTop: 3, position: 'relative' }}>
-          <button style={btnStyle} onClick={onSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
           <button style={btnStyle} onClick={onOpenCopyPicker}>
             Copy as Override…
           </button>
@@ -755,7 +750,6 @@ export function RecordPanel() {
   const [immutableSet, setImmutableSet] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [savingPlugin, setSavingPlugin] = useState<string | null>(null);
   const [copyPickerPlugin, setCopyPickerPlugin] = useState<string | null>(null);
   const [masterPickerPlugin, setMasterPickerPlugin] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
@@ -818,7 +812,6 @@ export function RecordPanel() {
         setAllChanges([]);
         setError(null);
         setActionError(null);
-        setSavingPlugin(null);
         setCopyPickerPlugin(null);
         setMasterPickerPlugin(null);
         void refreshRef.current(msg.formKey);
@@ -900,21 +893,6 @@ export function RecordPanel() {
     await refresh(formKey);
   }
 
-  async function handleSave(plugin: string) {
-    setActionError(null);
-    setSavingPlugin(plugin);
-    try {
-      const resp = await fetch(`http://localhost:${port}/plugins/${encodeURIComponent(plugin)}/save`, { method: 'POST' });
-      if (!resp.ok) {
-        setActionError(resp.status === 409 ? 'Plugin is read-only' : `Save failed: ${resp.statusText}`);
-        return;
-      }
-      await refresh(formKey);
-    } finally {
-      setSavingPlugin(null);
-    }
-  }
-
   async function handleCopyTo(targetPlugin: string) {
     setActionError(null);
     try {
@@ -934,7 +912,7 @@ export function RecordPanel() {
 
   // Issue #3: "Remove Override" — stages a delete of this plugin's override of the current
   // record (Phase 10's DeleteRecords endpoint, reached here via the same raw-fetch pattern as
-  // handleCopyTo/handleSave — the webview never routes through SessionController/ApiClient).
+  // handleCopyTo — the webview never routes through SessionController/ApiClient).
   async function handleRemoveOverride(plugin: string) {
     setActionError(null);
     try {
@@ -1108,14 +1086,12 @@ export function RecordPanel() {
                         override={col.override}
                         isImmutable={immutableSet.has(col.override.plugin)}
                         isHeaderRecord={isHeaderRecord}
-                        saving={savingPlugin === col.override.plugin}
                         showCopyPicker={copyPickerPlugin === col.override.plugin}
                         mutableTargets={allPlugins.filter(p => !p.isImmutable)}
                         showMasterPicker={masterPickerPlugin === col.override.plugin}
                         loadedPlugins={allPlugins}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleColumnCollapse(col.override.plugin)}
-                        onSave={() => { void handleSave(col.override.plugin); }}
                         onOpenCopyPicker={() => setCopyPickerPlugin(col.override.plugin)}
                         onCloseCopyPicker={() => setCopyPickerPlugin(null)}
                         onCopyTo={p => { void handleCopyTo(p); }}
