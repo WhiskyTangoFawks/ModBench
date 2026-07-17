@@ -125,8 +125,10 @@ exactly what it will carry.
   backend's 409 on a partial group revert remains as the guard against API misuse.
 - Title-bar **Save All / Revert All** act on everything, hidden or disabled when nothing is
   staged.
-- **Reveal**: the tree supports revealing an arbitrary change, so the Record editor panel's
-  Pending column can navigate here (see [medit-record-editor.md](medit-record-editor.md)).
+- **Reveal**: the tree exposes the `getParent` seam so an arbitrary change can be revealed.
+  The Record editor panel's Pending-column navigation that consumes it lands with **#140**
+  (blocked by this ticket); this ticket ships the seam, not the wiring
+  (see [medit-record-editor.md](medit-record-editor.md)).
 - Empty state: "No pending changes." A **failed fetch** yields an error node, never the empty
   state — an empty tree meaning "the request failed" is exactly the silently-wrong mental
   model [ADR-0026](../adr/0026-error-surfacing-policy.md) forbids. **Partial-save failure**
