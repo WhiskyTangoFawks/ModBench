@@ -59,7 +59,7 @@ function pendingChange(plugin: string, fieldPath: string, newValue: unknown): Pe
 
 type RenderOpts = {
   onOpen?: ReturnType<typeof vi.fn>;
-  editMode?: boolean;
+  immutable?: string[];
   onEdit?: ReturnType<typeof vi.fn>;
   onRevert?: ReturnType<typeof vi.fn>;
   onStructOp?: ReturnType<typeof vi.fn>;
@@ -80,7 +80,7 @@ function renderSection(vmad: VmadCompare | null, plugins: string[], opts: Render
           vmad={vmad}
           columns={cols}
           onOpen={onOpen}
-          editMode={opts.editMode}
+          immutableSet={new Set(opts.immutable ?? [])}
           onEdit={opts.onEdit}
           onRevert={opts.onRevert}
           onStructOp={opts.onStructOp}
@@ -120,7 +120,7 @@ describe('VmadSection', () => {
     expect(screen.getByText('Enabled')).toBeInTheDocument();
   });
 
-  it('renders an Object property FormKey as a link with the alias, opening it on click', () => {
+  it('renders an Object property FormKey as a link with the alias, opening it on Ctrl+click', () => {
     const vmad: VmadCompare = {
       scripts: [script({
         name: 'S',
@@ -139,7 +139,7 @@ describe('VmadSection', () => {
     expect(link.tagName).toBe('BUTTON');
     expect(screen.getByText(/\[2\]/)).toBeInTheDocument();
 
-    fireEvent.click(link);
+    fireEvent.click(link, { ctrlKey: true });
     expect(onOpen).toHaveBeenCalledWith('000123:Foo.esp');
   });
 
@@ -275,7 +275,6 @@ function arrayVmad(elementKind: 'scalar' | 'object', values: unknown[]): VmadCom
 describe('VmadSection array edit mode', () => {
   it('expanding an ArrayOfInt property in edit mode shows a number input per element', () => {
     const { container } = renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
-      editMode: true,
       onEdit: vi.fn(),
     });
     toggle('S');
@@ -289,7 +288,7 @@ describe('VmadSection array edit mode', () => {
 
   it('Add button appends a default element and stages the full new array', () => {
     const onEdit = vi.fn();
-    renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], { editMode: true, onEdit });
+    renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], { onEdit });
     toggle('S');
     toggle('Items');
 
@@ -300,7 +299,7 @@ describe('VmadSection array edit mode', () => {
 
   it('Remove button on an element removes it and stages the remaining array', () => {
     const onEdit = vi.fn();
-    renderSection(arrayVmad('scalar', [10, 20, 30]), ['A.esm'], { editMode: true, onEdit });
+    renderSection(arrayVmad('scalar', [10, 20, 30]), ['A.esm'], { onEdit });
     toggle('S');
     toggle('Items');
 
@@ -311,7 +310,7 @@ describe('VmadSection array edit mode', () => {
 
   it('Move down on an element swaps it with the next and stages the reordered array', () => {
     const onEdit = vi.fn();
-    renderSection(arrayVmad('scalar', [10, 20, 30]), ['A.esm'], { editMode: true, onEdit });
+    renderSection(arrayVmad('scalar', [10, 20, 30]), ['A.esm'], { onEdit });
     toggle('S');
     toggle('Items');
 
@@ -322,7 +321,7 @@ describe('VmadSection array edit mode', () => {
 
   it('Move up on an element swaps it with the previous and stages the reordered array', () => {
     const onEdit = vi.fn();
-    renderSection(arrayVmad('scalar', [10, 20, 30]), ['A.esm'], { editMode: true, onEdit });
+    renderSection(arrayVmad('scalar', [10, 20, 30]), ['A.esm'], { onEdit });
     toggle('S');
     toggle('Items');
 
@@ -335,7 +334,6 @@ describe('VmadSection array edit mode', () => {
     const onRevert = vi.fn();
     const chg = pendingChange('A.esm', String.raw`VMAD\S\Items`, [10, 20, 0]);
     renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
-      editMode: true,
       onRevert,
       withPendingCol: 'A.esm',
       pendingChangeMap: { [String.raw`A.esm:VMAD\S\Items`]: chg },
@@ -353,7 +351,6 @@ describe('VmadSection array edit mode', () => {
   it('editing an element calls onEdit with the full new array as atomic value', () => {
     const onEdit = vi.fn();
     const { container } = renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
-      editMode: true,
       onEdit,
     });
     toggle('S');
@@ -393,7 +390,7 @@ function structVmad(): VmadCompare {
 
 describe('VmadSection struct edit mode', () => {
   it('expanding a Struct in edit mode shows an input per member', () => {
-    const { container } = renderSection(structVmad(), ['A.esm'], { editMode: true, onEdit: vi.fn() });
+    const { container } = renderSection(structVmad(), ['A.esm'], { onEdit: vi.fn() });
     toggle('S');
     toggle('Bounds');
 
@@ -405,7 +402,7 @@ describe('VmadSection struct edit mode', () => {
 
   it('editing a struct member restages the whole struct subtree at the property path', () => {
     const onEdit = vi.fn();
-    const { container } = renderSection(structVmad(), ['A.esm'], { editMode: true, onEdit });
+    const { container } = renderSection(structVmad(), ['A.esm'], { onEdit });
     toggle('S');
     toggle('Bounds');
 
@@ -451,7 +448,7 @@ function nestedStructVmad(): VmadCompare {
 describe('VmadSection nested struct edit mode', () => {
   it('expands struct-in-struct and restages the whole root subtree when a deep member is edited', () => {
     const onEdit = vi.fn();
-    renderSection(nestedStructVmad(), ['A.esm'], { editMode: true, onEdit });
+    renderSection(nestedStructVmad(), ['A.esm'], { onEdit });
     toggle('S');
     toggle('Bounds');
     expect(screen.queryByText('Depth')).not.toBeInTheDocument();
@@ -498,7 +495,7 @@ describe('VmadSection structList + struct structural edits (13.7)', () => {
 
   it('Add struct appends a default-valued clone of the first element and restages', () => {
     const onEdit = vi.fn();
-    renderSection(structListVmad(), ['A.esm'], { editMode: true, onEdit });
+    renderSection(structListVmad(), ['A.esm'], { onEdit });
     toggle('S');
     toggle('Items');
 
@@ -513,7 +510,7 @@ describe('VmadSection structList + struct structural edits (13.7)', () => {
 
   it('Remove struct on an element removes it and restages', () => {
     const onEdit = vi.fn();
-    renderSection(structListVmad(), ['A.esm'], { editMode: true, onEdit });
+    renderSection(structListVmad(), ['A.esm'], { onEdit });
     toggle('S');
     toggle('Items');
 
@@ -526,7 +523,7 @@ describe('VmadSection structList + struct structural edits (13.7)', () => {
 
   it('Remove member on a struct member removes it and restages', () => {
     const onEdit = vi.fn();
-    renderSection(structVmad(), ['A.esm'], { editMode: true, onEdit });
+    renderSection(structVmad(), ['A.esm'], { onEdit });
     toggle('S');
     toggle('Bounds');
 
@@ -541,7 +538,6 @@ describe('VmadSection structList + struct structural edits (13.7)', () => {
     const onRevert = vi.fn();
     const chg = pendingChange('A.esm', String.raw`VMAD\S\Bounds`, [{ name: 'X', type: 'Int', intValue: 99 }]);
     renderSection(structVmad(), ['A.esm'], {
-      editMode: true,
       onRevert,
       withPendingCol: 'A.esm',
       pendingChangeMap: { [String.raw`A.esm:VMAD\S\Bounds`]: chg },
@@ -571,7 +567,7 @@ const boolVmad = (): VmadCompare => ({
 
 describe('VmadSection edit mode', () => {
   it('Bool property renders a checkbox in edit mode', () => {
-    const { container } = renderSection(boolVmad(), ['A.esm'], { editMode: true, onEdit: vi.fn() });
+    const { container } = renderSection(boolVmad(), ['A.esm'], { onEdit: vi.fn() });
     toggle('MyScript');
 
     expect(container.querySelector('input[type="checkbox"]')).toBeInTheDocument();
@@ -579,7 +575,7 @@ describe('VmadSection edit mode', () => {
 
   it('toggling Bool checkbox calls onEdit with VMAD path and boolean value', () => {
     const onEdit = vi.fn();
-    renderSection(boolVmad(), ['A.esm'], { editMode: true, onEdit });
+    renderSection(boolVmad(), ['A.esm'], { onEdit });
     toggle('MyScript');
 
     fireEvent.click(screen.getByRole('checkbox'));
@@ -600,7 +596,7 @@ describe('VmadSection edit mode', () => {
         })],
       })],
     };
-    renderSection(vmad, ['A.esm'], { editMode: true, onEdit });
+    renderSection(vmad, ['A.esm'], { onEdit });
     toggle('S');
 
     const input = screen.getByRole('spinbutton');
@@ -624,7 +620,7 @@ describe('VmadSection edit mode', () => {
         })],
       })],
     };
-    renderSection(vmad, ['A.esm'], { editMode: true, onEdit });
+    renderSection(vmad, ['A.esm'], { onEdit });
     toggle('S');
 
     const input = screen.getByRole('textbox');
@@ -647,7 +643,7 @@ describe('VmadSection edit mode', () => {
         })],
       })],
     };
-    const { container } = renderSection(vmad, ['A.esm'], { editMode: true, onEdit: vi.fn() });
+    const { container } = renderSection(vmad, ['A.esm'], { onEdit: vi.fn() });
     toggle('S');
 
     expect(container.querySelector('input[type="number"][aria-label="Alias"]')).toBeInTheDocument();
@@ -668,7 +664,7 @@ describe('VmadSection edit mode', () => {
         })],
       })],
     };
-    renderSection(vmad, ['A.esm'], { editMode: true, onEdit });
+    renderSection(vmad, ['A.esm'], { onEdit });
     toggle('S');
 
     const aliasInput = screen.getByRole('spinbutton', { name: 'Alias' });
@@ -682,7 +678,6 @@ describe('VmadSection edit mode', () => {
     const onRevert = vi.fn();
     const chg = pendingChange('A.esm', String.raw`VMAD\MyScript\Enabled`, true);
     renderSection(boolVmad(), ['A.esm'], {
-      editMode: true,
       onRevert,
       withPendingCol: 'A.esm',
       pendingChangeMap: { [String.raw`A.esm:VMAD\MyScript\Enabled`]: chg },
@@ -713,7 +708,7 @@ describe('VmadSection edit mode', () => {
         ],
       })],
     };
-    const { container } = renderSection(vmad, ['A.esm'], { editMode: true, onEdit: vi.fn() });
+    const { container } = renderSection(vmad, ['A.esm'], { onEdit: vi.fn() });
     toggle('S');
 
     expect(container.querySelectorAll('input, select, textarea')).toHaveLength(0);
@@ -724,7 +719,7 @@ describe('VmadSection edit mode', () => {
   it('add-property control opens a dialog that stages an add_property op', () => {
     const onStructOp = vi.fn();
     const vmad: VmadCompare = { scripts: [script({ name: 'S', flags: { 'A.esm': 'Local' } })] };
-    renderSection(vmad, ['A.esm'], { editMode: true, onStructOp });
+    renderSection(vmad, ['A.esm'], { onStructOp });
 
     fireEvent.click(screen.getByTitle('Add property'));
 
@@ -748,7 +743,7 @@ describe('VmadSection edit mode', () => {
         properties: [prop({ name: 'IsActive', kind: 'scalar', values: { 'A.esm': true }, types: { 'A.esm': 'Bool' } })],
       })],
     };
-    renderSection(vmad, ['A.esm'], { editMode: true, onStructOp, onEdit: vi.fn() });
+    renderSection(vmad, ['A.esm'], { onStructOp, onEdit: vi.fn() });
     toggle('S');
 
     fireEvent.click(screen.getByTitle('Remove property'));
@@ -797,7 +792,6 @@ describe('VmadSection edit mode', () => {
     });
     const vmad: VmadCompare = { scripts: [script({ name: 'S', flags: { 'A.esm': 'Local' } })] };
     renderSection(vmad, ['A.esm'], {
-      editMode: true,
       withPendingCol: 'A.esm',
       pendingChangeMap: { [`A.esm:${chg.fieldPath}`]: chg },
       onStructOp,
@@ -819,7 +813,7 @@ describe('VmadSection edit mode', () => {
 
   it('add-script control stages an add_script op even when the record has no VMAD', () => {
     const onStructOp = vi.fn();
-    renderSection(null, ['A.esm'], { editMode: true, onStructOp });
+    renderSection(null, ['A.esm'], { onStructOp });
 
     fireEvent.click(screen.getByTitle('Add script'));
     fireEvent.change(screen.getByLabelText('New script name'), { target: { value: 'MyScript' } });
@@ -836,7 +830,7 @@ describe('VmadSection edit mode', () => {
   it('remove-script control stages a remove_script op', () => {
     const onStructOp = vi.fn();
     const vmad: VmadCompare = { scripts: [script({ name: 'S', flags: { 'A.esm': 'Local' } })] };
-    renderSection(vmad, ['A.esm'], { editMode: true, onStructOp });
+    renderSection(vmad, ['A.esm'], { onStructOp });
 
     fireEvent.click(screen.getByTitle('Remove script'));
 
@@ -866,7 +860,7 @@ describe('VmadSection edit mode', () => {
         properties: [prop({ name: 'Counter', kind: 'scalar', values: { 'A.esm': 42 }, types: { 'A.esm': 'Int' } })],
       })],
     };
-    renderSection(vmad, ['A.esm'], { editMode: true, onStructOp });
+    renderSection(vmad, ['A.esm'], { onStructOp });
     toggle('S');
 
     fireEvent.change(screen.getByLabelText('Type for Counter'), { target: { value: 'Float' } });
@@ -897,7 +891,7 @@ describe('VmadSection edit mode', () => {
   it('script flags control stages set_flags on the script', () => {
     const onStructOp = vi.fn();
     const vmad: VmadCompare = { scripts: [script({ name: 'S', flags: { 'A.esm': 'Local' } })] };
-    renderSection(vmad, ['A.esm'], { editMode: true, onStructOp });
+    renderSection(vmad, ['A.esm'], { onStructOp });
 
     fireEvent.change(screen.getByLabelText('Flags for S'), { target: { value: 'Inherited' } });
 
@@ -912,7 +906,7 @@ describe('VmadSection edit mode', () => {
         properties: [prop({ name: 'Counter', kind: 'scalar', values: { 'A.esm': 42 }, types: { 'A.esm': 'Int' } })],
       })],
     };
-    renderSection(vmad, ['A.esm'], { editMode: true, onStructOp });
+    renderSection(vmad, ['A.esm'], { onStructOp });
     toggle('S');
 
     fireEvent.change(screen.getByLabelText('Flags for Counter'), { target: { value: 'Removed' } });

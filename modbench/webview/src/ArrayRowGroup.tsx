@@ -11,7 +11,7 @@ const borderColor = 'var(--vscode-editorGroup-border, #444)';
 interface ArrayRowGroupProps {
   value: unknown[] | null | undefined;
   meta: FieldMetadata;
-  editMode: boolean;
+  editable: boolean;
   port: number;
   onOpen: (fk: string) => void;
   onCommit: (v: unknown[]) => void;
@@ -19,7 +19,7 @@ interface ArrayRowGroupProps {
   checkError?: string | null;
 }
 
-export function ArrayRowGroup({ value, meta, editMode, port, onOpen, onCommit, storageKey, checkError }: ArrayRowGroupProps) {
+export function ArrayRowGroup({ value, meta, editable, port, onOpen, onCommit, storageKey, checkError }: ArrayRowGroupProps) {
   const stored = sessionStorage.getItem(storageKey);
   const [expanded, setExpanded] = useState(stored === 'true');
   const [addingElement, setAddingElement] = useState(false);
@@ -84,10 +84,10 @@ export function ArrayRowGroup({ value, meta, editMode, port, onOpen, onCommit, s
           style={{ color: 'var(--vscode-errorForeground, #f88)', fontSize: '11px', cursor: 'default' }}
         >⚠</span>
       )}
-      {editMode && elemMeta?.isSortable && (
+      {editable && elemMeta?.isSortable && (
         <button onClick={handleSort} title="Sort by FormKey" style={btnStyle}>↑↓</button>
       )}
-      {editMode && (
+      {editable && (
         <button onClick={handleAdd} title="Add element" style={btnStyle}>+</button>
       )}
     </div>
@@ -120,10 +120,10 @@ export function ArrayRowGroup({ value, meta, editMode, port, onOpen, onCommit, s
                 {idx}
               </td>
               <td style={{ border: `1px solid ${borderColor}`, padding: '2px 6px' }}>
-                {renderElement(item, idx, elemMeta, editMode, port, onOpen,
+                {renderElement(item, idx, elemMeta, editable, port, onOpen,
                   v => handleElementCommit(idx, v), storageKey)}
               </td>
-              {editMode && (
+              {editable && (
                 <td style={{ border: `1px solid ${borderColor}`, padding: '2px 4px', width: 20 }}>
                   <button
                     onClick={() => handleRemove(idx)}
@@ -145,7 +145,7 @@ function renderElement(
   item: unknown,
   idx: number,
   elemMeta: FieldMetadata | undefined,
-  editMode: boolean,
+  editable: boolean,
   port: number,
   onOpen: (fk: string) => void,
   onCommit: (v: unknown) => void,
@@ -159,7 +159,7 @@ function renderElement(
     return (
       <StructRowGroup
         value={item as Record<string, unknown>}
-        meta={elemMeta} editMode={editMode} port={port}
+        meta={elemMeta} editable={editable} port={port}
         onOpen={onOpen}
         onCommit={v => onCommit(v)}
         storageKey={`${parentKey}:${idx}`}
@@ -169,7 +169,7 @@ function renderElement(
 
   if (elemMeta.type === 'formKey') {
     const strVal = typeof item === 'string' && item ? item : null;
-    if (editMode) {
+    if (editable) {
       const inputStyle: React.CSSProperties = {
         fontFamily: mono, fontSize: '12px',
         background: 'var(--vscode-input-background, #3c3c3c)', color: fg,
@@ -196,7 +196,7 @@ function renderElement(
   }
 
   // Scalar fallback
-  if (!editMode) {
+  if (!editable) {
     return item == null
       ? <span style={{ opacity: 0.35, fontFamily: mono, fontSize: '12px' }}>—</span>
       : <span style={{ fontFamily: mono, fontSize: '12px' }}>{toStr(item)}</span>;

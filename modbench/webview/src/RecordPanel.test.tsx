@@ -26,38 +26,58 @@ const fkMeta: FieldMetadata = {
 
 // ── ScalarCell ────────────────────────────────────────────────────────────────
 
-describe('ScalarCell — view mode', () => {
+describe('ScalarCell — read-only column', () => {
   it('shows the string value', () => {
-    render(<ScalarCell value="Dogmeat" meta={strMeta} editMode={false} onCommit={vi.fn()} />);
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getByText('Dogmeat')).toBeInTheDocument();
   });
 
   it('shows "—" for null', () => {
-    render(<ScalarCell value={null} meta={strMeta} editMode={false} onCommit={vi.fn()} />);
+    render(<ScalarCell value={null} meta={strMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 
   it('shows numeric value as text', () => {
-    render(<ScalarCell value={42} meta={intMeta} editMode={false} onCommit={vi.fn()} />);
+    render(<ScalarCell value={42} meta={intMeta} editable={false} onCommit={vi.fn()} />);
     expect(screen.getByText('42')).toBeInTheDocument();
   });
 });
 
-describe('ScalarCell — edit mode', () => {
-  it('renders a text input for string type', () => {
-    render(<ScalarCell value="Dogmeat" meta={strMeta} editMode={true} onCommit={vi.fn()} />);
+// Issue #111: an editable cell renders as text until it is clicked — reading conflicts at a
+// glance is the grid's primary job, so only the clicked cell becomes an input (xEdit's
+// toEditOnClick). Commit or blur returns it to text.
+describe('ScalarCell — editable column renders text until clicked', () => {
+  it('renders text, not an input, before it is clicked', () => {
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} onCommit={vi.fn()} />);
+    expect(screen.getByText('Dogmeat')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('swaps to a text input for string type when clicked', () => {
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('Dogmeat'));
     expect(screen.getByDisplayValue('Dogmeat')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Dogmeat').type).toBe('text');
   });
 
-  it('renders a number input for int type', () => {
-    render(<ScalarCell value={5} meta={intMeta} editMode={true} onCommit={vi.fn()} />);
+  it('returns to text on blur', () => {
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('Dogmeat'));
+    fireEvent.blur(screen.getByDisplayValue('Dogmeat'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.getByText('Dogmeat')).toBeInTheDocument();
+  });
+
+  it('renders a number input for int type when clicked', () => {
+    render(<ScalarCell value={5} meta={intMeta} editable={true} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('5'));
     expect(screen.getByDisplayValue('5').type).toBe('number');
   });
 
   it('calls onCommit with a number (not a string) when int input is blurred', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value={5} meta={intMeta} editMode={true} onCommit={onCommit} />);
+    render(<ScalarCell value={5} meta={intMeta} editable={true} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('5'));
     const input = screen.getByDisplayValue('5');
     fireEvent.change(input, { target: { value: '10' } });
     fireEvent.blur(input);
@@ -67,38 +87,51 @@ describe('ScalarCell — edit mode', () => {
 
   it('calls onCommit with a float when float input is blurred', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value={1.5} meta={floatMeta} editMode={true} onCommit={onCommit} />);
+    render(<ScalarCell value={1.5} meta={floatMeta} editable={true} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('1.5'));
     const input = screen.getByDisplayValue('1.5');
     fireEvent.change(input, { target: { value: '3.14' } });
     fireEvent.blur(input);
     expect(onCommit).toHaveBeenCalledWith(3.14);
   });
 
-  it('renders a checkbox for bool type', () => {
-    render(<ScalarCell value={false} meta={boolMeta} editMode={true} onCommit={vi.fn()} />);
+  it('swaps to a checkbox for bool type when clicked', () => {
+    render(<ScalarCell value={false} meta={boolMeta} editable={true} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('false'));
     expect(screen.getByRole('checkbox')).toBeInTheDocument();
     expect(screen.getByRole('checkbox').checked).toBe(false);
   });
 
-  it('calls onCommit with true when bool checkbox is clicked', () => {
+  // Activating a bool must not toggle it: a stray click would otherwise stage a change.
+  it('does not commit merely by activating a bool cell', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value={false} meta={boolMeta} editMode={true} onCommit={onCommit} />);
+    render(<ScalarCell value={false} meta={boolMeta} editable={true} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('false'));
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('calls onCommit with true when the activated bool checkbox is clicked', () => {
+    const onCommit = vi.fn();
+    render(<ScalarCell value={false} meta={boolMeta} editable={true} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('false'));
     fireEvent.click(screen.getByRole('checkbox'));
     expect(onCommit).toHaveBeenCalledWith(true);
   });
 
-  it('renders a select with all enum options', () => {
-    render(<ScalarCell value="Male" meta={enumMeta} editMode={true} onCommit={vi.fn()} />);
+  it('swaps to a select with all enum options when clicked', () => {
+    render(<ScalarCell value="Male" meta={enumMeta} editable={true} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('Male'));
     const select = screen.getByRole('combobox');
     expect(select).toBeInTheDocument();
-    expect(screen.getByText('Male')).toBeInTheDocument();
-    expect(screen.getByText('Female')).toBeInTheDocument();
-    expect(screen.getByText('None')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Male' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Female' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'None' })).toBeInTheDocument();
   });
 
   it('calls onCommit with Enter key on a text input', () => {
     const onCommit = vi.fn();
-    render(<ScalarCell value="old" meta={strMeta} editMode={true} onCommit={onCommit} />);
+    render(<ScalarCell value="old" meta={strMeta} editable={true} onCommit={onCommit} />);
+    fireEvent.click(screen.getByText('old'));
     const input = screen.getByDisplayValue('old');
     fireEvent.change(input, { target: { value: 'new' } });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -108,40 +141,68 @@ describe('ScalarCell — edit mode', () => {
 
 // ── FormKeyCell ───────────────────────────────────────────────────────────────
 
-describe('FormKeyCell — view mode', () => {
+// Issue #111: one gesture split, uniform across the grid — plain click edits (opens the
+// picker), Ctrl+click follows the reference. This is the collision the mode was silently
+// resolving: click used to mean "navigate" in view mode and "open picker" in edit mode.
+describe('FormKeyCell — read-only column', () => {
   it('shows "—" when value is null', () => {
-    render(<FormKeyCell value={null} meta={fkMeta} editMode={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value={null} meta={fkMeta} editable={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 
-  it('shows the formKey string as a clickable link', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editMode={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
+  it('shows the formKey string as a link', () => {
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.getByText('000019:Fallout4.esm')).toBeInTheDocument();
   });
 
-  it('calls onOpen with the formKey when the link is clicked', () => {
+  it('Ctrl+click navigates to the referenced record', () => {
     const onOpen = vi.fn();
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editMode={false} port={5172} onOpen={onOpen} onCommit={vi.fn()} />);
-    fireEvent.click(screen.getByText('000019:Fallout4.esm'));
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} port={5172} onOpen={onOpen} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('000019:Fallout4.esm'), { ctrlKey: true });
     expect(onOpen).toHaveBeenCalledWith('000019:Fallout4.esm');
+  });
+
+  it('plain click does nothing — no navigation, no picker', () => {
+    const onOpen = vi.fn();
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} port={5172} onOpen={onOpen} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('000019:Fallout4.esm'));
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(screen.queryByPlaceholderText('Search EditorID…')).not.toBeInTheDocument();
   });
 });
 
-describe('FormKeyCell — edit mode', () => {
-  it('shows a "click to pick" prompt when value is null', () => {
-    render(<FormKeyCell value={null} meta={fkMeta} editMode={true} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
-    expect(screen.getByText(/click to pick/i)).toBeInTheDocument();
+describe('FormKeyCell — editable column', () => {
+  it('shows "—" when value is null, not a picker button', () => {
+    render(<FormKeyCell value={null} meta={fkMeta} editable={true} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Search EditorID…')).not.toBeInTheDocument();
   });
 
-  it('shows the current formKey on the picker button when a value is set', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editMode={true} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
+  it('shows the current formKey as a link at rest', () => {
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.getByText('000019:Fallout4.esm')).toBeInTheDocument();
   });
 
-  it('opens FormKeyPicker inline when the pick button is clicked', () => {
-    render(<FormKeyCell value={null} meta={fkMeta} editMode={true} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button'));
+  it('plain click opens the FormKey picker inline', () => {
+    render(<FormKeyCell value={null} meta={fkMeta} editable={true} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('—'));
     expect(screen.getByPlaceholderText('Search EditorID…')).toBeInTheDocument();
+  });
+
+  it('plain click on a cell with a value opens the picker, not navigation', () => {
+    const onOpen = vi.fn();
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} port={5172} onOpen={onOpen} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('000019:Fallout4.esm'));
+    expect(screen.getByPlaceholderText('Search EditorID…')).toBeInTheDocument();
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('Ctrl+click navigates instead of opening the picker', () => {
+    const onOpen = vi.fn();
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} port={5172} onOpen={onOpen} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('000019:Fallout4.esm'), { ctrlKey: true });
+    expect(onOpen).toHaveBeenCalledWith('000019:Fallout4.esm');
+    expect(screen.queryByPlaceholderText('Search EditorID…')).not.toBeInTheDocument();
   });
 });
 
@@ -164,17 +225,17 @@ describe('CheckErrorIcon', () => {
 
 describe('FormKeyCell — checkError', () => {
   it('shows no warning icon when checkError is absent', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editMode={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.queryByText('⚠')).not.toBeInTheDocument();
   });
 
   it('shows a warning icon with the checkError as its title in view mode', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editMode={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} checkError="dangling reference" />);
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} checkError="dangling reference" />);
     expect(screen.getByText('⚠')).toHaveAttribute('title', 'dangling reference');
   });
 
   it('shows a warning icon in edit mode too', () => {
-    render(<FormKeyCell value={null} meta={fkMeta} editMode={true} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} checkError="null not allowed" />);
+    render(<FormKeyCell value={null} meta={fkMeta} editable={true} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} checkError="null not allowed" />);
     expect(screen.getByText('⚠')).toHaveAttribute('title', 'null not allowed');
   });
 });
@@ -267,33 +328,25 @@ describe('RecordPanel', () => {
     expect(screen.getByText('Override Name')).toBeInTheDocument();
   });
 
-  it('shows an Edit button in view mode', async () => {
+  // Issue #111: there is no edit mode. Editing affordances follow the column's plugin
+  // mutability, not a mode the user has to enter on every record navigation.
+  it('renders no Edit/View mode toggle', async () => {
     render(<RecordPanel />);
-    await waitFor(() => expect(screen.getByText('Edit')).toBeInTheDocument());
+    await waitFor(() => screen.getByText('Name'));
+    expect(screen.queryByText('Edit')).not.toBeInTheDocument();
+    expect(screen.queryByText('View')).not.toBeInTheDocument();
   });
 
-  it('switches to View button and shows inputs when Edit is clicked', async () => {
+  it('offers Copy as Override… on a mutable column with no mode to enter first', async () => {
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
-    expect(screen.getByText('View')).toBeInTheDocument();
-    // Name field is a string — there should now be an input with the value
-    expect(screen.getByDisplayValue('Original Name')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Copy as Override…')).toBeInTheDocument());
   });
 
-  it('shows Save button for mutable plugins in edit mode', async () => {
+  it('offers no Copy as Override… on an immutable column', async () => {
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
-    expect(screen.getByText('Save')).toBeInTheDocument();
-  });
-
-  it('shows (read-only) label and no Save button for immutable plugins', async () => {
-    render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
-    expect(screen.getByText('(read-only)')).toBeInTheDocument();
-    expect(screen.getAllByText('Save')).toHaveLength(1); // only MyMod.esp gets a Save
+    await waitFor(() => screen.getByText('(read-only)'));
+    // Fallout4.esm is immutable, MyMod.esp is not — exactly one column gets the action.
+    expect(screen.getAllByText('Copy as Override…')).toHaveLength(1);
   });
 });
 
@@ -479,10 +532,10 @@ describe('RecordPanel — postMessage wiring', () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('calls vscode.postMessage with type openRecord when a FormKey link is clicked', async () => {
+  it('calls vscode.postMessage with type openRecord when a FormKey link is Ctrl+clicked', async () => {
     render(<RecordPanel />);
     await waitFor(() => screen.getByText('00013918:Fallout4.esm'));
-    fireEvent.click(screen.getByText('00013918:Fallout4.esm'));
+    fireEvent.click(screen.getByText('00013918:Fallout4.esm'), { ctrlKey: true });
     expect(vscode.postMessage).toHaveBeenCalledWith({
       type: WEBVIEW_TO_EXTENSION.OPEN_RECORD,
       formKey: '00013918:Fallout4.esm',
@@ -631,16 +684,16 @@ describe('RecordPanel — struct sub-rows', () => {
 
   it('child edit calls handleEdit with parent field name and merged struct', async () => {
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('X'));
 
-    // Find the input for the X sub-field in the Fallout4.esm column (value 10)
-    const inputFor10 = screen.getByDisplayValue('10');
-    fireEvent.change(inputFor10, { target: { value: '99' } });
-    fireEvent.blur(inputFor10);
+    // The X sub-field in the MyMod.esp column (value 15) — Fallout4.esm is immutable, so its
+    // cells never activate. Click the cell to activate its input, then edit it.
+    fireEvent.click(screen.getByText('15'));
+    const inputFor15 = screen.getByDisplayValue('15');
+    fireEvent.change(inputFor15, { target: { value: '99' } });
+    fireEvent.blur(inputFor15);
 
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
@@ -659,7 +712,9 @@ describe('RecordPanel — struct sub-rows', () => {
       plugin: string;
       fields: Record<string, unknown>;
     };
-    expect(body.fields['Bounds']).toMatchObject({ X: 99 });
+    // Y is preserved from MyMod.esp's disk value — the whole struct restages, not just X.
+    expect(body.fields['Bounds']).toMatchObject({ X: 99, Y: 20 });
+    expect(body.plugin).toBe('MyMod.esp');
   });
 });
 
@@ -691,8 +746,8 @@ describe('RecordPanel — 422 ProblemDetails detail is surfaced', () => {
 
   it('shows the ProblemDetails detail text when a stage is rejected with 422', async () => {
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
+    await waitFor(() => screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('Override Name'));
 
     const input = screen.getByDisplayValue('Override Name');
     fireEvent.change(input, { target: { value: 'Changed Name' } });
@@ -754,15 +809,12 @@ function makeHeaderFetch() {
 describe('RecordPanel — Add Master picker (issue #86)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('F1: shows "Add Master…" only in edit mode, on the header record', async () => {
+  it('F1: shows "Add Master…" on the header record, with no mode to enter first', async () => {
     vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
     vi.stubGlobal('mEditBackendPort', 15172);
     vi.stubGlobal('fetch', makeHeaderFetch());
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    expect(screen.queryByText('Add Master…')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('Edit'));
-    expect(screen.getByText('Add Master…')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Add Master…')).toBeInTheDocument());
   });
 
   it('F1: does not show "Add Master…" on a non-header record', async () => {
@@ -770,8 +822,7 @@ describe('RecordPanel — Add Master picker (issue #86)', () => {
     vi.stubGlobal('mEditBackendPort', 15172);
     vi.stubGlobal('fetch', makeFetch());
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
+    await waitFor(() => screen.getByText('Name'));
     expect(screen.queryByText('Add Master…')).not.toBeInTheDocument();
   });
 
@@ -780,8 +831,7 @@ describe('RecordPanel — Add Master picker (issue #86)', () => {
     vi.stubGlobal('mEditBackendPort', 15172);
     vi.stubGlobal('fetch', makeHeaderFetch());
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
+    await waitFor(() => screen.getByText('Add Master…'));
     fireEvent.click(screen.getByText('Add Master…'));
 
     // Fallout4.esm is already a master → excluded. DLCRobot.esm is loaded, not yet a master →
@@ -796,8 +846,7 @@ describe('RecordPanel — Add Master picker (issue #86)', () => {
     vi.stubGlobal('mEditBackendPort', 15172);
     vi.stubGlobal('fetch', fetchMock);
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
+    await waitFor(() => screen.getByText('Add Master…'));
     fireEvent.click(screen.getByText('Add Master…'));
     fireEvent.mouseDown(screen.getByText('DLCRobot.esm'));
 
@@ -836,8 +885,7 @@ describe('RecordPanel — Add Master picker (issue #86)', () => {
       return { ok: false, status: 404, statusText: 'Not Found' };
     }));
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
+    await waitFor(() => screen.getByText('Add Master…'));
     fireEvent.click(screen.getByText('Add Master…'));
     fireEvent.mouseDown(screen.getByText('DLCRobot.esm'));
 
@@ -918,8 +966,6 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
     }));
 
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
     await waitFor(() => screen.getByText('Save'));
     fireEvent.click(screen.getByText('Save'));
     await waitFor(() => screen.getByText('Saving…'));
@@ -930,9 +976,8 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
       }));
     });
 
-    // After LOAD_RECORD, new record loads with same plugins; clicking Edit should not show "Saving…"
+    // After LOAD_RECORD, the new record loads with the same plugins and must not show "Saving…"
     await waitFor(() => screen.getByText(/TestNPC/));
-    fireEvent.click(screen.getByText('Edit'));
     expect(screen.queryByText('Saving…')).not.toBeInTheDocument();
     expect(screen.getByText('Save')).not.toBeDisabled();
   });
@@ -1016,8 +1061,7 @@ describe('RecordPanel — column collapse (issue #3)', () => {
 
   it('collapsed column header hides the (read-only) label', async () => {
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
+    await waitFor(() => screen.getByText('(read-only)'));
     expect(screen.getByText('(read-only)')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Fallout4.esm'));
@@ -1052,18 +1096,20 @@ describe('RecordPanel — drag affordance on field cells', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('a field cell is not draggable in view mode', async () => {
+  // Issue #111: drag-to-copy is always on — there is no mode to enter. A read-only source
+  // column is draggable too: dragging is a copy, so only the drop target's mutability matters.
+  it('a field cell in a read-only column is draggable with a grab cursor, with no mode to enter', async () => {
     render(<RecordPanel />);
     await waitFor(() => screen.getByText('Original Name'));
     const cell = screen.getByText('Original Name').closest('td')!;
-    expect(cell.getAttribute('draggable')).toBe('false');
+    expect(cell.getAttribute('draggable')).toBe('true');
+    expect(cell.style.cursor).toBe('grab');
   });
 
-  it('a field cell becomes draggable with a grab cursor in edit mode', async () => {
+  it('a field cell in an editable column is draggable with a grab cursor, with no mode to enter', async () => {
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
-    const cell = screen.getByDisplayValue('Original Name').closest('td')!;
+    await waitFor(() => screen.getByText('Override Name'));
+    const cell = screen.getByText('Override Name').closest('td')!;
     expect(cell.getAttribute('draggable')).toBe('true');
     expect(cell.style.cursor).toBe('grab');
   });
@@ -1082,13 +1128,12 @@ describe('RecordPanel — drag-drop stages a pending field change', () => {
     const fetchMock = makeFetch();
     vi.stubGlobal('fetch', fetchMock);
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
+    await waitFor(() => screen.getByText('Original Name'));
 
     // Fallout4.esm is immutable — dragging FROM it is allowed (copy source).
-    const sourceCell = screen.getByDisplayValue('Original Name').closest('td')!;
+    const sourceCell = screen.getByText('Original Name').closest('td')!;
     // MyMod.esp is mutable — a valid drop target.
-    const targetCell = screen.getByDisplayValue('Override Name').closest('td')!;
+    const targetCell = screen.getByText('Override Name').closest('td')!;
 
     fireEvent.dragStart(sourceCell);
     fireEvent.drop(targetCell);
@@ -1114,13 +1159,12 @@ describe('RecordPanel — drag-drop stages a pending field change', () => {
     const fetchMock = makeFetch();
     vi.stubGlobal('fetch', fetchMock);
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
+    await waitFor(() => screen.getByText('Override Name'));
 
     // MyMod.esp is mutable — a valid drag source.
-    const sourceCell = screen.getByDisplayValue('Override Name').closest('td')!;
+    const sourceCell = screen.getByText('Override Name').closest('td')!;
     // Fallout4.esm is immutable — must reject the drop.
-    const targetCell = screen.getByDisplayValue('Original Name').closest('td')!;
+    const targetCell = screen.getByText('Original Name').closest('td')!;
 
     fireEvent.dragStart(sourceCell);
     fireEvent.drop(targetCell);

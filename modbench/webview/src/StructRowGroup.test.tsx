@@ -20,7 +20,7 @@ const factionMeta: FieldMetadata = {
 describe('StructRowGroup', () => {
   it('shows {…} when collapsed', () => {
     render(<StructRowGroup value={{ faction: '000010:Fallout4.esm', rank: 1 }}
-      meta={factionMeta} editMode={false} port={5172}
+      meta={factionMeta} editable={false} port={5172}
       onOpen={vi.fn()} onCommit={vi.fn()} storageKey="test:struct" />);
     expect(screen.getByText('{…}')).toBeInTheDocument();
   });
@@ -28,7 +28,7 @@ describe('StructRowGroup', () => {
   it('expands to show sub-fields from schema, not just stored keys', () => {
     // Value is missing 'rank' — sub-schema should still show the row
     render(<StructRowGroup value={{ faction: '000010:Fallout4.esm' }}
-      meta={factionMeta} editMode={false} port={5172}
+      meta={factionMeta} editable={false} port={5172}
       onOpen={vi.fn()} onCommit={vi.fn()} storageKey="test:struct2" />);
     fireEvent.click(screen.getByText('{…}'));
     expect(screen.getByText('faction')).toBeInTheDocument();
@@ -37,7 +37,7 @@ describe('StructRowGroup', () => {
 
   it('shows correct cell type for int sub-field', () => {
     render(<StructRowGroup value={{ faction: '000010:Fallout4.esm', rank: 3 }}
-      meta={factionMeta} editMode={false} port={5172}
+      meta={factionMeta} editable={false} port={5172}
       onOpen={vi.fn()} onCommit={vi.fn()} storageKey="test:struct3" />);
     fireEvent.click(screen.getByText('{…}'));
     // rank value 3 should be visible
@@ -55,7 +55,7 @@ describe('StructRowGroup', () => {
       }],
     };
     render(<StructRowGroup value={{ mode_flags: 5 }}
-      meta={structWithFlagsMeta} editMode={true} port={5172}
+      meta={structWithFlagsMeta} editable={true} port={5172}
       onOpen={vi.fn()} onCommit={vi.fn()} storageKey="test:struct-flags" />);
     fireEvent.click(screen.getByText('{…}'));
     const checkboxes = screen.getAllByRole('checkbox');
@@ -68,7 +68,7 @@ describe('StructRowGroup', () => {
   it('calls onCommit with merged struct when sub-field changes', () => {
     const onCommit = vi.fn();
     render(<StructRowGroup value={{ faction: '000010:Fallout4.esm', rank: 1 }}
-      meta={factionMeta} editMode={true} port={5172}
+      meta={factionMeta} editable={true} port={5172}
       onOpen={vi.fn()} onCommit={onCommit} storageKey="test:struct4" />);
     fireEvent.click(screen.getByText('{…}'));
     const input = screen.getByDisplayValue('1');

@@ -10,14 +10,14 @@ const borderColor = 'var(--vscode-editorGroup-border, #444)';
 interface StructRowGroupProps {
   value: Record<string, unknown> | null | undefined;
   meta: FieldMetadata;
-  editMode: boolean;
+  editable: boolean;
   port: number;
   onOpen: (fk: string) => void;
   onCommit: (v: Record<string, unknown>) => void;
   storageKey: string;
 }
 
-export function StructRowGroup({ value, meta, editMode, port, onOpen, onCommit, storageKey }: StructRowGroupProps) {
+export function StructRowGroup({ value, meta, editable, port, onOpen, onCommit, storageKey }: StructRowGroupProps) {
   const stored = sessionStorage.getItem(storageKey);
   const [expanded, setExpanded] = useState(stored === 'true');
 
@@ -67,7 +67,7 @@ export function StructRowGroup({ value, meta, editMode, port, onOpen, onCommit, 
                   {f.name}
                 </td>
                 <td style={{ border: `1px solid ${borderColor}`, padding: '2px 6px', minWidth: 120 }}>
-                  {renderSubCell(cellValue, f, editMode, port, onOpen,
+                  {renderSubCell(cellValue, f, editable, port, onOpen,
                     v => commitSubField(f.name, v), `${storageKey}:${f.name}`)}
                 </td>
               </tr>
@@ -83,7 +83,7 @@ export function StructRowGroup({ value, meta, editMode, port, onOpen, onCommit, 
 function renderSubCell(
   value: unknown,
   meta: FieldMetadata,
-  editMode: boolean,
+  editable: boolean,
   port: number,
   onOpen: (fk: string) => void,
   onCommit: (v: unknown) => void,
@@ -95,7 +95,7 @@ function renderSubCell(
     return (
       <StructRowGroup
         value={value as Record<string, unknown>}
-        meta={meta} editMode={editMode} port={port}
+        meta={meta} editable={editable} port={port}
         onOpen={onOpen}
         onCommit={v => onCommit(v)}
         storageKey={storageKey}
@@ -109,7 +109,7 @@ function renderSubCell(
   }
   if (meta.type === 'formKey') {
     const strVal = typeof value === 'string' && value ? value : null;
-    if (editMode) {
+    if (editable) {
       return (
         <span style={{ fontFamily: mono, fontSize: '12px', color: fg }}>
           {strVal ?? '—'}
@@ -130,7 +130,7 @@ function renderSubCell(
     );
   }
   // Scalar types
-  if (!editMode) {
+  if (!editable) {
     return value == null
       ? <span style={{ opacity: 0.35, fontFamily: mono, fontSize: '12px' }}>—</span>
       : <span style={{ fontFamily: mono, fontSize: '12px' }}>{toStr(value)}</span>;
@@ -150,7 +150,7 @@ function renderSubCell(
     );
   }
   if (meta.type === 'enum' && meta.isBitmask && meta.enumBitValues) {
-    return <FlagCell value={value} meta={meta} editMode={editMode} onCommit={onCommit} />;
+    return <FlagCell value={value} meta={meta} editable={editable} onCommit={onCommit} />;
   }
   if (meta.type === 'enum' && meta.enumValues.length > 0) {
     return (

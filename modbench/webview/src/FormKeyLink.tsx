@@ -1,13 +1,25 @@
 import React from 'react';
 import { mono } from './gridStyles';
 
-// Read-mode FormKey link button: renders a FormKey string as a clickable link
-// that opens the referenced record. Shared by FormKeyCell (generic fields) and
+// A FormKey rendered as its link affordance. Shared by FormKeyCell (generic fields) and
 // VmadSection (VMAD object properties).
-export function FormKeyLink({ value, onOpen }: { value: string; onOpen: (fk: string) => void }) {
+//
+// Issue #111: the click gesture is split here so it stays uniform across every cell in the
+// grid — Ctrl+click follows the reference (xEdit's vstViewClick likewise requires VK_CONTROL),
+// which leaves plain click free to mean "edit this cell". Plain click is the caller's to
+// define: FormKeyCell opens the picker with it; a read-only cell passes nothing, and plain
+// click there does nothing.
+export function FormKeyLink({ value, onOpen, onPlainClick }: Readonly<{
+  value: string;
+  onOpen: (fk: string) => void;
+  onPlainClick?: () => void;
+}>) {
   return (
     <button
-      onClick={() => onOpen(value)}
+      onClick={e => {
+        if (e.ctrlKey || e.metaKey) onOpen(value);
+        else onPlainClick?.();
+      }}
       style={{
         background: 'none',
         border: 'none',

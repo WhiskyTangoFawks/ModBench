@@ -501,13 +501,12 @@ describe('RecordPanel — array element edit', () => {
 
   it('editing element [1] calls PATCH with full updated array', async () => {
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('[1]'));
 
-    // MyMod.esp's [1] element is 'gamma' — find and edit it
+    // MyMod.esp's [1] element is 'gamma' — click it to activate its input, then edit it
+    fireEvent.click(screen.getByText('gamma'));
     const gammaInput = screen.getByDisplayValue('gamma');
     fireEvent.change(gammaInput, { target: { value: 'epsilon' } });
     fireEvent.blur(gammaInput);
@@ -591,12 +590,12 @@ describe('RecordPanel — struct sub-field edit', () => {
 
   it('editing X1 calls PATCH with full struct (X2 preserved from disk)', async () => {
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
-    await waitFor(() => screen.getByDisplayValue('5'));
+    await waitFor(() => screen.getByText('5'));
 
+    // Click X1's cell in the MyMod.esp column to activate its input.
+    fireEvent.click(screen.getByText('5'));
     const x1Input = screen.getByDisplayValue('5');
     fireEvent.change(x1Input, { target: { value: '10' } });
     fireEvent.blur(x1Input);
@@ -621,12 +620,12 @@ describe('RecordPanel — struct sub-field edit', () => {
   it('editing X1 with prior pending on X2 uses pending X2, not disk X2', async () => {
     vi.stubGlobal('fetch', makeFetch(structEditWithPriorPendingResult, [structEditPriorPendingChange]));
     render(<RecordPanel />);
-    await waitFor(() => screen.getByText('Edit'));
-    fireEvent.click(screen.getByText('Edit'));
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
-    await waitFor(() => screen.getByDisplayValue('5'));
+    await waitFor(() => screen.getByText('5'));
 
+    // Click X1's cell in the MyMod.esp column to activate its input.
+    fireEvent.click(screen.getByText('5'));
     const x1Input = screen.getByDisplayValue('5');
     fireEvent.change(x1Input, { target: { value: '10' } });
     fireEvent.blur(x1Input);

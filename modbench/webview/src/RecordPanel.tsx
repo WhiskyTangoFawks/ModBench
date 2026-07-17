@@ -29,22 +29,38 @@ const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConf
 interface ScalarCellProps {
   value: unknown;
   meta: FieldMetadata;
-  editMode: boolean;
+  // Issue #111: whether this cell's column is editable (its plugin is mutable). There is no
+  // edit mode — editability is a property of the column, not of a state the user toggles.
+  editable: boolean;
   onCommit: (v: unknown) => void;
 }
 
-export function ScalarCell({ value, meta, editMode, onCommit }: ScalarCellProps) {
+// The text a cell shows when it is not being edited. Null/missing renders as an empty-looking
+// em-dash, never "null"/"undefined" (spec: field type rendering rule 5).
+function ScalarText({ value }: { value: unknown }) {
+  return value == null
+    ? <span style={{ opacity: 0.35 }}>—</span>
+    : <span>{toStr(value)}</span>;
+}
+
+export function ScalarCell({ value, meta, editable, onCommit }: ScalarCellProps) {
   const [draft, setDraft] = useState(() => toStr(value));
   const [prevValue, setPrevValue] = useState(value);
+  // Issue #111: only the clicked cell is an input; everything else stays text.
+  const [active, setActive] = useState(false);
   if (prevValue !== value) {
     setPrevValue(value);
     setDraft(toStr(value));
   }
 
-  if (!editMode) {
-    return value == null
-      ? <span style={{ opacity: 0.35 }}>—</span>
-      : <span>{toStr(value)}</span>;
+  if (!editable) return <ScalarText value={value} />;
+
+  if (!active) {
+    return (
+      <span onClick={() => setActive(true)} style={{ cursor: 'text', display: 'block', minHeight: '1em' }}>
+        <ScalarText value={value} />
+      </span>
+    );
   }
 
   const inputBase: React.CSSProperties = {
@@ -59,18 +75,27 @@ export function ScalarCell({ value, meta, editMode, onCommit }: ScalarCellProps)
   };
 
   if (meta.type === 'bool') {
+    // Activating a bool must not toggle it — a stray click would otherwise stage a change.
     return (
       <input
         type="checkbox"
+        autoFocus
         checked={draft === 'true'}
         onChange={e => { setDraft(String(e.target.checked)); onCommit(e.target.checked); }}
+        onBlur={() => setActive(false)}
       />
     );
   }
 
   if (meta.type === 'enum' && meta.enumValues.length > 0) {
     return (
-      <select value={draft} onChange={e => setDraft(e.target.value)} onBlur={() => onCommit(draft)} style={inputBase}>
+      <select
+        autoFocus
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={() => { onCommit(draft); setActive(false); }}
+        style={inputBase}
+      >
         {meta.enumValues.map(ev => <option key={ev}>{ev}</option>)}
       </select>
     );
@@ -84,10 +109,11 @@ export function ScalarCell({ value, meta, editMode, onCommit }: ScalarCellProps)
 
   return (
     <input
+      autoFocus
       type={meta.type === 'int' || meta.type === 'float' ? 'number' : 'text'}
       value={draft}
       onChange={e => setDraft(e.target.value)}
-      onBlur={() => onCommit(coerce())}
+      onBlur={() => { onCommit(coerce()); setActive(false); }}
       onKeyDown={e => { if (e.key === 'Enter') { onCommit(coerce()); (e.target as HTMLInputElement).blur(); } }}
       style={inputBase}
     />
@@ -116,63 +142,44 @@ export function CheckErrorIcon({ checkError }: { checkError?: string | null }) {
 interface FormKeyCellProps {
   value: unknown;
   meta: FieldMetadata;
-  editMode: boolean;
+  editable: boolean;
   port: number;
   onOpen: (fk: string) => void;
   onCommit: (fk: string) => void;
   checkError?: string | null;
 }
 
-export function FormKeyCell({ value, meta, editMode, port, onOpen, onCommit, checkError }: FormKeyCellProps) {
+export function FormKeyCell({ value, meta, editable, port, onOpen, onCommit, checkError }: FormKeyCellProps) {
   const [picking, setPicking] = useState(false);
 
-  if (editMode) {
-    if (picking) {
-      return (
-        <FormKeyPicker
-          port={port}
-          validTypes={meta.validFormKeyTypes}
-          onSelect={fk => { setPicking(false); onCommit(fk); }}
-          onClose={() => setPicking(false)}
-        />
-      );
-    }
+  if (picking) {
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', width: '100%' }}>
-        <button
-          onClick={() => setPicking(true)}
-          style={{
-            background: 'var(--vscode-input-background, #3c3c3c)',
-            border: '1px solid var(--vscode-input-border, #555)',
-            color: typeof value === 'string' && value ? 'var(--vscode-textLink-foreground, #3794ff)' : fg,
-            cursor: 'pointer',
-            fontFamily: mono,
-            fontSize: '12px',
-            padding: '1px 4px',
-            textAlign: 'left',
-            width: '100%',
-          }}
-        >
-          {typeof value === 'string' && value
-            ? value
-            : <span style={{ opacity: 0.5 }}>— click to pick</span>}
-        </button>
-        <CheckErrorIcon checkError={checkError} />
-      </span>
+      <FormKeyPicker
+        port={port}
+        validTypes={meta.validFormKeyTypes}
+        onSelect={fk => { setPicking(false); onCommit(fk); }}
+        onClose={() => setPicking(false)}
+      />
     );
   }
 
-  if (typeof value !== 'string' || !value) {
-    return (
-      <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-        <span style={{ opacity: 0.35 }}>—</span>
-        <CheckErrorIcon checkError={checkError} />
-      </span>
-    );
-  }
+  // Issue #111: the cell reads the same whether or not its column is editable — a FormKey is a
+  // link, not a form control. Editability shows up in the gesture, not the paint: plain click
+  // opens the picker only where the column is mutable, and Ctrl+click follows the reference
+  // everywhere (including read-only columns).
+  const onPlainClick = editable ? () => setPicking(true) : undefined;
+
+  const fk = typeof value === 'string' && value ? value : null;
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-      <FormKeyLink value={value} onOpen={onOpen} />
+      {fk === null
+        ? (
+          <span
+            onClick={onPlainClick}
+            style={{ opacity: 0.35, cursor: editable ? 'pointer' : undefined }}
+          >—</span>
+        )
+        : <FormKeyLink value={fk} onOpen={onOpen} onPlainClick={onPlainClick} />}
       <CheckErrorIcon checkError={checkError} />
     </span>
   );
@@ -183,7 +190,7 @@ export function FormKeyCell({ value, meta, editMode, port, onOpen, onCommit, che
 function renderCell(
   value: unknown,
   meta: FieldMetadata,
-  editMode: boolean,
+  editable: boolean,
   port: number,
   onOpen: (fk: string) => void,
   onCommit: (v: unknown) => void,
@@ -192,7 +199,7 @@ function renderCell(
   if (meta.type === 'formKey') {
     return (
       <FormKeyCell
-        value={value} meta={meta} editMode={editMode} port={port}
+        value={value} meta={meta} editable={editable} port={port}
         onOpen={onOpen} onCommit={fk => onCommit(fk)} checkError={checkError}
       />
     );
@@ -213,9 +220,9 @@ function renderCell(
     );
   }
   if (meta.type === 'enum' && meta.isBitmask) {
-    return <FlagCell value={value} meta={meta} editMode={editMode} onCommit={onCommit} />;
+    return <FlagCell value={value} meta={meta} editable={editable} onCommit={onCommit} />;
   }
-  return <ScalarCell value={value} meta={meta} editMode={editMode} onCommit={onCommit} />;
+  return <ScalarCell value={value} meta={meta} editable={editable} onCommit={onCommit} />;
 }
 
 // ── PluginHeader ──────────────────────────────────────────────────────────────
@@ -224,7 +231,6 @@ interface PluginHeaderProps {
   override: RecordDetail;
   isImmutable: boolean;
   isHeaderRecord: boolean;
-  editMode: boolean;
   saving: boolean;
   showCopyPicker: boolean;
   mutableTargets: PluginInfo[];
@@ -251,7 +257,7 @@ function currentMasters(o: RecordDetail): string[] {
 }
 
 function PluginHeader({
-  override: o, isImmutable, isHeaderRecord, editMode, saving,
+  override: o, isImmutable, isHeaderRecord, saving,
   showCopyPicker, mutableTargets, showMasterPicker, loadedPlugins,
   collapsed, onToggleCollapse,
   onSave, onOpenCopyPicker, onCloseCopyPicker, onCopyTo,
@@ -287,7 +293,8 @@ function PluginHeader({
           )}
         </>
       )}
-      {!collapsed && editMode && !isImmutable && (
+      {/* Issue #111: no mode gate — a mutable column's structural actions are always available. */}
+      {!collapsed && !isImmutable && (
         <div style={{ marginTop: 3, position: 'relative' }}>
           <button style={btnStyle} onClick={onSave} disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
@@ -590,7 +597,10 @@ interface DiffRowProps {
   columns: Column[];
   overrideMap: Record<string, CompareOverride>;
   fieldMetaMap: Record<string, FieldMetadata>;
-  editMode: boolean;
+  // Issue #111: the set of plugins whose columns are read-only. Replaces the old `editMode`
+  // flag: editability is per-column, so an immutable column never renders an input even
+  // though the panel as a whole is always editable.
+  immutableSet: Set<string>;
   port: number;
   pendingChangeMap: Record<string, PendingChange>;
   collapsedColumns: Set<string>;
@@ -606,7 +616,7 @@ interface DiffRowProps {
 }
 
 function DiffRow({
-  diff, conflictAll, columns, overrideMap, fieldMetaMap, editMode, port,
+  diff, conflictAll, columns, overrideMap, fieldMetaMap, immutableSet, port,
   pendingChangeMap, collapsedColumns, onOpen, onEdit, onRevert,
   onCellDragStart, onCellDrop,
   context, hasChildren, isExpanded, onToggle,
@@ -650,22 +660,22 @@ function DiffRow({
               </td>
             );
           }
-          // Issue #3: in edit mode, a leaf field-value cell can be dragged into another
-          // plugin's column to stage its value there as a pending change (source may be a
-          // read-only column — dragging is a copy, only the drop target's mutability matters,
-          // enforced by onCellDrop). onDrop's applyValue re-uses this row's own onEdit closure,
-          // which already carries the right merge semantics for this row's context (top-level/
+          // Issue #3: a leaf field-value cell can be dragged into another plugin's column to
+          // stage its value there as a pending change (source may be a read-only column —
+          // dragging is a copy, only the drop target's mutability matters, enforced by
+          // onCellDrop). onDrop's applyValue re-uses this row's own onEdit closure, which
+          // already carries the right merge semantics for this row's context (top-level/
           // array-element/struct-child/grandchild).
           return (
             <td
               key={`disk:${o.plugin}`}
-              style={{ ...cellStyle, ...(editMode ? { cursor: 'grab' } : {}) }}
-              draggable={editMode}
-              onDragStart={editMode ? () => onCellDragStart(diff.fieldName, diff.values[o.plugin]) : undefined}
-              onDragOver={editMode ? e => e.preventDefault() : undefined}
-              onDrop={editMode ? () => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v)) : undefined}
+              style={{ ...cellStyle, cursor: 'grab' }}
+              draggable
+              onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin])}
+              onDragOver={e => e.preventDefault()}
+              onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
             >
-              {renderCell(diff.values[o.plugin], meta, editMode, port, onOpen,
+              {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin), port, onOpen,
                 v => onEdit(o.plugin, diff.fieldName, v), checkError)}
             </td>
           );
@@ -745,14 +755,13 @@ export function RecordPanel() {
   const [immutableSet, setImmutableSet] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [editMode, setEditMode] = useState(false);
   const [savingPlugin, setSavingPlugin] = useState<string | null>(null);
   const [copyPickerPlugin, setCopyPickerPlugin] = useState<string | null>(null);
   const [masterPickerPlugin, setMasterPickerPlugin] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
   // Issue #3: collapsed plugin columns, keyed by plugin name. Deliberately NOT reset by the
-  // LOAD_RECORD handler below (unlike editMode/copyPickerPlugin/masterPickerPlugin) — collapse
-  // state is meant to persist across record-to-record navigation within the same panel session.
+  // LOAD_RECORD handler below (unlike copyPickerPlugin/masterPickerPlugin) — collapse state
+  // is meant to persist across record-to-record navigation within the same panel session.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
   // Issue #3: transient drag payload — doesn't need to trigger a re-render, so a ref rather
   // than state. Cleared on drop (successful or rejected).
@@ -809,7 +818,6 @@ export function RecordPanel() {
         setAllChanges([]);
         setError(null);
         setActionError(null);
-        setEditMode(false);
         setSavingPlugin(null);
         setCopyPickerPlugin(null);
         setMasterPickerPlugin(null);
@@ -1069,28 +1077,10 @@ export function RecordPanel() {
   // only it has an editable masters field.
   const isHeaderRecord = formKey.startsWith('000000:');
 
-  const editToggleStyle: React.CSSProperties = {
-    fontSize: '11px',
-    padding: '2px 8px',
-    marginLeft: 10,
-    cursor: 'pointer',
-    background: editMode
-      ? 'var(--vscode-button-background, #0e639c)'
-      : 'var(--vscode-button-secondaryBackground, #3a3d41)',
-    color: editMode
-      ? 'var(--vscode-button-foreground, #fff)'
-      : 'var(--vscode-button-secondaryForeground, #ccc)',
-    border: 'none',
-    borderRadius: 2,
-  };
-
   return (
     <div style={containerStyle}>
       <div style={{ marginBottom: 10, fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center' }}>
         {title}
-        <button style={editToggleStyle} onClick={() => setEditMode(m => !m)}>
-          {editMode ? 'View' : 'Edit'}
-        </button>
       </div>
       {actionError && (
         <div style={{ marginBottom: 8, fontSize: '11px', color: 'var(--vscode-errorForeground, #f88)', padding: '3px 6px', border: '1px solid var(--vscode-inputValidation-errorBorder, #f88)', borderRadius: 2 }}>
@@ -1118,7 +1108,6 @@ export function RecordPanel() {
                         override={col.override}
                         isImmutable={immutableSet.has(col.override.plugin)}
                         isHeaderRecord={isHeaderRecord}
-                        editMode={editMode}
                         saving={savingPlugin === col.override.plugin}
                         showCopyPicker={copyPickerPlugin === col.override.plugin}
                         mutableTargets={allPlugins.filter(p => !p.isImmutable)}
@@ -1158,7 +1147,7 @@ export function RecordPanel() {
                   columns={columns}
                   overrideMap={overrideMap}
                   fieldMetaMap={fieldMetaMap}
-                  editMode={editMode}
+                  immutableSet={immutableSet}
                   port={port}
                   pendingChangeMap={pendingChangeMap}
                   collapsedColumns={collapsedColumns}
@@ -1200,7 +1189,7 @@ export function RecordPanel() {
                         columns={columns}
                         overrideMap={overrideMap}
                         fieldMetaMap={fieldMetaMap}
-                        editMode={editMode}
+                        immutableSet={immutableSet}
                         port={port}
                         pendingChangeMap={pendingChangeMap}
                         collapsedColumns={collapsedColumns}
@@ -1233,7 +1222,7 @@ export function RecordPanel() {
                             columns={columns}
                             overrideMap={overrideMap}
                             fieldMetaMap={fieldMetaMap}
-                            editMode={editMode}
+                            immutableSet={immutableSet}
                             port={port}
                             pendingChangeMap={pendingChangeMap}
                             collapsedColumns={collapsedColumns}
@@ -1264,7 +1253,7 @@ export function RecordPanel() {
                         columns={columns}
                         overrideMap={overrideMap}
                         fieldMetaMap={fieldMetaMap}
-                        editMode={editMode}
+                        immutableSet={immutableSet}
                         port={port}
                         pendingChangeMap={pendingChangeMap}
                         collapsedColumns={collapsedColumns}
@@ -1290,7 +1279,7 @@ export function RecordPanel() {
                         vmad={result.vmad}
                         columns={columns}
                         onOpen={handleOpen}
-                        editMode={editMode}
+                        immutableSet={immutableSet}
                         pendingChangeMap={pendingChangeMap}
                         onEdit={(plugin, vmadPath, value) => { void handleEdit(plugin, vmadPath, value); }}
                         onRevert={changeId => { void handleRevert(changeId); }}

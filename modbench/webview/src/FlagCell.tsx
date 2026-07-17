@@ -4,7 +4,7 @@ import type { FieldMetadata } from './types';
 interface FlagCellProps {
   value: unknown;
   meta: FieldMetadata;
-  editMode: boolean;
+  editable: boolean;
   onCommit: (v: unknown) => void;
 }
 
@@ -21,7 +21,7 @@ function toBigInt(value: unknown): bigint {
   return 0n;
 }
 
-export function FlagCell({ value, meta, editMode, onCommit }: FlagCellProps) {
+export function FlagCell({ value, meta, editable, onCommit }: FlagCellProps) {
   if (meta.enumValues.length === 0) return null;
   if (!meta.enumBitValues) return null;
 
@@ -30,7 +30,7 @@ export function FlagCell({ value, meta, editMode, onCommit }: FlagCellProps) {
   const num = toBigInt(value);
   const bits = meta.enumBitValues.map(BigInt);
 
-  if (!editMode) {
+  if (!editable) {
     if (value == null) return <span style={{ opacity: 0.35 }}>—</span>;
     const active = meta.enumValues.filter((_, i) => (num & bits[i]) !== 0n);
     return <span>{active.join(', ') || '—'}</span>;
