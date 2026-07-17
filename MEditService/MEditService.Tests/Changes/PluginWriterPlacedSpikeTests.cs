@@ -64,7 +64,7 @@ public class PluginWriterPlacedSpikeTests
             Guid.NewGuid(), newRefFk.ToString(), "Active.esp",
             "$create", "refr",
             J("null"), J("null"),
-            "user", null, DateTime.UtcNow, "create", null,
+            "user", null, DateTime.UtcNow, "create",
             ParentCell: extCellFk.ToString(), PlacementGroup: "persistent");
 
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);

@@ -385,21 +385,20 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Empty(result);
     }
 
-    // Grouping follows the members' dependencies, not the batch the StageGroup call labelled them
-    // with (ADR-0028). FK1's two changes are one group because both are changes to a record FK1's
-    // own $create brings into existence (edge rule 2); FK2 shares nothing with them, so it is a
-    // group of one. Before ADR-0028 this returned a single group of three purely because one call
-    // staged them together — see DeleteRecords_BatchTwoRecords for the same shift in the field.
+    // Grouping follows the members' dependencies, not the batch the StageChanges call staged them in
+    // (ADR-0028). FK1's two changes are one group because both are changes to a record FK1's own
+    // create brings into existence (edge rule 2); FK2 shares nothing with them, so it is a group of
+    // one. Before ADR-0028 this returned a single group of three purely because one call staged them
+    // together — see DeleteRecords_BatchTwoIndependentRecords for the same shift in the field.
     [Fact]
-    public void StageGroup_MembersAreGroupedByDependency_NotByTheStagingCall()
+    public void StageChanges_MembersAreGroupedByDependency_NotByTheStagingCall()
     {
         var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK1", "P.esp", "level"), MakeMember("FK2", "P.esp", "name") };
 
-        var group = _svc.StageGroup("create", "test group", members);
+        var group = _svc.StageChanges(members);
 
         // The returned group describes the component the first member landed in, not the whole call.
         Assert.Equal("create", group.Operation);
-        Assert.Equal("test group", group.Description);
         Assert.Equal(2, group.ChangeCount);
 
         var groups = _svc.GetChangeGroups();
@@ -408,10 +407,14 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Equal([1, 2], groups.Select(g => g.ChangeCount).Order());
     }
 
+    // A group's description derives from its originating change's row (ADR-0028). StageChanges
+    // members carry none (delete/renumber never did), so the description that reaches a group comes
+    // from an Upsert — the field-edit staging path, which carries one.
     [Fact]
-    public void GetChangeGroups_WithDescription_PreservesDescription()
+    public void GetChangeGroups_DescriptionDerivesFromOriginatingChange()
     {
-        _svc.StageGroup("rename", "my description", [MakeMember("FK1", "P.esp", "name")]);
+        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_",
+            new() { ["name"] = J("\"x\"") }, "user", "my description", []));
 
         var groups = _svc.GetChangeGroups();
 
@@ -424,11 +427,11 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void GetChanges_FilteredByGroupId_ReturnsOnlyGroupChanges()
     {
         var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK1", "P.esp", "level") };
-        var group = _svc.StageGroup("create", null, members);
+        var group = _svc.StageChanges(members);
         // A change entangled with nothing — its own group, and no business of FK1's.
         _svc.Upsert(new PendingChangeUpsert("FK3", "P.esp", "npc_", new() { ["level"] = J("5") }, "user", null, []));
 
-        var grouped = _svc.GetChanges(groupId: group.Id);
+        var grouped = _svc.GetChanges(memberChangeId: group.Id);
 
         Assert.Equal(2, grouped.Count);
         Assert.All(grouped, c => Assert.Equal("FK1", c.FormKey));
@@ -438,12 +441,12 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void RevertGroup_RemovesAllChangesAndGroup()
     {
         var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK1", "P.esp", "level") };
-        var group = _svc.StageGroup("create", null, members);
+        var group = _svc.StageChanges(members);
 
         var result = _svc.RevertGroup(group.Id);
 
         Assert.True(result);
-        Assert.Empty(_svc.GetChanges(groupId: group.Id));
+        Assert.Empty(_svc.GetChanges(memberChangeId: group.Id));
         Assert.Empty(_svc.GetChangeGroups());
     }
 
@@ -460,7 +463,7 @@ public sealed class PendingChangeServiceTests : IDisposable
     public void Revert_GroupOwned_ReturnsGroupOwned()
     {
         var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK1", "P.esp", "level") };
-        _svc.StageGroup("create", null, members);
+        _svc.StageChanges(members);
         var changeId = _svc.GetChanges(formKey: "FK1")[0].Id;
 
         var result = _svc.Revert(changeId);
@@ -475,32 +478,11 @@ public sealed class PendingChangeServiceTests : IDisposable
     [Fact]
     public void Revert_SoleMemberOfItsComponent_Reverts()
     {
-        _svc.StageGroup("create", null, [MakeMember("FK1", "P.esp", "name")]);
+        _svc.StageChanges([MakeMember("FK1", "P.esp", "name")]);
         var changeId = _svc.GetChanges(formKey: "FK1")[0].Id;
 
         Assert.IsType<RevertChangeResult.Reverted>(_svc.Revert(changeId));
         Assert.Empty(_svc.GetChanges(formKey: "FK1"));
-    }
-
-    // GetGroupIdForRecord still reads the stored group_id column, which the staging paths still
-    // write and the BlockedByGroup guard still reads (issue #134 removes both). It is deliberately
-    // not compared against a derived ChangeGroup.Id here — those are different currencies now.
-    [Fact]
-    public void GetGroupIdForRecord_WhenGroupOwned_ReturnsGroupId()
-    {
-        _svc.StageGroup("create", null, [MakeMember("FK1", "P.esp", "name")]);
-
-        var gid = _svc.GetGroupIdForRecord("FK1", "P.esp");
-
-        Assert.Equal(_svc.GetChanges(formKey: "FK1")[0].GroupId, gid);
-    }
-
-    [Fact]
-    public void GetGroupIdForRecord_WhenStandalone_ReturnsNull()
-    {
-        _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"x\"") }, "user", null, []));
-
-        Assert.Null(_svc.GetGroupIdForRecord("FK1", "P.esp"));
     }
 
     // --- Finding 2: Upsert changeType ---
@@ -515,10 +497,10 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Equal("create", _svc.GetChanges()[0].ChangeType);
     }
 
-    // --- Finding 3: StageGroup returns actual DB count ---
+    // --- Finding 3: StageChanges returns actual DB count ---
 
     [Fact]
-    public void StageGroup_DuplicateMembers_ReturnsActualDbCount()
+    public void StageChanges_DuplicateMembers_ReturnsActualDbCount()
     {
         var members = new[]
         {
@@ -526,27 +508,27 @@ public sealed class PendingChangeServiceTests : IDisposable
             MakeMember("FK1", "P.esp", "name"),  // duplicate PK — collapses to one row
         };
 
-        var group = _svc.StageGroup("create", null, members);
+        var group = _svc.StageChanges(members);
 
         Assert.Equal(1, group.ChangeCount);
     }
 
-    // --- Finding 4: StageGroup ON CONFLICT updates source and description ---
-
+    // StageChanges takes ownership of a conflicting field: the new source wins. Description is not in
+    // the ON CONFLICT set — a GroupMember carries none — so the prior change's description survives.
     [Fact]
-    public void StageGroup_OnConflict_UpdatesSourceAndDescription()
+    public void StageChanges_OnConflict_UpdatesSourcePreservesDescription()
     {
         // Manual edit on the field first
         _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"manual\"") }, "user", "user note", []));
 
-        // Stage group on the same field
+        // Stage on the same field via a batch member
         var members = new[] { new GroupMember("FK1", "P.esp", "npc_", "field_edit", "name", J("null"), J("\"group\""), "system") };
-        _svc.StageGroup("rename", "group note", members);
+        _svc.StageChanges(members);
 
         var changes = _svc.GetChanges(formKey: "FK1");
         Assert.Single(changes);
         Assert.Equal("system", changes[0].Source);
-        Assert.Equal("group note", changes[0].Description);
+        Assert.Equal("user note", changes[0].Description);
     }
 
     // --- Finding 5: RevertGroup cleans up pending_form_references ---
@@ -558,9 +540,9 @@ public sealed class PendingChangeServiceTests : IDisposable
         _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_",
             new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, [], [RaceRef]));
 
-        // StageGroup on same field — ON CONFLICT takes ownership (group_id set)
+        // StageChanges on the same field — ON CONFLICT takes ownership of source
         var members = new[] { new GroupMember("FK1", "A.esp", "npc_", "field_edit", "race", J("null"), J("\"000002:Fallout4.esm\"")) };
-        var group = _svc.StageGroup("rename", null, members);
+        var group = _svc.StageChanges(members);
 
         _svc.RevertGroup(group.Id);
 
@@ -569,13 +551,13 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Empty(drained.FormRefsByFormKey["FK1"]);
     }
 
-    // --- Finding 8: StageGroup uses Source from GroupMember ---
+    // --- Finding 8: StageChanges uses Source from GroupMember ---
 
     [Fact]
-    public void StageGroup_UsesSourceFromGroupMember()
+    public void StageChanges_UsesSourceFromMember()
     {
         var members = new[] { new GroupMember("FK1", "P.esp", "npc_", "create", "name", J("null"), J("\"x\""), "agent") };
-        _svc.StageGroup("create", null, members);
+        _svc.StageChanges(members);
 
         var changes = _svc.GetChanges(formKey: "FK1");
         Assert.Single(changes);
@@ -623,16 +605,16 @@ public sealed class PendingChangeServiceTests : IDisposable
     }
 
     [Fact]
-    public void StageGroup_MemberWithPlacement_RoundTripsThroughGroupRead()
+    public void StageChanges_MemberWithPlacement_RoundTripsThroughGroupRead()
     {
         var members = new[]
         {
             new GroupMember("FK1", "P.esp", "refr", "delete", "$delete", J("null"), J("null"),
                 "user", "001234:Fallout4.esm", "temporary"),
         };
-        var group = _svc.StageGroup("delete", null, members);
+        var group = _svc.StageChanges(members);
 
-        var change = _svc.GetChanges(groupId: group.Id)[0];
+        var change = _svc.GetChanges(memberChangeId: group.Id)[0];
         Assert.Equal("001234:Fallout4.esm", change.ParentCell);
         Assert.Equal("temporary", change.PlacementGroup);
     }

@@ -114,6 +114,6 @@ public sealed class DerivedChangeGroupTests : IDisposable
         Assert.Equal("create", group.Operation);
 
         foreach (var member in _svc.GetChanges())
-            Assert.Equal(2, _svc.GetChanges(groupId: member.Id).Count);
+            Assert.Equal(2, _svc.GetChanges(memberChangeId: member.Id).Count);
     }
 }

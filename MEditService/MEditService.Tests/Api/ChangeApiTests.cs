@@ -204,7 +204,7 @@ public sealed class ChangeApiTests(LoadedNpcApiFixture loaded) : IClassFixture<L
         // Both changes are on the one record FK-G1's $create brings into existence, so they are one
         // component (edge rule 2). Two changes on *different* records would be two groups now.
         var members = new[] { ApiMember("FK-G1", "Test.esp", "name"), ApiMember("FK-G1", "Test.esp", "level") };
-        var group = svc.StageGroup("create", null, members);
+        var group = svc.StageChanges(members);
 
         var del = await _client.DeleteAsync($"/changes/group/{group.Id}");
         Assert.Equal(HttpStatusCode.NoContent, del.StatusCode);
@@ -224,7 +224,7 @@ public sealed class ChangeApiTests(LoadedNpcApiFixture loaded) : IClassFixture<L
         await ClearChangesAsync();
         var svc = GetService();
         var members = new[] { ApiMember("FK-GO", "Test.esp", "name"), ApiMember("FK-GO", "Test.esp", "level") };
-        var group = svc.StageGroup("create", null, members);
+        var group = svc.StageChanges(members);
         var changeId = svc.GetChanges(formKey: "FK-GO")[0].Id;
 
         var resp = await _client.DeleteAsync($"/changes/{changeId}");
@@ -255,14 +255,19 @@ public sealed class ChangeApiTests(LoadedNpcApiFixture loaded) : IClassFixture<L
         Assert.Empty(await _client.GetFromJsonAsync<JsonElement[]>("/changes") ?? []);
     }
 
+    // #134: editing a record pending delete is blocked at the endpoint with a 409 that names the
+    // blocking op (delete) — keyed on the lifecycle change, not on "has a group."
     [Fact]
-    public async Task Patch_RecordWithPendingGroupChange_Returns409WithGroupInDetail()
+    public async Task Patch_RecordPendingDelete_Returns409NamingTheOp()
     {
         await ClearChangesAsync();
-        var svc = GetService();
         var rawFormKey = _fixture.Npc1FormKey.ToString();
-        var members = new[] { ApiMember(rawFormKey, TestPluginFixture.PluginName, "name") };
-        svc.StageGroup("create", null, members);
+
+        var delResp = await _client.PostAsJsonAsync("/records/delete", new
+        {
+            records = new[] { new { formKey = rawFormKey, plugin = TestPluginFixture.PluginName } },
+        });
+        Assert.Equal(HttpStatusCode.OK, delResp.StatusCode);
 
         var resp = await _client.PatchAsJsonAsync($"/records/{Uri.EscapeDataString(rawFormKey)}", new
         {
@@ -273,7 +278,7 @@ public sealed class ChangeApiTests(LoadedNpcApiFixture loaded) : IClassFixture<L
 
         Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
         var body = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
-        Assert.Contains("group", body.GetProperty("detail").GetString()!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("delete", body.GetProperty("detail").GetString()!, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

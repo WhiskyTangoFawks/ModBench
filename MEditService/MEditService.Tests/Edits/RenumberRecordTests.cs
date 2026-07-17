@@ -129,7 +129,7 @@ public sealed class RenumberRecordTests
                 var group = staged.Group;
                 Assert.Equal("renumber", group.Operation);
 
-                var allChanges = changes.GetChanges(groupId: group.Id);
+                var allChanges = changes.GetChanges(memberChangeId: group.Id);
 
                 // Exactly one renumber change for the record itself
                 var renumberChange = Assert.Single(allChanges, c => c.ChangeType == "renumber");

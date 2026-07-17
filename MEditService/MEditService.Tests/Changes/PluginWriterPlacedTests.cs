@@ -121,7 +121,7 @@ public class PluginWriterPlacedTests
         var change = new PendingChange(
             Guid.NewGuid(), fx.RefAFk.ToString(), "Active.esp",
             "scale", "refr", J("null"), J("2.0"),
-            "user", null, DateTime.UtcNow, "field_edit", null,
+            "user", null, DateTime.UtcNow, "field_edit",
             ParentCell: fx.CellFk.ToString(), PlacementGroup: "persistent");
 
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
@@ -167,7 +167,7 @@ public class PluginWriterPlacedTests
         var change = new PendingChange(
             Guid.NewGuid(), refAFk.ToString(), "Active.esp",
             "$delete", "refr", J("null"), J("null"),
-            "user", null, DateTime.UtcNow, "delete", null,
+            "user", null, DateTime.UtcNow, "delete",
             ParentCell: cellFk.ToString(), PlacementGroup: "persistent");
 
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
