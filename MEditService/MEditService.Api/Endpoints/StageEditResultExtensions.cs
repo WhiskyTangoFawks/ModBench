@@ -10,8 +10,8 @@ public static class StageEditResultExtensions
         StageEditResult.NoSession => Results.Problem("No session loaded."),
         StageEditResult.PluginImmutable i => Results.Problem(
             $"'{i.Plugin}' is a base-game plugin and cannot be edited.", statusCode: 409),
-        StageEditResult.BlockedByGroup g => Results.Problem(
-            $"This record has a pending group change — revert group {g.GroupId} first.", statusCode: 409),
+        StageEditResult.RecordPendingDeleteOrRenumber b => Results.Problem(
+            $"This record is pending {b.ChangeType}; revert that change before editing it.", statusCode: 409),
         StageEditResult.RecordNotFound => Results.NotFound(),
         StageEditResult.ReadOnlyFields r => Results.Problem(
             detail: $"The following fields are read-only and cannot be edited: {string.Join(", ", r.Fields)}",
@@ -27,8 +27,8 @@ public static class StageEditResultExtensions
         DeleteRecordsResult.NoSession => Results.Problem("No session loaded."),
         DeleteRecordsResult.PluginImmutable i => Results.Problem(
             $"'{i.Plugin}' is a base-game plugin and cannot be edited.", statusCode: 409),
-        DeleteRecordsResult.BlockedByPendingGroup => Results.Problem(
-            "Records have active group changes — revert groups first.", statusCode: 409),
+        DeleteRecordsResult.TargetPendingDeleteOrRenumber => Results.Problem(
+            "One or more records are already pending delete or renumber — revert those changes first.", statusCode: 409),
         DeleteRecordsResult.BlockedByReferences b => Results.Problem(
             detail: "One or more records are referenced by immutable plugins and cannot be deleted.",
             statusCode: 409,

@@ -42,9 +42,9 @@ public sealed class StageEditResultMappingTests
     }
 
     [Fact]
-    public void BlockedByGroup_MapsTo409Problem()
+    public void RecordPendingDeleteOrRenumber_MapsTo409Problem()
     {
-        var result = new StageEditResult.BlockedByGroup(Guid.NewGuid()).ToHttpResult();
+        var result = new StageEditResult.RecordPendingDeleteOrRenumber("delete").ToHttpResult();
 
         var status = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
         Assert.Equal(409, status.StatusCode);

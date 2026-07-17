@@ -33,9 +33,8 @@ public sealed partial class EditOrchestrator(
         var (earlyOut, session, recordType) = ValidateEditContext(formKey, plugin);
         if (earlyOut != null) return earlyOut;
 
-        var groupId = _changes.GetGroupIdForRecord(formKey, plugin);
-        if (groupId is not null)
-            return new StageEditResult.BlockedByGroup(groupId.Value);
+        if (PendingLifecycleChangeType(formKey, plugin) is { } blockingType)
+            return new StageEditResult.RecordPendingDeleteOrRenumber(blockingType);
 
         if (changeType == PendingChangeConstants.VmadStructOpChangeType)
             return StageVmadStructOps(formKey, plugin, recordType!, fields, source, description);
@@ -71,10 +70,10 @@ public sealed partial class EditOrchestrator(
 
         var formRefs = ExtractFormKeyRefs(fields, schemasForValidation, recordType!);
 
-        var distinctRefs = formRefs.Select(r => r.TargetFormKey).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var createGroupId = _changes.GetCreateGroupIdForAny(distinctRefs);
-
-        var staged = _changes.Upsert(new PendingChangeUpsert(formKey, plugin, recordType!, fields, source, description, oldValues, formRefs, GroupId: createGroupId));
+        // No group is assigned here (#134): an edit that references a pending-created record is
+        // grouped with that create by the edge rules (ADR-0028), not by a group id stamped at stage
+        // time. The pending_form_references written by this upsert are the edge the rules read.
+        var staged = _changes.Upsert(new PendingChangeUpsert(formKey, plugin, recordType!, fields, source, description, oldValues, formRefs));
         return new StageEditResult.Staged(staged);
     }
 
@@ -206,9 +205,8 @@ public sealed partial class EditOrchestrator(
         var (earlyOut, session, recordType) = ValidateEditContext(formKey, targetPlugin);
         if (earlyOut != null) return earlyOut;
 
-        var groupId = _changes.GetGroupIdForRecord(formKey, targetPlugin);
-        if (groupId is not null)
-            return new StageEditResult.BlockedByGroup(groupId.Value);
+        if (PendingLifecycleChangeType(formKey, targetPlugin) is { } blockingType)
+            return new StageEditResult.RecordPendingDeleteOrRenumber(blockingType);
 
         var winner = _query.GetRecord(formKey);
         if (winner == null) return new StageEditResult.RecordNotFound();
@@ -235,20 +233,21 @@ public sealed partial class EditOrchestrator(
         // origin (its FormKey's ModKey — the copy keeps the same FormKey, so target needs that
         // origin as a master regardless of which plugin's override values were copied) and any
         // plugin referenced by a FormLink inside the copied content (already-extracted formRefs).
-        var copyGroupId = StageMissingMasters(formKey, targetPlugin, formRefs, source);
+        StageMissingMasters(formKey, targetPlugin, formRefs, source);
 
         var staged = _changes.Upsert(new PendingChangeUpsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues, formRefs,
-            GroupId: copyGroupId, ParentCell: placement?.ParentCell, PlacementGroup: placement?.PlacementGroup));
+            ParentCell: placement?.ParentCell, PlacementGroup: placement?.PlacementGroup));
         return new StageEditResult.Staged(staged);
     }
 
     // Issue #86 invariant B: computes which origin plugins the copied FormKey and its FormLink
     // content reference that the target doesn't already master (pending-aware — a still-unsaved
-    // "Add Master" already counts), stages one masters-append pending change for them if any are
-    // missing, and returns the group id to share with the copy's own pending change so both land in
-    // the same change group (null when nothing was missing — a copy into an already-fully-mastered
-    // target stays ungrouped, matching pre-#86 behavior).
-    private Guid? StageMissingMasters(
+    // "Add Master" already counts), and stages one masters-append pending change for them if any are
+    // missing. No group is assigned (#134): the copy and this masters-add are grouped by edge rule 3
+    // (a record reachable only via a master the change adds), and two sequential copy-tos into the
+    // same target land in one group because the upsert's ON CONFLICT collapses onto the one header
+    // row they both depend on — the edge rules rediscover the grouping the old group id declared.
+    private void StageMissingMasters(
         string copiedFormKey, string targetPlugin, IReadOnlyList<PendingFormRef> formRefs, string source)
     {
         var referencedPlugins = new List<string>();
@@ -265,25 +264,15 @@ public sealed partial class EditOrchestrator(
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        if (missingMasters.Count == 0) return null;
+        if (missingMasters.Count == 0) return;
 
         var headerFormKey = Records.HeaderIndexer.FormKeyFor(targetPlugin);
-
-        // A prior copy-to in this same unsaved session may already have grouped a masters-append
-        // on this target header. Reuse that group instead of minting a new one: the pending-change
-        // upsert's ON CONFLICT keeps the *first* group id a row was tagged with (DuckDbPendingChangeService
-        // COALESCEs group_id), so generating a fresh id here every time would leave this call's own
-        // copy tagged with a group the header's masters row never actually joined — breaking "same
-        // change group" for the second of two sequential copy-tos into the same target.
-        var groupId = _changes.GetGroupIdForRecord(headerFormKey, targetPlugin) ?? Guid.NewGuid();
         var newMasters = currentMasters.Concat(missingMasters).ToList();
         _changes.Upsert(new PendingChangeUpsert(
             headerFormKey, targetPlugin, Records.HeaderIndexer.TableName,
             new Dictionary<string, JsonElement> { [HeaderMastersField] = JsonSerializer.SerializeToElement(newMasters) },
             source, null,
-            new Dictionary<string, JsonElement> { [HeaderMastersField] = JsonSerializer.SerializeToElement(currentMasters) },
-            GroupId: groupId));
-        return groupId;
+            new Dictionary<string, JsonElement> { [HeaderMastersField] = JsonSerializer.SerializeToElement(currentMasters) }));
     }
 
     // The plugin substring of a "FormID:Plugin" FormKey string; null when malformed (no colon, or
@@ -295,6 +284,16 @@ public sealed partial class EditOrchestrator(
         var colon = formKey.IndexOf(':');
         return colon >= 0 && colon < formKey.Length - 1 ? formKey[(colon + 1)..] : null;
     }
+
+    // The change_type of a pending delete or renumber on this record, or null. Editing, copying onto,
+    // or re-deleting a record that is about to cease to exist or change identity is incoherent — this
+    // is the semantic reason those operations block, replacing the old "record has any group" guard
+    // (#134): every change has a group now (ADR-0028), so group membership no longer distinguishes.
+    private string? PendingLifecycleChangeType(string formKey, string plugin) =>
+        _changes.GetChanges(plugin: plugin, formKey: formKey)
+            .FirstOrDefault(c => c.ChangeType is PendingChangeConstants.DeleteChangeType
+                                            or PendingChangeConstants.RenumberChangeType)
+            ?.ChangeType;
 
     // Issue #86: the target's masters as of right now — a still-pending "Add Master" (or a
     // preceding copy-to's auto-add within the same unsaved session) wins over the committed value,
@@ -354,7 +353,6 @@ public sealed partial class EditOrchestrator(
         if (CheckReverseEslGuard(plugin, reservedFormKey, session.GameRelease) is { } outOfRange)
             return new CreateRecordOutcome.EslIneligible(plugin, outOfRange);
 
-        var groupId = Guid.NewGuid();
         var created = _changes.Upsert(new PendingChangeUpsert(
             reservedFormKey, plugin, recordType,
             new Dictionary<string, JsonElement> { [PendingChangeConstants.CreateFieldPath] = JsonSerializer.SerializeToElement<object?>(null) },
@@ -362,7 +360,6 @@ public sealed partial class EditOrchestrator(
             [],
             FormRefs: null,
             ChangeType: PendingChangeConstants.CreateChangeType,
-            GroupId: groupId,
             ParentCell: parentCell,
             PlacementGroup: placementGroup));
 
@@ -374,14 +371,13 @@ public sealed partial class EditOrchestrator(
                 templateFields, source, null,
                 [],
                 templateRefs,
-                ChangeType: PendingChangeConstants.FieldEditChangeType,
-                GroupId: groupId));
+                ChangeType: PendingChangeConstants.FieldEditChangeType));
         }
 
-        // The id callers get back names the $create change itself, not the stored group_id written
-        // above: groups have no identity of their own, so save and revert take a member change id
-        // and act on its whole component (ADR-0028). Any template fields staged above join that
-        // component by edge rule 2 rather than by the label they share.
+        // The id callers get back names the $create change itself. Groups have no identity of their
+        // own, so save and revert take a member change id and act on its whole component (ADR-0028).
+        // The template fields staged above join that component by edge rule 2 (an edit on a record a
+        // pending $create brings into existence), not by any label.
         return new CreateRecordOutcome.Success(reservedFormKey, created[0].Id);
     }
 
@@ -399,13 +395,13 @@ public sealed partial class EditOrchestrator(
                 return new DeleteRecordsResult.PluginImmutable(plugin);
         }
 
-        // Check for active pending groups on any target
+        // Block targets already pending a delete or renumber (see TargetPendingDeleteOrRenumber).
         var blockedKeys = targets
-            .Where(t => _changes.GetGroupIdForRecord(t.FormKey, t.Plugin) != null)
+            .Where(t => PendingLifecycleChangeType(t.FormKey, t.Plugin) != null)
             .Select(t => t.FormKey)
             .ToList();
         if (blockedKeys.Count > 0)
-            return new DeleteRecordsResult.BlockedByPendingGroup(blockedKeys);
+            return new DeleteRecordsResult.TargetPendingDeleteOrRenumber(blockedKeys);
 
         var targetFormKeys = targets.Select(t => t.FormKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -440,7 +436,7 @@ public sealed partial class EditOrchestrator(
 
         AddNullificationMembers(members, toNullify, source);
 
-        var group = _changes.StageGroup("delete", null, members);
+        var group = _changes.StageChanges(members);
         return new DeleteRecordsResult.Staged(group);
     }
 
@@ -574,7 +570,7 @@ public sealed partial class EditOrchestrator(
                 source));
         }
 
-        var group = _changes.StageGroup("renumber", null, members);
+        var group = _changes.StageChanges(members);
         return new RenumberResult.Staged(group);
     }
 

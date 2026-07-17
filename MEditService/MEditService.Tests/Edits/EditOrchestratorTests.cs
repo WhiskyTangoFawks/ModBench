@@ -484,28 +484,32 @@ public sealed class EditOrchestratorTests
     }
 
 
+    // #134: copy-to blocks only when the target record is pending delete/renumber — not merely
+    // because it "has a group." Here the target is pending renumber, so overwriting it by copy is
+    // incoherent. (A target with only pending field edits is copyable — that block was the old
+    // conflation ADR-0028 removes.)
     [Fact]
-    public void CopyRecordTo_TargetRecordGroupOwned_ReturnsBlockedByGroup()
+    public void CopyRecordTo_TargetPendingRenumber_Blocked()
     {
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("eo-copy-group-owned")
+        var data = new PluginFixtureBuilder("eo-copy-target-renum")
             .WithPlugin("Source.esp", mod =>
-                npcKey = mod.Npcs.AddNew("TestNPC_CopyGroupOwned").FormKey)
-            .WithPlugin("Target.esp")
+                npcKey = mod.Npcs.AddNew("TestNPC_CopyTargetRenum").FormKey)
             .Build();
         using (data)
         {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
             using (manager)
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-                var members = new[] { new GroupMember(npcKey.ToString(), "Target.esp", "npc_", "create", "name", J("null"), J("\"x\"")) };
-                changes.StageGroup("create", null, members);
+                Assert.IsType<RenumberResult.Staged>(
+                    orchestrator.Renumber(npcKey.ToString(), 0xABC, "Source.esp", "user"));
 
-                var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user");
+                var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Source.esp", "user");
 
-                Assert.IsType<StageEditResult.BlockedByGroup>(result);
+                var blocked = Assert.IsType<StageEditResult.RecordPendingDeleteOrRenumber>(result);
+                Assert.Equal("renumber", blocked.ChangeType);
             }
         }
     }
@@ -517,8 +521,10 @@ public sealed class EditOrchestratorTests
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-        var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
         var changes = DuckDbTestFactory.MakePendingChangeService();
+        // Pass changes so SessionManager.Load() calls OnSessionLoaded, sharing the DuckDB connection —
+        // required for GetReferences, which queries pending_changes on the shared connection.
+        var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);
         var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
         var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector);
@@ -927,7 +933,7 @@ public sealed class EditOrchestratorTests
                 // saving a field of a record that does not exist yet would be incoherent.
                 Assert.Equal(
                     staged.Select(c => c.Id).Order(),
-                    changes.GetChanges(groupId: result.GroupId).Select(c => c.Id).Order());
+                    changes.GetChanges(memberChangeId: result.GroupId).Select(c => c.Id).Order());
             }
         }
     }
@@ -1120,17 +1126,77 @@ public sealed class EditOrchestratorTests
                 Assert.Equal("create", group.Operation);
                 Assert.Equal(
                     new[] { createResult.FormKey, npcKey.ToString() }.Order(),
-                    changes.GetChanges(groupId: group.Id).Select(c => c.FormKey).Order());
+                    changes.GetChanges(memberChangeId: group.Id).Select(c => c.FormKey).Order());
+            }
+        }
+    }
+
+    // --- Stage-edit guard: blocked only when the subject is pending delete/renumber (#134) ---
+    // ADR-0028: every change has a group now, so a guard keyed on "has a group" would make every
+    // record read-only after one edit. The guard keys on the semantic reason a field edit is
+    // incoherent — the record is being deleted or renumbered — not on group membership.
+
+    [Fact]
+    public void StageEdit_SubjectPendingDelete_Blocked()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("guard-edit-del")
+            .WithPlugin("Target.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC_GuardDel").FormKey)
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                Assert.IsType<DeleteRecordsResult.Staged>(
+                    orchestrator.DeleteRecords([(npcKey.ToString(), "Target.esp")], "user"));
+
+                var result = orchestrator.StageEdit(npcKey.ToString(), "Target.esp",
+                    new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") }, "user", null);
+
+                var blocked = Assert.IsType<StageEditResult.RecordPendingDeleteOrRenumber>(result);
+                Assert.Equal("delete", blocked.ChangeType);
             }
         }
     }
 
     [Fact]
-    public void StageEdit_NoCreatedFormKeyRefs_GroupIdIsNull()
+    public void StageEdit_SubjectPendingRenumber_Blocked()
     {
         FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("dep-group-null")
-            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("SourceNPC").FormKey)
+        var data = new PluginFixtureBuilder("guard-edit-renum")
+            .WithPlugin("Target.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC_GuardRenum").FormKey)
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                Assert.IsType<RenumberResult.Staged>(
+                    orchestrator.Renumber(npcKey.ToString(), 0xABC, "Target.esp", "user"));
+
+                var result = orchestrator.StageEdit(npcKey.ToString(), "Target.esp",
+                    new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") }, "user", null);
+
+                var blocked = Assert.IsType<StageEditResult.RecordPendingDeleteOrRenumber>(result);
+                Assert.Equal("renumber", blocked.ChangeType);
+            }
+        }
+    }
+
+    // Genuinely red against the old guard: SourceNPC's factions edit references a pending-created
+    // Faction, so under the stored model it carried a non-null group_id — and the old guard blocked
+    // any further edit on it. A field edit is not a delete or renumber, so it must not block.
+    [Fact]
+    public void StageEdit_SubjectHasPendingFieldEditWithGroup_NotBlocked()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("guard-edit-fieldgroup")
+            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("SourceNPC_GuardFieldGroup").FormKey)
             .WithPlugin("Target.esp")
             .Build();
         using (data)
@@ -1140,15 +1206,55 @@ public sealed class EditOrchestratorTests
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-                var fields = new Dictionary<string, JsonElement>
-                {
-                    ["aggression"] = JsonSerializer.SerializeToElement("Frenzied")
-                };
-                orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
+                var createResult = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", "fact", null, "user"));
+                var factionList = JsonSerializer.SerializeToElement(
+                    new[] { new { faction = createResult.FormKey, rank = 0 } });
+                Assert.IsType<StageEditResult.Staged>(orchestrator.StageEdit(npcKey.ToString(), "Source.esp",
+                    new Dictionary<string, JsonElement> { ["factions"] = factionList }, "user", null));
 
-                var allChanges = changes.GetChanges();
-                var change = allChanges.Single(c => c.FieldPath == "aggression");
-                Assert.Null(change.GroupId);
+                // A further edit on the same record — it has a pending field edit (grouped), not a
+                // pending delete/renumber, so it must stage.
+                var result = orchestrator.StageEdit(npcKey.ToString(), "Source.esp",
+                    new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") }, "user", null);
+
+                Assert.IsType<StageEditResult.Staged>(result);
+            }
+        }
+    }
+
+    // Genuinely red against the old guard: deleting the referenced record nullifies SourceNPC's ref,
+    // so SourceNPC picks up a field_edit change with a group_id — but SourceNPC is a *referrer* in
+    // the delete cascade, not its subject. Editing another of its fields must not block.
+    [Fact]
+    public void StageEdit_SubjectReferencedByDeleteCascade_NotBlocked()
+    {
+        FormKey npcKey = default;
+        FormKey raceKey = default;
+        var data = new PluginFixtureBuilder("guard-edit-cascade")
+            .WithPlugin("Target.esp", mod =>
+            {
+                var race = mod.Races.AddNew("TestRace_GuardCascade");
+                raceKey = race.FormKey;
+                var npc = mod.Npcs.AddNew("TestNPC_GuardCascade");
+                npc.Race.SetTo(race.FormKey);
+                npcKey = npc.FormKey;
+            })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                Assert.IsType<DeleteRecordsResult.Staged>(
+                    orchestrator.DeleteRecords([(raceKey.ToString(), "Target.esp")], "user"));
+
+                var result = orchestrator.StageEdit(npcKey.ToString(), "Target.esp",
+                    new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") }, "user", null);
+
+                Assert.IsType<StageEditResult.Staged>(result);
             }
         }
     }
@@ -1257,43 +1363,6 @@ public sealed class EditOrchestratorTests
                 IPluginWriter writer = new PluginWriter(SharedSchemaReflector.Instance, NullLogger<PluginWriter>.Instance);
                 Assert.DoesNotContain(fieldEdits, c => writer.IsReadOnly(GameRelease.Fallout4, "npc_", c.FieldPath));
                 Assert.Contains(fieldEdits, c => c.FieldPath == "aggression");
-            }
-        }
-    }
-
-    [Fact]
-    public void StageGroup_TargetsCreateSentinel_PreservesCreateGroupId()
-    {
-        var data = new PluginFixtureBuilder("sg-coalesce")
-            .WithPlugin("Target.esp")
-            .Build();
-        using (data)
-        {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
-            using (manager)
-            {
-                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-
-                var createResult = Assert.IsType<CreateRecordOutcome.Success>(
-                    orchestrator.CreateRecord("Target.esp", "npc_", null, "user"));
-
-                // The stored group_id is vestigial under ADR-0028 — nothing reads it for grouping any
-                // more — but the BlockedByGroup guard still does until #134, so its COALESCE-on-
-                // conflict behaviour still needs pinning: read it off the row rather than off the
-                // create's returned id, which is now a member change id in a different currency.
-                var originalGroupId = changes.GetChanges(formKey: createResult.FormKey)
-                    .Single(c => c.FieldPath == "$create").GroupId;
-                Assert.NotNull(originalGroupId);
-
-                // StageGroup targeting the same $create sentinel should NOT overwrite its groupId
-                var members = new[] { new GroupMember(
-                    createResult.FormKey, "Target.esp", "npc_", "create",
-                    "$create", J("null"), J("null")) };
-                changes.StageGroup("some_op", null, members);
-
-                var staged = changes.GetChanges(formKey: createResult.FormKey);
-                var createChange = staged.Single(c => c.FieldPath == "$create");
-                Assert.Equal(originalGroupId, createChange.GroupId);
             }
         }
     }
