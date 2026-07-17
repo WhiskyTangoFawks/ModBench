@@ -99,8 +99,11 @@ exactly what it will carry.
   member edits, flat — groups are small, and the record count belongs on the detail line
   rather than being something the user recovers by counting nodes.
 - A **group of one** gets no group wrapper: it renders as the edit itself, a top-level leaf
-  labeled `{RecordType} / {EditorID} · {fieldPath}`, with a `{old} → {new}` detail line and its
-  plugin.
+  labeled `{RecordType} / {record} · {fieldPath}`, with a `{old} → {new}` detail line and its
+  plugin. The record shows as its **FormKey** today — `GET /changes` carries no EditorID, and
+  resolving it would either widen scope to a backend change or add per-leaf record lookups
+  (the same gap the compare grid has, #141). The label upgrades to EditorID when #141 delivers
+  FormKey → EditorID resolution; a FormKey is unambiguous and always present until then.
 - `operation` and `description` are **derived, not stored** — `operation` is the dominant
   `change_type` among members (lifecycle ops beat `field_edit`), `description` the originating
   change's (ADR-0028). A ChangeGroup has no id and no number to title a node with.
