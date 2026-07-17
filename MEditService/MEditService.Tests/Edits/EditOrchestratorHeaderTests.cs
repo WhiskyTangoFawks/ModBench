@@ -647,15 +647,15 @@ public sealed class EditOrchestratorHeaderTests
                 Assert.IsType<StageEditResult.Staged>(result);
 
                 var headerKey = HeaderKey("Target.esp");
-                var copyGroupId = changes.GetGroupIdForRecord(npcKey.ToString(), "Target.esp");
-                var headerGroupId = changes.GetGroupIdForRecord(headerKey, "Target.esp");
-                Assert.NotNull(copyGroupId);
-                Assert.Equal(copyGroupId, headerGroupId);
 
-                // Exactly one change_groups row, covering both members — not two adjacent groups.
+                // The copied record only resolves in Target.esp because of the master this copy also
+                // adds, so the two travel together (ADR-0028 edge rule 3) — here via the record's own
+                // origin plugin, since a bare copied NPC holds no FormLinks of its own. One group
+                // covering both, not two adjacent ones.
                 var group = Assert.Single(changes.GetChangeGroups());
-                Assert.Equal(copyGroupId, group.Id);
                 Assert.True(group.ChangeCount >= 2);
+                Assert.Contains(headerKey, changes.GetChanges(groupId: group.Id).Select(c => c.FormKey));
+                Assert.Contains(npcKey.ToString(), changes.GetChanges(groupId: group.Id).Select(c => c.FormKey));
 
                 var mastersChange = changes.GetChanges(plugin: "Target.esp", formKey: headerKey).Single(c => c.FieldPath == "masters");
                 var newMasters = mastersChange.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
@@ -667,7 +667,7 @@ public sealed class EditOrchestratorHeaderTests
 
                 // Atomicity: reverting the group removes the copy and the master-add together —
                 // proving they're genuinely one unit, not just two changes that happen to share an id.
-                Assert.True(changes.RevertGroup(copyGroupId!.Value));
+                Assert.True(changes.RevertGroup(group.Id));
                 Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: npcKey.ToString()));
                 Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: headerKey));
             }
@@ -701,17 +701,14 @@ public sealed class EditOrchestratorHeaderTests
                 Assert.IsType<StageEditResult.Staged>(orchestrator.CopyRecordTo(npc2Key.ToString(), "Target.esp", "user"));
 
                 var headerKey = HeaderKey("Target.esp");
-                var copy1GroupId = changes.GetGroupIdForRecord(npc1Key.ToString(), "Target.esp");
-                var copy2GroupId = changes.GetGroupIdForRecord(npc2Key.ToString(), "Target.esp");
-                var headerGroupId = changes.GetGroupIdForRecord(headerKey, "Target.esp");
 
-                Assert.NotNull(copy1GroupId);
-                Assert.Equal(copy1GroupId, copy2GroupId);
-                Assert.Equal(copy1GroupId, headerGroupId);
-
-                // Exactly one change_groups row overall — not two.
+                // Both copies depend on the one masters change that adds both their origins, so all
+                // three form a single component (ADR-0028 edge rule 3) — the header change is the
+                // shared neighbour that joins two copies which reference nothing of each other's.
                 var group = Assert.Single(changes.GetChangeGroups());
-                Assert.Equal(copy1GroupId, group.Id);
+                Assert.Equal(
+                    [headerKey, npc1Key.ToString(), npc2Key.ToString()],
+                    changes.GetChanges(groupId: group.Id).Select(c => c.FormKey).Distinct().Order());
 
                 var mastersChange = changes.GetChanges(plugin: "Target.esp", formKey: headerKey).Single(c => c.FieldPath == "masters");
                 var newMasters = mastersChange.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
@@ -719,7 +716,7 @@ public sealed class EditOrchestratorHeaderTests
 
                 // Full atomicity: reverting the (single, shared) group removes both copies and the
                 // masters change together.
-                Assert.True(changes.RevertGroup(copy1GroupId!.Value));
+                Assert.True(changes.RevertGroup(group.Id));
                 Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: npc1Key.ToString()));
                 Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: npc2Key.ToString()));
                 Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: headerKey));
@@ -813,8 +810,19 @@ public sealed class EditOrchestratorHeaderTests
 
                 var headerKey = HeaderKey("Target.esp");
                 Assert.Null(changes.GetGroupIdForRecord(npcKey.ToString(), "Target.esp"));
+
+                // The subject: no masters change staged, because Target.esp already masters Base.esm.
                 Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: headerKey));
-                Assert.Empty(changes.GetChangeGroups());
+
+                // This used to assert no groups at all — a copy needing no master "stayed ungrouped".
+                // ADR-0028 abolishes the ungrouped change: with no master-add to entangle them (edge
+                // rule 3) and no lifecycle change in sight, the copied fields are simply groups of
+                // one. That is the fix for #112, not a regression — before it, these changes had a
+                // null group_id and so could never be shown or saved at all.
+                var groups = changes.GetChangeGroups();
+                Assert.NotEmpty(groups);
+                Assert.All(groups, g => Assert.Equal("field_edit", g.Operation));
+                Assert.DoesNotContain(headerKey, groups.SelectMany(g => changes.GetChanges(groupId: g.Id)).Select(c => c.FormKey));
             }
         }
     }

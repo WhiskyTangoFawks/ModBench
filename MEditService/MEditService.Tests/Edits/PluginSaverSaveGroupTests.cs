@@ -23,6 +23,31 @@ public sealed class PluginSaverSaveGroupTests
         return svc.StageGroup("edit", null, members);
     }
 
+    /// <summary>
+    /// Stages a component that genuinely spans A.esp and B.esp, returning a member change id naming
+    /// it. Two field edits sharing a group_id no longer make a group (ADR-0028) — a cross-plugin
+    /// group has to be earned by a real dependency, as a renumber's cascading reference updates earn
+    /// theirs. Here it is edge rule 1: B.esp's edit holds a FormLink to a record that only A.esp's
+    /// pending $create brings into existence.
+    /// </summary>
+    private static Guid StageCrossPluginComponent(DuckDbPendingChangeService svc)
+    {
+        const string createdFormKey = "000001:A.esp";
+        var created = svc.Upsert(new PendingChangeUpsert(
+            createdFormKey, "A.esp", "npc_",
+            new Dictionary<string, JsonElement> { ["$create"] = J("null") },
+            "user", null, [], FormRefs: null, ChangeType: "create"));
+
+        svc.Upsert(new PendingChangeUpsert(
+            "000001:B.esp", "B.esp", "npc_",
+            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
+            "user", null,
+            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
+            [new PendingFormRef("aggression", "aggression", createdFormKey)]));
+
+        return created[0].Id;
+    }
+
     // C1
     [Fact]
     public async Task Save_GroupWithNoChanges_ReturnsNoChanges()
@@ -115,16 +140,7 @@ public sealed class PluginSaverSaveGroupTests
     public async Task Save_WhenSecondPrepareFails_FirstTempCleanedup()
     {
         var changes = DuckDbTestFactory.MakePendingChangeService();
-        // Stage group spanning 2 plugins
-        var groupId = Guid.NewGuid();
-        changes.Upsert(new PendingChangeUpsert("000001:A.esp", "A.esp", "npc_",
-            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
-            "user", null, new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            GroupId: groupId));
-        changes.Upsert(new PendingChangeUpsert("000001:B.esp", "B.esp", "npc_",
-            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
-            "user", null, new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            GroupId: groupId));
+        var groupId = StageCrossPluginComponent(changes);
 
         var session = new StubSession();
         string? firstTmpPath = null;
@@ -154,15 +170,7 @@ public sealed class PluginSaverSaveGroupTests
     public async Task Save_MultiPlugin_ReindexedAsBatch()
     {
         var changes = DuckDbTestFactory.MakePendingChangeService();
-        var groupId = Guid.NewGuid();
-        changes.Upsert(new PendingChangeUpsert("000001:A.esp", "A.esp", "npc_",
-            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
-            "user", null, new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            GroupId: groupId));
-        changes.Upsert(new PendingChangeUpsert("000001:B.esp", "B.esp", "npc_",
-            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
-            "user", null, new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            GroupId: groupId));
+        var groupId = StageCrossPluginComponent(changes);
 
         var session = new StubSession();
         var saver = new PluginSaver(changes, session);

@@ -30,6 +30,8 @@ public sealed class ChangeApiTests(LoadedNpcApiFixture loaded) : IClassFixture<L
             JsonDocument.Parse("null").RootElement.Clone(),
             JsonDocument.Parse("\"x\"").RootElement.Clone());
 
+    private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
+
     [Fact]
     public async Task Patch_ValidField_Returns200()
     {
@@ -150,21 +152,29 @@ public sealed class ChangeApiTests(LoadedNpcApiFixture loaded) : IClassFixture<L
         }
     }
 
+    // A group spans plugins when a dependency does. Two unrelated creates in two plugins used to
+    // count as one group of two plugins purely because one StageGroup call labelled them; under
+    // ADR-0028 they are two groups of one. So the cross-plugin group here is a real one: B.esp's
+    // edit holds a FormLink to a record only A.esp's pending $create brings into existence.
     [Fact]
     public async Task GetChangeGroups_ReturnsPluginCount()
     {
         await ClearChangesAsync();
         var svc = GetService();
-        svc.StageGroup("create", null,
-        [
-            ApiMember("FK-PC1", "A.esp", "$create"),
-            ApiMember("FK-PC2", "B.esp", "$create"),
-        ]);
+        svc.Upsert(new PendingChangeUpsert("FK-PC1", "A.esp", "npc_",
+            new Dictionary<string, JsonElement> { ["$create"] = J("null") },
+            "user", null, [], FormRefs: null, ChangeType: "create"));
+        svc.Upsert(new PendingChangeUpsert("FK-PC2", "B.esp", "npc_",
+            new Dictionary<string, JsonElement> { ["leader"] = J("\"FK-PC1\"") },
+            "user", null,
+            new Dictionary<string, JsonElement> { ["leader"] = J("null") },
+            [new PendingFormRef("leader", "leader", "FK-PC1")]));
 
         var groups = await _client.GetFromJsonAsync<JsonElement[]>("/change-groups");
         Assert.NotNull(groups);
         var group = Assert.Single(groups);
         Assert.Equal(2, group.GetProperty("pluginCount").GetInt32());
+        Assert.Equal(2, group.GetProperty("changeCount").GetInt32());
     }
 
     [Fact]
@@ -191,7 +201,9 @@ public sealed class ChangeApiTests(LoadedNpcApiFixture loaded) : IClassFixture<L
     {
         await ClearChangesAsync();
         var svc = GetService();
-        var members = new[] { ApiMember("FK-G1", "Test.esp", "name"), ApiMember("FK-G2", "Test.esp", "name") };
+        // Both changes are on the one record FK-G1's $create brings into existence, so they are one
+        // component (edge rule 2). Two changes on *different* records would be two groups now.
+        var members = new[] { ApiMember("FK-G1", "Test.esp", "name"), ApiMember("FK-G1", "Test.esp", "level") };
         var group = svc.StageGroup("create", null, members);
 
         var del = await _client.DeleteAsync($"/changes/group/{group.Id}");
@@ -203,11 +215,15 @@ public sealed class ChangeApiTests(LoadedNpcApiFixture loaded) : IClassFixture<L
         Assert.Empty(groups!);
     }
 
+    // ADR-0028 supersedes ADR-0017 §4: 409 when the change's *component* has more than one member,
+    // not whenever it carries a group_id. So this needs two entangled changes to be refused — a lone
+    // one is now a group of one and reverts freely (DeleteChange_SoleMemberOfComponent_Returns204).
     [Fact]
     public async Task DeleteChange_GroupOwned_Returns409WithGroupIdInDetail()
     {
+        await ClearChangesAsync();
         var svc = GetService();
-        var members = new[] { ApiMember("FK-GO", "Test.esp", "name") };
+        var members = new[] { ApiMember("FK-GO", "Test.esp", "name"), ApiMember("FK-GO", "Test.esp", "level") };
         var group = svc.StageGroup("create", null, members);
         var changeId = svc.GetChanges(formKey: "FK-GO")[0].Id;
 
@@ -216,6 +232,27 @@ public sealed class ChangeApiTests(LoadedNpcApiFixture loaded) : IClassFixture<L
         Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
         var body = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
         Assert.Contains(group.Id.ToString(), body.GetProperty("detail").GetString()!);
+    }
+
+    // The other half of the rule, and the shape of the #112 fix at the HTTP edge: an ordinary field
+    // edit is entangled with nothing, so it reverts on its own rather than 409-ing forever.
+    [Fact]
+    public async Task DeleteChange_SoleMemberOfComponent_Returns204()
+    {
+        await ClearChangesAsync();
+        var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
+        await _client.PatchAsJsonAsync($"/records/{formKey}", new
+        {
+            plugin = TestPluginFixture.PluginName,
+            fields = new Dictionary<string, object?> { ["aggression"] = "Frenzied" },
+            source = "user",
+        });
+        var changeId = GetService().GetChanges(formKey: _fixture.Npc1FormKey.ToString())[0].Id;
+
+        var resp = await _client.DeleteAsync($"/changes/{changeId}");
+
+        Assert.Equal(HttpStatusCode.NoContent, resp.StatusCode);
+        Assert.Empty(await _client.GetFromJsonAsync<JsonElement[]>("/changes") ?? []);
     }
 
     [Fact]

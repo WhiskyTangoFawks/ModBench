@@ -20,6 +20,32 @@ public sealed class ExecuteGroupSaveAsyncTests
         return svc.StageGroup("edit", null, members);
     }
 
+    /// <summary>
+    /// Stages a genuinely entangled pair and returns a member change id naming their component.
+    /// A group of more than one has to be *earned* under ADR-0028: sharing a group_id no longer
+    /// makes changes travel together, so these tests build the dependency that does. Here that is
+    /// edge rule 1 — an edit in <paramref name="dependentPlugin"/> holding a FormLink to a record
+    /// only the pending $create in <paramref name="createPlugin"/> brings into existence.
+    /// </summary>
+    private static Guid StageEntangledPair(
+        DuckDbPendingChangeService svc, string createPlugin = "A.esp", string dependentPlugin = "B.esp")
+    {
+        const string createdFormKey = "000001:Test.esp";
+        var created = svc.Upsert(new PendingChangeUpsert(
+            createdFormKey, createPlugin, "npc_",
+            new Dictionary<string, JsonElement> { ["$create"] = J("null") },
+            "user", null, [], FormRefs: null, ChangeType: "create"));
+
+        svc.Upsert(new PendingChangeUpsert(
+            "000002:Test.esp", dependentPlugin, "npc_",
+            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
+            "user", null,
+            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
+            [new PendingFormRef("aggression", "aggression", createdFormKey)]));
+
+        return created[0].Id;
+    }
+
     // A1
     [Fact]
     public async Task NoChanges_ReturnsNoChanges_WriteNotCalled()
@@ -85,15 +111,14 @@ public sealed class ExecuteGroupSaveAsyncTests
     {
         var svc = DuckDbTestFactory.MakePendingChangeService();
         var formRefs = new[] { new PendingFormRef("aggression", "aggression", "000002:Ref.esp") };
-        var groupId = Guid.NewGuid();
-        svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
+        var staged = svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null,
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            formRefs, GroupId: groupId));
+            formRefs));
 
         await Assert.ThrowsAsync<IOException>(() =>
-            svc.ExecuteGroupSaveAsync(groupId, _ =>
+            svc.ExecuteGroupSaveAsync(staged[0].Id, _ =>
                 Task.FromException<IReadOnlyList<(string Plugin, PreparedPluginSave Prepared)>>(new IOException("disk full"))));
 
         var drained = svc.DrainForPlugin("A.esp");
@@ -105,15 +130,19 @@ public sealed class ExecuteGroupSaveAsyncTests
     public async Task WriteReceivesCorrectSnapshot()
     {
         var svc = DuckDbTestFactory.MakePendingChangeService();
-        var groupId = Guid.NewGuid();
+        // Two fields of one record would be two groups now, not one — nothing entangles them
+        // (ADR-0028). Stage a $create plus a field edit on the same record instead: the edit is on a
+        // record the create brings into existence, so edge rule 2 makes them one component of two.
+        var created = svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
+            new Dictionary<string, JsonElement> { ["$create"] = J("null") },
+            "user", null, [], FormRefs: null, ChangeType: "create"));
         svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
-            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\""), ["name"] = J("\"Bob\"") },
+            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null,
-            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\""), ["name"] = J("\"Alice\"") },
-            GroupId: groupId));
+            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") }));
 
         IReadOnlyDictionary<string, IReadOnlyList<PendingChange>>? captured = null;
-        await svc.ExecuteGroupSaveAsync(groupId, byPlugin =>
+        await svc.ExecuteGroupSaveAsync(created[0].Id, byPlugin =>
         {
             captured = byPlugin;
             return Task.FromResult(NoResults());
@@ -129,19 +158,12 @@ public sealed class ExecuteGroupSaveAsyncTests
     public async Task MultiPlugin_BothClearedOnSuccess()
     {
         var svc = DuckDbTestFactory.MakePendingChangeService();
-        var groupId = Guid.NewGuid();
-        svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
-            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
-            "user", null, new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            GroupId: groupId));
-        svc.Upsert(new PendingChangeUpsert("000002:Test.esp", "B.esp", "npc_",
-            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
-            "user", null, new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            GroupId: groupId));
+        var memberId = StageEntangledPair(svc);
 
-        await svc.ExecuteGroupSaveAsync(groupId, _ => Task.FromResult(NoResults()));
+        await svc.ExecuteGroupSaveAsync(memberId, _ => Task.FromResult(NoResults()));
 
-        Assert.Empty(svc.GetChanges(groupId: groupId));
+        Assert.Empty(svc.GetChanges(groupId: memberId));
+        Assert.Empty(svc.GetChanges());
     }
 
     // A8
@@ -153,7 +175,10 @@ public sealed class ExecuteGroupSaveAsyncTests
 
         await svc.ExecuteGroupSaveAsync(group.Id, _ => Task.FromResult(NoResults()));
 
-        Assert.DoesNotContain(svc.GetChangeGroups(), g => g.Id == group.Id);
+        // Asserting DoesNotContain(g.Id == group.Id) would now pass vacuously — a derived group's id
+        // is a member change id, so a saved group's id can never match anything anyway. Assert the
+        // group is gone outright.
+        Assert.Empty(svc.GetChangeGroups());
     }
 
     // A9
@@ -162,14 +187,13 @@ public sealed class ExecuteGroupSaveAsyncTests
     {
         var svc = DuckDbTestFactory.MakePendingChangeService();
         var formRefs = new[] { new PendingFormRef("aggression", "aggression", "000002:Ref.esp") };
-        var groupId = Guid.NewGuid();
-        svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
+        var staged = svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null,
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            formRefs, GroupId: groupId));
+            formRefs));
 
-        await svc.ExecuteGroupSaveAsync(groupId, _ => Task.FromResult(NoResults()));
+        await svc.ExecuteGroupSaveAsync(staged[0].Id, _ => Task.FromResult(NoResults()));
 
         var drained = svc.DrainForPlugin("A.esp");
         Assert.Empty(drained.FormRefsByFormKey["000001:Test.esp"]);
