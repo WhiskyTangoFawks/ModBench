@@ -1,6 +1,16 @@
 import type { ApiClient } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
+import type { components } from './generated/api';
 import { reportSkippedPlugins } from './sessionFailures';
+
+type SaveResult = components['schemas']['SaveResult'];
+/** The save endpoints answer with a per-plugin outcome map, even on HTTP 200. */
+type SaveOutcome = { [plugin: string]: SaveResult };
+
+/** A plugin's save left records unwritten (read-only target, missing record, failed create). */
+function pluginHadFailures(r: SaveResult): boolean {
+  return [r.readOnly, r.notFound, r.createFailed].some(list => (list?.length ?? 0) > 0);
+}
 
 export interface SessionControllerDeps {
   client: ApiClient;
@@ -144,10 +154,13 @@ export class SessionController {
   }
 
   async saveGroup(groupId: string): Promise<void> {
-    const { response } = await this.deps.client.POST('/change-groups/{groupId}/save', {
+    const { data, response } = await this.deps.client.POST('/change-groups/{groupId}/save', {
       params: { path: { groupId } },
     });
     if (response.ok || response.status === 404) {
+      // A save can succeed at the HTTP level yet leave some plugins unwritten
+      // (read-only, not found) — an integrity-tier partial outcome (ADR-0026).
+      this.reportPartialSave(data);
       this.deps.refreshGroupTree();
       this.deps.refreshTree();
       return;
@@ -155,6 +168,48 @@ export class SessionController {
     const text = await response.text();
     this.log(`[SessionController] saveGroup failed (${response.status}): ${text}`);
     this.deps.showError(`mEdit: Save failed — ${text}`);
+  }
+
+  /** Save several selected groups at once, each atomic on its whole component. */
+  async saveGroups(groupIds: string[]): Promise<void> {
+    if (groupIds.length === 0) return;
+    const { data, response } = await this.deps.client.POST('/changes/groups/save', {
+      body: groupIds,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      this.log(`[SessionController] saveGroups failed (${response.status}): ${text}`);
+      this.deps.showError(`mEdit: Save failed — ${text}`);
+      return;
+    }
+    this.reportPartialSave(data);
+    this.deps.refreshGroupTree();
+    this.deps.refreshTree();
+  }
+
+  /** Revert several selected groups at once, each atomic on its whole component. */
+  async revertGroups(groupIds: string[]): Promise<void> {
+    for (const id of groupIds) {
+      await this.revertGroup(id);
+    }
+  }
+
+  /** ADR-0026 integrity tier: a save that wrote some plugins but not others must be
+   *  surfaced, never silent. The backend leaves the unwritten changes queued. */
+  private reportPartialSave(byPlugin: SaveOutcome | undefined): void {
+    if (!byPlugin) return;
+    const saved: string[] = [];
+    const failed: string[] = [];
+    for (const [plugin, r] of Object.entries(byPlugin)) {
+      if (pluginHadFailures(r)) failed.push(plugin);
+      else saved.push(plugin);
+    }
+    if (failed.length === 0) return;
+    this.log(`[SessionController] partial save — wrote [${saved.join(', ')}], failed [${failed.join(', ')}]`);
+    this.deps.showError(
+      `mEdit: Partial save — wrote ${saved.join(', ') || 'nothing'}; could not write ` +
+        `${failed.join(', ')}. Those changes remain queued.`,
+    );
   }
 
   async revertGroup(groupId: string): Promise<void> {
@@ -181,11 +236,12 @@ export class SessionController {
     const failed: string[] = [];
     let anySucceeded = false;
     for (const g of groups) {
-      const { response: r } = await this.deps.client.POST('/change-groups/{groupId}/save', {
+      const { data, response: r } = await this.deps.client.POST('/change-groups/{groupId}/save', {
         params: { path: { groupId: g.id! } },
       });
       if (r.ok || r.status === 404) {
         anySucceeded = true;
+        this.reportPartialSave(data);
       } else {
         failed.push(g.id!);
         this.log(`[SessionController] saveAllGroups: group ${g.id} failed (${r.status})`);
