@@ -389,12 +389,12 @@
         },
         {
           "command": "modbench.saveAllGroups",
-          "when": "view == modbench.changeGroupTree",
+          "when": "view == modbench.changeGroupTree && modbench.hasPendingChanges",
           "group": "navigation"
         },
         {
           "command": "modbench.revertAllGroups",
-          "when": "view == modbench.changeGroupTree",
+          "when": "view == modbench.changeGroupTree && modbench.hasPendingChanges",
           "group": "navigation"
         }
       ],

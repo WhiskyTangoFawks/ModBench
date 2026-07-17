@@ -97,7 +97,9 @@ export function activate(context: vscode.ExtensionContext) {
   const client = createApiClient(port);
   const repository = new ApiPluginRepository(client, log);
   const treeProvider = new PluginTreeProvider(repository, log);
-  const changeGroupTreeProvider = new PendingChangesTreeProvider(client, log);
+  const changeGroupTreeProvider = new PendingChangesTreeProvider(client, log, (hasPending) => {
+    void vscode.commands.executeCommand('setContext', 'modbench.hasPendingChanges', hasPending);
+  });
   const openPanels = new Map<string, vscode.WebviewPanel>();
 
   const { scriptsPath, filterProvider } = setupScripts(cfg);
@@ -245,12 +247,16 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
 }
 
 /** Delete records and save/revert change groups. */
-/** The member change id that keys save/revert on a node's whole component (ADR-0028).
- *  Only actionable nodes (a group, or a top-level singleton edit) contribute one;
- *  member nodes have no context menu and are excluded. */
-function pendingComponentId(node: PendingTreeNode): string | undefined {
-  if (node instanceof PendingGroupNode) return node.componentId;
-  if (node instanceof PendingLeafNode && node.contextValue === 'pendingGroup') return node.componentId;
+/** The component a node acts on (keyed by a member change id, ADR-0028): a group node is
+ *  its own component, a top-level singleton is a group of one, and a member resolves to the
+ *  multi-member group it belongs to. canSelectMany lets a member land in a selection, so we
+ *  map it to its group rather than silently drop it (ADR-0026). Empty/error nodes yield none. */
+function owningComponent(node: PendingTreeNode): { componentId: string; group?: PendingGroupNode } | undefined {
+  if (node instanceof PendingGroupNode) return { componentId: node.componentId, group: node };
+  if (node instanceof PendingLeafNode) {
+    if (node.contextValue === 'pendingGroup') return { componentId: node.componentId };
+    if (node.parent) return { componentId: node.parent.componentId, group: node.parent };
+  }
   return undefined;
 }
 
@@ -260,10 +266,24 @@ function selectedPendingNodes(node?: PendingTreeNode, allSelected?: PendingTreeN
   return node ? [node] : [];
 }
 
+/** Deduped component ids across the selection — two members of one group collapse to it. */
 function selectedComponentIds(node?: PendingTreeNode, allSelected?: PendingTreeNode[]): string[] {
-  return selectedPendingNodes(node, allSelected)
-    .map(pendingComponentId)
-    .filter((id): id is string => !!id);
+  const ids = selectedPendingNodes(node, allSelected)
+    .map(owningComponent)
+    .filter((r): r is { componentId: string; group?: PendingGroupNode } => !!r)
+    .map(r => r.componentId);
+  return [...new Set(ids)];
+}
+
+/** The multi-member groups a save/revert would touch — selected group nodes plus the owning
+ *  groups of any selected members — deduped, so a confirmation can list all linked edits. */
+function selectedGroups(node?: PendingTreeNode, allSelected?: PendingTreeNode[]): PendingGroupNode[] {
+  const groups = new Map<string, PendingGroupNode>();
+  for (const n of selectedPendingNodes(node, allSelected)) {
+    const g = owningComponent(n)?.group;
+    if (g) groups.set(g.componentId, g);
+  }
+  return [...groups.values()];
 }
 
 function registerChangeGroupCommands(deps: EditorCommandDeps): vscode.Disposable[] {
@@ -307,13 +327,12 @@ function registerChangeGroupCommands(deps: EditorCommandDeps): vscode.Disposable
     vscode.commands.registerCommand(
       'modbench.revertGroup',
       async (node?: PendingTreeNode, allSelected?: PendingTreeNode[]) => {
-        const nodes = selectedPendingNodes(node, allSelected);
-        const ids = nodes.map(pendingComponentId).filter((id): id is string => !!id);
+        const ids = selectedComponentIds(node, allSelected);
         if (ids.length === 0) return;
         // A revert takes the whole component, so when a multi-member group is in the
-        // selection, name every linked edit that travels with it (ADR-0029) — the user
-        // never sees a raw 409 for reverting part of a group.
-        const groups = nodes.filter((n): n is PendingGroupNode => n instanceof PendingGroupNode);
+        // selection — directly or via one of its members — name every linked edit that
+        // travels with it (ADR-0029); the user never sees a raw 409 for a partial revert.
+        const groups = selectedGroups(node, allSelected);
         if (groups.length > 0) {
           const members = groups.flatMap(g =>
             g.members.map(m => `${m.recordType ?? ''} / ${m.formKey ?? ''} · ${m.fieldPath ?? ''}`));
