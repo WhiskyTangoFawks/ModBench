@@ -127,14 +127,16 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
   `validFormKeyTypes`, and the link affordance appears on `Ctrl`-hover only when the reference
   resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows.
   Pending-change cells show the new value on a yellow background with a revert (↩) button.
-- **Array elements edit by value, but arrays have no arity or order controls** — no add, remove,
-  or reorder in the compare grid. Editing an element's value restages the whole array; changing
-  how many elements there are, or what order they are in, is not reachable and never has been
-  (#142).
-- **Editing stages pending changes** rather than writing immediately. Copy to… (a plugin
-  picker) remains a panel-level control. A cell value can be **dragged between plugin columns**
-  to copy it as a pending change into the target (which must be editable; the source need not
-  be).
+- **Array elements edit by value, but the field grid has no arity or order controls** — no add,
+  remove, or reorder. Editing an element's value restages the whole array; changing how many
+  elements there are, or what order they are in, is not reachable there and never has been
+  (#142). The VMAD section is the exception: it has its own element and struct add/remove.
+- **Editing stages pending changes** rather than writing immediately. Copying a whole record
+  into another plugin is a **column-header** action, not a panel-level one — **Copy as
+  Override…** on each mutable column's header opens a picker of the other mutable plugins.
+  There is no single "active editable plugin" for a panel-level control to assume. A cell value
+  can also be **dragged between plugin columns** to copy it as a pending change into the target
+  (which must be editable; the source need not be).
 
 ### Pending column
 
@@ -229,22 +231,30 @@ section, and any future surface):
 
    *The resolve test is currently a proxy, and a known-limited one (#141).* The frontend has no
    per-FormKey resolution: the compare response carries the FormKey string and nothing about
-   what it points at. So the affordance keys off the field's `checkError`, which the backend
-   emits (`<Error: Could not be resolved>`) exactly when a FormLink is absent from the record
-   index. What ships therefore tracks **"this cell is not flagged suspect"**, not **"this
-   reference is genuinely indexed"**. Two deliberate divergences follow, both erring toward
-   hiding a real link rather than advertising a dead one, and both landing on cells that already
-   show a ⚠:
+   what it points at. So in the **field grid** the affordance keys off the field's
+   `checkError`, which the backend emits (`<Error: Could not be resolved>`) exactly when a
+   FormLink is absent from the record index. What ships therefore tracks **"this cell is not
+   flagged suspect"**, not **"this reference is genuinely indexed"**. Two deliberate
+   divergences follow, both erring toward hiding a real link rather than advertising a dead
+   one, and both landing on cells that already show a ⚠:
    - a reference that resolves but to the **wrong type** carries a `checkError`, so the
      affordance is suppressed though xEdit would allow the jump;
    - for a **struct or array leaf**, `checkError` is the parent field's aggregate, so one
      dangling member suppresses the affordance on its siblings.
 
-   #141 removes the proxy by carrying resolution in the compare response, which is also what
-   rule 2 needs to label links with the referenced record's EditorID rather than its FormKey.
+   In the **VMAD section** the proxy is weaker still, and errs the other way: a
+   `VmadPropertyDiff` carries no `checkError`, so the only available test is that the Object
+   property's FormKey is well-formed — which catches an unset reference (`Null [-1]`) but not
+   one pointing outside the index, leaving that case looking followable.
+
+   #141 removes the proxy on both surfaces by carrying resolution in the compare response,
+   which is also what rule 2 needs to label links with the referenced record's EditorID rather
+   than its FormKey.
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
-   per-session, not persisted across restarts. Array **element values** are editable; array
-   **arity and order** are not (#142).
+   per-session, not persisted across restarts. Array **element values** are editable
+   everywhere. Array **arity and order** divide by surface, so this rule does not generalize:
+   the VMAD section has add/remove element and add/remove struct, while the **field grid has
+   none** — no add, no remove, no reorder (#142).
 4. **Pending values** always show the new value (not the old), on a yellow background with a
    revert button.
 5. **Null / missing fields** render as an empty cell, never "null"/"undefined".
@@ -281,9 +291,10 @@ section, and any future surface):
 - **Referenced By** — a separate panel, [medit-referenced-by.md](medit-referenced-by.md).
 - **Grouping semantics** — settled in ADR-0028 and computed backend-side; this surface renders
   grouping, it does not derive it.
-- **Array arity and order editing** — no add, remove, or reorder; tracked as #142, which has to
-  settle how an arity change stages under ADR-0017's `old_value`/`new_value` model and how
-  sorted (`wbArrayS`) and unsorted (`wbArray`) arrays differ.
+- **Array arity and order editing *in the field grid*** — no add, remove, or reorder; tracked
+  as #142, which has to settle how an arity change stages under ADR-0017's
+  `old_value`/`new_value` model and how sorted (`wbArrayS`) and unsorted (`wbArray`) arrays
+  differ. Not a limit of the VMAD section, which has its own.
 
 ## Further Notes
 
