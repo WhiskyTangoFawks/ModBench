@@ -452,6 +452,21 @@ describe('SessionController.revertGroups', () => {
       expect.objectContaining({ params: { path: { groupId: 'id2' } } }),
     );
   });
+
+  it('reports every failed revert in one aggregated message, not one per group', async () => {
+    const client = {
+      ...makeClient(),
+      DELETE: vi.fn().mockResolvedValue({ response: { ok: false, status: 500, text: () => Promise.resolve('err') } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.revertGroups(['id1', 'id2']);
+
+    expect(deps.showError).toHaveBeenCalledTimes(1);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('id1'));
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('id2'));
+  });
 });
 
 // ── partial-save reporting (ADR-0026 integrity tier) ────────────────────────────
@@ -480,6 +495,26 @@ describe('SessionController partial-save reporting', () => {
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('B.esp'));
     // The group stays visible with its re-queued changes — the tree still refreshes.
     expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
+  });
+
+  it('reports a plugin that applied some records and failed others as partial, not wholly failed', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({
+        data: {
+          'A.esp': { backupPath: '/b', applied: ['001:A.esp'], readOnly: ['002:A.esp'], notFound: [], createFailed: [] },
+        },
+        response: { ok: true, status: 200 },
+      }),
+      DELETE: vi.fn(),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveGroup('abc-123');
+
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('partially wrote A.esp'));
+    expect(deps.showError).not.toHaveBeenCalledWith(expect.stringContaining('could not write'));
   });
 
   it('stays silent when every plugin in the outcome applied cleanly', async () => {

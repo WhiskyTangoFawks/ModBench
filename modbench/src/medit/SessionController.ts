@@ -7,9 +7,17 @@ type SaveResult = components['schemas']['SaveResult'];
 /** The save endpoints answer with a per-plugin outcome map, even on HTTP 200. */
 type SaveOutcome = { [plugin: string]: SaveResult };
 
-/** A plugin's save left records unwritten (read-only target, missing record, failed create). */
-function pluginHadFailures(r: SaveResult): boolean {
-  return [r.readOnly, r.notFound, r.createFailed].some(list => (list?.length ?? 0) > 0);
+type PluginSaveStatus = 'saved' | 'partial' | 'failed';
+
+const count = (list: readonly string[] | null | undefined): number => list?.length ?? 0;
+
+/** Classify a plugin's save outcome. Records can be left unwritten (read-only target,
+ *  missing record, failed create) while others applied — that plugin partially saved,
+ *  not wholly failed (ADR-0026: per-plugin accuracy). */
+function classifyPluginSave(r: SaveResult): PluginSaveStatus {
+  const unwritten = count(r.readOnly) + count(r.notFound) + count(r.createFailed);
+  if (unwritten === 0) return 'saved';
+  return count(r.applied) > 0 ? 'partial' : 'failed';
 }
 
 export interface SessionControllerDeps {
@@ -187,11 +195,24 @@ export class SessionController {
     this.deps.refreshTree();
   }
 
-  /** Revert several selected groups at once, each atomic on its whole component. */
+  /** Revert several selected groups at once, each atomic on its whole component. Reports
+   *  any failures in one aggregated message (ADR-0026), matching saveGroups — not N toasts. */
   async revertGroups(groupIds: string[]): Promise<void> {
+    if (groupIds.length === 0) return;
+    const failed: string[] = [];
+    let anyReverted = false;
     for (const id of groupIds) {
-      await this.revertGroup(id);
+      const { response } = await this.deps.client.DELETE('/changes/group/{groupId}', {
+        params: { path: { groupId: id } },
+      });
+      if (response.ok) anyReverted = true;
+      else {
+        failed.push(id);
+        this.log(`[SessionController] revertGroups: group ${id} failed (${response.status})`);
+      }
     }
+    if (anyReverted) this.deps.refreshGroupTree();
+    if (failed.length > 0) this.deps.showError(`mEdit: Failed to revert: ${failed.join(', ')}`);
   }
 
   /** ADR-0026 integrity tier: a save that wrote some plugins but not others must be
@@ -199,17 +220,18 @@ export class SessionController {
   private reportPartialSave(byPlugin: SaveOutcome | undefined): void {
     if (!byPlugin) return;
     const saved: string[] = [];
+    const partial: string[] = [];
     const failed: string[] = [];
     for (const [plugin, r] of Object.entries(byPlugin)) {
-      if (pluginHadFailures(r)) failed.push(plugin);
-      else saved.push(plugin);
+      ({ saved, partial, failed }[classifyPluginSave(r)]).push(plugin);
     }
-    if (failed.length === 0) return;
-    this.log(`[SessionController] partial save — wrote [${saved.join(', ')}], failed [${failed.join(', ')}]`);
-    this.deps.showError(
-      `mEdit: Partial save — wrote ${saved.join(', ') || 'nothing'}; could not write ` +
-        `${failed.join(', ')}. Those changes remain queued.`,
-    );
+    if (partial.length === 0 && failed.length === 0) return;
+    const parts: string[] = [];
+    if (saved.length > 0) parts.push(`wrote ${saved.join(', ')}`);
+    if (partial.length > 0) parts.push(`partially wrote ${partial.join(', ')}`);
+    if (failed.length > 0) parts.push(`could not write ${failed.join(', ')}`);
+    this.log(`[SessionController] partial save — ${parts.join('; ')}`);
+    this.deps.showError(`mEdit: Partial save — ${parts.join('; ')}. Unwritten changes remain queued.`);
   }
 
   async revertGroup(groupId: string): Promise<void> {
