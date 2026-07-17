@@ -967,12 +967,19 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
             ? parsed
             : 0;
 
+    // The timestamp resolves to sub-second because one user gesture now writes a plugin more than
+    // once a second: saving is per change group, and since ADR-0028 a plugin's field edits are many
+    // groups rather than one, so "Save All" runs several saves of the same plugin back to back.
+    // At one-second resolution the second of those collided with the first's backup and threw,
+    // failing the save. Sub-second keeps every backup — deliberately not File.Copy(overwrite: true),
+    // which would destroy the earlier one, nor a uniquifying retry, which would silently mask a
+    // genuine collision; CreateBackup_FileAlreadyExists_ThrowsIOException pins that throw.
     internal static string CreateBackup(string pluginPath, string? timestamp = null)
     {
         var dir = Path.GetDirectoryName(pluginPath)!;
         var name = Path.GetFileNameWithoutExtension(pluginPath);
         var ext = Path.GetExtension(pluginPath);
-        var ts = timestamp ?? DateTime.UtcNow.ToString("yyyy-MM-ddTHH-mm-ss", CultureInfo.InvariantCulture);
+        var ts = timestamp ?? DateTime.UtcNow.ToString("yyyy-MM-ddTHH-mm-ss-fffffff", CultureInfo.InvariantCulture);
         var path = Path.Combine(dir, $"{name}.{ts}.bak{ext}");
         File.Copy(pluginPath, path, overwrite: false);
         return path;

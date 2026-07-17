@@ -287,6 +287,33 @@ public class PluginWriterApplyTests
         }
     }
 
+    // Two backups of one plugin in quick succession must both survive. Saving is per change group,
+    // and since ADR-0028 a plugin's field edits are many groups rather than one, so "Save All" writes
+    // the same plugin several times within a second — which at one-second timestamp resolution
+    // collided with the previous backup and threw, failing the save.
+    [Fact]
+    public void CreateBackup_TwiceInQuickSuccession_KeepsBoth()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"pw-backup-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var pluginPath = Path.Combine(dir, "TestPlugin.esp");
+            File.WriteAllText(pluginPath, "dummy");
+
+            var first = PluginWriter.CreateBackup(pluginPath);
+            var second = PluginWriter.CreateBackup(pluginPath);
+
+            Assert.NotEqual(first, second);
+            Assert.True(File.Exists(first));
+            Assert.True(File.Exists(second));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     // --- PruneOldBackups deletes oldest files, keeps newest maxBackups (mutants 138, 159, 160, 162) ---
 
     [Fact]
