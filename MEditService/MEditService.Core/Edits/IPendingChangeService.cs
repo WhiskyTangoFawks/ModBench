@@ -42,10 +42,20 @@ public interface IPendingChangeService
     /// </summary>
     string? GetPendingCreateRecordType(string formKey);
 
+    /// <summary>
+    /// Staged changes, optionally narrowed. <paramref name="groupId"/> names any *member change* of
+    /// a group and selects that change's whole component — groups have no identity of their own
+    /// (ADR-0028). The stored <c>group_id</c> column is not consulted.
+    /// </summary>
     IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? groupId = null);
 
     Dictionary<string, JsonElement>? GetPendingFields(string formKey, string plugin);
 
+    /// <summary>
+    /// Reverts one change on its own, refusing with <see cref="RevertChangeResult.GroupOwned"/> when
+    /// it is entangled with others — i.e. when its component has more than one member. ADR-0028
+    /// supersedes ADR-0017 §4 here: the refusal keys on the component, not on carrying a group_id.
+    /// </summary>
     RevertChangeResult Revert(Guid changeId);
 
     int Revert(string? plugin, string? formKey);
@@ -53,8 +63,10 @@ public interface IPendingChangeService
     DrainResult DrainForPlugin(string plugin);
 
     /// <summary>
-    /// Atomically saves a change group: deletes its pending rows and commits <paramref name="prepareAll"/>'s
-    /// prepared plugin writes together, rolling both back together if either half fails.
+    /// Atomically saves the change group <paramref name="groupId"/> belongs to — it names any
+    /// *member change*, not a stored group (ADR-0028) — deleting its pending rows and committing
+    /// <paramref name="prepareAll"/>'s prepared plugin writes together, rolling both back together
+    /// if either half fails.
     /// <paramref name="prepareAll"/> runs under the service's single writer lock — it must only prepare
     /// writes (no commit-side-effecting work) and must not call back into this service, or it will deadlock.
     /// </summary>
@@ -74,11 +86,32 @@ public interface IPendingChangeService
     /// </summary>
     (IReadOnlyList<string> Added, IReadOnlyList<string> Removed) GetPendingNativeFormKeyChanges(string plugin);
 
+    /// <summary>
+    /// One <see cref="ChangeGroup"/> per connected component of the pending-change dependency graph
+    /// (ADR-0028) — derived, never read from the <c>change_groups</c> table. Every pending change is
+    /// in exactly one; a change nothing depends on is a group of one. Each group's <c>Id</c> is one
+    /// of its member change ids.
+    /// </summary>
     IReadOnlyList<ChangeGroup> GetChangeGroups();
 
+    /// <summary>
+    /// Reverts the whole component <paramref name="groupId"/> belongs to — it names any *member
+    /// change*, not a stored group. False when no such change is pending.
+    /// </summary>
     bool RevertGroup(Guid groupId);
 
+    /// <summary>
+    /// The stored <c>group_id</c> of a record's pending changes, or null. Vestigial as far as
+    /// grouping goes — it survives only for the <c>BlockedByGroup</c> guard, which still reads it
+    /// (issue #134 removes both). Not a group identity: use <see cref="GetChangeGroups"/>.
+    /// </summary>
     Guid? GetGroupIdForRecord(string formKey, string plugin);
 
+    /// <summary>
+    /// Stages <paramref name="members"/> together. The returned group is *derived* from the staged
+    /// rows, so <paramref name="operation"/> and <paramref name="description"/> hold only insofar as
+    /// the members imply them, and members that depend on nothing of each other's land in separate
+    /// groups regardless of being staged by one call (ADR-0028).
+    /// </summary>
     ChangeGroup StageGroup(string operation, string? description, IReadOnlyList<GroupMember> members);
 }

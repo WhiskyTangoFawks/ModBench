@@ -121,8 +121,13 @@ public sealed class DeleteRecordsApiTests(LoadedDeleteRecordsApiFixture loaded) 
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 
+    // Changed by ADR-0028 — not a regression. The response used to describe a single group of two,
+    // because the call labelled both deletes with one group_id. These two NPCs are standalone: they
+    // reference nothing of each other's, so nothing entangles them and reverting one cannot
+    // invalidate the other. The response now describes the component the first delete landed in — a
+    // group of one — and the batch surfaces as two independently revertable groups.
     [Fact]
-    public async Task PostDeleteRecords_BatchTwoRecords_SingleGroupInResponse()
+    public async Task PostDeleteRecords_BatchTwoIndependentRecords_AreSeparateGroups()
     {
         await ClearChangesAsync();
 
@@ -137,6 +142,10 @@ public sealed class DeleteRecordsApiTests(LoadedDeleteRecordsApiFixture loaded) 
 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(2, body.GetProperty("changeCount").GetInt32());
+        Assert.Equal(1, body.GetProperty("changeCount").GetInt32());
+
+        var groups = await _client.GetFromJsonAsync<JsonElement[]>("/change-groups") ?? [];
+        Assert.Equal(2, groups.Length);
+        Assert.All(groups, g => Assert.Equal("delete", g.GetProperty("operation").GetString()));
     }
 }

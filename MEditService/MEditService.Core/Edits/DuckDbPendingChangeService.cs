@@ -74,18 +74,22 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             );
             """;
         cmd.ExecuteNonQuery();
+
+        // Deriving change groups reads the committed reference index (ADR-0028 edge rule 1), so it
+        // must exist wherever pending changes do. Records/ owns the definition; this is the same
+        // idempotent DDL, not a second copy of it.
+        Records.TableDdlBuilder.CreateFormReferencesTable(connection);
     }
 
     private DuckDBConnection RequireConnection() =>
         _connection ?? throw new InvalidOperationException("No session loaded.");
 
-    private static (string Where, List<object> Params) BuildFilter(string? plugin, string? formKey, Guid? groupId = null)
+    private static (string Where, List<object> Params) BuildFilter(string? plugin, string? formKey)
     {
         var conditions = new List<string>();
         var paramValues = new List<object>();
         if (plugin != null) { conditions.Add($"plugin = ${paramValues.Count + 1}"); paramValues.Add(plugin); }
         if (formKey != null) { conditions.Add($"form_key = ${paramValues.Count + 1}"); paramValues.Add(formKey); }
-        if (groupId != null) { conditions.Add($"group_id = ${paramValues.Count + 1}"); paramValues.Add(groupId.Value.ToString()); }
         var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
         return (where, paramValues);
     }
@@ -208,8 +212,17 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         try
         {
             var conn = RequireConnection();
-            var (where, paramValues) = BuildFilter(plugin, formKey, groupId);
-            return DoSelectChanges(conn, where, paramValues);
+            var (where, paramValues) = BuildFilter(plugin, formKey);
+            var changes = DoSelectChanges(conn, where, paramValues);
+
+            // groupId names a member change, not a stored group (ADR-0028): narrow to that change's
+            // component, keeping any plugin/formKey filter applied on top.
+            if (groupId is not { } memberChangeId) return changes;
+
+            var component = ComponentOf(conn, memberChangeId);
+            if (component == null) return [];
+            var memberIds = component.Select(m => m.Id).ToHashSet();
+            return [.. changes.Where(c => memberIds.Contains(c.Id))];
         }
         finally { _sem.Release(); }
     }
@@ -323,47 +336,25 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             added.Add(newFormKey);
     }
 
+    /// <summary>
+    /// Reverts a single change on its own. Refuses when the change is entangled with others —
+    /// reverting part of a component would leave the rest invalid, so the caller must revert the
+    /// whole group. Per ADR-0028 that is a property of the change's *component*, not of a stored
+    /// group id: every change now has a group, and a change of one reverts freely.
+    /// </summary>
     public RevertChangeResult Revert(Guid changeId)
     {
         _sem.Wait();
         try
         {
             var conn = RequireConnection();
-            var changeIdStr = changeId.ToString();
+            var component = ComponentOf(conn, changeId);
+            if (component == null) return new RevertChangeResult.NotFound();
+            if (component.Count > 1)
+                return new RevertChangeResult.GroupOwned(component.Min(m => m.Id));
 
             using var txn = conn.BeginTransaction();
-
-            using var check = conn.CreateCommand();
-            check.CommandText = "SELECT group_id, form_key, plugin, field_path FROM pending_changes WHERE id = $1";
-            check.Parameters.Add(new DuckDBParameter { Value = changeIdStr });
-
-            string? fk, pl, fp;
-            using (var checkReader = check.ExecuteReader())
-            {
-                if (!checkReader.Read())
-                    return new RevertChangeResult.NotFound();
-                if (!checkReader.IsDBNull(0))
-                    return new RevertChangeResult.GroupOwned(Guid.Parse(checkReader.GetString(0)));
-                fk = checkReader.GetString(1);
-                pl = checkReader.GetString(2);
-                fp = checkReader.GetString(3);
-            }
-
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "DELETE FROM pending_changes WHERE id = $1";
-            cmd.Parameters.Add(new DuckDBParameter { Value = changeIdStr });
-            cmd.ExecuteNonQuery();
-
-            using var del = conn.CreateCommand();
-            del.CommandText = """
-                DELETE FROM pending_form_references
-                WHERE source_form_key = $1 AND source_plugin = $2 AND staged_field = $3
-                """;
-            del.Parameters.Add(new DuckDBParameter { Value = fk });
-            del.Parameters.Add(new DuckDBParameter { Value = pl });
-            del.Parameters.Add(new DuckDBParameter { Value = fp });
-            del.ExecuteNonQuery();
-
+            DeleteComponent(conn, component);
             txn.Commit();
             return new RevertChangeResult.Reverted();
         }
@@ -467,81 +458,100 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         try
         {
             var conn = RequireConnection();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = """
-                SELECT cg.id, cg.operation, cg.description, cg.created_at,
-                       CAST(COUNT(pc.id) AS INTEGER) AS change_count,
-                       CAST(COUNT(DISTINCT pc.plugin) AS INTEGER) AS plugin_count
-                FROM change_groups cg
-                LEFT JOIN pending_changes pc ON pc.group_id = cg.id
-                GROUP BY cg.id, cg.operation, cg.description, cg.created_at
-                """;
-
-            var result = new List<ChangeGroup>();
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
-            {
-                var id = Guid.Parse(reader.GetString(0));
-                var operation = reader.GetString(1);
-                var description = reader.IsDBNull(2) ? null : reader.GetString(2);
-                var createdAt = reader.GetDateTime(3);
-                var changeCount = reader.GetInt32(4);
-                var pluginCount = reader.GetInt32(5);
-                result.Add(new ChangeGroup(id, operation, description, createdAt, changeCount, pluginCount));
-            }
-            return result;
+            return [.. AllComponents(conn).Select(Describe)];
         }
         finally { _sem.Release(); }
     }
 
+    private static List<List<PendingChange>> AllComponents(DuckDBConnection conn) =>
+        PendingChangeGraph.Components(conn, DoSelectChanges(conn, "", []));
+
+    /// <summary>
+    /// The component of the change identified by <paramref name="memberChangeId"/>, or null when no
+    /// such change is pending. Groups have no identity of their own (ADR-0028) — any member id
+    /// names the whole component.
+    /// </summary>
+    private static List<PendingChange>? ComponentOf(DuckDBConnection conn, Guid memberChangeId) =>
+        AllComponents(conn).FirstOrDefault(c => c.Any(m => m.Id == memberChangeId));
+
+    /// <summary>
+    /// Derives a component's ChangeGroup columns from its members (ADR-0028): the id is a member
+    /// change id, the operation is the dominant change_type with lifecycle ops beating field_edit,
+    /// the description is the originating change's, and created_at is the earliest member's.
+    /// </summary>
+    private static ChangeGroup Describe(List<PendingChange> members)
+    {
+        var originating = members
+            .OrderBy(m => PendingChangeConstants.IsLifecycle(m.ChangeType) ? 0 : 1)
+            .ThenBy(m => m.ChangedAt)
+            .ThenBy(m => m.Id)
+            .First();
+
+        return new ChangeGroup(
+            members.Min(m => m.Id),
+            originating.ChangeType,
+            originating.Description,
+            members.Min(m => m.ChangedAt),
+            members.Count,
+            members.Select(m => m.Plugin).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    /// <summary>
+    /// Reverts the whole component of <paramref name="groupId"/>, which names a *member change*
+    /// rather than a stored group (ADR-0028). False when no such change is pending.
+    /// </summary>
     public bool RevertGroup(Guid groupId)
     {
         _sem.Wait();
         try
         {
             var conn = RequireConnection();
-            var groupIdStr = groupId.ToString();
-
-            // Collect (form_key, plugin, field_path) for form-ref cleanup before we delete them
-            var groupFields = new List<(string FormKey, string Plugin, string FieldPath)>();
-            using (var selectCmd = conn.CreateCommand())
-            {
-                selectCmd.CommandText = "SELECT form_key, plugin, field_path FROM pending_changes WHERE group_id = $1";
-                selectCmd.Parameters.Add(new DuckDBParameter { Value = groupIdStr });
-                using var selectReader = selectCmd.ExecuteReader();
-                while (selectReader.Read())
-                    groupFields.Add((selectReader.GetString(0), selectReader.GetString(1), selectReader.GetString(2)));
-            }
+            var component = ComponentOf(conn, groupId);
+            if (component == null) return false;
 
             using var txn = conn.BeginTransaction();
-
-            foreach (var (fk, pl, fp) in groupFields)
-            {
-                using var delRef = conn.CreateCommand();
-                delRef.CommandText = """
-                    DELETE FROM pending_form_references
-                    WHERE source_form_key = $1 AND source_plugin = $2 AND staged_field = $3
-                    """;
-                delRef.Parameters.Add(new DuckDBParameter { Value = fk });
-                delRef.Parameters.Add(new DuckDBParameter { Value = pl });
-                delRef.Parameters.Add(new DuckDBParameter { Value = fp });
-                delRef.ExecuteNonQuery();
-            }
-
-            using var delChanges = conn.CreateCommand();
-            delChanges.CommandText = "DELETE FROM pending_changes WHERE group_id = $1";
-            delChanges.Parameters.Add(new DuckDBParameter { Value = groupIdStr });
-            delChanges.ExecuteNonQuery();
-
-            using var delGroup = conn.CreateCommand();
-            delGroup.CommandText = "DELETE FROM change_groups WHERE id = $1";
-            delGroup.Parameters.Add(new DuckDBParameter { Value = groupIdStr });
-            var deleted = delGroup.ExecuteNonQuery();
-
+            DeleteComponent(conn, component);
             txn.Commit();
-            return deleted > 0;
+            return true;
         }
         finally { _sem.Release(); }
+    }
+
+    /// <summary>
+    /// Drops a component's pending rows and the form references staged with them. Also clears the
+    /// vestigial change_groups rows the staging paths still write, so they cannot outlive their
+    /// members; nothing reads them any more (issue #134 removes them outright).
+    /// </summary>
+    private static void DeleteComponent(DuckDBConnection conn, List<PendingChange> component)
+    {
+        foreach (var change in component)
+        {
+            using var delRef = conn.CreateCommand();
+            delRef.CommandText = """
+                DELETE FROM pending_form_references
+                WHERE source_form_key = $1 AND source_plugin = $2 AND staged_field = $3
+                """;
+            delRef.Parameters.Add(new DuckDBParameter { Value = change.FormKey });
+            delRef.Parameters.Add(new DuckDBParameter { Value = change.Plugin });
+            delRef.Parameters.Add(new DuckDBParameter { Value = change.FieldPath });
+            delRef.ExecuteNonQuery();
+
+            using var delChange = conn.CreateCommand();
+            delChange.CommandText = "DELETE FROM pending_changes WHERE id = $1";
+            delChange.Parameters.Add(new DuckDBParameter { Value = change.Id.ToString() });
+            delChange.ExecuteNonQuery();
+        }
+
+        foreach (var staleGroupId in component.Select(c => c.GroupId).OfType<Guid>().Distinct())
+        {
+            using var delGroup = conn.CreateCommand();
+            delGroup.CommandText = """
+                DELETE FROM change_groups WHERE id = $1
+                AND NOT EXISTS (SELECT 1 FROM pending_changes WHERE group_id = $1)
+                """;
+            delGroup.Parameters.Add(new DuckDBParameter { Value = staleGroupId.ToString() });
+            delGroup.ExecuteNonQuery();
+        }
     }
 
     public Guid? GetGroupIdForRecord(string formKey, string plugin)
@@ -665,15 +675,21 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
 
             txn.Commit();
 
-            using var countCmd = conn.CreateCommand();
-            countCmd.CommandText = "SELECT CAST(COUNT(*) AS INTEGER) FROM pending_changes WHERE group_id = $1";
-            countCmd.Parameters.Add(new DuckDBParameter { Value = groupId.ToString() });
-            var actualCount = Convert.ToInt32(countCmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
-            var pluginCount = members.Select(m => m.Plugin).Distinct(StringComparer.OrdinalIgnoreCase).Count();
-            return new ChangeGroup(groupId, operation, description, createdAt, actualCount, pluginCount);
+            // Report the group as it now *derives*, not as it was labelled. The id handed back must
+            // be a member change id like every other ChangeGroup's — the stored group_id written
+            // above is no longer a currency any read or save path accepts (ADR-0028). The passed
+            // `operation`/`description` likewise survive only insofar as the members imply them.
+            var anchor = FindChange(conn, members[0].FormKey, members[0].Plugin, members[0].FieldPath);
+            return Describe(ComponentOf(conn, anchor.Id)!);
         }
         finally { _sem.Release(); }
     }
+
+    private static PendingChange FindChange(DuckDBConnection conn, string formKey, string plugin, string fieldPath) =>
+        DoSelectChanges(
+            conn,
+            " WHERE form_key = $1 AND plugin = $2 AND field_path = $3",
+            [formKey, plugin, fieldPath]).Single();
 
     public async Task<SaveGroupResult> ExecuteGroupSaveAsync(
         Guid groupId,
@@ -683,15 +699,15 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         try
         {
             var conn = RequireConnection();
-            var pending = SelectChangesForGroup(conn, groupId);
-            if (pending.Count == 0) return new SaveGroupResult.NoChanges();
+            var pending = ComponentOf(conn, groupId);
+            if (pending == null || pending.Count == 0) return new SaveGroupResult.NoChanges();
 
             var byPlugin = pending
                 .GroupBy(c => c.Plugin)
                 .ToDictionary(g => g.Key, g => (IReadOnlyList<PendingChange>)[.. g]);
 
             await using var txn = await conn.BeginTransactionAsync();
-            DeleteChangesForGroup(conn, groupId);
+            DeleteComponent(conn, pending);
 
             var prepared = await prepareAll(byPlugin);
             var saveTxn = new SaveTransaction(prepared);
@@ -712,37 +728,6 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             }
         }
         finally { _sem.Release(); }
-    }
-
-    private static List<PendingChange> SelectChangesForGroup(DuckDBConnection conn, Guid groupId)
-    {
-        var (where, paramValues) = BuildFilter(null, null, groupId);
-        return DoSelectChanges(conn, where, paramValues);
-    }
-
-    private static void DeleteChangesForGroup(DuckDBConnection conn, Guid groupId)
-    {
-        var groupIdStr = groupId.ToString();
-
-        using var delRefs = conn.CreateCommand();
-        delRefs.CommandText = """
-            DELETE FROM pending_form_references
-            WHERE (source_form_key, source_plugin, staged_field) IN (
-                SELECT form_key, plugin, field_path FROM pending_changes WHERE group_id = $1
-            )
-            """;
-        delRefs.Parameters.Add(new DuckDBParameter { Value = groupIdStr });
-        delRefs.ExecuteNonQuery();
-
-        using var delChanges = conn.CreateCommand();
-        delChanges.CommandText = "DELETE FROM pending_changes WHERE group_id = $1";
-        delChanges.Parameters.Add(new DuckDBParameter { Value = groupIdStr });
-        delChanges.ExecuteNonQuery();
-
-        using var delGroup = conn.CreateCommand();
-        delGroup.CommandText = "DELETE FROM change_groups WHERE id = $1";
-        delGroup.Parameters.Add(new DuckDBParameter { Value = groupIdStr });
-        delGroup.ExecuteNonQuery();
     }
 
     public void Dispose() => _sem.Dispose();

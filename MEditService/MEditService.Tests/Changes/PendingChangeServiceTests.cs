@@ -385,21 +385,27 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Empty(result);
     }
 
+    // Grouping follows the members' dependencies, not the batch the StageGroup call labelled them
+    // with (ADR-0028). FK1's two changes are one group because both are changes to a record FK1's
+    // own $create brings into existence (edge rule 2); FK2 shares nothing with them, so it is a
+    // group of one. Before ADR-0028 this returned a single group of three purely because one call
+    // staged them together — see DeleteRecords_BatchTwoRecords for the same shift in the field.
     [Fact]
-    public void StageGroup_ReturnsGroupAndAppearsInGetChangeGroups()
+    public void StageGroup_MembersAreGroupedByDependency_NotByTheStagingCall()
     {
         var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK1", "P.esp", "level"), MakeMember("FK2", "P.esp", "name") };
 
         var group = _svc.StageGroup("create", "test group", members);
 
+        // The returned group describes the component the first member landed in, not the whole call.
         Assert.Equal("create", group.Operation);
         Assert.Equal("test group", group.Description);
-        Assert.Equal(3, group.ChangeCount);
+        Assert.Equal(2, group.ChangeCount);
 
         var groups = _svc.GetChangeGroups();
-        Assert.Single(groups);
-        Assert.Equal("create", groups[0].Operation);
-        Assert.Equal(3, groups[0].ChangeCount);
+        Assert.Equal(2, groups.Count);
+        Assert.All(groups, g => Assert.Equal("create", g.Operation));
+        Assert.Equal([1, 2], groups.Select(g => g.ChangeCount).Order());
     }
 
     [Fact]
@@ -413,24 +419,25 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Equal("my description", groups[0].Description);
     }
 
+    // groupId names a member change and selects that change's whole component (ADR-0028).
     [Fact]
     public void GetChanges_FilteredByGroupId_ReturnsOnlyGroupChanges()
     {
-        var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK2", "P.esp", "name") };
+        var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK1", "P.esp", "level") };
         var group = _svc.StageGroup("create", null, members);
-        // standalone change
+        // A change entangled with nothing — its own group, and no business of FK1's.
         _svc.Upsert(new PendingChangeUpsert("FK3", "P.esp", "npc_", new() { ["level"] = J("5") }, "user", null, []));
 
         var grouped = _svc.GetChanges(groupId: group.Id);
 
         Assert.Equal(2, grouped.Count);
-        Assert.All(grouped, c => Assert.Equal(group.Id, c.GroupId));
+        Assert.All(grouped, c => Assert.Equal("FK1", c.FormKey));
     }
 
     [Fact]
     public void RevertGroup_RemovesAllChangesAndGroup()
     {
-        var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK2", "P.esp", "name") };
+        var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK1", "P.esp", "level") };
         var group = _svc.StageGroup("create", null, members);
 
         var result = _svc.RevertGroup(group.Id);
@@ -446,10 +453,13 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.False(_svc.RevertGroup(Guid.NewGuid()));
     }
 
+    // A change entangled with others cannot be reverted alone — reverting part of a component would
+    // leave the rest invalid. Per ADR-0028 that is a property of the component, not of a stored
+    // label: see Revert_SoleMemberOfItsComponent_Reverts for the other half of the rule.
     [Fact]
     public void Revert_GroupOwned_ReturnsGroupOwned()
     {
-        var members = new[] { MakeMember("FK1", "P.esp", "name") };
+        var members = new[] { MakeMember("FK1", "P.esp", "name"), MakeMember("FK1", "P.esp", "level") };
         _svc.StageGroup("create", null, members);
         var changeId = _svc.GetChanges(formKey: "FK1")[0].Id;
 
@@ -459,15 +469,30 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.NotEqual(Guid.Empty, owned.GroupId);
     }
 
+    // ADR-0028 supersedes ADR-0017 §4: a change is refused only when its *component* has more than
+    // one member, not whenever it carries a group_id. Every change has a group now, so the old rule
+    // would make a lone create — or any ordinary field edit — permanently unrevertable.
+    [Fact]
+    public void Revert_SoleMemberOfItsComponent_Reverts()
+    {
+        _svc.StageGroup("create", null, [MakeMember("FK1", "P.esp", "name")]);
+        var changeId = _svc.GetChanges(formKey: "FK1")[0].Id;
+
+        Assert.IsType<RevertChangeResult.Reverted>(_svc.Revert(changeId));
+        Assert.Empty(_svc.GetChanges(formKey: "FK1"));
+    }
+
+    // GetGroupIdForRecord still reads the stored group_id column, which the staging paths still
+    // write and the BlockedByGroup guard still reads (issue #134 removes both). It is deliberately
+    // not compared against a derived ChangeGroup.Id here — those are different currencies now.
     [Fact]
     public void GetGroupIdForRecord_WhenGroupOwned_ReturnsGroupId()
     {
-        var members = new[] { MakeMember("FK1", "P.esp", "name") };
-        var group = _svc.StageGroup("create", null, members);
+        _svc.StageGroup("create", null, [MakeMember("FK1", "P.esp", "name")]);
 
         var gid = _svc.GetGroupIdForRecord("FK1", "P.esp");
 
-        Assert.Equal(group.Id, gid);
+        Assert.Equal(_svc.GetChanges(formKey: "FK1")[0].GroupId, gid);
     }
 
     [Fact]

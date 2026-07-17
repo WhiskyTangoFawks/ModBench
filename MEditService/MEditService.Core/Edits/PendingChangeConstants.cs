@@ -15,6 +15,13 @@ internal static class PendingChangeConstants
     internal const string PlacementGroupPersistent = "persistent";
     internal const string PlacementGroupTemporary = "temporary";
 
+    /// <summary>
+    /// Change types that bring a FormKey into or out of existence. These are the ones that entangle
+    /// other changes (ADR-0028 edge rule 1) and that dominate a derived group's operation.
+    /// </summary>
+    internal static bool IsLifecycle(string changeType) =>
+        changeType is CreateChangeType or DeleteChangeType or RenumberChangeType;
+
     internal static readonly JsonElement NullElement =
         JsonSerializer.SerializeToElement<object?>(null);
 }

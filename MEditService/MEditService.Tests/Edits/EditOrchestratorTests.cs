@@ -877,8 +877,11 @@ public sealed class EditOrchestratorTests
                 Assert.Equal("$create", staged[0].FieldPath);
                 Assert.Equal("create", staged[0].ChangeType);
                 Assert.Equal(JsonValueKind.Null, staged[0].NewValue.ValueKind);
-                Assert.Equal(result.GroupId, staged[0].GroupId);
                 Assert.Equal(result.FormKey, staged[0].FormKey);
+
+                // The create hands back a member change id — here the $create change's own id —
+                // rather than a stored group id (ADR-0028).
+                Assert.Equal(result.GroupId, staged[0].Id);
 
                 var groups = changes.GetChangeGroups();
                 Assert.Single(groups);
@@ -915,13 +918,16 @@ public sealed class EditOrchestratorTests
                 Assert.True(staged.Count > 1, "Expected $create plus at least one field_edit from template");
                 var createChange = staged.Single(c => c.FieldPath == "$create");
                 Assert.Equal(JsonValueKind.Null, createChange.NewValue.ValueKind);
-                Assert.Equal(result.GroupId, createChange.GroupId);
+                Assert.Equal(result.GroupId, createChange.Id);
                 var fieldEdits = staged.Where(c => c.FieldPath != "$create").ToList();
-                Assert.All(fieldEdits, c =>
-                {
-                    Assert.Equal("field_edit", c.ChangeType);
-                    Assert.Equal(result.GroupId, c.GroupId);
-                });
+                Assert.All(fieldEdits, c => Assert.Equal("field_edit", c.ChangeType));
+
+                // The template's field edits are all edits on a record the $create brings into
+                // existence, so they share its group by edge rule 2 rather than by a shared label —
+                // saving a field of a record that does not exist yet would be incoherent.
+                Assert.Equal(
+                    staged.Select(c => c.Id).Order(),
+                    changes.GetChanges(groupId: result.GroupId).Select(c => c.Id).Order());
             }
         }
     }
@@ -1104,7 +1110,17 @@ public sealed class EditOrchestratorTests
                 var dependentChange = allChanges.FirstOrDefault(c =>
                     c.FormKey == npcKey.ToString() && c.FieldPath == "factions");
                 Assert.NotNull(dependentChange);
-                Assert.Equal(createResult.GroupId, dependentChange.GroupId);
+
+                // The edit holds a FormLink to a record that only the pending $create brings into
+                // existence, so the two travel together (ADR-0028 edge rule 1) — saving the edit
+                // without the create would leave a dangling reference. Observed as one group rather
+                // than as a shared group_id: grouping is derived now, not labelled.
+                var group = Assert.Single(changes.GetChangeGroups());
+                Assert.Equal(2, group.ChangeCount);
+                Assert.Equal("create", group.Operation);
+                Assert.Equal(
+                    new[] { createResult.FormKey, npcKey.ToString() }.Order(),
+                    changes.GetChanges(groupId: group.Id).Select(c => c.FormKey).Order());
             }
         }
     }
@@ -1261,6 +1277,14 @@ public sealed class EditOrchestratorTests
                 var createResult = Assert.IsType<CreateRecordOutcome.Success>(
                     orchestrator.CreateRecord("Target.esp", "npc_", null, "user"));
 
+                // The stored group_id is vestigial under ADR-0028 — nothing reads it for grouping any
+                // more — but the BlockedByGroup guard still does until #134, so its COALESCE-on-
+                // conflict behaviour still needs pinning: read it off the row rather than off the
+                // create's returned id, which is now a member change id in a different currency.
+                var originalGroupId = changes.GetChanges(formKey: createResult.FormKey)
+                    .Single(c => c.FieldPath == "$create").GroupId;
+                Assert.NotNull(originalGroupId);
+
                 // StageGroup targeting the same $create sentinel should NOT overwrite its groupId
                 var members = new[] { new GroupMember(
                     createResult.FormKey, "Target.esp", "npc_", "create",
@@ -1269,7 +1293,7 @@ public sealed class EditOrchestratorTests
 
                 var staged = changes.GetChanges(formKey: createResult.FormKey);
                 var createChange = staged.Single(c => c.FieldPath == "$create");
-                Assert.Equal(createResult.GroupId, createChange.GroupId);
+                Assert.Equal(originalGroupId, createChange.GroupId);
             }
         }
     }

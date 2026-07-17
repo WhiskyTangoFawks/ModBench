@@ -121,7 +121,10 @@ public sealed class DeleteRecordsTests
                 Assert.Equal("Target.esp", deleteChange.Plugin);
                 Assert.Equal("$delete", deleteChange.FieldPath);
                 Assert.Equal("npc_", deleteChange.RecordType);
-                Assert.Equal(staged.Group.Id, deleteChange.GroupId);
+
+                // The staged result names a member change of the derived group (ADR-0028), so it
+                // selects that group's changes rather than matching a stored group_id column.
+                Assert.Equal([deleteChange.Id], changes.GetChanges(groupId: staged.Group.Id).Select(c => c.Id));
                 var groups = changes.GetChangeGroups();
                 Assert.Single(groups);
                 Assert.Equal("delete", groups[0].Operation);
@@ -129,8 +132,15 @@ public sealed class DeleteRecordsTests
         }
     }
 
+    // Changed by ADR-0028 — not a regression. This asserted a single group, because one DeleteRecords
+    // call labelled both deletes with one group_id. Grouping is now derived from dependencies, and
+    // two unrelated records that reference nothing of each other's are entangled by nothing: reverting
+    // one cannot invalidate the other. So a batch of two independent deletes is two groups of one,
+    // each independently revertable. Deleting them in one gesture was a fact about the user's click,
+    // never about the data. A delete whose cascade *does* entangle records still travels together —
+    // see DeleteRecords_EditableRef_NullificationStagedWithCorrectShape.
     [Fact]
-    public void DeleteRecords_BatchTwoRecords_AllInOneChangeGroup()
+    public void DeleteRecords_BatchTwoIndependentRecords_AreSeparateGroups()
     {
         FormKey npc1Key = default;
         FormKey npc2Key = default;
@@ -154,9 +164,15 @@ public sealed class DeleteRecordsTests
                 Assert.IsType<DeleteRecordsResult.Staged>(result);
                 var deleteChanges = changes.GetChanges().Where(c => c.ChangeType == "delete").ToList();
                 Assert.Equal(2, deleteChanges.Count);
-                var groupId = deleteChanges[0].GroupId;
-                Assert.All(deleteChanges, c => Assert.Equal(groupId, c.GroupId));
-                Assert.Single(changes.GetChangeGroups());
+
+                var groups = changes.GetChangeGroups();
+                Assert.Equal(2, groups.Count);
+                Assert.All(groups, g => Assert.Equal(1, g.ChangeCount));
+                Assert.All(groups, g => Assert.Equal("delete", g.Operation));
+
+                // Independently revertable: dropping one leaves the other staged.
+                Assert.True(changes.RevertGroup(groups[0].Id));
+                Assert.Single(changes.GetChanges(), c => c.ChangeType == "delete");
             }
         }
     }
@@ -286,7 +302,15 @@ public sealed class DeleteRecordsTests
                 Assert.Equal("keywords", nullifyChange.FieldPath);
                 // Old value must be the actual keywords array, not a different field's value
                 Assert.Equal(JsonValueKind.Array, nullifyChange.OldValue.ValueKind);
-                Assert.Equal(staged.Group.Id, nullifyChange.GroupId);
+
+                // The nullification and the delete travel together (ADR-0028 edge rule 1): the
+                // referring record's *committed* reference to the deleted target is the edge, since
+                // staging the nullification is precisely what removes the pending one. Saving the
+                // delete without the nullification would leave a reference to a record that is gone.
+                var deleteChange = changes.GetChanges().Single(c => c.ChangeType == "delete");
+                Assert.Equal(
+                    new[] { deleteChange.Id, nullifyChange.Id }.Order(),
+                    changes.GetChanges(groupId: staged.Group.Id).Select(c => c.Id).Order());
             }
         }
     }
