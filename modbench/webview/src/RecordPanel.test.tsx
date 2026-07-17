@@ -1174,6 +1174,39 @@ describe('RecordPanel — drag affordance on field cells', () => {
     expect(cell.getAttribute('draggable')).toBe('true');
     expect(cell.style.cursor).toBe('grab');
   });
+
+  // Issue #111: a draggable ancestor swallows text selection inside an input — the browser
+  // starts a drag instead of selecting. So a cell stops being draggable exactly while its own
+  // input is active, and becomes draggable again when the input closes.
+  it('a cell is not draggable while its own input is active', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Override Name'));
+    const cell = screen.getByText('Override Name').closest('td')!;
+    fireEvent.click(screen.getByText('Override Name'));
+
+    expect(screen.getByDisplayValue('Override Name')).toBeInTheDocument();
+    expect(cell.getAttribute('draggable')).toBe('false');
+  });
+
+  it('a cell becomes draggable again once its input is dismissed', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Override Name'));
+    const cell = screen.getByText('Override Name').closest('td')!;
+    fireEvent.click(screen.getByText('Override Name'));
+    fireEvent.blur(screen.getByDisplayValue('Override Name'));
+
+    expect(cell.getAttribute('draggable')).toBe('true');
+  });
+
+  // Other cells keep their drag affordance while one cell is being edited.
+  it('a sibling cell stays draggable while another cell is being edited', async () => {
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Override Name'));
+    const sibling = screen.getByText('Original Name').closest('td')!;
+    fireEvent.click(screen.getByText('Override Name'));
+
+    expect(sibling.getAttribute('draggable')).toBe('true');
+  });
 });
 
 // ── Drag-drop staging (issue #3) ──────────────────────────────────────────────

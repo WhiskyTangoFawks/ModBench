@@ -586,6 +586,41 @@ type RowContext =
   | { kind: 'struct-child';  overrideMeta: FieldMetadata; parentFieldName: string }
   | { kind: 'grandchild';    overrideMeta: FieldMetadata; parentFieldName: string; parentFieldIndex: number };
 
+// A disk column's value cell. Issue #111: drag-to-copy is always on, but a draggable ancestor
+// swallows text selection inside an input — the browser starts a drag instead of selecting — so
+// the cell stops being draggable exactly while its own input is active.
+//
+// The cell learns that from focus events bubbling out of its own subtree rather than from the
+// leaf renderers reporting it: which control a value renders as is the leaf's business (and
+// there are several — text, number, select, checkbox, flag multi-select), while "does this cell
+// currently contain an active input" is the cell's own. Watching its subtree keeps that
+// knowledge on the right side of the boundary and costs the leaves no prop.
+function DiskCell({ style, onDragStart, onDrop, children }: Readonly<{
+  style: React.CSSProperties;
+  onDragStart: () => void;
+  onDrop: () => void;
+  children: React.ReactNode;
+}>) {
+  const [editing, setEditing] = useState(false);
+  // A focused FormKey link is not an editor — only a form control suppresses the drag.
+  const isFormControl = (t: EventTarget | null) =>
+    t instanceof HTMLElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(t.tagName);
+
+  return (
+    <td
+      style={{ ...style, cursor: editing ? undefined : 'grab' }}
+      draggable={!editing}
+      onFocus={e => { if (isFormControl(e.target)) setEditing(true); }}
+      onBlur={e => { if (isFormControl(e.target)) setEditing(false); }}
+      onDragStart={onDragStart}
+      onDragOver={e => e.preventDefault()}
+      onDrop={onDrop}
+    >
+      {children}
+    </td>
+  );
+}
+
 interface DiffRowProps {
   diff: FieldDiff;
   conflictAll: ConflictAll;
@@ -662,17 +697,15 @@ function DiffRow({
           // already carries the right merge semantics for this row's context (top-level/
           // array-element/struct-child/grandchild).
           return (
-            <td
+            <DiskCell
               key={`disk:${o.plugin}`}
-              style={{ ...cellStyle, cursor: 'grab' }}
-              draggable
+              style={cellStyle}
               onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin])}
-              onDragOver={e => e.preventDefault()}
               onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
             >
               {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin), port, onOpen,
                 v => onEdit(o.plugin, diff.fieldName, v), checkError)}
-            </td>
+            </DiskCell>
           );
         }
 
