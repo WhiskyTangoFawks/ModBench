@@ -1,9 +1,9 @@
 # mEdit Record editor panel — Surface Specification
 
-**Status: Implemented**, with two reworks specced and not yet built — the removal of edit mode
-(#111) and the Pending column's save/revert actions
-([ADR-0029](../adr/0029-pending-changes-tree-is-a-grouping-view.md)). Both are marked *planned*
-inline below.
+**Status: Implemented**, with one rework specced and not yet built — the Pending column's
+save/revert actions ([ADR-0029](../adr/0029-pending-changes-tree-is-a-grouping-view.md)),
+marked *planned* inline below. Two known gaps are called out where they bite: FormKey
+resolution (#141) and array arity/order editing (#142).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
@@ -54,9 +54,11 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
    triage records without opening every field.
 4. As a user, I want enums and flags rendered as their names, never raw integers, so that I can
    read values without a lookup table.
-5. As a user, I want a FormKey field to render as the referenced record's EditorID as a
-   hyperlink, and `Ctrl+click` to open that record, so that I can follow references without
-   copying IDs around — the same gesture xEdit uses, leaving plain click free to edit.
+5. As a user, I want a FormKey field to render as a link to the referenced record, and
+   `Ctrl+click` to open that record, so that I can follow references without copying IDs
+   around — the same gesture xEdit uses, leaving plain click free to edit. *(The link is
+   labelled with the FormKey; labelling it with the referenced record's EditorID needs
+   resolution the compare response does not carry — #141.)*
 6. As a user, I want structs and arrays shown collapsed with a summary and expandable to their
    sub-fields/elements, so that a complex record stays readable.
 7. As a user, I want to click a field and change it with the right input for its type (text,
@@ -85,9 +87,9 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
 15. As a user, I want to rename a mutable record's FormID, with validation that the new id is
     free and that immutable references don't block it, so that renumbering is safe and the
     errors are explained rather than silent.
-16. As a user, I want a read-only view of a record's Papyrus (VMAD) script data — scripts,
-    their properties, and nested array/struct/structList values — so that I can inspect
-    scripting without it being editable (editing Papyrus is out of scope).
+16. As a user, I want to inspect and edit a record's Papyrus (VMAD) script data — scripts,
+    their properties, and nested array/struct/structList values — so that I can reconcile
+    script conflicts in the same grid as the rest of the record.
 17. As a user, I want null/missing fields shown as empty cells (never "null"/"undefined") and
     read-only cells in immutable columns to render no input on click, so that the grid reads
     cleanly and never invites an edit that can't happen.
@@ -112,19 +114,23 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
 
 ### Editing
 
-- **There is no edit mode** *(planned — #111; a header Edit/View toggle ships today and resets
-  on every record navigation)*. A cell in a non-immutable column renders as text and swaps to
-  its input **on click**, reverting to text on commit or blur — only the clicked cell, never the
-  whole grid, since reading conflicts at a glance is the grid's primary job. This is xEdit's
+- **There is no edit mode.** Editability is a property of the **column**, not of a state the
+  user enters: a cell in a non-immutable column renders as text and swaps to its input **on
+  click**, reverting to text on commit or blur — only the clicked cell, never the whole grid,
+  since reading conflicts at a glance is the grid's primary job. This is xEdit's
   `toEditOnClick`. Immutable columns never activate an input. Dragging is always available,
-  except on a cell whose own input is active.
+  except on a cell whose own input is active (a draggable ancestor would otherwise swallow text
+  selection inside the input).
 - **Cells render by field schema type**: strings/numbers/bools as text/number/toggle inputs;
   enums as their name via a `<select>`; flags as active flag names via a per-flag multi-select;
-  FormKeys as an EditorID hyperlink — `Ctrl+click` follows it, plain click opens a FormKey
-  picker filtered by `validFormKeyTypes`, and the link affordance appears on `Ctrl`-hover only
-  when the cell actually links to an indexed record; structs and arrays as a collapsed summary
-  expandable to child rows with add/remove. Pending-change cells show the new value on a yellow
-  background with a revert (↩) button.
+  FormKeys as a link — `Ctrl+click` follows it, plain click opens a FormKey picker filtered by
+  `validFormKeyTypes`, and the link affordance appears on `Ctrl`-hover only when the reference
+  resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows.
+  Pending-change cells show the new value on a yellow background with a revert (↩) button.
+- **Array elements edit by value, but arrays have no arity or order controls** — no add, remove,
+  or reorder in the compare grid. Editing an element's value restages the whole array; changing
+  how many elements there are, or what order they are in, is not reachable and never has been
+  (#142).
 - **Editing stages pending changes** rather than writing immediately. Copy to… (a plugin
   picker) remains a panel-level control. A cell value can be **dragged between plugin columns**
   to copy it as a pending change into the target (which must be editable; the source need not
@@ -133,8 +139,10 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
 ### Pending column
 
 *Planned — [ADR-0029](../adr/0029-pending-changes-tree-is-a-grouping-view.md). Today the column
-is display-only but for an inline revert, and the panel's Save button calls
-`POST /plugins/{plugin}/save`, a route the backend does not implement.*
+is display-only but for an inline revert, and the panel offers no save at all: the per-plugin
+Save button called `POST /plugins/{plugin}/save`, a route the backend does not implement and
+will not, so it was deleted (#136). Saving is in the
+[Pending Changes tree](medit-pending-changes-tree.md) until the actions below are built.*
 
 Every action is scoped to a **ChangeGroup**, never to part of one and never to a record or a
 plugin:
@@ -186,9 +194,12 @@ classification.
 
 ### VMAD (Papyrus) section
 
-- When a record's compare response includes VMAD data, a **read-only** "Scripts (VMAD)" section
-  renders below the field rows in the same table body; it is absent for record types without
-  VMAD. **Editing Papyrus is out of scope** — this section never renders inputs.
+- When a record's compare response includes VMAD data, a "Scripts (VMAD)" section renders below
+  the field rows in the same table body; it is absent for record types without VMAD. It is
+  **editable on the same terms as the field rows** — leaf cells read as text and swap to their
+  editor on click, gated on the column's mutability, never on a mode. Beyond leaf values it also
+  offers structural ops: add/remove script, add/remove/set-type property, script and property
+  flags, and array/struct element ops.
 - Two expandable levels: **script rows** (bold script name; per-plugin script flag; blank for
   plugins lacking the script; collapsed by default) and indented **property rows** (per-plugin
   value; hidden while the parent script is collapsed).
@@ -196,8 +207,9 @@ classification.
   summary badge when collapsed, expanding to element/member child rows; scalar and
   object/variable kinds are leaf values. A cell is **blank** when the plugin has no value for
   the property, versus an em-dash `—` when the property exists but is empty for that plugin.
-  Object-kind values render as FormKey link-buttons that open the referenced record; when
-  property types differ across plugins each cell appends `(TypeName)` in dimmed text.
+  Object-kind values render as FormKey link-buttons, following the same `Ctrl+click` gesture as
+  every other link in the grid; when property types differ across plugins each cell appends
+  `(TypeName)` in dimmed text.
 - Conflict coloring follows the same ConflictThis rules as the field rows, driven by per-plugin
   `cellStates`. A VMAD cell can be dragged between columns to copy its value as a pending field
   change (target must be editable).
@@ -208,10 +220,31 @@ These apply everywhere a field value is rendered (the compare grid, pending cell
 section, and any future surface):
 
 1. **Never display raw integers for enums or flags** — always resolve to name(s).
-2. **FormKeys render as EditorID hyperlinks** when the referenced record is indexed; fall back
-   to the FormKey string otherwise.
+2. **FormKeys render as links**, labelled with the FormKey string. The **link affordance**
+   (underline, pointer) appears only while `Ctrl` is held and the pointer is over the cell, and
+   only when the reference resolves; `Ctrl+click` follows it, and a link that does not look
+   followable is not followable. This mirrors xEdit's `vstViewCheckHotTrack`, which gates
+   hot-tracking on `Allow := Assigned(lLinksTo)` — a link you cannot follow must not look like
+   one.
+
+   *The resolve test is currently a proxy, and a known-limited one (#141).* The frontend has no
+   per-FormKey resolution: the compare response carries the FormKey string and nothing about
+   what it points at. So the affordance keys off the field's `checkError`, which the backend
+   emits (`<Error: Could not be resolved>`) exactly when a FormLink is absent from the record
+   index. What ships therefore tracks **"this cell is not flagged suspect"**, not **"this
+   reference is genuinely indexed"**. Two deliberate divergences follow, both erring toward
+   hiding a real link rather than advertising a dead one, and both landing on cells that already
+   show a ⚠:
+   - a reference that resolves but to the **wrong type** carries a `checkError`, so the
+     affordance is suppressed though xEdit would allow the jump;
+   - for a **struct or array leaf**, `checkError` is the parent field's aggregate, so one
+     dangling member suppresses the affordance on its siblings.
+
+   #141 removes the proxy by carrying resolution in the compare response, which is also what
+   rule 2 needs to label links with the referenced record's EditorID rather than its FormKey.
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
-   per-session, not persisted across restarts.
+   per-session, not persisted across restarts. Array **element values** are editable; array
+   **arity and order** are not (#142).
 4. **Pending values** always show the new value (not the old), on a yellow background with a
    revert button.
 5. **Null / missing fields** render as an empty cell, never "null"/"undefined".
@@ -239,13 +272,18 @@ section, and any future surface):
 
 - **Multiple simultaneous record editor panels** — one panel is open at a time and reused when
   navigating (an extension invariant).
-- **Editing Papyrus (VMAD)** — the VMAD section is read-only and never renders inputs.
+- **Editing Papyrus source** — the VMAD section edits script *data* (properties, their values
+  and types, script and property flags). Compiling or editing `.psc` source is a different job
+  and is not this surface's.
 - **Per-plugin and per-record save** — a ChangeGroup may span plugins, so those scopes could
   only be honoured by splitting a group. Save and revert act on a group, a multi-selection of
   groups, or everything (ADR-0029).
 - **Referenced By** — a separate panel, [medit-referenced-by.md](medit-referenced-by.md).
 - **Grouping semantics** — settled in ADR-0028 and computed backend-side; this surface renders
   grouping, it does not derive it.
+- **Array arity and order editing** — no add, remove, or reorder; tracked as #142, which has to
+  settle how an arity change stages under ADR-0017's `old_value`/`new_value` model and how
+  sorted (`wbArrayS`) and unsorted (`wbArray`) arrays differ.
 
 ## Further Notes
 
@@ -253,3 +291,6 @@ section, and any future surface):
   immutability plus staging already prevent accidental writes) is recorded in #111. The
   rationale for group-scoped save/revert is
   [ADR-0029](../adr/0029-pending-changes-tree-is-a-grouping-view.md).
+- #111 also established that editability is per **column**, replacing a mode: before it, the
+  cells were never told which columns were immutable, so a read-only column rendered inputs
+  whose stage the backend then rejected with a 409.
