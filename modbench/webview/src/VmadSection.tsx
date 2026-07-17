@@ -343,6 +343,21 @@ interface LeafCellCtx {
   onOpen: (fk: string) => void;
 }
 
+// Issue #111: a leaf cell reads as text and swaps to its editor only when clicked — the same
+// rule as the field grid above it, and for the same reason: a wall of inputs would bury the
+// values. Closes again when focus leaves the editor.
+function ClickToEdit({ read, children }: Readonly<{ read: React.ReactNode; children: React.ReactNode }>) {
+  const [active, setActive] = useState(false);
+  if (!active) {
+    return <span onClick={() => setActive(true)} style={{ cursor: 'text' }}>{read}</span>;
+  }
+  return (
+    <span onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setActive(false); }}>
+      {children}
+    </span>
+  );
+}
+
 function renderLeafCell(
   p: VmadPropertyDiff,
   plugin: string,
@@ -354,7 +369,8 @@ function renderLeafCell(
 ): React.ReactNode {
   const { isEditable, onEdit, port, onOpen } = ctx;
   const typeCue = typesDiffer ? `(${p.types[plugin]})` : null;
-  if (!isEditable(plugin) || !onEdit) return leafContent(p, plugin, onOpen, typeCue);
+  const read = leafContent(p, plugin, onOpen, typeCue);
+  if (!isEditable(plugin) || !onEdit) return read;
 
   function commit(v: unknown) {
     if (structCtx) {
@@ -371,9 +387,21 @@ function renderLeafCell(
     }
   }
 
-  if (p.kind === 'scalar') return <VmadScalarEditor value={p.values[plugin]} type={scalarType(p)} onCommit={commit} />;
-  if (p.kind === 'object' && port != null) return <VmadObjectEditor value={p.values[plugin]} port={port} onCommit={commit} />;
-  return leafContent(p, plugin, onOpen, typeCue);
+  if (p.kind === 'scalar') {
+    return (
+      <ClickToEdit read={read}>
+        <VmadScalarEditor value={p.values[plugin]} type={scalarType(p)} onCommit={commit} />
+      </ClickToEdit>
+    );
+  }
+  if (p.kind === 'object' && port != null) {
+    return (
+      <ClickToEdit read={read}>
+        <VmadObjectEditor value={p.values[plugin]} port={port} onCommit={commit} />
+      </ClickToEdit>
+    );
+  }
+  return read;
 }
 
 function hasPluginData(p: VmadPropertyDiff, plugin: string): boolean {

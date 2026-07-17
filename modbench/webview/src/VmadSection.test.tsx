@@ -228,7 +228,9 @@ describe('VmadSection', () => {
     expect(container.querySelector('tr')).toBeNull();
   });
 
-  it('renders no edit inputs (read-only invariant) while keeping conflict coloring', () => {
+  // VMAD editing shipped in phase 13.8; the section is not read-only. With no onEdit handler
+  // wired there is nothing to edit with, and conflict coloring must survive regardless.
+  it('renders no edit inputs when no onEdit is supplied, while keeping conflict coloring', () => {
     const vmad: VmadCompare = {
       scripts: [script({
         name: 'S',
@@ -273,17 +275,32 @@ function arrayVmad(elementKind: 'scalar' | 'object', values: unknown[]): VmadCom
 }
 
 describe('VmadSection array editing', () => {
-  it('expanding an ArrayOfInt property in an editable column shows a number input per element', () => {
+  // Issue #111: expanding shows the elements as text. Only the clicked element becomes an
+  // input — an expanded array must not turn into a wall of them.
+  it('expanding an ArrayOfInt property in an editable column shows its elements as text', () => {
     const { container } = renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
       onEdit: vi.fn(),
     });
     toggle('S');
     toggle('Items');
 
+    expect(container.querySelectorAll('input')).toHaveLength(0);
+    expect(screen.getByText('10')).toBeInTheDocument();
+    expect(screen.getByText('20')).toBeInTheDocument();
+  });
+
+  it('clicking one element activates only that element', () => {
+    const { container } = renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
+      onEdit: vi.fn(),
+    });
+    toggle('S');
+    toggle('Items');
+    fireEvent.click(screen.getByText('10'));
+
     const inputs = container.querySelectorAll('input[type="number"]');
-    expect(inputs).toHaveLength(2);
+    expect(inputs).toHaveLength(1);
     expect((inputs[0] as HTMLInputElement).value).toBe('10');
-    expect((inputs[1] as HTMLInputElement).value).toBe('20');
+    expect(screen.getByText('20')).toBeInTheDocument();
   });
 
   // Issue #111: VMAD controls follow the column's mutability, exactly like field cells.
@@ -378,6 +395,7 @@ describe('VmadSection array editing', () => {
     });
     toggle('S');
     toggle('Items');
+    fireEvent.click(screen.getByText('10'));
 
     const inputs = container.querySelectorAll('input[type="number"]');
     fireEvent.change(inputs[0], { target: { value: '99' } });
@@ -411,16 +429,17 @@ function structVmad(): VmadCompare {
   };
 }
 
-describe('VmadSection struct edit mode', () => {
-  it('expanding a Struct in edit mode shows an input per member', () => {
+describe('VmadSection struct editing', () => {
+  it('expanding a Struct shows its members as text, and clicking one activates only it', () => {
     const { container } = renderSection(structVmad(), ['A.esm'], { onEdit: vi.fn() });
     toggle('S');
     toggle('Bounds');
+    expect(container.querySelectorAll('input')).toHaveLength(0);
 
+    fireEvent.click(screen.getByText('1'));
     const inputs = container.querySelectorAll('input[type="number"]');
-    expect(inputs).toHaveLength(2);
+    expect(inputs).toHaveLength(1);
     expect((inputs[0] as HTMLInputElement).value).toBe('1');
-    expect((inputs[1] as HTMLInputElement).value).toBe('2');
   });
 
   it('editing a struct member restages the whole struct subtree at the property path', () => {
@@ -428,6 +447,7 @@ describe('VmadSection struct edit mode', () => {
     const { container } = renderSection(structVmad(), ['A.esm'], { onEdit });
     toggle('S');
     toggle('Bounds');
+    fireEvent.click(screen.getByText('1'));
 
     const inputs = container.querySelectorAll('input[type="number"]');
     fireEvent.change(inputs[0], { target: { value: '99' } });
@@ -468,7 +488,7 @@ function nestedStructVmad(): VmadCompare {
   };
 }
 
-describe('VmadSection nested struct edit mode', () => {
+describe('VmadSection nested struct editing', () => {
   it('expands struct-in-struct and restages the whole root subtree when a deep member is edited', () => {
     const onEdit = vi.fn();
     renderSection(nestedStructVmad(), ['A.esm'], { onEdit });
@@ -480,6 +500,7 @@ describe('VmadSection nested struct edit mode', () => {
     expect(screen.getByText('Depth')).toBeInTheDocument();
 
     // The only editable member visible now is Depth (X is a sibling at the Bounds level).
+    fireEvent.click(screen.getByText('42'));
     const depthInput = screen.getByText('Depth').closest('tr')!.querySelector('input[type="number"]')!;
     fireEvent.change(depthInput, { target: { value: '99' } });
     fireEvent.blur(depthInput);
@@ -588,10 +609,31 @@ const boolVmad = (): VmadCompare => ({
   })],
 });
 
-describe('VmadSection edit mode', () => {
-  it('Bool property renders a checkbox in edit mode', () => {
+// Issue #111: VMAD leaf cells follow the same rule as field cells — text until clicked. VMAD
+// editing itself is not new here (it shipped in phase 13.8); only the mode gate is gone.
+describe('VmadSection leaf cells edit in place on click', () => {
+  it('a scalar property reads as text, with no input, before it is clicked', () => {
     const { container } = renderSection(boolVmad(), ['A.esm'], { onEdit: vi.fn() });
     toggle('MyScript');
+
+    expect(container.querySelectorAll('input')).toHaveLength(0);
+    expect(screen.getByText('false')).toBeInTheDocument();
+  });
+
+  it('swaps to its editor when clicked', () => {
+    const { container } = renderSection(boolVmad(), ['A.esm'], { onEdit: vi.fn() });
+    toggle('MyScript');
+    fireEvent.click(screen.getByText('false'));
+
+    expect(container.querySelector('input[type="checkbox"]')).toBeInTheDocument();
+  });
+});
+
+describe('VmadSection editing', () => {
+  it('Bool property renders a checkbox once its cell is clicked', () => {
+    const { container } = renderSection(boolVmad(), ['A.esm'], { onEdit: vi.fn() });
+    toggle('MyScript');
+    fireEvent.click(screen.getByText('false'));
 
     expect(container.querySelector('input[type="checkbox"]')).toBeInTheDocument();
   });
@@ -601,6 +643,7 @@ describe('VmadSection edit mode', () => {
     renderSection(boolVmad(), ['A.esm'], { onEdit });
     toggle('MyScript');
 
+    fireEvent.click(screen.getByText('false'));
     fireEvent.click(screen.getByRole('checkbox'));
     expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\MyScript\Enabled`, true);
   });
@@ -621,6 +664,7 @@ describe('VmadSection edit mode', () => {
     };
     renderSection(vmad, ['A.esm'], { onEdit });
     toggle('S');
+    fireEvent.click(screen.getByText('5'));
 
     const input = screen.getByRole('spinbutton');
     fireEvent.change(input, { target: { value: '42' } });
@@ -645,6 +689,7 @@ describe('VmadSection edit mode', () => {
     };
     renderSection(vmad, ['A.esm'], { onEdit });
     toggle('S');
+    fireEvent.click(screen.getByText('old'));
 
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'new' } });
@@ -653,7 +698,7 @@ describe('VmadSection edit mode', () => {
     expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Name`, 'new');
   });
 
-  it('Object property renders FK button and alias input in edit mode', () => {
+  it('Object property renders FK button and alias input once its cell is clicked', () => {
     const vmad: VmadCompare = {
       scripts: [script({
         name: 'S',
@@ -668,6 +713,7 @@ describe('VmadSection edit mode', () => {
     };
     const { container } = renderSection(vmad, ['A.esm'], { onEdit: vi.fn() });
     toggle('S');
+    fireEvent.click(screen.getByText('000123:Foo.esp'));
 
     expect(container.querySelector('input[type="number"][aria-label="Alias"]')).toBeInTheDocument();
     expect((container.querySelector('input[type="number"][aria-label="Alias"]') as HTMLInputElement).value).toBe('2');
@@ -689,6 +735,7 @@ describe('VmadSection edit mode', () => {
     };
     renderSection(vmad, ['A.esm'], { onEdit });
     toggle('S');
+    fireEvent.click(screen.getByText('000123:Foo.esp'));
 
     const aliasInput = screen.getByRole('spinbutton', { name: 'Alias' });
     fireEvent.change(aliasInput, { target: { value: '5' } });
