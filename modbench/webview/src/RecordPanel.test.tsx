@@ -208,6 +208,59 @@ describe('FormKeyCell — editable column', () => {
 
 // ── CheckErrorIcon ───────────────────────────────────────────────────────────
 
+// Issue #111: the link affordance appears on Ctrl-hover only, and only where the reference
+// actually goes somewhere — without the guard the gesture is invisible, and with it advertised
+// on a dangling reference it lies. Mirrors xEdit's vstViewCheckHotTrack, which sets
+// Allow := Assigned(lLinksTo) and requires VK_CONTROL.
+//
+// The resolve guard is checkError: the backend emits one ("<Error: Could not be resolved>")
+// exactly when a FormLink is not in the record index, and it is already threaded to the cell.
+// It is a proxy, not the real thing — see #141 and the note in medit-record-editor.md.
+describe('FormKeyCell — Ctrl-hover link affordance', () => {
+  afterEach(() => { fireEvent.keyUp(window, { key: 'Control' }); });
+
+  it('shows no link affordance at rest', () => {
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    const link = screen.getByText('000019:Fallout4.esm');
+    expect(link.style.textDecoration).toBe('none');
+  });
+
+  it('shows the link affordance when Ctrl is held and the cell is hovered', () => {
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    const link = screen.getByText('000019:Fallout4.esm');
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    fireEvent.mouseEnter(link);
+    expect(link.style.textDecoration).toBe('underline');
+    expect(link.style.cursor).toBe('pointer');
+  });
+
+  it('shows no link affordance on Ctrl-hover when the reference does not resolve', () => {
+    render(<FormKeyCell value="FFFFFF:Dangling.esm" meta={fkMeta} editable={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} checkError="[FFFFFF:Dangling.esm] <Error: Could not be resolved>" />);
+    const link = screen.getByText('FFFFFF:Dangling.esm');
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    fireEvent.mouseEnter(link);
+    expect(link.style.textDecoration).toBe('none');
+  });
+
+  // The affordance and the gesture agree: a link that does not look followable is not
+  // followable. Otherwise Ctrl+click would navigate to a record that is not in the index.
+  it('Ctrl+click does not navigate when the reference does not resolve', () => {
+    const onOpen = vi.fn();
+    render(<FormKeyCell value="FFFFFF:Dangling.esm" meta={fkMeta} editable={false} port={5172} onOpen={onOpen} onCommit={vi.fn()} checkError="[FFFFFF:Dangling.esm] <Error: Could not be resolved>" />);
+    fireEvent.click(screen.getByText('FFFFFF:Dangling.esm'), { ctrlKey: true });
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('drops the affordance again when Ctrl is released', () => {
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} port={5172} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    const link = screen.getByText('000019:Fallout4.esm');
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    fireEvent.mouseEnter(link);
+    fireEvent.keyUp(window, { key: 'Control' });
+    expect(link.style.textDecoration).toBe('none');
+  });
+});
+
 describe('CheckErrorIcon', () => {
   it('renders nothing when checkError is null or undefined', () => {
     const { container: a } = render(<CheckErrorIcon checkError={null} />);

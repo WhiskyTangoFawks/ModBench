@@ -179,7 +179,7 @@ export function FormKeyCell({ value, meta, editable, port, onOpen, onCommit, che
             style={{ opacity: 0.35, cursor: editable ? 'pointer' : undefined }}
           >—</span>
         )
-        : <FormKeyLink value={fk} onOpen={onOpen} onPlainClick={onPlainClick} />}
+        : <FormKeyLink value={fk} onOpen={onOpen} onPlainClick={onPlainClick} linksTo={!checkError} />}
       <CheckErrorIcon checkError={checkError} />
     </span>
   );
