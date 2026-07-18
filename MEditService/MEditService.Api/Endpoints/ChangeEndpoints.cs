@@ -189,7 +189,8 @@ public static class ChangeEndpoints
         [FromRoute] string plugin,
         [FromBody] CreateRecordRequest req,
         ISessionManager session,
-        IEditOrchestrator orchestrator)
+        IEditOrchestrator orchestrator,
+        ILoggerFactory loggerFactory)
     {
         var s = session.Session;
         if (s == null) return Results.Problem(NoSessionMessage);
@@ -214,6 +215,8 @@ public static class ChangeEndpoints
         }
         catch (ArgumentException ex)
         {
+            loggerFactory.CreateLogger(nameof(ChangeEndpoints))
+                .LogWarning(ex, "Rejected CreateRecord for {Plugin}", decodedPlugin);
             return Results.Problem(ex.Message, statusCode: 422);
         }
     }
@@ -223,7 +226,8 @@ public static class ChangeEndpoints
         [FromRoute] string cellFormKey,
         [FromBody] CreatePlacedRecordRequest req,
         ISessionManager session,
-        IEditOrchestrator orchestrator)
+        IEditOrchestrator orchestrator,
+        ILoggerFactory loggerFactory)
     {
         var s = session.Session;
         if (s == null) return Results.Problem(NoSessionMessage);
@@ -249,6 +253,8 @@ public static class ChangeEndpoints
         }
         catch (ArgumentException ex)
         {
+            loggerFactory.CreateLogger(nameof(ChangeEndpoints))
+                .LogWarning(ex, "Rejected CreatePlacedRecord for {Plugin}", decodedPlugin);
             return Results.Problem(ex.Message, statusCode: 422);
         }
     }
