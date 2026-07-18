@@ -105,15 +105,6 @@ public static class ChangeEndpoints
             .Produces<int>()
             .ProducesProblem(400);
 
-        app.MapPost("/changes/groups/save", SaveGroups)
-            .WithName("SaveGroups")
-            .WithTags(Tag)
-            .Produces<Dictionary<string, SaveResult>>()
-            .ProducesProblem(400)
-            .ProducesProblem(404)
-            .ProducesProblem(409)
-            .ProducesProblem(500);
-
         app.MapPost("/change-groups/{groupId}/save", SaveSingleGroup)
             .WithName("SaveChangeGroup")
             .WithTags(Tag)
@@ -260,46 +251,6 @@ public static class ChangeEndpoints
         {
             return Results.Problem(ex.Message, statusCode: 422);
         }
-    }
-
-    private static async Task<IResult> SaveGroups(
-        [FromBody] Guid[] groupIds,
-        PluginSaver saver,
-        ISessionManager session,
-        ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(ChangeEndpoints));
-
-        if (groupIds == null) return Results.Problem("Request body is required.", statusCode: 400);
-
-        if (session.Session == null) return Results.Problem(NoSessionMessage);
-
-        var allResults = new Dictionary<string, SaveResult>();
-        try
-        {
-            foreach (var groupId in groupIds)
-            {
-                var r = await saver.Save(groupId);
-                if (r is SaveGroupResult.Saved saved)
-                {
-                    foreach (var (k, v) in saved.ByPlugin) allResults[k] = v;
-                    // The bulk body has no reindex-failure field (#131 deletes this endpoint); at
-                    // least never swallow it silently in the interim (ADR-0026, #127).
-                    if (saved.ReindexFailure is { } rf)
-                        logger.LogWarning("Reindex failed after saving {Plugins}; index is stale: {Reason}",
-                            string.Join(", ", rf.Plugins), rf.Reason);
-                }
-                else if (r is SaveGroupResult.ImmutablePlugin immutable)
-                    return Results.Problem($"'{immutable.Plugin}' is a base-game plugin and cannot be saved.", statusCode: 409);
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to save change groups");
-            return Results.Problem(ex.Message);
-        }
-
-        return Results.Ok(allResults);
     }
 
     private static async Task<IResult> SaveSingleGroup(
