@@ -147,3 +147,5 @@ public record BlockedReference(
 public record DeleteRecordTarget(string FormKey, string Plugin);
 
 public record DeleteRecordsRequest(IReadOnlyList<DeleteRecordTarget> Records);
+
+public record HealthResponse(string Status);
