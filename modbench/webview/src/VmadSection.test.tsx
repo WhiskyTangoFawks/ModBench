@@ -6,6 +6,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { VmadSection } from './VmadSection';
 import type { Column } from './recordUtils';
 import type { CompareOverride, PendingChange, VmadCompare, VmadScriptDiff, VmadPropertyDiff } from './types';
+import type { RecordSessionClient } from './RecordSessionClient';
+
+// Issue #122: VMAD editors (object property picker, add-property dialog) take the injected
+// client instead of a port. These tests don't drive a live search, so a stub whose presence
+// just enables the editor branches is enough.
+const stubClient = { searchRecords: vi.fn().mockResolvedValue([]) } as unknown as RecordSessionClient;
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -85,7 +91,7 @@ function renderSection(vmad: VmadCompare | null, plugins: string[], opts: Render
           onRevert={opts.onRevert}
           onStructOp={opts.onStructOp}
           pendingChangeMap={opts.pendingChangeMap}
-          port={5172}
+          client={stubClient}
         />
       </tbody>
     </table>,
