@@ -754,7 +754,12 @@ function DiffRow({
           >
             {hasPending && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span>{toStr(pendingValue)}</span>
+                {/* Issue #137: the pending value renders through the same type-aware renderer the
+                    disk columns use, in its read-only form (editable=false) — enums/flags resolve
+                    to names, FormKeys become links — so the Pending column reads in the same
+                    language as the row it is being compared against. A staged FormKey is validated
+                    at stage time (ADR-0020), so it always resolves: no checkError proxy needed. */}
+                <span>{renderCell(pendingValue, meta, false, port, onOpen, () => {})}</span>
                 {change && showActions && (
                   <button
                     onClick={() => onRevert(change.id)}
