@@ -1,3 +1,4 @@
+using MEditService.Core.Edits;
 using MEditService.Core.Session;
 
 namespace MEditService.Core.Queries;
@@ -126,6 +127,14 @@ public record ExplicitPlugin(string Name, string Path);
 public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId);
 
 public record CreateRecordResult(string FormKey, Guid GroupId);
+
+// A save reports success even when the post-commit reindex failed: the file is written and the
+// pending changes are consumed, only the read model is stale. `ReindexFailure` is null on the
+// happy path and populated otherwise, so the frontend can surface the stale-index warning
+// (#127, ADR-0026 integrity tier). Mirrors SessionLoadResponse.Failures' structured shape.
+public record SaveGroupResponse(
+    IReadOnlyDictionary<string, SaveResult> ByPlugin,
+    ReindexFailure? ReindexFailure);
 
 public record BlockedReference(
     string TargetFormKey,

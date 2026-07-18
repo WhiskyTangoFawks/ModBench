@@ -658,11 +658,21 @@ export interface components {
             reason?: string | null;
             expectedTypes?: string[] | null;
         };
+        ReindexFailure: {
+            plugins?: string[] | null;
+            reason?: string | null;
+        };
         RenumberRecordRequest: {
             /** Format: int32 */
             newFormId?: number;
             plugin?: string | null;
             source?: string | null;
+        };
+        SaveGroupResponse: {
+            byPlugin?: {
+                [key: string]: components["schemas"]["SaveResult"];
+            } | null;
+            reindexFailure?: components["schemas"]["ReindexFailure"];
         };
         SaveResult: {
             backupPath?: string | null;
@@ -1325,9 +1335,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: components["schemas"]["SaveResult"];
-                    };
+                    "application/json": components["schemas"]["SaveGroupResponse"];
                 };
             };
             /** @description Bad Request */

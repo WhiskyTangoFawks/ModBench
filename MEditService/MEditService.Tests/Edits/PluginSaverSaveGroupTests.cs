@@ -3,6 +3,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Session;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
@@ -54,7 +55,7 @@ public sealed class PluginSaverSaveGroupTests
     {
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session);
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
 
         var result = await saver.Save(Guid.NewGuid());
 
@@ -68,7 +69,7 @@ public sealed class PluginSaverSaveGroupTests
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var group = StageGroupChange(changes, "A.esp");
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session);
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
 
         var result = await saver.Save(group.Id);
 
@@ -82,7 +83,7 @@ public sealed class PluginSaverSaveGroupTests
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var group = StageGroupChange(changes, "A.esp");
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session);
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
 
         await saver.Save(group.Id);
 
@@ -97,7 +98,7 @@ public sealed class PluginSaverSaveGroupTests
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var group = StageGroupChange(changes, "A.esp");
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session);
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
 
         await saver.Save(group.Id);
 
@@ -112,7 +113,7 @@ public sealed class PluginSaverSaveGroupTests
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var group = StageGroupChange(changes, "A.esp");
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session);
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
 
         await saver.Save(group.Id);
 
@@ -128,7 +129,7 @@ public sealed class PluginSaverSaveGroupTests
         var group = StageGroupChange(changes, "A.esp");
         var session = new StubSession();
         session.SetPrepareResponse(() => Task.FromException<PreparedPluginSave>(new IOException("disk full")));
-        var saver = new PluginSaver(changes, session);
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
 
         await Assert.ThrowsAsync<IOException>(() => saver.Save(group.Id));
 
@@ -157,7 +158,7 @@ public sealed class PluginSaverSaveGroupTests
             return Task.FromResult(new PreparedPluginSave(tmpInDir, tmp, EmptySaveResult()));
         });
         session.SetPrepareResponse(() => Task.FromException<PreparedPluginSave>(new IOException("disk full")));
-        var saver = new PluginSaver(changes, session);
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
 
         await Assert.ThrowsAsync<IOException>(() => saver.Save(groupId));
 
@@ -173,13 +174,66 @@ public sealed class PluginSaverSaveGroupTests
         var groupId = StageCrossPluginComponent(changes);
 
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session);
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
 
         await saver.Save(groupId);
 
         var call = Assert.Single(session.BatchReindexCalls);
         Assert.Contains("A.esp", call);
         Assert.Contains("B.esp", call);
+    }
+
+    // C10 — reindex runs after the file+DB commit; a throw there must not turn a committed
+    // save into a reported failure. It folds into a named Reindex failure on Saved (#127).
+    [Fact]
+    public async Task Save_WhenReindexThrows_ReturnsSavedWithNamedReindexFailure()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        var group = StageGroupChange(changes, "A.esp");
+        var session = new StubSession();
+        session.SetReindexResponse(() => Task.FromException(new IOException("duckdb busy")));
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+
+        var result = await saver.Save(group.Id);
+
+        var saved = Assert.IsType<SaveGroupResult.Saved>(result);
+        Assert.NotNull(saved.ReindexFailure);
+        Assert.Contains("A.esp", saved.ReindexFailure!.Plugins);
+        Assert.Contains("duckdb busy", saved.ReindexFailure.Reason);
+        Assert.NotEmpty(saved.ByPlugin); // the per-plugin SaveResults survive
+        File.Delete(session.LastDestPath!);
+    }
+
+    // C11 — the save really happened: pending changes stay consumed even though reindex failed.
+    [Fact]
+    public async Task Save_WhenReindexThrows_PendingChangesStayConsumed()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        var group = StageGroupChange(changes, "A.esp");
+        var session = new StubSession();
+        session.SetReindexResponse(() => Task.FromException(new IOException("duckdb busy")));
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+
+        await saver.Save(group.Id);
+
+        Assert.Empty(changes.GetChanges(memberChangeId: group.Id));
+        File.Delete(session.LastDestPath!);
+    }
+
+    // C12 — happy path leaves Reindex null.
+    [Fact]
+    public async Task Save_WhenReindexSucceeds_ReindexFailureIsNull()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        var group = StageGroupChange(changes, "A.esp");
+        var session = new StubSession();
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+
+        var result = await saver.Save(group.Id);
+
+        var saved = Assert.IsType<SaveGroupResult.Saved>(result);
+        Assert.Null(saved.ReindexFailure);
+        File.Delete(session.LastDestPath!);
     }
 
     // C9
@@ -190,7 +244,7 @@ public sealed class PluginSaverSaveGroupTests
         var group = StageGroupChange(changes, "Immutable.esm");
         var session = new StubSession();
         session.SetSession(new StubGameSession([MakeImmutablePlugin("Immutable.esm")]));
-        var saver = new PluginSaver(changes, session);
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
 
         var result = await saver.Save(group.Id);
 
@@ -210,12 +264,14 @@ public sealed class PluginSaverSaveGroupTests
     {
         private readonly Queue<Func<Task<PreparedPluginSave>>> _prepareQueue = new();
         private readonly List<IReadOnlyList<string>> _batchReindexed = [];
+        private Func<Task>? _reindexResponse;
 
         public IReadOnlyList<IReadOnlyList<string>> BatchReindexCalls => _batchReindexed;
         public string? LastTmpDir { get; private set; }
         public string? LastDestPath { get; private set; }
 
         public void SetPrepareResponse(Func<Task<PreparedPluginSave>> fn) => _prepareQueue.Enqueue(fn);
+        public void SetReindexResponse(Func<Task> fn) => _reindexResponse = fn;
         public void SetSession(IGameSession session) => Session = session;
 
         public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes)
@@ -232,7 +288,11 @@ public sealed class PluginSaverSaveGroupTests
         }
 
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
-        public Task ReindexPlugins(IReadOnlyList<string> plugins) { _batchReindexed.Add(plugins); return Task.CompletedTask; }
+        public Task ReindexPlugins(IReadOnlyList<string> plugins)
+        {
+            _batchReindexed.Add(plugins);
+            return _reindexResponse?.Invoke() ?? Task.CompletedTask;
+        }
 
         public void Dispose() => Session!.Dispose();
 
