@@ -62,7 +62,7 @@ public sealed class ProblemDetailsApiTests(LoadedNpcApiFixture loaded) : IClassF
     [InlineData("createPlugin", 503)]
     [InlineData("patch", 500)]
     [InlineData("copy", 500)]
-    [InlineData("save", 500)]
+    [InlineData("save", 400)]
     public async Task Endpoint_NoSession_ReturnsProblemDetails(string op, int expectedStatus)
     {
         await using var app = new WebApplicationFactory<Program>();
@@ -80,7 +80,7 @@ public sealed class ProblemDetailsApiTests(LoadedNpcApiFixture loaded) : IClassF
                 fields = new Dictionary<string, object?> { ["editor_id"] = "x" },
             }),
             "copy" => await client.PostAsJsonAsync($"/plugins/{plugin}/records", new { recordType = "npc_" }),
-            _ => await client.PostAsJsonAsync("/changes/groups/save", Array.Empty<Guid>()),
+            _ => await client.PostAsync($"/change-groups/{Guid.NewGuid()}/save", null),
         };
 
         AssertIsProblemDetails(resp, expectedStatus);

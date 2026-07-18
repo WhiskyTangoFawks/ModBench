@@ -182,21 +182,24 @@ export class SessionController {
     this.deps.showError(`mEdit: Save failed — ${text}`);
   }
 
-  /** Save several selected groups at once, each atomic on its whole component. */
+  /** Save several selected groups at once, each atomic on its whole component. Loops the
+   *  per-group endpoint (mirroring saveAllGroups) so partial-save and stale-index outcomes
+   *  are surfaced per group (ADR-0026), aggregating failures into one message. */
   async saveGroups(groupIds: string[]): Promise<void> {
     if (groupIds.length === 0) return;
-    const { data, response } = await this.deps.client.POST('/changes/groups/save', {
-      body: groupIds,
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      this.log(`[SessionController] saveGroups failed (${response.status}): ${text}`);
-      this.deps.showError(`mEdit: Save failed — ${text}`);
-      return;
+    const failed: string[] = [];
+    let anySucceeded = false;
+    for (const id of groupIds) {
+      if (await this.saveOneGroup(id)) anySucceeded = true;
+      else failed.push(id);
     }
-    this.reportPartialSave(data);
-    this.deps.refreshGroupTree();
-    this.deps.refreshTree();
+    if (anySucceeded) {
+      this.deps.refreshGroupTree();
+      this.deps.refreshTree();
+    }
+    if (failed.length > 0) {
+      this.deps.showError(`mEdit: Failed to save: ${failed.join(', ')}`);
+    }
   }
 
   /** Revert several selected groups at once, each atomic on its whole component. Reports
@@ -288,7 +291,8 @@ export class SessionController {
 
   /** Save one group via the per-group endpoint, surfacing partial and stale-index outcomes
    *  (ADR-0026). Returns true if the save reached the backend (HTTP ok, or 404 = already gone);
-   *  the caller aggregates failures. Shared by saveAllGroups; saveGroup surfaces its own errors. */
+   *  the caller aggregates failures. Shared by saveAllGroups and saveGroups; saveGroup surfaces
+   *  its own errors. */
   private async saveOneGroup(groupId: string): Promise<boolean> {
     const { data, response } = await this.deps.client.POST('/change-groups/{groupId}/save', {
       params: { path: { groupId } },
@@ -298,7 +302,7 @@ export class SessionController {
       this.reportStaleIndex(data?.reindexFailure);
       return true;
     }
-    this.log(`[SessionController] saveAllGroups: group ${groupId} failed (${response.status})`);
+    this.log(`[SessionController] saveOneGroup: group ${groupId} failed (${response.status})`);
     return false;
   }
 

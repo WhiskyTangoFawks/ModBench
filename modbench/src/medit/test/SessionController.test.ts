@@ -382,7 +382,7 @@ describe('SessionController.saveAllGroups', () => {
 describe('SessionController.saveGroups', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('POSTs the whole selection to the batch save endpoint and refreshes both trees', async () => {
+  it('POSTs the per-group endpoint for each selected id and refreshes both trees', async () => {
     const client = {
       ...makeClient(),
       POST: vi.fn().mockResolvedValue({ data: {}, response: { ok: true, status: 200 } }),
@@ -393,9 +393,14 @@ describe('SessionController.saveGroups', () => {
 
     await ctrl.saveGroups(['id1', 'id2']);
 
+    expect(client.POST).toHaveBeenCalledTimes(2);
     expect(client.POST).toHaveBeenCalledWith(
-      '/changes/groups/save',
-      expect.objectContaining({ body: ['id1', 'id2'] }),
+      '/change-groups/{groupId}/save',
+      expect.objectContaining({ params: { path: { groupId: 'id1' } } }),
+    );
+    expect(client.POST).toHaveBeenCalledWith(
+      '/change-groups/{groupId}/save',
+      expect.objectContaining({ params: { path: { groupId: 'id2' } } }),
     );
     expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
     expect(deps.refreshTree).toHaveBeenCalledOnce();
@@ -411,10 +416,33 @@ describe('SessionController.saveGroups', () => {
     expect(client.POST).not.toHaveBeenCalled();
   });
 
-  it('shows an error and does not refresh when the batch save fails', async () => {
+  it('aggregates failures naming failed groups while refreshing on any success', async () => {
+    let postCalls = 0;
     const client = {
       ...makeClient(),
-      POST: vi.fn().mockResolvedValue({ response: { ok: false, status: 409, text: () => Promise.resolve('immutable') } }),
+      POST: vi.fn().mockImplementation(() => {
+        postCalls++;
+        if (postCalls === 2) return Promise.resolve({ response: { ok: false, status: 500, text: () => Promise.resolve('disk full') } });
+        return Promise.resolve({ data: {}, response: { ok: true, status: 200 } });
+      }),
+      DELETE: vi.fn(),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveGroups(['id1', 'id2']);
+
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('id2'));
+    expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
+  });
+
+  it('surfaces the stale-index warning when a per-group save reindex fails', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({
+        data: { byPlugin: {}, reindexFailure: { plugins: ['Mod.esp'], reason: 'locked' } },
+        response: { ok: true, status: 200 },
+      }),
       DELETE: vi.fn(),
     };
     const deps = makeDeps({ client });
@@ -422,8 +450,7 @@ describe('SessionController.saveGroups', () => {
 
     await ctrl.saveGroups(['id1']);
 
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('immutable'));
-    expect(deps.refreshGroupTree).not.toHaveBeenCalled();
+    expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('stale'));
   });
 });
 
