@@ -1572,3 +1572,157 @@ describe('RecordPanel — Copy as New Record', () => {
     expect(patchBody.fields['Name']).toBe('Bob');
   });
 });
+
+// ── Pending cells route through the type-aware renderer (issue #137) ───────────
+
+// The Pending column exists so a staged edit can be compared against every plugin's disk value.
+// The disk columns render through renderCell (enums/flags → names, FormKeys → links); the pending
+// cell must speak the same language, or a user comparing a pending "3" against a disk "Fire" cannot
+// tell whether anything changed. These assert what the pending cell renders, not how.
+
+const pendingFlagsMeta: FieldMetadata = {
+  name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
+  enumValues: ['Fire', 'Ice', 'Shock'], enumBitValues: ['1', '2', '4'], isBitmask: true,
+};
+
+// One record with a bitmask field: disk "1" (Fire), staged "3" (Fire + Ice). Disk cell shows
+// "Fire", pending shows "Fire, Ice" — so "Fire, Ice" uniquely identifies the pending cell.
+const pendingFlagsResult = {
+  conflictAll: 'Override',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: pendingFlagsMeta, value: '1' }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: pendingFlagsMeta, value: '1' }],
+      pendingFields: { Flags: '3' }, conflictThis: 'Override',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Flags',
+    values: { 'Fallout4.esm': '1', 'MyMod.esp': '1' },
+    winnerPlugin: 'MyMod.esp', winnerValue: '1',
+    cellStates: { 'MyMod.esp': 'Override' },
+  }],
+};
+
+// A FormKey field: disk "000019:Fallout4.esm", staged "0001F4:Fallout4.esm".
+const pendingFormKeyResult = {
+  conflictAll: 'Override',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: fkMeta, value: '000019:Fallout4.esm' }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: fkMeta, value: '000019:Fallout4.esm' }],
+      pendingFields: { Race: '0001F4:Fallout4.esm' }, conflictThis: 'Override',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Race',
+    values: { 'Fallout4.esm': '000019:Fallout4.esm', 'MyMod.esp': '000019:Fallout4.esm' },
+    winnerPlugin: 'MyMod.esp', winnerValue: '000019:Fallout4.esm',
+    cellStates: { 'MyMod.esp': 'Override' },
+  }],
+};
+
+// Same FormKey field, but the staged value clears the reference to null.
+const pendingNullResult = {
+  conflictAll: 'Override',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: fkMeta, value: '000019:Fallout4.esm' }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: fkMeta, value: '000019:Fallout4.esm' }],
+      pendingFields: { Race: null }, conflictThis: 'Override',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Race',
+    values: { 'Fallout4.esm': '000019:Fallout4.esm', 'MyMod.esp': '000019:Fallout4.esm' },
+    winnerPlugin: 'MyMod.esp', winnerValue: '000019:Fallout4.esm',
+    cellStates: { 'MyMod.esp': 'Override' },
+  }],
+};
+
+function stubFetchWith(compare: unknown) {
+  vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  vi.stubGlobal('mEditBackendPort', 15172);
+  vi.stubGlobal('fetch', vi.fn((url: string) => {
+    if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(compare) };
+    if (String(url).includes('/changes')) return { ok: true, json: () => Promise.resolve([]) };
+    if (String(url).includes('/plugins')) return { ok: true, json: () => Promise.resolve(pluginsResponse) };
+    return { ok: false, status: 404, statusText: 'Not Found' };
+  }));
+}
+
+describe('RecordPanel — pending cells render type-aware (issue #137)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('renders a pending flags value as its active flag names, not a raw integer', async () => {
+    stubFetchWith(pendingFlagsResult);
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Flags'));
+
+    // The staged value "3" must resolve to "Fire, Ice"; the raw decimal must not appear.
+    expect(screen.getByText('Fire, Ice')).toBeInTheDocument();
+    expect(screen.queryByText('3')).not.toBeInTheDocument();
+  });
+
+  it('renders a pending FormKey as a followable link, not a plain string', async () => {
+    stubFetchWith(pendingFormKeyResult);
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Race'));
+
+    // The staged FormKey is labelled with its FormKey string and is a link (a button), so
+    // Ctrl+click follows the reference — a plain <span> could not.
+    const link = screen.getByText('0001F4:Fallout4.esm');
+    expect(link.tagName).toBe('BUTTON');
+    fireEvent.click(link, { ctrlKey: true });
+    expect(vscode.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: '0001F4:Fallout4.esm' }),
+    );
+  });
+
+  it('renders a pending null value as an empty "—" cell, never "null"/"undefined"', async () => {
+    stubFetchWith(pendingNullResult);
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Race'));
+
+    // Staging a clear leaves a null pending value; it must read as the same em-dash the disk
+    // columns use for absence (rule 5), not the literal text "null"/"undefined".
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText('null')).not.toBeInTheDocument();
+    expect(screen.queryByText('undefined')).not.toBeInTheDocument();
+  });
+
+  // Guard, not a red-driver: routing the pending value through renderCell (which is capable of
+  // rendering editable controls) newly risks the pending cell becoming editable. Rule 6 / the
+  // issue require it stay read-only — clicking must never surface an input.
+  it('keeps the pending cell non-editable — clicking surfaces no input', async () => {
+    stubFetchWith(pendingFlagsResult);
+    render(<RecordPanel />);
+    await waitFor(() => screen.getByText('Flags'));
+
+    fireEvent.click(screen.getByText('Fire, Ice'));
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+});
