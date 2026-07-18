@@ -15,6 +15,15 @@ function makePlugin(i: number): PluginMetadata {
   };
 }
 
+function nonOkClient() {
+  return {
+    GET: vi.fn().mockResolvedValue({
+      data: undefined,
+      response: { ok: false, status: 500, text: () => Promise.resolve('boom') },
+    }),
+  } as any;
+}
+
 function makeRecord(i: number): RecordSummary {
   return {
     formKey: `Fallout4.esm:${String(i).padStart(6, '0')}`,
@@ -55,14 +64,16 @@ describe('ApiPluginRepository.getPlugins', () => {
     } as any;
     const repo = new ApiPluginRepository(client);
 
-    await expect(repo.getPlugins()).rejects.toThrow(/503/);
+    // Pin the exact message: it is the user-visible #75 ErrorNode text and must not
+    // drift (e.g. to a method-signature label) when the error path is refactored.
+    await expect(repo.getPlugins()).rejects.toThrow(/GET \/plugins failed \(503\)/);
   });
 });
 
 describe('ApiPluginRepository.getRecordTypes', () => {
   it('calls GET /plugins/{plugin}/record-types with correct path param', async () => {
     const types = [{ type: 'WEAP', count: 42 }, { type: 'NPC_', count: 10 }];
-    const client = { GET: vi.fn().mockResolvedValue({ data: types }) } as any;
+    const client = { GET: vi.fn().mockResolvedValue({ data: types, response: { ok: true } }) } as any;
     const repo = new ApiPluginRepository(client);
 
     const result = await repo.getRecordTypes('MyPlugin.esp');
@@ -75,10 +86,15 @@ describe('ApiPluginRepository.getRecordTypes', () => {
   });
 
   it('returns empty array when data is undefined', async () => {
-    const client = { GET: vi.fn().mockResolvedValue({ data: undefined }) } as any;
+    const client = { GET: vi.fn().mockResolvedValue({ data: undefined, response: { ok: true } }) } as any;
     const repo = new ApiPluginRepository(client);
 
     expect(await repo.getRecordTypes('Plugin.esp')).toEqual([]);
+  });
+
+  it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
+    const repo = new ApiPluginRepository(nonOkClient());
+    await expect(repo.getRecordTypes('Plugin.esp')).rejects.toThrow(/500/);
   });
 });
 
@@ -86,7 +102,7 @@ describe('ApiPluginRepository.getRecords', () => {
   it('calls GET /records with correct query params', async () => {
     const records = [makeRecord(0), makeRecord(1)];
     const client = {
-      GET: vi.fn().mockResolvedValue({ data: { items: records, total: 100 } }),
+      GET: vi.fn().mockResolvedValue({ data: { items: records, total: 100 }, response: { ok: true } }),
     } as any;
     const repo = new ApiPluginRepository(client);
 
@@ -103,12 +119,17 @@ describe('ApiPluginRepository.getRecords', () => {
   });
 
   it('returns empty result when data is undefined', async () => {
-    const client = { GET: vi.fn().mockResolvedValue({ data: undefined }) } as any;
+    const client = { GET: vi.fn().mockResolvedValue({ data: undefined, response: { ok: true } }) } as any;
     const repo = new ApiPluginRepository(client);
 
     const result = await repo.getRecords('Plugin.esp', 'WEAP', 0, 50);
 
     expect(result).toEqual({ items: [], total: 0 });
+  });
+
+  it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
+    const repo = new ApiPluginRepository(nonOkClient());
+    await expect(repo.getRecords('Plugin.esp', 'WEAP', 0, 50)).rejects.toThrow(/500/);
   });
 });
 
@@ -175,5 +196,47 @@ describe('ApiPluginRepository.getActiveFilter', () => {
     const repo = new ApiPluginRepository(client);
 
     expect(await repo.getActiveFilter()).toBeNull();
+  });
+});
+
+describe('ApiPluginRepository.getWorldspaces', () => {
+  it('maps worldspace summaries on an OK response', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({
+        data: [{ formKey: 'Fallout4.esm:00003C', editorId: 'Commonwealth' }],
+        response: { ok: true },
+      }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    expect(await repo.getWorldspaces('Plugin.esp')).toEqual([
+      { formKey: 'Fallout4.esm:00003C', editorId: 'Commonwealth' },
+    ]);
+  });
+
+  it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
+    const repo = new ApiPluginRepository(nonOkClient());
+    await expect(repo.getWorldspaces('Plugin.esp')).rejects.toThrow(/500/);
+  });
+});
+
+describe('ApiPluginRepository.getWorldspaceBlocks', () => {
+  it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
+    const repo = new ApiPluginRepository(nonOkClient());
+    await expect(repo.getWorldspaceBlocks('Plugin.esp', 'Fallout4.esm:00003C')).rejects.toThrow(/500/);
+  });
+});
+
+describe('ApiPluginRepository.getCellReferences', () => {
+  it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
+    const repo = new ApiPluginRepository(nonOkClient());
+    await expect(repo.getCellReferences('Plugin.esp', 'Fallout4.esm:00003C')).rejects.toThrow(/500/);
+  });
+});
+
+describe('ApiPluginRepository.getInteriorCells', () => {
+  it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
+    const repo = new ApiPluginRepository(nonOkClient());
+    await expect(repo.getInteriorCells('Plugin.esp', 0, 50)).rejects.toThrow(/500/);
   });
 });
