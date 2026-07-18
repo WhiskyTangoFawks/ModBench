@@ -4,7 +4,9 @@ import type { components } from './generated/api';
 import { reportSkippedPlugins } from './sessionFailures';
 
 type SaveResult = components['schemas']['SaveResult'];
-/** The save endpoints answer with a per-plugin outcome map, even on HTTP 200. */
+type ReindexFailure = components['schemas']['ReindexFailure'];
+/** The single-group save answers with a per-plugin outcome map plus an optional reindex
+ *  failure, even on HTTP 200 (ADR-0026: structured failure, frontend surfaces it). */
 type SaveOutcome = { [plugin: string]: SaveResult };
 
 type PluginSaveStatus = 'saved' | 'partial' | 'failed';
@@ -168,7 +170,9 @@ export class SessionController {
     if (response.ok || response.status === 404) {
       // A save can succeed at the HTTP level yet leave some plugins unwritten
       // (read-only, not found) — an integrity-tier partial outcome (ADR-0026).
-      this.reportPartialSave(data);
+      this.reportPartialSave(data?.byPlugin ?? undefined);
+      // Or succeed on disk but fail to reindex — the file is written, only the views are stale.
+      this.reportStaleIndex(data?.reindexFailure);
       this.deps.refreshGroupTree();
       this.deps.refreshTree();
       return;
@@ -234,6 +238,18 @@ export class SessionController {
     this.deps.showError(`mEdit: Partial save — ${parts.join('; ')}. Unwritten changes remain queued.`);
   }
 
+  /** ADR-0026 integrity tier: the save committed to disk but the post-commit reindex failed, so
+   *  the record views now serve stale pre-save data. The write is done and the changes are
+   *  consumed — this is a warning to reload, never a "save failed" error. */
+  private reportStaleIndex(failure: ReindexFailure | null | undefined): void {
+    if (!failure) return;
+    const plugins = (failure.plugins ?? []).join(', ') || 'the saved plugins';
+    this.log(`[SessionController] reindex failed after save — index stale for ${plugins}: ${failure.reason ?? 'unknown error'}`);
+    this.deps.showWarning(
+      `mEdit: Saved ${plugins}, but the index is now stale — reload the session to refresh the record views.`,
+    );
+  }
+
   async revertGroup(groupId: string): Promise<void> {
     const { response } = await this.deps.client.DELETE('/changes/group/{groupId}', {
       params: { path: { groupId } },
@@ -258,16 +274,8 @@ export class SessionController {
     const failed: string[] = [];
     let anySucceeded = false;
     for (const g of groups) {
-      const { data, response: r } = await this.deps.client.POST('/change-groups/{groupId}/save', {
-        params: { path: { groupId: g.id! } },
-      });
-      if (r.ok || r.status === 404) {
-        anySucceeded = true;
-        this.reportPartialSave(data);
-      } else {
-        failed.push(g.id!);
-        this.log(`[SessionController] saveAllGroups: group ${g.id} failed (${r.status})`);
-      }
+      if (await this.saveOneGroup(g.id!)) anySucceeded = true;
+      else failed.push(g.id!);
     }
     if (anySucceeded) {
       this.deps.refreshGroupTree();
@@ -276,6 +284,22 @@ export class SessionController {
     if (failed.length > 0) {
       this.deps.showError(`mEdit: Failed to save pending changes: ${failed.join(', ')}`);
     }
+  }
+
+  /** Save one group via the per-group endpoint, surfacing partial and stale-index outcomes
+   *  (ADR-0026). Returns true if the save reached the backend (HTTP ok, or 404 = already gone);
+   *  the caller aggregates failures. Shared by saveAllGroups; saveGroup surfaces its own errors. */
+  private async saveOneGroup(groupId: string): Promise<boolean> {
+    const { data, response } = await this.deps.client.POST('/change-groups/{groupId}/save', {
+      params: { path: { groupId } },
+    });
+    if (response.ok || response.status === 404) {
+      this.reportPartialSave(data?.byPlugin ?? undefined);
+      this.reportStaleIndex(data?.reindexFailure);
+      return true;
+    }
+    this.log(`[SessionController] saveAllGroups: group ${groupId} failed (${response.status})`);
+    return false;
   }
 
   async revertAllGroups(): Promise<void> {

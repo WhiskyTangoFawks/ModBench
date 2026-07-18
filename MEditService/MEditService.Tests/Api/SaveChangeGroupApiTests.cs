@@ -32,7 +32,9 @@ public sealed class SaveChangeGroupApiTests(LoadedNpcApiFixture loaded) : IClass
         Assert.Equal(HttpStatusCode.OK, saveResp.StatusCode);
 
         var body = JsonSerializer.Deserialize<JsonElement>(await saveResp.Content.ReadAsStringAsync());
-        Assert.True(body.GetProperty(TestPluginFixture.PluginName).TryGetProperty("backupPath", out _));
+        Assert.True(body.GetProperty("byPlugin").GetProperty(TestPluginFixture.PluginName)
+            .TryGetProperty("backupPath", out _));
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("reindexFailure").ValueKind);
 
         var afterChanges = await _client.GetFromJsonAsync<JsonElement[]>("/changes");
         Assert.Empty(afterChanges!);

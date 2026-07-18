@@ -117,7 +117,7 @@ public static class ChangeEndpoints
         app.MapPost("/change-groups/{groupId}/save", SaveSingleGroup)
             .WithName("SaveChangeGroup")
             .WithTags(Tag)
-            .Produces<Dictionary<string, SaveResult>>()
+            .Produces<SaveGroupResponse>()
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)
@@ -281,7 +281,14 @@ public static class ChangeEndpoints
             {
                 var r = await saver.Save(groupId);
                 if (r is SaveGroupResult.Saved saved)
+                {
                     foreach (var (k, v) in saved.ByPlugin) allResults[k] = v;
+                    // The bulk body has no reindex-failure field (#131 deletes this endpoint); at
+                    // least never swallow it silently in the interim (ADR-0026, #127).
+                    if (saved.ReindexFailure is { } rf)
+                        logger.LogWarning("Reindex failed after saving {Plugins}; index is stale: {Reason}",
+                            string.Join(", ", rf.Plugins), rf.Reason);
+                }
                 else if (r is SaveGroupResult.ImmutablePlugin immutable)
                     return Results.Problem($"'{immutable.Plugin}' is a base-game plugin and cannot be saved.", statusCode: 409);
             }
@@ -311,7 +318,7 @@ public static class ChangeEndpoints
                 SaveGroupResult.NoChanges => Results.Problem("Change group not found.", statusCode: 404),
                 SaveGroupResult.ImmutablePlugin im => Results.Problem(
                     $"'{im.Plugin}' is a base-game plugin and cannot be saved.", statusCode: 409),
-                SaveGroupResult.Saved saved => Results.Ok(saved.ByPlugin),
+                SaveGroupResult.Saved saved => Results.Ok(new SaveGroupResponse(saved.ByPlugin, saved.ReindexFailure)),
                 var r => throw new InvalidOperationException($"Unhandled SaveGroupResult: {r.GetType().Name}")
             };
         }

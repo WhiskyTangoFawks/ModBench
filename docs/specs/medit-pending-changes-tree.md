@@ -133,7 +133,12 @@ exactly what it will carry.
   state — an empty tree meaning "the request failed" is exactly the silently-wrong mental
   model [ADR-0026](../adr/0026-error-surfacing-policy.md) forbids. **Partial-save failure**
   (some plugins saved, some not) shows an error notification naming which saved and which
-  failed; the group stays in the tree with its re-queued changes intact.
+  failed; the group stays in the tree with its re-queued changes intact. **Save-succeeded-
+  but-reindex-failed** is not a failed save: the file is written and the pending changes are
+  consumed, so it surfaces a warning ("saved, but the index is now stale — reload the
+  session"), never "save failed" — the backend returns the reindex failure as a structured
+  field on a 200 response and the frontend surfaces it (integrity tier,
+  [ADR-0026](../adr/0026-error-surfacing-policy.md)).
 - All backend calls go through the generated `ApiClient`, never raw `fetch()`
   (`modbench/CLAUDE.md`). Group membership and member detail come from the backend; the
   frontend renders grouping, it does not derive it.

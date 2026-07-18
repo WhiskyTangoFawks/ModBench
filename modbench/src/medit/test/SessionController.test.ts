@@ -479,8 +479,11 @@ describe('SessionController partial-save reporting', () => {
       ...makeClient(),
       POST: vi.fn().mockResolvedValue({
         data: {
-          'A.esp': { backupPath: '/b', applied: ['001:A.esp'], readOnly: [], notFound: [], createFailed: [] },
-          'B.esp': { backupPath: '/b', applied: [], readOnly: ['002:B.esp'], notFound: [], createFailed: [] },
+          byPlugin: {
+            'A.esp': { backupPath: '/b', applied: ['001:A.esp'], readOnly: [], notFound: [], createFailed: [] },
+            'B.esp': { backupPath: '/b', applied: [], readOnly: ['002:B.esp'], notFound: [], createFailed: [] },
+          },
+          reindexFailure: null,
         },
         response: { ok: true, status: 200 },
       }),
@@ -502,7 +505,10 @@ describe('SessionController partial-save reporting', () => {
       ...makeClient(),
       POST: vi.fn().mockResolvedValue({
         data: {
-          'A.esp': { backupPath: '/b', applied: ['001:A.esp'], readOnly: ['002:A.esp'], notFound: [], createFailed: [] },
+          byPlugin: {
+            'A.esp': { backupPath: '/b', applied: ['001:A.esp'], readOnly: ['002:A.esp'], notFound: [], createFailed: [] },
+          },
+          reindexFailure: null,
         },
         response: { ok: true, status: 200 },
       }),
@@ -521,7 +527,10 @@ describe('SessionController partial-save reporting', () => {
     const client = {
       ...makeClient(),
       POST: vi.fn().mockResolvedValue({
-        data: { 'A.esp': { backupPath: '/b', applied: ['001:A.esp'], readOnly: [], notFound: [], createFailed: [] } },
+        data: {
+          byPlugin: { 'A.esp': { backupPath: '/b', applied: ['001:A.esp'], readOnly: [], notFound: [], createFailed: [] } },
+          reindexFailure: null,
+        },
         response: { ok: true, status: 200 },
       }),
       DELETE: vi.fn(),
@@ -532,6 +541,33 @@ describe('SessionController partial-save reporting', () => {
     await ctrl.saveGroup('abc-123');
 
     expect(deps.showError).not.toHaveBeenCalled();
+    expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
+  });
+
+  // #127 — a committed save whose post-commit reindex failed is an integrity-tier condition:
+  // the write happened, but the record views are now stale. Surface it, never silently.
+  it('warns that the index is stale (not "save failed") when the response names a reindex failure', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({
+        data: {
+          byPlugin: { 'A.esp': { backupPath: '/b', applied: ['001:A.esp'], readOnly: [], notFound: [], createFailed: [] } },
+          reindexFailure: { plugins: ['A.esp'], reason: 'duckdb busy' },
+        },
+        response: { ok: true, status: 200 },
+      }),
+      DELETE: vi.fn(),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.saveGroup('abc-123');
+
+    // Integrity-tier: a warning naming the stale plugin and telling the user to reload — not showError "Save failed".
+    expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('A.esp'));
+    expect(deps.showWarning).toHaveBeenCalledWith(expect.stringMatching(/stale|reload/i));
+    expect(deps.showError).not.toHaveBeenCalledWith(expect.stringContaining('Save failed'));
+    // The save still happened — the trees refresh so the pending change leaves the tree.
     expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
   });
 });
