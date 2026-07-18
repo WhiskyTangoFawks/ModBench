@@ -7,6 +7,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import type { FieldMetadata } from './types';
+import type { LoadResult, RecordSessionClient } from './RecordSessionClient';
 
 // ── Metadata fixtures ─────────────────────────────────────────────────────────
 
@@ -377,13 +378,35 @@ const structInArrayPendingChange = {
   source: 'agent', description: null, changedAt: '2026-06-20T12:00:00Z',
 };
 
-function makeFetch(compareResult: object, changes: object[] = []) {
-  return vi.fn((url: string) => {
-    if (String(url).includes('/compare')) return { ok: true, json: () => Promise.resolve(compareResult) };
-    if (String(url).includes('/changes'))  return { ok: true, json: () => Promise.resolve(changes) };
-    if (String(url).includes('/plugins'))  return { ok: true, json: () => Promise.resolve(pluginsResponse) };
-    return { ok: false, status: 404, statusText: 'Not Found' };
-  });
+// Issue #122: the panel renders against an injected client. Each block sets its compare/changes
+// fixture, and `renderPanel` builds a fake client whose `load` returns the composite view and
+// whose `save` is a spy the edit tests assert on.
+let currentCompare: object;
+let currentChanges: object[] = [];
+
+function loadReturn(): LoadResult {
+  return {
+    ok: true, result: currentCompare, changes: currentChanges, plugins: pluginsResponse,
+    immutableSet: new Set(pluginsResponse.filter(p => p.isImmutable).map(p => p.name)),
+  } as unknown as LoadResult;
+}
+
+function fakeClient(): RecordSessionClient {
+  const resp = { ok: true, status: 200, statusText: 'HTTP 200', json: () => Promise.resolve([]) } as unknown as Response;
+  return {
+    load: vi.fn().mockImplementation(() => Promise.resolve(loadReturn())),
+    searchRecords: vi.fn().mockResolvedValue([]),
+    save: vi.fn().mockResolvedValue(resp),
+    revert: vi.fn().mockResolvedValue(resp),
+    copyTo: vi.fn().mockResolvedValue(resp),
+    removeOverride: vi.fn().mockResolvedValue(resp),
+    createRecord: vi.fn().mockResolvedValue(resp),
+  };
+}
+
+function renderPanel() {
+  const client = fakeClient();
+  return { client, ...render(<RecordPanel client={client} />) };
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -391,13 +414,13 @@ function makeFetch(compareResult: object, changes: object[] = []) {
 describe('RecordPanel — array child rows (sorted)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    vi.stubGlobal('mEditBackendPort', 15172);
-    vi.stubGlobal('fetch', makeFetch(sortedArrayCompareResult));
+    currentCompare = sortedArrayCompareResult;
+    currentChanges = [];
   });
   afterEach(() => vi.unstubAllGlobals());
 
   it('parent array row shows [2] when collapsed', async () => {
-    render(<RecordPanel />);
+    renderPanel();
     await waitFor(() => screen.getByText('Keywords'));
     // Both plugin columns have 2-element arrays; at least one [2] must be visible
     expect(screen.getAllByText('[2]').length).toBeGreaterThan(0);
@@ -406,7 +429,7 @@ describe('RecordPanel — array child rows (sorted)', () => {
   });
 
   it('clicking ▶ expands to show 3 child rows for the sorted array', async () => {
-    render(<RecordPanel />);
+    renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     // Field name TDs contain the element keys; use getAllByText since FormKey also renders them as links
@@ -416,7 +439,7 @@ describe('RecordPanel — array child rows (sorted)', () => {
   });
 
   it('KwdB child row has dimmed em-dash for MyMod.esp (null value)', async () => {
-    render(<RecordPanel />);
+    renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getAllByText('KwdB').length > 0);
@@ -433,13 +456,13 @@ describe('RecordPanel — array child rows (sorted)', () => {
 describe('RecordPanel — array child rows (pending highlight)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    vi.stubGlobal('mEditBackendPort', 15172);
-    vi.stubGlobal('fetch', makeFetch(unsortedArrayWithPendingResult, [pendingChange]));
+    currentCompare = unsortedArrayWithPendingResult;
+    currentChanges = [pendingChange];
   });
   afterEach(() => vi.unstubAllGlobals());
 
   it('element [1] row is yellow-highlighted for MyMod.esp pending change', async () => {
-    render(<RecordPanel />);
+    renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('[1]'));
@@ -454,7 +477,7 @@ describe('RecordPanel — array child rows (pending highlight)', () => {
   });
 
   it('element [0] row is NOT yellow-highlighted (unchanged element)', async () => {
-    render(<RecordPanel />);
+    renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('[1]'));
@@ -469,7 +492,7 @@ describe('RecordPanel — array child rows (pending highlight)', () => {
   });
 
   it('revert button ↩ appears on parent Items row', async () => {
-    render(<RecordPanel />);
+    renderPanel();
     await waitFor(() => screen.getByText('Items'));
 
     const parentRow = screen.getByText('Items').closest('tr')!;
@@ -477,7 +500,7 @@ describe('RecordPanel — array child rows (pending highlight)', () => {
   });
 
   it('revert button ↩ does NOT appear on element child rows', async () => {
-    render(<RecordPanel />);
+    renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('[1]'));
@@ -494,13 +517,13 @@ describe('RecordPanel — array child rows (pending highlight)', () => {
 describe('RecordPanel — array element edit', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    vi.stubGlobal('mEditBackendPort', 15172);
-    vi.stubGlobal('fetch', makeFetch(unsortedArrayWithPendingResult, []));
+    currentCompare = unsortedArrayWithPendingResult;
+    currentChanges = [];
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('editing element [1] calls PATCH with full updated array', async () => {
-    render(<RecordPanel />);
+  it('editing element [1] calls save with full updated array', async () => {
+    const { client } = renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('[1]'));
@@ -511,23 +534,15 @@ describe('RecordPanel — array element edit', () => {
     fireEvent.change(gammaInput, { target: { value: 'epsilon' } });
     fireEvent.blur(gammaInput);
 
+    // Element [0] unchanged ('alpha'), element [1] replaced ('epsilon')
     await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/records/'),
-        expect.objectContaining({ method: 'PATCH' }),
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm',
+        'MyMod.esp',
+        { Items: ['alpha', 'epsilon'] },
+        undefined,
       ),
     );
-
-    const patchCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-      (c: unknown[]) => (c[1] as RequestInit)?.method === 'PATCH',
-    )!;
-    const body = JSON.parse((patchCall[1] as RequestInit).body as string) as {
-      plugin: string;
-      fields: Record<string, unknown>;
-    };
-    expect(body.plugin).toBe('MyMod.esp');
-    // Element [0] unchanged ('alpha'), element [1] replaced ('epsilon')
-    expect(body.fields['Items']).toEqual(['alpha', 'epsilon']);
   });
 });
 
@@ -536,13 +551,13 @@ describe('RecordPanel — array element edit', () => {
 describe('RecordPanel — struct sub-field pending highlight', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    vi.stubGlobal('mEditBackendPort', 15172);
-    vi.stubGlobal('fetch', makeFetch(structWithPendingResult, [structPendingChange]));
+    currentCompare = structWithPendingResult;
+    currentChanges = [structPendingChange];
   });
   afterEach(() => vi.unstubAllGlobals());
 
   it('X1 sub-field row is highlighted (pending value differs from disk)', async () => {
-    render(<RecordPanel />);
+    renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('X1'));
@@ -555,7 +570,7 @@ describe('RecordPanel — struct sub-field pending highlight', () => {
   });
 
   it('X2 sub-field row is NOT highlighted (pending value equals disk)', async () => {
-    render(<RecordPanel />);
+    renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('X2'));
@@ -568,7 +583,7 @@ describe('RecordPanel — struct sub-field pending highlight', () => {
   });
 
   it('revert button ↩ appears on X1 sub-field row (triggers parent struct change)', async () => {
-    render(<RecordPanel />);
+    renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('X1'));
@@ -583,13 +598,13 @@ describe('RecordPanel — struct sub-field pending highlight', () => {
 describe('RecordPanel — struct sub-field edit', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    vi.stubGlobal('mEditBackendPort', 15172);
-    vi.stubGlobal('fetch', makeFetch(structEditResult, []));
+    currentCompare = structEditResult;
+    currentChanges = [];
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('editing X1 calls PATCH with full struct (X2 preserved from disk)', async () => {
-    render(<RecordPanel />);
+  it('editing X1 calls save with full struct (X2 preserved from disk)', async () => {
+    const { client } = renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('5'));
@@ -601,25 +616,19 @@ describe('RecordPanel — struct sub-field edit', () => {
     fireEvent.blur(x1Input);
 
     await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/records/'),
-        expect.objectContaining({ method: 'PATCH' }),
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm',
+        'MyMod.esp',
+        { ObjectBounds: { X1: 10, X2: 200 } },
+        undefined,
       ),
     );
-
-    const patchCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-      (c: unknown[]) => (c[1] as RequestInit)?.method === 'PATCH',
-    )!;
-    const body = JSON.parse((patchCall[1] as RequestInit).body as string) as {
-      plugin: string; fields: Record<string, unknown>;
-    };
-    expect(body.plugin).toBe('MyMod.esp');
-    expect(body.fields['ObjectBounds']).toEqual({ X1: 10, X2: 200 });
   });
 
   it('editing X1 with prior pending on X2 uses pending X2, not disk X2', async () => {
-    vi.stubGlobal('fetch', makeFetch(structEditWithPriorPendingResult, [structEditPriorPendingChange]));
-    render(<RecordPanel />);
+    currentCompare = structEditWithPriorPendingResult;
+    currentChanges = [structEditPriorPendingChange];
+    const { client } = renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('5'));
@@ -630,22 +639,15 @@ describe('RecordPanel — struct sub-field edit', () => {
     fireEvent.change(x1Input, { target: { value: '10' } });
     fireEvent.blur(x1Input);
 
+    // X2 must come from pending (300), not disk (200)
     await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/records/'),
-        expect.objectContaining({ method: 'PATCH' }),
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm',
+        'MyMod.esp',
+        { ObjectBounds: { X1: 10, X2: 300 } },
+        undefined,
       ),
     );
-
-    const patchCall = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(
-      (c: unknown[]) => (c[1] as RequestInit)?.method === 'PATCH',
-    )!;
-    const body = JSON.parse((patchCall[1] as RequestInit).body as string) as {
-      plugin: string; fields: Record<string, unknown>;
-    };
-    expect(body.plugin).toBe('MyMod.esp');
-    // X2 must come from pending (300), not disk (200)
-    expect(body.fields['ObjectBounds']).toEqual({ X1: 10, X2: 300 });
   });
 });
 
@@ -654,13 +656,13 @@ describe('RecordPanel — struct sub-field edit', () => {
 describe('RecordPanel — grandchild rows (struct sub-fields inside array element)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    vi.stubGlobal('mEditBackendPort', 15172);
-    vi.stubGlobal('fetch', makeFetch(structInArrayResult, [structInArrayPendingChange]));
+    currentCompare = structInArrayResult;
+    currentChanges = [structInArrayPendingChange];
   });
   afterEach(() => vi.unstubAllGlobals());
 
   async function expandToGrandchildren() {
-    render(<RecordPanel />);
+    renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));        // expand Packages
     // [0] also appears in column headers; find the TD in the table body

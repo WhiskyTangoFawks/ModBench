@@ -9,10 +9,10 @@ import { VmadSection } from './VmadSection';
 import type { CompareOverride, CompareResult, ConflictAll, ConflictThis, FieldDiff, FieldMetadata, PendingChange, RecordDetail } from './types';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './messages';
+import type { PluginInfo, RecordSessionClient } from './RecordSessionClient';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey: string;
-  mEditBackendPort: number;
 };
 
 const ROW_BG: Partial<Record<ConflictAll, string>> = {
@@ -151,19 +151,19 @@ interface FormKeyCellProps {
   value: unknown;
   meta: FieldMetadata;
   editable: boolean;
-  port: number;
+  client: RecordSessionClient;
   onOpen: (fk: string) => void;
   onCommit: (fk: string) => void;
   checkError?: string | null;
 }
 
-export function FormKeyCell({ value, meta, editable, port, onOpen, onCommit, checkError }: FormKeyCellProps) {
+export function FormKeyCell({ value, meta, editable, client, onOpen, onCommit, checkError }: FormKeyCellProps) {
   const [picking, setPicking] = useState(false);
 
   if (picking) {
     return (
       <FormKeyPicker
-        port={port}
+        client={client}
         validTypes={meta.validFormKeyTypes}
         onSelect={fk => { setPicking(false); onCommit(fk); }}
         onClose={() => setPicking(false)}
@@ -199,7 +199,7 @@ function renderCell(
   value: unknown,
   meta: FieldMetadata,
   editable: boolean,
-  port: number,
+  client: RecordSessionClient,
   onOpen: (fk: string) => void,
   onCommit: (v: unknown) => void,
   checkError?: string | null,
@@ -207,7 +207,7 @@ function renderCell(
   if (meta.type === 'formKey') {
     return (
       <FormKeyCell
-        value={value} meta={meta} editable={editable} port={port}
+        value={value} meta={meta} editable={editable} client={client}
         onOpen={onOpen} onCommit={fk => onCommit(fk)} checkError={checkError}
       />
     );
@@ -639,7 +639,7 @@ interface DiffRowProps {
   // flag: editability is per-column, so an immutable column never renders an input even
   // though the panel as a whole is always editable.
   immutableSet: Set<string>;
-  port: number;
+  client: RecordSessionClient;
   pendingChangeMap: Record<string, PendingChange>;
   collapsedColumns: Set<string>;
   onOpen: (fk: string) => void;
@@ -654,7 +654,7 @@ interface DiffRowProps {
 }
 
 function DiffRow({
-  diff, conflictAll, columns, overrideMap, fieldMetaMap, immutableSet, port,
+  diff, conflictAll, columns, overrideMap, fieldMetaMap, immutableSet, client,
   pendingChangeMap, collapsedColumns, onOpen, onEdit, onRevert,
   onCellDragStart, onCellDrop,
   context, hasChildren, isExpanded, onToggle,
@@ -711,7 +711,7 @@ function DiffRow({
               onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin])}
               onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
             >
-              {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin), port, onOpen,
+              {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin), client, onOpen,
                 v => onEdit(o.plugin, diff.fieldName, v), checkError)}
             </DiskCell>
           );
@@ -759,7 +759,7 @@ function DiffRow({
                     to names, FormKeys become links — so the Pending column reads in the same
                     language as the row it is being compared against. A staged FormKey is validated
                     at stage time (ADR-0020), so it always resolves: no checkError proxy needed. */}
-                <span>{renderCell(pendingValue, meta, false, port, onOpen, () => {})}</span>
+                <span>{renderCell(pendingValue, meta, false, client, onOpen, () => {})}</span>
                 {change && showActions && (
                   <button
                     onClick={() => onRevert(change.id)}
@@ -786,9 +786,7 @@ function DiffRow({
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
 
-interface PluginInfo { name: string; isImmutable: boolean; loadOrderIndex: number }
-
-export function RecordPanel() {
+export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }>) {
   const [formKey, setFormKey] = useState<string>(mEditWindow.mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
   const [allChanges, setAllChanges] = useState<PendingChange[]>([]);
@@ -812,35 +810,26 @@ export function RecordPanel() {
   // target list), branching on `mode` only in onSelect.
   const [targetPickerSource, setTargetPickerSource] = useState<{ plugin: string; x: number; y: number; mode: 'copyAll' | 'newRecord' } | null>(null);
 
-  const port = mEditWindow.mEditBackendPort;
-
   const refresh = useCallback(async (fk: string) => {
-    if (!fk || !port) return;
+    if (!fk) return;
     try {
       setError(null);
-      const [cmpRes, chgRes, pluginsRes] = await Promise.all([
-        fetch(`http://localhost:${port}/records/${encodeURIComponent(fk)}/compare`),
-        fetch(`http://localhost:${port}/changes?formKey=${encodeURIComponent(fk)}`),
-        fetch(`http://localhost:${port}/plugins`),
-      ]);
-      if (!cmpRes.ok) throw new Error(`HTTP ${cmpRes.status}`);
-      setResult(await cmpRes.json() as CompareResult);
-      if (chgRes.ok) setAllChanges(await chgRes.json() as PendingChange[]);
-      if (pluginsRes.ok) {
-        const plugins = await pluginsRes.json() as PluginInfo[];
-        setAllPlugins(plugins);
-        setImmutableSet(new Set(plugins.filter(p => p.isImmutable).map(p => p.name)));
-      }
+      const loaded = await client.load(fk);
+      if (!loaded.ok) throw new Error(loaded.error);
+      setResult(loaded.result);
+      if (loaded.changes) setAllChanges(loaded.changes);
+      if (loaded.plugins) setAllPlugins(loaded.plugins);
+      if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [port]);
+  }, [client]);
 
   const refreshRef = useRef(refresh);
   useLayoutEffect(() => { refreshRef.current = refresh; }, [refresh]);
 
   // When the handler drives a new-formKey navigation it calls refresh directly,
-  // so the [formKey, port] effect must skip to avoid a double request.
+  // so the [formKey] effect must skip to avoid a double request.
   const prevFormKeyRef = useRef(formKey);
   const skipNextRefreshEffect = useRef(false);
 
@@ -850,7 +839,7 @@ export function RecordPanel() {
       const msg = event.data as ExtensionToWebview;
       if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) {
         if (msg.formKey !== prevFormKeyRef.current) {
-          // formKey will change → [formKey, port] effect will fire; skip it.
+          // formKey will change → [formKey] effect will fire; skip it.
           skipNextRefreshEffect.current = true;
         }
         setFormKey(msg.formKey);
@@ -869,10 +858,10 @@ export function RecordPanel() {
 
   useEffect(() => {
     prevFormKeyRef.current = formKey;
-    if (!formKey || !port) return;
+    if (!formKey) return;
     if (skipNextRefreshEffect.current) { skipNextRefreshEffect.current = false; return; }
     void refreshRef.current(formKey);
-  }, [formKey, port]);
+  }, [formKey]);
 
   async function handleEdit(plugin: string, fieldName: string, value: unknown) {
     await stageChange(plugin, { [fieldName]: value });
@@ -885,11 +874,7 @@ export function RecordPanel() {
 
   async function stageChange(plugin: string, fields: Record<string, unknown>, changeType?: string) {
     setActionError(null);
-    const resp = await fetch(`http://localhost:${port}/records/${encodeURIComponent(formKey)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plugin, fields, source: 'user', ...(changeType ? { changeType } : {}) }),
-    });
+    const resp = await client.save(formKey, plugin, fields, changeType);
     if (!resp.ok) {
       if (resp.status === 409) {
         const body = await resp.json().catch(() => ({})) as Record<string, unknown>;
@@ -925,7 +910,7 @@ export function RecordPanel() {
 
   async function handleRevert(changeId: string) {
     setActionError(null);
-    const resp = await fetch(`http://localhost:${port}/changes/${changeId}`, { method: 'DELETE' });
+    const resp = await client.revert(changeId);
     if (!resp.ok) {
       if (resp.status === 409) {
         const body = await resp.json().catch(() => ({})) as Record<string, unknown>;
@@ -942,10 +927,7 @@ export function RecordPanel() {
   async function handleCopyTo(targetPlugin: string) {
     setActionError(null);
     try {
-      const resp = await fetch(
-        `http://localhost:${port}/records/${encodeURIComponent(formKey)}/copy-to/${encodeURIComponent(targetPlugin)}`,
-        { method: 'POST' }
-      );
+      const resp = await client.copyTo(formKey, targetPlugin);
       if (!resp.ok) {
         setActionError(resp.status === 409 ? 'Plugin is read-only' : `Copy failed: ${resp.statusText}`);
         return;
@@ -962,11 +944,7 @@ export function RecordPanel() {
   async function handleRemoveOverride(plugin: string) {
     setActionError(null);
     try {
-      const resp = await fetch(`http://localhost:${port}/records/delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ records: [{ formKey, plugin }] }),
-      });
+      const resp = await client.removeOverride(formKey, plugin);
       if (!resp.ok) {
         setActionError(resp.status === 409 ? 'Plugin is read-only' : `Remove failed: ${resp.statusText}`);
         return;
@@ -1045,11 +1023,7 @@ export function RecordPanel() {
     if (!source) return;
     setActionError(null);
     try {
-      const createResp = await fetch(`http://localhost:${port}/plugins/${encodeURIComponent(targetPlugin)}/records`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recordType: source.recordType, source: 'user' }),
-      });
+      const createResp = await client.createRecord(targetPlugin, source.recordType);
       if (!createResp.ok) {
         setActionError(createResp.status === 409 ? 'Plugin is read-only' : `Copy failed: ${createResp.statusText}`);
         return;
@@ -1057,11 +1031,7 @@ export function RecordPanel() {
       const { formKey: newFormKey } = await createResp.json() as { formKey: string };
       const fields: Record<string, unknown> = {};
       for (const fv of source.fields) fields[fv.metadata.name] = fv.value;
-      const patchResp = await fetch(`http://localhost:${port}/records/${encodeURIComponent(newFormKey)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plugin: targetPlugin, fields, source: 'user' }),
-      });
+      const patchResp = await client.save(newFormKey, targetPlugin, fields);
       if (!patchResp.ok) {
         setActionError(`Copy failed: ${patchResp.statusText}`);
       }
@@ -1170,7 +1140,7 @@ export function RecordPanel() {
                   overrideMap={overrideMap}
                   fieldMetaMap={fieldMetaMap}
                   immutableSet={immutableSet}
-                  port={port}
+                  client={client}
                   pendingChangeMap={pendingChangeMap}
                   collapsedColumns={collapsedColumns}
                   onCellDragStart={handleCellDragStart}
@@ -1212,7 +1182,7 @@ export function RecordPanel() {
                         overrideMap={overrideMap}
                         fieldMetaMap={fieldMetaMap}
                         immutableSet={immutableSet}
-                        port={port}
+                        client={client}
                         pendingChangeMap={pendingChangeMap}
                         collapsedColumns={collapsedColumns}
                         onCellDragStart={handleCellDragStart}
@@ -1245,7 +1215,7 @@ export function RecordPanel() {
                             overrideMap={overrideMap}
                             fieldMetaMap={fieldMetaMap}
                             immutableSet={immutableSet}
-                            port={port}
+                            client={client}
                             pendingChangeMap={pendingChangeMap}
                             collapsedColumns={collapsedColumns}
                             onCellDragStart={handleCellDragStart}
@@ -1276,7 +1246,7 @@ export function RecordPanel() {
                         overrideMap={overrideMap}
                         fieldMetaMap={fieldMetaMap}
                         immutableSet={immutableSet}
-                        port={port}
+                        client={client}
                         pendingChangeMap={pendingChangeMap}
                         collapsedColumns={collapsedColumns}
                         onCellDragStart={handleCellDragStart}
@@ -1306,7 +1276,7 @@ export function RecordPanel() {
                         onEdit={(plugin, vmadPath, value) => { void handleEdit(plugin, vmadPath, value); }}
                         onRevert={changeId => { void handleRevert(changeId); }}
                         onStructOp={(plugin, vmadPath, op) => { void handleVmadStructOp(plugin, vmadPath, op); }}
-                        port={port}
+                        client={client}
                       />
           </tbody>
         </table>

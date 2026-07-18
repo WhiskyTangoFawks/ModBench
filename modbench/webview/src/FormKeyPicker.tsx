@@ -1,20 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-
-interface RecordSummary {
-  formKey: string;
-  editorId: string | null;
-}
+import type { FormKeySearchResult, RecordSessionClient } from './RecordSessionClient';
 
 interface Props {
-  port: number;
+  client: RecordSessionClient;
   validTypes: string[];
   onSelect: (formKey: string) => void;
   onClose: () => void;
 }
 
-export function FormKeyPicker({ port, validTypes, onSelect, onClose }: Props) {
+export function FormKeyPicker({ client, validTypes, onSelect, onClose }: Props) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<RecordSummary[]>([]);
+  const [results, setResults] = useState<FormKeySearchResult[]>([]);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -34,20 +30,15 @@ export function FormKeyPicker({ port, validTypes, onSelect, onClose }: Props) {
     timerRef.current = setTimeout(() => {
       void (async () => {
         try {
-          const typeParam = validTypes.length === 1 ? `&type=${encodeURIComponent(validTypes[0])}` : '';
-          const r = await fetch(
-            `http://localhost:${port}/records?search=${encodeURIComponent(query)}${typeParam}&limit=20`,
-            { signal: controller.signal }
-          );
-          if (!r.ok || controller.signal.aborted) return;
-          const data = await r.json() as { items: RecordSummary[] };
-          setResults(data.items ?? []);
+          const items = await client.searchRecords(query, validTypes, controller.signal);
+          if (controller.signal.aborted) return;
+          setResults(items);
           setSelectedIdx(0);
         } catch { /* ignore network + abort errors */ }
       })();
     }, 200);
     return () => { controller.abort(); if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [query, port, validTypes]);
+  }, [query, client, validTypes]);
 
   useEffect(() => {
     const el = dropdownRef.current?.children[selectedIdx] as HTMLElement | undefined;

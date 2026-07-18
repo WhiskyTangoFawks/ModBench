@@ -5,6 +5,7 @@ import { toStr } from './recordUtils';
 import { baseCell, headerCell, toggleBtnStyle, getCellStyle, mono, fg } from './gridStyles';
 import { FormKeyLink } from './FormKeyLink';
 import { FormKeyPicker } from './FormKeyPicker';
+import type { RecordSessionClient } from './RecordSessionClient';
 
 // A VMAD structural operation payload (phase 13.8). The `op` discriminator routes the change.
 export interface StructOp {
@@ -28,7 +29,7 @@ interface VmadSectionProps {
   onEdit?: (plugin: string, vmadPath: string, value: unknown) => void;
   onRevert?: (changeId: string) => void;
   onStructOp?: OnStructOp;
-  port?: number;
+  client?: RecordSessionClient;
 }
 
 // VMAD property types that can be added (everything except Variable / ArrayOfVariable).
@@ -342,7 +343,7 @@ interface LeafCellCtx {
   // Issue #111: per-column editability — a leaf cell in an immutable column never edits.
   isEditable: (plugin: string) => boolean;
   onEdit?: OnEdit;
-  port?: number;
+  client?: RecordSessionClient;
   onOpen: (fk: string) => void;
 }
 
@@ -379,7 +380,7 @@ function renderLeafCell(
   ctx: LeafCellCtx,
   typesDiffer: boolean,
 ): React.ReactNode {
-  const { isEditable, onEdit, port, onOpen } = ctx;
+  const { isEditable, onEdit, client, onOpen } = ctx;
   const typeCue = typesDiffer ? `(${p.types[plugin]})` : null;
   const read = leafContent(p, plugin, onOpen, typeCue);
   if (!isEditable(plugin) || !onEdit) return read;
@@ -406,10 +407,10 @@ function renderLeafCell(
       </ClickToEdit>
     );
   }
-  if (p.kind === 'object' && port != null) {
+  if (p.kind === 'object' && client != null) {
     return (
       <ClickToEdit read={read}>
-        <VmadObjectEditor value={p.values[plugin]} port={port} onCommit={commit} />
+        <VmadObjectEditor value={p.values[plugin]} client={client} onCommit={commit} />
       </ClickToEdit>
     );
   }
@@ -543,11 +544,11 @@ const OBJ_RE = /^(.+?)\s*\[(-?\d+)\]\s*$/;
 
 interface VmadObjectEditorProps {
   value: unknown;
-  port: number;
+  client: RecordSessionClient;
   onCommit: (v: { formKey: string; alias: number }) => void;
 }
 
-function VmadObjectEditor({ value, port, onCommit }: Readonly<VmadObjectEditorProps>) {
+function VmadObjectEditor({ value, client, onCommit }: Readonly<VmadObjectEditorProps>) {
   const str = typeof value === 'string' ? value : '';
   const m = OBJ_RE.exec(str);
   const diskFk = m ? m[1].trim() : str;
@@ -563,7 +564,7 @@ function VmadObjectEditor({ value, port, onCommit }: Readonly<VmadObjectEditorPr
   if (picking) {
     return (
       <FormKeyPicker
-        port={port}
+        client={client}
         validTypes={[]}
         onSelect={fk => { setPicking(false); setPendingFk(fk); onCommit({ formKey: fk, alias }); }}
         onClose={() => setPicking(false)}
@@ -631,8 +632,8 @@ function ModalShell({ title, confirmDisabled, onConfirm, onCancel, children }: R
   );
 }
 
-function AddPropertyDialog({ port, onConfirm, onCancel }: Readonly<{
-  port?: number;
+function AddPropertyDialog({ client, onConfirm, onCancel }: Readonly<{
+  client?: RecordSessionClient;
   onConfirm: (v: { name: string; type: string; value: unknown }) => void;
   onCancel: () => void;
 }>) {
@@ -666,11 +667,11 @@ function AddPropertyDialog({ port, onConfirm, onCancel }: Readonly<{
         />
       );
     }
-    if (type === 'Object' && port != null) {
+    if (type === 'Object' && client != null) {
       const fk = (value as { formKey?: string }).formKey ?? '';
       if (picking) {
         return (
-          <FormKeyPicker port={port} validTypes={[]}
+          <FormKeyPicker client={client} validTypes={[]}
             onSelect={f => { setValue({ formKey: f, alias: -1 }); setPicking(false); }}
             onClose={() => setPicking(false)} />
         );
@@ -696,8 +697,8 @@ function AddPropertyDialog({ port, onConfirm, onCancel }: Readonly<{
   );
 }
 
-function AddPropertyButton({ plugin, scriptName, onStructOp, port }: Readonly<{
-  plugin: string; scriptName: string; onStructOp: OnStructOp; port?: number;
+function AddPropertyButton({ plugin, scriptName, onStructOp, client }: Readonly<{
+  plugin: string; scriptName: string; onStructOp: OnStructOp; client?: RecordSessionClient;
 }>) {
   const [open, setOpen] = useState(false);
   return (
@@ -705,7 +706,7 @@ function AddPropertyButton({ plugin, scriptName, onStructOp, port }: Readonly<{
       <button title="Add property" onClick={() => setOpen(true)} style={structBtnStyle}>+ prop</button>
       {open && (
         <AddPropertyDialog
-          port={port}
+          client={client}
           onCancel={() => setOpen(false)}
           onConfirm={({ name, type, value }) => {
             setOpen(false);
@@ -873,7 +874,7 @@ function RemoveScriptButton({ plugin, scriptName, onStructOp }: Readonly<{
 
 export function VmadSection({
   vmad, columns, onOpen,
-  immutableSet, pendingChangeMap, onEdit, onRevert, onStructOp, port,
+  immutableSet, pendingChangeMap, onEdit, onRevert, onStructOp, client,
 }: Readonly<VmadSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -975,7 +976,7 @@ export function VmadSection({
     );
   }
 
-  const leafCtx: LeafCellCtx = { isEditable, onEdit, port, onOpen };
+  const leafCtx: LeafCellCtx = { isEditable, onEdit, client, onOpen };
 
   const pushPropertyRows = (
     p: VmadPropertyDiff,
@@ -1099,7 +1100,7 @@ export function VmadSection({
           isEditable(plugin) && onStructOp
             ? <span style={inlineCell}>
                 <ScriptFlagsControl plugin={plugin} scriptName={s.name} current={s.flags[plugin] ?? null} onStructOp={onStructOp} />
-                <AddPropertyButton plugin={plugin} scriptName={s.name} onStructOp={onStructOp} port={port} />
+                <AddPropertyButton plugin={plugin} scriptName={s.name} onStructOp={onStructOp} client={client} />
                 <RemoveScriptButton plugin={plugin} scriptName={s.name} onStructOp={onStructOp} />
               </span>
             : (s.flags[plugin] ?? null))}
