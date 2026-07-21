@@ -126,9 +126,10 @@ exactly what it will carry.
 - Title-bar **Save All / Revert All** act on everything, hidden or disabled when nothing is
   staged.
 - **Reveal**: the tree exposes the `getParent` seam so an arbitrary change can be revealed.
-  The Record editor panel's Pending-column navigation that consumes it lands with **#140**
-  (blocked by this ticket); this ticket ships the seam, not the wiring
-  (see [medit-record-editor.md](medit-record-editor.md)).
+  A plain click on a pending value in the Record editor panel reveals and selects that change's
+  node here, expanding the parent group for a multi-member change and showing the tree if it was
+  hidden (#140, see [medit-record-editor.md](medit-record-editor.md)). Resolution is the
+  provider's job; a change already saved or reverted resolves to nothing and is ignored.
 - Empty state: "No pending changes." A **failed fetch** yields an error node, never the empty
   state — an empty tree meaning "the request failed" is exactly the silently-wrong mental
   model [ADR-0026](../adr/0026-error-surfacing-policy.md) forbids. **Partial-save failure**

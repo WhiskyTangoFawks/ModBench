@@ -32,6 +32,11 @@ export class PendingLeafNode extends vscode.TreeItem {
     const fieldPath = change.fieldPath ?? '';
     super(`${recordType} / ${formKey} · ${fieldPath}`, vscode.TreeItemCollapsibleState.None);
     this.changeId = change.id ?? '';
+    // A stable id (not the label) is what lets TreeView.reveal match a freshly-built node
+    // against whatever the view has already rendered (#140) — labels can collide, change ids
+    // can't. Prefixed so a leaf's id never collides with its own group node's id (a group's
+    // `groupId` is one of its members' change ids, ADR-0028).
+    this.id = `change:${this.changeId}`;
     this.formKey = formKey;
     this.plugin = change.plugin ?? '';
     this.description = `${formatValue(change.oldValue)} → ${formatValue(change.newValue)} · ${this.plugin}`;
@@ -58,6 +63,9 @@ export class PendingGroupNode extends vscode.TreeItem {
     const op = group.operation ?? '';
     super(group.description ? `${op} ${group.description}` : op, vscode.TreeItemCollapsibleState.Collapsed);
     this.groupId = group.id ?? '';
+    // See PendingLeafNode's `id` comment — same reveal-matching need, prefixed so it can never
+    // collide with a member leaf's id even though `groupId` is itself one member's change id.
+    this.id = `group:${this.groupId}`;
     this.members = members;
     const records = new Set(members.map(m => m.formKey ?? '')).size;
     this.description = `${group.changeCount ?? members.length} edits · ${records} records · ${group.pluginCount ?? 0} plugins`;
@@ -120,6 +128,22 @@ export class PendingChangesTreeProvider implements vscode.TreeDataProvider<Pendi
     }
     if (element) return [];
     return this.rootNodes();
+  }
+
+  /** Resolves a pending change id to its node — a top-level leaf for a group of one, or the
+   *  member leaf inside its group (with `parent` set, so `getParent` chains to the group) — for
+   *  the Pending column's click-to-reveal (#140). `undefined` means the change is no longer
+   *  pending (already saved or reverted); the caller is expected to no-op rather than throw. */
+  async resolveChange(changeId: string): Promise<PendingTreeNode | undefined> {
+    for (const root of await this.getChildren()) {
+      if (root instanceof PendingLeafNode && root.changeId === changeId) return root;
+      if (root instanceof PendingGroupNode) {
+        const member = (await this.getChildren(root))
+          .find((m): m is PendingLeafNode => m instanceof PendingLeafNode && m.changeId === changeId);
+        if (member) return member;
+      }
+    }
+    return undefined;
   }
 
   private async rootNodes(): Promise<PendingTreeNode[]> {

@@ -1697,3 +1697,103 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
     expect(screen.queryByRole('button', { name: 'Revert' })).not.toBeInTheDocument();
   });
 });
+
+// ── Pending column click-to-reveal (issue #140) ─────────────────────────────────
+//
+// Plain click on a pending value reveals that change in the Pending Changes tree — a message
+// to the extension host, which resolves the change id to a node and calls TreeView.reveal
+// (not this seam's concern; see PendingChangesTreeProvider.resolveChange). Ctrl+click must
+// keep meaning "follow the reference" uniformly, including on a pending FormKey value.
+
+const pendingFkResult = {
+  conflictAll: 'Override',
+  overrides: [
+    { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
+      editorId: 'TestNPC', fields: [{ metadata: fkMeta, value: '00013918:Fallout4.esm' }],
+      pendingFields: {}, conflictThis: 'Master' },
+    { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: fkMeta, value: '00013918:Fallout4.esm' }],
+      pendingFields: { Race: '00099999:MyMod.esp' }, conflictThis: 'Override' },
+  ],
+  diffs: [{
+    fieldName: 'Race',
+    values: { 'Fallout4.esm': '00013918:Fallout4.esm', 'MyMod.esp': '00013918:Fallout4.esm' },
+    winnerPlugin: 'MyMod.esp', winnerValue: '00013918:Fallout4.esm',
+    cellStates: { 'MyMod.esp': 'Override' },
+  }],
+};
+
+const soloChangeFk = [{ id: 'chg-1', plugin: 'MyMod.esp', fieldPath: 'Race', recordType: 'npc_', formKey: '000001:Fallout4.esm' }];
+
+describe('RecordPanel — Pending column click-to-reveal (issue #140)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.mocked(vscode.postMessage).mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('plain click on a pending value posts revealPendingChange with the change id', async () => {
+    renderPanel(pendingNameResult, { changes: soloChange });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.click(screen.getByText('Staged Name'));
+
+    expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
+      changeId: 'chg-1',
+    });
+  });
+
+  it('plain click on a pending value does not begin an edit — pending cells stay non-editable', async () => {
+    const save = vi.fn().mockResolvedValue(resp(200, []));
+    renderPanel(pendingNameResult, { changes: soloChange, save });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.click(screen.getByText('Staged Name'));
+
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('Ctrl+click on a pending FormKey value still posts openRecord, not a reveal', async () => {
+    renderPanel(pendingFkResult, { changes: soloChangeFk });
+    await waitFor(() => screen.getByText('00099999:MyMod.esp'));
+
+    fireEvent.click(screen.getByText('00099999:MyMod.esp'), { ctrlKey: true });
+
+    expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.OPEN_RECORD,
+      formKey: '00099999:MyMod.esp',
+    });
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
+    }));
+  });
+
+  it('clicking the inline ↩ reverts the group and does not also post a reveal', async () => {
+    const revertGroup = vi.fn().mockResolvedValue(resp(204));
+    const groupMembers = vi.fn().mockResolvedValue(soloChange);
+    renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.click(screen.getByText('↩'));
+
+    await waitFor(() => expect(revertGroup).toHaveBeenCalledWith('chg-1'));
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
+    }));
+  });
+
+  it('right-click still offers Save Group / Revert Group after the reveal wiring', async () => {
+    renderPanel(pendingNameResult, { changes: soloChange });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+
+    expect(screen.getByRole('menuitem', { name: 'Save Group' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Revert Group' })).toBeInTheDocument();
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
+    }));
+  });
+});
