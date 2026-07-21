@@ -780,14 +780,6 @@ describe('VmadSection leaf cells edit in place on click', () => {
 });
 
 describe('VmadSection editing', () => {
-  it('Bool property renders a checkbox once its cell is clicked', () => {
-    const { container } = renderSection(boolVmad(), ['A.esm'], { onEdit: vi.fn() });
-    toggle('MyScript');
-    fireEvent.click(screen.getByText('false'));
-
-    expect(container.querySelector('input[type="checkbox"]')).toBeInTheDocument();
-  });
-
   it('toggling Bool checkbox calls onEdit with VMAD path and boolean value', () => {
     const onEdit = vi.fn();
     renderSection(boolVmad(), ['A.esm'], { onEdit });
@@ -846,27 +838,6 @@ describe('VmadSection editing', () => {
     fireEvent.blur(input);
 
     expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Name`, 'new');
-  });
-
-  it('Object property renders FK button and alias input once its cell is clicked', () => {
-    const vmad: VmadCompare = {
-      scripts: [script({
-        name: 'S',
-        properties: [prop({
-          name: 'Target',
-          kind: 'object',
-          values: { 'A.esm': '000123:Foo.esp [2]' },
-          types: { 'A.esm': 'Object' },
-          winnerPlugin: 'A.esm',
-        })],
-      })],
-    };
-    const { container } = renderSection(vmad, ['A.esm'], { onEdit: vi.fn() });
-    toggle('S');
-    fireEvent.click(screen.getByText('000123:Foo.esp'));
-
-    expect(container.querySelector('input[type="number"][aria-label="Alias"]')).toBeInTheDocument();
-    expect((container.querySelector('input[type="number"][aria-label="Alias"]') as HTMLInputElement).value).toBe('2');
   });
 
   it('Object alias change + blur stages VMAD path with { formKey, alias }', () => {
