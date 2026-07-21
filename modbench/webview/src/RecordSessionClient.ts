@@ -37,6 +37,14 @@ export interface RecordSessionClient {
   copyTo(formKey: string, targetPlugin: string): Promise<Response>;
   removeOverride(formKey: string, plugin: string): Promise<Response>;
   createRecord(plugin: string, recordType?: string): Promise<Response>;
+  // Issue #139: the changes in the whole component `changeId` belongs to (ADR-0028). Read fully
+  // here (not a raw Response) because the panel only needs the member list to decide the ↩
+  // confirmation; a failed read yields [] so the panel falls back to a plain single-change revert.
+  groupMembers(changeId: string): Promise<PendingChange[]>;
+  // Issue #139: save/revert the whole component a member change belongs to. Both return the raw
+  // Response so the panel reads the SaveGroupResponse body / status itself (ADR-0026 surfacing).
+  saveGroup(changeId: string): Promise<Response>;
+  revertGroup(changeId: string): Promise<Response>;
 }
 
 export function createRecordSessionClient(port: number): RecordSessionClient {
@@ -129,6 +137,31 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
       return rawWrite(fetchImpl => client.POST('/plugins/{plugin}/records', {
         params: { path: { plugin } },
         body: { source: 'user', ...(recordType ? { recordType } : {}) },
+        parseAs: 'stream',
+        fetch: fetchImpl,
+      }));
+    },
+
+    async groupMembers(changeId) {
+      // `groupId` selects the whole component the named change belongs to (ADR-0028); the param
+      // name is the backend's, but any member id resolves the same component. A failed read is
+      // not fatal — the panel only needs the count to choose the ↩ confirmation, and falling back
+      // to [] means it takes the no-confirmation path, never a raw 409.
+      const { data, response } = await client.GET('/changes', { params: { query: { groupId: changeId } } });
+      return response.ok ? (data as PendingChange[]) : [];
+    },
+
+    saveGroup(changeId) {
+      return rawWrite(fetchImpl => client.POST('/change-groups/{groupId}/save', {
+        params: { path: { groupId: changeId } },
+        parseAs: 'stream',
+        fetch: fetchImpl,
+      }));
+    },
+
+    revertGroup(changeId) {
+      return rawWrite(fetchImpl => client.DELETE('/changes/group/{groupId}', {
+        params: { path: { groupId: changeId } },
         parseAs: 'stream',
         fetch: fetchImpl,
       }));

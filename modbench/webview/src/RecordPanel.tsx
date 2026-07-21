@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FlagCell } from './FlagCell';
 import { FormKeyPicker } from './FormKeyPicker';
+import { ModalShell } from './ModalShell';
+import { partialSaveMessage, staleIndexMessage } from '../../src/medit/saveClassification';
+import type { ReindexFailure, SaveResult } from '../../src/medit/saveClassification';
 import { buildColumns, toStr } from './recordUtils';
 import type { Column } from './recordUtils';
 import { mono, fg, baseCell, headerCell, toggleBtnStyle, getConflictBg, getCellStyle } from './gridStyles';
@@ -482,6 +485,78 @@ function ColumnHeaderMenu({ x, y, disabledRemove, onClose, onCopyAllToPending, o
   );
 }
 
+// ── PendingCellMenu ───────────────────────────────────────────────────────────
+
+// Issue #139: right-click on a pending value. Save Group / Revert Group, both scoped to that
+// change's whole ChangeGroup (ADR-0029), never to part of one. Same chrome/close behavior as
+// ColumnHeaderMenu (role="menu", position:fixed at the click, closes on outside click or Escape).
+interface PendingCellMenuProps {
+  x: number;
+  y: number;
+  onClose: () => void;
+  onSaveGroup: () => void;
+  onRevertGroup: () => void;
+}
+
+function PendingCellMenu({ x, y, onClose, onSaveGroup, onRevertGroup }: PendingCellMenuProps) {
+  useEffect(() => {
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
+      onClose();
+    };
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [onClose]);
+
+  return (
+    <ul
+      role="menu"
+      style={{
+        position: 'fixed',
+        top: y,
+        left: x,
+        listStyle: 'none',
+        margin: 0,
+        padding: 4,
+        backgroundColor: 'var(--vscode-menu-background,#3c3c3c)',
+        color: 'var(--vscode-menu-foreground,#ccc)',
+        border: '1px solid var(--vscode-menu-border,#454545)',
+        borderRadius: 2,
+        zIndex: 1000,
+      }}
+    >
+      <ColumnHeaderMenuItem label="Save Group" onActivate={onSaveGroup} />
+      <ColumnHeaderMenuItem label="Revert Group" onActivate={onRevertGroup} />
+    </ul>
+  );
+}
+
+// ── RevertGroupConfirm ────────────────────────────────────────────────────────
+
+// Issue #139: a multi-member group revert takes every linked edit with it (ADR-0028), so the
+// user confirms first, seeing the members that travel with it — rather than the panel firing the
+// 409 the backend returns for a partial group revert. A group of one skips this entirely.
+function RevertGroupConfirm({ members, onConfirm, onCancel }: Readonly<{
+  members: PendingChange[];
+  onConfirm: () => void;
+  onCancel: () => void;
+}>) {
+  return (
+    <ModalShell title="Revert this group? All linked edits are reverted together." confirmLabel="Revert"
+      onConfirm={onConfirm} onCancel={onCancel}>
+      <ul style={{ margin: '4px 0', paddingLeft: 18, fontSize: '11px', maxHeight: 200, overflowY: 'auto' }}>
+        {members.map(m => (
+          <li key={m.id}>{`${m.recordType ?? ''} / ${m.formKey ?? ''} · ${m.fieldPath ?? ''}`}</li>
+        ))}
+      </ul>
+    </ModalShell>
+  );
+}
+
 // ── PluginTargetPicker ────────────────────────────────────────────────────────
 
 // Issue #3: the target-plugin picker for "Copy All to Pending"/"Copy as New Record". More than
@@ -645,6 +720,7 @@ interface DiffRowProps {
   onOpen: (fk: string) => void;
   onEdit: (plugin: string, fieldName: string, value: unknown) => void;
   onRevert: (changeId: string) => void;
+  onPendingContextMenu: (changeId: string, x: number, y: number) => void;
   onCellDragStart: (fieldName: string, value: unknown) => void;
   onCellDrop: (fieldName: string, targetPlugin: string, applyValue: (value: unknown) => void) => void;
   context: RowContext;
@@ -655,7 +731,7 @@ interface DiffRowProps {
 
 function DiffRow({
   diff, conflictAll, columns, overrideMap, fieldMetaMap, immutableSet, client,
-  pendingChangeMap, collapsedColumns, onOpen, onEdit, onRevert,
+  pendingChangeMap, collapsedColumns, onOpen, onEdit, onRevert, onPendingContextMenu,
   onCellDragStart, onCellDrop,
   context, hasChildren, isExpanded, onToggle,
 }: DiffRowProps) {
@@ -745,6 +821,9 @@ function DiffRow({
         return (
           <td
             key={`pending:${col.plugin}`}
+            // Issue #139: right-click a pending value → group-scoped Save/Revert. Gated on the
+            // same showActions as the inline ↩ (top-level and struct-child rows carry a change id).
+            onContextMenu={change && showActions ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); } : undefined}
             style={{
               ...baseCell,
               backgroundColor: hasPending ? 'rgba(255,200,50,0.10)' : undefined,
@@ -763,7 +842,7 @@ function DiffRow({
                 {change && showActions && (
                   <button
                     onClick={() => onRevert(change.id)}
-                    title="Revert this change"
+                    title="Revert group"
                     style={{
                       background: 'none',
                       border: 'none',
@@ -809,6 +888,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // same UI (position:fixed at the context menu's click coordinates, mutable-plugins-minus-source
   // target list), branching on `mode` only in onSelect.
   const [targetPickerSource, setTargetPickerSource] = useState<{ plugin: string; x: number; y: number; mode: 'copyAll' | 'newRecord' } | null>(null);
+  // Issue #139: right-click menu on a pending value (Save Group / Revert Group), keyed on the
+  // member change id it acts on; and the multi-member revert confirmation the ↩ / Revert Group
+  // raise before dropping a whole component.
+  const [pendingMenu, setPendingMenu] = useState<{ changeId: string; x: number; y: number } | null>(null);
+  const [revertConfirm, setRevertConfirm] = useState<{ changeId: string; members: PendingChange[] } | null>(null);
 
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
@@ -908,19 +992,49 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     await refresh(formKey);
   }
 
-  async function handleRevert(changeId: string) {
+  // Issue #139: the ↩ and the context menu's Revert Group both revert the change's whole
+  // component (ADR-0029). A group of one reverts straight away — the common case, exactly
+  // "revert this field"; a multi-member group confirms first, listing what travels with it,
+  // rather than firing the backend's 409 for a partial group revert (ADR-0028). The member
+  // count comes from GET /changes for this change's component; a failed read yields [] and
+  // takes the no-confirmation path, never a raw 409.
+  async function handleRevertGroup(changeId: string) {
     setActionError(null);
-    const resp = await client.revert(changeId);
-    if (!resp.ok) {
-      if (resp.status === 409) {
-        const body = await resp.json().catch(() => ({})) as Record<string, unknown>;
-        const detail = typeof body?.detail === 'string' ? body.detail : '';
-        setActionError(detail || `Revert failed: ${resp.statusText}`);
-      } else {
-        setActionError(`Revert failed: ${resp.statusText}`);
-      }
+    const members = await client.groupMembers(changeId);
+    if (members.length > 1) {
+      setRevertConfirm({ changeId, members });
       return;
     }
+    await revertGroup(changeId);
+  }
+
+  async function revertGroup(changeId: string) {
+    setActionError(null);
+    const resp = await client.revertGroup(changeId);
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({})) as Record<string, unknown>;
+      const detail = typeof body?.detail === 'string' ? body.detail : '';
+      setActionError(detail || `Revert failed: ${resp.statusText}`);
+      return;
+    }
+    await refresh(formKey);
+  }
+
+  // Issue #139: save the change's whole component (ADR-0029). A save can return HTTP 200 yet
+  // leave some fields unwritten, or commit to disk but fail the post-commit reindex — both are
+  // ADR-0026 integrity outcomes surfaced from what SaveGroupResponse reports, worded to match
+  // severity: a partial save reads as a failure with the plugins named and the group re-queued;
+  // a stale reindex reads as a completed-save warning to reload, never as a failure.
+  async function handleSaveGroup(changeId: string) {
+    setActionError(null);
+    const resp = await client.saveGroup(changeId);
+    if (!resp.ok) {
+      setActionError(`Save failed: ${resp.statusText}`);
+      return;
+    }
+    const body = await resp.json().catch(() => ({})) as { byPlugin?: Record<string, SaveResult>; reindexFailure?: ReindexFailure | null };
+    const messages = [partialSaveMessage(body.byPlugin), staleIndexMessage(body.reindexFailure)].filter(Boolean);
+    setActionError(messages.length > 0 ? messages.join(' ') : null);
     await refresh(formKey);
   }
 
@@ -1147,7 +1261,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                   onCellDrop={handleCellDrop}
                   onOpen={handleOpen}
                   onEdit={(plugin, fieldName, value) => { void handleEdit(plugin, fieldName, value); }}
-                  onRevert={changeId => { void handleRevert(changeId); }}
+                  onRevert={changeId => { void handleRevertGroup(changeId); }}
+                  onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                   context={{ kind: 'top-level' }}
                   hasChildren={hasChildren}
                   isExpanded={isExpanded}
@@ -1191,7 +1306,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         onEdit={(plugin, elemKey, newValue) => {
                           void handleEdit(plugin, diff.fieldName, updateArrayAtKey(resolveCurrentArr(plugin), elemKey, newValue, elementMeta.isSortable ?? false));
                         }}
-                        onRevert={changeId => { void handleRevert(changeId); }}
+                        onRevert={changeId => { void handleRevertGroup(changeId); }}
+                        onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                         context={{ kind: 'array-element', overrideMeta: elementMeta, parentFieldName: diff.fieldName }}
                         hasChildren={(child.children?.length ?? 0) > 0}
                         isExpanded={elemExpanded}
@@ -1228,7 +1344,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                               updatedArr[elemIdx] = { ...curElem, [subField]: subValue };
                               void handleEdit(plugin, diff.fieldName, updatedArr);
                             }}
-                            onRevert={changeId => { void handleRevert(changeId); }}
+                            onRevert={changeId => { void handleRevertGroup(changeId); }}
+                            onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                             context={{ kind: 'grandchild', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName, parentFieldIndex: elemIdx }}
                           />,
                         );
@@ -1258,7 +1375,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                           const cur = pending !== undefined ? { ...disk, ...pending } : disk;
                           void handleEdit(plugin, diff.fieldName, { ...cur, [subField]: subValue });
                         }}
-                        onRevert={changeId => { void handleRevert(changeId); }}
+                        onRevert={changeId => { void handleRevertGroup(changeId); }}
+                        onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                         context={{ kind: 'struct-child', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName }}
                       />,
                     );
@@ -1274,7 +1392,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         immutableSet={immutableSet}
                         pendingChangeMap={pendingChangeMap}
                         onEdit={(plugin, vmadPath, value) => { void handleEdit(plugin, vmadPath, value); }}
-                        onRevert={changeId => { void handleRevert(changeId); }}
+                        onRevert={changeId => { void handleRevertGroup(changeId); }}
+                        onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                         onStructOp={(plugin, vmadPath, op) => { void handleVmadStructOp(plugin, vmadPath, op); }}
                         client={client}
                       />
@@ -1304,6 +1423,22 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
             if (mode === 'copyAll') void handleCopyAllToPending(source, target);
             else void handleCopyAsNewRecord(source, target);
           }}
+        />
+      )}
+      {pendingMenu && (
+        <PendingCellMenu
+          x={pendingMenu.x}
+          y={pendingMenu.y}
+          onClose={() => setPendingMenu(null)}
+          onSaveGroup={() => { const id = pendingMenu.changeId; setPendingMenu(null); void handleSaveGroup(id); }}
+          onRevertGroup={() => { const id = pendingMenu.changeId; setPendingMenu(null); void handleRevertGroup(id); }}
+        />
+      )}
+      {revertConfirm && (
+        <RevertGroupConfirm
+          members={revertConfirm.members}
+          onCancel={() => setRevertConfirm(null)}
+          onConfirm={() => { const id = revertConfirm.changeId; setRevertConfirm(null); void revertGroup(id); }}
         />
       )}
     </div>

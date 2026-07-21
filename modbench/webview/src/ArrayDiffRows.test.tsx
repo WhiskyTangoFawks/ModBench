@@ -496,7 +496,7 @@ describe('RecordPanel — array child rows (pending highlight)', () => {
     await waitFor(() => screen.getByText('Items'));
 
     const parentRow = screen.getByText('Items').closest('tr')!;
-    expect(parentRow.querySelector('button[title="Revert this change"]')).toBeTruthy();
+    expect(parentRow.querySelector('button[title="Revert group"]')).toBeTruthy();
   });
 
   it('revert button ↩ does NOT appear on element child rows', async () => {
@@ -506,11 +506,11 @@ describe('RecordPanel — array child rows (pending highlight)', () => {
     await waitFor(() => screen.getByText('[1]'));
 
     const row1 = screen.getByText('[1]').closest('tr')!;
-    expect(row1.querySelector('button[title="Revert this change"]')).toBeNull();
+    expect(row1.querySelector('button[title="Revert group"]')).toBeNull();
 
     const row0Td = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!;
     const row0 = row0Td.closest('tr')!;
-    expect(row0.querySelector('button[title="Revert this change"]')).toBeNull();
+    expect(row0.querySelector('button[title="Revert group"]')).toBeNull();
   });
 });
 
@@ -589,7 +589,7 @@ describe('RecordPanel — struct sub-field pending highlight', () => {
     await waitFor(() => screen.getByText('X1'));
 
     const x1Row = screen.getByText('X1').closest('tr')!;
-    expect(x1Row.querySelector('button[title="Revert this change"]')).toBeTruthy();
+    expect(x1Row.querySelector('button[title="Revert group"]')).toBeTruthy();
   });
 });
 
@@ -698,9 +698,9 @@ describe('RecordPanel — grandchild rows (struct sub-fields inside array elemen
     await expandToGrandchildren();
 
     const priorityRow = screen.getByText('Priority').closest('tr')!;
-    expect(priorityRow.querySelector('button[title="Revert this change"]')).toBeNull();
+    expect(priorityRow.querySelector('button[title="Revert group"]')).toBeNull();
 
     const pkgIdRow = screen.getByText('PkgId').closest('tr')!;
-    expect(pkgIdRow.querySelector('button[title="Revert this change"]')).toBeNull();
+    expect(pkgIdRow.querySelector('button[title="Revert group"]')).toBeNull();
   });
 });

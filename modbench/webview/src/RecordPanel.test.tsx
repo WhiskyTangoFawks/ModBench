@@ -423,6 +423,9 @@ interface FakeOpts {
   save?: RecordSessionClient['save'];
   createRecord?: RecordSessionClient['createRecord'];
   removeOverride?: RecordSessionClient['removeOverride'];
+  saveGroup?: RecordSessionClient['saveGroup'];
+  revertGroup?: RecordSessionClient['revertGroup'];
+  groupMembers?: RecordSessionClient['groupMembers'];
 }
 
 // Issue #122: a fake record-session client. `load` returns the composite view built from the
@@ -441,6 +444,11 @@ function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordSessionClient 
     copyTo: vi.fn().mockResolvedValue(resp(200, [])),
     removeOverride: opts.removeOverride ?? vi.fn().mockResolvedValue(resp(200, {})),
     createRecord: opts.createRecord ?? vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Mod2.esp' })),
+    // Issue #139: group save/revert + the member-count read that decides the ↩ confirmation.
+    // groupMembers defaults to the staged changes (a group of one), the no-confirmation path.
+    saveGroup: opts.saveGroup ?? vi.fn().mockResolvedValue(resp(200, { byPlugin: {}, reindexFailure: null })),
+    revertGroup: opts.revertGroup ?? vi.fn().mockResolvedValue(resp(204)),
+    groupMembers: opts.groupMembers ?? vi.fn().mockResolvedValue(opts.changes ?? []),
   };
 }
 
@@ -1508,5 +1516,184 @@ describe('RecordPanel — pending cells render type-aware (issue #137)', () => {
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+});
+
+// ── Pending column save / revert (issue #139) ──────────────────────────────────
+//
+// The Pending column's actions, every one scoped to a ChangeGroup (ADR-0029). A staged edit
+// to Name on the mutable column, with a matching pending change so the ↩ and the group actions
+// key on its id.
+
+const pendingNameResult = {
+  conflictAll: 'Override',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: strMeta, value: 'Original Name' }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: strMeta, value: 'Original Name' }],
+      pendingFields: { Name: 'Staged Name' }, conflictThis: 'Override',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Name',
+    values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Original Name' },
+    winnerPlugin: 'MyMod.esp', winnerValue: 'Original Name',
+    cellStates: { 'MyMod.esp': 'Override' },
+  }],
+};
+
+const soloChange = [{ id: 'chg-1', plugin: 'MyMod.esp', fieldPath: 'Name', recordType: 'npc_', formKey: '000001:Fallout4.esm' }];
+
+// A two-member component: the staged Name edit dragged a WEAP field edit with it (ADR-0028).
+const twoMemberGroup = [
+  { id: 'chg-1', plugin: 'MyMod.esp', fieldPath: 'Name', recordType: 'npc_', formKey: '000001:Fallout4.esm' },
+  { id: 'chg-2', plugin: 'OtherMod.esp', fieldPath: 'BoundWeapon', recordType: 'weap', formKey: '001234:MyMod.esp' },
+];
+
+const okSave = (byPlugin: unknown, reindexFailure: unknown = null) => resp(200, { byPlugin, reindexFailure });
+
+describe('RecordPanel — Pending column save/revert (issue #139)', () => {
+  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('right-clicking a pending value offers Save Group and Revert Group', async () => {
+    renderPanel(pendingNameResult, { changes: soloChange });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+    expect(screen.getByRole('menuitem', { name: 'Save Group' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Revert Group' })).toBeInTheDocument();
+  });
+
+  it('Save Group saves that change\'s component and refreshes the grid', async () => {
+    const saveGroup = vi.fn().mockResolvedValue(okSave({}));
+    const { client } = renderPanel(pendingNameResult, { changes: soloChange, saveGroup });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Save Group' }));
+
+    await waitFor(() => expect(saveGroup).toHaveBeenCalledWith('chg-1'));
+    // The grid is reloaded to reflect what reached disk (load fires again after the save).
+    await waitFor(() => expect((client.load as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('names which plugins saved and which could not on a partial save', async () => {
+    // Applied nothing, one field read-only → that plugin wholly failed (ADR-0026).
+    const saveGroup = vi.fn().mockResolvedValue(okSave({
+      'MyMod.esp': { backupPath: 'b', applied: [], readOnly: ['Name'], notFound: [], createFailed: [] },
+    }));
+    renderPanel(pendingNameResult, { changes: soloChange, saveGroup });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Save Group' }));
+
+    await waitFor(() => expect(screen.getByText(/could not write MyMod\.esp/)).toBeInTheDocument());
+    expect(screen.getByText(/remain queued/)).toBeInTheDocument();
+  });
+
+  it('warns to reload after a save whose reindex went stale, without reading as a failure', async () => {
+    const saveGroup = vi.fn().mockResolvedValue(okSave(
+      { 'MyMod.esp': { backupPath: 'b', applied: ['Name'], readOnly: [], notFound: [], createFailed: [] } },
+      { plugins: ['MyMod.esp'], reason: 'boom' },
+    ));
+    renderPanel(pendingNameResult, { changes: soloChange, saveGroup });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Save Group' }));
+
+    await waitFor(() => expect(screen.getByText(/index is now stale/)).toBeInTheDocument());
+    // A completed-but-stale save is a warning, not a failure — it must not claim the save failed.
+    expect(screen.queryByText(/Partial save/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/could not write/)).not.toBeInTheDocument();
+  });
+
+  it('the inline ↩ on a group of one reverts immediately with no confirmation', async () => {
+    const revertGroup = vi.fn().mockResolvedValue(resp(204));
+    const groupMembers = vi.fn().mockResolvedValue(soloChange);
+    renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.click(screen.getByText('↩'));
+
+    await waitFor(() => expect(revertGroup).toHaveBeenCalledWith('chg-1'));
+    // No confirmation modal for a group of one.
+    expect(screen.queryByRole('button', { name: 'Revert' })).not.toBeInTheDocument();
+  });
+
+  it('the inline ↩ on a multi-member group confirms, listing the members, before reverting', async () => {
+    const revertGroup = vi.fn().mockResolvedValue(resp(204));
+    const groupMembers = vi.fn().mockResolvedValue(twoMemberGroup);
+    renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.click(screen.getByText('↩'));
+
+    // The confirmation lists the linked member that travels with the group.
+    await waitFor(() => expect(screen.getByText(/BoundWeapon/)).toBeInTheDocument());
+    // Nothing is reverted until the user confirms.
+    expect(revertGroup).not.toHaveBeenCalled();
+  });
+
+  it('reverting the whole group on confirm calls revertGroup, not the single-change endpoint', async () => {
+    const revertGroup = vi.fn().mockResolvedValue(resp(204));
+    const groupMembers = vi.fn().mockResolvedValue(twoMemberGroup);
+    const { client } = renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.click(screen.getByText('↩'));
+    await waitFor(() => screen.getByRole('button', { name: 'Revert' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revert' }));
+
+    await waitFor(() => expect(revertGroup).toHaveBeenCalledWith('chg-1'));
+    expect(client.revert).not.toHaveBeenCalled();
+  });
+
+  it('cancelling the confirmation reverts nothing', async () => {
+    const revertGroup = vi.fn().mockResolvedValue(resp(204));
+    const groupMembers = vi.fn().mockResolvedValue(twoMemberGroup);
+    renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.click(screen.getByText('↩'));
+    await waitFor(() => screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(revertGroup).not.toHaveBeenCalled();
+  });
+
+  it('Revert Group from the context menu confirms for a multi-member group', async () => {
+    const revertGroup = vi.fn().mockResolvedValue(resp(204));
+    const groupMembers = vi.fn().mockResolvedValue(twoMemberGroup);
+    renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Revert Group' }));
+
+    await waitFor(() => expect(screen.getByText(/BoundWeapon/)).toBeInTheDocument());
+    expect(revertGroup).not.toHaveBeenCalled();
+  });
+
+  it('Revert Group from the context menu on a group of one reverts with no confirmation', async () => {
+    const revertGroup = vi.fn().mockResolvedValue(resp(204));
+    const groupMembers = vi.fn().mockResolvedValue(soloChange);
+    renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Revert Group' }));
+
+    await waitFor(() => expect(revertGroup).toHaveBeenCalledWith('chg-1'));
+    expect(screen.queryByRole('button', { name: 'Revert' })).not.toBeInTheDocument();
   });
 });
