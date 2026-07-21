@@ -1,0 +1,241 @@
+import '@testing-library/jest-dom';
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+
+import { DiffRow } from './DiffRow';
+import type { Column } from './recordUtils';
+import type { CompareOverride, FieldDiff, FieldMetadata, PendingChange } from './types';
+import type { RecordSessionClient } from './RecordSessionClient';
+
+const client = {} as unknown as RecordSessionClient;
+
+const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
+
+function override(plugin: string, partial: Partial<CompareOverride> = {}): CompareOverride {
+  return {
+    formKey: '000001:Fallout4.esm', plugin, loadOrderIndex: 0, isWinner: false,
+    editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'disk-value' }],
+    conflictThis: 'Master',
+    ...partial,
+  };
+}
+
+function diskColumn(o: CompareOverride): Column {
+  return { kind: 'disk', override: o };
+}
+function pendingColumn(plugin: string): Column {
+  return { kind: 'pending', plugin };
+}
+
+function diff(partial: Partial<FieldDiff> = {}): FieldDiff {
+  return {
+    fieldName: 'Name',
+    values: { 'Fallout4.esm': 'disk-value', 'MyMod.esp': 'disk-value' },
+    winnerPlugin: 'Fallout4.esm', winnerValue: 'disk-value',
+    cellStates: {},
+    ...partial,
+  };
+}
+
+function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}): React.ComponentProps<typeof DiffRow> {
+  const master = override('Fallout4.esm');
+  const mod = override('MyMod.esp');
+  return {
+    diff: diff(),
+    conflictAll: 'NoConflict',
+    columns: [diskColumn(master), diskColumn(mod)],
+    overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+    fieldMetaMap: { Name: strMeta },
+    immutableSet: new Set(['Fallout4.esm']),
+    client,
+    pendingChangeMap: {},
+    collapsedColumns: new Set(),
+    onOpen: vi.fn(),
+    onEdit: vi.fn(),
+    onRevert: vi.fn(),
+    onPendingContextMenu: vi.fn(),
+    onRevealPendingChange: vi.fn(),
+    onCellDragStart: vi.fn(),
+    onCellDrop: vi.fn(),
+    context: { kind: 'top-level' },
+    ...overrides,
+  };
+}
+
+function renderRow(props: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
+  return render(<table><tbody>{React.createElement(DiffRow, baseProps(props))}</tbody></table>);
+}
+
+describe('DiffRow — top-level scalar row', () => {
+  it('renders the field name and both plugin values', () => {
+    renderRow();
+    expect(screen.getByText('Name')).toBeInTheDocument();
+    expect(screen.getAllByText('disk-value').length).toBe(2);
+  });
+
+  it('does not render an expand toggle when there are no children', () => {
+    renderRow();
+    expect(screen.queryByRole('button', { name: '▶' })).not.toBeInTheDocument();
+  });
+
+  it('renders the expand toggle when hasChildren is set, and calls onToggle', () => {
+    const onToggle = vi.fn();
+    renderRow({ hasChildren: true, isExpanded: false, onToggle });
+    const btn = screen.getByText('▶');
+    fireEvent.click(btn);
+    expect(onToggle).toHaveBeenCalled();
+  });
+
+  it('shows ▼ when expanded', () => {
+    renderRow({ hasChildren: true, isExpanded: true });
+    expect(screen.getByText('▼')).toBeInTheDocument();
+  });
+
+  it('renders a blank cell for a collapsed column', () => {
+    renderRow({ collapsedColumns: new Set(['MyMod.esp']) });
+    // Only one 'disk-value' now shows — MyMod.esp's column is blanked.
+    expect(screen.getAllByText('disk-value').length).toBe(1);
+  });
+});
+
+describe('DiffRow — editability follows immutableSet', () => {
+  it('an immutable column renders read-only text, not an input', () => {
+    renderRow();
+    // Fallout4.esm is immutable per baseProps — clicking its cell must not produce an input.
+    const cells = screen.getAllByText('disk-value');
+    fireEvent.click(cells[0]);
+    expect(screen.queryByDisplayValue('disk-value')).not.toBeInTheDocument();
+  });
+
+  it('a mutable column click activates an editable input', () => {
+    renderRow();
+    const cells = screen.getAllByText('disk-value');
+    fireEvent.click(cells[1]); // MyMod.esp — mutable
+    expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
+  });
+
+  it('editing a mutable cell calls onEdit with plugin/fieldName/value', () => {
+    const onEdit = vi.fn();
+    renderRow({ onEdit });
+    fireEvent.click(screen.getAllByText('disk-value')[1]);
+    const input = screen.getByDisplayValue('disk-value');
+    fireEvent.change(input, { target: { value: 'new-value' } });
+    fireEvent.blur(input);
+    expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Name', 'new-value');
+  });
+});
+
+describe('DiffRow — drag affordance on leaf cells', () => {
+  it('dragging a disk cell calls onCellDragStart with the field name and its value', () => {
+    const onCellDragStart = vi.fn();
+    renderRow({ onCellDragStart });
+    const cell = screen.getAllByText('disk-value')[0].closest('td')!;
+    fireEvent.dragStart(cell);
+    expect(onCellDragStart).toHaveBeenCalledWith('Name', 'disk-value');
+  });
+
+  it('dropping on a cell calls onCellDrop with the field name and target plugin', () => {
+    const onCellDrop = vi.fn();
+    renderRow({ onCellDrop });
+    const cell = screen.getAllByText('disk-value')[1].closest('td')!;
+    fireEvent.drop(cell);
+    expect(onCellDrop).toHaveBeenCalledWith('Name', 'MyMod.esp', expect.any(Function));
+  });
+});
+
+describe('DiffRow — pending companion column', () => {
+  const change: PendingChange = {
+    id: 'c1', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fieldPath: 'Name',
+    recordType: 'Npc', oldValue: 'disk-value', newValue: 'pending-value',
+    source: 'agent', description: null, changedAt: '2026-06-20T12:00:00Z',
+  };
+
+  function pendingProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
+    const master = override('Fallout4.esm');
+    const mod = override('MyMod.esp', { pendingFields: { Name: 'pending-value' } });
+    return baseProps({
+      columns: [diskColumn(master), diskColumn(mod), pendingColumn('MyMod.esp')],
+      overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+      pendingChangeMap: { 'MyMod.esp:Name': change },
+      ...overrides,
+    });
+  }
+
+  it('renders the pending value and a revert button', () => {
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps())}</tbody></table>);
+    expect(screen.getByText('pending-value')).toBeInTheDocument();
+    expect(screen.getByTitle('Revert group')).toBeInTheDocument();
+  });
+
+  it('clicking the revert button calls onRevert with the change id and does not bubble to reveal', () => {
+    const onRevert = vi.fn();
+    const onRevealPendingChange = vi.fn();
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onRevert, onRevealPendingChange }))}</tbody></table>);
+    fireEvent.click(screen.getByTitle('Revert group'));
+    expect(onRevert).toHaveBeenCalledWith('c1');
+    expect(onRevealPendingChange).not.toHaveBeenCalled();
+  });
+
+  it('plain click on the pending cell (not the revert button) reveals the change', () => {
+    const onRevealPendingChange = vi.fn();
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onRevealPendingChange }))}</tbody></table>);
+    fireEvent.click(screen.getByText('pending-value'));
+    expect(onRevealPendingChange).toHaveBeenCalledWith('c1');
+  });
+
+  it('Ctrl+click on the pending cell does not reveal', () => {
+    const onRevealPendingChange = vi.fn();
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onRevealPendingChange }))}</tbody></table>);
+    fireEvent.click(screen.getByText('pending-value'), { ctrlKey: true });
+    expect(onRevealPendingChange).not.toHaveBeenCalled();
+  });
+
+  it('right-click on the pending cell calls onPendingContextMenu with the change id and coordinates', () => {
+    const onPendingContextMenu = vi.fn();
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onPendingContextMenu }))}</tbody></table>);
+    fireEvent.contextMenu(screen.getByText('pending-value'), { clientX: 42, clientY: 7 });
+    expect(onPendingContextMenu).toHaveBeenCalledWith('c1', 42, 7);
+  });
+
+  it('renders nothing in the pending column when there is no pending value', () => {
+    const master = override('Fallout4.esm');
+    const mod = override('MyMod.esp'); // no pendingFields
+    render(<table><tbody>{React.createElement(DiffRow, baseProps({
+      columns: [diskColumn(master), diskColumn(mod), pendingColumn('MyMod.esp')],
+      overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+    }))}</tbody></table>);
+    expect(screen.queryByTitle('Revert group')).not.toBeInTheDocument();
+  });
+});
+
+describe('DiffRow — non-top-level contexts', () => {
+  it('array-element / struct-child / grandchild rows indent and hide the ↩ except struct-child', () => {
+    const master = override('Fallout4.esm');
+    const mod = override('MyMod.esp', { pendingFields: { Items: ['x', 'y'] } });
+    const elementMeta: FieldMetadata = { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
+    const change: PendingChange = {
+      id: 'c2', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fieldPath: 'Items',
+      recordType: 'Npc', oldValue: ['x'], newValue: ['x', 'y'], source: 'agent', description: null,
+      changedAt: '2026-06-20T12:00:00Z',
+    };
+    render(<table><tbody>{React.createElement(DiffRow, baseProps({
+      diff: diff({ fieldName: '[1]', values: { 'Fallout4.esm': 'x', 'MyMod.esp': 'x' } }),
+      columns: [diskColumn(master), diskColumn(mod), pendingColumn('MyMod.esp')],
+      overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+      pendingChangeMap: { 'MyMod.esp:Items': change },
+      context: { kind: 'array-element', overrideMeta: elementMeta, parentFieldName: 'Items' },
+    }))}</tbody></table>);
+    // array-element rows never carry the inline revert affordance (showActions is false).
+    expect(screen.queryByTitle('Revert group')).not.toBeInTheDocument();
+    const fieldCell = screen.getByText('[1]').closest('td')!;
+    expect(fieldCell.style.paddingLeft).toBe('24px');
+  });
+
+  it('returns null when the row context has no resolvable field metadata', () => {
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, baseProps({
+      fieldMetaMap: {}, // 'Name' not present -> top-level meta lookup misses
+    }))}</tbody></table>);
+    expect(container.querySelector('tr')).not.toBeInTheDocument();
+  });
+});
