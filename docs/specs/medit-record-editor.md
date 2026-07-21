@@ -1,8 +1,7 @@
 # mEdit Record editor panel — Surface Specification
 
-**Status: Implemented**, but for the Pending column's click-to-reveal, marked *planned* inline
-below (#140). Two known gaps are called out where they bite: FormKey resolution (#141) and
-array arity/order editing (#142).
+**Status: Implemented.** Two known gaps are called out where they bite: FormKey resolution
+(#141) and array arity/order editing (#142).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
@@ -147,9 +146,10 @@ Every action is scoped to a **ChangeGroup**, never to part of one and never to a
 plugin:
 
 - **Plain click** on a pending value reveals that change in the
-  [Pending Changes tree](medit-pending-changes-tree.md). *Planned — #140.* The gesture is free
-  because pending cells are not editable, and it keeps `Ctrl+click` meaning "follow the
-  reference" uniformly across every cell in the grid.
+  [Pending Changes tree](medit-pending-changes-tree.md), selecting its node and expanding the
+  parent group for a multi-member change. The gesture is free because pending cells are not
+  editable, and it keeps `Ctrl+click` meaning "follow the reference" uniformly across every cell
+  in the grid. A change already saved or reverted resolves to nothing and is ignored.
 - **Right-click** offers Save Group and Revert Group for that change's group. Save Group writes
   every plugin in the component and consumes its pending rows; the grid reloads to reflect what
   reached disk.

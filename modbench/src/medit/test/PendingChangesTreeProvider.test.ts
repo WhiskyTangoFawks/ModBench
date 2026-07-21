@@ -244,6 +244,44 @@ describe('PendingChangesTreeProvider — group expansion', () => {
   });
 });
 
+// ── Slice 1 (#140): resolve a change id to its node, for click-to-reveal ─────
+describe('PendingChangesTreeProvider — resolveChange', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('resolves a top-level group-of-one leaf by change id', async () => {
+    const client = makeClient({ groups: [group({ id: 'c1' })], changes: [change({ id: 'c1' })] });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const node = await provider.resolveChange('c1');
+    expect(node).toBeInstanceOf(PendingLeafNode);
+    expect((node as PendingLeafNode).changeId).toBe('c1');
+  });
+
+  it('resolves a member node inside a multi-member group, parented to the group', async () => {
+    const client = makeClient({
+      groups: [group({ id: 'm1', operation: 'renumber', changeCount: 2, pluginCount: 1 })],
+      membersByGroupId: { m1: [change({ id: 'm1' }), change({ id: 'a2' })] },
+    });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const node = await provider.resolveChange('a2');
+    expect(node).toBeInstanceOf(PendingLeafNode);
+    expect((node as PendingLeafNode).changeId).toBe('a2');
+    expect(provider.getParent(node!)).toBeInstanceOf(PendingGroupNode);
+  });
+
+  // The "saved or reverted since" case (#140 AC): the change is simply no longer in the
+  // pending set. The caller (extension.ts) is expected to no-op on undefined, never throw.
+  it('returns undefined for an id that is not pending (already saved or reverted)', async () => {
+    const client = makeClient({ groups: [group({ id: 'c1' })], changes: [change({ id: 'c1' })] });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    await expect(provider.resolveChange('stale-id')).resolves.toBeUndefined();
+  });
+
+  it('returns undefined when there is nothing pending at all', async () => {
+    const provider = new PendingChangesTreeProvider(makeClient({ groups: [] }), vi.fn());
+    await expect(provider.resolveChange('anything')).resolves.toBeUndefined();
+  });
+});
+
 // ── Save All / Revert All gating: report staged state on every root render ───
 describe('PendingChangesTreeProvider — pending-state signal', () => {
   beforeEach(() => vi.resetAllMocks());

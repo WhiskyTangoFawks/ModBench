@@ -69,6 +69,7 @@ type RenderOpts = {
   onEdit?: ReturnType<typeof vi.fn>;
   onRevert?: ReturnType<typeof vi.fn>;
   onPendingContextMenu?: ReturnType<typeof vi.fn>;
+  onRevealPendingChange?: ReturnType<typeof vi.fn>;
   onStructOp?: ReturnType<typeof vi.fn>;
   pendingChangeMap?: Record<string, PendingChange>;
   withPendingCol?: string; // plugin to add a pending column for
@@ -91,6 +92,7 @@ function renderSection(vmad: VmadCompare | null, plugins: string[], opts: Render
           onEdit={opts.onEdit}
           onRevert={opts.onRevert}
           onPendingContextMenu={opts.onPendingContextMenu}
+          onRevealPendingChange={opts.onRevealPendingChange}
           onStructOp={opts.onStructOp}
           pendingChangeMap={opts.pendingChangeMap}
           client={stubClient}
@@ -409,6 +411,54 @@ describe('VmadSection array editing', () => {
 
     fireEvent.contextMenu(screen.getByText('[10,20,0]'));
     expect(onPendingContextMenu).toHaveBeenCalledWith(chg.id, expect.any(Number), expect.any(Number));
+  });
+
+  // Issue #140: a VMAD pending value reveals its change like any other pending cell — the
+  // record editor spec states the Pending column's click-to-reveal for "a pending value"
+  // uniformly, with no VMAD exception.
+  it('plain-clicking a VMAD pending value emits the reveal request with the change id', () => {
+    const onRevealPendingChange = vi.fn();
+    const chg = pendingChange('A.esm', String.raw`VMAD\S\Items`, [10, 20, 0]);
+    renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
+      onRevealPendingChange,
+      withPendingCol: 'A.esm',
+      pendingChangeMap: { [String.raw`A.esm:VMAD\S\Items`]: chg },
+    });
+    toggle('S');
+
+    fireEvent.click(screen.getByText('[10,20,0]'));
+    expect(onRevealPendingChange).toHaveBeenCalledWith(chg.id);
+  });
+
+  it('Ctrl+clicking a VMAD pending value does not reveal it', () => {
+    const onRevealPendingChange = vi.fn();
+    const chg = pendingChange('A.esm', String.raw`VMAD\S\Items`, [10, 20, 0]);
+    renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
+      onRevealPendingChange,
+      withPendingCol: 'A.esm',
+      pendingChangeMap: { [String.raw`A.esm:VMAD\S\Items`]: chg },
+    });
+    toggle('S');
+
+    fireEvent.click(screen.getByText('[10,20,0]'), { ctrlKey: true });
+    expect(onRevealPendingChange).not.toHaveBeenCalled();
+  });
+
+  it('clicking the inline ↩ on a VMAD pending cell reverts without also revealing', () => {
+    const onRevert = vi.fn();
+    const onRevealPendingChange = vi.fn();
+    const chg = pendingChange('A.esm', String.raw`VMAD\S\Items`, [10, 20, 0]);
+    renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
+      onRevert,
+      onRevealPendingChange,
+      withPendingCol: 'A.esm',
+      pendingChangeMap: { [String.raw`A.esm:VMAD\S\Items`]: chg },
+    });
+    toggle('S');
+
+    fireEvent.click(screen.getByTitle('Revert group'));
+    expect(onRevert).toHaveBeenCalledWith(chg.id);
+    expect(onRevealPendingChange).not.toHaveBeenCalled();
   });
 
   it('editing an element calls onEdit with the full new array as atomic value', () => {

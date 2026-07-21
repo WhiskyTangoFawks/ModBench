@@ -721,6 +721,10 @@ interface DiffRowProps {
   onEdit: (plugin: string, fieldName: string, value: unknown) => void;
   onRevert: (changeId: string) => void;
   onPendingContextMenu: (changeId: string, x: number, y: number) => void;
+  // Issue #140: plain click on a pending value reveals its change in the Pending Changes tree.
+  // Free gesture — pending cells are never editable — and kept off Ctrl+click, which still
+  // means "follow the reference" uniformly across every cell in the grid.
+  onRevealPendingChange: (changeId: string) => void;
   onCellDragStart: (fieldName: string, value: unknown) => void;
   onCellDrop: (fieldName: string, targetPlugin: string, applyValue: (value: unknown) => void) => void;
   context: RowContext;
@@ -732,7 +736,7 @@ interface DiffRowProps {
 function DiffRow({
   diff, conflictAll, columns, overrideMap, fieldMetaMap, immutableSet, client,
   pendingChangeMap, collapsedColumns, onOpen, onEdit, onRevert, onPendingContextMenu,
-  onCellDragStart, onCellDrop,
+  onRevealPendingChange, onCellDragStart, onCellDrop,
   context, hasChildren, isExpanded, onToggle,
 }: DiffRowProps) {
   const meta = context.kind === 'top-level' ? fieldMetaMap[diff.fieldName] : context.overrideMeta;
@@ -824,6 +828,13 @@ function DiffRow({
             // Issue #139: right-click a pending value → group-scoped Save/Revert. Gated on the
             // same showActions as the inline ↩ (top-level and struct-child rows carry a change id).
             onContextMenu={change && showActions ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); } : undefined}
+            // Issue #140: plain click reveals the change in the Pending Changes tree. Ctrl/meta-
+            // click is left alone so it falls through to the cell's own FormKeyLink, which follows
+            // the reference — never both on the same click (the link doesn't stop propagation, so
+            // without this guard a Ctrl+click here would fire the reveal too).
+            onClick={change && showActions
+              ? e => { if (!e.ctrlKey && !e.metaKey) onRevealPendingChange(change.id); }
+              : undefined}
             style={{
               ...baseCell,
               backgroundColor: hasPending ? 'rgba(255,200,50,0.10)' : undefined,
@@ -841,7 +852,9 @@ function DiffRow({
                 <span>{renderCell(pendingValue, meta, false, client, onOpen, () => {})}</span>
                 {change && showActions && (
                   <button
-                    onClick={() => onRevert(change.id)}
+                    // stopPropagation: the ↩ sits inside the cell that plain-click reveals
+                    // (#140) — reverting must not also fire a reveal on the same click.
+                    onClick={e => { e.stopPropagation(); onRevert(change.id); }}
                     title="Revert group"
                     style={{
                       background: 'none',
@@ -1073,6 +1086,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: fk });
   }
 
+  // Issue #140: plain click on a pending value → reveal that change in the Pending Changes
+  // tree. The extension host resolves the change id to a node and reveals it; the webview
+  // cannot call TreeView.reveal itself.
+  function handleRevealPendingChange(changeId: string) {
+    vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE, changeId });
+  }
+
   function handleCellDragStart(fieldName: string, value: unknown) {
     dragPayloadRef.current = { fieldName, value };
   }
@@ -1263,6 +1283,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                   onEdit={(plugin, fieldName, value) => { void handleEdit(plugin, fieldName, value); }}
                   onRevert={changeId => { void handleRevertGroup(changeId); }}
                   onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
+                  onRevealPendingChange={handleRevealPendingChange}
                   context={{ kind: 'top-level' }}
                   hasChildren={hasChildren}
                   isExpanded={isExpanded}
@@ -1308,6 +1329,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         }}
                         onRevert={changeId => { void handleRevertGroup(changeId); }}
                         onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
+                        onRevealPendingChange={handleRevealPendingChange}
                         context={{ kind: 'array-element', overrideMeta: elementMeta, parentFieldName: diff.fieldName }}
                         hasChildren={(child.children?.length ?? 0) > 0}
                         isExpanded={elemExpanded}
@@ -1346,6 +1368,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                             }}
                             onRevert={changeId => { void handleRevertGroup(changeId); }}
                             onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
+                            onRevealPendingChange={handleRevealPendingChange}
                             context={{ kind: 'grandchild', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName, parentFieldIndex: elemIdx }}
                           />,
                         );
@@ -1377,6 +1400,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         }}
                         onRevert={changeId => { void handleRevertGroup(changeId); }}
                         onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
+                        onRevealPendingChange={handleRevealPendingChange}
                         context={{ kind: 'struct-child', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName }}
                       />,
                     );
@@ -1394,6 +1418,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         onEdit={(plugin, vmadPath, value) => { void handleEdit(plugin, vmadPath, value); }}
                         onRevert={changeId => { void handleRevertGroup(changeId); }}
                         onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
+                        onRevealPendingChange={handleRevealPendingChange}
                         onStructOp={(plugin, vmadPath, op) => { void handleVmadStructOp(plugin, vmadPath, op); }}
                         client={client}
                       />
