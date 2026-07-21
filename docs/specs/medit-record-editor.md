@@ -1,9 +1,8 @@
 # mEdit Record editor panel — Surface Specification
 
-**Status: Implemented**, with one rework specced and not yet built — the Pending column's
-save/revert actions ([ADR-0029](../adr/0029-pending-changes-tree-is-a-grouping-view.md)),
-marked *planned* inline below. Two known gaps are called out where they bite: FormKey
-resolution (#141) and array arity/order editing (#142).
+**Status: Implemented**, but for the Pending column's click-to-reveal, marked *planned* inline
+below (#140). Two known gaps are called out where they bite: FormKey resolution (#141) and
+array arity/order editing (#142).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
@@ -140,24 +139,30 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
 
 ### Pending column
 
-*Planned — [ADR-0029](../adr/0029-pending-changes-tree-is-a-grouping-view.md). Today the column
-is display-only but for an inline revert, and the panel offers no save at all: the per-plugin
-Save button called `POST /plugins/{plugin}/save`, a route the backend does not implement and
-will not, so it was deleted (#136). Saving is in the
-[Pending Changes tree](medit-pending-changes-tree.md) until the actions below are built.*
+Per [ADR-0029](../adr/0029-pending-changes-tree-is-a-grouping-view.md) (#139). The per-plugin
+Save button that once lived here called `POST /plugins/{plugin}/save`, a route the backend does
+not implement and will not, so it was deleted (#136); the actions below replace it.
 
 Every action is scoped to a **ChangeGroup**, never to part of one and never to a record or a
 plugin:
 
 - **Plain click** on a pending value reveals that change in the
-  [Pending Changes tree](medit-pending-changes-tree.md). The gesture is free because pending
-  cells are not editable, and it keeps `Ctrl+click` meaning "follow the reference" uniformly
-  across every cell in the grid.
-- **Right-click** offers Save Group and Revert Group for that change's group.
-- The inline **revert (↩)** reverts the change's *group*. For a group of one — the common case
-  — that is exactly "revert this field"; for an entangled change it confirms first, listing the
-  members, rather than firing the 409 the backend would return for a partial group revert
-  (ADR-0028).
+  [Pending Changes tree](medit-pending-changes-tree.md). *Planned — #140.* The gesture is free
+  because pending cells are not editable, and it keeps `Ctrl+click` meaning "follow the
+  reference" uniformly across every cell in the grid.
+- **Right-click** offers Save Group and Revert Group for that change's group. Save Group writes
+  every plugin in the component and consumes its pending rows; the grid reloads to reflect what
+  reached disk.
+- The inline **revert (↩)** reverts the change's *group*, identically to the context menu's
+  Revert Group — the confirmation keys on member count, not on which control fired it. For a
+  group of one — the common case — that is exactly "revert this field" and fires straight away;
+  for an entangled change both confirm first, listing the members, rather than firing the 409 the
+  backend would return for a partial group revert (ADR-0028). The member count is read from
+  `GET /changes` for the change's component; the panel never surfaces a raw 409.
+- A **partial save** is surfaced, never silent (ADR-0026): the banner names which plugins wrote,
+  partially wrote, and could not write, and states the unwritten changes stay queued. A save that
+  reached disk but whose post-commit reindex failed reads instead as a completed-save warning to
+  reload (#127) — honest to the severity, not "save failed".
 - There is **no per-plugin or per-record Save** on the panel. Bulk saving is multi-select in the
   Pending Changes tree, or Save All.
 

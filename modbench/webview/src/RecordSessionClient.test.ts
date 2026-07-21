@@ -15,7 +15,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 describe('createRecordSessionClient', () => {
   it('exposes the record-session operations', () => {
     const client = createRecordSessionClient(5172);
-    for (const m of ['load', 'searchRecords', 'save', 'revert', 'copyTo', 'removeOverride', 'createRecord']) {
+    for (const m of ['load', 'searchRecords', 'save', 'revert', 'copyTo', 'removeOverride', 'createRecord', 'groupMembers', 'saveGroup', 'revertGroup']) {
       expect(client).toHaveProperty(m);
     }
   });
@@ -180,5 +180,48 @@ describe('RecordSessionClient writes', () => {
     expect(resp.status).toBe(409);
     expect(resp.bodyUsed).toBe(false);
     expect(await resp.json()).toEqual({ detail: 'read-only' });
+  });
+
+  it('saveGroup POSTs to the change-group save endpoint', async () => {
+    await createRecordSessionClient(5172).saveGroup('g1');
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(req.method).toBe('POST');
+    expect(req.url).toContain('/change-groups/g1/save');
+  });
+
+  it('saveGroup returns an unconsumed Response so the panel can read the body', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ byPlugin: {}, reindexFailure: null }));
+    const resp = await createRecordSessionClient(5172).saveGroup('g1');
+    expect(resp.bodyUsed).toBe(false);
+    expect(await resp.json()).toEqual({ byPlugin: {}, reindexFailure: null });
+  });
+
+  it('revertGroup DELETEs the whole component by member change id', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await createRecordSessionClient(5172).revertGroup('g1');
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(req.method).toBe('DELETE');
+    expect(req.url).toContain('/changes/group/g1');
+  });
+});
+
+describe('RecordSessionClient.groupMembers', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    fetchMock = vi.fn(() => Promise.resolve(jsonResponse([{ id: 'c1' }, { id: 'c2' }])));
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('GETs the changes in the component the change id belongs to', async () => {
+    const members = await createRecordSessionClient(5172).groupMembers('c1');
+    const url = typeof fetchMock.mock.calls[0][0] === 'string' ? fetchMock.mock.calls[0][0] : fetchMock.mock.calls[0][0].url;
+    expect(url).toContain('/changes?groupId=c1');
+    expect(members).toEqual([{ id: 'c1' }, { id: 'c2' }]);
+  });
+
+  it('returns [] when the read fails, so the panel can fall back to a plain revert', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}, 500));
+    expect(await createRecordSessionClient(5172).groupMembers('c1')).toEqual([]);
   });
 });

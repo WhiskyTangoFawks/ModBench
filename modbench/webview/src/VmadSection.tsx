@@ -5,6 +5,7 @@ import { toStr } from './recordUtils';
 import { baseCell, headerCell, toggleBtnStyle, getCellStyle, mono, fg } from './gridStyles';
 import { FormKeyLink } from './FormKeyLink';
 import { FormKeyPicker } from './FormKeyPicker';
+import { ModalShell } from './ModalShell';
 import type { RecordSessionClient } from './RecordSessionClient';
 
 // A VMAD structural operation payload (phase 13.8). The `op` discriminator routes the change.
@@ -28,6 +29,9 @@ interface VmadSectionProps {
   pendingChangeMap?: Record<string, PendingChange>;
   onEdit?: (plugin: string, vmadPath: string, value: unknown) => void;
   onRevert?: (changeId: string) => void;
+  // Issue #139: right-click a pending value → Save Group / Revert Group. Threaded down to every
+  // pending-cell renderer so VMAD pending values offer the same actions as ordinary fields.
+  onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
   onStructOp?: OnStructOp;
   client?: RecordSessionClient;
 }
@@ -613,25 +617,6 @@ const dialogInputStyle: React.CSSProperties = {
   border: '1px solid var(--vscode-input-border, #555)', padding: '2px 6px',
 };
 
-// Shared modal chrome for the add-property / add-script dialogs (fixed overlay + title + footer).
-function ModalShell({ title, confirmDisabled, onConfirm, onCancel, children }: Readonly<{
-  title: string; confirmDisabled?: boolean; onConfirm: () => void; onCancel: () => void; children: React.ReactNode;
-}>) {
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: 'var(--vscode-editor-background, #1e1e1e)', border: '1px solid var(--vscode-editorGroup-border, #444)', padding: 12, minWidth: 280 }}>
-        <div style={{ fontFamily: mono, fontSize: '12px', marginBottom: 8 }}>{title}</div>
-        <table><tbody>{children}</tbody></table>
-        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-          <button onClick={onCancel} style={{ fontSize: '11px', padding: '2px 8px', cursor: 'pointer' }}>Cancel</button>
-          <button onClick={onConfirm} disabled={confirmDisabled}
-            style={{ fontSize: '11px', padding: '2px 8px', cursor: 'pointer', background: 'var(--vscode-button-background, #0e639c)', color: 'var(--vscode-button-foreground, #fff)', border: 'none' }}>Add</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function AddPropertyDialog({ client, onConfirm, onCancel }: Readonly<{
   client?: RecordSessionClient;
   onConfirm: (v: { name: string; type: string; value: unknown }) => void;
@@ -686,6 +671,7 @@ function AddPropertyDialog({ client, onConfirm, onCancel }: Readonly<{
   return (
     <ModalShell title="Add property" confirmDisabled={name.trim() === ''}
       onCancel={onCancel} onConfirm={() => onConfirm({ name, type, value })}>
+      <table><tbody>
       <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Name</td>
         <td><input aria-label="New property name" style={inputStyle} value={name} onChange={e => setName(e.target.value)} /></td></tr>
       <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Type</td>
@@ -693,6 +679,7 @@ function AddPropertyDialog({ client, onConfirm, onCancel }: Readonly<{
           {ADDABLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select></td></tr>
       <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Value</td><td>{valueControl()}</td></tr>
+      </tbody></table>
     </ModalShell>
   );
 }
@@ -793,19 +780,21 @@ function pendingOpLabel(v: unknown): React.ReactNode {
 
 // Renders a pending add_property in the pending column: an inline editor (scalar) in edit mode that
 // re-issues the same add op with the new value, else a read-only value. Plus a revert control.
-function AddedPendingCell({ change, editable, onStructOp, onRevert }: Readonly<{
+function AddedPendingCell({ change, editable, onStructOp, onRevert, onPendingContextMenu }: Readonly<{
   change: PendingChange; editable?: boolean; onStructOp?: OnStructOp; onRevert?: (id: string) => void;
+  onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
 }>) {
   const op = change.newValue as StructOp & { type: string; name: string; value: unknown };
   const kind = opScalarKind(op.type);
   const reissue = (v: unknown) => onStructOp?.(change.plugin, change.fieldPath, { ...op, value: v });
   return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+      onContextMenu={onPendingContextMenu ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); } : undefined}>
       {editable && onStructOp && kind
         ? <VmadScalarEditor value={op.value} type={kind} onCommit={reissue} ariaLabel={`Added value for ${op.name}`} />
         : <span>{toStr(op.value)}</span>}
       {onRevert && (
-        <button onClick={() => onRevert(change.id)} title="Revert this change"
+        <button onClick={() => onRevert(change.id)} title="Revert group"
           style={{ ...iconBtnStyle, color: 'var(--vscode-errorForeground, #f88)', fontSize: '11px' }}>↩</button>
       )}
     </span>
@@ -830,12 +819,14 @@ function AddScriptDialog({ onConfirm, onCancel }: Readonly<{
   return (
     <ModalShell title="Add script" confirmDisabled={name.trim() === ''}
       onCancel={onCancel} onConfirm={() => onConfirm({ name, flags })}>
+      <table><tbody>
       <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Name</td>
         <td><input aria-label="New script name" style={dialogInputStyle} value={name} onChange={e => setName(e.target.value)} /></td></tr>
       <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Flags</td>
         <td><select aria-label="New script flags" style={dialogInputStyle} value={flags} onChange={e => setFlags(e.target.value)}>
           {SCRIPT_FLAGS.map(f => <option key={f} value={f}>{f}</option>)}
         </select></td></tr>
+      </tbody></table>
     </ModalShell>
   );
 }
@@ -874,7 +865,7 @@ function RemoveScriptButton({ plugin, scriptName, onStructOp }: Readonly<{
 
 export function VmadSection({
   vmad, columns, onOpen,
-  immutableSet, pendingChangeMap, onEdit, onRevert, onStructOp, client,
+  immutableSet, pendingChangeMap, onEdit, onRevert, onPendingContextMenu, onStructOp, client,
 }: Readonly<VmadSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -928,6 +919,9 @@ export function VmadSection({
               fontStyle: 'italic',
               opacity: hasPending ? 1 : 0.3,
             }}
+            onContextMenu={hasPending && onPendingContextMenu
+              ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); }
+              : undefined}
           >
             {hasPending && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -935,7 +929,7 @@ export function VmadSection({
                 {onRevert && (
                   <button
                     onClick={() => onRevert(change.id)}
-                    title="Revert this change"
+                    title="Revert group"
                     style={{
                       background: 'none',
                       border: 'none',
@@ -1071,7 +1065,7 @@ export function VmadSection({
                 backgroundColor: change ? 'rgba(255,200,50,0.10)' : undefined,
                 opacity: change ? 1 : 0.3,
               }}>
-                {change && <AddedPendingCell change={change} editable={isEditable(col.plugin)} onStructOp={onStructOp} onRevert={onRevert} />}
+                {change && <AddedPendingCell change={change} editable={isEditable(col.plugin)} onStructOp={onStructOp} onRevert={onRevert} onPendingContextMenu={onPendingContextMenu} />}
               </td>
             );
           }
@@ -1128,9 +1122,12 @@ export function VmadSection({
                 ...baseCell, fontStyle: 'italic',
                 backgroundColor: change ? 'rgba(255,200,50,0.10)' : undefined,
                 opacity: change ? 1 : 0.3,
-              }}>
+              }}
+              onContextMenu={change && onPendingContextMenu
+                ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); }
+                : undefined}>
                 {change && onRevert && (
-                  <button onClick={() => onRevert(change.id)} title="Revert this change"
+                  <button onClick={() => onRevert(change.id)} title="Revert group"
                     style={{ ...iconBtnStyle, color: 'var(--vscode-errorForeground, #f88)', fontSize: '11px' }}>↩</button>
                 )}
               </td>

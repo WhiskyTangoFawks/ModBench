@@ -68,6 +68,7 @@ type RenderOpts = {
   immutable?: string[];
   onEdit?: ReturnType<typeof vi.fn>;
   onRevert?: ReturnType<typeof vi.fn>;
+  onPendingContextMenu?: ReturnType<typeof vi.fn>;
   onStructOp?: ReturnType<typeof vi.fn>;
   pendingChangeMap?: Record<string, PendingChange>;
   withPendingCol?: string; // plugin to add a pending column for
@@ -89,6 +90,7 @@ function renderSection(vmad: VmadCompare | null, plugins: string[], opts: Render
           immutableSet={new Set(opts.immutable ?? [])}
           onEdit={opts.onEdit}
           onRevert={opts.onRevert}
+          onPendingContextMenu={opts.onPendingContextMenu}
           onStructOp={opts.onStructOp}
           pendingChangeMap={opts.pendingChangeMap}
           client={stubClient}
@@ -388,10 +390,25 @@ describe('VmadSection array editing', () => {
 
     // Pending column on the parent array row shows the new array value
     expect(screen.getByText('[10,20,0]')).toBeInTheDocument();
-    const revertBtn = screen.getByTitle('Revert this change');
+    const revertBtn = screen.getByTitle('Revert group');
     expect(revertBtn).toBeInTheDocument();
     fireEvent.click(revertBtn);
     expect(onRevert).toHaveBeenCalledWith(chg.id);
+  });
+
+  // Issue #139: a VMAD pending value offers Save Group / Revert Group like any other pending cell.
+  it('right-clicking a VMAD pending value requests the pending context menu', () => {
+    const onPendingContextMenu = vi.fn();
+    const chg = pendingChange('A.esm', String.raw`VMAD\S\Items`, [10, 20, 0]);
+    renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
+      onPendingContextMenu,
+      withPendingCol: 'A.esm',
+      pendingChangeMap: { [String.raw`A.esm:VMAD\S\Items`]: chg },
+    });
+    toggle('S');
+
+    fireEvent.contextMenu(screen.getByText('[10,20,0]'));
+    expect(onPendingContextMenu).toHaveBeenCalledWith(chg.id, expect.any(Number), expect.any(Number));
   });
 
   it('editing an element calls onEdit with the full new array as atomic value', () => {
@@ -594,7 +611,7 @@ describe('VmadSection structList + struct structural edits (13.7)', () => {
     });
     toggle('S');
 
-    const revertBtn = screen.getByTitle('Revert this change');
+    const revertBtn = screen.getByTitle('Revert group');
     fireEvent.click(revertBtn);
     expect(onRevert).toHaveBeenCalledWith(chg.id);
   });
@@ -838,7 +855,7 @@ describe('VmadSection editing', () => {
     toggle('MyScript');
 
     expect(screen.getByText('true')).toBeInTheDocument();
-    const revertBtn = screen.getByTitle('Revert this change');
+    const revertBtn = screen.getByTitle('Revert group');
     expect(revertBtn).toBeInTheDocument();
     fireEvent.click(revertBtn);
     expect(onRevert).toHaveBeenCalledWith(chg.id);
