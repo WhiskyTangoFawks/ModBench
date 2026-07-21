@@ -142,14 +142,7 @@ public sealed partial class EditOrchestrator(
     // VMAD fields: check for Variable/ArrayOfVariable types which are read-only.
     // IsReadOnly returns false for all VMAD paths (it can't know the type without a DB lookup),
     // so we do the type check here using GetVmad.
-    // The VMAD property types stageable as plain field edits; anything else (Variable,
-    // ArrayOfVariable, Struct, ArrayOfStruct, ...) is read-only through this path.
-    private static readonly HashSet<string> EditableVmadPropertyTypes = new(StringComparer.Ordinal)
-    {
-        "Bool", "Int", "Float", "String", "Object",
-        "ArrayOfBool", "ArrayOfInt", "ArrayOfFloat", "ArrayOfString", "ArrayOfObject",
-    };
-
+    // Which types are stageable as plain field edits is the codec's editability policy.
     private static void CollectVmadReadOnlyFields(
         List<string> vmadFields, VmadData? vmadData, List<string> readOnlyFields)
     {
@@ -161,7 +154,7 @@ public sealed partial class EditOrchestrator(
                 continue;
             }
             if (FindVmadProperty(vmadData, scriptName, propName) is { } prop
-                && !EditableVmadPropertyTypes.Contains(prop.Value.Type))
+                && !VmadCodec.IsEditable(prop.Value.Type))
             {
                 readOnlyFields.Add(path);
             }
@@ -821,27 +814,11 @@ public sealed partial class EditOrchestrator(
         return result;
     }
 
-    // Extracts Object / ArrayOfObject FormKey refs from a VMAD value in the { formKey, alias } shape.
+    // Which FormKeys a VMAD value carries is the codec's business; the path they hang off is ours.
     private static void ExtractVmadValueRefs(string fieldPath, JsonElement value, List<PendingFormRef> into)
     {
-        if (value.ValueKind == JsonValueKind.Object &&
-            value.TryGetProperty("formKey", out var fkEl) &&
-            fkEl.ValueKind == JsonValueKind.String && fkEl.GetString() is string fk)
-        {
+        foreach (var fk in VmadCodec.ValueFormKeys(value))
             into.Add(new PendingFormRef(fieldPath, fieldPath, fk));
-        }
-        else if (value.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var el in value.EnumerateArray())
-            {
-                if (el.ValueKind == JsonValueKind.Object &&
-                    el.TryGetProperty("formKey", out var elFkEl) &&
-                    elFkEl.GetString() is string elFk)
-                {
-                    into.Add(new PendingFormRef(fieldPath, fieldPath, elFk));
-                }
-            }
-        }
     }
 
     private (StageEditResult? earlyOut, IGameSession? session, string? recordType) ValidateEditContext(

@@ -379,12 +379,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return rows;
     }
 
-    // Array-of-scalar property types, whose elements come from the vmad_property_list_items rows.
-    private static readonly HashSet<string> ScalarArrayTypes = new(StringComparer.Ordinal)
-        { "ArrayOfBool", "ArrayOfInt", "ArrayOfFloat", "ArrayOfString", "ArrayOfObject" };
-
+    // Types with an element type are the ones whose elements come from vmad_property_list_items rows.
     private static VmadPropertyValue MapVmadProperty(VmadPropertyRow r, List<VmadListItemRow>? items) =>
-        ScalarArrayTypes.Contains(r.Type)
+        VmadCodec.ElementType(r.Type) is not null
             ? new VmadPropertyValue(r.Type, r.Flags, null, ListItems: MapVmadItems(items))
             : MapNonArrayVmadProperty(r);
 
@@ -400,15 +397,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         _ => new VmadPropertyValue(r.Type, r.Flags, null),
     };
 
-    private static List<VmadNamedValue>? MapStructMembers(string? structJson)
-    {
-        if (structJson is null) return null;
-        // A Struct's fields live inside a single unnamed ScriptEntry wrapper in the binary format,
-        // so flatten that wrapper to surface struct fields directly as named members.
-        return [.. VmadJson.DeserializeStruct(structJson)
-            .SelectMany(e => e.Properties)
-            .Select(n => new VmadNamedValue(n.Name, MapNode(n)))];
-    }
+    private static List<VmadNamedValue>? MapStructMembers(string? structJson) =>
+        structJson is null
+            ? null
+            : [.. VmadCodec.StructMembers(structJson).Select(n => new VmadNamedValue(n.Name, MapNode(n)))];
 
     private static List<IReadOnlyList<VmadNamedValue>>? MapStructList(string? structJson)
     {
@@ -435,13 +427,13 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     private static List<VmadPropertyValue> MapVmadItems(List<VmadListItemRow>? items) =>
         items is null
             ? []
-            : [.. items.Select(i => i.Type switch
+            : [.. items.Select(i => VmadCodec.ElementType(i.Type) switch
             {
-                "ArrayOfBool" => new VmadPropertyValue("Bool", "", i.Bool),
-                "ArrayOfInt" => new VmadPropertyValue("Int", "", i.Int),
-                "ArrayOfFloat" => new VmadPropertyValue("Float", "", i.Float),
-                "ArrayOfString" => new VmadPropertyValue("String", "", i.String),
-                "ArrayOfObject" => new VmadPropertyValue("Object", "", i.FormKey, i.Alias),
+                "Bool" => new VmadPropertyValue("Bool", "", i.Bool),
+                "Int" => new VmadPropertyValue("Int", "", i.Int),
+                "Float" => new VmadPropertyValue("Float", "", i.Float),
+                "String" => new VmadPropertyValue("String", "", i.String),
+                "Object" => new VmadPropertyValue("Object", "", i.FormKey, i.Alias),
                 _ => new VmadPropertyValue(i.Type, "", null),
             })];
 
