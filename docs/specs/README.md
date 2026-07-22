@@ -22,7 +22,7 @@ A view spanning several surfaces gets one **context overview** plus one spec per
 | Layer | Tense | Lives | Lifecycle |
 |---|---|---|---|
 | **Surface spec** (this directory) | Present — "what this surface does" | Repo | Living; updated when an initiative ships |
-| **PRD** — one per initiative | Future — "what we're building and why" | GitHub issue (`/to-spec`) | Spent when its slices ship |
+| **PRD** — one per initiative | Future — "what we're building and why" | GitHub issue (`/to-spec`), labeled `ready-for-agent`; not a Milestone (can't carry a label) | Spent when its slices ship |
 | **Issue** — vertical slice of a PRD | Imperative | GitHub issue (`/to-tickets`) | Closed on merge |
 
 Rules:
