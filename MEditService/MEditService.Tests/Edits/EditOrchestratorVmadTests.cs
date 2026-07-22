@@ -60,6 +60,8 @@ public sealed class EditOrchestratorVmadTests
         public VmadData? GetVmad(string formKey, string plugin) =>
             throw new InvalidOperationException("GetVmad must not be called for non-VMAD edits");
         public PlacementRow? GetPlacement(string formKey, string plugin) => inner.GetPlacement(formKey, plugin);
+        public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
+            inner.GetChanges(plugin, formKey, memberChangeId);
     }
 
     // ---- Non-VMAD edit skips GetVmad ----
@@ -122,6 +124,8 @@ public sealed class EditOrchestratorVmadTests
                     ])
                 ]);
         public PlacementRow? GetPlacement(string formKey, string plugin) => inner.GetPlacement(formKey, plugin);
+        public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
+            inner.GetChanges(plugin, formKey, memberChangeId);
     }
 
     [Fact]

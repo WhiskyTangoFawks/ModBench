@@ -1,3 +1,4 @@
+using MEditService.Core.Edits;
 using MEditService.Core.Records;
 
 namespace MEditService.Core.Queries;
@@ -16,4 +17,9 @@ public interface IRecordQueryService
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
     VmadData? GetVmad(string formKey, string plugin);
     PlacementRow? GetPlacement(string formKey, string plugin);
+
+    // ADR-0031: the /changes read surface (Pending Changes tree, pending-column rendering) — each
+    // PendingChange's NewValue gets its FormKey-typed leaves resolved in one batched pass via
+    // PendingChangeResolver, same lookup as GetCompare's FieldDiff resolution.
+    IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null);
 }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Queries;
+using MEditService.Core.Records;
 
 namespace MEditService.Tests.Query;
 
@@ -10,17 +11,19 @@ public class CheckErrorBuilderTests
     private static readonly FieldMetadata FormKeyMeta = new(
         "race", "formKey", false, ["race"], [], AllowsNull: false);
 
+    private static RecordLookupEntry? Entry(string recordType) => new RecordLookupEntry(recordType, null);
+
     [Fact]
     public void Build_CleanScalarReference_ReturnsNull()
     {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, "000001:Test.esp", _ => "race");
+        var err = CheckErrorBuilder.Build(FormKeyMeta, "000001:Test.esp", _ => Entry("race"));
         Assert.Null(err);
     }
 
     [Fact]
     public void Build_NullScalarReference_NonNullableField_ReturnsNullNotAllowedMessage()
     {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, null, _ => "race");
+        var err = CheckErrorBuilder.Build(FormKeyMeta, null, _ => Entry("race"));
         Assert.Equal("Found a NULL reference, expected: race", err);
     }
 
@@ -28,7 +31,7 @@ public class CheckErrorBuilderTests
     public void Build_NullScalarReference_NullableField_ReturnsNull()
     {
         var meta = FormKeyMeta with { AllowsNull = true };
-        var err = CheckErrorBuilder.Build(meta, null, _ => "race");
+        var err = CheckErrorBuilder.Build(meta, null, _ => Entry("race"));
         Assert.Null(err);
     }
 
@@ -42,7 +45,7 @@ public class CheckErrorBuilderTests
     [Fact]
     public void Build_TypeMismatchedScalarReference_ReturnsMismatchMessage()
     {
-        var err = CheckErrorBuilder.Build(FormKeyMeta, "000001:Test.esp", _ => "npc_");
+        var err = CheckErrorBuilder.Build(FormKeyMeta, "000001:Test.esp", _ => Entry("npc_"));
         Assert.Equal("Found a npc_ reference, expected: race", err);
     }
 
@@ -53,7 +56,7 @@ public class CheckErrorBuilderTests
         var meta = new FieldMetadata("keywords", "array", true, [], [], ElementType: elemMeta);
         var value = J("""["000001:Test.esp", null, "000FFF:Test.esp"]""");
 
-        var err = CheckErrorBuilder.Build(meta, value, fk => fk == "000001:Test.esp" ? "kywd" : null);
+        var err = CheckErrorBuilder.Build(meta, value, fk => fk == "000001:Test.esp" ? Entry("kywd") : null);
 
         Assert.Equal("[2]: [000FFF:Test.esp] <Error: Could not be resolved>", err);
     }
@@ -76,7 +79,7 @@ public class CheckErrorBuilderTests
     {
         // validTypes.Count > 0 guard: when validTypes is empty, no type_mismatch check runs.
         var meta = new FieldMetadata("link", "formKey", false, [], [], AllowsNull: false);
-        var err = CheckErrorBuilder.Build(meta, "000001:Test.esp", _ => "npc_");
+        var err = CheckErrorBuilder.Build(meta, "000001:Test.esp", _ => Entry("npc_"));
         Assert.Null(err);
     }
 

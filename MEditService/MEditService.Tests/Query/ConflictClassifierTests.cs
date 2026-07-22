@@ -683,4 +683,83 @@ public class ConflictClassifierTests
         Assert.NotNull(yChild);
         Assert.False(yChild!.CellStates.ContainsKey("B.esp")); // JSON null → treated as absent
     }
+
+    // --- Resolutions (ADR-0031) ---
+
+    [Fact]
+    public void Classify_ScalarFormKeyField_PopulatesResolutionPerPlugin()
+    {
+        var meta = new FieldMetadata("race", "formKey", false, ["race"], []);
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
+            [new FieldValue(meta, "000AAA:Test.esp")]);
+        var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
+            [new FieldValue(meta, "000BBB:Test.esp")]);
+
+        static MEditService.Core.Records.RecordLookupEntry? Resolve(string fk) =>
+            fk == "000AAA:Test.esp" ? new MEditService.Core.Records.RecordLookupEntry("race", "GoodRace") : null;
+
+        var result = Classifier.Classify([master, override1], NoMasters, Resolve);
+
+        var diff = result.Diffs.First(d => d.FieldName == "race");
+        Assert.NotNull(diff.Resolutions);
+        Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.ResolvedValidType, diff.Resolutions!["A.esp"].State);
+        Assert.Equal("GoodRace", diff.Resolutions["A.esp"].EditorId);
+        Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.Unresolved, diff.Resolutions["B.esp"].State);
+    }
+
+    [Fact]
+    public void Classify_SortedArrayOfFormKey_SiblingLeavesResolveIndependently_ParentCarriesNoResolutions()
+    {
+        // kw1 resolves, kw2 is dangling — the regression this replaces would let kw2's missing
+        // resolution suppress kw1's (or vice versa) by aggregating to the array field's own state.
+        var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"000AAA:Test.esp\",\"000BBB:Test.esp\"]");
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
+            [SortedArrayField("keywords", (object?)arrayA)]);
+
+        static MEditService.Core.Records.RecordLookupEntry? Resolve(string fk) =>
+            fk == "000AAA:Test.esp" ? new MEditService.Core.Records.RecordLookupEntry("kywd", "GoodKeyword") : null;
+
+        var result = Classifier.Classify([master], NoMasters, Resolve);
+
+        var arrayDiff = result.Diffs.First(d => d.FieldName == "keywords");
+        Assert.Null(arrayDiff.Resolutions); // no aggregation onto the parent array field
+
+        var kw1 = arrayDiff.Children!.First(c => c.WinnerValue is JsonElement je && je.GetString() == "000AAA:Test.esp");
+        var kw2 = arrayDiff.Children!.First(c => c.WinnerValue is JsonElement je && je.GetString() == "000BBB:Test.esp");
+
+        Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.ResolvedValidType, kw1.Resolutions!["A.esp"].State);
+        Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.Unresolved, kw2.Resolutions!["A.esp"].State);
+    }
+
+    [Fact]
+    public void Classify_StructFormKeySubField_ResolvesIndependentlyOfSiblingStructField()
+    {
+        var factionField = new FieldMetadata("faction", "formKey", false, ["fact"], []);
+        var rankField = Meta("rank", "int");
+        var structMeta = StructMeta("Factions", factionField, rankField);
+
+        var val = JsonSerializer.Deserialize<JsonElement>("""{"faction":"000FFF:Test.esp","rank":1}""");
+        var master = MakeStructOverride("A.esp", 0, true, structMeta, val);
+
+        // dangling: every FormKey is unresolved
+        var result = Classifier.Classify([master], NoMasters, _ => null);
+
+        var factionChild = result.Diffs.First(d => d.FieldName == "Factions").Children!.First(c => c.FieldName == "faction");
+        var rankChild = result.Diffs.First(d => d.FieldName == "Factions").Children!.First(c => c.FieldName == "rank");
+
+        Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.Unresolved, factionChild.Resolutions!["A.esp"].State);
+        Assert.Null(rankChild.Resolutions); // non-formKey sibling never gets a Resolutions entry
+    }
+
+    [Fact]
+    public void Classify_NoResolverPassed_ResolutionsStayNull()
+    {
+        var meta = new FieldMetadata("race", "formKey", false, ["race"], []);
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
+            [new FieldValue(meta, "000AAA:Test.esp")]);
+
+        var result = Classify([master]);
+
+        Assert.Null(result.Diffs.First(d => d.FieldName == "race").Resolutions);
+    }
 }

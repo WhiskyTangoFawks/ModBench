@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Records;
 using MEditService.Core.Session;
 
 namespace MEditService.Core.Queries;
@@ -71,13 +72,19 @@ public record CompareOverride(
     string RecordType = "")
     : RecordDetail(FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, PendingFields, RecordType);
 
+// Resolutions (ADR-0031): only populated for a scalar formKey-typed leaf, keyed by plugin like
+// Values/CellStates — one entry per plugin whose cell holds a FormKey value. Never populated on a
+// struct/array field's own FieldDiff (its Values aren't FormKey strings) and never aggregated up
+// from Children — each leaf's signal is independent, so a dangling sibling can't hide a live
+// hyperlink/affordance on the leaf next to it.
 public record FieldDiff(
     string FieldName,
     Dictionary<string, object?> Values,
     string WinnerPlugin,
     object? WinnerValue,
     IReadOnlyDictionary<string, ConflictThis> CellStates,
-    IReadOnlyList<FieldDiff>? Children = null);
+    IReadOnlyList<FieldDiff>? Children = null,
+    IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null);
 
 public record ClassifyResult(
     ConflictAll ConflictAll,
@@ -97,7 +104,11 @@ public record VmadPropertyDiff(
                                                         // member nodes; a structList carries a list of per-instance member-node lists. Populated only
                                                         // for struct/structList. The frontend patches one member by path and restages the whole value
                                                         // (atomic column, ADR-0019).
-    Dictionary<string, object?>? Raw = null);
+    Dictionary<string, object?>? Raw = null,
+    // ADR-0031: only populated on a Kind=="object" leaf, keyed by plugin like Values/CellStates —
+    // never aggregated up from Children, so a dangling sibling Object can't hide a live
+    // hyperlink/affordance on the leaf next to it.
+    IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null);
 
 public record VmadScriptDiff(
     string Name,                                       // sort key = ScriptName

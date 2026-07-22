@@ -153,11 +153,11 @@ public static class ChangeEndpoints
         [FromQuery] string? plugin,
         [FromQuery] string? formKey,
         [FromQuery] Guid? groupId,
-        IPendingChangeService changes)
+        IRecordQueryService query)
     {
         var decodedPlugin = plugin != null ? Uri.UnescapeDataString(plugin) : null;
         var decodedFormKey = formKey != null ? Uri.UnescapeDataString(formKey) : null;
-        return Results.Ok(changes.GetChanges(decodedPlugin, decodedFormKey, groupId));
+        return Results.Ok(query.GetChanges(decodedPlugin, decodedFormKey, groupId));
     }
 
     private static IResult DeleteChangeGroup(Guid groupId, IPendingChangeService changes) =>

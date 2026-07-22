@@ -426,4 +426,62 @@ public sealed class VmadConflictClassifierTests
         Assert.Equal("Struct", inner.Type);
         Assert.Null(inner.Members);
     }
+
+    // --- Resolutions (ADR-0031) ---
+
+    [Fact]
+    public void Classify_ObjectProperty_PopulatesResolutionPerPlugin()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Ref", ObjVal("000800:Base.esp", 1))));
+        var b = Input("B.esp", 1, Script("S", "Local", Prop("Ref", ObjVal("000FFF:Base.esp", 2))));
+
+        static RecordLookupEntry? Resolve(string fk) =>
+            fk == "000800:Base.esp" ? new RecordLookupEntry("kywd", "GoodKeyword") : null;
+
+        var result = VmadConflictClassifier.Classify([a, b], Resolve);
+
+        var refProp = result.Compare.Scripts[0].Properties.First(p => p.Name == "Ref");
+        Assert.NotNull(refProp.Resolutions);
+        Assert.Equal(FormKeyResolutionState.ResolvedValidType, refProp.Resolutions!["A.esp"].State);
+        Assert.Equal("GoodKeyword", refProp.Resolutions["A.esp"].EditorId);
+        Assert.Equal(FormKeyResolutionState.Unresolved, refProp.Resolutions["B.esp"].State);
+    }
+
+    [Fact]
+    public void Classify_ArrayOfObject_SiblingElementsResolveIndependently_ParentCarriesNoResolutions()
+    {
+        // One element dangling must not hide the other's live affordance — the same aggregation
+        // bug FieldDiff had for struct/array leaves, now fixed for VMAD too.
+        var arr = new VmadPropertyValue("ArrayOfObject", "", null, ListItems:
+        [
+            new VmadPropertyValue("Object", "", "000800:Base.esp", 1),
+            new VmadPropertyValue("Object", "", "000FFF:Base.esp", 2),
+        ]);
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Refs", arr)));
+
+        static RecordLookupEntry? Resolve(string fk) =>
+            fk == "000800:Base.esp" ? new RecordLookupEntry("kywd", "Good") : null;
+
+        var result = VmadConflictClassifier.Classify([a], Resolve);
+
+        var refsProp = result.Compare.Scripts[0].Properties.First(p => p.Name == "Refs");
+        Assert.Equal("array", refsProp.Kind);
+        Assert.Null(refsProp.Resolutions); // no aggregation onto the parent array property
+
+        var first = refsProp.Children!.First(c => c.Name == "[0]");
+        var second = refsProp.Children!.First(c => c.Name == "[1]");
+        Assert.Equal(FormKeyResolutionState.ResolvedValidType, first.Resolutions!["A.esp"].State);
+        Assert.Equal(FormKeyResolutionState.Unresolved, second.Resolutions!["A.esp"].State);
+    }
+
+    [Fact]
+    public void Classify_NoResolverPassed_ResolutionsStayNull()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Ref", ObjVal("000800:Base.esp", 1))));
+
+        var result = VmadConflictClassifier.Classify([a]);
+
+        var refProp = result.Compare.Scripts[0].Properties.First(p => p.Name == "Ref");
+        Assert.Null(refProp.Resolutions);
+    }
 }
