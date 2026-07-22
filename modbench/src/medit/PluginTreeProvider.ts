@@ -29,6 +29,7 @@ export class PluginNode extends vscode.TreeItem {
     if (plugin.isImmutable) {
       this.iconPath = new vscode.ThemeIcon('lock');
     }
+    this.command = { command: 'modbench.openHeader', title: 'Open Record Header', arguments: [this] };
   }
 }
 
