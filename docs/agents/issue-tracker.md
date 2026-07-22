@@ -7,7 +7,7 @@ Issues/PRDs live as GitHub issues. Use `gh` for all operations.
 Durable docs vs. work items:
 
 - **Surface specs** (`docs/specs/<surface>.md`) — present-tense doc per UI surface. Repo-versioned, not tracker.
-- **PRDs** — one Milestone per initiative (e.g. "Downloads tab v1"), via `/to-spec`. Future tense; spent when slices ship.
+- **PRDs** — one GitHub issue per initiative (e.g. "Downloads tab v1"), via `/to-spec`; carries `ready-for-agent` (a Milestone can't hold a label). Future tense; spent when slices ship. Not a Milestone: milestones are priority-ordered by title prefix, so minting one per PRD would force a roadmap renumber or brand the initiative speculative — a PRD issue may optionally be *assigned to* a milestone for roadmap grouping, same as any other issue.
 - **Implementation issues** — PRD slices, via `/to-tickets` (also works directly on a spec file/section).
 
 On ship: fold outcome into the surface spec — spec always = current behavior.
