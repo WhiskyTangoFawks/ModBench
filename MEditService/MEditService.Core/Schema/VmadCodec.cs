@@ -254,21 +254,28 @@ public static class VmadCodec
 
     // Struct member Object nodes carry formKeyValue/aliasValue (the VmadPropertyNode
     // wire shape), distinct from the {formKey, alias} shape used for top-level edits.
+    // formKeyValue is a genuine JSON null for a null Object (matching the read projection's
+    // IsNull guard) — that builds a member whose Object is left unset, not a failed parse.
     private static bool TryBuildObjectMember(
         JsonElement node, string name, ScriptProperty.Flag flags, out ScriptProperty prop)
     {
         prop = null!;
-        if (!node.TryGetProperty("formKeyValue", out var fkEl) || fkEl.GetString() is not string fkStr
-            || !FormKey.TryFactory(fkStr, out var fk))
-        {
+        if (!node.TryGetProperty("formKeyValue", out var fkEl))
             return false;
+
+        FormKey? fk = null;
+        if (fkEl.ValueKind != JsonValueKind.Null)
+        {
+            if (fkEl.GetString() is not string fkStr || !FormKey.TryFactory(fkStr, out var parsedFk))
+                return false;
+            fk = parsedFk;
         }
 
         var alias = node.TryGetProperty("aliasValue", out var aEl) && aEl.ValueKind == JsonValueKind.Number
             ? aEl.GetInt16()
             : (short)0;
         var obj = new ScriptObjectProperty { Name = name, Flags = flags, Alias = alias };
-        obj.Object.SetTo(fk);
+        if (fk is { } target) obj.Object.SetTo(target);
         prop = obj;
         return true;
     }
@@ -664,7 +671,8 @@ public static class VmadCodec
         IScriptIntPropertyGetter n => new(n.Name, "Int", FlagsString(n.Flags), IntValue: n.Data),
         IScriptFloatPropertyGetter f => new(f.Name, "Float", FlagsString(f.Flags), FloatValue: f.Data),
         IScriptStringPropertyGetter s => new(s.Name, "String", FlagsString(s.Flags), StringValue: s.Data),
-        IScriptObjectPropertyGetter o => new(o.Name, "Object", FlagsString(o.Flags), FormKeyValue: o.Object.FormKey.ToString(), AliasValue: o.Alias),
+        IScriptObjectPropertyGetter o => new(o.Name, "Object", FlagsString(o.Flags),
+            FormKeyValue: o.Object.IsNull ? null : o.Object.FormKey.ToString(), AliasValue: o.Alias),
         IScriptStructPropertyGetter st => new(st.Name, "Struct", FlagsString(st.Flags),
             Members: [.. st.Members.SelectMany(m => m.Properties).Select(ToPropertyNode)]),
         _ => new(p.Name, p.GetType().Name, FlagsString(p.Flags))

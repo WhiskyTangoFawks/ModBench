@@ -202,6 +202,23 @@ public class VmadCodecTests
         Assert.Equal(7, Assert.IsType<ScriptIntProperty>(Assert.Single(nested.Members).Properties[0]).Data);
     }
 
+    // Issue #116: a struct member Object property now reads as a null formKeyValue (the
+    // previous test above), so apply must accept that shape back and build a null Object
+    // member, not fail the whole struct the way a malformed value does.
+    [Fact]
+    public void ApplyValue_Struct_NullObjectMember_BuildsNullObject()
+    {
+        var prop = new ScriptStructProperty();
+        var json = J("""[{"name":"Ref","type":"Object","formKeyValue":null,"aliasValue":-1}]""");
+
+        Assert.Equal(VmadApplyResult.Applied, VmadCodec.ApplyValue(prop, json));
+
+        var wrapper = Assert.Single(prop.Members);
+        var rebuilt = Assert.IsType<ScriptObjectProperty>(Assert.Single(wrapper.Properties));
+        Assert.True(rebuilt.Object.IsNull);
+        Assert.Equal((short)-1, rebuilt.Alias);
+    }
+
     [Fact]
     public void ApplyValue_ArrayOfStruct_BuildsOneEntryPerInstance()
     {
@@ -515,6 +532,21 @@ public class VmadCodecTests
         Assert.Equal(@"\Ref", reference.RelativePath);
     }
 
+    // Issue #116: a null Object member must read back with no FormKey, the same as a
+    // top-level null Object property (Parse_NullObjectProperty_ReturnsNoValueAndNoRefs) —
+    // not the stringified "000000:Null" sentinel a naive unconditional ToString() produces.
+    [Fact]
+    public void Parse_Struct_NullObjectMember_ReturnsNullFormKeyValue()
+    {
+        var parsed = VmadCodec.Parse(StructProperty("Config", NullMemberObject("Ref")))!;
+
+        var members = VmadCodec.StructMembers(parsed.StructJson!);
+        var refMember = Assert.Single(members);
+        Assert.Equal("Object", refMember.Type);
+        Assert.Null(refMember.FormKeyValue);
+        Assert.Empty(parsed.Refs);
+    }
+
     [Fact]
     public void Parse_ArrayOfStruct_SerializesInstancesAndCollectsIndexedMemberRefs()
     {
@@ -555,6 +587,23 @@ public class VmadCodecTests
         Assert.Equal(json, VmadCodec.Parse(rebuilt)!.StructJson);
     }
 
+    // Issue #116: the same round trip, but the Object member is null — staging an edit on a
+    // property that reads as null must not be misread as "delete this property".
+    [Fact]
+    public void Parse_ThenApplyValue_RoundTripsAStructWithNullObjectMember()
+    {
+        var original = StructProperty("Config", NullMemberObject("Ref"));
+
+        var json = VmadCodec.Parse(original)!.StructJson!;
+        var wire = JsonSerializer.SerializeToElement(VmadCodec.StructMembers(json), Wire);
+
+        var rebuilt = new ScriptStructProperty { Name = "Config" };
+        Assert.Equal(VmadApplyResult.Applied, VmadCodec.ApplyValue(rebuilt, wire));
+
+        Assert.True(Assert.IsType<ScriptObjectProperty>(Assert.Single(rebuilt.Members).Properties[0]).Object.IsNull);
+        Assert.Equal(json, VmadCodec.Parse(rebuilt)!.StructJson);
+    }
+
     // ---- FormKeys in staged values ----
 
     [Fact]
@@ -589,6 +638,9 @@ public class VmadCodecTests
         obj.Object.SetTo(Target);
         return obj;
     }
+
+    private static ScriptObjectProperty NullMemberObject(string name) =>
+        new() { Name = name, Alias = -1 };
 
     // A Struct's fields live inside a single unnamed ScriptEntry wrapper in the binary format.
     private static ScriptStructProperty StructProperty(string name, params ScriptProperty[] members)

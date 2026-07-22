@@ -221,7 +221,7 @@ public static class VmadConflictClassifier
     private static object? LeafValue(VmadPropertyValue? v)
     {
         if (v == null) return null;
-        if (v.Type == "Object") return $"{v.Value} [{v.Alias}]";
+        if (v.Type == "Object") return v.Value == null ? null : $"{v.Value} [{v.Alias}]";
         return v.Value; // null for Struct/ArrayOf* — their data lives in Members/ListItems/StructList
     }
 
