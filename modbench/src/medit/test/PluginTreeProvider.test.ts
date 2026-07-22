@@ -311,6 +311,24 @@ describe('PluginNode', () => {
     const node = new PluginNode({ ...makePlugin(0), isImmutable: false });
     expect(node.iconPath).toBeUndefined();
   });
+
+  it('wires .command to modbench.openHeader with itself as the argument (mutable)', () => {
+    const node = new PluginNode({ ...makePlugin(0), isImmutable: false });
+    expect(node.command).toEqual({
+      command: 'modbench.openHeader',
+      title: 'Open Record Header',
+      arguments: [node],
+    });
+  });
+
+  it('wires .command to modbench.openHeader with itself as the argument (immutable)', () => {
+    const node = new PluginNode({ ...makePlugin(0), isImmutable: true });
+    expect(node.command).toEqual({
+      command: 'modbench.openHeader',
+      title: 'Open Record Header',
+      arguments: [node],
+    });
+  });
 });
 
 // ── RecordTypeNode ────────────────────────────────────────────────────────────
