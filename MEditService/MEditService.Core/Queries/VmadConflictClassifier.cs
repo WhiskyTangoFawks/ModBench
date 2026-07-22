@@ -248,7 +248,12 @@ public static class VmadConflictClassifier
 
         if (v.ListItems != null)
             return $"{v.Type}[" + string.Join(",", v.ListItems.Select(Canon)) + "]";
-        var leaf = v.Type == "Object" ? $"{v.Value} [{v.Alias}]" : v.Value?.ToString() ?? "";
+
+        string leaf;
+        if (v.Type == "Object")
+            leaf = v.Value == null ? "" : $"{v.Value} [{v.Alias}]";
+        else
+            leaf = v.Value?.ToString() ?? "";
         return $"{v.Type}|{leaf}";
     }
 

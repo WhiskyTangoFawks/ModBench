@@ -372,6 +372,19 @@ public sealed class VmadConflictClassifierTests
         Assert.Equal(ConflictAll.Override, result.ConflictContribution);
     }
 
+    // Issue #148: same bug #116 fixed in LeafValue, but in Canon — a null Object value's
+    // comparison key must not stringify the null into " [-1]"; it must canonicalize distinctly
+    // from a non-null Object that happens to share the same alias.
+    [Fact]
+    public void Canon_NullObjectValue_DiffersFromNonNullObjectWithSameAlias()
+    {
+        var nullObj = ObjVal(null, -1);
+        var nonNullObj = ObjVal("000800:Base.esp", -1);
+
+        Assert.NotEqual(VmadConflictClassifier.Canon(nullObj), VmadConflictClassifier.Canon(nonNullObj));
+        Assert.Equal("Object|", VmadConflictClassifier.Canon(nullObj));
+    }
+
     // Canon (internal) member sorting is covered behaviorally by
     // Classify_ReorderedButEqualScriptsAndProperties_NotFlagged and
     // Classify_AlignsScriptsPropertiesAndMembers_InSortedOrder. The Canon sort *direction*
