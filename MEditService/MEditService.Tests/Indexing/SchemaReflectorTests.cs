@@ -800,17 +800,86 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Header_FlagsColumn_IsBitmaskEnumWithMasterAndSmallNames()
+    public void GetSchemas_Header_FlagsColumn_IsBitmaskEnumWithEsmAndEslNames()
     {
+        // Issue #118: header flags display xEdit's vocabulary, not raw Mutagen member names.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "flags");
         Assert.NotNull(col);
         Assert.Equal("BIGINT", col!.DuckDbType);
         Assert.Equal("enum", col.ApiType);
         Assert.True(col.IsBitmask);
-        Assert.Contains("Master", col.EnumValues);
-        Assert.Contains("Small", col.EnumValues);
+        Assert.Contains("ESM", col.EnumValues);
+        Assert.DoesNotContain("Master", col.EnumValues);
+        Assert.Contains("ESL", col.EnumValues);
+        Assert.DoesNotContain("Small", col.EnumValues);
         Assert.Contains("Localized", col.EnumValues);
+    }
+
+    [Theory]
+    [InlineData("LightMaster", "ESL")]
+    [InlineData("Light", "ESL")]
+    [InlineData("Small", "ESL")]
+    [InlineData("Master", "ESM")]
+    [InlineData("Overlay", "Overlay")]
+    [InlineData("Localized", "Localized")]
+    public void MapToXEditFlagName_KeysOffMutagenMemberName_NotBitPosition(string mutagenName, string expected)
+    {
+        // Issue #118: only Mutagen.Bethesda.Fallout4 is referenced by this project, so a live
+        // second-game schema (e.g. Starfield's "Light" member) isn't reflectable here — this
+        // exercises the mapping directly against every Mutagen member name it must key off of,
+        // proving the mapping is keyed by name, not by bit position, and includes a non-Fallout
+        // member name ("LightMaster") per the acceptance criteria.
+        Assert.Equal(expected, SchemaReflector.MapToXEditFlagName(mutagenName));
+    }
+
+    [Fact]
+    public void GetSchemas_Header_FlagsColumn_EnumValuesStayPositionallyAlignedWithBitValues()
+    {
+        // Renaming for xEdit display must not disturb the parallel EnumValues/EnumBitValues
+        // arrays that consumers index in lockstep.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["header"].RecordColumns.FirstOrDefault(c => c.Name == "flags");
+        Assert.NotNull(col);
+        Assert.NotNull(col!.EnumBitValues);
+        Assert.Equal(col.EnumValues.Count, col.EnumBitValues!.Count);
+
+        var esmIndex = col.EnumValues.ToList().IndexOf("ESM");
+        Assert.Equal("1", col.EnumBitValues[esmIndex]);
+
+        var eslIndex = col.EnumValues.ToList().IndexOf("ESL");
+        Assert.Equal(((long)Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small).ToString(
+            System.Globalization.CultureInfo.InvariantCulture), col.EnumBitValues[eslIndex]);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_EslFlagValue_UnaffectedByDisplayNameRename()
+    {
+        // EslFlagValue detection runs off the original Mutagen member name (LightMasterFlagNames),
+        // computed before the xEdit display-name rename is applied to EnumValues.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        Assert.Equal((long)Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small,
+            schemas["header"].EslFlagValue);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_HeaderColumnApply_FlagsStagesSameBitmaskValueAfterRename()
+    {
+        // Toggling a renamed flag (e.g. "ESM") must stage the same bitmask value it always has —
+        // this is a labelling change only, not a protocol change.
+        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
+        var flagsIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "flags");
+        var mod = new Mutagen.Bethesda.Fallout4.Fallout4Mod(
+            Mutagen.Bethesda.Plugins.ModKey.FromFileName("Test.esp"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+
+        var bitmask = (long)Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Master;
+        var json = System.Text.Json.JsonDocument.Parse(
+            $"\"{bitmask.ToString(System.Globalization.CultureInfo.InvariantCulture)}\"").RootElement;
+
+        schema.HeaderColumnApply![flagsIndex]!(mod, json);
+
+        Assert.Equal(Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Master, mod.ModHeader.Flags);
     }
 
     [Fact]
