@@ -374,3 +374,76 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
     );
   });
 });
+
+// ── mEdit plugin tree title reflects view mode (#109) ───────────────────────────
+// The activity-bar container title ("Modbench") is fixed by VS Code; the mEdit
+// context instead lives on the editing plugin tree's own writable `title`.
+
+interface TitledTreeView { title?: string }
+
+describe('mEdit plugin tree title reflects view mode (#109)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const exportsOf = () => ext?.exports as {
+    treeView?: TitledTreeView;
+    changeGroupTreeView?: TitledTreeView;
+    modListProvider?: unknown;
+  } | undefined;
+  let gameDir = '';
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+
+    fs.writeFileSync(path.join(root, 'ModOrganizer.ini'), '[General]\ngameName=Fallout4\nselected_profile=Default\n');
+    fs.mkdirSync(path.join(root, 'profiles', 'Default'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'modlist.txt'), '');
+    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n');
+    fs.mkdirSync(path.join(root, 'mods'), { recursive: true });
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    await vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
+    fs.rmSync(path.join(root, 'ModOrganizer.ini'), { force: true });
+    fs.rmSync(path.join(root, 'profiles'), { recursive: true, force: true });
+    fs.rmSync(path.join(root, 'mods'), { recursive: true, force: true });
+    fs.rmSync(gameDir, { recursive: true, force: true });
+  });
+
+  it('sets the mEdit plugin tree title when Launch mEdit enters editing mode', async () => {
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    assert.strictEqual(
+      exportsOf()?.treeView?.title, 'mEdit — Plugins',
+      'the editing plugin tree title should convey the mEdit context after Launch mEdit',
+    );
+  });
+
+  it('leaves the Pending Changes view title untouched entering editing mode', () => {
+    assert.strictEqual(
+      exportsOf()?.changeGroupTreeView?.title, 'Pending Changes',
+      'only the editing plugin tree title should change — Pending Changes keeps its declared default',
+    );
+  });
+
+  it('restores the default plugin tree title when Close mEdit exits editing mode', async () => {
+    await vscode.commands.executeCommand('modbench.closeMedit');
+    assert.strictEqual(
+      exportsOf()?.treeView?.title, 'Plugins',
+      'closing mEdit should restore the plugin tree title to its declared default',
+    );
+  });
+
+  it('sets the mEdit plugin tree title when Launch Game enters editing mode', async () => {
+    await vscode.commands.executeCommand('modbench.modList.launchGame');
+    assert.strictEqual(
+      exportsOf()?.treeView?.title, 'mEdit — Plugins',
+      'Launch Game reuses the editing view while the game runs, so the title should convey mEdit too',
+    );
+  });
+});

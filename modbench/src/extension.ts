@@ -29,12 +29,29 @@ import { extractArchive } from './modmanager/install/extractArchive';
 import { openDownloadsPanel } from './modmanager/DownloadsPanel';
 
 let backendManager: BackendManager | undefined;
+let pluginTreeView: vscode.TreeView<PluginTreeNode> | undefined;
+
+// #109: the activity-bar container title ("Modbench") is fixed by VS Code — no
+// `when` clause or API retargets it. The mEdit context instead lives on the
+// writable title of the editing plugin tree itself.
+const DEFAULT_PLUGIN_TREE_TITLE = 'Plugins'; // must match package.json's declared view name
+const EDITING_PLUGIN_TREE_TITLE = 'mEdit — Plugins';
 
 const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
+/** Single choke point for `modbench.viewMode` transitions (#109) — every entry/exit
+ *  path calls this instead of `setContext` directly, so the editing plugin tree's
+ *  title can never drift out of sync with the mode. */
+function setViewMode(mode: 'loadout' | 'editing'): void {
+  void vscode.commands.executeCommand('setContext', 'modbench.viewMode', mode);
+  if (pluginTreeView) {
+    pluginTreeView.title = mode === 'editing' ? EDITING_PLUGIN_TREE_TITLE : DEFAULT_PLUGIN_TREE_TITLE;
+  }
+}
+
 /** Leave editing: show the Loadout view and tear down the editing backend. */
 function exitToLoadout(): void {
-  void vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
+  setViewMode('loadout');
   backendManager?.stop();
 }
 
@@ -125,6 +142,7 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: treeProvider,
     canSelectMany: true,
   });
+  pluginTreeView = treeView;
 
   const changeGroupTreeView = vscode.window.createTreeView('modbench.changeGroupTree', {
     treeDataProvider: changeGroupTreeProvider,
@@ -134,7 +152,7 @@ export function activate(context: vscode.ExtensionContext) {
   // ── Mod List (Loadout) view ──────────────────────────────────────────────────
   // The open workspace root IS the MO2 instance (see modbench/CLAUDE.md). Until
   // the Loadout↔Editing toggle lands (Modbench-5), Mod List is the only visible view.
-  void vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
+  setViewMode('loadout');
 
   registerDeploymentModeContext(context);
 
@@ -156,10 +174,9 @@ export function activate(context: vscode.ExtensionContext) {
   // is no auto-connect / auto-wizard at activation; show a neutral idle state.
   statusBarItem.text = '$(plug) mEdit';
 
-  // Exposed for integration tests to assert tree shape (e.g. the pinned Overwrite
-  // row, #82; the editing plugin tree after launch, #75) — VS Code ignores unused
-  // exports in production.
-  return { modListProvider, treeProvider };
+  // Exposed for integration tests (pinned Overwrite row #82; editing tree after
+  // launch #75; editing tree title follows view mode #109) — unused in production.
+  return { modListProvider, treeProvider, treeView, changeGroupTreeView };
 }
 
 
@@ -923,7 +940,7 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
       changeGroupTreeProvider.refresh();
       // Reveal the editing views only now — the pluginTree's first GET /plugins must
       // not fire before the session is loaded, or it renders empty (issue #75).
-      void vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'editing');
+      setViewMode('editing');
       log('[extension] editing session ready');
   };
 }
@@ -1044,7 +1061,7 @@ function registerDeployCommands(
         if (!gd) return;
         await runDeploy(gd);
         // Switch to the Plugin List view while the game runs (mirrors launchMedit).
-        void vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'editing');
+        setViewMode('editing');
         const executable = path.join(gd.root, 'Fallout4.exe');
         const template = (config().get('mods.launchCommand') as string) || '';
         const child = template
