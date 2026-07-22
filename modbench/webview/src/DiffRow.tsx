@@ -6,8 +6,14 @@ import { CheckErrorIcon } from './CheckErrorIcon';
 import { baseCell, toggleBtnStyle, getCellStyle } from './gridStyles';
 import { pendingIfChanged, extractPendingElementValue } from './recordUtils';
 import type { Column } from './recordUtils';
-import type { CompareOverride, ConflictAll, FieldDiff, FieldMetadata, PendingChange } from './types';
+import type { CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
 import type { RecordSessionClient } from './RecordSessionClient';
+
+// ADR-0020: a staged FormKey is validated at stage time, so it always resolves — until #159 wires
+// PendingChange.resolutions through, this stands in so the pending column keeps behaving exactly
+// as it did under the old checkError-proxy (always followable), without reintroducing a second
+// gating mechanism alongside the real per-leaf `resolution` signal disk columns now use.
+const PENDING_RESOLVES: FormKeyResolution = { state: 'ResolvedValidType', recordType: null, editorId: null };
 
 const ROW_BG: Partial<Record<ConflictAll, string>> = {
   Override:        'rgba(76,175,80,0.20)',
@@ -27,12 +33,13 @@ function renderCell(
   onOpen: (fk: string) => void,
   onCommit: (v: unknown) => void,
   checkError?: string | null,
+  resolution?: FormKeyResolution,
 ): React.ReactNode {
   if (meta.type === 'formKey') {
     return (
       <FormKeyCell
         value={value} meta={meta} editable={editable} client={client}
-        onOpen={onOpen} onCommit={fk => onCommit(fk)} checkError={checkError}
+        onOpen={onOpen} onCommit={fk => onCommit(fk)} checkError={checkError} resolution={resolution}
       />
     );
   }
@@ -186,7 +193,7 @@ export function DiffRow({
               onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
             >
               {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin), client, onOpen,
-                v => onEdit(o.plugin, diff.fieldName, v), checkError)}
+                v => onEdit(o.plugin, diff.fieldName, v), checkError, diff.resolutions?.[o.plugin])}
             </DiskCell>
           );
         }
@@ -242,8 +249,10 @@ export function DiffRow({
                     disk columns use, in its read-only form (editable=false) — enums/flags resolve
                     to names, FormKeys become links — so the Pending column reads in the same
                     language as the row it is being compared against. A staged FormKey is validated
-                    at stage time (ADR-0020), so it always resolves: no checkError proxy needed. */}
-                <span>{renderCell(pendingValue, meta, false, client, onOpen, () => {})}</span>
+                    at stage time (ADR-0020), so it always resolves — PENDING_RESOLVES stands in
+                    until #159 wires PendingChange.resolutions through. */}
+                <span>{renderCell(pendingValue, meta, false, client, onOpen, () => {}, undefined,
+                  meta.type === 'formKey' ? PENDING_RESOLVES : undefined)}</span>
                 {change && showActions && (
                   <button
                     // stopPropagation: the ↩ sits inside the cell that plain-click reveals

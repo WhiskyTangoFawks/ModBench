@@ -227,34 +227,26 @@ These apply everywhere a field value is rendered (the compare grid, pending cell
 section, and any future surface):
 
 1. **Never display raw integers for enums or flags** — always resolve to name(s).
-2. **FormKeys render as links**, labelled with the FormKey string. The **link affordance**
-   (underline, pointer) appears only while `Ctrl` is held and the pointer is over the cell, and
-   only when the reference resolves; `Ctrl+click` follows it, and a link that does not look
-   followable is not followable. This mirrors xEdit's `vstViewCheckHotTrack`, which gates
-   hot-tracking on `Allow := Assigned(lLinksTo)` — a link you cannot follow must not look like
-   one.
+2. **FormKeys render as links**, labelled with the referenced record's EditorID when the
+   reference resolves, falling back to the FormKey string when it doesn't. The **link
+   affordance** (underline, pointer) appears only while `Ctrl` is held and the pointer is over
+   the cell, and only when the reference resolves (valid type *or* wrong type — xEdit allows
+   following either); `Ctrl+click` follows it, and a link that does not look followable is not
+   followable. This mirrors xEdit's `vstViewCheckHotTrack`, which gates hot-tracking on
+   `Allow := Assigned(lLinksTo)` — a link you cannot follow must not look like one.
 
-   *The resolve test is currently a proxy, and a known-limited one (#141).* The frontend has no
-   per-FormKey resolution: the compare response carries the FormKey string and nothing about
-   what it points at. So in the **field grid** the affordance keys off the field's
-   `checkError`, which the backend emits (`<Error: Could not be resolved>`) exactly when a
-   FormLink is absent from the record index. What ships therefore tracks **"this cell is not
-   flagged suspect"**, not **"this reference is genuinely indexed"**. Two deliberate
-   divergences follow, both erring toward hiding a real link rather than advertising a dead
-   one, and both landing on cells that already show a ⚠:
-   - a reference that resolves but to the **wrong type** carries a `checkError`, so the
-     affordance is suppressed though xEdit would allow the jump;
-   - for a **struct or array leaf**, `checkError` is the parent field's aggregate, so one
-     dangling member suppresses the affordance on its siblings.
+   The **field grid** (ADR-0031, #157) sources both the label and the affordance from the
+   backend's per-FormKey resolution signal on `FieldDiff` — a tri-state (unresolved /
+   resolved-wrong-type / resolved-valid-type) computed server-side against the global FormKey
+   index, carried independently per leaf so a dangling struct/array member never suppresses the
+   affordance on the leaf next to it. `checkError` still drives the ⚠ icon but no longer gates
+   the link.
 
-   In the **VMAD section** the proxy is weaker still, and errs the other way: a
-   `VmadPropertyDiff` carries no `checkError`, so the only available test is that the Object
-   property's FormKey is well-formed — which catches an unset reference (`Null [-1]`) but not
-   one pointing outside the index, leaving that case looking followable.
-
-   #141 removes the proxy on both surfaces by carrying resolution in the compare response,
-   which is also what rule 2 needs to label links with the referenced record's EditorID rather
-   than its FormKey.
+   *The **VMAD section**'s proxy is unchanged and still the known-limited one (#158).* A
+   `VmadPropertyDiff` doesn't yet carry the resolution signal, so the only available test is
+   that the Object property's FormKey is well-formed — which catches an unset reference
+   (`Null [-1]`) but not one pointing outside the index, leaving that case looking followable.
+   #158 carries the same resolution signal onto `VmadPropertyDiff` to close this gap.
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
    per-session, not persisted across restarts. Array **element values** are editable
    everywhere. Array **arity and order** divide by surface, so this rule does not generalize:
