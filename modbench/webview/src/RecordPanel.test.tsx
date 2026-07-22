@@ -626,6 +626,13 @@ describe('RecordPanel — Add Master picker (issue #86)', () => {
       expect(screen.getByText(/masters can only be appended to/)).toBeInTheDocument(),
     );
   });
+
+  it('issue #119: does not show a Scripts (VMAD) section on the header record', async () => {
+    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
+    renderPanel(headerCompareResult, headerOpts);
+    await waitFor(() => screen.getByText('Add Master…'));
+    expect(screen.queryByText('Scripts (VMAD)')).not.toBeInTheDocument();
+  });
 });
 
 // ── Top-level pending no-op suppression ──────────────────────────────────────
