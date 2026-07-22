@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Column } from './recordUtils';
-import type { ConflictThis, FormKeyResolution, PendingChange, VmadCompare, VmadKind, VmadPropertyDiff } from './types';
+import type { ConflictThis, PendingChange, VmadCompare, VmadKind, VmadPropertyDiff } from './types';
 import { toStr } from './recordUtils';
 import { baseCell, headerCell, toggleBtnStyle, getCellStyle, fg } from './gridStyles';
 import { FormKeyLink } from './FormKeyLink';
@@ -400,26 +400,6 @@ function containerSummary(p: VmadPropertyDiff): string {
   return `[${n} items]`;
 }
 
-// Spec rule 2's resolve gate, as far as VMAD data can carry it today. A Papyrus Object property
-// arrives as the formatted string "{FormKey} [{Alias}]", and an unset one formats as
-// "Null [-1]" — so a well-formed FormKey is the strongest resolve test available here.
-//
-// This is weaker than the field grid's (#157), which now carries the backend's real
-// ADR-0031 resolution signal. VmadPropertyDiff gains that same signal in #158 — until then, an
-// Object pointing at a FormKey absent from the index still looks followable here.
-function isFormKey(s: string): boolean {
-  return /^[0-9A-Fa-f]{6,8}:.+/.test(s);
-}
-
-// Wraps the well-formedness proxy above in the shape FormKeyLink now expects, so this call site
-// doesn't carry two parallel gating mechanisms (ADR-0031: a caller retaining the old proxy after
-// the resolution signal lands is a regression, not a valid choice) while #158 wires VMAD onto the
-// real signal. No editorId, so the label still falls back to the raw FormKey string — unchanged
-// behavior, just re-expressed through the new prop.
-function vmadObjectResolution(fk: string): FormKeyResolution {
-  return { state: isFormKey(fk) ? 'ResolvedValidType' : 'Unresolved', recordType: null, editorId: null };
-}
-
 function leafContent(
   p: VmadPropertyDiff,
   plugin: string,
@@ -441,7 +421,7 @@ function leafContent(
     const fk = m ? m[1] : str;
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-        <FormKeyLink value={fk} onOpen={onOpen} resolution={vmadObjectResolution(fk)} />
+        <FormKeyLink value={fk} onOpen={onOpen} resolution={p.resolutions?.[plugin]} />
         {m && <span>&nbsp;{m[2]}</span>}
         {typeCue && <span style={{ opacity: 0.6 }}>&nbsp;{typeCue}</span>}
       </span>
