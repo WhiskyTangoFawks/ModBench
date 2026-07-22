@@ -1,3 +1,4 @@
+using MEditService.Core.Records;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda.Plugins;
@@ -10,7 +11,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters)
+        IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
+        Func<string, RecordLookupEntry?>? resolveFormKey = null)
     {
         if (conflictingRecords.Count == 0)
             return new ClassifyResult(ConflictAll.OnlyOne, new Dictionary<string, ConflictThis>(), []);
@@ -20,7 +22,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             var single = conflictingRecords[0];
             var pluginState = new Dictionary<string, ConflictThis> { [single.Plugin] = ConflictThis.OnlyOne };
             var fieldNames = single.Fields.Select(f => f.Metadata.Name).ToList();
-            return new ClassifyResult(ConflictAll.OnlyOne, pluginState, BuildDiffs(fieldNames, conflictingRecords, single, single.Plugin, []));
+            var singleCtx = new DiffContext(single.Plugin, conflictingRecords, _logger, resolveFormKey);
+            return new ClassifyResult(ConflictAll.OnlyOne, pluginState, BuildDiffs(fieldNames, conflictingRecords, single, singleCtx, []));
         }
 
         var master = conflictingRecords[0];
@@ -32,7 +35,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             .Where(f => f.Metadata.ElementType?.IsSortable == true)
             .Select(f => f.Metadata.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var diffs = BuildDiffs([.. master.Fields.Select(f => f.Metadata.Name)], conflictingRecords, winner, master.Plugin, sortedArrays);
+        var ctx = new DiffContext(master.Plugin, conflictingRecords, _logger, resolveFormKey);
+        var diffs = BuildDiffs([.. master.Fields.Select(f => f.Metadata.Name)], conflictingRecords, winner, ctx, sortedArrays);
 
         var conflictAll = ConflictRules.Reduce(diffs.SelectMany(d => d.CellStates.Values));
 
@@ -84,11 +88,20 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
     private const int MaxArrayChildCount = 500;
 
-    private List<FieldDiff> BuildDiffs(
+    // Bundles the per-Classify-call context (master plugin, all overrides, logger, and the ADR-0031
+    // resolver) that every recursive Build*Children/MakeChild step needs, so adding the resolver
+    // didn't push any method over the parameter-count limit.
+    private sealed record DiffContext(
+        string MasterPlugin,
+        IReadOnlyList<RecordDetail> Records,
+        ILogger Logger,
+        Func<string, RecordLookupEntry?>? ResolveFormKey);
+
+    private static List<FieldDiff> BuildDiffs(
         IReadOnlyList<string> fieldNames,
         IReadOnlyList<RecordDetail> records,
         RecordDetail winner,
-        string masterPlugin,
+        DiffContext ctx,
         HashSet<string> sortedArrays)
     {
         var masterFieldMeta = records[0].Fields
@@ -100,24 +113,45 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                     o => o.Plugin,
                     o => o.Fields.FirstOrDefault(f => f.Metadata.Name == fieldName)?.Value);
                 var winnerValue = values.GetValueOrDefault(winner.Plugin);
-                var cellStates = ComputeCellStates(fieldName, values, masterPlugin, records, sortedArrays);
+                var cellStates = ComputeCellStates(fieldName, values, ctx.MasterPlugin, records, sortedArrays);
                 var meta = masterFieldMeta.GetValueOrDefault(fieldName);
                 List<FieldDiff>? children = null;
                 if (meta?.Fields != null)
-                    children = BuildStructChildren(meta.Fields, values, masterPlugin, records, _logger);
+                    children = BuildStructChildren(meta.Fields, values, ctx);
                 else if (meta?.ElementType != null)
-                    children = BuildArrayChildren(meta.ElementType, values, masterPlugin, records, _logger, MaxArrayChildCount, fieldName);
-                return new FieldDiff(fieldName, values, winner.Plugin, winnerValue, cellStates, children);
+                    children = BuildArrayChildren(meta.ElementType, values, ctx, MaxArrayChildCount, fieldName);
+                var resolutions = BuildResolutions(meta, values, ctx.ResolveFormKey);
+                return new FieldDiff(fieldName, values, winner.Plugin, winnerValue, cellStates, children, resolutions);
             })
             .Where(d => d.Values.Values.Any(v => v != null))];
+    }
+
+    // Only a scalar formKey-typed field carries Resolutions — struct/array fields' own Values
+    // aren't FormKey strings, and this is never propagated from Children (ADR-0031: no aggregation).
+    private static Dictionary<string, FormKeyResolution>? BuildResolutions(
+        FieldMetadata? meta,
+        Dictionary<string, object?> values,
+        Func<string, RecordLookupEntry?>? resolveFormKey)
+    {
+        if (resolveFormKey == null || meta?.Type != "formKey") return null;
+
+        var resolutions = new Dictionary<string, FormKeyResolution>();
+        foreach (var (plugin, value) in values)
+        {
+            // Top-level scalar formKey fields carry a raw string (DuckDB VARCHAR); struct sub-fields
+            // and array elements carry a JsonElement (parsed from the struct/array column's JSON) —
+            // ExtractString handles both so struct/array leaves resolve exactly like top-level ones.
+            var fk = FormRefPathBuilder.ExtractString(value);
+            if (string.IsNullOrEmpty(fk) || fk == "Null") continue;
+            resolutions[plugin] = FormKeyResolution.From(resolveFormKey(fk), meta.ValidFormKeyTypes);
+        }
+        return resolutions.Count > 0 ? resolutions : null;
     }
 
     private static List<FieldDiff>? BuildArrayChildren(
         FieldMetadata elementMeta,
         Dictionary<string, object?> parentValues,
-        string masterPlugin,
-        IReadOnlyList<RecordDetail> records,
-        ILogger logger,
+        DiffContext ctx,
         int maxChildren,
         string parentFieldName)
     {
@@ -127,7 +161,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                   je.ValueKind == System.Text.Json.JsonValueKind.Array
                 ? (System.Text.Json.JsonElement?)je : null);
 
-        var builder = new ArrayChildrenBuilder(elementMeta, arrays, masterPlugin, records, logger, maxChildren, parentFieldName);
+        var builder = new ArrayChildrenBuilder(elementMeta, arrays, ctx, maxChildren, parentFieldName);
         var children = elementMeta.IsSortable ? builder.BuildSorted() : builder.BuildPositional();
         return children is { Count: > 0 } ? children : null;
     }
@@ -137,15 +171,17 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     private sealed class ArrayChildrenBuilder(
         FieldMetadata elementMeta,
         Dictionary<string, System.Text.Json.JsonElement?> arrays,
-        string masterPlugin,
-        IReadOnlyList<RecordDetail> records,
-        ILogger logger,
+        DiffContext ctx,
         int maxChildren,
         string parentFieldName)
     {
+        private readonly IReadOnlyList<RecordDetail> _records = ctx.Records;
+        private readonly string _masterPlugin = ctx.MasterPlugin;
+        private readonly ILogger _logger = ctx.Logger;
+
         public List<FieldDiff>? BuildSorted()
         {
-            var union = records
+            var union = _records
                 .Where(r => arrays.GetValueOrDefault(r.Plugin) != null)
                 .SelectMany(r => arrays[r.Plugin]!.Value.EnumerateArray()
                     .Select(e => e.GetString()).OfType<string>())
@@ -224,28 +260,27 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
         private FieldDiff MakeChild(string label, Dictionary<string, object?> subValues)
         {
-            var fieldWinner = records
+            var fieldWinner = _records
                 .Where(r => subValues.GetValueOrDefault(r.Plugin) != null)
                 .MaxBy(r => r.LoadOrderIndex)!;
             var winnerValue = subValues[fieldWinner.Plugin];
-            var cellStates = ComputeCellStates(label, subValues, masterPlugin, records, []);
+            var cellStates = ComputeCellStates(label, subValues, _masterPlugin, _records, []);
             var childChildren = elementMeta.Fields != null
-                ? BuildStructChildren(elementMeta.Fields, subValues, masterPlugin, records, logger)
+                ? BuildStructChildren(elementMeta.Fields, subValues, ctx)
                 : null;
-            return new FieldDiff(label, subValues, fieldWinner.Plugin, winnerValue, cellStates, childChildren);
+            var resolutions = BuildResolutions(elementMeta, subValues, ctx.ResolveFormKey);
+            return new FieldDiff(label, subValues, fieldWinner.Plugin, winnerValue, cellStates, childChildren, resolutions);
         }
 
-        private void WarnTooLarge(int count) => logger.LogWarning(
+        private void WarnTooLarge(int count) => _logger.LogWarning(
             "Array field {Field} on {FormKey} has {Count} elements across plugins — exceeding MaxArrayChildCount ({Max}), falling back to opaque display",
-            parentFieldName, records[0].FormKey, count, maxChildren);
+            parentFieldName, _records[0].FormKey, count, maxChildren);
     }
 
     private static List<FieldDiff>? BuildStructChildren(
         IReadOnlyList<FieldMetadata> subFields,
         Dictionary<string, object?> parentValues,
-        string masterPlugin,
-        IReadOnlyList<RecordDetail> records,
-        ILogger logger)
+        DiffContext ctx)
     {
         var children = new List<FieldDiff>();
         foreach (var subField in subFields)
@@ -258,17 +293,18 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
             List<FieldDiff>? subChildren = null;
             if (subField.IsArray && subField.ElementType != null)
-                subChildren = BuildArrayChildren(subField.ElementType, subValues, masterPlugin, records, logger, MaxArrayChildCount, subField.Name);
+                subChildren = BuildArrayChildren(subField.ElementType, subValues, ctx, MaxArrayChildCount, subField.Name);
             else if (subField.Fields != null)
-                subChildren = BuildStructChildren(subField.Fields, subValues, masterPlugin, records, logger);
+                subChildren = BuildStructChildren(subField.Fields, subValues, ctx);
 
-            var fieldWinner = records
+            var fieldWinner = ctx.Records
                 .Where(r => subValues.GetValueOrDefault(r.Plugin) != null)
                 .MaxBy(r => r.LoadOrderIndex)!;
 
             var winnerValue = subValues[fieldWinner.Plugin];
-            var cellStates = ComputeCellStates(subField.Name, subValues, masterPlugin, records, []);
-            children.Add(new FieldDiff(subField.Name, subValues, fieldWinner.Plugin, winnerValue, cellStates, subChildren));
+            var cellStates = ComputeCellStates(subField.Name, subValues, ctx.MasterPlugin, ctx.Records, []);
+            var resolutions = BuildResolutions(subField, subValues, ctx.ResolveFormKey);
+            children.Add(new FieldDiff(subField.Name, subValues, fieldWinner.Plugin, winnerValue, cellStates, subChildren, resolutions));
         }
         return children.Count > 0 ? children : null;
     }

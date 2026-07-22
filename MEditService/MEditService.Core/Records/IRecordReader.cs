@@ -11,6 +11,13 @@ public interface IRecordReader
     int CountRecordsForPlugin(string tableName, string plugin);
     string? FindRecordType(string formKey);
 
+    // O(1) form_key -> (record type, EditorID) lookup against the winning override, backed by the
+    // form_lookup index-time table (ADR-0031). Prefer this over FindRecordType for any resolution
+    // that runs per FormKey value in a hot response path (CheckErrorBuilder, FieldDiff/PendingChange/
+    // VmadPropertyDiff resolution) — FindRecordType's per-table scan stays only for callers that
+    // already have a table name and merely need existence (e.g. reference validation at stage time).
+    RecordLookupEntry? ResolveFormKey(string formKey);
+
     // Form keys of records native to the plugin (the FormKey's own ModKey == plugin), across all
     // real record tables. Used for ESL-eligibility validation (issue #85).
     IReadOnlyList<string> GetNativeFormKeys(string plugin);

@@ -8,30 +8,34 @@ namespace MEditService.Core.Queries;
 /// </summary>
 public static class CheckErrorBuilder
 {
-    public static string? Build(FieldMetadata meta, object? value, Func<string, string?> getRecordType)
+    // ADR-0031: resolve callers pass IRecordRepository.ResolveFormKey (the O(1) form_lookup read),
+    // not FindRecordType's per-table scan — resolve is a raw lookup; the not-found/wrong-type/
+    // valid-type distinction is computed uniformly here via FormKeyResolution.From, the same factory
+    // FieldDiff/PendingChange/VmadPropertyDiff resolution uses.
+    public static string? Build(FieldMetadata meta, object? value, Func<string, RecordLookupEntry?> resolve)
     {
         var entries = new List<string>();
         FormRefPathBuilder.Walk(meta, value, "",
             (path, raw, allowsNull, validTypes) =>
             {
-                var err = CheckScalar(raw, allowsNull, validTypes, getRecordType);
+                var err = CheckScalar(raw, allowsNull, validTypes, resolve);
                 if (err != null) entries.Add(path.Length > 0 ? $"{path}: {err}" : err);
             });
         return entries.Count > 0 ? string.Join("; ", entries) : null;
     }
 
     private static string? CheckScalar(
-        string? value, bool allowsNull, IReadOnlyList<string> validTypes, Func<string, string?> getRecordType)
+        string? value, bool allowsNull, IReadOnlyList<string> validTypes, Func<string, RecordLookupEntry?> resolve)
     {
         if (string.IsNullOrEmpty(value) || value == "Null")
             return allowsNull ? null : $"Found a NULL reference, expected: {string.Join(", ", validTypes)}";
 
-        var resolvedType = getRecordType(value);
-        return resolvedType switch
+        var resolution = FormKeyResolution.From(resolve(value), validTypes);
+        return resolution.State switch
         {
-            null => $"[{value}] <Error: Could not be resolved>",
-            _ when validTypes.Count > 0 && !validTypes.Contains(resolvedType, StringComparer.OrdinalIgnoreCase)
-                => $"Found a {resolvedType} reference, expected: {string.Join(", ", validTypes)}",
+            FormKeyResolutionState.Unresolved => $"[{value}] <Error: Could not be resolved>",
+            FormKeyResolutionState.ResolvedWrongType
+                => $"Found a {resolution.RecordType} reference, expected: {string.Join(", ", validTypes)}",
             _ => null,
         };
     }

@@ -100,6 +100,9 @@ public sealed class RecordQueryService(
     public CompareResult? GetCompare(string formKey)
     {
         var repository = RequireRepository();
+        // ADR-0031: one memoizing cache per response — a FormKey repeated across sibling
+        // cells/plugins/leaves (generic fields and VMAD alike) is resolved at most once.
+        var resolveFormKey = FormKeyResolutionCache.Memoize(repository.ResolveFormKey);
         foreach (var tableName in RequireSchemas().Keys)
         {
             var overrides = repository.GetAllOverrides(tableName, formKey);
@@ -113,7 +116,7 @@ public sealed class RecordQueryService(
 
             var pluginMasters = RequireSession().Plugins
                 .ToDictionary(p => p.Name, p => p.Masters);
-            var classification = _conflictClassifier.Classify(withPending, pluginMasters);
+            var classification = _conflictClassifier.Classify(withPending, pluginMasters, resolveFormKey);
             var annotated = withPending
                 .ConvertAll(o => new CompareOverride(
                     o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields, o.PendingFields,
@@ -128,7 +131,7 @@ public sealed class RecordQueryService(
             var conflictAll = classification.ConflictAll;
             if (vmadInputs.Any(i => i.Vmad != null))
             {
-                var vmadResult = VmadConflictClassifier.Classify(vmadInputs);
+                var vmadResult = VmadConflictClassifier.Classify(vmadInputs, resolveFormKey);
                 vmad = vmadResult.Compare;
                 conflictAll = ConflictRules.Escalate(conflictAll, vmadResult.ConflictContribution);
             }
@@ -163,6 +166,13 @@ public sealed class RecordQueryService(
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
         RequireRepository().GetReferences(targetFormKey);
+
+    public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null)
+    {
+        var pending = _changes.GetChanges(plugin, formKey, memberChangeId);
+        var resolveFormKey = FormKeyResolutionCache.Memoize(RequireRepository().ResolveFormKey);
+        return PendingChangeResolver.ResolveAll(pending, RequireSchemas(), resolveFormKey);
+    }
 
     public VmadData? GetVmad(string formKey, string plugin) =>
         RequireRepository().GetVmad(formKey, plugin);

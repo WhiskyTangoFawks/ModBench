@@ -50,6 +50,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         var plugin = pluginMod.ModKey.FileName.ToString();
 
         var refs = new List<FormRef>();
+        var lookupRows = new List<(string FormKey, string RecordType, string? EditorId)>();
 
         // One transaction for the whole reindex so a throw partway leaves the prior committed
         // read model intact rather than a partial snapshot. DuckDB appenders enroll in the active
@@ -59,9 +60,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         foreach (var (tableName, schema) in schemas)
         {
             // The header table is never a major-record type (ModHeader has no FormKey/EditorID) —
-            // IndexRecordTable's EnumerateMajorRecords call assumes one, so it's indexed separately.
+            // IndexRecordTable's EnumerateMajorRecords call assumes one, so it's indexed separately,
+            // and header rows never enter form_lookup for the same reason.
             if (tableName == "header") continue;
-            IndexRecordTable(tableName, schema, pluginMod, plugin, loadOrderIndex, refs);
+            IndexRecordTable(tableName, schema, pluginMod, plugin, loadOrderIndex, refs, lookupRows);
         }
 
         // Walk VMAD after the per-type loop so both generic and VMAD Object refs land in `refs`
@@ -94,12 +96,35 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             }
         }
 
+        // ADR-0031: one form_lookup row per indexed record, populated in this same pass — no
+        // second indexing pass over the plugin.
+        DeleteExisting("form_lookup", plugin);
+        if (lookupRows.Count > 0)
+        {
+            using var lookupAppender = Connection.CreateAppender("form_lookup");
+            foreach (var (formKey, recordType, editorId) in lookupRows)
+            {
+                var row = lookupAppender.CreateRow();
+                row.AppendValue(formKey);
+                row.AppendValue(plugin);
+                row.AppendValue(recordType);
+                if (editorId is { } eid)
+                    row.AppendValue(eid);
+                else
+                    row.AppendNullValue();
+                row.AppendValue((int?)loadOrderIndex);
+                row.AppendValue((bool?)false);
+                row.EndRow();
+            }
+        }
+
         tx.Commit();
     }
 
     private void IndexRecordTable(
         string tableName, RecordTableSchema schema, IModGetter pluginMod,
-        string plugin, int loadOrderIndex, List<FormRef> refs)
+        string plugin, int loadOrderIndex, List<FormRef> refs,
+        List<(string FormKey, string RecordType, string? EditorId)> lookupRows)
     {
         List<IMajorRecordGetter> records;
         try
@@ -138,6 +163,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
                 row.EndRow();
                 CollectFormRefs(refs, record, tableName, schema);
+                lookupRows.Add((record.FormKey.ToString(), tableName, record.EditorID));
             }
             catch (Exception ex)
             {
@@ -162,6 +188,17 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 ))
                 """);
         }
+
+        // form_lookup isn't a reflected schema table, so it needs its own winner sweep — same
+        // shape as every other table's, so ResolveFormKey's EditorID reflects the winning override
+        // like every other resolved field, not a winner-agnostic special case (ADR-0031).
+        Execute("""
+            UPDATE form_lookup
+            SET is_winner = (load_order_idx = (
+                SELECT MAX(t2.load_order_idx) FROM form_lookup t2
+                WHERE t2.form_key = form_lookup.form_key
+            ))
+            """);
     }
 
     // --- Queries (absorbed from RecordQueryService, with DuckDBParameter throughout) ---
@@ -219,11 +256,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         AddParams(cmd, values);
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;
-        var cache = new Dictionary<string, string?>();
+        var cache = new Dictionary<string, RecordLookupEntry?>();
         return ReadDetail(reader, schema, fk =>
         {
             if (cache.TryGetValue(fk, out var t)) return t;
-            var resolved = FindRecordType(fk);
+            var resolved = ResolveFormKey(fk);
             cache[fk] = resolved;
             return resolved;
         });
@@ -244,13 +281,13 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         using var reader = cmd.ExecuteReader();
 
         var list = new List<RecordDetail>();
-        var cache = new Dictionary<string, string?>();
+        var cache = new Dictionary<string, RecordLookupEntry?>();
         while (reader.Read())
         {
             list.Add(ReadDetail(reader, schema, fk =>
             {
                 if (cache.TryGetValue(fk, out var t)) return t;
-                var resolved = FindRecordType(fk);
+                var resolved = ResolveFormKey(fk);
                 cache[fk] = resolved;
                 return resolved;
             }));
@@ -459,6 +496,22 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return null;
     }
 
+    public RecordLookupEntry? ResolveFormKey(string formKey)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = "SELECT record_type, editor_id FROM form_lookup WHERE form_key = $1 AND is_winner LIMIT 1";
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        using var reader = cmd.ExecuteReader();
+
+        // Local function so the merged conditional expression below doesn't nest a ternary per
+        // coordinate (SonarS3358), matching GetPlacement's NullableFloat pattern.
+        string? NullableEditorId() => reader.IsDBNull(1) ? null : reader.GetString(1);
+
+        return !reader.Read()
+            ? null
+            : new RecordLookupEntry(reader.GetString(0), NullableEditorId());
+    }
+
     public IReadOnlyList<string> GetNativeFormKeys(string plugin)
     {
         var tables = RequireSchemas().Keys.Where(t => t != HeaderIndexer.TableName).ToList();
@@ -521,7 +574,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         new(reader.GetString(0), reader.GetString(1), reader.GetInt32(2),
             reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4));
 
-    private static RecordDetail ReadDetail(DuckDBDataReader reader, RecordTableSchema schema, Func<string, string?> getRecordType)
+    private static RecordDetail ReadDetail(DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
     {
         var formKey = reader.GetString(0);
         var plugin = reader.GetString(1);
@@ -545,7 +598,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             if (value != null && col.IsBitmask)
                 value = Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
             var meta = col.ToFieldMetadata();
-            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, getRecordType)));
+            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey)));
         }
 
         return new RecordDetail(formKey, plugin, loadOrderIndex, isWinner, editorId, fields, RecordType: schema.TableName);

@@ -321,6 +321,26 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
         Assert.Null(tableName);
     }
 
+    // --- ResolveFormKey (ADR-0031) ---
+
+    [Fact]
+    public void ResolveFormKey_KnownFormKey_ReturnsRecordTypeAndEditorId()
+    {
+        using var repo = LoadedRepository();
+        var entry = repo.ResolveFormKey(_fixture.Npc1FormKey.ToString());
+        Assert.NotNull(entry);
+        Assert.Equal("npc_", entry!.Value.RecordType);
+        Assert.Equal("TestNPC01", entry.Value.EditorId);
+    }
+
+    [Fact]
+    public void ResolveFormKey_UnknownFormKey_ReturnsNull()
+    {
+        using var repo = LoadedRepository();
+        var entry = repo.ResolveFormKey("FFFFFF:Unknown.esp");
+        Assert.Null(entry);
+    }
+
     // --- UpdateWinners ---
 
     [Fact]

@@ -514,18 +514,27 @@ public static class VmadCodec
 
     // The FormKeys carried by a staged VMAD value, in the { formKey, alias } shape used for
     // Object and ArrayOfObject edits. Any other value shape references nothing.
-    public static IEnumerable<string> ValueFormKeys(JsonElement value)
+    public static IEnumerable<string> ValueFormKeys(JsonElement value) =>
+        ValueFormKeysWithPaths(value).Select(p => p.FormKey);
+
+    // Same FormKeys as ValueFormKeys, paired with a sub-path within value ("" for a scalar Object,
+    // "[i]" for an ArrayOfObject element) so callers can key a per-leaf signal independently
+    // (ADR-0031's PendingChangeResolver). Struct/ArrayOfStruct-shaped values still yield nothing —
+    // pre-existing scope, same as ValueFormKeys.
+    public static IEnumerable<(string Path, string FormKey)> ValueFormKeysWithPaths(JsonElement value)
     {
         if (value.ValueKind == JsonValueKind.Array)
         {
+            var idx = 0;
             foreach (var el in value.EnumerateArray())
             {
-                if (FormKeyOf(el) is { } elFk) yield return elFk;
+                if (FormKeyOf(el) is { } elFk) yield return ($"[{idx}]", elFk);
+                idx++;
             }
         }
         else if (FormKeyOf(value) is { } fk)
         {
-            yield return fk;
+            yield return ("", fk);
         }
     }
 

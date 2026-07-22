@@ -12,7 +12,22 @@ public sealed record VmadClassifyResult(VmadCompare Compare, ConflictAll Conflic
 // load-order plugin that has the cell).
 public static class VmadConflictClassifier
 {
-    public static VmadClassifyResult Classify(IReadOnlyList<VmadPluginInput> inputs)
+    // Bundles the per-Classify-call context (all plugin inputs, master plugin, the shared conflict
+    // accumulator, and the ADR-0031 resolver) that every recursive Build*/ChildDiff step needs —
+    // mirrors ConflictClassifier.DiffContext so the two classifiers stay consistent within this PR.
+    private sealed record VmadDiffContext(
+        IReadOnlyList<VmadPluginInput> Inputs,
+        string MasterPlugin,
+        ConflictAccumulator Conflict,
+        Func<string, RecordLookupEntry?>? ResolveFormKey);
+
+    // resolveFormKey: ADR-0031's O(1) lookup, batched once per Classify call. VMAD's Object-kind
+    // properties reference ordinary major records (not VMAD-internal data), so they resolve through
+    // the same lookup as FieldDiff — no VMAD-specific index or expected-type list exists at this
+    // layer, so every resolved Object is either ResolvedValidType or Unresolved, never
+    // ResolvedWrongType (there's no Papyrus-declared expected record type to compare against).
+    public static VmadClassifyResult Classify(
+        IReadOnlyList<VmadPluginInput> inputs, Func<string, RecordLookupEntry?>? resolveFormKey = null)
     {
         var present = inputs.Where(i => i.Vmad != null).ToList();
         if (present.Count == 0)
@@ -20,6 +35,7 @@ public static class VmadConflictClassifier
 
         var masterPlugin = inputs[0].Plugin;
         var conflict = new ConflictAccumulator();
+        var ctx = new VmadDiffContext(inputs, masterPlugin, conflict, resolveFormKey);
 
         var scriptNames = present
             .SelectMany(i => i.Vmad!.Scripts.Select(s => s.Name))
@@ -38,7 +54,7 @@ public static class VmadConflictClassifier
                 var (cellStates, winner) = ComputeCellStates(inputs, masterPlugin, p => perPlugin[p]?.Flags);
                 conflict.Add(cellStates);
 
-                var properties = BuildPropertyDiffs(inputs, masterPlugin, perPlugin, conflict);
+                var properties = BuildPropertyDiffs(perPlugin, ctx);
                 return new VmadScriptDiff(scriptName, flags, winner, cellStates, properties);
             });
 
@@ -46,12 +62,9 @@ public static class VmadConflictClassifier
     }
 
     private static List<VmadPropertyDiff> BuildPropertyDiffs(
-        IReadOnlyList<VmadPluginInput> inputs,
-        string masterPlugin,
-        Dictionary<string, VmadScriptData?> perPluginScript,
-        ConflictAccumulator conflict)
+        Dictionary<string, VmadScriptData?> perPluginScript, VmadDiffContext ctx)
     {
-        var propNames = inputs
+        var propNames = ctx.Inputs
             .Select(i => perPluginScript[i.Plugin])
             .Where(s => s != null)
             .SelectMany(s => s!.Properties.Select(p => p.Name))
@@ -62,19 +75,15 @@ public static class VmadConflictClassifier
         return [.. propNames
             .Select(propName =>
             {
-                var perPlugin = inputs.ToDictionary(
+                var perPlugin = ctx.Inputs.ToDictionary(
                     i => i.Plugin,
                     i => perPluginScript[i.Plugin]?.Properties.FirstOrDefault(p => p.Name == propName)?.Value);
-                return BuildDiff(propName, perPlugin, inputs, masterPlugin, conflict);
+                return BuildDiff(propName, perPlugin, ctx);
             })];
     }
 
     private static VmadPropertyDiff BuildDiff(
-        string name,
-        Dictionary<string, VmadPropertyValue?> perPlugin,
-        IReadOnlyList<VmadPluginInput> inputs,
-        string masterPlugin,
-        ConflictAccumulator conflict)
+        string name, Dictionary<string, VmadPropertyValue?> perPlugin, VmadDiffContext ctx)
     {
         var kind = Kind(perPlugin.Values.First(v => v != null)!.Type);
         var types = perPlugin
@@ -82,12 +91,32 @@ public static class VmadConflictClassifier
             .ToDictionary(kv => kv.Key, kv => kv.Value!.Type);
         var values = perPlugin.ToDictionary(kv => kv.Key, kv => LeafValue(kv.Value));
 
-        var (cellStates, winner) = ComputeCellStates(inputs, masterPlugin, p => Canon(perPlugin[p]));
-        conflict.Add(cellStates);
+        var (cellStates, winner) = ComputeCellStates(ctx.Inputs, ctx.MasterPlugin, p => Canon(perPlugin[p]));
+        ctx.Conflict.Add(cellStates);
 
-        var children = BuildChildren(kind, perPlugin, inputs, masterPlugin, conflict);
+        var children = BuildChildren(kind, perPlugin, ctx);
         var raw = BuildRaw(kind, perPlugin);
-        return new VmadPropertyDiff(name, kind, values, types, winner, cellStates, children, raw);
+        var resolutions = BuildResolutions(kind, perPlugin, ctx.ResolveFormKey);
+        return new VmadPropertyDiff(name, kind, values, types, winner, cellStates, children, raw, resolutions);
+    }
+
+    // Only an "object"-kind leaf carries Resolutions — never aggregated from Children, so a
+    // dangling Object in one array element/struct member doesn't hide a live link on its siblings
+    // (ADR-0031, same independence fix as FieldDiff).
+    private static Dictionary<string, FormKeyResolution>? BuildResolutions(
+        string kind,
+        Dictionary<string, VmadPropertyValue?> perPlugin,
+        Func<string, RecordLookupEntry?>? resolveFormKey)
+    {
+        if (resolveFormKey == null || kind != "object") return null;
+
+        var resolutions = new Dictionary<string, FormKeyResolution>();
+        foreach (var (plugin, value) in perPlugin)
+        {
+            if (value?.Value is not string fk || fk.Length == 0) continue;
+            resolutions[plugin] = FormKeyResolution.From(resolveFormKey(fk), []);
+        }
+        return resolutions.Count > 0 ? resolutions : null;
     }
 
     // Per-plugin editable subtree for struct/structList in the VmadPropertyNode shape the apply
@@ -122,16 +151,11 @@ public static class VmadConflictClassifier
     };
 
     private static List<VmadPropertyDiff>? BuildChildren(
-        string kind,
-        Dictionary<string, VmadPropertyValue?> perPlugin,
-        IReadOnlyList<VmadPluginInput> inputs,
-        string masterPlugin,
-        ConflictAccumulator conflict) => kind switch
+        string kind, Dictionary<string, VmadPropertyValue?> perPlugin, VmadDiffContext ctx) => kind switch
         {
-            "array" => IndexedChildren(perPlugin, inputs, masterPlugin, conflict,
-                v => v.ListItems, (sl, idx) => sl[idx]),
-            "struct" => MemberChildren(perPlugin, inputs, masterPlugin, conflict),
-            "structList" => IndexedChildren(perPlugin, inputs, masterPlugin, conflict,
+            "array" => IndexedChildren(perPlugin, ctx, v => v.ListItems, (sl, idx) => sl[idx]),
+            "struct" => MemberChildren(perPlugin, ctx),
+            "structList" => IndexedChildren(perPlugin, ctx,
                 v => v.StructList, (sl, idx) => new VmadPropertyValue("Struct", "", null, Members: sl[idx])),
             _ => null,
         };
@@ -139,9 +163,7 @@ public static class VmadConflictClassifier
     // Aligns array/struct-list elements by index. Each plugin contributes element idx if present.
     private static List<VmadPropertyDiff>? IndexedChildren<T>(
         Dictionary<string, VmadPropertyValue?> perPlugin,
-        IReadOnlyList<VmadPluginInput> inputs,
-        string masterPlugin,
-        ConflictAccumulator conflict,
+        VmadDiffContext ctx,
         Func<VmadPropertyValue, IReadOnlyList<T>?> select,
         Func<IReadOnlyList<T>, int, VmadPropertyValue> elementAt)
     {
@@ -149,16 +171,13 @@ public static class VmadConflictClassifier
         return maxLen == 0
             ? null
             : ([.. Enumerable.Range(0, maxLen)
-            .Select(idx => ChildDiff($"[{idx}]", perPlugin, inputs, masterPlugin, conflict,
+            .Select(idx => ChildDiff($"[{idx}]", perPlugin, ctx,
                 v => select(v) is { } list && idx < list.Count ? elementAt(list, idx) : null))]);
     }
 
     // Aligns struct members by name (union, sorted).
     private static List<VmadPropertyDiff>? MemberChildren(
-        Dictionary<string, VmadPropertyValue?> perPlugin,
-        IReadOnlyList<VmadPluginInput> inputs,
-        string masterPlugin,
-        ConflictAccumulator conflict)
+        Dictionary<string, VmadPropertyValue?> perPlugin, VmadDiffContext ctx)
     {
         var names = perPlugin.Values
             .Where(v => v?.Members != null)
@@ -170,20 +189,18 @@ public static class VmadConflictClassifier
         return names.Count == 0
             ? null
             : ([.. names
-            .Select(mn => ChildDiff(mn, perPlugin, inputs, masterPlugin, conflict,
+            .Select(mn => ChildDiff(mn, perPlugin, ctx,
                 v => v.Members?.FirstOrDefault(m => m.Name == mn)?.Value))]);
     }
 
     private static VmadPropertyDiff ChildDiff(
         string name,
         Dictionary<string, VmadPropertyValue?> perPlugin,
-        IReadOnlyList<VmadPluginInput> inputs,
-        string masterPlugin,
-        ConflictAccumulator conflict,
+        VmadDiffContext ctx,
         Func<VmadPropertyValue, VmadPropertyValue?> pick)
     {
         var childPer = perPlugin.ToDictionary(kv => kv.Key, kv => kv.Value is null ? null : pick(kv.Value));
-        return BuildDiff(name, childPer, inputs, masterPlugin, conflict);
+        return BuildDiff(name, childPer, ctx);
     }
 
     // Delegates per-cell classification to ConflictRules (shared with the generic field path):
@@ -249,11 +266,12 @@ public static class VmadConflictClassifier
         if (v.ListItems != null)
             return $"{v.Type}[" + string.Join(",", v.ListItems.Select(Canon)) + "]";
 
-        string leaf;
-        if (v.Type == "Object")
-            leaf = v.Value == null ? "" : $"{v.Value} [{v.Alias}]";
-        else
-            leaf = v.Value?.ToString() ?? "";
+        var leaf = v.Type switch
+        {
+            "Object" when v.Value == null => "",
+            "Object" => $"{v.Value} [{v.Alias}]",
+            _ => v.Value?.ToString() ?? "",
+        };
         return $"{v.Type}|{leaf}";
     }
 

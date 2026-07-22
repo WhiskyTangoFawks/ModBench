@@ -15,6 +15,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         CreatePluginsTable(connection);
         CreateIndexStateTable(connection);
         CreateFormReferencesTable(connection);
+        CreateFormLookupTable(connection);
         CreateVmadTables(connection);
         CreatePlacementTables(connection);
         foreach (var schema in _reflector.GetSchemas(release).Values)
@@ -58,6 +59,28 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         Execute(connection, """
             CREATE INDEX IF NOT EXISTS idx_form_references_target
                 ON form_references(target_form_key)
+            """);
+    }
+
+    // ADR-0031: global form_key -> (record type, EditorID) lookup, one row per (form_key, plugin)
+    // like every reflected record table — populated in the same indexing pass that writes each
+    // record's own per-type table row, so CheckErrorBuilder and the compare/changes resolvers can
+    // resolve a FormKey in O(1) instead of scanning every per-type table.
+    internal static void CreateFormLookupTable(DuckDBConnection connection)
+    {
+        Execute(connection, """
+            CREATE TABLE IF NOT EXISTS form_lookup (
+                form_key       VARCHAR NOT NULL,
+                plugin         VARCHAR NOT NULL,
+                record_type    VARCHAR NOT NULL,
+                editor_id      VARCHAR,
+                load_order_idx INTEGER NOT NULL,
+                is_winner      BOOLEAN NOT NULL DEFAULT FALSE
+            )
+            """);
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_form_lookup_form_key
+                ON form_lookup(form_key)
             """);
     }
 

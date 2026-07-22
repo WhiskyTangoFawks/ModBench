@@ -1029,6 +1029,8 @@ public sealed class RecordQueryServiceTests : IDisposable
             return inner.FindRecordType(formKey);
         }
 
+        public RecordLookupEntry? ResolveFormKey(string formKey) => inner.ResolveFormKey(formKey);
+
         public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly)
         {
             GetRecordCalls++;
