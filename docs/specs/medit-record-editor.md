@@ -242,11 +242,10 @@ section, and any future surface):
    affordance on the leaf next to it. `checkError` still drives the ⚠ icon but no longer gates
    the link.
 
-   *The **VMAD section**'s proxy is unchanged and still the known-limited one (#158).* A
-   `VmadPropertyDiff` doesn't yet carry the resolution signal, so the only available test is
-   that the Object property's FormKey is well-formed — which catches an unset reference
-   (`Null [-1]`) but not one pointing outside the index, leaving that case looking followable.
-   #158 carries the same resolution signal onto `VmadPropertyDiff` to close this gap.
+   The **VMAD section** sources the same signal from `VmadPropertyDiff.resolutions` (#158) —
+   an Object-kind property's link label and affordance follow the real resolution, not a
+   well-formedness proxy, so a dangling reference (one pointing outside the index) no longer
+   looks followable.
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
    per-session, not persisted across restarts. Array **element values** are editable
    everywhere. Array **arity and order** divide by surface, so this rule does not generalize:
