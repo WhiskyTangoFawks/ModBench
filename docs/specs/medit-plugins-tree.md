@@ -100,6 +100,10 @@ masters; there is no separate load-session step.
   `modbench.viewMode == 'editing'`. It is the primary navigation surface; there is no separate
   load-session step — the session is constructed on entry from the active modlist's enabled
   plugins plus vanilla masters (`load-explicit`).
+- **Title reflects view mode** (#109): the activity-bar container title ("Modbench") is fixed by
+  VS Code and cannot change at runtime, so the view's own writable title carries the mEdit
+  context instead — it reads "Plugins" in loadout mode and "mEdit — Plugins" once
+  `modbench.viewMode` flips to `'editing'`, reverting on exit.
 - **Multi-select** (`canSelectMany`): Ctrl/Shift-click selects multiple nodes, possibly
   spanning plugins and record types; batch-capable context commands (currently Remove Record)
   receive the full selection.
