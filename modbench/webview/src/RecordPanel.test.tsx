@@ -627,9 +627,14 @@ describe('RecordPanel — Add Master picker (issue #86)', () => {
     );
   });
 
-  it('issue #119: does not show a Scripts (VMAD) section on the header record', async () => {
+});
+
+describe('RecordPanel — no VMAD section on the header record (issue #119)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('does not show a Scripts (VMAD) section on the header record', async () => {
     vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
-    renderPanel(headerCompareResult, headerOpts);
+    renderPanel(headerCompareResult, { plugins: headerPluginsResponse });
     await waitFor(() => screen.getByText('Add Master…'));
     expect(screen.queryByText('Scripts (VMAD)')).not.toBeInTheDocument();
   });
