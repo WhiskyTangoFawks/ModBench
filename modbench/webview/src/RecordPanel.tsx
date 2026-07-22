@@ -554,19 +554,21 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
               }
               return rows;
             })}
-            <VmadSection
-                        vmad={result.vmad}
-                        columns={columns}
-                        onOpen={handleOpen}
-                        immutableSet={immutableSet}
-                        pendingChangeMap={pendingChangeMap}
-                        onEdit={(plugin, vmadPath, value) => { void handleEdit(plugin, vmadPath, value); }}
-                        onRevert={changeId => { void handleRevertGroup(changeId); }}
-                        onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
-                        onRevealPendingChange={handleRevealPendingChange}
-                        onStructOp={(plugin, vmadPath, op) => { void handleVmadStructOp(plugin, vmadPath, op); }}
-                        client={client}
-                      />
+            {!isHeaderRecord && (
+              <VmadSection
+                          vmad={result.vmad}
+                          columns={columns}
+                          onOpen={handleOpen}
+                          immutableSet={immutableSet}
+                          pendingChangeMap={pendingChangeMap}
+                          onEdit={(plugin, vmadPath, value) => { void handleEdit(plugin, vmadPath, value); }}
+                          onRevert={changeId => { void handleRevertGroup(changeId); }}
+                          onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
+                          onRevealPendingChange={handleRevealPendingChange}
+                          onStructOp={(plugin, vmadPath, op) => { void handleVmadStructOp(plugin, vmadPath, op); }}
+                          client={client}
+                        />
+            )}
           </tbody>
         </table>
       </div>
