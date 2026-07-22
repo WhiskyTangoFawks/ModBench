@@ -139,6 +139,7 @@ describe('VmadSection', () => {
           kind: 'object',
           values: { 'A.esm': '000123:Foo.esp [2]' },
           types: { 'A.esm': 'Object' },
+          resolutions: { 'A.esm': { state: 'ResolvedValidType', recordType: 'NPC_', editorId: null } },
         })],
       })],
     };
@@ -696,6 +697,7 @@ describe('VmadSection — Ctrl+click follows the reference instead of editing', 
         values: { 'A.esm': '000123:Foo.esp [2]' },
         types: { 'A.esm': 'Object' },
         winnerPlugin: 'A.esm',
+        resolutions: { 'A.esm': { state: 'ResolvedValidType', recordType: 'NPC_', editorId: null } },
       })],
     })],
   });
@@ -785,6 +787,61 @@ describe('VmadSection — Ctrl+click follows the reference instead of editing', 
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
     expect(link.style.textDecoration).toBe('underline');
+    fireEvent.keyUp(window, { key: 'Control' });
+  });
+
+  // Issue #158: VMAD Object properties now source their FormKeyLink resolution from the real
+  // ADR-0031 signal (VmadPropertyDiff.resolutions), not the well-formedness regex proxy this
+  // replaces. A resolved reference renders its EditorID as the link label...
+  it('a resolved VMAD object reference renders the EditorID as its label', () => {
+    const resolvedVmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [prop({
+          name: 'Target',
+          kind: 'object',
+          values: { 'A.esm': '000123:Foo.esp [2]' },
+          types: { 'A.esm': 'Object' },
+          winnerPlugin: 'A.esm',
+          resolutions: { 'A.esm': { state: 'ResolvedValidType', recordType: 'NPC_', editorId: 'SomeNPC' } },
+        })],
+      })],
+    };
+    renderSection(resolvedVmad, ['A.esm'], {});
+    toggle('S');
+
+    expect(screen.getByText('SomeNPC')).toBeInTheDocument();
+    expect(screen.queryByText('000123:Foo.esp')).not.toBeInTheDocument();
+  });
+
+  // ...and a dangling reference — a syntactically well-formed FormKey string that isn't in the
+  // index — must not show the hover affordance or navigate, even though the old well-formedness
+  // proxy would have granted it. This is the false-affordance regression #158 fixes.
+  it('a dangling (unresolved) VMAD object reference shows no affordance despite being well-formed', () => {
+    const danglingVmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [prop({
+          name: 'Target',
+          kind: 'object',
+          values: { 'A.esm': '000123:Foo.esp [2]' },
+          types: { 'A.esm': 'Object' },
+          winnerPlugin: 'A.esm',
+          resolutions: { 'A.esm': { state: 'Unresolved', recordType: null, editorId: null } },
+        })],
+      })],
+    };
+    const onOpen = vi.fn();
+    renderSection(danglingVmad, ['A.esm'], { onOpen });
+    toggle('S');
+
+    const link = screen.getByText('000123:Foo.esp');
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    fireEvent.mouseEnter(link);
+    expect(link.style.textDecoration).toBe('none');
+
+    fireEvent.click(link, { ctrlKey: true });
+    expect(onOpen).not.toHaveBeenCalled();
     fireEvent.keyUp(window, { key: 'Control' });
   });
 });
