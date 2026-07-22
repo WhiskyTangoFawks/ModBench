@@ -222,6 +222,10 @@ const fkCompareResult = {
       winnerPlugin: 'Fallout4.esm',
       winnerValue: '00013918:Fallout4.esm',
       cellStates: {},
+      // ADR-0031: the backend now carries a resolution signal per FormKey value — this fixture
+      // mirrors a resolved reference so the Ctrl-hover affordance/navigation tests below exercise
+      // real product behavior instead of an unresolved default.
+      resolutions: { 'Fallout4.esm': { state: 'ResolvedValidType', recordType: 'race', editorId: 'HumanRace' } },
     },
   ],
 };
@@ -340,8 +344,9 @@ describe('RecordPanel — postMessage wiring', () => {
 
   it('calls vscode.postMessage with type openRecord when a FormKey link is Ctrl+clicked', async () => {
     renderPanel(fkCompareResult, { plugins: fkPlugins });
-    await waitFor(() => screen.getByText('00013918:Fallout4.esm'));
-    fireEvent.click(screen.getByText('00013918:Fallout4.esm'), { ctrlKey: true });
+    // Resolved per fkCompareResult's diff.resolutions — labeled with the EditorID, not the raw FormKey.
+    await waitFor(() => screen.getByText('HumanRace'));
+    fireEvent.click(screen.getByText('HumanRace'), { ctrlKey: true });
     expect(vscode.postMessage).toHaveBeenCalledWith({
       type: WEBVIEW_TO_EXTENSION.OPEN_RECORD,
       formKey: '00013918:Fallout4.esm',

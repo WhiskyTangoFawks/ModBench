@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { FormKeyPicker } from './FormKeyPicker';
 import { FormKeyLink } from './FormKeyLink';
 import { CheckErrorIcon } from './CheckErrorIcon';
-import type { FieldMetadata } from './types';
+import type { FieldMetadata, FormKeyResolution } from './types';
 import type { RecordSessionClient } from './RecordSessionClient';
 
 interface FormKeyCellProps {
@@ -13,9 +13,13 @@ interface FormKeyCellProps {
   onOpen: (fk: string) => void;
   onCommit: (fk: string) => void;
   checkError?: string | null;
+  // ADR-0031 / issue #157: the leaf's own resolution signal, gating the link affordance and
+  // label — independent of checkError, which still drives the ⚠ icon below but no longer the
+  // link (a resolved-but-wrong-type reference carries a checkError yet is still followable).
+  resolution?: FormKeyResolution;
 }
 
-export function FormKeyCell({ value, meta, editable, client, onOpen, onCommit, checkError }: FormKeyCellProps) {
+export function FormKeyCell({ value, meta, editable, client, onOpen, onCommit, checkError, resolution }: FormKeyCellProps) {
   const [picking, setPicking] = useState(false);
 
   if (picking) {
@@ -45,7 +49,7 @@ export function FormKeyCell({ value, meta, editable, client, onOpen, onCommit, c
             style={{ opacity: 0.35, cursor: editable ? 'pointer' : undefined }}
           >—</span>
         )
-        : <FormKeyLink value={fk} onOpen={onOpen} onPlainClick={onPlainClick} linksTo={!checkError} />}
+        : <FormKeyLink value={fk} onOpen={onOpen} onPlainClick={onPlainClick} resolution={resolution} />}
       <CheckErrorIcon checkError={checkError} />
     </span>
   );

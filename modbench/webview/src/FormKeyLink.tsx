@@ -1,5 +1,10 @@
 import React, { useState, useSyncExternalStore } from 'react';
 import { mono } from './gridStyles';
+import type { FormKeyResolution } from './types';
+
+// Safe default when a caller has no resolution to offer yet (VMAD/pending wiring land in #158/
+// #159) — behaves exactly like a genuinely unresolved reference: raw FormKey label, no affordance.
+const UNRESOLVED: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
 // Whether Ctrl/Cmd is currently held. Window-level because the affordance has to appear on a
 // cell the pointer is already resting over — a cell that will see no fresh mouse event. Every
@@ -57,18 +62,25 @@ function useCtrlHeld(): boolean {
 // click there does nothing.
 //
 // The link *affordance* — underline and pointer — appears only while Ctrl is held and the
-// pointer is over the cell, and only when the reference resolves. This mirrors xEdit's
-// vstViewCheckHotTrack, which gates hot-tracking on `Allow := Assigned(lLinksTo)`: a link you
-// cannot follow must not look like one. `linksTo` is the caller's resolve signal.
-export function FormKeyLink({ value, onOpen, onPlainClick, linksTo = true }: Readonly<{
+// pointer is over the cell, and only when the reference resolves (ADR-0031: Unresolved withholds
+// it, ResolvedWrongType/ResolvedValidType both grant it, matching xEdit's willingness to follow a
+// reference of the wrong type). This mirrors xEdit's vstViewCheckHotTrack, which gates
+// hot-tracking on `Allow := Assigned(lLinksTo)`: a link you cannot follow must not look like one.
+//
+// Issue #157: the button's label is the resolved EditorID when the reference resolves, falling
+// back to the raw FormKey string when it doesn't (or when the caller has no resolution to offer
+// yet — VMAD/pending wiring land in #158/#159).
+export function FormKeyLink({ value, onOpen, onPlainClick, resolution = UNRESOLVED }: Readonly<{
   value: string;
   onOpen: (fk: string) => void;
   onPlainClick?: () => void;
-  linksTo?: boolean;
+  resolution?: FormKeyResolution;
 }>) {
   const ctrl = useCtrlHeld();
   const [hovered, setHovered] = useState(false);
+  const linksTo = resolution.state !== 'Unresolved';
   const hot = ctrl && hovered && linksTo;
+  const label = resolution.editorId ?? value;
 
   return (
     <button
@@ -90,7 +102,7 @@ export function FormKeyLink({ value, onOpen, onPlainClick, linksTo = true }: Rea
         textAlign: 'left',
       }}
     >
-      {value}
+      {label}
     </button>
   );
 }

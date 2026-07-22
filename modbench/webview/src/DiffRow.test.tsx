@@ -1,11 +1,11 @@
 import '@testing-library/jest-dom';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 import { DiffRow } from './DiffRow';
 import type { Column } from './recordUtils';
-import type { CompareOverride, FieldDiff, FieldMetadata, PendingChange } from './types';
+import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
 import type { RecordSessionClient } from './RecordSessionClient';
 
 const client = {} as unknown as RecordSessionClient;
@@ -237,5 +237,89 @@ describe('DiffRow — non-top-level contexts', () => {
       fieldMetaMap: {}, // 'Name' not present -> top-level meta lookup misses
     }))}</tbody></table>);
     expect(container.querySelector('tr')).not.toBeInTheDocument();
+  });
+});
+
+// Issue #157 / ADR-0031 regression coverage: the affordance must key off the leaf's own
+// `diff.resolutions` entry, not the parent field's aggregate `checkError` (looked up via
+// `overrideMap`/`pendingLookupField`) — a dangling sibling in the same struct/array must not hide
+// a live link on the leaf next to it.
+describe('DiffRow — FormKey leaf resolution is independent of the parent field aggregate', () => {
+  const fkMeta: FieldMetadata = { name: '', type: 'formKey', isArray: false, validFormKeyTypes: [], enumValues: [] };
+  const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'kywd', editorId: 'SomeKeyword' };
+  const wrongType: FormKeyResolution = { state: 'ResolvedWrongType', recordType: 'npc_', editorId: 'SomeNpc' };
+  const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
+
+  // Simulates today's aggregate bug: the parent field carries a checkError (e.g. because a
+  // *different* sibling element/member is dangling), which the old code read via overrideMap +
+  // pendingLookupField regardless of which leaf row was rendering.
+  function leafProps(
+    kind: 'array-element' | 'struct-child',
+    resolution: FormKeyResolution,
+    value = '000019:Fallout4.esm',
+  ) {
+    const parentFieldName = kind === 'array-element' ? 'Keywords' : 'LinkedRef';
+    const parentType = kind === 'array-element' ? 'array' : 'struct';
+    const master = override('Fallout4.esm', {
+      fields: [{ metadata: { name: parentFieldName, type: parentType, isArray: kind === 'array-element', validFormKeyTypes: [], enumValues: [] }, value: kind === 'array-element' ? [] : {}, checkError: 'aggregate: one sibling is dangling' }],
+    });
+    return baseProps({
+      diff: diff({ fieldName: kind === 'array-element' ? '[1]' : 'Reference', values: { 'Fallout4.esm': value }, resolutions: { 'Fallout4.esm': resolution } }),
+      columns: [diskColumn(master)],
+      overrideMap: { 'Fallout4.esm': master },
+      fieldMetaMap: { [parentFieldName]: fkMeta },
+      immutableSet: new Set(),
+      context: { kind, overrideMeta: fkMeta, parentFieldName },
+    });
+  }
+
+  afterEach(() => { fireEvent.keyUp(window, { key: 'Control' }); });
+
+  it('an array-element resolved-valid-type leaf still shows the affordance despite the parent field checkError', () => {
+    renderRow(leafProps('array-element', validType));
+    const link = screen.getByText('SomeKeyword');
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    fireEvent.mouseEnter(link);
+    expect(link.style.textDecoration).toBe('underline');
+  });
+
+  it('an array-element resolved-wrong-type leaf still shows the affordance despite the parent field checkError', () => {
+    renderRow(leafProps('array-element', wrongType, '00001A:Fallout4.esm'));
+    const link = screen.getByText('SomeNpc');
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    fireEvent.mouseEnter(link);
+    expect(link.style.textDecoration).toBe('underline');
+  });
+
+  it('a struct-child resolved-valid-type leaf still shows the affordance despite the parent field checkError', () => {
+    renderRow(leafProps('struct-child', validType));
+    const link = screen.getByText('SomeKeyword');
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    fireEvent.mouseEnter(link);
+    expect(link.style.textDecoration).toBe('underline');
+  });
+
+  it('an array-element unresolved leaf shows no affordance (plain FormKey text)', () => {
+    renderRow(leafProps('array-element', unresolved, 'FFFFFF:Dangling.esm'));
+    const link = screen.getByText('FFFFFF:Dangling.esm');
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    fireEvent.mouseEnter(link);
+    expect(link.style.textDecoration).toBe('none');
+  });
+
+  it('a struct-child unresolved leaf shows no affordance (plain FormKey text)', () => {
+    renderRow(leafProps('struct-child', unresolved, 'FFFFFF:Dangling.esm'));
+    const link = screen.getByText('FFFFFF:Dangling.esm');
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    fireEvent.mouseEnter(link);
+    expect(link.style.textDecoration).toBe('none');
+  });
+
+  it('a struct-child resolved-wrong-type leaf still shows the affordance despite the parent field checkError', () => {
+    renderRow(leafProps('struct-child', wrongType, '00001A:Fallout4.esm'));
+    const link = screen.getByText('SomeNpc');
+    fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
+    fireEvent.mouseEnter(link);
+    expect(link.style.textDecoration).toBe('underline');
   });
 });

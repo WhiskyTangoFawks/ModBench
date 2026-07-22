@@ -521,6 +521,9 @@ export interface components {
                 [key: string]: components["schemas"]["ConflictThis"];
             } | null;
             children?: components["schemas"]["FieldDiff"][] | null;
+            resolutions?: {
+                [key: string]: components["schemas"]["FormKeyResolution"];
+            } | null;
         };
         FieldMetadata: {
             name?: string | null;
@@ -540,6 +543,13 @@ export interface components {
             value?: unknown;
             checkError?: string | null;
         };
+        FormKeyResolution: {
+            state?: components["schemas"]["FormKeyResolutionState"];
+            recordType?: string | null;
+            editorId?: string | null;
+        };
+        /** @enum {string} */
+        FormKeyResolutionState: "Unresolved" | "ResolvedWrongType" | "ResolvedValidType";
         PatchRecordRequest: {
             plugin?: string | null;
             fields?: {
@@ -565,6 +575,9 @@ export interface components {
             changeType?: string | null;
             parentCell?: string | null;
             placementGroup?: string | null;
+            resolutions?: {
+                [key: string]: components["schemas"]["FormKeyResolution"];
+            } | null;
         };
         PlacedSummary: {
             formKey?: string | null;
@@ -704,6 +717,9 @@ export interface components {
             children?: components["schemas"]["VmadPropertyDiff"][] | null;
             raw?: {
                 [key: string]: unknown;
+            } | null;
+            resolutions?: {
+                [key: string]: components["schemas"]["FormKeyResolution"];
             } | null;
         };
         VmadScriptDiff: {

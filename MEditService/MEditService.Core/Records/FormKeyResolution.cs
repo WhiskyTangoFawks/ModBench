@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MEditService.Core.Records;
 
 // The three-way distinction CheckErrorBuilder already computes (not found / found, wrong type /
@@ -5,6 +7,12 @@ namespace MEditService.Core.Records;
 // so a resolvable-but-wrong-type reference stays distinguishable from a genuinely dangling one
 // (ADR-0031). A resolved-wrong-type reference still gets the Ctrl-hover/hyperlink affordance,
 // matching xEdit — only Unresolved withholds it.
+//
+// [JsonConverter] on the enum itself (not just the global ConfigureHttpJsonOptions converter) is
+// what Swashbuckle's schema generator honors — without it the enum round-trips as a string at
+// runtime but the OpenAPI schema (and therefore generated api.ts) still describes it as an int,
+// same as ConflictThis/ConflictAll.
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum FormKeyResolutionState
 {
     Unresolved,
