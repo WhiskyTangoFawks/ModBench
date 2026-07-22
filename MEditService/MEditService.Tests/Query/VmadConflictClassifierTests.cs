@@ -15,7 +15,7 @@ public sealed class VmadConflictClassifierTests
         new("ArrayOf" + elemType, "", null,
             ListItems: values.Select(v => new VmadPropertyValue(elemType, "", v)).ToList());
 
-    private static VmadPropertyValue ObjVal(string formKey, short alias) =>
+    private static VmadPropertyValue ObjVal(string? formKey, short alias) =>
         new("Object", "", formKey, alias);
 
     private static VmadPropertyValue StructListVal(params VmadNamedValue[][] instances) =>
@@ -276,6 +276,21 @@ public sealed class VmadConflictClassifierTests
         Assert.Equal("000800:Base.esp [1]", refProp.Values["A.esp"]);
         Assert.Equal("000900:Base.esp [2]", refProp.Values["B.esp"]);
         Assert.Equal(ConflictThis.Override, refProp.CellStates["B.esp"]);
+    }
+
+    // Issue #116: a null Object property must expose a null leaf value — not a stringified
+    // "{null} [{alias}]" — so the webview's absent-value rendering (and its refusal to
+    // linkify) actually gets reached instead of a non-null sentinel string.
+    [Fact]
+    public void Classify_NullObjectProperty_ExposesNullLeafValue()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Ref", ObjVal(null, -1))));
+
+        var result = VmadConflictClassifier.Classify([a]);
+
+        var refProp = result.Compare.Scripts[0].Properties.First(p => p.Name == "Ref");
+        Assert.Equal("object", refProp.Kind);
+        Assert.Null(refProp.Values["A.esp"]);
     }
 
     [Fact]

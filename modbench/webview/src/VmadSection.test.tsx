@@ -749,6 +749,34 @@ describe('VmadSection — Ctrl+click follows the reference instead of editing', 
     fireEvent.keyUp(window, { key: 'Control' });
   });
 
+  // Issue #116: the backend now sends a genuine null (not the "Null [alias]" sentinel
+  // string above) for a null Object property — e.g. a null script object property nested
+  // in a struct. This pins the already-correct absent-value path so a future change can't
+  // reintroduce a followable-looking sentinel here without a test noticing.
+  it('a null object value (real null, not a sentinel string) renders as em-dash and does not navigate', () => {
+    const nullObjectVmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [prop({
+          name: 'Target',
+          kind: 'object',
+          values: { 'A.esm': null },
+          types: { 'A.esm': 'Object' },
+          winnerPlugin: 'A.esm',
+        })],
+      })],
+    };
+    const onOpen = vi.fn();
+    const { container } = renderSection(nullObjectVmad, ['A.esm'], { onOpen });
+    toggle('S');
+
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(container.querySelector('a, [role="link"]')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('—'), { ctrlKey: true });
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
   it('a real object reference still offers the affordance on Ctrl-hover', () => {
     renderSection(objectVmad(), ['A.esm'], {});
     toggle('S');
