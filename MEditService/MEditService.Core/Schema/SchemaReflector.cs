@@ -154,12 +154,20 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         if (flagsProp?.PropertyType.IsEnum == true)
         {
             var flagsLeaf = ClassifyEnumLeaf(flagsProp, flagsProp.PropertyType);
+            // EslFlagValue detection runs off the raw Mutagen member names before the xEdit
+            // display-name rename below — LightMasterFlagNames is the source of truth for "which
+            // member means ESL", independent of what the UI displays.
+            eslFlagValue = FindEslFlagValue(flagsLeaf.EnumValues, flagsLeaf.EnumBitValues);
+
+            // Issue #118: only the header's flags column gets xEdit's display names — every other
+            // bitmask enum in the schema (npc_, race, ...) keeps its raw Mutagen member names, so
+            // this maps flagsLeaf.EnumValues here rather than inside ClassifyEnumLeaf.
+            var displayNames = flagsLeaf.EnumValues.Select(MapToXEditFlagName).ToArray();
             columns.Add(new ColumnSpec("flags", flagsProp.Name, flagsLeaf.DuckDbType, _ => null,
-                flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, flagsLeaf.EnumValues, Apply: null,
+                flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, displayNames, Apply: null,
                 IsBitmask: flagsLeaf.IsBitmask, EnumBitValues: flagsLeaf.EnumBitValues));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, flagsLeaf.Get));
             applies.Add(HeaderPropertyApply(modHeaderProp, flagsProp.Name, nullable: false, flagsLeaf.Convert));
-            eslFlagValue = FindEslFlagValue(flagsLeaf.EnumValues, flagsLeaf.EnumBitValues);
         }
         else
         {
@@ -217,6 +225,20 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // Member names Mutagen uses for the light-master ("ESL") flag across games.
     private static readonly HashSet<string> LightMasterFlagNames =
         new(StringComparer.OrdinalIgnoreCase) { "Small", "LightMaster", "Light" };
+
+    // Issue #118: xEdit's display names for the plugin header's flags, keyed off the Mutagen
+    // member name (never a bit position — bit positions differ across games; see
+    // wbDefinitionsFO4.pas for the source vocabulary: ESM/Localized/ESL/Update). Applies only to
+    // the header's flags column (see BuildHeaderSchema); every other bitmask enum in the schema
+    // keeps its raw Mutagen member names. Optimized/Localized/Update already match xEdit's own
+    // spelling, so they need no entry here; a member with no xEdit counterpart at all (e.g.
+    // Overlay, Medium) falls through unchanged too.
+    internal static string MapToXEditFlagName(string mutagenName)
+    {
+        if (mutagenName.Equals("Master", StringComparison.OrdinalIgnoreCase)) return "ESM";
+        if (LightMasterFlagNames.Contains(mutagenName)) return "ESL";
+        return mutagenName;
+    }
 
     // names and bitValues are the parallel arrays ClassifyEnumLeaf builds in lockstep (a bitmask
     // enum always yields both), so a single bound over names indexes bitValues safely.
