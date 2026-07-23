@@ -12,4 +12,13 @@ public abstract record DeleteRecordsResult
     // change has a group now (ADR-0028), so a record with only pending field edits is deletable.
     public sealed record TargetPendingDeleteOrRenumber(IReadOnlyList<string> FormKeys) : DeleteRecordsResult;
     public sealed record Staged(ChangeGroup Group) : DeleteRecordsResult;
+
+    // A delete target that is itself a pending $create has no on-disk existence for a $delete to act
+    // on (#143): deleting it reverts the create's whole dependency component instead (same
+    // RevertGroup path the revert-group endpoint uses), never a staged $delete.
+    public sealed record Reverted(IReadOnlyList<string> FormKeys) : DeleteRecordsResult;
+
+    // A mixed batch — some targets pending-create, some not — reverts the create targets and stages
+    // a delete for the rest. The two outcomes are never collapsed into one undifferentiated result.
+    public sealed record Mixed(ChangeGroup StagedGroup, IReadOnlyList<string> RevertedFormKeys) : DeleteRecordsResult;
 }

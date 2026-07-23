@@ -506,6 +506,10 @@ export interface components {
         DeleteRecordsRequest: {
             records?: components["schemas"]["DeleteRecordTarget"][] | null;
         };
+        DeleteRecordsResponse: {
+            stagedGroup?: components["schemas"]["ChangeGroup"];
+            revertedFormKeys?: string[] | null;
+        };
         ExplicitPlugin: {
             name?: string | null;
             path?: string | null;
@@ -922,7 +926,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ChangeGroup"];
+                    "application/json": components["schemas"]["DeleteRecordsResponse"];
                 };
             };
             /** @description Bad Request */

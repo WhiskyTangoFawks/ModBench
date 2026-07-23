@@ -379,14 +379,8 @@ public sealed partial class EditOrchestrator(
         var session = _sessionManager.Session;
         if (session == null) return new DeleteRecordsResult.NoSession();
 
-        // Reject deletes targeting immutable plugins
-        foreach (var (_, plugin) in targets)
-        {
-            var meta = session.Plugins.FirstOrDefault(p =>
-                p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase));
-            if (meta?.IsImmutable == true)
-                return new DeleteRecordsResult.PluginImmutable(plugin);
-        }
+        if (FindImmutablePluginTarget(targets, session) is { } immutablePlugin)
+            return new DeleteRecordsResult.PluginImmutable(immutablePlugin);
 
         // Block targets already pending a delete or renumber (see TargetPendingDeleteOrRenumber).
         var blockedKeys = targets
@@ -396,23 +390,81 @@ public sealed partial class EditOrchestrator(
         if (blockedKeys.Count > 0)
             return new DeleteRecordsResult.TargetPendingDeleteOrRenumber(blockedKeys);
 
-        var targetFormKeys = targets.Select(t => t.FormKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // A pending-create target has no on-disk existence for a $delete to act on (#143): deleting it
+        // reverts the create's whole dependency component instead of staging a $delete. Reference
+        // scanning below only applies to the rest — nothing committed can reference a FormKey that
+        // doesn't exist on disk yet, so a pending-create target can never be BlockedByReferences.
+        var createTargets = targets
+            .Where(t => _changes.GetPendingCreateRecordType(t.FormKey) != null)
+            .ToList();
+        var plainTargets = targets.Except(createTargets).ToList();
 
-        // Scan references to all targets; partition into blocked (immutable) vs. nullifiable (editable)
-        var immutablePlugins = session.Plugins
-            .Where(p => p.IsImmutable)
-            .Select(p => p.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var (blocked, toNullify) = PartitionInboundReferences(targets, targetFormKeys, immutablePlugins);
-
+        // Check plain-target reference blocking *before* reverting any pending-create: reverting is a
+        // mutation, so it must not fire on a call that's about to fail with BlockedByReferences —
+        // otherwise a create the user never asked to touch would vanish behind a "failed" response.
+        var (blocked, toNullify) = PartitionInboundReferences(plainTargets, session);
         if (blocked.Count > 0)
             return new DeleteRecordsResult.BlockedByReferences(blocked);
 
-        // Build group members: one delete change per target + one nullification per editable ref
-        var members = new List<GroupMember>();
+        var revertedFormKeys = RevertPendingCreateTargets(createTargets);
 
-        foreach (var (formKey, plugin) in targets)
+        return plainTargets.Count == 0
+            ? new DeleteRecordsResult.Reverted(revertedFormKeys)
+            : StagePlainDeletes(plainTargets, source, toNullify, revertedFormKeys);
+    }
+
+    // The plugin name of the first target whose plugin is immutable, or null.
+    private static string? FindImmutablePluginTarget(
+        IReadOnlyList<(string FormKey, string Plugin)> targets, IGameSession session) =>
+        targets
+            .Select(t => t.Plugin)
+            .FirstOrDefault(plugin => session.Plugins.FirstOrDefault(p =>
+                p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase))?.IsImmutable == true);
+
+    // Reverts each pending-create target's whole dependency component (ADR-0028) via the same
+    // RevertGroup path the revert-group endpoint uses — no new cascade logic. Returns the FormKeys
+    // reverted, in the order given.
+    private List<string> RevertPendingCreateTargets(IReadOnlyList<(string FormKey, string Plugin)> createTargets)
+    {
+        var reverted = new List<string>();
+        foreach (var (formKey, _) in createTargets)
+        {
+            var createChangeId = _changes.GetChanges(formKey: formKey)
+                .FirstOrDefault(c => c.ChangeType == PendingChangeConstants.CreateChangeType)?.Id;
+            if (createChangeId == null) continue;
+
+            _changes.RevertGroup(createChangeId.Value);
+            reverted.Add(formKey);
+        }
+        return reverted;
+    }
+
+    // Stages a $delete change per plainTarget + nullifications for editable inbound refs, same as the
+    // pre-#143 flow. toNullify is precomputed by the caller (before any pending-create revert, so a
+    // BlockedByReferences failure never happens after a revert side effect already landed).
+    // revertedFormKeys (from the sibling pending-create targets, if any) decides whether the result
+    // is a plain Staged or a Mixed that reports both outcomes distinctly.
+    private DeleteRecordsResult StagePlainDeletes(
+        IReadOnlyList<(string FormKey, string Plugin)> plainTargets,
+        string source,
+        List<(string SourceFormKey, string SourcePlugin, string FieldPath, string RecordType)> toNullify,
+        List<string> revertedFormKeys)
+    {
+        var members = BuildDeleteMembers(plainTargets, source);
+        AddNullificationMembers(members, toNullify, source);
+
+        var group = _changes.StageChanges(members);
+        return revertedFormKeys.Count > 0
+            ? new DeleteRecordsResult.Mixed(group, revertedFormKeys)
+            : new DeleteRecordsResult.Staged(group);
+    }
+
+    // Build group members: one delete change per target
+    private List<GroupMember> BuildDeleteMembers(
+        IReadOnlyList<(string FormKey, string Plugin)> plainTargets, string source)
+    {
+        var members = new List<GroupMember>();
+        foreach (var (formKey, plugin) in plainTargets)
         {
             var recordType = _query.GetRecordType(formKey) ?? "unknown";
             var placement = _query.GetPlacement(formKey, plugin);
@@ -426,11 +478,20 @@ public sealed partial class EditOrchestrator(
                 placement?.ParentCell,
                 placement?.PlacementGroup));
         }
+        return members;
+    }
 
-        AddNullificationMembers(members, toNullify, source);
-
-        var group = _changes.StageChanges(members);
-        return new DeleteRecordsResult.Staged(group);
+    // Scans references to targets; partitions into blocked (referenced by an immutable plugin) vs.
+    // nullifiable (referenced only by editable plugins).
+    private (List<BlockedReference> Blocked, List<(string SourceFormKey, string SourcePlugin, string FieldPath, string RecordType)> ToNullify)
+        PartitionInboundReferences(IReadOnlyList<(string FormKey, string Plugin)> targets, IGameSession session)
+    {
+        var targetFormKeys = targets.Select(t => t.FormKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var immutablePlugins = session.Plugins
+            .Where(p => p.IsImmutable)
+            .Select(p => p.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return PartitionInboundReferences(targets, targetFormKeys, immutablePlugins);
     }
 
     private (List<BlockedReference> Blocked, List<(string SourceFormKey, string SourcePlugin, string FieldPath, string RecordType)> ToNullify)

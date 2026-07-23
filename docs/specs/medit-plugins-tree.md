@@ -132,7 +132,11 @@ masters; there is no separate load-session step.
   Open Record) opens the editor; the context menu adds Copy as Override Into…, Copy as New
   Record Into…, Remove Record (a confirmation listing every selected record, deleting the whole
   selection as one batch; the Delete key also triggers it), Show Referenced By, and Run Script…
-  (context = this record).
+  (context = this record). Removing a record that is itself a **pending create** reverts that
+  create's whole ChangeGroup (component-revert, ADR-0028) instead of staging a `delete` on top of
+  it — a record with no on-disk existence has nothing to delete. A mixed batch reverts the
+  pending-create targets and stages a `delete` for the committed ones; the response reports the
+  two outcomes distinctly (`revertedFormKeys` vs. `stagedGroup`) rather than collapsing them (#143).
 - Context menu availability is driven by node `contextValue` from backend metadata:
   `"plugin"`, `"pluginImmutable"`, `"recordType"`, `"record"`.
 
