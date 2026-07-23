@@ -621,7 +621,7 @@ describe('RecordPanel — Add Master picker (issue #86)', () => {
 
   it('F3: a not_append_only 422 rejection surfaces a readable message', async () => {
     vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
-    const save = vi.fn().mockResolvedValue(resp(422, [{ fieldPath: 'masters', reason: 'not_append_only' }]));
+    const save = vi.fn().mockResolvedValue(resp(422, { fieldErrors: [{ fieldPath: 'masters', reason: 'not_append_only' }] }));
     renderPanel(headerCompareResult, { ...headerOpts, save });
     await waitFor(() => screen.getByText('Add Master…'));
     fireEvent.click(screen.getByText('Add Master…'));

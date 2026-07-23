@@ -13,11 +13,13 @@ public static class StageEditResultExtensions
         StageEditResult.RecordPendingDeleteOrRenumber b => Results.Problem(
             $"This record is pending {b.ChangeType}; revert that change before editing it.", statusCode: 409),
         StageEditResult.RecordNotFound => Results.NotFound(),
-        StageEditResult.ReadOnlyFields r => Results.Problem(
-            detail: $"The following fields are read-only and cannot be edited: {string.Join(", ", r.Fields)}",
-            statusCode: 422),
-        StageEditResult.InvalidReferences inv => Results.UnprocessableEntity(inv.Errors),
-        StageEditResult.EslIneligible esl => EslIneligibleProblem(esl.Plugin, esl.FormKeys),
+        StageEditResult.ReadOnlyFields r => Results.UnprocessableEntity(new PatchRecordValidationError(
+            FieldErrors: null,
+            Detail: $"The following fields are read-only and cannot be edited: {string.Join(", ", r.Fields)}")),
+        StageEditResult.InvalidReferences inv => Results.UnprocessableEntity(
+            new PatchRecordValidationError(inv.Errors, Detail: null)),
+        StageEditResult.EslIneligible esl => Results.UnprocessableEntity(
+            new PatchRecordValidationError(FieldErrors: null, Detail: EslIneligibleDetail(esl.Plugin, esl.FormKeys))),
         StageEditResult.Staged staged => Results.Ok(staged.Changes),
         var r => throw new InvalidOperationException($"Unhandled StageEditResult variant: {r.GetType().Name}")
     };
@@ -43,7 +45,11 @@ public static class StageEditResultExtensions
     // toggle, plus CreateRecord/Renumber's reverse guard — issue #98) so the 422 wording stays
     // identical across all of them.
     internal static IResult EslIneligibleProblem(string plugin, IReadOnlyList<string> formKeys) =>
-        Results.Problem(
-            detail: $"'{plugin}' can't be an ESL: {formKeys.Count} FormID(s) fall outside the ESL range (0x001–0xFFF): {string.Join(", ", formKeys)}",
-            statusCode: 422);
+        Results.Problem(detail: EslIneligibleDetail(plugin, formKeys), statusCode: 422);
+
+    // #147: StageEdit's 422 path (PatchRecord/CopyRecordTo) reports this text inside the single
+    // PatchRecordValidationError envelope instead of raw ProblemDetails — CreateRecord/
+    // CreatePlacedRecord/Renumber keep the ProblemDetails wrapper above, out of #147's scope.
+    private static string EslIneligibleDetail(string plugin, IReadOnlyList<string> formKeys) =>
+        $"'{plugin}' can't be an ESL: {formKeys.Count} FormID(s) fall outside the ESL range (0x001–0xFFF): {string.Join(", ", formKeys)}";
 }

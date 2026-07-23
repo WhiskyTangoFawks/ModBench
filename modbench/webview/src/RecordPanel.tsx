@@ -10,7 +10,7 @@ import type { ReindexFailure, SaveResult } from '../../src/medit/saveClassificat
 import { buildColumns, defaultElementValue, parseElementIndex, updateArrayAtKey } from './recordUtils';
 import { mono, fg, baseCell, headerCell, getConflictBg } from './gridStyles';
 import { VmadSection } from './VmadSection';
-import type { CompareOverride, CompareResult, ConflictThis, FieldMetadata, PendingChange } from './types';
+import type { CompareOverride, CompareResult, ConflictThis, FieldMetadata, PatchRecordValidationError, PendingChange } from './types';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './messages';
 import type { PluginInfo, RecordSessionClient } from './RecordSessionClient';
@@ -123,12 +123,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         const detail = typeof body?.detail === 'string' ? body.detail : '';
         setActionError(detail.toLowerCase().includes('group') ? detail : 'Plugin is read-only');
       } else if (resp.status === 422) {
-        const body = await resp.json().catch(() => null) as
-          | Array<{ fieldPath?: string; reason?: string; expectedTypes?: string[] }>
-          | { detail?: string }
-          | null;
-        if (Array.isArray(body) && body.length > 0) {
-          setActionError(body.map(e => {
+        // #147: single documented envelope (PatchRecordValidationError) — fieldErrors is non-null
+        // for reference/append-only/type-mismatch/null-not-allowed failures, detail is non-null for
+        // everything else (e.g. ESL-ineligible, read-only fields). Never both.
+        const body = await resp.json().catch(() => null) as PatchRecordValidationError | null;
+        if (body?.fieldErrors && body.fieldErrors.length > 0) {
+          setActionError(body.fieldErrors.map(e => {
             const path = e.fieldPath ?? '?';
             if (e.reason === 'not_in_session') return `${path}: reference not found in session`;
             if (e.reason === 'not_append_only') return `${path}: masters can only be appended to, not reordered or removed`;
@@ -136,8 +136,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
             if (e.reason === 'null_not_allowed') return `${path}: cannot be null`;
             return `${path}: ${e.reason ?? 'invalid'}`;
           }).join('; '));
-        } else if (body && !Array.isArray(body) && typeof body.detail === 'string') {
-          // ProblemDetails (e.g. ESL-ineligible or read-only fields) — surface the reason verbatim.
+        } else if (typeof body?.detail === 'string') {
           setActionError(body.detail);
         } else {
           setActionError('Invalid reference');
