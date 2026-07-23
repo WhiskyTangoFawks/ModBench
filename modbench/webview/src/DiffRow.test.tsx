@@ -198,6 +198,128 @@ describe('DiffRow — pending companion column', () => {
     expect(onPendingContextMenu).toHaveBeenCalledWith('c1', 42, 7);
   });
 
+  // Issue #159: the pending column renders a FormKey field's staged value through the same
+  // FormKeyLink as disk columns, sourced from the change's own `resolutions['']` (root path,
+  // matching PendingChangeResolver's convention for a scalar formKey field) — not the old
+  // PENDING_RESOLVES stand-in.
+  describe('pending FormKey cell', () => {
+    const fkMeta: FieldMetadata = { name: 'Reference', type: 'formKey', isArray: false, validFormKeyTypes: [], enumValues: [] };
+    const fkChange: PendingChange = {
+      id: 'c3', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fieldPath: 'Reference',
+      recordType: 'Npc', oldValue: '000010:Fallout4.esm', newValue: '000020:Fallout4.esm',
+      source: 'agent', description: null, changedAt: '2026-06-20T12:00:00Z',
+    };
+
+    function fkPendingProps(resolutions: Record<string, FormKeyResolution> | undefined) {
+      const master = override('Fallout4.esm', { fields: [{ metadata: fkMeta, value: '000010:Fallout4.esm' }] });
+      const mod = override('MyMod.esp', {
+        fields: [{ metadata: fkMeta, value: '000010:Fallout4.esm' }],
+        pendingFields: { Reference: '000020:Fallout4.esm' },
+      });
+      return baseProps({
+        diff: diff({ fieldName: 'Reference', values: { 'Fallout4.esm': '000010:Fallout4.esm', 'MyMod.esp': '000010:Fallout4.esm' } }),
+        fieldMetaMap: { Reference: fkMeta },
+        columns: [diskColumn(master), diskColumn(mod), pendingColumn('MyMod.esp')],
+        overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+        pendingChangeMap: { 'MyMod.esp:Reference': { ...fkChange, resolutions } },
+      });
+    }
+
+    it('renders the resolved EditorID as the pending cell label', () => {
+      render(<table><tbody>{React.createElement(DiffRow, fkPendingProps({
+        '': { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'SomeOtherNpc' },
+      }))}</tbody></table>);
+      expect(screen.getByText('SomeOtherNpc')).toBeInTheDocument();
+      expect(screen.queryByText('000020:Fallout4.esm')).not.toBeInTheDocument();
+    });
+
+    it('falls back to the raw FormKey when unresolved', () => {
+      render(<table><tbody>{React.createElement(DiffRow, fkPendingProps({
+        '': { state: 'Unresolved', recordType: null, editorId: null },
+      }))}</tbody></table>);
+      expect(screen.getByText('000020:Fallout4.esm')).toBeInTheDocument();
+    });
+
+    it('falls back to the raw FormKey when the change carries no resolutions at all', () => {
+      render(<table><tbody>{React.createElement(DiffRow, fkPendingProps(undefined))}</tbody></table>);
+      expect(screen.getByText('000020:Fallout4.esm')).toBeInTheDocument();
+    });
+  });
+
+  // Issue #159: nested rows (struct member / array element / struct member of an array element)
+  // look up their resolution at the sub-path PendingChangeResolver used for that leaf within the
+  // top-level change's NewValue — not at the root ("") path.
+  describe('pending FormKey cell — nested contexts', () => {
+    function nestedChange(fieldPath: string, resolutions: Record<string, FormKeyResolution>): PendingChange {
+      return {
+        id: 'c4', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fieldPath,
+        recordType: 'Npc', oldValue: null, newValue: null,
+        source: 'agent', description: null, changedAt: '2026-06-20T12:00:00Z',
+        resolutions,
+      };
+    }
+
+    it('a struct-child pending FormKey cell resolves via the member-name path', () => {
+      const fkMeta: FieldMetadata = { name: 'Target', type: 'formKey', isArray: false, validFormKeyTypes: [], enumValues: [] };
+      const mod = override('MyMod.esp', { pendingFields: { LinkedRef: { Target: '000030:Fallout4.esm' } } });
+      render(<table><tbody>{React.createElement(DiffRow, baseProps({
+        diff: diff({ fieldName: 'Target', values: { 'MyMod.esp': '000010:Fallout4.esm' } }),
+        columns: [diskColumn(mod), pendingColumn('MyMod.esp')],
+        overrideMap: { 'MyMod.esp': mod },
+        pendingChangeMap: { 'MyMod.esp:LinkedRef': nestedChange('LinkedRef', {
+          Target: { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'StructTarget' },
+        }) },
+        context: { kind: 'struct-child', overrideMeta: fkMeta, parentFieldName: 'LinkedRef' },
+      }))}</tbody></table>);
+      expect(screen.getByText('StructTarget')).toBeInTheDocument();
+    });
+
+    it('a positional array-element pending FormKey cell resolves via its "[idx]" path', () => {
+      const fkMeta: FieldMetadata = { name: '', type: 'formKey', isArray: false, validFormKeyTypes: [], enumValues: [] };
+      const mod = override('MyMod.esp', { pendingFields: { Items: ['000030:Fallout4.esm'] } });
+      render(<table><tbody>{React.createElement(DiffRow, baseProps({
+        diff: diff({ fieldName: '[0]', values: { 'MyMod.esp': '000010:Fallout4.esm' } }),
+        columns: [diskColumn(mod), pendingColumn('MyMod.esp')],
+        overrideMap: { 'MyMod.esp': mod },
+        pendingChangeMap: { 'MyMod.esp:Items': nestedChange('Items', {
+          '[0]': { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'PositionalTarget' },
+        }) },
+        context: { kind: 'array-element', overrideMeta: fkMeta, parentFieldName: 'Items' },
+      }))}</tbody></table>);
+      expect(screen.getByText('PositionalTarget')).toBeInTheDocument();
+    });
+
+    it('a sortable (pure FormLink) array-element pending FormKey cell resolves by its position in the pending array', () => {
+      const fkMeta: FieldMetadata = { name: '', type: 'formKey', isArray: false, validFormKeyTypes: [], enumValues: [], isSortable: true };
+      const mod = override('MyMod.esp', { pendingFields: { Items: ['000010:Fallout4.esm', '000099:Fallout4.esm'] } });
+      render(<table><tbody>{React.createElement(DiffRow, baseProps({
+        diff: diff({ fieldName: '000099:Fallout4.esm', values: { 'MyMod.esp': '000088:Fallout4.esm' } }),
+        columns: [diskColumn(mod), pendingColumn('MyMod.esp')],
+        overrideMap: { 'MyMod.esp': mod },
+        pendingChangeMap: { 'MyMod.esp:Items': nestedChange('Items', {
+          '[1]': { state: 'ResolvedValidType', recordType: 'kywd', editorId: 'SortedTarget' },
+        }) },
+        context: { kind: 'array-element', overrideMeta: fkMeta, parentFieldName: 'Items' },
+      }))}</tbody></table>);
+      expect(screen.getByText('SortedTarget')).toBeInTheDocument();
+    });
+
+    it('a grandchild pending FormKey cell resolves via its "[idx].member" path', () => {
+      const fkMeta: FieldMetadata = { name: 'Target', type: 'formKey', isArray: false, validFormKeyTypes: [], enumValues: [] };
+      const mod = override('MyMod.esp', { pendingFields: { Items: [{}, {}, { Target: '000077:Fallout4.esm' }] } });
+      render(<table><tbody>{React.createElement(DiffRow, baseProps({
+        diff: diff({ fieldName: 'Target', values: { 'MyMod.esp': '000010:Fallout4.esm' } }),
+        columns: [diskColumn(mod), pendingColumn('MyMod.esp')],
+        overrideMap: { 'MyMod.esp': mod },
+        pendingChangeMap: { 'MyMod.esp:Items': nestedChange('Items', {
+          '[2].Target': { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'GrandchildTarget' },
+        }) },
+        context: { kind: 'grandchild', overrideMeta: fkMeta, parentFieldName: 'Items', parentFieldIndex: 2 },
+      }))}</tbody></table>);
+      expect(screen.getByText('GrandchildTarget')).toBeInTheDocument();
+    });
+  });
+
   it('renders nothing in the pending column when there is no pending value', () => {
     const master = override('Fallout4.esm');
     const mod = override('MyMod.esp'); // no pendingFields

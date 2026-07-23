@@ -135,6 +135,38 @@ public class PendingChangeResolverTests
     }
 
     [Fact]
+    public void Resolve_RecordFormKeyResolves_PopulatesRecordResolution()
+    {
+        var change = MakeChange("race", "npc_", J("\"000AAA:Test.esp\""));
+        var schemas = Schemas("npc_", FormKeyColumn("race", "race"));
+
+        static RecordLookupEntry? Resolve(string fk) => fk switch
+        {
+            "000001:Test.esp" => new RecordLookupEntry("npc_", "MyNpc"),
+            "000AAA:Test.esp" => new RecordLookupEntry("race", "GoodRace"),
+            _ => null,
+        };
+
+        var resolved = PendingChangeResolver.Resolve(change, schemas, Resolve);
+
+        Assert.NotNull(resolved.RecordResolution);
+        Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolved.RecordResolution!.State);
+        Assert.Equal("MyNpc", resolved.RecordResolution.EditorId);
+        Assert.Equal("npc_", resolved.RecordResolution.RecordType);
+    }
+
+    [Fact]
+    public void Resolve_RecordFormKeyDangling_RecordResolutionIsUnresolved()
+    {
+        var change = MakeChange("race", "npc_", J("\"000AAA:Test.esp\""));
+        var schemas = Schemas("npc_", FormKeyColumn("race", "race"));
+
+        var resolved = PendingChangeResolver.Resolve(change, schemas, _ => null);
+
+        Assert.Equal(FormKeyResolutionState.Unresolved, resolved.RecordResolution!.State);
+    }
+
+    [Fact]
     public void ResolveAll_MapsEveryChange()
     {
         var a = MakeChange("race", "npc_", J("\"000AAA:Test.esp\""));

@@ -578,6 +578,7 @@ export interface components {
             resolutions?: {
                 [key: string]: components["schemas"]["FormKeyResolution"];
             } | null;
+            recordResolution?: components["schemas"]["FormKeyResolution"];
         };
         PlacedSummary: {
             formKey?: string | null;

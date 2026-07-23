@@ -25,5 +25,11 @@ public record PendingChange(
                                      // a scalar formKey field itself, "[0]"/".member" for a leaf inside an atomic staged struct/array
                                      // blob, ADR-0019). Never aggregated: each leaf's signal is independent of its siblings'. Null
                                      // when FieldPath isn't a FormKey-carrying field or no resolver was supplied.
-    IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null
+    IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null,
+    // ADR-0031: resolution signal for the change's own FormKey (record identity), distinct from
+    // Resolutions above (which is scoped to leaves inside NewValue). Populated unconditionally by
+    // PendingChangeResolver — the Pending Changes tree's `{RecordType} / {EditorID}` leaf label
+    // reads this, not Resolutions, since the record's own FormKey is never a leaf of its own
+    // NewValue. No expected-type list applies to identity (empty validTypes), same as VMAD.
+    FormKeyResolution? RecordResolution = null
 );

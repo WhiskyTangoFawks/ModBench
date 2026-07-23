@@ -9,12 +9,6 @@ import type { Column } from './recordUtils';
 import type { CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
 import type { RecordSessionClient } from './RecordSessionClient';
 
-// ADR-0020: a staged FormKey is validated at stage time, so it always resolves — until #159 wires
-// PendingChange.resolutions through, this stands in so the pending column keeps behaving exactly
-// as it did under the old checkError-proxy (always followable), without reintroducing a second
-// gating mechanism alongside the real per-leaf `resolution` signal disk columns now use.
-const PENDING_RESOLVES: FormKeyResolution = { state: 'ResolvedValidType', recordType: null, editorId: null };
-
 const ROW_BG: Partial<Record<ConflictAll, string>> = {
   Override:        'rgba(76,175,80,0.20)',
   Conflict:        'rgba(255,152,0,0.20)',
@@ -22,6 +16,31 @@ const ROW_BG: Partial<Record<ConflictAll, string>> = {
 };
 
 const getRowBg = (c: ConflictAll): string | undefined => ROW_BG[c];
+
+// Issue #159: maps a row's context + field name to the sub-path key PendingChangeResolver used
+// when building `change.resolutions` (FormRefPathBuilder convention: "" for the change's own
+// scalar value, a bare member name for a struct child, "[idx]" for a positional array element,
+// "[idx].member" for a grandchild). A positional (non-sortable) array element's `diff.fieldName`
+// is already "[idx]" (ConflictClassifier.BuildPositional) — the same format FormRefPathBuilder
+// produces — so it's used directly. A sortable (pure FormLink) array is keyed by element value,
+// not position (ConflictClassifier.BuildSorted, wbArrayS), which FormRefPathBuilder does not
+// know about — its position within the *pending* array (rawPending) is looked up instead.
+// Returns undefined when no path can be determined (e.g. a sortable element not present in the
+// pending array) — callers treat that the same as "no resolution available".
+function pendingResolutionPath(context: RowContext, fieldName: string, rawPending: unknown): string | undefined {
+  switch (context.kind) {
+    case 'top-level': return '';
+    case 'struct-child': return fieldName;
+    case 'grandchild': return `[${context.parentFieldIndex}].${fieldName}`;
+    case 'array-element': {
+      if (!context.overrideMeta.isSortable) return fieldName; // already "[idx]"
+      // indexOf takes the first match on a duplicate FormKey value — harmless here since
+      // duplicate values in the pending array would carry identical resolutions anyway.
+      const idx = Array.isArray(rawPending) ? (rawPending as unknown[]).indexOf(fieldName) : -1;
+      return idx >= 0 ? `[${idx}]` : undefined;
+    }
+  }
+}
 
 // ── Cell renderer ─────────────────────────────────────────────────────────────
 
@@ -223,6 +242,8 @@ export function DiffRow({
         }
         const change = pendingChangeMap[`${col.plugin}:${pendingLookupField}`];
         const hasPending = pendingValue !== undefined;
+        const resolutionPath = pendingResolutionPath(context, diff.fieldName, rawPending);
+        const pendingResolution = resolutionPath !== undefined ? change?.resolutions?.[resolutionPath] : undefined;
         return (
           <td
             key={`pending:${col.plugin}`}
@@ -248,11 +269,12 @@ export function DiffRow({
                 {/* Issue #137: the pending value renders through the same type-aware renderer the
                     disk columns use, in its read-only form (editable=false) — enums/flags resolve
                     to names, FormKeys become links — so the Pending column reads in the same
-                    language as the row it is being compared against. A staged FormKey is validated
-                    at stage time (ADR-0020), so it always resolves — PENDING_RESOLVES stands in
-                    until #159 wires PendingChange.resolutions through. */}
+                    language as the row it is being compared against. Issue #159: the FormKey
+                    resolution comes from the staged change's own `resolutions`, keyed by this
+                    row's sub-path within the change's NewValue (pendingResolutionPath) — the
+                    same tri-state signal disk columns use, not a stand-in. */}
                 <span>{renderCell(pendingValue, meta, false, client, onOpen, () => {}, undefined,
-                  meta.type === 'formKey' ? PENDING_RESOLVES : undefined)}</span>
+                  meta.type === 'formKey' ? pendingResolution : undefined)}</span>
                 {change && showActions && (
                   <button
                     // stopPropagation: the ↩ sits inside the cell that plain-click reveals
