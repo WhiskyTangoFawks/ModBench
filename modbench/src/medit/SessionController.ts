@@ -169,19 +169,7 @@ export class SessionController {
    *  are surfaced per group (ADR-0026), aggregating failures into one message. */
   async saveGroups(groupIds: string[]): Promise<void> {
     if (groupIds.length === 0) return;
-    const failed: string[] = [];
-    let anySucceeded = false;
-    for (const id of groupIds) {
-      if (await this.saveOneGroup(id)) anySucceeded = true;
-      else failed.push(id);
-    }
-    if (anySucceeded) {
-      this.deps.refreshGroupTree();
-      this.deps.refreshTree();
-    }
-    if (failed.length > 0) {
-      this.deps.showError(`mEdit: Failed to save: ${failed.join(', ')}`);
-    }
+    return this.saveGroupList(groupIds, 'mEdit: Failed to save:');
   }
 
   /** Revert several selected groups at once, each atomic on its whole component. Reports
@@ -245,18 +233,25 @@ export class SessionController {
     }
     const groups = data.filter(g => g.id);
     if (groups.length === 0) return;
+    return this.saveGroupList(groups.map(g => g.id!), 'mEdit: Failed to save pending changes:');
+  }
+
+  /** Shared loop/aggregate body for saveGroups and saveAllGroups: save each group via the
+   *  per-group endpoint, refresh trees once if anything succeeded, and surface one aggregated
+   *  error naming every failed group (ADR-0026) — not N toasts. */
+  private async saveGroupList(groupIds: string[], failMessagePrefix: string): Promise<void> {
     const failed: string[] = [];
     let anySucceeded = false;
-    for (const g of groups) {
-      if (await this.saveOneGroup(g.id!)) anySucceeded = true;
-      else failed.push(g.id!);
+    for (const id of groupIds) {
+      if (await this.saveOneGroup(id)) anySucceeded = true;
+      else failed.push(id);
     }
     if (anySucceeded) {
       this.deps.refreshGroupTree();
       this.deps.refreshTree();
     }
     if (failed.length > 0) {
-      this.deps.showError(`mEdit: Failed to save pending changes: ${failed.join(', ')}`);
+      this.deps.showError(`${failMessagePrefix} ${failed.join(', ')}`);
     }
   }
 
