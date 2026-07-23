@@ -125,7 +125,7 @@ public record CompareResult(
     ConflictAll ConflictAll,
     VmadCompare? Vmad = null);
 
-public record PluginRecordTypeCount(string Type, int Count);
+public record PluginRecordTypeCount(string Type, int Count, string DisplayName);
 
 public record SessionFilterRequest(string Sql);
 public record SessionFilterResponse(string? Sql);

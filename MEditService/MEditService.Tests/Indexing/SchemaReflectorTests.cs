@@ -39,6 +39,36 @@ public class SchemaReflectorTests
         Assert.False(schemas.ContainsKey("navi"));
     }
 
+    // ── Issue #110: xEdit-parity display names ────────────────────────────────
+
+    [Fact]
+    public void GetSchemas_Acti_DisplayName_MatchesXEdit()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        Assert.Equal("Activator", schemas["acti"].DisplayName);
+    }
+
+    [Fact]
+    public void GetSchemas_Gmst_DisplayName_MatchesXEdit()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        Assert.Equal("Game Setting", schemas["gmst"].DisplayName);
+    }
+
+    [Fact]
+    public void GetSchemas_EveryDiscoveredTable_HasANonEmptyDisplayName()
+    {
+        // Guards the hand-transcribed RecordDisplayNames table: every table Mutagen reflection
+        // currently surfaces must have a real xEdit-sourced name, not a silent fallback to the
+        // raw signature (which RecordDisplayNames.For only does for a lookup miss).
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var missing = schemas
+            .Where(kv => string.IsNullOrEmpty(kv.Value.DisplayName) || kv.Value.DisplayName == kv.Key)
+            .Select(kv => kv.Key)
+            .ToList();
+        Assert.Empty(missing);
+    }
+
     [Fact]
     public void GetSchemas_Npc_BoolColumn_MapsToBooleanDuckDbType()
     {

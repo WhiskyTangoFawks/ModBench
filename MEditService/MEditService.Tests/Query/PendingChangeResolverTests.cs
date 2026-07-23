@@ -24,9 +24,13 @@ public class PendingChangeResolverTests
     }
 
     private static IReadOnlyDictionary<string, RecordTableSchema> Schemas(string tableName, params ColumnSpec[] columns) =>
+        Schemas(tableName, tableName, columns);
+
+    private static IReadOnlyDictionary<string, RecordTableSchema> Schemas(
+        string tableName, string displayName, params ColumnSpec[] columns) =>
         new Dictionary<string, RecordTableSchema>
         {
-            [tableName] = new() { TableName = tableName, RecordType = typeof(object), RecordColumns = columns },
+            [tableName] = new() { TableName = tableName, DisplayName = displayName, RecordType = typeof(object), RecordColumns = columns },
         };
 
     [Fact]
@@ -153,6 +157,19 @@ public class PendingChangeResolverTests
         Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolved.RecordResolution!.State);
         Assert.Equal("MyNpc", resolved.RecordResolution.EditorId);
         Assert.Equal("npc_", resolved.RecordResolution.RecordType);
+    }
+
+    [Fact]
+    public void Resolve_PopulatesRecordTypeDisplayName_FromSchema()
+    {
+        // Issue #110: the Pending Changes tree's `{RecordType} / {EditorID}` leaf label should
+        // read an xEdit-parity display name, not the raw signature.
+        var change = MakeChange("race", "npc_", J("\"000AAA:Test.esp\""));
+        var schemas = Schemas("npc_", "Non-Player Character", FormKeyColumn("race", "race"));
+
+        var resolved = PendingChangeResolver.Resolve(change, schemas, _ => null);
+
+        Assert.Equal("Non-Player Character", resolved.RecordTypeDisplayName);
     }
 
     [Fact]

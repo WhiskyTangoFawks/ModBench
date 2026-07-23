@@ -163,6 +163,20 @@ describe('PendingChangesTreeProvider — root', () => {
     expect((node as PendingLeafNode).label).toBe('npc_ / 001234:MyPatch.esp · Height');
   });
 
+  // ── Issue #110: leaf label shows the xEdit display name, not the raw signature ────
+  it('renders the leaf label with the xEdit display name in place of the raw record type', async () => {
+    const client = makeClient({
+      groups: [group({ id: 'c1' })],
+      changes: [change({
+        id: 'c1', recordType: 'npc_', recordTypeDisplayName: 'Non-Player Character',
+        formKey: '001234:MyPatch.esp', fieldPath: 'Height',
+      })],
+    });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const [node] = await provider.getChildren();
+    expect((node as PendingLeafNode).label).toBe('Non-Player Character / 001234:MyPatch.esp · Height');
+  });
+
   // ── Slice 2: singleton left-click opens its record ────────────────────────
   it('gives a singleton leaf an openEditor command carrying its formKey', async () => {
     const client = makeClient({

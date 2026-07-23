@@ -159,8 +159,9 @@ public sealed class RecordQueryService(
             counts[recordType] = existing + 1;
         }
 
+        var schemas = RequireSchemas();
         return [.. counts
-            .Select(kv => new PluginRecordTypeCount(kv.Key, kv.Value))
+            .Select(kv => new PluginRecordTypeCount(kv.Key, kv.Value, schemas.DisplayNameFor(kv.Key)))
             .OrderBy(r => r.Type)];
     }
 

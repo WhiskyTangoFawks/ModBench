@@ -39,8 +39,11 @@ export class RecordTypeNode extends vscode.TreeItem {
     public readonly plugin: string,
     public readonly recordType: string,
     count: number,
+    displayName: string = recordType,
   ) {
-    super(recordType, vscode.TreeItemCollapsibleState.Collapsed);
+    // Issue #110: label is the xEdit-parity display name ("Activator"); recordType (the raw
+    // 4-char signature, e.g. "acti") stays the internal id — cache key, contextValue, commands.
+    super(displayName, vscode.TreeItemCollapsibleState.Collapsed);
     this.description = count.toLocaleString();
     this.contextValue = 'recordType';
   }
@@ -309,7 +312,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       if (types.some(t => t.type === 'worldspace')) nodes.push(new WorldspacesNode(node.plugin.name));
       if (types.some(t => t.type === 'cell')) nodes.push(new InteriorCellsNode(node.plugin.name));
       for (const t of types) {
-        if (!SPATIAL_TYPES.has(t.type)) nodes.push(new RecordTypeNode(node.plugin.name, t.type, t.count));
+        if (!SPATIAL_TYPES.has(t.type)) nodes.push(new RecordTypeNode(node.plugin.name, t.type, t.count, t.displayName));
       }
       return nodes;
     } catch (e) {

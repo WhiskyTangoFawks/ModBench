@@ -58,12 +58,12 @@ function makeRecord(i: number): RecordSummary {
 
 function makeRepository(overrides: Partial<{
   plugins: PluginMetadata[];
-  recordTypes: { type: string; count: number }[];
+  recordTypes: { type: string; count: number; displayName?: string }[];
   records: RecordPage;
 }> = {}): PluginRepository {
   return {
     getPlugins: vi.fn().mockResolvedValue(overrides.plugins ?? [makePlugin(0), makePlugin(1)]),
-    getRecordTypes: vi.fn().mockResolvedValue(overrides.recordTypes ?? [{ type: 'WEAP', count: 5 }]),
+    getRecordTypes: vi.fn().mockResolvedValue(overrides.recordTypes ?? [{ type: 'WEAP', count: 5, displayName: 'Weapon' }]),
     getRecords: vi.fn().mockResolvedValue(overrides.records ?? { items: [makeRecord(0)], total: 1 }),
     setFilter: vi.fn().mockResolvedValue(null),
     clearFilter: vi.fn().mockResolvedValue(undefined),
@@ -185,6 +185,19 @@ describe('PluginTreeProvider.getChildren(PluginNode)', () => {
     expect(children).toHaveLength(2);
     expect(children.every(c => c instanceof RecordTypeNode)).toBe(true);
     expect((children[0] as RecordTypeNode).recordType).toBe('WEAP');
+  });
+
+  it('renders the xEdit display name as the label, not the raw signature', async () => {
+    const repo = makeRepository({
+      recordTypes: [{ type: 'acti', count: 10, displayName: 'Activator' }],
+    });
+    const provider = new PluginTreeProvider(repo);
+    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
+
+    const [typeNode] = await provider.getChildren(pluginNode) as RecordTypeNode[];
+
+    expect(typeNode.label).toBe('Activator');
+    expect(typeNode.recordType).toBe('acti');
   });
 });
 
@@ -430,9 +443,17 @@ describe('PluginNode', () => {
 // ── RecordTypeNode ────────────────────────────────────────────────────────────
 
 describe('RecordTypeNode', () => {
-  it('uses record type as label', () => {
+  it('uses record type as label when no display name is given', () => {
     const node = new RecordTypeNode('MyPlugin.esp', 'WEAP', 42);
     expect(node.label).toBe('WEAP');
+  });
+
+  it('uses the xEdit display name as label, keeping recordType as the raw signature', () => {
+    // Issue #110: the tree must show "Weapon", not "weap" — but recordType (used for
+    // caching, commands, contextValue) stays the raw signature.
+    const node = new RecordTypeNode('MyPlugin.esp', 'weap', 42, 'Weapon');
+    expect(node.label).toBe('Weapon');
+    expect(node.recordType).toBe('weap');
   });
 
   it('shows formatted count as description', () => {

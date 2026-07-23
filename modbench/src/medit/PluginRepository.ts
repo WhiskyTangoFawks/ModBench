@@ -31,8 +31,9 @@ function toRecordSummary(r: GeneratedRecordSummary): RecordSummary {
   };
 }
 
-function toRecordTypeCount(r: PluginRecordTypeCount): { type: string; count: number } {
-  return { type: r.type ?? '', count: r.count ?? 0 };
+function toRecordTypeCount(r: PluginRecordTypeCount): { type: string; count: number; displayName: string } {
+  const type = r.type ?? '';
+  return { type, count: r.count ?? 0, displayName: r.displayName ?? type };
 }
 
 type GenWorldspace = components['schemas']['WorldspaceSummary'];
@@ -69,7 +70,7 @@ export interface CellPage {
 
 export interface PluginRepository {
   getPlugins(): Promise<PluginMetadata[]>;
-  getRecordTypes(plugin: string): Promise<{ type: string; count: number }[]>;
+  getRecordTypes(plugin: string): Promise<{ type: string; count: number; displayName: string }[]>;
   getRecords(plugin: string, type: string, offset: number, limit: number): Promise<RecordPage>;
   setFilter(sql: string): Promise<string | null>; // returns error message or null on success
   clearFilter(): Promise<void>;
@@ -109,7 +110,7 @@ export class ApiPluginRepository implements PluginRepository {
     return (data ?? []).map(toPluginMetadata);
   }
 
-  async getRecordTypes(plugin: string): Promise<{ type: string; count: number }[]> {
+  async getRecordTypes(plugin: string): Promise<{ type: string; count: number; displayName: string }[]> {
     const { data, response } = await this.client.GET('/plugins/{plugin}/record-types', {
       params: { path: { plugin } },
     });

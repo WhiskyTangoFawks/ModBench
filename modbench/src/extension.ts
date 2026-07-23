@@ -367,7 +367,9 @@ function registerChangeGroupCommands(deps: EditorCommandDeps): vscode.Disposable
         const groups = selectedGroups(node, allSelected);
         if (groups.length > 0) {
           const members = groups.flatMap(g =>
-            g.members.map(m => `${m.recordType ?? ''} / ${m.formKey ?? ''} · ${m.fieldPath ?? ''}`));
+            // Issue #110: xEdit-parity display name, matching the Pending Changes tree's own
+            // leaf label; falls back to the raw signature for an older/stale API contract.
+            g.members.map(m => `${m.recordTypeDisplayName ?? m.recordType ?? ''} / ${m.formKey ?? ''} · ${m.fieldPath ?? ''}`));
           const label = groups.length > 1 ? `Revert ${groups.length} groups?` : 'Revert this group?';
           const answer = await vscode.window.showWarningMessage(
             `${label} All linked edits are reverted together.`,

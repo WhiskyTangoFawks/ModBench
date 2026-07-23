@@ -587,6 +587,7 @@ export interface components {
                 [key: string]: components["schemas"]["FormKeyResolution"];
             } | null;
             recordResolution?: components["schemas"]["FormKeyResolution"];
+            recordTypeDisplayName?: string | null;
         };
         PlacedSummary: {
             formKey?: string | null;
@@ -602,6 +603,7 @@ export interface components {
             type?: string | null;
             /** Format: int32 */
             count?: number;
+            displayName?: string | null;
         };
         PluginResponse: {
             name?: string | null;

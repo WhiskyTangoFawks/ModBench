@@ -72,7 +72,10 @@ describe('ApiPluginRepository.getPlugins', () => {
 
 describe('ApiPluginRepository.getRecordTypes', () => {
   it('calls GET /plugins/{plugin}/record-types with correct path param', async () => {
-    const types = [{ type: 'WEAP', count: 42 }, { type: 'NPC_', count: 10 }];
+    const types = [
+      { type: 'WEAP', count: 42, displayName: 'Weapon' },
+      { type: 'NPC_', count: 10, displayName: 'Non-Player Character' },
+    ];
     const client = { GET: vi.fn().mockResolvedValue({ data: types, response: { ok: true } }) } as any;
     const repo = new ApiPluginRepository(client);
 
@@ -83,6 +86,18 @@ describe('ApiPluginRepository.getRecordTypes', () => {
       '/plugins/{plugin}/record-types',
       expect.objectContaining({ params: { path: { plugin: 'MyPlugin.esp' } } }),
     );
+  });
+
+  it('falls back to the raw type when displayName is absent from the response', async () => {
+    // Issue #110: additive field — a stale/older backend response without displayName
+    // must not surface `undefined` as a tree label.
+    const types = [{ type: 'WEAP', count: 42 }];
+    const client = { GET: vi.fn().mockResolvedValue({ data: types, response: { ok: true } }) } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const result = await repo.getRecordTypes('MyPlugin.esp');
+
+    expect(result).toEqual([{ type: 'WEAP', count: 42, displayName: 'WEAP' }]);
   });
 
   it('returns empty array when data is undefined', async () => {
