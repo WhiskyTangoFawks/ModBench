@@ -13,10 +13,13 @@ public static class PendingChangeResolver
     public static PendingChange Resolve(
         PendingChange change,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        Func<string, RecordLookupEntry?> resolveFormKey) =>
-        VmadPath.IsVmadPath(change.FieldPath)
-            ? ResolveVmad(change, resolveFormKey)
-            : ResolveField(change, schemas, resolveFormKey);
+        Func<string, RecordLookupEntry?> resolveFormKey)
+    {
+        var withIdentity = change with { RecordResolution = FormKeyResolution.From(resolveFormKey(change.FormKey), []) };
+        return VmadPath.IsVmadPath(change.FieldPath)
+            ? ResolveVmad(withIdentity, resolveFormKey)
+            : ResolveField(withIdentity, schemas, resolveFormKey);
+    }
 
     private static PendingChange ResolveField(
         PendingChange change,

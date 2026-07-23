@@ -111,7 +111,10 @@ export interface PendingChange {
   description: string | null;
   changedAt: string;
   // ADR-0031: resolution signal for every FormKey-typed value inside newValue, keyed by the
-  // sub-path within newValue ("" for a scalar formKey field itself). Pending-column wiring lands
-  // in #159; the field exists here now so the type matches the backend response shape.
+  // sub-path within newValue ("" for a scalar formKey field itself, matching FormRefPathBuilder).
   resolutions?: Record<string, FormKeyResolution>;
+  // ADR-0031 / #159: resolution signal for the change's own FormKey (record identity) — distinct
+  // from `resolutions` above, which is scoped to leaves inside newValue. Drives the Pending
+  // Changes tree's `{RecordType} / {EditorID}` leaf label.
+  recordResolution?: FormKeyResolution;
 }

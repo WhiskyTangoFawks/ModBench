@@ -14,8 +14,10 @@ function formatValue(v: unknown): string {
 }
 
 /** A single pending change — a top-level group-of-one (`pendingGroup`) or a member
- *  of a multi-member group (`pendingGroupMember`). The record is shown by FormKey
- *  until #141 delivers FormKey → EditorID resolution over the change response. */
+ *  of a multi-member group (`pendingGroupMember`). The record shows as its resolved
+ *  EditorID (ADR-0031 / #159) when the change's own FormKey resolves; falls back to
+ *  the raw FormKey when it doesn't (or when the backend hasn't supplied a resolution
+ *  at all, e.g. against a stale API contract). */
 export class PendingLeafNode extends vscode.TreeItem {
   readonly changeId: string;
   readonly formKey: string;
@@ -30,7 +32,10 @@ export class PendingLeafNode extends vscode.TreeItem {
     const recordType = change.recordType ?? '';
     const formKey = change.formKey ?? '';
     const fieldPath = change.fieldPath ?? '';
-    super(`${recordType} / ${formKey} · ${fieldPath}`, vscode.TreeItemCollapsibleState.None);
+    const recordLabel = change.recordResolution && change.recordResolution.state !== 'Unresolved'
+      ? (change.recordResolution.editorId ?? formKey)
+      : formKey;
+    super(`${recordType} / ${recordLabel} · ${fieldPath}`, vscode.TreeItemCollapsibleState.None);
     this.changeId = change.id ?? '';
     // A stable id (not the label) is what lets TreeView.reveal match a freshly-built node
     // against whatever the view has already rendered (#140) — labels can collide, change ids

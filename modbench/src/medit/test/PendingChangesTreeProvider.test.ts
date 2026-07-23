@@ -126,6 +126,43 @@ describe('PendingChangesTreeProvider — root', () => {
     expect((node as PendingLeafNode).collapsibleState).toBe(0);
   });
 
+  // ── Issue #159: leaf label upgrades to EditorID when the change's own FormKey resolves ────
+  it('renders the leaf label with the resolved EditorID in place of the raw FormKey', async () => {
+    const client = makeClient({
+      groups: [group({ id: 'c1' })],
+      changes: [change({
+        id: 'c1', recordType: 'npc_', formKey: '001234:MyPatch.esp', fieldPath: 'Height',
+        recordResolution: { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'GoodNpc' },
+      })],
+    });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const [node] = await provider.getChildren();
+    expect((node as PendingLeafNode).label).toBe('npc_ / GoodNpc · Height');
+  });
+
+  it('falls back to the raw FormKey in the leaf label when the record is unresolved', async () => {
+    const client = makeClient({
+      groups: [group({ id: 'c1' })],
+      changes: [change({
+        id: 'c1', recordType: 'npc_', formKey: '001234:MyPatch.esp', fieldPath: 'Height',
+        recordResolution: { state: 'Unresolved', recordType: null, editorId: null },
+      })],
+    });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const [node] = await provider.getChildren();
+    expect((node as PendingLeafNode).label).toBe('npc_ / 001234:MyPatch.esp · Height');
+  });
+
+  it('falls back to the raw FormKey in the leaf label when the change carries no recordResolution at all', async () => {
+    const client = makeClient({
+      groups: [group({ id: 'c1' })],
+      changes: [change({ id: 'c1', recordType: 'npc_', formKey: '001234:MyPatch.esp', fieldPath: 'Height' })],
+    });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    const [node] = await provider.getChildren();
+    expect((node as PendingLeafNode).label).toBe('npc_ / 001234:MyPatch.esp · Height');
+  });
+
   // ── Slice 2: singleton left-click opens its record ────────────────────────
   it('gives a singleton leaf an openEditor command carrying its formKey', async () => {
     const client = makeClient({
