@@ -238,9 +238,12 @@ public static class VmadConflictClassifier
     private static object? LeafValue(VmadPropertyValue? v)
     {
         if (v == null) return null;
-        if (v.Type == "Object") return v.Value == null ? null : $"{v.Value} [{v.Alias}]";
+        if (v.Type == "Object") return ObjectLeaf(v);
         return v.Value; // null for Struct/ArrayOf* — their data lives in Members/ListItems/StructList
     }
+
+    // Single source of truth for the Object-type null-guard: null when unset, else "Value [Alias]".
+    private static string? ObjectLeaf(VmadPropertyValue v) => v.Value == null ? null : $"{v.Value} [{v.Alias}]";
 
     // Canonical comparison string for a property value (null = absent). Prefixed with Type so a
     // property whose Type differs across plugins registers as a conflict, not just a value change.
@@ -266,12 +269,9 @@ public static class VmadConflictClassifier
         if (v.ListItems != null)
             return $"{v.Type}[" + string.Join(",", v.ListItems.Select(Canon)) + "]";
 
-        var leaf = v.Type switch
-        {
-            "Object" when v.Value == null => "",
-            "Object" => $"{v.Value} [{v.Alias}]",
-            _ => v.Value?.ToString() ?? "",
-        };
+        var leaf = v.Type == "Object"
+            ? ObjectLeaf(v) ?? ""
+            : v.Value?.ToString() ?? "";
         return $"{v.Type}|{leaf}";
     }
 
