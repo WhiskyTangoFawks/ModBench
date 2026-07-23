@@ -156,7 +156,8 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   async getActiveFilter(): Promise<string | null> {
-    const { data } = await this.client.GET('/session/filter', {});
+    const { data, response } = await this.client.GET('/session/filter', {});
+    await this.ensureOk('getActiveFilter', response);
     return data?.sql ?? null;
   }
 

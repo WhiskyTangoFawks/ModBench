@@ -148,6 +148,10 @@ masters; there is no separate load-session step.
   `modbench.scriptsPath` ("▶ Apply as Filter" when the file differs from the active filter; "✓
   Active — click to clear" when it is the active filter). A `filterActive` context key drives
   the active indicators.
+- If reading the active-filter state fails (backend error), the sync degrades to *inactive* and
+  warns the user rather than silently presenting the unfiltered tree as a confirmed "no filter"
+  ([ADR-0026](../adr/0026-error-surfacing-policy.md); same degrade-and-warn convention as other
+  secondary reads). The failure is non-fatal to session activation.
 - Conflict-status filtering, EditorID search, and record-type narrowing are all expressed as
   user-written SQL against the per-type DuckDB tables — **no structured toggle UI**. A built-in
   `pending-changes.sql` preset (`SELECT DISTINCT form_key FROM pending_changes`) is copied into

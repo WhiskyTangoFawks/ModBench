@@ -179,7 +179,10 @@ describe('ApiPluginRepository.clearFilter', () => {
 describe('ApiPluginRepository.getActiveFilter', () => {
   it('calls GET /session/filter and returns sql', async () => {
     const client = {
-      GET: vi.fn().mockResolvedValue({ data: { sql: 'SELECT form_key FROM "npc_"' } }),
+      GET: vi.fn().mockResolvedValue({
+        data: { sql: 'SELECT form_key FROM "npc_"' },
+        response: { ok: true },
+      }),
     } as any;
     const repo = new ApiPluginRepository(client);
 
@@ -191,11 +194,16 @@ describe('ApiPluginRepository.getActiveFilter', () => {
 
   it('returns null when sql is null', async () => {
     const client = {
-      GET: vi.fn().mockResolvedValue({ data: { sql: null } }),
+      GET: vi.fn().mockResolvedValue({ data: { sql: null }, response: { ok: true } }),
     } as any;
     const repo = new ApiPluginRepository(client);
 
     expect(await repo.getActiveFilter()).toBeNull();
+  });
+
+  it('throws on a non-OK response instead of resolving to null, so a failed read is never mistaken for "no filter set"', async () => {
+    const repo = new ApiPluginRepository(nonOkClient());
+    await expect(repo.getActiveFilter()).rejects.toThrow(/500/);
   });
 });
 
