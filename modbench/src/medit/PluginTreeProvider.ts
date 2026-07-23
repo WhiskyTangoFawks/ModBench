@@ -187,6 +187,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private readonly pageCache: PageCache = new Map();
   private readonly interiorCache: CellPageCache = new Map();
   private readonly refCache = new Map<string, CellReferences>();
+  // Last load-more failure per parent, keyed the same as pageCache/interiorCache
+  // ("plugin::recordType" / plugin). Cleared on a successful retry; renders as an
+  // ErrorNode alongside the still-clickable LoadMoreNode/InteriorLoadMoreNode.
+  private readonly loadMoreFailures = new Map<string, string>();
+  private readonly interiorLoadMoreFailures = new Map<string, string>();
   private readonly log: (msg: string) => void;
 
   // Plugin-name filter (issue #70): a client-side substring match over whatever
@@ -204,6 +209,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this.pageCache.clear();
     this.interiorCache.clear();
     this.refCache.clear();
+    this.loadMoreFailures.clear();
+    this.interiorLoadMoreFailures.clear();
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -249,8 +256,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     try {
       const result = await this.repository.getRecords(parent.plugin, parent.recordType, cached.items.length, PAGE_SIZE);
       this.pageCache.set(cacheKey, { items: [...cached.items, ...result.items], total: result.total });
+      this.loadMoreFailures.delete(cacheKey);
     } catch (e) {
-      this.log(`[PluginTreeProvider] loadMore(${parent.plugin}, ${parent.recordType}) failed: ${this.err(e)}`);
+      const message = this.err(e);
+      this.log(`[PluginTreeProvider] loadMore(${parent.plugin}, ${parent.recordType}) failed: ${message}`);
+      this.loadMoreFailures.set(cacheKey, message);
     }
     this._onDidChangeTreeData.fire(parent);
   }
@@ -261,8 +271,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     try {
       const result = await this.repository.getInteriorCells(parent.plugin, cached.items.length, PAGE_SIZE);
       this.interiorCache.set(parent.plugin, { items: [...cached.items, ...result.items], total: result.total });
+      this.interiorLoadMoreFailures.delete(parent.plugin);
     } catch (e) {
-      this.log(`[PluginTreeProvider] loadMoreInterior(${parent.plugin}) failed: ${this.err(e)}`);
+      const message = this.err(e);
+      this.log(`[PluginTreeProvider] loadMoreInterior(${parent.plugin}) failed: ${message}`);
+      this.interiorLoadMoreFailures.set(parent.plugin, message);
     }
     this._onDidChangeTreeData.fire(parent);
   }
@@ -366,6 +379,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     if (cached.total > cached.items.length) {
       nodes.push(new InteriorLoadMoreNode(node, cached.total - cached.items.length));
     }
+    const failure = this.interiorLoadMoreFailures.get(node.plugin);
+    if (failure) nodes.push(new ErrorNode(failure));
     return nodes;
   }
 
@@ -383,10 +398,12 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       }
     }
 
-    const nodes: (RecordNode | LoadMoreNode)[] = cached.items.map(r => new RecordNode(r));
+    const nodes: PluginTreeNode[] = cached.items.map(r => new RecordNode(r));
     if (cached.total > cached.items.length) {
       nodes.push(new LoadMoreNode(node, cached.total - cached.items.length));
     }
+    const failure = this.loadMoreFailures.get(cacheKey);
+    if (failure) nodes.push(new ErrorNode(failure));
     return nodes;
   }
 }
