@@ -3,5 +3,5 @@ namespace MEditService.Core.Edits;
 public sealed record ReferenceValidationError(
     string FieldPath,
     string Value,
-    string Reason, // "null_not_allowed" | "type_mismatch" | "not_in_session"
+    string Reason, // "null_not_allowed" | "type_mismatch" | "not_in_session" | "not_append_only"
     IReadOnlyList<string> ExpectedTypes);

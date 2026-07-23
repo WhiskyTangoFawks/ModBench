@@ -563,6 +563,10 @@ export interface components {
             description?: string | null;
             changeType?: string | null;
         };
+        PatchRecordValidationError: {
+            fieldErrors?: components["schemas"]["ReferenceValidationError"][] | null;
+            detail?: string | null;
+        };
         PendingChange: {
             /** Format: uuid */
             id?: string;
@@ -848,7 +852,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                    "application/json": components["schemas"]["PatchRecordValidationError"];
                 };
             };
         };
@@ -902,7 +906,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReferenceValidationError"][];
+                    "application/json": components["schemas"]["PatchRecordValidationError"];
                 };
             };
         };

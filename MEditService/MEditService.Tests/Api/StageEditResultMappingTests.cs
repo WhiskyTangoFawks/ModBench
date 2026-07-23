@@ -20,7 +20,9 @@ public sealed class StageEditResultMappingTests
         Assert.Equal(422, status.StatusCode);
 
         var value = Assert.IsAssignableFrom<IValueHttpResult>(result);
-        Assert.Equal(errors, value.Value);
+        var body = Assert.IsType<PatchRecordValidationError>(value.Value);
+        Assert.Equal(errors, body.FieldErrors);
+        Assert.Null(body.Detail);
     }
 
     [Fact]
@@ -66,6 +68,11 @@ public sealed class StageEditResultMappingTests
 
         var status = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
         Assert.Equal(422, status.StatusCode);
+
+        var value = Assert.IsAssignableFrom<IValueHttpResult>(result);
+        var body = Assert.IsType<PatchRecordValidationError>(value.Value);
+        Assert.Null(body.FieldErrors);
+        Assert.Contains("form_key", body.Detail);
     }
 
     [Fact]
@@ -76,9 +83,11 @@ public sealed class StageEditResultMappingTests
         var status = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
         Assert.Equal(422, status.StatusCode);
 
-        var problem = Assert.IsType<Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult>(result);
-        Assert.Contains("Heavy.esp", problem.ProblemDetails.Detail);
-        Assert.Contains("001000:Heavy.esp", problem.ProblemDetails.Detail);
+        var value = Assert.IsAssignableFrom<IValueHttpResult>(result);
+        var body = Assert.IsType<PatchRecordValidationError>(value.Value);
+        Assert.Null(body.FieldErrors);
+        Assert.Contains("Heavy.esp", body.Detail);
+        Assert.Contains("001000:Heavy.esp", body.Detail);
     }
 
     [Fact]

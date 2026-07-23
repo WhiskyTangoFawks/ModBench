@@ -118,3 +118,18 @@ export interface PendingChange {
   // Changes tree's `{RecordType} / {EditorID}` leaf label.
   recordResolution?: FormKeyResolution;
 }
+
+export interface ReferenceValidationError {
+  fieldPath: string;
+  value?: string;
+  reason?: 'not_in_session' | 'not_append_only' | 'type_mismatch' | 'null_not_allowed';
+  expectedTypes?: string[];
+}
+
+// #147: PATCH /records/{formKey}'s single 422 shape — fieldErrors for reference/append-only/
+// type-mismatch/null-not-allowed failures, detail for everything else (ESL-ineligible, read-only
+// fields). Never both. Mirrors the backend's PatchRecordValidationError envelope.
+export interface PatchRecordValidationError {
+  fieldErrors?: ReferenceValidationError[] | null;
+  detail?: string | null;
+}

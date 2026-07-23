@@ -168,4 +168,12 @@ public record DeleteRecordsResponse(ChangeGroup? StagedGroup, IReadOnlyList<stri
 
 public record DeleteRecordsRequest(IReadOnlyList<DeleteRecordTarget> Records);
 
+// #147: PatchRecord/CopyRecordTo's 422 had the same anti-pattern as #143's DeleteRecords 200 —
+// one status code, two undeclared shapes (a bare ReferenceValidationError[] for reference/
+// append-only/type-mismatch/null-not-allowed failures, ProblemDetails for read-only-fields/
+// ESL-ineligible). This envelope keeps the wire honest: exactly one documented 422 schema.
+// FieldErrors is non-null for reference-style failures; Detail is non-null for the rest — never
+// both populated (unlike DeleteRecordsResponse, StageEditResult only ever reports one outcome).
+public record PatchRecordValidationError(IReadOnlyList<ReferenceValidationError>? FieldErrors, string? Detail);
+
 public record HealthResponse(string Status);

@@ -25,16 +25,20 @@ public static class ChangeEndpoints
             .WithName("PatchRecord")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PendingChange>>()
-            .Produces<IReadOnlyList<ReferenceValidationError>>(422)
+            // #147: one 422 envelope covers every rejection reason (reference/append-only/type-
+            // mismatch/null-not-allowed alongside read-only-fields/ESL-ineligible) — see
+            // PatchRecordValidationError for why (a bare array and ProblemDetails on the same status
+            // code isn't representable in OpenAPI without oneOf machinery this repo doesn't have).
+            .Produces<PatchRecordValidationError>(422)
             .ProducesProblem(404)
-            .ProducesProblem(409)
-            .ProducesProblem(422);
+            .ProducesProblem(409);
 
         app.MapPost("/records/{formKey}/copy-to/{targetPlugin}", CopyRecordTo)
             .WithName("CopyRecordTo")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PendingChange>>()
-            .Produces<IReadOnlyList<ReferenceValidationError>>(422)
+            // #147: shares StageEditResult.ToHttpResult with PatchRecord — same single 422 envelope.
+            .Produces<PatchRecordValidationError>(422)
             .ProducesProblem(404)
             .ProducesProblem(409);
 
