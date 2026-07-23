@@ -1,7 +1,7 @@
 # mEdit Record editor panel — Surface Specification
 
-**Status: Implemented.** Two known gaps are called out where they bite: FormKey resolution
-(#141) and array arity/order editing (#142).
+**Status: Implemented.** One known gap is called out where it bites: FormKey resolution
+(#141).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
@@ -125,10 +125,14 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
   `validFormKeyTypes`, and the link affordance appears on `Ctrl`-hover only when the reference
   resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows.
   Pending-change cells show the new value on a yellow background with a revert (↩) button.
-- **Array elements edit by value, but the field grid has no arity or order controls** — no add,
-  remove, or reorder. Editing an element's value restages the whole array; changing how many
-  elements there are, or what order they are in, is not reachable there and never has been
-  (#142). The VMAD section is the exception: it has its own element and struct add/remove.
+- **Unsorted array fields have arity and order controls in the field grid** — each element row
+  carries move-up / move-down (swap with the neighbour, disabled at the first/last position) and
+  a remove control, and the parent array row carries an add control that appends a default-valued
+  element (#142). Sorted (`wbArrayS`) arrays show none of these — order is derived from the sort
+  key, so the controls are absent, not merely disabled. All three ops restage the **whole array**
+  as a single field edit (same path as an element-value edit; ADR-0017), and render only on
+  non-immutable columns. There is no free drag-reorder and no auto-sort. The VMAD section keeps
+  its own separate element/struct add/remove.
 - **Editing stages pending changes** rather than writing immediately. Copying a whole record
   into another plugin is a **column-header** action, not a panel-level one — **Copy as
   Override…** on each mutable column's header opens a picker of the other mutable plugins.
@@ -248,9 +252,10 @@ section, and any future surface):
    looks followable.
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
    per-session, not persisted across restarts. Array **element values** are editable
-   everywhere. Array **arity and order** divide by surface, so this rule does not generalize:
-   the VMAD section has add/remove element and add/remove struct, while the **field grid has
-   none** — no add, no remove, no reorder (#142).
+   everywhere. Array **arity and order** are editable in the field grid for **unsorted** arrays
+   (add / remove / move-up / move-down, swap-based, on non-immutable columns) and **absent** for
+   sorted (`wbArrayS`) arrays, whose order is sort-key-derived (#142). The VMAD section keeps its
+   own add/remove element and add/remove struct.
 4. **Pending values** always show the new value (not the old), on a yellow background with a
    revert button.
 5. **Null / missing fields** render as an empty cell, never "null"/"undefined".
@@ -287,10 +292,10 @@ section, and any future surface):
 - **Referenced By** — a separate panel, [medit-referenced-by.md](medit-referenced-by.md).
 - **Grouping semantics** — settled in ADR-0028 and computed backend-side; this surface renders
   grouping, it does not derive it.
-- **Array arity and order editing *in the field grid*** — no add, remove, or reorder; tracked
-  as #142, which has to settle how an arity change stages under ADR-0017's
-  `old_value`/`new_value` model and how sorted (`wbArrayS`) and unsorted (`wbArray`) arrays
-  differ. Not a limit of the VMAD section, which has its own.
+- **Array arity/order editing of *sorted* (`wbArrayS`) arrays** — deliberately absent: order is
+  derived from the sort key, so add/remove/reorder controls do not render on them. Unsorted
+  (`wbArray`) arrays gained field-grid arity/order controls in #142 (arity changes restage the
+  whole array under ADR-0017's `old_value`/`new_value` model).
 
 ## Further Notes
 

@@ -1,4 +1,4 @@
-import type { CompareOverride } from './types';
+import type { CompareOverride, FieldMetadata } from './types';
 
 export function toStr(v: unknown): string {
   if (v == null) return '';
@@ -64,4 +64,23 @@ export function updateArrayAtKey(
   }
   const idx = parseElementIndex(elementKey);
   return array.map((e, i) => (i === idx ? newValue : e));
+}
+
+// Issue #142: the value a freshly-appended array element starts with, derived from the
+// element's own FieldMetadata (RecordPanel's "＋" control on an unsorted array's parent row).
+// Struct elements (e.g. Factions: { Faction: FormKey, Rank: int }) recurse field-by-field —
+// mirrors VmadSection's defaultElementValue/defaultNode pair, but keyed off the compare grid's
+// own FieldMetadata shape rather than VMAD's raw node JSON, which the two do not share.
+// The `default` arm is deliberate, not lazy: an unrecognized/future `type` returns '' rather than
+// falling through to `undefined`, which would silently append a hole into a saved array.
+export function defaultElementValue(meta: FieldMetadata): unknown {
+  switch (meta.type) {
+    case 'string': case 'formKey': return '';
+    case 'int': case 'float': return 0;
+    case 'bool': return false;
+    case 'enum': return meta.enumValues[0] ?? '';
+    case 'struct': return Object.fromEntries((meta.fields ?? []).map(f => [f.name, defaultElementValue(f)]));
+    case 'array': return [];
+    default: return '';
+  }
 }

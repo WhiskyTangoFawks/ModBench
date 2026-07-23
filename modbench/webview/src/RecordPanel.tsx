@@ -7,7 +7,7 @@ import { PluginTargetPicker } from './PluginTargetPicker';
 import { DiffRow } from './DiffRow';
 import { partialSaveMessage, staleIndexMessage } from '../../src/medit/saveClassification';
 import type { ReindexFailure, SaveResult } from '../../src/medit/saveClassification';
-import { buildColumns, parseElementIndex, updateArrayAtKey } from './recordUtils';
+import { buildColumns, defaultElementValue, parseElementIndex, updateArrayAtKey } from './recordUtils';
 import { mono, fg, baseCell, headerCell, getConflictBg } from './gridStyles';
 import { VmadSection } from './VmadSection';
 import type { CompareOverride, CompareResult, ConflictThis, FieldMetadata, PendingChange } from './types';
@@ -410,6 +410,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
             {diffs.flatMap(diff => {
               const hasChildren = (diff.children?.length ?? 0) > 0;
               const isExpanded = expandedStructs.has(diff.fieldName);
+              const parentMeta = fieldMetaMap[diff.fieldName];
+              const elementType = parentMeta?.type === 'array' ? parentMeta.elementType : undefined;
+              // Issue #142: current (pending-over-disk) array for the "＋" add control, hoisted
+              // above the per-child loop below so the parent row can use it too.
+              const resolveCurrentArr = (plugin: string): unknown[] => {
+                const diskArr = (diff.values[plugin] as unknown[]) ?? [];
+                const pendingArr = overrideMap[plugin]?.pendingFields?.[diff.fieldName] as unknown[] | undefined;
+                return pendingArr ?? diskArr;
+              };
               const rows: React.ReactNode[] = [
                 <DiffRow
                   key={diff.fieldName}
@@ -438,22 +447,20 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                     else next.add(diff.fieldName);
                     return next;
                   })}
+                  // Issue #142: "＋" on the array's parent row — absent for sortable arrays and
+                  // for non-array fields (elementType undefined covers both).
+                  onArrayAdd={elementType != null && elementType.isSortable !== true
+                    ? plugin => { void handleEdit(plugin, diff.fieldName, [...resolveCurrentArr(plugin), defaultElementValue(elementType)]); }
+                    : undefined}
                 />,
               ];
               if (hasChildren && isExpanded) {
-                const parentMeta = fieldMetaMap[diff.fieldName];
-                const elementType = parentMeta?.type === 'array' ? parentMeta.elementType : undefined;
                 for (const child of diff.children ?? []) {
                   if (elementType != null) {
                     const elementMeta = elementType;
                     const childKey = `${diff.fieldName}.${child.fieldName}`;
                     const elemExpanded = expandedStructs.has(childKey);
                     const elemIdx = parseElementIndex(child.fieldName);
-                    const resolveCurrentArr = (plugin: string): unknown[] => {
-                      const diskArr = (diff.values[plugin] as unknown[]) ?? [];
-                      const pendingArr = overrideMap[plugin]?.pendingFields?.[diff.fieldName] as unknown[] | undefined;
-                      return pendingArr ?? diskArr;
-                    };
                     rows.push(
                       <DiffRow
                         key={childKey}
@@ -478,6 +485,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         context={{ kind: 'array-element', overrideMeta: elementMeta, parentFieldName: diff.fieldName }}
                         hasChildren={(child.children?.length ?? 0) > 0}
                         isExpanded={elemExpanded}
+                        // Issue #142: move-up/move-down/remove — absent (not disabled) for
+                        // sortable elements, whose order/arity isn't user-editable. Writes the
+                        // whole array as one field edit (ADR-0017), same mechanism as element
+                        // value edits above.
+                        arrayEdit={elementMeta.isSortable !== true ? {
+                          currentArray: resolveCurrentArr,
+                          index: elemIdx,
+                          onArrayEdit: (plugin, value) => { void handleEdit(plugin, diff.fieldName, value); },
+                        } : undefined}
                         onToggle={() => setExpandedStructs(prev => {
                           const next = new Set(prev);
                           if (next.has(childKey)) next.delete(childKey); else next.add(childKey);
