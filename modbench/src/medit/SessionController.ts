@@ -98,7 +98,17 @@ export class SessionController {
   }
 
   async syncFilterState(): Promise<void> {
-    const sql = await this.deps.repository.getActiveFilter();
+    let sql: string | null;
+    try {
+      sql = await this.deps.repository.getActiveFilter();
+    } catch (e) {
+      this.log(`[SessionController] syncFilterState failed: ${e instanceof Error ? e.message : String(e)}`);
+      this.deps.showWarning(
+        `mEdit: Could not read the active filter — treating the filter as inactive. ${e instanceof Error ? e.message : String(e)}`,
+      );
+      this.deps.setFilterActive(false);
+      return;
+    }
     this.deps.setFilterActive(sql !== null, sql ?? undefined);
   }
 

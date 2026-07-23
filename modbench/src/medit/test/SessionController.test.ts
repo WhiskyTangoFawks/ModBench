@@ -209,6 +209,18 @@ describe('SessionController.syncFilterState', () => {
 
     expect(deps.setFilterActive).toHaveBeenCalledWith(false, undefined);
   });
+
+  it('degrades to inactive and warns, without throwing, when the read fails', async () => {
+    const repository = makeRepository();
+    repository.getActiveFilter = vi.fn().mockRejectedValue(new Error('getActiveFilter failed (500): boom'));
+    const deps = makeDeps({ repository });
+    const ctrl = new SessionController(deps);
+
+    await expect(ctrl.syncFilterState()).resolves.toBeUndefined();
+
+    expect(deps.setFilterActive).toHaveBeenCalledWith(false);
+    expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('filter'));
+  });
 });
 
 // ── saveGroup ─────────────────────────────────────────────────────────────────
