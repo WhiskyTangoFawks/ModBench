@@ -187,6 +187,10 @@ masters; there is no separate load-session step.
   a session, navigation opens a record panel, the record filter prunes the tree, and command
   registration holds — add any new command id(s) to `EXPECTED_COMMANDS`.
 - Per `modbench/CLAUDE.md`: a failed fetch yields an **error tree node**, never an empty list.
+  This holds for **load-more (pagination) fetches** too: a failed "Load more…" surfaces an error
+  node for that parent while keeping the already-loaded pages and the retry affordance, and the
+  error clears on a successful retry — a paginated failure is never indistinguishable from
+  "nothing more to load."
 
 ## Out of Scope
 

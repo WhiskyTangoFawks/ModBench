@@ -229,6 +229,46 @@ describe('ApiPluginRepository.getWorldspaces', () => {
 });
 
 describe('ApiPluginRepository.getWorldspaceBlocks', () => {
+  it('maps the top cell and nested blocks/subBlocks/cells on an OK response', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({
+        data: {
+          topCell: { formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null },
+          blocks: [{
+            x: 1,
+            y: -1,
+            subBlocks: [{
+              x: 2,
+              y: -2,
+              cells: [{ formKey: 'Fallout4.esm:000002', editorId: 'Cell2', cellX: 12, cellY: -5 }],
+            }],
+          }],
+        },
+        response: { ok: true },
+      }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const result = await repo.getWorldspaceBlocks('Plugin.esp', 'Fallout4.esm:00003C');
+
+    expect(result).toEqual({
+      topCell: { formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null },
+      blocks: [{
+        x: 1,
+        y: -1,
+        subBlocks: [{
+          x: 2,
+          y: -2,
+          cells: [{ formKey: 'Fallout4.esm:000002', editorId: 'Cell2', cellX: 12, cellY: -5 }],
+        }],
+      }],
+    });
+    expect(client.GET).toHaveBeenCalledWith(
+      '/plugins/{plugin}/worldspaces/{formKey}/blocks',
+      expect.objectContaining({ params: { path: { plugin: 'Plugin.esp', formKey: 'Fallout4.esm:00003C' } } }),
+    );
+  });
+
   it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
     const repo = new ApiPluginRepository(nonOkClient());
     await expect(repo.getWorldspaceBlocks('Plugin.esp', 'Fallout4.esm:00003C')).rejects.toThrow(/500/);
@@ -236,6 +276,30 @@ describe('ApiPluginRepository.getWorldspaceBlocks', () => {
 });
 
 describe('ApiPluginRepository.getCellReferences', () => {
+  it('maps persistent and temporary placed summaries on an OK response', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({
+        data: {
+          persistent: [{ formKey: 'Fallout4.esm:000010', editorId: 'PersistentRef', baseFormKey: 'Fallout4.esm:000011', recordType: 'refr' }],
+          temporary: [{ formKey: 'Fallout4.esm:000020', editorId: 'TempRef', baseFormKey: null, recordType: 'achr' }],
+        },
+        response: { ok: true },
+      }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const result = await repo.getCellReferences('Plugin.esp', 'Fallout4.esm:00003C');
+
+    expect(result).toEqual({
+      persistent: [{ formKey: 'Fallout4.esm:000010', editorId: 'PersistentRef', baseFormKey: 'Fallout4.esm:000011', recordType: 'refr' }],
+      temporary: [{ formKey: 'Fallout4.esm:000020', editorId: 'TempRef', baseFormKey: null, recordType: 'achr' }],
+    });
+    expect(client.GET).toHaveBeenCalledWith(
+      '/plugins/{plugin}/cells/{formKey}/references',
+      expect.objectContaining({ params: { path: { plugin: 'Plugin.esp', formKey: 'Fallout4.esm:00003C' } } }),
+    );
+  });
+
   it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
     const repo = new ApiPluginRepository(nonOkClient());
     await expect(repo.getCellReferences('Plugin.esp', 'Fallout4.esm:00003C')).rejects.toThrow(/500/);
@@ -243,6 +307,30 @@ describe('ApiPluginRepository.getCellReferences', () => {
 });
 
 describe('ApiPluginRepository.getInteriorCells', () => {
+  it('calls GET /plugins/{plugin}/interior-cells with query params and maps items/total', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({
+        data: {
+          items: [{ formKey: 'Fallout4.esm:000030', editorId: 'IntCell', cellX: null, cellY: null }],
+          total: 42,
+        },
+        response: { ok: true },
+      }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const result = await repo.getInteriorCells('Plugin.esp', 50, 25);
+
+    expect(result).toEqual({
+      items: [{ formKey: 'Fallout4.esm:000030', editorId: 'IntCell', cellX: null, cellY: null }],
+      total: 42,
+    });
+    expect(client.GET).toHaveBeenCalledWith(
+      '/plugins/{plugin}/interior-cells',
+      expect.objectContaining({ params: { path: { plugin: 'Plugin.esp' }, query: { offset: 50, limit: 25 } } }),
+    );
+  });
+
   it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
     const repo = new ApiPluginRepository(nonOkClient());
     await expect(repo.getInteriorCells('Plugin.esp', 0, 50)).rejects.toThrow(/500/);

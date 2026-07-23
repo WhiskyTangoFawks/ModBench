@@ -276,6 +276,102 @@ describe('PluginTreeProvider.loadMore', () => {
 
     expect(fired).toHaveLength(1);
   });
+
+  it('renders an ErrorNode alongside the retry affordance when a page fetch fails, preserving already-loaded items', async () => {
+    const firstPage = Array.from({ length: 50 }, (_, i) => makeRecord(i));
+    const repo = makeRepository({ records: { items: firstPage, total: 70 } });
+    (repo.getRecords as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ items: firstPage, total: 70 })
+      .mockRejectedValueOnce(new Error('boom'));
+
+    const provider = new PluginTreeProvider(repo);
+    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
+    const [typeNode] = await provider.getChildren(pluginNode) as RecordTypeNode[];
+    const firstChildren = await provider.getChildren(typeNode);
+    const loadMoreNode = firstChildren.find(c => c instanceof LoadMoreNode) as LoadMoreNode;
+
+    await provider.loadMore(loadMoreNode);
+    const afterFailure = await provider.getChildren(typeNode);
+
+    expect(afterFailure.filter(c => c instanceof RecordNode)).toHaveLength(50);
+    expect(afterFailure.find(c => c instanceof LoadMoreNode)).toBeDefined();
+    const errorNode = afterFailure.find(c => c instanceof ErrorNode);
+    expect(errorNode).toBeDefined();
+    expect(errorNode!.tooltip).toContain('boom');
+  });
+
+  it('clears the ErrorNode on a successful retry', async () => {
+    const firstPage = Array.from({ length: 50 }, (_, i) => makeRecord(i));
+    const secondPage = Array.from({ length: 20 }, (_, i) => makeRecord(50 + i));
+    const repo = makeRepository({ records: { items: firstPage, total: 70 } });
+    (repo.getRecords as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ items: firstPage, total: 70 })
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce({ items: secondPage, total: 70 });
+
+    const provider = new PluginTreeProvider(repo);
+    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
+    const [typeNode] = await provider.getChildren(pluginNode) as RecordTypeNode[];
+    const firstChildren = await provider.getChildren(typeNode);
+    const loadMoreNode = firstChildren.find(c => c instanceof LoadMoreNode) as LoadMoreNode;
+
+    await provider.loadMore(loadMoreNode);
+    await provider.loadMore(loadMoreNode);
+    const afterRetry = await provider.getChildren(typeNode);
+
+    expect(afterRetry.filter(c => c instanceof RecordNode)).toHaveLength(70);
+    expect(afterRetry.find(c => c instanceof LoadMoreNode)).toBeUndefined();
+    expect(afterRetry.find(c => c instanceof ErrorNode)).toBeUndefined();
+  });
+});
+
+// ── loadMoreInterior ────────────────────────────────────────────────────────
+
+describe('PluginTreeProvider.loadMoreInterior', () => {
+  it('renders an ErrorNode alongside the retry affordance when a page fetch fails, preserving already-loaded items', async () => {
+    const firstPage = [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0 }];
+    const repo = makeRepository();
+    (repo.getInteriorCells as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ items: firstPage, total: 2 })
+      .mockRejectedValueOnce(new Error('boom'));
+
+    const provider = new PluginTreeProvider(repo);
+    const node = new InteriorCellsNode('M.esp');
+    const firstChildren = await provider.getChildren(node);
+    const loadMoreNode = firstChildren.find(c => c instanceof InteriorLoadMoreNode) as InteriorLoadMoreNode;
+
+    await provider.loadMore(loadMoreNode);
+    const afterFailure = await provider.getChildren(node);
+
+    expect(afterFailure.filter(c => c instanceof CellNode)).toHaveLength(1);
+    expect(afterFailure.find(c => c instanceof InteriorLoadMoreNode)).toBeDefined();
+    const errorNode = afterFailure.find(c => c instanceof ErrorNode);
+    expect(errorNode).toBeDefined();
+    expect(errorNode!.tooltip).toContain('boom');
+  });
+
+  it('clears the ErrorNode on a successful retry', async () => {
+    const firstPage = [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0 }];
+    const secondPage = [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0 }];
+    const repo = makeRepository();
+    (repo.getInteriorCells as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ items: firstPage, total: 2 })
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce({ items: secondPage, total: 2 });
+
+    const provider = new PluginTreeProvider(repo);
+    const node = new InteriorCellsNode('M.esp');
+    const firstChildren = await provider.getChildren(node);
+    const loadMoreNode = firstChildren.find(c => c instanceof InteriorLoadMoreNode) as InteriorLoadMoreNode;
+
+    await provider.loadMore(loadMoreNode);
+    await provider.loadMore(loadMoreNode);
+    const afterRetry = await provider.getChildren(node);
+
+    expect(afterRetry.filter(c => c instanceof CellNode)).toHaveLength(2);
+    expect(afterRetry.find(c => c instanceof InteriorLoadMoreNode)).toBeUndefined();
+    expect(afterRetry.find(c => c instanceof ErrorNode)).toBeUndefined();
+  });
 });
 
 // ── PluginNode ────────────────────────────────────────────────────────────────
