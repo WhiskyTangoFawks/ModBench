@@ -146,6 +146,55 @@ const pendingChange = {
   changedAt: '2026-06-20T12:00:00Z',
 };
 
+// ── Unsorted array fixture for arity/order controls (#142) ────────────────────
+// Both plugins carry the same 3-element array, no pending. Fallout4.esm stays
+// immutable (per pluginsResponse) so the same fixture covers the immutable-column
+// gating slice too.
+
+const unsortedArrayControlsResult = {
+  conflictAll: 'NoConflict',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: unsortedArrayMeta, value: ['alpha', 'beta', 'gamma'] }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: unsortedArrayMeta, value: ['alpha', 'beta', 'gamma'] }],
+      pendingFields: {}, conflictThis: 'IdenticalToMaster',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Items',
+    values: { 'Fallout4.esm': ['alpha', 'beta', 'gamma'], 'MyMod.esp': ['alpha', 'beta', 'gamma'] },
+    winnerPlugin: 'Fallout4.esm', winnerValue: ['alpha', 'beta', 'gamma'],
+    cellStates: {},
+    children: [
+      {
+        fieldName: '[0]',
+        values: { 'Fallout4.esm': 'alpha', 'MyMod.esp': 'alpha' },
+        winnerPlugin: 'Fallout4.esm', winnerValue: 'alpha',
+        cellStates: {},
+      },
+      {
+        fieldName: '[1]',
+        values: { 'Fallout4.esm': 'beta', 'MyMod.esp': 'beta' },
+        winnerPlugin: 'Fallout4.esm', winnerValue: 'beta',
+        cellStates: {},
+      },
+      {
+        fieldName: '[2]',
+        values: { 'Fallout4.esm': 'gamma', 'MyMod.esp': 'gamma' },
+        winnerPlugin: 'Fallout4.esm', winnerValue: 'gamma',
+        cellStates: {},
+      },
+    ],
+  }],
+};
+
 // ── Struct sub-field fixtures ─────────────────────────────────────────────────
 
 const structMeta: FieldMetadata = {
@@ -702,5 +751,189 @@ describe('RecordPanel — grandchild rows (struct sub-fields inside array elemen
 
     const pkgIdRow = screen.getByText('PkgId').closest('tr')!;
     expect(pkgIdRow.querySelector('button[title="Revert group"]')).toBeNull();
+  });
+});
+
+// ── #142: array arity/order controls (unsorted arrays only) ───────────────────
+
+describe('RecordPanel — array arity/order controls (unsorted)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    currentCompare = unsortedArrayControlsResult;
+    currentChanges = [];
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function expandItems() {
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => rowByLabel('[2]'));
+  }
+
+  // Element row labels ("[0]", "[1]", …) collide with plugin-header load-order labels
+  // ("[0]", "[1]" — see PluginHeader), which getByText also matches. Row labels are the
+  // element row's own label <td>, whose text content is exactly the bracketed index.
+  function rowByLabel(label: string): HTMLTableRowElement {
+    const td = Array.from(document.querySelectorAll('td')).find(el => el.textContent === label);
+    if (!td) throw new Error(`no row labeled ${label}`);
+    return td.closest('tr')!;
+  }
+
+  it('move-up is disabled on the first element, move-down disabled on the last (mutable column)', async () => {
+    renderPanel();
+    await expandItems();
+
+    const row0 = rowByLabel('[0]');
+    const row2 = rowByLabel('[2]');
+    const upBtn0 = row0.querySelector<HTMLButtonElement>('button[title="Move up"]')!;
+    const downBtn0 = row0.querySelector<HTMLButtonElement>('button[title="Move down"]')!;
+    const upBtn2 = row2.querySelector<HTMLButtonElement>('button[title="Move up"]')!;
+    const downBtn2 = row2.querySelector<HTMLButtonElement>('button[title="Move down"]')!;
+
+    expect(upBtn0.disabled).toBe(true);
+    expect(downBtn0.disabled).toBe(false);
+    expect(upBtn2.disabled).toBe(false);
+    expect(downBtn2.disabled).toBe(true);
+  });
+
+  it('move-down on element [0] swaps it with [1] and saves the whole array', async () => {
+    const { client } = renderPanel();
+    await expandItems();
+
+    const row0 = rowByLabel('[0]');
+    const downBtn0 = row0.querySelector<HTMLButtonElement>('button[title="Move down"]')!;
+    fireEvent.click(downBtn0);
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm',
+        'MyMod.esp',
+        { Items: ['beta', 'alpha', 'gamma'] },
+        undefined,
+      ),
+    );
+  });
+
+  it('remove on element [1] saves the array with that element dropped', async () => {
+    const { client } = renderPanel();
+    await expandItems();
+
+    const row1 = rowByLabel('[1]');
+    const removeBtn = row1.querySelector<HTMLButtonElement>('button[title="Remove element"]')!;
+    fireEvent.click(removeBtn);
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm',
+        'MyMod.esp',
+        { Items: ['alpha', 'gamma'] },
+        undefined,
+      ),
+    );
+  });
+
+  it('move/remove controls are absent on the immutable Fallout4.esm column', async () => {
+    renderPanel();
+    await expandItems();
+
+    const row0 = rowByLabel('[0]');
+    // Two disk columns render as adjacent <td>s in column order: Fallout4.esm (immutable) then
+    // MyMod.esp (mutable). The immutable column's cell must carry none of the three controls.
+    const cells = row0.querySelectorAll('td');
+    const immutableCell = cells[1]; // 0 = row label, 1 = Fallout4.esm, 2 = MyMod.esp
+    expect(immutableCell.querySelector('button[title="Move up"]')).toBeNull();
+    expect(immutableCell.querySelector('button[title="Move down"]')).toBeNull();
+    expect(immutableCell.querySelector('button[title="Remove element"]')).toBeNull();
+
+    const mutableCell = cells[2];
+    expect(mutableCell.querySelector('button[title="Move up"]')).not.toBeNull();
+  });
+
+  it('add element on the parent Items row (expanded) appends a default-valued scalar element', async () => {
+    const { client } = renderPanel();
+    await expandItems();
+
+    const parentRow = screen.getByText('Items').closest('tr')!;
+    const mutableCell = parentRow.querySelectorAll('td')[2]; // Fallout4.esm immutable, MyMod.esp mutable
+    const addBtn = mutableCell.querySelector<HTMLButtonElement>('button[title="Add element"]')!;
+    fireEvent.click(addBtn);
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm',
+        'MyMod.esp',
+        { Items: ['alpha', 'beta', 'gamma', ''] },
+        undefined,
+      ),
+    );
+  });
+
+  it('add element control is absent on the immutable Fallout4.esm column', async () => {
+    renderPanel();
+    await expandItems();
+
+    const parentRow = screen.getByText('Items').closest('tr')!;
+    const immutableCell = parentRow.querySelectorAll('td')[1];
+    expect(immutableCell.querySelector('button[title="Add element"]')).toBeNull();
+  });
+
+  it('add element control is absent while the Items row is collapsed', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('▶'));
+
+    const parentRow = screen.getByText('Items').closest('tr')!;
+    expect(parentRow.querySelector('button[title="Add element"]')).toBeNull();
+  });
+});
+
+describe('RecordPanel — array add control (struct elements)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    currentCompare = structInArrayResult;
+    currentChanges = [];
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('add element on the parent Packages row appends a metadata-derived default struct', async () => {
+    const { client } = renderPanel();
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => screen.getByText('Packages').closest('tr'));
+
+    const parentRow = screen.getByText('Packages').closest('tr')!;
+    const mutableCell = parentRow.querySelectorAll('td')[2]; // Fallout4.esm immutable, MyMod.esp mutable
+    const addBtn = mutableCell.querySelector<HTMLButtonElement>('button[title="Add element"]')!;
+    fireEvent.click(addBtn);
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm',
+        'MyMod.esp',
+        // MyMod.esp has a prior pending change (Priority 1 → 5, per structInArrayResult's
+        // fixture comment) — the add builds off that pending-merged array, not disk.
+        { Packages: [{ PkgId: 'PkgA', Priority: 5 }, { PkgId: '', Priority: 0 }] },
+        undefined,
+      ),
+    );
+  });
+});
+
+describe('RecordPanel — array arity/order controls absent for sorted arrays', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    currentCompare = sortedArrayCompareResult;
+    currentChanges = [];
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('no move/remove controls render on a sorted array\'s element rows', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => screen.getAllByText('KwdA').length > 0);
+
+    expect(screen.queryByTitle('Move up')).toBeNull();
+    expect(screen.queryByTitle('Move down')).toBeNull();
+    expect(screen.queryByTitle('Remove element')).toBeNull();
   });
 });

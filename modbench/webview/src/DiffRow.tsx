@@ -9,6 +9,54 @@ import type { Column } from './recordUtils';
 import type { CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
 import type { RecordSessionClient } from './RecordSessionClient';
 
+// Issue #142: per-element move-up/move-down/remove controls for unsorted array rows. Only
+// created by the caller (RecordPanel) when the element's metadata reports `isSortable !== true`
+// — DiffRow itself does no sortedness branching, so "sorted arrays get no controls" stays
+// enforced in exactly one place. `currentArray` mirrors the pending-aware merge RecordPanel
+// already performs for element value edits (pending overrides disk) so move/remove build off
+// the same array a concurrent value edit would.
+export interface ArrayEditControls {
+  currentArray: (plugin: string) => unknown[];
+  index: number;
+  onArrayEdit: (plugin: string, value: unknown[]) => void;
+}
+
+const arrayCtrlBtnStyle: React.CSSProperties = {
+  background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: 0, lineHeight: 1,
+};
+
+// Swap-based move (matches VmadSection's ArrayElementCell) — no free drag, no auto-sort.
+function ArrayElementControls({ plugin, controls }: Readonly<{ plugin: string; controls: ArrayEditControls }>) {
+  const { currentArray, index, onArrayEdit } = controls;
+  const arr = currentArray(plugin);
+  const swap = (j: number) => {
+    const next = [...arr];
+    [next[index], next[j]] = [next[j], next[index]];
+    onArrayEdit(plugin, next);
+  };
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <button title="Move up" disabled={index === 0} onClick={() => swap(index - 1)} style={arrayCtrlBtnStyle}>▲</button>
+      <button title="Move down" disabled={index === arr.length - 1} onClick={() => swap(index + 1)} style={arrayCtrlBtnStyle}>▼</button>
+      <button
+        title="Remove element"
+        onClick={() => onArrayEdit(plugin, arr.filter((_, j) => j !== index))}
+        style={{ ...arrayCtrlBtnStyle, color: 'var(--vscode-errorForeground, #f88)' }}
+      >×</button>
+    </span>
+  );
+}
+
+// Issue #142: "＋" control on an unsorted array's parent row — appends a default-valued element
+// (RecordPanel supplies the default, derived from the element's own FieldMetadata via
+// `defaultElementValue`). Matches VmadSection's `ArrayAddButton`: visible only while the array is
+// expanded, occupying the same slot the collapsed "[n]" summary would otherwise show.
+function ArrayAddButton({ onClick }: Readonly<{ onClick: () => void }>) {
+  return (
+    <button title="Add element" onClick={onClick} style={{ ...arrayCtrlBtnStyle, fontSize: '14px' }}>+</button>
+  );
+}
+
 const ROW_BG: Partial<Record<ConflictAll, string>> = {
   Override:        'rgba(76,175,80,0.20)',
   Conflict:        'rgba(255,152,0,0.20)',
@@ -151,13 +199,20 @@ interface DiffRowProps {
   hasChildren?: boolean;
   isExpanded?: boolean;
   onToggle?: () => void;
+  // Issue #142: present only for an unsorted array-element row (RecordPanel omits it for
+  // sortable elements) — renders move-up/move-down/remove on non-immutable disk columns.
+  arrayEdit?: ArrayEditControls;
+  // Issue #142: present only for an unsorted array's parent (top-level) row — appends a
+  // default-valued element to that plugin's array. Absent (not disabled) for sortable arrays,
+  // same rule as arrayEdit above.
+  onArrayAdd?: (plugin: string) => void;
 }
 
 export function DiffRow({
   diff, conflictAll, columns, overrideMap, fieldMetaMap, immutableSet, client,
   pendingChangeMap, collapsedColumns, onOpen, onEdit, onRevert, onPendingContextMenu,
   onRevealPendingChange, onCellDragStart, onCellDrop,
-  context, hasChildren, isExpanded, onToggle,
+  context, hasChildren, isExpanded, onToggle, arrayEdit, onArrayAdd,
 }: DiffRowProps) {
   const meta = context.kind === 'top-level' ? fieldMetaMap[diff.fieldName] : context.overrideMeta;
   if (!meta) return null;
@@ -188,13 +243,16 @@ export function DiffRow({
               ? (diff.values[o.plugin] as unknown[]).length
               : '…';
             const collapsedLabel = meta.type === 'array' ? `[${len}]` : '{…}';
+            const showAdd = isExpanded && onArrayAdd && !immutableSet.has(o.plugin);
             return (
               <td key={`disk:${o.plugin}`} style={cellStyle}>
-                {isExpanded ? null : (
+                {!isExpanded && (
                   <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
                     {collapsedLabel}<CheckErrorIcon checkError={checkError} />
                   </span>
                 )}
+                {showAdd && <ArrayAddButton onClick={() => onArrayAdd(o.plugin)} />}
+                {arrayEdit && !immutableSet.has(o.plugin) && <ArrayElementControls plugin={o.plugin} controls={arrayEdit} />}
               </td>
             );
           }
@@ -213,6 +271,7 @@ export function DiffRow({
             >
               {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin), client, onOpen,
                 v => onEdit(o.plugin, diff.fieldName, v), checkError, diff.resolutions?.[o.plugin])}
+              {arrayEdit && !immutableSet.has(o.plugin) && <ArrayElementControls plugin={o.plugin} controls={arrayEdit} />}
             </DiskCell>
           );
         }
