@@ -565,7 +565,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
     [Fact]
     public void ColumnList_ZeroColumns_ReturnsEmptyString()
     {
-        var schema = new RecordTableSchema { TableName = "t", RecordType = typeof(object), RecordColumns = [] };
+        var schema = new RecordTableSchema { TableName = "t", DisplayName = "t", RecordType = typeof(object), RecordColumns = [] };
         Assert.Equal("", DuckDbRecordRepository.ColumnList(schema));
     }
 

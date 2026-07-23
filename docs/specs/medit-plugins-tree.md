@@ -123,8 +123,10 @@ masters; there is no separate load-session step.
   Plugin…, Copy as Override Into…, Open Header, and — on editable plugins only — Add New
   Record…, Convert to ESL/ESM, Add Master…, and Run Script…. Each is a confirmation or picker as
   appropriate; destructive ones confirm.
-- **Record-type nodes**: labeled by type; children are paginated record nodes with a "Load
-  more…" node at the end of a page.
+- **Record-type nodes**: labeled by the type's **human-readable name** (e.g. "Activator" for
+  `ACTI`, "Game Setting" for `GMST`), matching xEdit's naming from `wbDefinitionsFO4.pas` (#110);
+  the raw 4-char signature remains the internal identifier (cache keys, `contextValue`, commands,
+  API `type`). Children are paginated record nodes with a "Load more…" node at the end of a page.
 - **Record nodes**: labeled `{EditorID}  [{RecordType}:{FormID}]` (FormKey only when no
   EditorID), with a conflict badge overlaid when the record conflicts or has a lost change (the
   underlying two-axis model is [ADR-0016](../adr/0016-two-axis-conflict-model.md); its visual

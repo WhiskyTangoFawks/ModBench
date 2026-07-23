@@ -19,16 +19,29 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // Stryker disable once NullCoalescing: logger init; only usage is a defensive LogTrace in catch — unreachable from tests without artificial exception injection
     private readonly ILogger _logger = logger ?? NullLogger<SchemaReflector>.Instance;
 
-    // Phase 16: placed references (refr/achr) are indexed as normal records so the
-    // worldspace tree, record editor, and agent queries are uniform DuckDB reads; their
-    // cell parentage lives in the `placement` side table. Landscape/navmesh and the rare
-    // projectile/hazard placements stay excluded — they aren't standard editable refs.
-    private static readonly HashSet<string> ExcludedTables = new(StringComparer.OrdinalIgnoreCase)
+    // Issue #110: these two sets were one undifferentiated list, mixing two unrelated rules.
+    // Split so each is documented on its own terms; `pfo2` (formerly in this list) was dead —
+    // it's a PACK sub-record struct field (wbStruct(PFO2, 'Data', ...) in wbDefinitionsFO4.pas),
+    // never a top-level Mutagen record type, so it could never have been discovered here anyway.
+
+    // Deliberate product filter: not standard editable refs (Phase 16 placed refr/achr are
+    // indexed as normal records so the worldspace tree, record editor, and agent queries are
+    // uniform DuckDB reads; their cell parentage lives in the `placement` side table — land/
+    // navm/navi don't get that treatment).
+    private static readonly HashSet<string> NonEditableRefTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "land", "navm", "navi",
-        "pgre", "pmis", "parw", "pbar", "pbea",
-        "pcon", "pfla", "pfo2", "phzd",
     };
+
+    // xEdit-signature-variant collapsing: rare REFR-flavor placement types (projectile/hazard/
+    // etc. placements) that mEdit doesn't surface as distinct record types.
+    private static readonly HashSet<string> XEditRefSignatureVariants = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "pgre", "pmis", "parw", "pbar", "pbea", "pcon", "pfla", "phzd",
+    };
+
+    private static readonly HashSet<string> ExcludedTables =
+        new(NonEditableRefTypes.Concat(XEditRefSignatureVariants), StringComparer.OrdinalIgnoreCase);
 
     private sealed record GameSchemaCache(
         IReadOnlyDictionary<string, RecordTableSchema> Schemas,
@@ -87,6 +100,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             schemas[tableName] = addNew == null ? schema : new RecordTableSchema
             {
                 TableName = schema.TableName,
+                DisplayName = schema.DisplayName,
                 RecordType = schema.RecordType,
                 RecordColumns = schema.RecordColumns,
                 AddNew = addNew,
@@ -183,6 +197,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return new RecordTableSchema
         {
             TableName = "header",
+            DisplayName = RecordDisplayNames.For("header"),
             RecordType = headerGetterType,
             RecordColumns = columns,
             HeaderColumnExtract = extracts,
@@ -236,8 +251,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     internal static string MapToXEditFlagName(string mutagenName)
     {
         if (mutagenName.Equals("Master", StringComparison.OrdinalIgnoreCase)) return "ESM";
-        if (LightMasterFlagNames.Contains(mutagenName)) return "ESL";
-        return mutagenName;
+        return LightMasterFlagNames.Contains(mutagenName) ? "ESL" : mutagenName;
     }
 
     // names and bitValues are the parallel arrays ClassifyEnumLeaf builds in lockstep (a bitmask
@@ -246,8 +260,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         if (bitValues == null) return null;
         for (int i = 0; i < names.Length; i++)
+        {
             if (LightMasterFlagNames.Contains(names[i]))
                 return long.Parse(bitValues[i], System.Globalization.CultureInfo.InvariantCulture);
+        }
         return null;
     }
 
@@ -334,6 +350,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return new RecordTableSchema
         {
             TableName = tableName,
+            DisplayName = RecordDisplayNames.For(tableName),
             RecordType = getterType,
             RecordColumns = columns
         };

@@ -443,6 +443,17 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.All(result, r => Assert.True(r.Count > 0));
     }
 
+    [Fact]
+    public void GetPluginRecordTypes_DisplayName_MatchesXEdit()
+    {
+        // Issue #110: the signature ("npc_") stays the key; DisplayName is additive, sourced
+        // from the same xEdit-parity lookup SchemaReflector uses.
+        var result = _svc.GetPluginRecordTypes(TestPluginFixture.PluginName);
+
+        var npc = Assert.Single(result, r => r.Type == "npc_");
+        Assert.Equal("Non-Player Character", npc.DisplayName);
+    }
+
     // Ascending-order guarantee is tested with >1 type in
     // GetPluginRecordTypes_WithMultipleTypes_ReturnsInAscendingOrder; the single-type
     // fixture makes a dedicated ordering test here trivially true.

@@ -31,5 +31,10 @@ public record PendingChange(
     // PendingChangeResolver — the Pending Changes tree's `{RecordType} / {EditorID}` leaf label
     // reads this, not Resolutions, since the record's own FormKey is never a leaf of its own
     // NewValue. No expected-type list applies to identity (empty validTypes), same as VMAD.
-    FormKeyResolution? RecordResolution = null
+    FormKeyResolution? RecordResolution = null,
+    // Issue #110: xEdit-parity display name for RecordType (e.g. "Non-Player Character" for
+    // "npc_"), populated unconditionally by PendingChangeResolver from the schema's DisplayName.
+    // Additive — RecordType (the signature) is unchanged and still the field everything else
+    // keys off. Falls back to RecordType itself when the type isn't a known schema.
+    string? RecordTypeDisplayName = null
 );

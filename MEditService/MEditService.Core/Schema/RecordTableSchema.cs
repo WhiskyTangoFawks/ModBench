@@ -33,6 +33,14 @@ public sealed class RecordTableSchema
     public required IReadOnlyList<ColumnSpec> RecordColumns { get; init; }
 
     /// <summary>
+    /// The xEdit display name for this record type (e.g. "Activator" for <c>acti</c>), sourced
+    /// from <see cref="RecordDisplayNames"/>. Additive display-layer field — <see cref="TableName"/>
+    /// (the 4-char signature) remains the key used everywhere else (table keys, filtering, API
+    /// payloads). Defaults to <see cref="TableName"/> if the table isn't in the lookup.
+    /// </summary>
+    public required string DisplayName { get; init; }
+
+    /// <summary>
     /// Adds a new blank record with the given FormKey to the correct group on <paramref name="mod"/>.
     /// Null when the group property could not be resolved via reflection.
     /// </summary>

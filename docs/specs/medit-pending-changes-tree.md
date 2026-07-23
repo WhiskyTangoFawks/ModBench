@@ -100,7 +100,9 @@ exactly what it will carry.
   rather than being something the user recovers by counting nodes.
 - A **group of one** gets no group wrapper: it renders as the edit itself, a top-level leaf
   labeled `{RecordType} / {record} · {fieldPath}`, with a `{old} → {new}` detail line and its
-  plugin. The record shows as its resolved **EditorID** (ADR-0031 / #159), sourced from
+  plugin. `{RecordType}` renders the record type's **human-readable name** (e.g. "Activator"),
+  sourced from `PendingChange.recordTypeDisplayName`, falling back to the raw 4-char signature for
+  an older API contract (#110). The record shows as its resolved **EditorID** (ADR-0031 / #159), sourced from
   `PendingChange.recordResolution` — the change's own FormKey resolved against the global
   FormKey→(record type, EditorID) lookup, distinct from `resolutions`, which resolves FormKey
   values nested inside the change's staged `newValue`. Falls back to the raw **FormKey** when

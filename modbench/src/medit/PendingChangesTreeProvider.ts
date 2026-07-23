@@ -29,7 +29,9 @@ export class PendingLeafNode extends vscode.TreeItem {
   get componentId(): string { return this.changeId; }
 
   constructor(change: PendingChange, contextValue: 'pendingGroup' | 'pendingGroupMember') {
-    const recordType = change.recordType ?? '';
+    // Issue #110: prefer the xEdit-parity display name over the raw 4-char signature;
+    // falls back to the raw signature for an older/stale API contract without the field.
+    const recordType = change.recordTypeDisplayName ?? change.recordType ?? '';
     const formKey = change.formKey ?? '';
     const fieldPath = change.fieldPath ?? '';
     const recordLabel = change.recordResolution && change.recordResolution.state !== 'Unresolved'
