@@ -33,7 +33,9 @@ public static class StageEditResultExtensions
             detail: "One or more records are referenced by immutable plugins and cannot be deleted.",
             statusCode: 409,
             extensions: new Dictionary<string, object?> { ["blockedBy"] = b.BlockedBy }),
-        DeleteRecordsResult.Staged s => Results.Ok(s.Group),
+        DeleteRecordsResult.Staged s => Results.Ok(new DeleteRecordsResponse(s.Group, null)),
+        DeleteRecordsResult.Reverted rv => Results.Ok(new DeleteRecordsResponse(null, rv.FormKeys)),
+        DeleteRecordsResult.Mixed m => Results.Ok(new DeleteRecordsResponse(m.StagedGroup, m.RevertedFormKeys)),
         var r => throw new InvalidOperationException($"Unhandled DeleteRecordsResult variant: {r.GetType().Name}")
     };
 

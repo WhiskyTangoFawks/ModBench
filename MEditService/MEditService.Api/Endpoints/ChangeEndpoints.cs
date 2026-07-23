@@ -41,7 +41,10 @@ public static class ChangeEndpoints
         app.MapPost("/records/delete", DeleteRecords)
             .WithName("DeleteRecords")
             .WithTags(Tag)
-            .Produces<ChangeGroup>()
+            // #143: one 200 envelope covers all three outcomes (staged delete, reverted create, or a
+            // mix) — see DeleteRecordsResponse for why (#147: one status code, multiple distinct
+            // bodies isn't representable in OpenAPI without oneOf machinery this repo doesn't have).
+            .Produces<DeleteRecordsResponse>()
             .ProducesProblem(400)
             .ProducesProblem(409);
 

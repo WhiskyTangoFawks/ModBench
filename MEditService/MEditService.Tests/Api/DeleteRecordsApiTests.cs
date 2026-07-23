@@ -46,9 +46,11 @@ public sealed class DeleteRecordsApiTests(LoadedDeleteRecordsApiFixture loaded) 
 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(body.TryGetProperty("id", out _), "Response should have a ChangeGroup 'id'");
-        Assert.True(body.TryGetProperty("changeCount", out var countEl), "Response should have 'changeCount'");
-        Assert.Equal(1, countEl.GetInt32());
+        var stagedGroup = body.GetProperty("stagedGroup");
+        Assert.True(stagedGroup.TryGetProperty("id", out _), "Response should have a ChangeGroup 'id'");
+        Assert.Equal(1, stagedGroup.GetProperty("changeCount").GetInt32());
+        Assert.False(body.TryGetProperty("revertedFormKeys", out var reverted) && reverted.ValueKind == JsonValueKind.Array && reverted.GetArrayLength() > 0,
+            "A plain committed delete must not report any reverted targets");
     }
 
     [Fact]
@@ -103,7 +105,7 @@ public sealed class DeleteRecordsApiTests(LoadedDeleteRecordsApiFixture loaded) 
 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(2, body.GetProperty("changeCount").GetInt32());
+        Assert.Equal(2, body.GetProperty("stagedGroup").GetProperty("changeCount").GetInt32());
 
         var changes = await _client.GetFromJsonAsync<JsonElement[]>(
             $"/changes?formKey={Uri.EscapeDataString(_fixture.EditableNpcFormKey.ToString())}");
@@ -111,6 +113,83 @@ public sealed class DeleteRecordsApiTests(LoadedDeleteRecordsApiFixture loaded) 
         Assert.Contains(changes, c =>
             c.GetProperty("changeType").GetString() == "field_edit" &&
             c.GetProperty("fieldPath").GetString() == "keywords");
+    }
+
+    // #143: a pending-create target has no on-disk existence for a $delete to act on — deleting it
+    // reverts the create's component instead of staging a $delete alongside it.
+    [Fact]
+    public async Task PostDeleteRecords_TargetPendingCreate_RevertsAndStagesNoDelete()
+    {
+        await ClearChangesAsync();
+
+        var createResp = await _client.PostAsJsonAsync(
+            $"/plugins/{Uri.EscapeDataString(DeleteRecordsFixture.EditablePlugin)}/records",
+            new { recordType = "npc_", templateFormKey = (string?)null, source = "user" });
+        createResp.EnsureSuccessStatusCode();
+        var created = await createResp.Content.ReadFromJsonAsync<JsonElement>();
+        var createdFormKey = created.GetProperty("formKey").GetString()!;
+
+        var resp = await _client.PostAsJsonAsync("/records/delete", new
+        {
+            records = new[] { new { formKey = createdFormKey, plugin = DeleteRecordsFixture.EditablePlugin } }
+        });
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.TryGetProperty("revertedFormKeys", out var formKeys), "Response should have 'revertedFormKeys'");
+        Assert.Contains(formKeys.EnumerateArray(), fk => fk.GetString() == createdFormKey);
+        Assert.True(
+            !body.TryGetProperty("stagedGroup", out var stagedGroup) || stagedGroup.ValueKind == JsonValueKind.Null,
+            "Reverted response must not report a staged group — nothing was staged");
+
+        var changes = await _client.GetFromJsonAsync<JsonElement[]>(
+            $"/changes?formKey={Uri.EscapeDataString(createdFormKey)}");
+        Assert.NotNull(changes);
+        Assert.Empty(changes);
+    }
+
+    // #143 AC #4, wire-level proof: a batch mixing a pending-create target and a committed target
+    // must report both outcomes in the one envelope, never collapsed into just one of them.
+    [Fact]
+    public async Task PostDeleteRecords_MixedBatch_ReturnsBothStagedGroupAndRevertedFormKeys()
+    {
+        await ClearChangesAsync();
+
+        var createResp = await _client.PostAsJsonAsync(
+            $"/plugins/{Uri.EscapeDataString(DeleteRecordsFixture.EditablePlugin)}/records",
+            new { recordType = "npc_", templateFormKey = (string?)null, source = "user" });
+        createResp.EnsureSuccessStatusCode();
+        var created = await createResp.Content.ReadFromJsonAsync<JsonElement>();
+        var createdFormKey = created.GetProperty("formKey").GetString()!;
+
+        var resp = await _client.PostAsJsonAsync("/records/delete", new
+        {
+            records = new[]
+            {
+                new { formKey = createdFormKey, plugin = DeleteRecordsFixture.EditablePlugin },
+                new { formKey = _fixture.StandaloneNpc2FormKey.ToString(), plugin = DeleteRecordsFixture.EditablePlugin },
+            }
+        });
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(body.TryGetProperty("revertedFormKeys", out var reverted), "Response should have 'revertedFormKeys'");
+        Assert.Contains(reverted.EnumerateArray(), fk => fk.GetString() == createdFormKey);
+
+        Assert.True(body.TryGetProperty("stagedGroup", out var stagedGroup), "Response should have 'stagedGroup'");
+        Assert.NotEqual(JsonValueKind.Null, stagedGroup.ValueKind);
+        Assert.Equal(1, stagedGroup.GetProperty("changeCount").GetInt32());
+
+        var changes = await _client.GetFromJsonAsync<JsonElement[]>(
+            $"/changes?formKey={Uri.EscapeDataString(_fixture.StandaloneNpc2FormKey.ToString())}");
+        Assert.NotNull(changes);
+        Assert.Contains(changes, c => c.GetProperty("changeType").GetString() == "delete");
+
+        var createdChanges = await _client.GetFromJsonAsync<JsonElement[]>(
+            $"/changes?formKey={Uri.EscapeDataString(createdFormKey)}");
+        Assert.NotNull(createdChanges);
+        Assert.Empty(createdChanges);
     }
 
     [Fact]
@@ -145,7 +224,7 @@ public sealed class DeleteRecordsApiTests(LoadedDeleteRecordsApiFixture loaded) 
 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(1, body.GetProperty("changeCount").GetInt32());
+        Assert.Equal(1, body.GetProperty("stagedGroup").GetProperty("changeCount").GetInt32());
 
         var groups = await _client.GetFromJsonAsync<JsonElement[]>("/change-groups") ?? [];
         Assert.Equal(2, groups.Length);

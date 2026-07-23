@@ -157,6 +157,15 @@ public record BlockedReference(
 
 public record DeleteRecordTarget(string FormKey, string Plugin);
 
+// #143 / #147: DeleteRecords has three outcomes (staged delete, reverted create, or a mix of both),
+// but they all land on the same 200 — one status code answered by multiple distinct response bodies
+// is the #147 anti-pattern (Swashbuckle has no oneOf machinery for it and silently keeps only the
+// last-declared .Produces<T>() type). This envelope keeps the wire honest: exactly one documented
+// schema, with the two fields null when their outcome didn't happen. StagedGroup is non-null when
+// any target staged a delete; RevertedFormKeys lists every target reverted instead — never both
+// null, and both populated for a mixed batch.
+public record DeleteRecordsResponse(ChangeGroup? StagedGroup, IReadOnlyList<string>? RevertedFormKeys);
+
 public record DeleteRecordsRequest(IReadOnlyList<DeleteRecordTarget> Records);
 
 public record HealthResponse(string Status);

@@ -1259,6 +1259,139 @@ public sealed class EditOrchestratorTests
         }
     }
 
+    // --- Delete on pending-create targets reverts instead of staging (#143) ---
+    // A pending-create record has no on-disk existence for a $delete to act on, so deleting it must
+    // revert the create's whole dependency component (reusing RevertGroup) rather than staging a
+    // $delete change that would coexist incoherently with the $create.
+
+    [Fact]
+    public void DeleteRecords_TargetPendingCreate_RevertsInsteadOfStaging()
+    {
+        var data = new PluginFixtureBuilder("del-create-revert")
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var createResult = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", "npc_", null, "user"));
+
+                var result = orchestrator.DeleteRecords(
+                    [(createResult.FormKey, "Target.esp")], "user");
+
+                var reverted = Assert.IsType<DeleteRecordsResult.Reverted>(result);
+                Assert.Equal([createResult.FormKey], reverted.FormKeys);
+                Assert.Empty(changes.GetChanges(formKey: createResult.FormKey));
+            }
+        }
+    }
+
+    [Fact]
+    public void DeleteRecords_TargetPendingCreateWithDependentEdit_RevertsWholeComponent()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("del-create-revert-cascade")
+            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("SourceNPC").FormKey)
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var createResult = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", "fact", null, "user"));
+                var factionList = JsonSerializer.SerializeToElement(
+                    new[] { new { faction = createResult.FormKey, rank = 0 } });
+                Assert.IsType<StageEditResult.Staged>(orchestrator.StageEdit(npcKey.ToString(), "Source.esp",
+                    new Dictionary<string, JsonElement> { ["factions"] = factionList }, "user", null));
+
+                // SourceNPC's factions edit and the Faction's $create are one component (ADR-0028 edge
+                // rule 2): deleting the Faction target must revert both, not just the $create row.
+                var result = orchestrator.DeleteRecords(
+                    [(createResult.FormKey, "Target.esp")], "user");
+
+                var reverted = Assert.IsType<DeleteRecordsResult.Reverted>(result);
+                Assert.Equal([createResult.FormKey], reverted.FormKeys);
+                Assert.Empty(changes.GetChangeGroups());
+            }
+        }
+    }
+
+    [Fact]
+    public void DeleteRecords_MixedPendingCreateAndCommittedTargets_RevertsAndStagesDistinctly()
+    {
+        FormKey committedNpcKey = default;
+        var data = new PluginFixtureBuilder("del-create-mixed")
+            .WithPlugin("Target.esp", mod => committedNpcKey = mod.Npcs.AddNew("CommittedNPC").FormKey)
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var createResult = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", "npc_", null, "user"));
+
+                var result = orchestrator.DeleteRecords(
+                    [(createResult.FormKey, "Target.esp"), (committedNpcKey.ToString(), "Target.esp")], "user");
+
+                var mixed = Assert.IsType<DeleteRecordsResult.Mixed>(result);
+                Assert.Equal([createResult.FormKey], mixed.RevertedFormKeys);
+                Assert.Equal(1, mixed.StagedGroup.ChangeCount);
+
+                Assert.Empty(changes.GetChanges(formKey: createResult.FormKey));
+                var committedChanges = changes.GetChanges(formKey: committedNpcKey.ToString());
+                Assert.Contains(committedChanges, c => c.ChangeType == "delete");
+            }
+        }
+    }
+
+    // Genuinely red before the fix: RevertPendingCreateTargets used to run unconditionally, ahead of
+    // the plainTargets reference-block check. A mixed batch that fails with BlockedByReferences must
+    // not have already reverted a sibling pending-create — that's an unreported mutation on a call
+    // whose result says nothing was done.
+    [Fact]
+    public void DeleteRecords_MixedBatchBlockedByReferences_DoesNotRevertPendingCreate()
+    {
+        FormKey keywordKey = default;
+        var data = new PluginFixtureBuilder("del-create-mixed-blocked")
+            .WithPlugin("Target.esp", mod => keywordKey = mod.Keywords.AddNew("BlockedKw").FormKey)
+            // Fallout4.esm (implicit/immutable) NPC references the keyword — blocks its deletion.
+            .WithPlugin("Fallout4.esm", (mod, _) =>
+            {
+                var npc = mod.Npcs.AddNew("BlockingNPC");
+                npc.Keywords = [new FormLink<IKeywordGetter>(keywordKey)];
+            }, listed: false)
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var createResult = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", "npc_", null, "user"));
+
+                var result = orchestrator.DeleteRecords(
+                    [(keywordKey.ToString(), "Target.esp"), (createResult.FormKey, "Target.esp")], "user");
+
+                Assert.IsType<DeleteRecordsResult.BlockedByReferences>(result);
+                // The pending-create must survive untouched — the call reported nothing succeeded.
+                Assert.NotEmpty(changes.GetChanges(formKey: createResult.FormKey));
+            }
+        }
+    }
+
     [Fact]
     public void RevertGroup_RemovesCreateAndDependentEdits()
     {
