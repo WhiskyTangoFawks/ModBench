@@ -136,7 +136,19 @@ public sealed class RecordQueryService(
                 conflictAll = ConflictRules.Escalate(conflictAll, vmadResult.ConflictContribution);
             }
 
-            return new CompareResult(annotated, classification.Diffs, conflictAll, vmad);
+            // Conditions (CTDA) are outside the reflection pipeline too — classify separately and
+            // fold their contribution into the record-level ConflictAll, mirroring VMAD. [ADR-0032]
+            var conditionInputs = withPending
+                .ConvertAll(o => new ConditionPluginInput(o.Plugin, o.LoadOrderIndex, repository.GetConditions(formKey, o.Plugin)));
+            ConditionCompare? conditions = null;
+            if (conditionInputs.Any(i => i.Owners.Count > 0))
+            {
+                var conditionResult = ConditionConflictClassifier.Classify(conditionInputs);
+                conditions = conditionResult.Compare;
+                conflictAll = ConflictRules.Escalate(conflictAll, conditionResult.ConflictContribution);
+            }
+
+            return new CompareResult(annotated, classification.Diffs, conflictAll, vmad, conditions);
         }
         return null;
     }

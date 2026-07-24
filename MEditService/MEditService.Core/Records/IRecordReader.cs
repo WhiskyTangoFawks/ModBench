@@ -1,4 +1,5 @@
 using MEditService.Core.Queries;
+using MEditService.Core.Schema;
 
 namespace MEditService.Core.Records;
 
@@ -8,6 +9,11 @@ public interface IRecordReader
     RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly);
     IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey);
     VmadData? GetVmad(string formKey, string plugin);
+
+    // Conditions (CTDA) for one plugin's copy of a record, grouped by owning field path, in stored
+    // order. Empty when the record carries none. Reconstructs the neutral ParsedCondition the codec
+    // produced at index time (ADR-0032).
+    IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin);
     int CountRecordsForPlugin(string tableName, string plugin);
     string? FindRecordType(string formKey);
 

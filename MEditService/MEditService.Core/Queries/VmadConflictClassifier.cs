@@ -214,10 +214,7 @@ public static class VmadConflictClassifier
         var canon = inputs.ToDictionary(i => i.Plugin, i => (object?)valueOf(i.Plugin));
         var pluginOrder = inputs.Select(i => (i.Plugin, i.LoadOrderIndex)).ToList();
 
-        var winner = inputs
-            .Where(i => canon[i.Plugin] != null)
-            .MaxBy(i => i.LoadOrderIndex)!
-            .Plugin;
+        var winner = ConflictRules.PickWinner(pluginOrder, p => canon[p] != null);
 
         var states = ConflictRules.ComputeCellStates(canon, masterPlugin, pluginOrder, Equals);
 

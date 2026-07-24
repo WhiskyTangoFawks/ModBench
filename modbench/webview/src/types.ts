@@ -92,11 +92,58 @@ export interface VmadCompare {
   scripts: VmadScriptDiff[];
 }
 
+// Conditions (CTDA) — game-neutral parsed model (ADR-0032). One ParsedCondition per row; the
+// section renders its xEdit-style summary and expands to these typed fields.
+export type ConditionOperator =
+  | 'EqualTo' | 'NotEqualTo' | 'GreaterThan' | 'GreaterThanOrEqualTo' | 'LessThan' | 'LessThanOrEqualTo';
+
+export type ConditionParamCategory = 'Number' | 'Form' | 'Text';
+
+export interface ParsedConditionParam {
+  category: ConditionParamCategory;
+  typeName: string;                        // ParameterType name, e.g. "ActorValue" — display cue
+  number?: number | null;
+  formKey?: string | null;
+  text?: string | null;
+}
+
+export interface ParsedCondition {
+  function: string;
+  operator: ConditionOperator;
+  or: boolean;                             // true = OR, false = AND
+  runOnTarget: string;                     // "Subject" | "Target" | "Reference" | ...
+  runOnReference?: string | null;          // FormKey when runOnTarget === "Reference"
+  useGlobal: boolean;
+  comparisonFloat?: number | null;
+  comparisonGlobal?: string | null;        // GLOB FormKey when useGlobal
+  parameters: ParsedConditionParam[];
+}
+
+export interface ConditionDiff {
+  index: number;
+  perPlugin: Record<string, ParsedCondition | null>;   // null = plugin lacks this condition row
+  winnerPlugin: string;
+  cellStates: Record<string, ConflictThis>;            // whole-condition state (summary row)
+  // Per-field two-axis states for the expanded view, keyed by field id ("function", "operator",
+  // "gate", "runOn", "comparison", "param:{i}") — only the field that differs is colored.
+  fieldCellStates: Record<string, Record<string, ConflictThis>>;
+}
+
+export interface ConditionGroupDiff {
+  fieldPath: string;
+  conditions: ConditionDiff[];
+}
+
+export interface ConditionCompare {
+  groups: ConditionGroupDiff[];
+}
+
 export interface CompareResult {
   overrides: CompareOverride[];
   diffs: FieldDiff[];
   conflictAll: ConflictAll;
   vmad?: VmadCompare | null;
+  conditions?: ConditionCompare | null;
 }
 
 export interface PendingChange {

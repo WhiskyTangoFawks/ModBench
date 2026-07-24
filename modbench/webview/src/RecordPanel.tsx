@@ -10,6 +10,7 @@ import type { ReindexFailure, SaveResult } from '../../src/medit/saveClassificat
 import { buildColumns, defaultElementValue, parseElementIndex, updateArrayAtKey } from './recordUtils';
 import { mono, fg, baseCell, headerCell, getConflictBg } from './gridStyles';
 import { VmadSection } from './VmadSection';
+import { ConditionSection } from './ConditionSection';
 import type { CompareOverride, CompareResult, ConflictThis, FieldMetadata, PatchRecordValidationError, PendingChange } from './types';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './messages';
@@ -583,6 +584,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                           onStructOp={(plugin, vmadPath, op) => { void handleVmadStructOp(plugin, vmadPath, op); }}
                           client={client}
                         />
+            )}
+            {!isHeaderRecord && (
+              <ConditionSection
+                conditions={result.conditions}
+                columns={columns}
+                onOpen={handleOpen}
+              />
             )}
           </tbody>
         </table>

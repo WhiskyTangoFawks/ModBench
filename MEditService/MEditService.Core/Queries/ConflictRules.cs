@@ -10,6 +10,13 @@ public static class ConflictRules
     // non-master plugins are IdenticalToMaster, ConflictLoses (differ from the winner), or Override.
     // Callers supply `valuesEqual` so generic fields can use sorted-array-aware comparison while VMAD
     // compares pre-canonicalized strings.
+    // The winning plugin for a cell: highest load-order plugin that has a value. Callers only align
+    // over the union of plugins that carry the value, so at least one is always present.
+    public static string PickWinner(
+        IReadOnlyList<(string Plugin, int LoadOrderIndex)> pluginOrder,
+        Func<string, bool> hasValue) =>
+        pluginOrder.Where(p => hasValue(p.Plugin)).MaxBy(p => p.LoadOrderIndex)!.Plugin;
+
     public static Dictionary<string, ConflictThis> ComputeCellStates(
         IReadOnlyDictionary<string, object?> valuesByPlugin,
         string masterPlugin,
