@@ -44,6 +44,16 @@ public interface IPendingChangeService
     Dictionary<string, JsonElement>? GetPendingFields(string formKey, string plugin);
 
     /// <summary>
+    /// Deletes pending changes (and their form references) on <paramref name="formKey"/>/
+    /// <paramref name="plugin"/> whose field_path starts with <paramref name="prefix"/>. Used when a
+    /// whole-subtree restage supersedes previously-staged per-field edits within that subtree — e.g.
+    /// an add/remove/move condition-list restage superseding stale <c>CTDA\&lt;fieldPath&gt;\N\...</c>
+    /// edits whose indices are no longer trustworthy (#153, ADR-0019). Returns the number of rows
+    /// removed.
+    /// </summary>
+    int RemoveFieldsWithPrefix(string formKey, string plugin, string prefix);
+
+    /// <summary>
     /// Reverts one change on its own, refusing with <see cref="RevertChangeResult.GroupOwned"/> when
     /// its component has more than one member.
     /// </summary>

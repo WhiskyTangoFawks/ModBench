@@ -282,6 +282,119 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     // Number, String) on both slots is cleared unconditionally. That's the only way to guarantee a
     // value from the old function's shape can never silently read back through the new one,
     // regardless of which of the three storage members the old and new categories happened to share.
+    // ---- ApplyListValue: whole-list restage write-back (#153) ----
+
+    // Record-level entry point PluginWriter calls for an add/remove/reorder restage: replaces the
+    // entire condition list in place with freshly-materialized Condition instances. Mirrors
+    // ApplyFieldValue's record-level/list-level split.
+    public ConditionApplyResult ApplyListValue(IMajorRecord record, string fieldPath, JsonElement newList) =>
+        record.GetType().GetProperty(fieldPath)?.GetValue(record) is IList<Condition> conditions
+            ? ApplyListValue(conditions, newList)
+            : ConditionApplyResult.NotFound;
+
+    // newList is a JSON array of ParsedCondition-shaped objects (camelCase field names) — the same
+    // shape ConditionDiff.PerPlugin already sends the frontend, so this and Parse are inverses.
+    // Fails atomically: a malformed element leaves the original list untouched rather than landing
+    // a partially-materialized list (same "never silently do less than asked" rule as elsewhere).
+    public static ConditionApplyResult ApplyListValue(IList<Condition> conditions, JsonElement newList)
+    {
+        if (newList.ValueKind != JsonValueKind.Array) return ConditionApplyResult.NotFound;
+
+        var materialized = new List<Condition>();
+        foreach (var el in newList.EnumerateArray())
+        {
+            if (MaterializeCondition(el) is not { } condition) return ConditionApplyResult.NotFound;
+            materialized.Add(condition);
+        }
+
+        conditions.Clear();
+        foreach (var c in materialized) conditions.Add(c);
+        return ConditionApplyResult.Applied;
+    }
+
+    // Builds one fresh Condition from a ParsedCondition-shaped JSON object. Null means the element
+    // is malformed (unknown function/operator name, or not an object).
+    private static Condition? MaterializeCondition(JsonElement el)
+    {
+        if (el.ValueKind != JsonValueKind.Object) return null;
+        if (!el.TryGetProperty("function", out var fnEl) || fnEl.GetString() is not { } fnStr
+            || !Enum.TryParse<Condition.Function>(fnStr, out var fn))
+        {
+            return null;
+        }
+        if (!el.TryGetProperty("operator", out var opEl) || opEl.GetString() is not { } opStr
+            || !Enum.TryParse<ConditionOperator>(opStr, out var neutralOp))
+        {
+            return null;
+        }
+
+        var or = el.TryGetProperty("or", out var orEl) && orEl.ValueKind == JsonValueKind.True;
+        var useGlobal = el.TryGetProperty("useGlobal", out var ugEl) && ugEl.ValueKind == JsonValueKind.True;
+        var runOnTarget = el.TryGetProperty("runOnTarget", out var rotEl) && rotEl.GetString() is { } rotStr
+            && Enum.TryParse<Condition.RunOnType>(rotStr, out var rot) ? rot : Condition.RunOnType.Subject;
+
+        var data = new FunctionConditionData { Function = fn, RunOnType = runOnTarget };
+        if (runOnTarget == Condition.RunOnType.Reference
+            && el.TryGetProperty("runOnReference", out var refEl) && refEl.ValueKind == JsonValueKind.String
+            && FormKey.TryFactory(refEl.GetString()!, out var refFk))
+        {
+            data.Reference.SetTo(refFk);
+        }
+
+        if (el.TryGetProperty("parameters", out var paramsEl) && paramsEl.ValueKind == JsonValueKind.Array)
+        {
+            var index = 0;
+            foreach (var p in paramsEl.EnumerateArray())
+            {
+                if (index > 1) break;
+                MaterializeParam(data, index, p);
+                index++;
+            }
+        }
+
+        Condition condition = useGlobal ? new ConditionGlobal { Data = data } : new ConditionFloat { Data = data };
+        condition.CompareOperator = MapOperatorBack(neutralOp);
+        condition.Flags = or ? Condition.Flag.OR : 0;
+
+        if (useGlobal && condition is ConditionGlobal g
+            && el.TryGetProperty("comparisonGlobal", out var cgEl) && cgEl.ValueKind == JsonValueKind.String
+            && FormKey.TryFactory(cgEl.GetString()!, out var cgFk))
+        {
+            g.ComparisonValue.SetTo(cgFk);
+        }
+        else if (!useGlobal && condition is ConditionFloat f
+            && el.TryGetProperty("comparisonFloat", out var cfEl) && cfEl.ValueKind == JsonValueKind.Number)
+        {
+            f.ComparisonValue = cfEl.GetSingle();
+        }
+
+        return condition;
+    }
+
+    // Only slots 0 and 1 exist on FO4's FunctionConditionData — a param beyond that is ignored by
+    // the caller's loop guard. Category names the slot member (Form/Text/Number), same taxonomy
+    // ParsedConditionParam.Category already uses.
+    private static void MaterializeParam(FunctionConditionData data, int index, JsonElement p)
+    {
+        if (p.ValueKind != JsonValueKind.Object) return;
+        var category = p.TryGetProperty("category", out var catEl) ? catEl.GetString() : null;
+
+        if (category == "Form" && p.TryGetProperty("formKey", out var fkEl) && fkEl.ValueKind == JsonValueKind.String
+            && FormKey.TryFactory(fkEl.GetString()!, out var fk))
+        {
+            if (index == 0) data.ParameterOneRecord.SetTo(fk); else data.ParameterTwoRecord.SetTo(fk);
+        }
+        else if (category == "Text" && p.TryGetProperty("text", out var textEl))
+        {
+            var text = textEl.ValueKind == JsonValueKind.String ? textEl.GetString() : null;
+            if (index == 0) data.ParameterOneString = text; else data.ParameterTwoString = text;
+        }
+        else if (category == "Number" && p.TryGetProperty("number", out var numEl) && numEl.ValueKind == JsonValueKind.Number)
+        {
+            if (index == 0) data.ParameterOneNumber = numEl.GetInt32(); else data.ParameterTwoNumber = numEl.GetInt32();
+        }
+    }
+
     private static ConditionApplyResult ApplyFunction(Condition condition, JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.String || value.GetString() is not { } s

@@ -112,6 +112,7 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
     {
         if (VmadPath.IsVmadPath(fieldPath)) return false;
         if (ConditionPath.IsConditionPath(fieldPath)) return false;
+        if (ConditionPath.IsConditionListPath(fieldPath)) return false;
         var schemas = _schemaReflector.GetSchemas(release);
         if (!schemas.TryGetValue(recordType, out var schema)) return true;
 
@@ -302,10 +303,18 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
                 continue;
             }
 
-            foreach (var change in fieldChanges)
+            foreach (var change in OrderForConditionListRestage(fieldChanges))
                 results.Record(TryApplyField(record, change, schemas, ctx.Release), change.FieldPath);
         }
     }
+
+    // #153 Q3 ordering guarantee: a condition-owner whole-list restage (e.g. "Conditions") must
+    // apply before any CTDA\<fieldPath>\N\... per-field edit on the same record, since a per-field
+    // edit staged *after* an add (targeting the newly-added index) is only valid once the restage
+    // has run. A stable sort — not reliance on incidental enumeration order — makes this hold
+    // regardless of which order the two pending changes happen to have been staged/enumerated in.
+    private static IEnumerable<PendingChange> OrderForConditionListRestage(List<PendingChange> fieldChanges) =>
+        fieldChanges.OrderBy(c => ConditionPath.IsConditionPath(c.FieldPath) ? 1 : 0);
 
     // Applies header field edits (author/flags) onto mod.ModHeader via the schema's
     // HeaderColumnApply delegates. A null delegate (e.g. masters) is read-only.
@@ -483,6 +492,9 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         if (ConditionPath.IsConditionPath(change.FieldPath))
             return ApplyConditionField(record, change, release);
 
+        if (ConditionPath.IsConditionListPath(change.FieldPath))
+            return ApplyConditionListField(record, change, release);
+
         if (!schemas.TryGetValue(change.RecordType, out var schema))
             return ApplyOutcome.NotFound;
         var col = schema.RecordColumns.FirstOrDefault(c => c.Name == change.FieldPath);
@@ -515,6 +527,21 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
             return ApplyOutcome.NotFound;
 
         var result = codec.ApplyFieldValue(record, fieldPath, index, subField, change.NewValue);
+        return result switch
+        {
+            ConditionApplyResult.Applied => ApplyOutcome.Applied,
+            _ => ApplyOutcome.NotFound,
+        };
+    }
+
+    // Whole-list restage (#153): change.FieldPath is the bare owning field name (e.g. "Conditions"),
+    // change.NewValue the full ParsedCondition-shaped JSON array an add/remove/move staged.
+    private static ApplyOutcome ApplyConditionListField(IMajorRecord record, PendingChange change, GameRelease release)
+    {
+        if (ConditionCodecRegistry.For(release.ToCategory()) is not { } codec)
+            return ApplyOutcome.NotFound;
+
+        var result = codec.ApplyListValue(record, change.FieldPath, change.NewValue);
         return result switch
         {
             ConditionApplyResult.Applied => ApplyOutcome.Applied,

@@ -246,9 +246,19 @@ classification.
 - The function picker is a searchable list backed by `GET /condition-functions`, filtered
   server-side to the functions Mutagen actually resolves for the record's game/category — never
   a hardcoded, unfiltered enum dump.
-- The AND/OR flag between conditions renders read-only in this slice (#152); adding, removing,
-  and reordering conditions, and editing multiple condition-carrying fields on one record, are
-  later slices of the same epic (#153, #154).
+- The AND/OR flag between conditions renders read-only; editing multiple condition-carrying
+  fields on one record is a later slice of the same epic (#154).
+- **Add/remove/reorder** controls (Add, Move-up, Move-down, Remove) render per condition row,
+  gated by the same immutable-column rule as every other edit. Unlike VMAD's structural ops
+  (which dispatch a named op the backend applies), a condition list has no stable per-element
+  identity (ADR-0019 — array indices have no stable identity), so arity/order changes are
+  computed entirely client-side (`conditionOps.ts`) and staged as one plain `FieldEdit` at the
+  list's own field path (`"Conditions"`) — the same whole-subtree-restage pattern VMAD's plain
+  arrays already use. Before applying an op, the current list is folded with the plugin's own
+  outstanding per-field pending edits so an in-flight edit is never silently dropped; staging the
+  restage then supersedes (clears) those now-stale per-field pending rows, and a save applies the
+  whole-list restage before any of that plugin's sibling per-field edits, so adding a condition
+  and immediately editing one of its fields in the same session writes back correctly.
 - Codec support is FO4-only today, reflecting Mutagen's four structurally different per-game
   condition data shapes (no shared cross-game interface, unlike VMAD's `IHaveVirtualMachineAdapter`)
   — a per-game `IConditionCodec` strategy resolved by `GameCategory` (ADR-0032); other games are
