@@ -19,11 +19,12 @@ public sealed class ConditionIndexerTests : IDisposable
 
     private readonly FormKey _cobjFormKey;
     private readonly FormKey _questFormKey;
+    private readonly FormKey _multiListQuestFormKey;
     private readonly PluginFixtureData _fixture;
 
     public ConditionIndexerTests()
     {
-        FormKey cobjFk = default, questFk = default;
+        FormKey cobjFk = default, questFk = default, multiListQuestFk = default;
         _fixture = new PluginFixtureBuilder()
             .WithPlugin("CtdaTest.esp", mod =>
             {
@@ -46,10 +47,31 @@ public sealed class ConditionIndexerTests : IDisposable
                     Flags = Condition.Flag.OR,
                     Data = data,
                 });
+
+                // #154: Quest has two flat, top-level condition-carrying fields
+                // (DialogConditions, UnusedConditions) — the multi-owner fixture. Both are
+                // populated here so GetConditions must key them independently by field path.
+                var multiListQuest = mod.Quests.AddNew("MultiConditionListQuest");
+                multiListQuestFk = multiListQuest.FormKey;
+                multiListQuest.DialogConditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    ComparisonValue = 1.0f,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+                multiListQuest.UnusedConditions = [
+                    new ConditionFloat
+                    {
+                        CompareOperator = CompareOperator.GreaterThan,
+                        ComparisonValue = 2.0f,
+                        Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                    },
+                ];
             })
             .Build();
         _cobjFormKey = cobjFk;
         _questFormKey = questFk;
+        _multiListQuestFormKey = multiListQuestFk;
     }
 
     public void Dispose() => _fixture.Dispose();
@@ -97,5 +119,28 @@ public sealed class ConditionIndexerTests : IDisposable
     {
         using var repo = LoadedRepository();
         Assert.Empty(repo.GetConditions(_questFormKey.ToString(), "CtdaTest.esp"));
+    }
+
+    // #154: a record with more than one condition-carrying field (Quest.DialogConditions and
+    // Quest.UnusedConditions are both flat top-level Condition lists) must surface one owner per
+    // field, each keyed by its own FieldPath, never merged or collided.
+    [Fact]
+    public void GetConditions_RecordWithMultipleConditionLists_ReturnsOneOwnerPerFieldPath()
+    {
+        using var repo = LoadedRepository();
+
+        var owners = repo.GetConditions(_multiListQuestFormKey.ToString(), "CtdaTest.esp");
+
+        Assert.Equal(2, owners.Count);
+        var dialog = owners.Single(o => o.FieldPath == "DialogConditions");
+        var unused = owners.Single(o => o.FieldPath == "UnusedConditions");
+
+        var dialogCondition = Assert.Single(dialog.Conditions);
+        Assert.Equal(ConditionOperator.EqualTo, dialogCondition.Operator);
+        Assert.Equal(1.0f, dialogCondition.ComparisonFloat);
+
+        var unusedCondition = Assert.Single(unused.Conditions);
+        Assert.Equal(ConditionOperator.GreaterThan, unusedCondition.Operator);
+        Assert.Equal(2.0f, unusedCondition.ComparisonFloat);
     }
 }

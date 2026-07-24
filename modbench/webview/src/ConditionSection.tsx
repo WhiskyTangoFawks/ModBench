@@ -467,13 +467,19 @@ export function ConditionSection({
     onEdit, client, pendingChangeMap, onRevert, onPendingContextMenu, onRevealPendingChange,
   };
 
-  const rows: React.ReactNode[] = [
-    <tr key="conditions-header">
-      <td colSpan={columns.length + 1} style={headerCell}>Conditions</td>
-    </tr>,
-  ];
+  // #154: a record can have more than one condition-carrying field (e.g. a Quest's
+  // DialogConditions and UnusedConditions) — each group gets its own labeled header naming its
+  // owning field, so a multi-list record renders as clearly separated sections rather than one
+  // unlabeled merge. A single-group record (the common case, e.g. COBJ's "Conditions") renders
+  // exactly as before, since the header text is just that one group's own field name.
+  const rows: React.ReactNode[] = [];
 
   for (const group of groups) {
+    rows.push(
+      <tr key={`${group.fieldPath}-header`}>
+        <td colSpan={columns.length + 1} style={headerCell}>{group.fieldPath}</td>
+      </tr>,
+    );
     for (const condition of group.conditions) {
       const key = `${group.fieldPath}#${condition.index}`;
       rows.push(...conditionRows(condition, group.conditions, key, group.fieldPath, expanded.has(key), ctx));

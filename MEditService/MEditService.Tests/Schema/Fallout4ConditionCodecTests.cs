@@ -7,7 +7,61 @@ namespace MEditService.Tests.Schema;
 
 public class Fallout4ConditionCodecTests
 {
+    private static readonly Fallout4ConditionCodec Codec = new();
+
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
+
+    // ---- Extract: condition-owner discovery (#154) ----
+
+    [Fact]
+    public void Extract_RecordWithSingleConditionField_ReturnsOneOwner()
+    {
+        var cobj = new ConstructibleObject(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+        cobj.Conditions.Add(new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } });
+
+        var owners = Codec.Extract(cobj).ToList();
+
+        var owner = Assert.Single(owners);
+        Assert.Equal("Conditions", owner.FieldPath);
+        Assert.Single(owner.Conditions);
+    }
+
+    // Quest has two flat, top-level condition-carrying fields (DialogConditions, UnusedConditions)
+    // — Extract must discover both, each independently keyed by its own field name, rather than
+    // only the single hardcoded "Conditions" property this codec used to look for.
+    [Fact]
+    public void Extract_RecordWithMultipleConditionFields_ReturnsOneOwnerPerField()
+    {
+        var quest = new Quest(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+        quest.DialogConditions.Add(new ConditionFloat
+        {
+            CompareOperator = CompareOperator.EqualTo,
+            Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+        });
+        quest.UnusedConditions = [
+            new ConditionFloat
+            {
+                CompareOperator = CompareOperator.GreaterThan,
+                Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+            },
+        ];
+
+        var owners = Codec.Extract(quest).ToList();
+
+        Assert.Equal(2, owners.Count);
+        var dialog = owners.Single(o => o.FieldPath == "DialogConditions");
+        var unused = owners.Single(o => o.FieldPath == "UnusedConditions");
+        Assert.Equal(ConditionOperator.EqualTo, Assert.Single(dialog.Conditions).Operator);
+        Assert.Equal(ConditionOperator.GreaterThan, Assert.Single(unused.Conditions).Operator);
+    }
+
+    [Fact]
+    public void Extract_RecordWithNoConditions_ReturnsEmpty()
+    {
+        var quest = new Quest(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+
+        Assert.Empty(Codec.Extract(quest));
+    }
 
     // ---- ApplyFieldValue: write-back (#152) ----
 

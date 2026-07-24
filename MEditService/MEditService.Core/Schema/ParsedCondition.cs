@@ -13,6 +13,14 @@ public interface IConditionCodec
     // field, e.g. "Conditions".
     IEnumerable<ConditionOwner> Extract(IMajorRecordGetter record);
 
+    // Schema-level (instance-free) twin of Extract's per-property discovery (#154): does
+    // recordType have a condition-owning field named fieldPath? Callers that only have a record's
+    // CLR type (not yet a loaded instance) — PluginWriter's read-only/apply-dispatch checks,
+    // EditOrchestrator's whole-list-restage supersession — use this instead of hardcoding a single
+    // field name, so any of a record's condition-owning fields (not just "Conditions") is
+    // recognized consistently everywhere.
+    bool IsConditionListField(Type recordType, string fieldPath);
+
     // Write-back (#152): applies one scalar condition-field edit in place on the mutable record.
     // fieldPath is the owning field (e.g. "Conditions"), index the condition's position within it,
     // subField the edited part (see ConditionPath in Edits/ for the wire-path convention that

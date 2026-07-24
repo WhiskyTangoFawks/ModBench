@@ -40,6 +40,10 @@ function compare(conditions: ConditionDiff[]): ConditionCompare {
   return { groups: [{ fieldPath: 'Conditions', conditions }] };
 }
 
+function multiCompare(groups: Array<{ fieldPath: string; conditions: ConditionDiff[] }>): ConditionCompare {
+  return { groups };
+}
+
 function fakeClient(overrides: Partial<RecordSessionClient> = {}): RecordSessionClient {
   return {
     searchRecords: vi.fn().mockResolvedValue([{ formKey: '001234:Q.esp', editorId: 'PickedQuest' }]),
@@ -474,6 +478,48 @@ describe('ConditionSection', () => {
     expect(within(row).queryByTitle('Remove condition')).toBeNull();
     expect(within(row).queryByTitle('Move condition up')).toBeNull();
     expect(within(row).queryByTitle('Move condition down')).toBeNull();
+  });
+
+  // ---- #154: multiple condition-carrying fields on one record ----
+
+  it('renders a separately labeled section per condition-owning field, not one shared "Conditions" header', () => {
+    const dialog = condition({ function: 'GetIsID' });
+    const unused = condition({ function: 'GetDead' });
+    renderSection(
+      multiCompare([
+        { fieldPath: 'DialogConditions', conditions: [{ index: 0, perPlugin: { 'A.esp': dialog }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
+        { fieldPath: 'UnusedConditions', conditions: [{ index: 0, perPlugin: { 'A.esp': unused }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
+      ]),
+      ['A.esp'],
+    );
+
+    expect(screen.getByText('DialogConditions')).toBeInTheDocument();
+    expect(screen.getByText('UnusedConditions')).toBeInTheDocument();
+    // No shared generic header when there's more than one owning field.
+    expect(screen.queryByText('Conditions')).toBeNull();
+  });
+
+  it('editing/adding/removing in one condition-owning field never touches a sibling field on the same record', () => {
+    const dialog = condition({ function: 'GetIsID', operator: 'EqualTo' });
+    const unused = condition({ function: 'GetDead', operator: 'NotEqualTo' });
+    const onEdit = vi.fn();
+    renderSection(
+      multiCompare([
+        { fieldPath: 'DialogConditions', conditions: [{ index: 0, perPlugin: { 'A.esp': dialog }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
+        { fieldPath: 'UnusedConditions', conditions: [{ index: 0, perPlugin: { 'A.esp': unused }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
+      ]),
+      ['A.esp'],
+      { onEdit },
+    );
+
+    // Two independent "add" controls, one per field — clicking DialogConditions's must restage
+    // only DialogConditions's list, never touching UnusedConditions's.
+    const addButtons = screen.getAllByTitle('Add condition');
+    expect(addButtons).toHaveLength(2);
+    fireEvent.click(addButtons[0]);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'DialogConditions', [dialog, defaultCondition()]);
+    expect(onEdit).not.toHaveBeenCalledWith('A.esp', 'UnusedConditions', expect.anything());
   });
 
   it('without onEdit, no add/remove/move controls render', () => {
