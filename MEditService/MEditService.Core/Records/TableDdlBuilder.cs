@@ -17,6 +17,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         CreateFormReferencesTable(connection);
         CreateFormLookupTable(connection);
         CreateVmadTables(connection);
+        CreateConditionTables(connection);
         CreatePlacementTables(connection);
         foreach (var schema in _reflector.GetSchemas(release).Values)
             CreateRecordTable(connection, schema);
@@ -146,6 +147,55 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         Execute(connection, """
             CREATE INDEX IF NOT EXISTS idx_vmad_items_fk
                 ON vmad_property_list_items(form_key, plugin)
+            """);
+    }
+
+    // Conditions (CTDA) index — one `conditions` row per condition, its used parameters spread
+    // across `condition_parameters`. Keyed by (form_key, plugin, owner_field_path) so a record can
+    // carry conditions on more than one field. Mirrors the VMAD table split so a later editing slice
+    // has per-condition / per-parameter addressing without a migration. [ADR-0032]
+    internal static void CreateConditionTables(DuckDBConnection connection)
+    {
+        Execute(connection, """
+            CREATE TABLE IF NOT EXISTS conditions (
+                form_key         VARCHAR NOT NULL,
+                plugin           VARCHAR NOT NULL,
+                owner_field_path VARCHAR NOT NULL,
+                condition_index  INTEGER NOT NULL,
+                record_type      VARCHAR NOT NULL,
+                function         VARCHAR NOT NULL,
+                operator         VARCHAR NOT NULL,
+                is_or            BOOLEAN NOT NULL,
+                run_on_target    VARCHAR NOT NULL,
+                run_on_reference VARCHAR,
+                use_global       BOOLEAN NOT NULL,
+                comparison_float FLOAT,
+                comparison_global VARCHAR
+            )
+            """);
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_conditions_fk
+                ON conditions(form_key, plugin)
+            """);
+
+        Execute(connection, """
+            CREATE TABLE IF NOT EXISTS condition_parameters (
+                form_key         VARCHAR NOT NULL,
+                plugin           VARCHAR NOT NULL,
+                owner_field_path VARCHAR NOT NULL,
+                condition_index  INTEGER NOT NULL,
+                param_index      INTEGER NOT NULL,
+                record_type      VARCHAR NOT NULL,
+                category         VARCHAR NOT NULL,
+                type_name        VARCHAR NOT NULL,
+                number_value     INTEGER,
+                formkey_value    VARCHAR,
+                text_value       VARCHAR
+            )
+            """);
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_condition_params_fk
+                ON condition_parameters(form_key, plugin)
             """);
     }
 

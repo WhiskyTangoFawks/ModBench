@@ -71,6 +71,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         DeleteVmadForPlugin(plugin);
         IndexVmad(pluginMod, plugin, refs);
 
+        DeleteConditionsForPlugin(plugin);
+        IndexConditions(pluginMod, plugin);
+
         IndexPlacement(pluginMod, plugin);
 
         IndexHeader(pluginMod, plugin, loadOrderIndex, schemas);
@@ -326,6 +329,106 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         return new VmadData(scriptData);
     }
+
+    public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin)
+    {
+        var conditionRows = ReadConditionRows(formKey, plugin);
+        if (conditionRows.Count == 0) return [];
+
+        var paramsByCondition = ReadConditionParamRows(formKey, plugin)
+            .GroupBy(p => (p.FieldPath, p.ConditionIndex))
+            .ToDictionary(g => g.Key, g => g.OrderBy(p => p.ParamIndex)
+                .Select(p => new ParsedConditionParam(
+                    Enum.Parse<ConditionParamCategory>(p.Category), p.TypeName, p.Number, p.FormKey, p.Text))
+                .ToList());
+
+        return [.. conditionRows
+            .GroupBy(c => c.FieldPath, StringComparer.Ordinal)
+            .Select(g => new ConditionOwner(g.Key, [.. g
+                .OrderBy(c => c.ConditionIndex)
+                .Select(c => new ParsedCondition(
+                    c.Function,
+                    Enum.Parse<ConditionOperator>(c.Operator),
+                    c.IsOr,
+                    c.RunOnTarget,
+                    c.RunOnReference,
+                    c.UseGlobal,
+                    c.ComparisonFloat,
+                    c.ComparisonGlobal,
+                    paramsByCondition.GetValueOrDefault((c.FieldPath, c.ConditionIndex)) ?? []))]))];
+    }
+
+    private List<ConditionRow> ReadConditionRows(string formKey, string plugin)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT owner_field_path, condition_index, function, operator, is_or,
+                   run_on_target, run_on_reference, use_global, comparison_float, comparison_global
+            FROM conditions
+            WHERE form_key = $1 AND plugin = $2
+            ORDER BY owner_field_path, condition_index
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        using var reader = cmd.ExecuteReader();
+
+        var rows = new List<ConditionRow>();
+        while (reader.Read())
+        {
+            rows.Add(new ConditionRow(
+                reader.GetString(0),
+                reader.GetInt32(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetBoolean(4),
+                reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.GetBoolean(7),
+                reader.IsDBNull(8) ? null : reader.GetFloat(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9)));
+        }
+
+        return rows;
+    }
+
+    private List<ConditionParamRow> ReadConditionParamRows(string formKey, string plugin)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT owner_field_path, condition_index, param_index, category, type_name,
+                   number_value, formkey_value, text_value
+            FROM condition_parameters
+            WHERE form_key = $1 AND plugin = $2
+            ORDER BY owner_field_path, condition_index, param_index
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        using var reader = cmd.ExecuteReader();
+
+        var rows = new List<ConditionParamRow>();
+        while (reader.Read())
+        {
+            rows.Add(new ConditionParamRow(
+                reader.GetString(0),
+                reader.GetInt32(1),
+                reader.GetInt32(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetInt32(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7)));
+        }
+
+        return rows;
+    }
+
+    private readonly record struct ConditionRow(
+        string FieldPath, int ConditionIndex, string Function, string Operator, bool IsOr,
+        string RunOnTarget, string? RunOnReference, bool UseGlobal, float? ComparisonFloat, string? ComparisonGlobal);
+
+    private readonly record struct ConditionParamRow(
+        string FieldPath, int ConditionIndex, int ParamIndex, string Category, string TypeName,
+        int? Number, string? FormKey, string? Text);
 
     private readonly record struct VmadScriptRow(string Name, string Flags);
 
@@ -739,6 +842,52 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         foreach (var table in (string[])["vmad_scripts", "vmad_properties", "vmad_property_list_items"])
             DeleteExisting(table, plugin);
     }
+
+    private void DeleteConditionsForPlugin(string plugin)
+    {
+        foreach (var table in (string[])["conditions", "condition_parameters"])
+            DeleteExisting(table, plugin);
+    }
+
+    // Walks every major record through the per-game condition codec (ADR-0032). No aspect interface
+    // groups condition-bearing records, so enumeration is unfiltered; the codec's reflect-for-
+    // `Conditions` check is cheap and yields nothing for records without conditions.
+    private void IndexConditions(IModGetter pluginMod, string plugin)
+    {
+        var codec = ConditionCodecFor(pluginMod.GameRelease.ToCategory());
+        if (codec == null)
+        {
+            _logger.LogWarning("No condition codec for {Game}; skipping condition index for {Plugin}",
+                pluginMod.GameRelease, plugin);
+            return;
+        }
+
+        using var conditionAppender = Connection.CreateAppender("conditions");
+        using var paramAppender = Connection.CreateAppender("condition_parameters");
+        var indexer = new ConditionIndexer(conditionAppender, paramAppender);
+
+        var count = 0;
+        foreach (var record in pluginMod.EnumerateMajorRecords())
+        {
+            var owners = codec.Extract(record);
+            if (!owners.Any()) continue;
+            indexer.IndexRecord(record.FormKey.ToString(), plugin, ResolveRecordType(record), owners);
+            count++;
+        }
+
+        _logger.LogInformation("Indexed conditions for {Count} records in {Plugin}", count, plugin);
+    }
+
+    // The per-game condition-codec registry (ADR-0032). Adding a game is one entry here plus its
+    // codec; an absent game yields no codec and condition indexing is skipped with a warning.
+    private static readonly Dictionary<GameCategory, Func<IConditionCodec>> ConditionCodecs =
+        new()
+        {
+            [GameCategory.Fallout4] = static () => new Fallout4ConditionCodec(),
+        };
+
+    private static IConditionCodec? ConditionCodecFor(GameCategory category) =>
+        ConditionCodecs.TryGetValue(category, out var make) ? make() : null;
 
     private string ResolveRecordType(IMajorRecordGetter record)
     {

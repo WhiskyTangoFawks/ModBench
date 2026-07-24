@@ -119,11 +119,28 @@ public record VmadScriptDiff(
 
 public record VmadCompare(IReadOnlyList<VmadScriptDiff> Scripts);
 
+// Conditions (CTDA) aligned across plugins — one ConditionDiff per condition row, per owning field.
+// PerPlugin holds the neutral parsed condition (null = that plugin lacks the row); the frontend
+// renders the summary and expands to typed fields from it. Two-axis coloring like ordinary fields.
+public record ConditionDiff(
+    int Index,
+    Dictionary<string, Schema.ParsedCondition?> PerPlugin,
+    string WinnerPlugin,
+    IReadOnlyDictionary<string, ConflictThis> CellStates,
+    // Per-field two-axis states for the expanded view, keyed by field id ("function", "operator",
+    // "gate", "runOn", "comparison", "param:{i}"), so only fields that actually differ are colored.
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, ConflictThis>> FieldCellStates);
+
+public record ConditionGroupDiff(string FieldPath, IReadOnlyList<ConditionDiff> Conditions);
+
+public record ConditionCompare(IReadOnlyList<ConditionGroupDiff> Groups);
+
 public record CompareResult(
     IReadOnlyList<CompareOverride> Overrides,
     IReadOnlyList<FieldDiff> Diffs,
     ConflictAll ConflictAll,
-    VmadCompare? Vmad = null);
+    VmadCompare? Vmad = null,
+    ConditionCompare? Conditions = null);
 
 public record PluginRecordTypeCount(string Type, int Count, string DisplayName);
 

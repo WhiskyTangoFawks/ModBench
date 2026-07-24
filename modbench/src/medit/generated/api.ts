@@ -472,7 +472,41 @@ export interface components {
             diffs?: components["schemas"]["FieldDiff"][] | null;
             conflictAll?: components["schemas"]["ConflictAll"];
             vmad?: components["schemas"]["VmadCompare"];
+            conditions?: components["schemas"]["ConditionCompare"];
         };
+        ConditionCompare: {
+            groups?: components["schemas"]["ConditionGroupDiff"][] | null;
+        };
+        ConditionDiff: {
+            /** Format: int32 */
+            index?: number;
+            perPlugin?: {
+                [key: string]: components["schemas"]["ParsedCondition"];
+            } | null;
+            winnerPlugin?: string | null;
+            cellStates?: {
+                [key: string]: components["schemas"]["ConflictThis"];
+            } | null;
+            fieldCellStates?: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["ConflictThis"];
+                };
+            } | null;
+        };
+        ConditionGroupDiff: {
+            fieldPath?: string | null;
+            conditions?: components["schemas"]["ConditionDiff"][] | null;
+        };
+        /**
+         * Format: int32
+         * @enum {integer}
+         */
+        ConditionOperator: 0 | 1 | 2 | 3 | 4 | 5;
+        /**
+         * Format: int32
+         * @enum {integer}
+         */
+        ConditionParamCategory: 0 | 1 | 2;
         /** @enum {string} */
         ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictCritical";
         /** @enum {string} */
@@ -554,6 +588,26 @@ export interface components {
         };
         /** @enum {string} */
         FormKeyResolutionState: "Unresolved" | "ResolvedWrongType" | "ResolvedValidType";
+        ParsedCondition: {
+            function?: string | null;
+            operator?: components["schemas"]["ConditionOperator"];
+            or?: boolean;
+            runOnTarget?: string | null;
+            runOnReference?: string | null;
+            useGlobal?: boolean;
+            /** Format: float */
+            comparisonFloat?: number | null;
+            comparisonGlobal?: string | null;
+            parameters?: components["schemas"]["ParsedConditionParam"][] | null;
+        };
+        ParsedConditionParam: {
+            category?: components["schemas"]["ConditionParamCategory"];
+            typeName?: string | null;
+            /** Format: int32 */
+            number?: number | null;
+            formKey?: string | null;
+            text?: string | null;
+        };
         PatchRecordRequest: {
             plugin?: string | null;
             fields?: {

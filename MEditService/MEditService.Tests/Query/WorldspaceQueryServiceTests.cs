@@ -1,6 +1,7 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Session;
 using Mutagen.Bethesda;
 
@@ -22,6 +23,7 @@ public class WorldspaceQueryServiceTests
         public RecordDetail? GetRecord(string t, string fk, string? p, bool w) => null;
         public IReadOnlyList<RecordDetail> GetAllOverrides(string t, string fk) => [];
         public VmadData? GetVmad(string fk, string p) => null;
+        public IReadOnlyList<ConditionOwner> GetConditions(string fk, string p) => [];
         public int CountRecordsForPlugin(string t, string p) => 0;
         public string? FindRecordType(string fk) => null;
         public RecordLookupEntry? ResolveFormKey(string fk) => null;

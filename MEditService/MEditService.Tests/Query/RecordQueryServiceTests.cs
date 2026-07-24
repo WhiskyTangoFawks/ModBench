@@ -398,6 +398,38 @@ public sealed class RecordQueryServiceTests : IDisposable
             });
     }
 
+    [Fact]
+    public void GetCompare_RecordHasConditions_PopulatesConditionCompareShape()
+    {
+        FormKey cobjKey = default;
+        var data = new PluginFixtureBuilder("rqs-conditions")
+            .WithPlugin("Base.esp", mod =>
+            {
+                var cobj = mod.ConstructibleObjects.AddNew("Recipe");
+                cobjKey = cobj.FormKey;
+                cobj.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    ComparisonValue = 1f,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+            })
+            .Build();
+        using (data)
+            WithCompareService(data, svc =>
+            {
+                var compare = svc.GetCompare(cobjKey.ToString());
+
+                Assert.NotNull(compare);
+                Assert.NotNull(compare!.Conditions);
+                var group = Assert.Single(compare.Conditions!.Groups);
+                Assert.Equal("Conditions", group.FieldPath);
+                var diff = Assert.Single(group.Conditions);
+                Assert.Equal("GetIsID", diff.PerPlugin["Base.esp"]!.Function);
+                Assert.Equal("Base.esp", diff.WinnerPlugin);
+            });
+    }
+
     private static void WithCompareService(PluginFixtureData data, Action<RecordQueryService> test)
     {
         var reflector = SharedSchemaReflector.Instance;
@@ -1057,6 +1089,9 @@ public sealed class RecordQueryServiceTests : IDisposable
 
         public VmadData? GetVmad(string formKey, string plugin) =>
             inner.GetVmad(formKey, plugin);
+
+        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin) =>
+            inner.GetConditions(formKey, plugin);
 
         public int CountRecordsForPlugin(string tableName, string plugin) =>
             inner.CountRecordsForPlugin(tableName, plugin);
