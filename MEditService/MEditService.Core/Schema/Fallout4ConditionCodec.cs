@@ -158,7 +158,7 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
         return category switch
         {
             Condition.ParameterCategory.Form when value.ValueKind == JsonValueKind.String
-                && Mutagen.Bethesda.Plugins.FormKey.TryFactory(value.GetString()!, out var fk) =>
+                && FormKey.TryFactory(value.GetString()!, out var fk) =>
                 SetFormParam(data, paramIndex, fk),
             Condition.ParameterCategory.String when value.ValueKind == JsonValueKind.String =>
                 SetStringParam(data, paramIndex, value.GetString()),
@@ -169,7 +169,7 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
         };
     }
 
-    private static ConditionApplyResult SetFormParam(FunctionConditionData data, int paramIndex, Mutagen.Bethesda.Plugins.FormKey fk)
+    private static ConditionApplyResult SetFormParam(FunctionConditionData data, int paramIndex, FormKey fk)
     {
         if (paramIndex == 0) data.ParameterOneRecord.SetTo(fk); else data.ParameterTwoRecord.SetTo(fk);
         return ConditionApplyResult.Applied;
@@ -201,7 +201,7 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
 
         condition.Data.RunOnType = target;
         if (value.TryGetProperty("reference", out var refEl) && refEl.ValueKind == JsonValueKind.String
-            && Mutagen.Bethesda.Plugins.FormKey.TryFactory(refEl.GetString()!, out var refFk))
+            && FormKey.TryFactory(refEl.GetString()!, out var refFk))
         {
             condition.Data.Reference.SetTo(refFk);
         }
@@ -215,7 +215,7 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     {
         ConditionFloat f when value.ValueKind == JsonValueKind.Number => SetFloatComparison(f, value.GetSingle()),
         ConditionGlobal g when value.ValueKind == JsonValueKind.String
-            && Mutagen.Bethesda.Plugins.FormKey.TryFactory(value.GetString()!, out var fk) => SetGlobalComparison(g, fk),
+            && FormKey.TryFactory(value.GetString()!, out var fk) => SetGlobalComparison(g, fk),
         _ => ConditionApplyResult.NotFound,
     };
 
@@ -225,7 +225,7 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
         return ConditionApplyResult.Applied;
     }
 
-    private static ConditionApplyResult SetGlobalComparison(ConditionGlobal g, Mutagen.Bethesda.Plugins.FormKey fk)
+    private static ConditionApplyResult SetGlobalComparison(ConditionGlobal g, FormKey fk)
     {
         g.ComparisonValue.SetTo(fk);
         return ConditionApplyResult.Applied;
