@@ -225,6 +225,37 @@ classification.
   `cellStates`. A VMAD cell can be dragged between columns to copy its value as a pending field
   change (target must be editable).
 
+### Condition (CTDA) section
+
+- When a record's compare response includes condition data, a "Conditions" section renders below
+  the field rows in the same table body, one row per condition, one column per plugin; it is
+  absent for record types that carry none. It reuses the grid's `Column`/`cellStates` conflict
+  coloring rather than a separate modal or panel (ADR-0032).
+- Each row renders a human-readable summary — function name, its typed parameters, the Run On
+  target, comparison operator, and comparison value — instead of raw struct fields.
+- The section is **editable on the same terms as the field rows and the VMAD section**: leaf
+  fields (function, each parameter, Run On, operator, comparison value, and the Use-Global
+  toggle) stage through the ordinary pending-change `onEdit` path, gated on the column's
+  mutability, never on a mode. A parameter's input type (FormKey picker / number / string) is
+  resolved per-function from Mutagen's typed getters, and switching a condition's function
+  reshapes its parameter inputs to the new function's parameter signature — the backend resets
+  the condition's parameter storage to the new shape at write time
+  (`Fallout4ConditionCodec.ApplyFieldValue`), so no parameter value from a different function's
+  shape can silently persist in the wrong type. Toggling Use-Global swaps the comparison-value
+  input between a plain number and a GLOB-record FormKey picker.
+- The function picker is a searchable list backed by `GET /condition-functions`, filtered
+  server-side to the functions Mutagen actually resolves for the record's game/category — never
+  a hardcoded, unfiltered enum dump.
+- The AND/OR flag between conditions renders read-only in this slice (#152); adding, removing,
+  and reordering conditions, and editing multiple condition-carrying fields on one record, are
+  later slices of the same epic (#153, #154).
+- Codec support is FO4-only today, reflecting Mutagen's four structurally different per-game
+  condition data shapes (no shared cross-game interface, unlike VMAD's `IHaveVirtualMachineAdapter`)
+  — a per-game `IConditionCodec` strategy resolved by `GameCategory` (ADR-0032); other games are
+  tracked separately (#164).
+- FormKey-typed condition parameters and the Run On reference inherit the same
+  resolution-signal gap as VMAD (#141/#166) until that lands — they render the raw FormKey.
+
 ### Field type rendering rules
 
 These apply everywhere a field value is rendered (the compare grid, pending cells, the VMAD
