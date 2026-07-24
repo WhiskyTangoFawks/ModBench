@@ -154,4 +154,113 @@ public sealed class EditOrchestratorConditionTests
             Assert.Equal(JsonValueKind.Null, staged.Changes[0].OldValue.ValueKind);
         }
     }
+
+    // ---- Whole-list restage (#153): add/remove/move stage the entire condition list as one plain
+    // FieldEdit at the owning field's bare path, per ADR-0019 (array indices have no stable identity).
+
+    [Fact]
+    public void StageEdit_ConditionListRestage_StagesWholeListAsFieldEdit()
+    {
+        var (cobjFk, data) = BuildFixture("eo-cond-list-restage", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, _) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+            var newList = J("""
+                [
+                  { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                    "runOnReference": null, "useGlobal": false, "comparisonFloat": 1.0, "comparisonGlobal": null, "parameters": [] },
+                  { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                    "runOnReference": null, "useGlobal": false, "comparisonFloat": 2.0, "comparisonGlobal": null, "parameters": [] }
+                ]
+                """);
+            var fields = new Dictionary<string, JsonElement> { ["Conditions"] = newList };
+
+            var result = orchestrator.StageEdit(cobjFk.ToString(), "TestPlugin.esp", fields, "user", null);
+
+            var staged = Assert.IsType<StageEditResult.Staged>(result);
+            var change = Assert.Single(staged.Changes);
+            Assert.Equal("Conditions", change.FieldPath);
+            Assert.Equal(PendingChangeConstants.FieldEditChangeType, change.ChangeType);
+            Assert.Equal(2, change.NewValue.GetArrayLength());
+        }
+    }
+
+    [Fact]
+    public void StageEdit_ConditionListRestage_ExtractsFormParameterReferences()
+    {
+        FormKey cobjFk = default, questFk = default;
+        using var data = new PluginFixtureBuilder("eo-cond-list-restage-formref")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var quest = mod.Quests.AddNew("TargetQuest");
+                questFk = quest.FormKey;
+                var cobj = mod.ConstructibleObjects.AddNew("Recipe");
+                cobjFk = cobj.FormKey;
+            })
+            .Build();
+
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var newList = J($$"""
+                [
+                  { "function": "GetStageDone", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                    "runOnReference": null, "useGlobal": false, "comparisonFloat": 0, "comparisonGlobal": null,
+                    "parameters": [ { "category": "Form", "typeName": "Quest", "formKey": "{{questFk}}", "number": null, "text": null } ] }
+                ]
+                """);
+            var fields = new Dictionary<string, JsonElement> { ["Conditions"] = newList };
+
+            var result = orchestrator.StageEdit(cobjFk.ToString(), "TestPlugin.esp", fields, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(result);
+            var drained = changes.DrainForPlugin("TestPlugin.esp");
+            var condRef = drained.FormRefsByFormKey[cobjFk.ToString()]
+                .FirstOrDefault(r => r.FieldPath.Equals("Conditions", StringComparison.Ordinal));
+            Assert.NotNull(condRef);
+            Assert.Equal(questFk.ToString(), condRef.TargetFormKey);
+        }
+    }
+
+    // Q3: staging a whole-list restage must clear any already-outstanding per-field CTDA\ pending
+    // edits for that same owning field — their index references are no longer trustworthy once the
+    // list has been reordered/added-to/removed-from (ADR-0019).
+    [Fact]
+    public void StageEdit_ConditionListRestage_ClearsSupersededPerFieldPendingEdits()
+    {
+        var (cobjFk, data) = BuildFixture("eo-cond-list-restage-clears", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+
+            var priorFields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+            var priorResult = orchestrator.StageEdit(cobjFk.ToString(), "TestPlugin.esp", priorFields, "user", null);
+            Assert.IsType<StageEditResult.Staged>(priorResult);
+            Assert.True(changes.GetPendingFields(cobjFk.ToString(), "TestPlugin.esp")
+                ?.ContainsKey(@"CTDA\Conditions\0\Operator"));
+
+            var newList = J("""
+                [
+                  { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                    "runOnReference": null, "useGlobal": false, "comparisonFloat": 1.0, "comparisonGlobal": null, "parameters": [] }
+                ]
+                """);
+            var restageResult = orchestrator.StageEdit(
+                cobjFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["Conditions"] = newList }, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(restageResult);
+            var pendingAfter = changes.GetPendingFields(cobjFk.ToString(), "TestPlugin.esp");
+            Assert.False(pendingAfter?.ContainsKey(@"CTDA\Conditions\0\Operator") ?? false);
+            Assert.True(pendingAfter?.ContainsKey("Conditions"));
+        }
+    }
 }

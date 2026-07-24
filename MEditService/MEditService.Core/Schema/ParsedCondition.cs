@@ -19,6 +19,12 @@ public interface IConditionCodec
     // produces these three already-parsed pieces).
     ConditionApplyResult ApplyFieldValue(IMajorRecord record, string fieldPath, int index, string subField, JsonElement value);
 
+    // Write-back (#153): replaces fieldPath's entire condition list with newList, a JSON array of
+    // ParsedCondition-shaped objects — the whole-subtree restage an add/remove/reorder stages
+    // (ADR-0019: array indices have no stable identity, so arity/order changes replace the whole
+    // list rather than address one element).
+    ConditionApplyResult ApplyListValue(IMajorRecord record, string fieldPath, JsonElement newList);
+
     // The function picker's catalog (#152): every function name this game's Mutagen package
     // resolves — not a hand-maintained ~479-entry list, so a game with a different Function enum
     // never silently offers a name it can't actually parse or write.

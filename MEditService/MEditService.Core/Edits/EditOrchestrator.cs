@@ -77,11 +77,24 @@ public sealed partial class EditOrchestrator(
 
         var formRefs = ExtractFormKeyRefs(fields, schemasForValidation, recordType!);
 
+        // #153 Q3: a whole-list restage (add/remove/move) supersedes any already-staged per-field
+        // CTDA\<fieldPath>\N\... edits on the same owning field — their indices are no longer
+        // trustworthy once the list has been reordered/added-to/removed-from (ADR-0019). Cleared
+        // before the upsert below so the two can never both land as separate pending rows that a
+        // save would apply twice.
+        ClearSupersededConditionListFields(formKey, plugin, fields);
+
         // No group is assigned here (#134): an edit that references a pending-created record is
         // grouped with that create by the edge rules (ADR-0028), not by a group id stamped at stage
         // time. The pending_form_references written by this upsert are the edge the rules read.
         var staged = _changes.Upsert(new PendingChangeUpsert(formKey, plugin, recordType!, fields, source, description, oldValues, formRefs));
         return new StageEditResult.Staged(staged);
+    }
+
+    private void ClearSupersededConditionListFields(string formKey, string plugin, Dictionary<string, JsonElement> fields)
+    {
+        foreach (var field in fields.Keys.Where(ConditionPath.IsConditionListPath))
+            _changes.RemoveFieldsWithPrefix(formKey, plugin, $@"{ConditionPath.Prefix}{field}\");
     }
 
     // Phase 13.8 structural ops: each field value is an op payload { op, ... } rather than a plain
@@ -937,6 +950,10 @@ public sealed partial class EditOrchestrator(
             {
                 ExtractConditionValueRefs(fieldPath, newValue, result);
             }
+            else if (ConditionPath.IsConditionListPath(fieldPath))
+            {
+                ExtractConditionListRefs(fieldPath, newValue, result);
+            }
             else if (colsByName.TryGetValue(fieldPath, out var col))
             {
                 FormRefPathBuilder.Walk(col, _ => (object?)newValue, (path, fk) =>
@@ -973,6 +990,47 @@ public sealed partial class EditOrchestrator(
             && value.ValueKind == JsonValueKind.String && FormKey.TryFactory(value.GetString()!, out var fk))
         {
             into.Add(new PendingFormRef(fieldPath, fieldPath, fk.ToString()));
+        }
+    }
+
+    // A whole-list restage (#153) carries the same FormKey-bearing shapes as a per-field condition
+    // edit (ExtractConditionValueRefs), just once per element instead of once per staged field: each
+    // element's Form-category parameters, its "runOnReference", and (when useGlobal) its
+    // "comparisonGlobal".
+    private static void ExtractConditionListRefs(string fieldPath, JsonElement value, List<PendingFormRef> into)
+    {
+        if (value.ValueKind != JsonValueKind.Array) return;
+
+        foreach (var el in value.EnumerateArray())
+        {
+            if (el.ValueKind != JsonValueKind.Object) continue;
+
+            if (el.TryGetProperty("runOnReference", out var refEl) && refEl.ValueKind == JsonValueKind.String
+                && FormKey.TryFactory(refEl.GetString()!, out var refFk))
+            {
+                into.Add(new PendingFormRef(fieldPath, fieldPath, refFk.ToString()));
+            }
+
+            if (el.TryGetProperty("useGlobal", out var ugEl) && ugEl.ValueKind == JsonValueKind.True
+                && el.TryGetProperty("comparisonGlobal", out var cgEl) && cgEl.ValueKind == JsonValueKind.String
+                && FormKey.TryFactory(cgEl.GetString()!, out var cgFk))
+            {
+                into.Add(new PendingFormRef(fieldPath, fieldPath, cgFk.ToString()));
+            }
+
+            if (!el.TryGetProperty("parameters", out var paramsEl) || paramsEl.ValueKind != JsonValueKind.Array)
+                continue;
+
+            foreach (var p in paramsEl.EnumerateArray())
+            {
+                if (p.ValueKind != JsonValueKind.Object) continue;
+                if (p.TryGetProperty("category", out var catEl) && catEl.GetString() == "Form"
+                    && p.TryGetProperty("formKey", out var fkEl) && fkEl.ValueKind == JsonValueKind.String
+                    && FormKey.TryFactory(fkEl.GetString()!, out var pfk))
+                {
+                    into.Add(new PendingFormRef(fieldPath, fieldPath, pfk.ToString()));
+                }
+            }
         }
     }
 

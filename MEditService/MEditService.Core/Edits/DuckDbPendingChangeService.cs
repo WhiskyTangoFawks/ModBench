@@ -248,6 +248,40 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         finally { _sem.Release(); }
     }
 
+    public int RemoveFieldsWithPrefix(string formKey, string plugin, string prefix)
+    {
+        _sem.Wait();
+        try
+        {
+            var conn = RequireConnection();
+            using var txn = conn.BeginTransaction();
+
+            using var delRefs = conn.CreateCommand();
+            delRefs.CommandText = """
+                DELETE FROM pending_form_references
+                WHERE source_form_key = $1 AND source_plugin = $2 AND staged_field LIKE $3
+                """;
+            delRefs.Parameters.Add(new DuckDBParameter { Value = formKey });
+            delRefs.Parameters.Add(new DuckDBParameter { Value = plugin });
+            delRefs.Parameters.Add(new DuckDBParameter { Value = prefix + "%" });
+            delRefs.ExecuteNonQuery();
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                DELETE FROM pending_changes
+                WHERE form_key = $1 AND plugin = $2 AND field_path LIKE $3
+                """;
+            cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+            cmd.Parameters.Add(new DuckDBParameter { Value = prefix + "%" });
+            var count = cmd.ExecuteNonQuery();
+
+            txn.Commit();
+            return count;
+        }
+        finally { _sem.Release(); }
+    }
+
     public IReadOnlyList<(string FormKey, string RecordType)> GetStagedFormKeys(string plugin, string? recordType = null)
     {
         _sem.Wait();

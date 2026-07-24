@@ -397,4 +397,107 @@ public class Fallout4ConditionCodecTests
         Assert.Equal("Reference", parsed.RunOnTarget);
         Assert.Equal(reference.ToString(), parsed.RunOnReference);
     }
+
+    // ---- ApplyListValue: whole-list restage write-back (#153) ----
+    // The wire shape is the same ParsedCondition-derived shape ConditionDiff.PerPlugin already
+    // sends the frontend (camelCase field names) — ApplyListValue and Parse are inverses.
+
+    [Fact]
+    public void ApplyListValue_ReplacesListWithMaterializedConditions()
+    {
+        var quest = FormKey.Factory("001234:Test.esp");
+        var reference = FormKey.Factory("00dcba:Test.esp");
+        var glob = FormKey.Factory("00abcd:Test.esp");
+        IList<Condition> list = [new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } }];
+
+        var newList = J($$"""
+            [
+              {
+                "function": "GetIsID",
+                "operator": "EqualTo",
+                "or": false,
+                "runOnTarget": "Subject",
+                "runOnReference": null,
+                "useGlobal": false,
+                "comparisonFloat": 3.5,
+                "comparisonGlobal": null,
+                "parameters": []
+              },
+              {
+                "function": "GetStageDone",
+                "operator": "GreaterThan",
+                "or": true,
+                "runOnTarget": "Reference",
+                "runOnReference": "{{reference}}",
+                "useGlobal": true,
+                "comparisonFloat": null,
+                "comparisonGlobal": "{{glob}}",
+                "parameters": [
+                  { "category": "Form", "typeName": "Quest", "formKey": "{{quest}}", "number": null, "text": null },
+                  { "category": "Number", "typeName": "QuestStage", "number": 10, "formKey": null, "text": null }
+                ]
+              }
+            ]
+            """);
+
+        var result = Fallout4ConditionCodec.ApplyListValue(list, newList);
+
+        Assert.Equal(ConditionApplyResult.Applied, result);
+        Assert.Equal(2, list.Count);
+
+        var first = Assert.IsType<ConditionFloat>(list[0]);
+        Assert.Equal(CompareOperator.EqualTo, first.CompareOperator);
+        Assert.Equal((Condition.Flag)0, first.Flags);
+        Assert.Equal(3.5f, first.ComparisonValue);
+        var firstData = Assert.IsType<FunctionConditionData>(first.Data);
+        Assert.Equal(Condition.Function.GetIsID, firstData.Function);
+        Assert.Equal(Condition.RunOnType.Subject, firstData.RunOnType);
+
+        var second = Assert.IsType<ConditionGlobal>(list[1]);
+        Assert.Equal(CompareOperator.GreaterThan, second.CompareOperator);
+        Assert.Equal(Condition.Flag.OR, second.Flags);
+        Assert.Equal(glob, second.ComparisonValue.FormKey);
+        var secondData = Assert.IsType<FunctionConditionData>(second.Data);
+        Assert.Equal(Condition.Function.GetStageDone, secondData.Function);
+        Assert.Equal(Condition.RunOnType.Reference, secondData.RunOnType);
+        Assert.Equal(reference, secondData.Reference.FormKey);
+        Assert.Equal(quest, secondData.ParameterOneRecord.FormKey);
+        Assert.Equal(10, secondData.ParameterTwoNumber);
+    }
+
+    [Fact]
+    public void ApplyListValue_NotAnArray_ReturnsNotFound()
+    {
+        IList<Condition> list = [];
+
+        var result = Fallout4ConditionCodec.ApplyListValue(list, J("\"not-a-list\""));
+
+        Assert.Equal(ConditionApplyResult.NotFound, result);
+    }
+
+    [Fact]
+    public void ApplyListValue_UnknownFunctionName_ReturnsNotFoundAndLeavesListUnchanged()
+    {
+        var original = new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } };
+        IList<Condition> list = [original];
+
+        var result = Fallout4ConditionCodec.ApplyListValue(list, J("""
+            [{ "function": "NotARealFunction", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+               "runOnReference": null, "useGlobal": false, "comparisonFloat": 0, "comparisonGlobal": null, "parameters": [] }]
+            """));
+
+        Assert.Equal(ConditionApplyResult.NotFound, result);
+        Assert.Same(original, Assert.Single(list));
+    }
+
+    [Fact]
+    public void ApplyListValue_EmptyArray_ClearsList()
+    {
+        IList<Condition> list = [new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } }];
+
+        var result = Fallout4ConditionCodec.ApplyListValue(list, J("[]"));
+
+        Assert.Equal(ConditionApplyResult.Applied, result);
+        Assert.Empty(list);
+    }
 }

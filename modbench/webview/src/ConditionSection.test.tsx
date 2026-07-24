@@ -4,6 +4,7 @@ import { render, screen, fireEvent, within, waitFor } from '@testing-library/rea
 import { describe, it, expect, vi } from 'vitest';
 
 import { ConditionSection } from './ConditionSection';
+import { defaultCondition } from './conditionOps';
 import type { Column } from './recordUtils';
 import type { CompareOverride, ConditionCompare, ConditionDiff, ParsedCondition, PendingChange } from './types';
 import type { RecordSessionClient } from './RecordSessionClient';
@@ -396,5 +397,93 @@ describe('ConditionSection', () => {
     expect(within(operatorRow).getByText('GreaterThan')).toBeInTheDocument();
     fireEvent.click(within(operatorRow).getByTitle('Revert group'));
     expect(onRevert).toHaveBeenCalledWith('chg-1');
+  });
+
+  // ---- #153: add/remove/reorder controls ----
+
+  it('renders an add-condition control per editable plugin column; clicking stages the grown list', () => {
+    const c = condition({ operator: 'EqualTo' });
+    const onEdit = vi.fn();
+    renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+      { onEdit },
+    );
+
+    fireEvent.click(screen.getByTitle('Add condition'));
+
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'Conditions', [c, defaultCondition()]);
+  });
+
+  it('does not render an add-condition control on an immutable plugin column', () => {
+    renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': condition() }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+      { onEdit: vi.fn(), immutableSet: new Set(['A.esp']) },
+    );
+
+    expect(screen.queryByTitle('Add condition')).toBeNull();
+  });
+
+  it('clicking Remove on a condition stages the list with that condition removed', () => {
+    const c0 = condition({ operator: 'EqualTo' });
+    const c1 = condition({ operator: 'NotEqualTo' });
+    const onEdit = vi.fn();
+    renderSection(
+      compare([
+        { index: 0, perPlugin: { 'A.esp': c0 }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} },
+        { index: 1, perPlugin: { 'A.esp': c1 }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} },
+      ]),
+      ['A.esp'],
+      { onEdit },
+    );
+
+    const row = screen.getByText('#1').closest('tr')!;
+    fireEvent.click(within(row).getByTitle('Remove condition'));
+
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'Conditions', [c1]);
+  });
+
+  it('clicking Move down swaps the condition with the next one', () => {
+    const c0 = condition({ operator: 'EqualTo' });
+    const c1 = condition({ operator: 'NotEqualTo' });
+    const onEdit = vi.fn();
+    renderSection(
+      compare([
+        { index: 0, perPlugin: { 'A.esp': c0 }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} },
+        { index: 1, perPlugin: { 'A.esp': c1 }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} },
+      ]),
+      ['A.esp'],
+      { onEdit },
+    );
+
+    const row = screen.getByText('#1').closest('tr')!;
+    fireEvent.click(within(row).getByTitle('Move condition down'));
+
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'Conditions', [c1, c0]);
+  });
+
+  it('does not render move/remove controls on an immutable plugin column', () => {
+    renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': condition() }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+      { onEdit: vi.fn(), immutableSet: new Set(['A.esp']) },
+    );
+
+    const row = screen.getByText('#1').closest('tr')!;
+    expect(within(row).queryByTitle('Remove condition')).toBeNull();
+    expect(within(row).queryByTitle('Move condition up')).toBeNull();
+    expect(within(row).queryByTitle('Move condition down')).toBeNull();
+  });
+
+  it('without onEdit, no add/remove/move controls render', () => {
+    renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': condition() }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+    );
+
+    expect(screen.queryByTitle('Add condition')).toBeNull();
+    const row = screen.getByText('#1').closest('tr')!;
+    expect(within(row).queryByTitle('Remove condition')).toBeNull();
   });
 });

@@ -10,6 +10,7 @@ import { FormKeyCell } from './FormKeyCell';
 import { ScalarCell } from './ScalarCell';
 import { ConditionFunctionPicker } from './ConditionFunctionPicker';
 import { conditionFieldPath, conditionParamPath } from './conditionPath';
+import { applyConditionListOp, currentConditionList } from './conditionOps';
 import type { RecordSessionClient } from './RecordSessionClient';
 
 // Compare view for a record's conditions (CTDA), mirroring VmadSection's grid shape. Each
@@ -18,6 +19,10 @@ import type { RecordSessionClient } from './RecordSessionClient';
 // change path (#152) — the same mechanism every other scalar field in this app uses (ScalarCell /
 // FormKeyCell) — except the AND/OR logic gate, left read-only (deferred with add/remove/reorder,
 // #150's arity/order slice).
+
+const iconBtnStyle: React.CSSProperties = {
+  background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: 0, lineHeight: 1,
+};
 
 const OPERATOR_SYMBOL: Record<ConditionOperator, string> = {
   EqualTo: '=',
@@ -331,9 +336,49 @@ function fieldCell(
   return field.render(c, onOpen);
 }
 
+// Move-up/move-down/remove controls for one condition row, per plugin column — mirrors VMAD's
+// ArrayElementCell reorder buttons and RemoveScriptButton placement. Computes the plugin's current
+// effective list (committed + its own outstanding per-field pending edits, #153 Q3) and stages the
+// whole restaged list at the group's field path via the ordinary onEdit path (ADR-0019 — no
+// separate structural-op wire dispatch; ADR-0032's whole-subtree-restage precedent).
+function conditionRowControls(
+  condition: ConditionDiff,
+  groupConditions: ConditionDiff[],
+  groupFieldPath: string,
+  plugin: string,
+  ctx: SectionCtx,
+): React.ReactNode {
+  if (!ctx.onEdit) return null;
+  const onEdit = ctx.onEdit;
+  const restage = (op: Parameters<typeof applyConditionListOp>[1]) => {
+    const list = currentConditionList(groupConditions, groupFieldPath, plugin, ctx.pendingChangeMap);
+    onEdit(plugin, groupFieldPath, applyConditionListOp(list, op));
+  };
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, marginLeft: 6 }}>
+      <button
+        title="Move condition up"
+        onClick={() => restage({ op: 'move_condition', index: condition.index, direction: 'up' })}
+        style={iconBtnStyle}
+      >▲</button>
+      <button
+        title="Move condition down"
+        onClick={() => restage({ op: 'move_condition', index: condition.index, direction: 'down' })}
+        style={iconBtnStyle}
+      >▼</button>
+      <button
+        title="Remove condition"
+        onClick={() => restage({ op: 'remove_condition', index: condition.index })}
+        style={{ ...iconBtnStyle, color: 'var(--vscode-errorForeground, #f88)' }}
+      >×</button>
+    </span>
+  );
+}
+
 // The summary row plus, when expanded, one two-axis-colored row per field.
 function conditionRows(
   condition: ConditionDiff,
+  groupConditions: ConditionDiff[],
   key: string,
   groupFieldPath: string,
   isExpanded: boolean,
@@ -354,7 +399,12 @@ function conditionRows(
       </td>
       {perPluginCells(columns, key, condition.cellStates, plugin => {
         const c = condition.perPlugin[plugin];
-        return c ? <span>{conditionSummary(c)}</span> : dash();
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+            {c ? <span>{conditionSummary(c)}</span> : dash()}
+            {ctx.isEditable(plugin) && conditionRowControls(condition, groupConditions, groupFieldPath, plugin, ctx)}
+          </span>
+        );
       })}
     </tr>,
   ];
@@ -429,9 +479,39 @@ export function ConditionSection({
   for (const group of groups) {
     for (const condition of group.conditions) {
       const key = `${group.fieldPath}#${condition.index}`;
-      rows.push(...conditionRows(condition, key, group.fieldPath, expanded.has(key), ctx));
+      rows.push(...conditionRows(condition, group.conditions, key, group.fieldPath, expanded.has(key), ctx));
     }
+    rows.push(addConditionRow(group.fieldPath, group.conditions, ctx));
   }
 
   return <>{rows}</>;
+}
+
+// One "＋ condition" row per condition list, mirroring VmadSection's "＋ script" row: a per-editable-
+// plugin-column button that appends a default-valued condition and restages the whole list.
+function addConditionRow(groupFieldPath: string, groupConditions: ConditionDiff[], ctx: SectionCtx): React.ReactNode {
+  return (
+    <tr key={`${groupFieldPath}:add`}>
+      <td style={{ ...baseCell, opacity: 0.85 }}>＋ condition</td>
+      {ctx.columns.map((col, i) => {
+        if (col.kind === 'pending' || !ctx.isEditable(col.override.plugin) || !ctx.onEdit) {
+          return <td key={`${groupFieldPath}:add:${i}`} style={baseCell} />;
+        }
+        const plugin = col.override.plugin;
+        const onEdit = ctx.onEdit;
+        return (
+          <td key={`${groupFieldPath}:add:d${i}`} style={baseCell}>
+            <button
+              title="Add condition"
+              onClick={() => {
+                const list = currentConditionList(groupConditions, groupFieldPath, plugin, ctx.pendingChangeMap);
+                onEdit(plugin, groupFieldPath, applyConditionListOp(list, { op: 'add_condition' }));
+              }}
+              style={{ ...iconBtnStyle, fontSize: '14px', padding: '0 4px' }}
+            >+</button>
+          </td>
+        );
+      })}
+    </tr>
+  );
 }

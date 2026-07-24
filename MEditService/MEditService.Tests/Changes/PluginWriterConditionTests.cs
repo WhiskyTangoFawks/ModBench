@@ -22,6 +22,13 @@ public class PluginWriterConditionTests
         Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "cobj", @"CTDA\Conditions\0\Operator"));
     }
 
+    [Fact]
+    public void IsReadOnly_ConditionListPath_ReturnsFalse()
+    {
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+        Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "cobj", "Conditions"));
+    }
+
     // ---- Helpers ----
 
     private static (string pluginPath, FormKey cobjFk, PluginFixtureData data) BuildFixture(string prefix)
@@ -198,6 +205,75 @@ public class PluginWriterConditionTests
 
         Assert.Contains(@"CTDA\Conditions\9\Operator", result.NotFound);
         Assert.Empty(result.Applied);
+    }
+
+    // ---- Whole-list restage (#153): add/remove/move stage the entire list at the bare owning
+    // field path, per ADR-0019 / EditOrchestrator's condition-owner FieldEdit routing. ----
+
+    [Fact]
+    public async Task SaveAsync_ConditionListRestage_ReplacesEntireList()
+    {
+        var (path, cobjFk, fixture) = BuildFixture("cond-list-restage");
+        using var _ = fixture;
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var newList = """
+            [
+              { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                "runOnReference": null, "useGlobal": false, "comparisonFloat": 5.0, "comparisonGlobal": null, "parameters": [] },
+              { "function": "GetDead", "operator": "NotEqualTo", "or": true, "runOnTarget": "Target",
+                "runOnReference": null, "useGlobal": false, "comparisonFloat": 0.0, "comparisonGlobal": null, "parameters": [] }
+            ]
+            """;
+
+        var result = await writer.SaveAsync(path, [MakeConditionChange(cobjFk, "Conditions", newList)], GameRelease.Fallout4);
+
+        Assert.Contains("Conditions", result.Applied);
+        var conditions = ReloadCobj(path, cobjFk).Conditions;
+        Assert.Equal(2, conditions.Count);
+        Assert.Equal(CompareOperator.EqualTo, conditions[0].CompareOperator);
+        Assert.Equal(CompareOperator.NotEqualTo, conditions[1].CompareOperator);
+        Assert.Equal(Condition.Flag.OR, conditions[1].Flags);
+    }
+
+    // Q3 ordering guarantee: an add-then-immediately-edit-the-new-condition flow (#153 AC1, "the
+    // new condition is immediately editable via #152's field editors") leaves a per-field CTDA\
+    // edit staged on top of a list-restage in the same save. The per-field edit must win — it's
+    // staged after the restage and its index only exists once the restage has run — regardless of
+    // which order the two pending changes happen to enumerate in.
+    [Fact]
+    public async Task SaveAsync_ConditionListRestagePlusFieldEditOnNewCondition_FieldEditWinsOverRestage()
+    {
+        var (path, cobjFk, fixture) = BuildFixture("cond-list-restage-order");
+        using var _ = fixture;
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var newList = """
+            [
+              { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                "runOnReference": null, "useGlobal": false, "comparisonFloat": 1.0, "comparisonGlobal": null, "parameters": [] },
+              { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                "runOnReference": null, "useGlobal": false, "comparisonFloat": 0.0, "comparisonGlobal": null, "parameters": [] }
+            ]
+            """;
+
+        // Deliberately ordered per-field-edit-before-restage in the input: proves the writer
+        // reorders rather than relying on incidental enumeration order.
+        var changes = new[]
+        {
+            MakeConditionChange(cobjFk, @"CTDA\Conditions\1\Function", "\"GetDead\""),
+            MakeConditionChange(cobjFk, "Conditions", newList),
+        };
+
+        var result = await writer.SaveAsync(path, changes, GameRelease.Fallout4);
+
+        Assert.Contains("Conditions", result.Applied);
+        Assert.Contains(@"CTDA\Conditions\1\Function", result.Applied);
+
+        var conditions = ReloadCobj(path, cobjFk).Conditions;
+        Assert.Equal(2, conditions.Count);
+        var data = (IFunctionConditionDataGetter)conditions[1].Data;
+        Assert.Equal(Condition.Function.GetDead, data.Function);
     }
 
     // ---- Sibling conditions untouched ----
