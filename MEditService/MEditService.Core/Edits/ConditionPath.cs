@@ -10,18 +10,15 @@ public static class ConditionPath
 {
     public const string Prefix = @"CTDA\";
 
-    // #153: the current single condition-owning field name — mirrors Fallout4ConditionCodec.Extract's
-    // own single-owner scope ("Nested condition lists... are a later slice"). A whole-list restage
-    // (add/remove/move) stages at this bare path, not a CTDA\-prefixed one, per ADR-0019 (array
-    // indices have no stable identity, so arity/order changes replace the whole list, not one
-    // element). Becomes data-driven if/when multiple owner field names are supported.
-    private const string ListFieldName = "Conditions";
-
+    // A whole-list restage (add/remove/move) stages at the bare owning-field path, not a
+    // CTDA\-prefixed one, per ADR-0019 (array indices have no stable identity, so arity/order
+    // changes replace the whole list, not one element). Recognizing *which* bare field names are
+    // actually condition-owning fields (#154: a record may have more than one — e.g. Quest's
+    // DialogConditions/UnusedConditions, not just "Conditions") needs the record's CLR type, which
+    // this pure wire-format helper doesn't have — see IConditionCodec.IsConditionListField, which
+    // callers with schema/instance access (PluginWriter, EditOrchestrator) use instead.
     public static bool IsConditionPath(string path) =>
         path.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase);
-
-    public static bool IsConditionListPath(string path) =>
-        path == ListFieldName;
 
     public static string Build(string fieldPath, int index, string subField) =>
         $@"CTDA\{fieldPath}\{index}\{subField}";

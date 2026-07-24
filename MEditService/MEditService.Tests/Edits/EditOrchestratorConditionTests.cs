@@ -263,4 +263,59 @@ public sealed class EditOrchestratorConditionTests
             Assert.True(pendingAfter?.ContainsKey("Conditions"));
         }
     }
+
+    // #154: a record with more than one condition-owning field (Quest's DialogConditions and
+    // UnusedConditions) must supersede/restage each field independently — restaging one must never
+    // clear a per-field pending edit staged against the *other* field on the same record.
+    [Fact]
+    public void StageEdit_ConditionListRestageOnOneField_LeavesSiblingFieldPendingEditIntact()
+    {
+        FormKey questFk = default;
+        using var data = new PluginFixtureBuilder("eo-cond-multi-list-clears")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var quest = mod.Quests.AddNew("MultiListQuest");
+                questFk = quest.FormKey;
+                quest.DialogConditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+                quest.UnusedConditions = [
+                    new ConditionFloat
+                    {
+                        CompareOperator = CompareOperator.LessThan,
+                        Data = new FunctionConditionData { Function = Condition.Function.GetDead },
+                    },
+                ];
+            })
+            .Build();
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            var priorFields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\UnusedConditions\0\Operator"] = J("\"GreaterThan\""),
+            };
+            var priorResult = orchestrator.StageEdit(questFk.ToString(), "TestPlugin.esp", priorFields, "user", null);
+            Assert.IsType<StageEditResult.Staged>(priorResult);
+
+            var newDialogList = J("""
+                [
+                  { "function": "GetIsID", "operator": "NotEqualTo", "or": false, "runOnTarget": "Subject",
+                    "runOnReference": null, "useGlobal": false, "comparisonFloat": 5.0, "comparisonGlobal": null, "parameters": [] }
+                ]
+                """);
+            var restageResult = orchestrator.StageEdit(
+                questFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["DialogConditions"] = newDialogList }, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(restageResult);
+            var pendingAfter = changes.GetPendingFields(questFk.ToString(), "TestPlugin.esp");
+            Assert.True(pendingAfter?.ContainsKey(@"CTDA\UnusedConditions\0\Operator"));
+            Assert.True(pendingAfter?.ContainsKey("DialogConditions"));
+        }
+    }
 }

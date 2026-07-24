@@ -112,9 +112,17 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
     {
         if (VmadPath.IsVmadPath(fieldPath)) return false;
         if (ConditionPath.IsConditionPath(fieldPath)) return false;
-        if (ConditionPath.IsConditionListPath(fieldPath)) return false;
         var schemas = _schemaReflector.GetSchemas(release);
         if (!schemas.TryGetValue(recordType, out var schema)) return true;
+
+        // #154: any of the record's condition-owning fields (not just a hardcoded "Conditions")
+        // is always editable via the whole-list-restage path — recognized by asking this game's
+        // codec whether recordType actually has a condition-list property named fieldPath.
+        if (ConditionCodecRegistry.For(release.ToCategory()) is { } codec
+            && codec.IsConditionListField(schema.RecordType, fieldPath))
+        {
+            return false;
+        }
 
         // The header's columns are written via HeaderColumnApply (ModHeader isn't an IMajorRecord,
         // so ColumnSpec.Apply is always null for it) — resolve editability from that list instead.
@@ -492,8 +500,15 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         if (ConditionPath.IsConditionPath(change.FieldPath))
             return ApplyConditionField(record, change, release);
 
-        if (ConditionPath.IsConditionListPath(change.FieldPath))
+        // #154: dispatches on whichever of the record's actual condition-owning fields this is
+        // (not just "Conditions") — an instance is on hand here, so the check reflects directly
+        // off record.GetType() rather than needing the recordType-string/schema lookup PluginWriter
+        // .IsReadOnly uses when it only has a type name.
+        if (ConditionCodecRegistry.For(release.ToCategory()) is { } codec
+            && codec.IsConditionListField(record.GetType(), change.FieldPath))
+        {
             return ApplyConditionListField(record, change, release);
+        }
 
         if (!schemas.TryGetValue(change.RecordType, out var schema))
             return ApplyOutcome.NotFound;

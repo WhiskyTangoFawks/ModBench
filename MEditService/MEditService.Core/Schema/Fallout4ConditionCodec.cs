@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -11,20 +12,42 @@ namespace MEditService.Core.Schema;
 // interface, so each game gets its own codec behind IConditionCodec. [ADR-0032]
 public sealed class Fallout4ConditionCodec : IConditionCodec
 {
-    // Discovers a record's conditions by reflecting for a top-level `Conditions` property — the
-    // shape COBJ/Perk/MagicEffect/Package/etc. share. Nested condition lists (quest aliases,
-    // terminal items) are a later slice. Discovery is game-generic; Parse is FO4-specific.
+    // Discovers a record's conditions by reflecting over every top-level property whose value is a
+    // condition list — the shape COBJ's `Conditions`, Quest's `DialogConditions`/`UnusedConditions`,
+    // Perk's `Conditions`, etc. all share — rather than a single hardcoded property name, so a
+    // record with more than one condition-carrying field (#154) surfaces one owner per field,
+    // independently keyed by that field's own name. Nested per-array-item condition lists (a
+    // Perk effect's own Conditions, a Quest alias's/stage's own Conditions — each doubly-indexed
+    // inside a parent array rather than a flat top-level property) are out of scope for this
+    // reflection pass — deferred to a follow-up ticket. Discovery is game-generic; Parse is
+    // FO4-specific.
     public IEnumerable<ConditionOwner> Extract(IMajorRecordGetter record)
     {
-        if (record.GetType().GetProperty("Conditions")?.GetValue(record)
-            is not IEnumerable<IConditionGetter> conditions)
+        var owners = new List<ConditionOwner>();
+        foreach (var prop in record.GetType().GetProperties())
         {
-            return [];
-        }
+            if (!IsConditionListProperty(prop)) continue;
+            if (prop.GetValue(record) is not IEnumerable<IConditionGetter> conditions) continue;
 
-        var parsed = conditions.Select(Parse).ToList();
-        return parsed.Count == 0 ? [] : [new ConditionOwner("Conditions", parsed)];
+            var parsed = conditions.Select(Parse).ToList();
+            if (parsed.Count > 0) owners.Add(new ConditionOwner(prop.Name, parsed));
+        }
+        return owners;
     }
+
+    // Schema-level twin of Extract's own per-instance discovery — same shape check
+    // (IsConditionListProperty), just applied to the CLR type rather than a live value, for callers
+    // that don't yet have a loaded record instance (#154).
+    public bool IsConditionListField(Type recordType, string fieldPath) =>
+        recordType.GetProperty(fieldPath) is { } prop && IsConditionListProperty(prop);
+
+    // The one shape test that decides "is this property a condition list" everywhere it matters:
+    // not an indexer, and its value would satisfy IEnumerable<IConditionGetter> (covers both
+    // non-nullable ExtendedList<Condition> and nullable ExtendedList<Condition>? owners like
+    // Quest's DialogConditions/UnusedConditions).
+    private static bool IsConditionListProperty(PropertyInfo prop) =>
+        prop.GetIndexParameters().Length == 0
+        && typeof(IEnumerable<IConditionGetter>).IsAssignableFrom(prop.PropertyType);
 
     // Parses one Mutagen condition into neutral form.
     public static ParsedCondition Parse(IConditionGetter condition)

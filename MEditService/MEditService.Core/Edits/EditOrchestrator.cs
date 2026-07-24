@@ -75,14 +75,14 @@ public sealed partial class EditOrchestrator(
         var headerGuardResult = CheckHeaderStageGuards(plugin, recordType!, fields, oldValues, session!);
         if (headerGuardResult != null) return headerGuardResult;
 
-        var formRefs = ExtractFormKeyRefs(fields, schemasForValidation, recordType!);
+        var formRefs = ExtractFormKeyRefs(fields, schemasForValidation, recordType!, session!.GameRelease);
 
         // #153 Q3: a whole-list restage (add/remove/move) supersedes any already-staged per-field
         // CTDA\<fieldPath>\N\... edits on the same owning field — their indices are no longer
         // trustworthy once the list has been reordered/added-to/removed-from (ADR-0019). Cleared
         // before the upsert below so the two can never both land as separate pending rows that a
         // save would apply twice.
-        ClearSupersededConditionListFields(formKey, plugin, fields);
+        ClearSupersededConditionListFields(formKey, plugin, fields, schemasForValidation, recordType!, session!.GameRelease);
 
         // No group is assigned here (#134): an edit that references a pending-created record is
         // grouped with that create by the edge rules (ADR-0028), not by a group id stamped at stage
@@ -91,9 +91,17 @@ public sealed partial class EditOrchestrator(
         return new StageEditResult.Staged(staged);
     }
 
-    private void ClearSupersededConditionListFields(string formKey, string plugin, Dictionary<string, JsonElement> fields)
+    private void ClearSupersededConditionListFields(
+        string formKey, string plugin, Dictionary<string, JsonElement> fields,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, string recordType, GameRelease release)
     {
-        foreach (var field in fields.Keys.Where(ConditionPath.IsConditionListPath))
+        if (!schemas.TryGetValue(recordType, out var schema)) return;
+        if (ConditionCodecRegistry.For(release.ToCategory()) is not { } codec) return;
+
+        // #154: matches on any of the record's condition-owning fields (not just "Conditions"), so
+        // a restage of e.g. Quest.UnusedConditions clears its own stale CTDA\UnusedConditions\...
+        // rows without touching a sibling DialogConditions restage staged in the same batch.
+        foreach (var field in fields.Keys.Where(f => codec.IsConditionListField(schema.RecordType, f)))
             _changes.RemoveFieldsWithPrefix(formKey, plugin, $@"{ConditionPath.Prefix}{field}\");
     }
 
@@ -299,7 +307,7 @@ public sealed partial class EditOrchestrator(
         var placement = _query.GetPlacement(formKey, winner.Plugin);
 
         var schemas = _schemaReflector.GetSchemas(session!.GameRelease);
-        var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!);
+        var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!, session!.GameRelease);
 
         // Issue #86 invariant B: a staged copy must never leave the target referencing a FormKey
         // whose origin isn't declared in the target's masters — covers both the copied record's own
@@ -438,7 +446,7 @@ public sealed partial class EditOrchestrator(
 
         if (templateFields != null)
         {
-            var templateRefs = ExtractFormKeyRefs(templateFields, schemas, recordType);
+            var templateRefs = ExtractFormKeyRefs(templateFields, schemas, recordType, session.GameRelease);
             _changes.Upsert(new PendingChangeUpsert(
                 reservedFormKey, plugin, recordType,
                 templateFields, source, null,
@@ -935,11 +943,13 @@ public sealed partial class EditOrchestrator(
     private static List<PendingFormRef> ExtractFormKeyRefs(
         Dictionary<string, JsonElement> fields,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        string recordType)
+        string recordType,
+        GameRelease release)
     {
         var result = new List<PendingFormRef>();
         if (!schemas.TryGetValue(recordType, out var schema)) return result;
         var colsByName = schema.RecordColumns.ToDictionary(c => c.Name);
+        var conditionCodec = ConditionCodecRegistry.For(release.ToCategory());
         foreach (var (fieldPath, newValue) in fields)
         {
             if (VmadPath.IsVmadPath(fieldPath))
@@ -950,7 +960,8 @@ public sealed partial class EditOrchestrator(
             {
                 ExtractConditionValueRefs(fieldPath, newValue, result);
             }
-            else if (ConditionPath.IsConditionListPath(fieldPath))
+            // #154: any of the record's condition-owning fields (not just "Conditions").
+            else if (conditionCodec != null && conditionCodec.IsConditionListField(schema.RecordType, fieldPath))
             {
                 ExtractConditionListRefs(fieldPath, newValue, result);
             }

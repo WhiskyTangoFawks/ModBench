@@ -29,6 +29,17 @@ public class PluginWriterConditionTests
         Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "cobj", "Conditions"));
     }
 
+    // #154: a record with more than one condition-owning field (Quest) must recognize each of them,
+    // not just the single hardcoded "Conditions" name.
+    [Theory]
+    [InlineData("DialogConditions")]
+    [InlineData("UnusedConditions")]
+    public void IsReadOnly_ConditionListPath_OnNonConditionsFieldName_ReturnsFalse(string fieldPath)
+    {
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+        Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "qust", fieldPath));
+    }
+
     // ---- Helpers ----
 
     private static (string pluginPath, FormKey cobjFk, PluginFixtureData data) BuildFixture(string prefix)
@@ -274,6 +285,62 @@ public class PluginWriterConditionTests
         Assert.Equal(2, conditions.Count);
         var data = (IFunctionConditionDataGetter)conditions[1].Data;
         Assert.Equal(Condition.Function.GetDead, data.Function);
+    }
+
+    // ---- Multiple condition lists on one record (#154) ----
+
+    // Quest has two flat, top-level condition-carrying fields (DialogConditions, UnusedConditions)
+    // — restaging one must never touch the other, proving the wire-path/apply-dispatch keying by
+    // field name (not a single hardcoded "Conditions") actually isolates them end to end.
+    [Fact]
+    public async Task SaveAsync_ConditionListRestageOnOneField_SiblingFieldOnSameRecordUntouched()
+    {
+        FormKey questFk = default;
+        using var fixture = new PluginFixtureBuilder("cond-multi-list")
+            .WithPlugin("ConditionWrite.esp", mod =>
+            {
+                var quest = mod.Quests.AddNew("MultiListQuest");
+                questFk = quest.FormKey;
+                quest.DialogConditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+                quest.UnusedConditions = [
+                    new ConditionFloat
+                    {
+                        CompareOperator = CompareOperator.LessThan,
+                        Data = new FunctionConditionData { Function = Condition.Function.GetDead },
+                    },
+                ];
+            })
+            .Build();
+        var path = Path.Combine(fixture.DataFolder, "ConditionWrite.esp");
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var newDialogList = """
+            [
+              { "function": "GetIsID", "operator": "NotEqualTo", "or": false, "runOnTarget": "Subject",
+                "runOnReference": null, "useGlobal": false, "comparisonFloat": 9.0, "comparisonGlobal": null, "parameters": [] }
+            ]
+            """;
+        var change = new PendingChange(Guid.NewGuid(), questFk.ToString(), "ConditionWrite.esp",
+            "DialogConditions", "qust", JsonDocument.Parse("null").RootElement, J(newDialogList),
+            "user", null, DateTime.UtcNow, "field_edit", null);
+
+        var result = await writer.SaveAsync(path, [change], GameRelease.Fallout4);
+
+        Assert.Contains("DialogConditions", result.Applied);
+        var modPath = new ModPath(ModKey.FromFileName("ConditionWrite.esp"), path);
+        var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
+        var reloaded = mod.Quests.First(q => q.FormKey == questFk);
+
+        Assert.Equal(CompareOperator.NotEqualTo, Assert.Single(reloaded.DialogConditions).CompareOperator);
+
+        // UnusedConditions was never staged — must remain exactly as it was.
+        var unusedCondition = Assert.Single(reloaded.UnusedConditions!);
+        Assert.Equal(CompareOperator.LessThan, unusedCondition.CompareOperator);
+        Assert.Equal(Condition.Function.GetDead, ((IFunctionConditionDataGetter)unusedCondition.Data).Function);
     }
 
     // ---- Sibling conditions untouched ----
