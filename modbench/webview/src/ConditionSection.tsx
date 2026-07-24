@@ -9,7 +9,7 @@ import { FormKeyLink } from './FormKeyLink';
 import { FormKeyCell } from './FormKeyCell';
 import { ScalarCell } from './ScalarCell';
 import { ConditionFunctionPicker } from './ConditionFunctionPicker';
-import { conditionFieldPath, conditionParamPath } from './conditionPath';
+import { CONDITION_SUBFIELD_WIRE, conditionFieldPath, conditionParamPath } from './conditionPath';
 import { applyConditionListOp, currentConditionList } from './conditionOps';
 import type { RecordSessionClient } from './RecordSessionClient';
 
@@ -224,10 +224,7 @@ function fieldsFor(condition: ConditionDiff): FieldSpec[] {
 function wirePathFor(groupFieldPath: string, index: number, key: string): string | null {
   const paramMatch = /^param:(\d+)$/.exec(key);
   if (paramMatch) return conditionParamPath(groupFieldPath, index, Number(paramMatch[1]));
-  const subField: Record<string, string> = {
-    function: 'Function', runOn: 'RunOn', operator: 'Operator', useGlobal: 'UseGlobal', comparison: 'Comparison',
-  };
-  return subField[key] ? conditionFieldPath(groupFieldPath, index, subField[key]) : null;
+  return CONDITION_SUBFIELD_WIRE[key] ? conditionFieldPath(groupFieldPath, index, CONDITION_SUBFIELD_WIRE[key]) : null;
 }
 
 function dash(): React.ReactNode {

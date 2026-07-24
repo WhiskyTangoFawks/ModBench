@@ -6,7 +6,7 @@
 // plain arrays already use. There is no backend op dispatch to mirror here; this module's job is
 // purely to compute the new list.
 import type { ConditionDiff, ConditionOperator, ParsedCondition, ParsedConditionParam, PendingChange } from './types';
-import { conditionFieldPath, conditionParamPath } from './conditionPath';
+import { CONDITION_SUBFIELD_WIRE, conditionFieldPath, conditionParamPath } from './conditionPath';
 
 export type ConditionListOp =
   | { op: 'add_condition' }
@@ -46,13 +46,6 @@ export function applyConditionListOp(list: ParsedCondition[], op: ConditionListO
   [next[op.index], next[other]] = [next[other], next[op.index]];
   return next;
 }
-
-// The ConditionPath wire sub-field keys ConditionSection stages scalar edits at (mirrors
-// wirePathFor in ConditionSection.tsx) — used below to find a condition's outstanding per-field
-// pending edits.
-const SUBFIELD_WIRE: Record<string, string> = {
-  function: 'Function', runOn: 'RunOn', operator: 'Operator', useGlobal: 'UseGlobal', comparison: 'Comparison',
-};
 
 function overlayField(condition: ParsedCondition, key: string, value: unknown): ParsedCondition {
   switch (key) {
@@ -124,8 +117,8 @@ function overlayPendingEdits(
   if (!pendingChangeMap) return base;
 
   let overlaid = base;
-  for (const key of Object.keys(SUBFIELD_WIRE)) {
-    const wirePath = conditionFieldPath(fieldPath, index, SUBFIELD_WIRE[key]);
+  for (const key of Object.keys(CONDITION_SUBFIELD_WIRE)) {
+    const wirePath = conditionFieldPath(fieldPath, index, CONDITION_SUBFIELD_WIRE[key]);
     const change = pendingChangeMap[`${plugin}:${wirePath}`];
     if (change) overlaid = overlayField(overlaid, key, change.newValue);
   }
