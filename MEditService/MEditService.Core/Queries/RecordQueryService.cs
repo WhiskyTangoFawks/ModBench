@@ -2,6 +2,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using Mutagen.Bethesda;
 
 namespace MEditService.Core.Queries;
 
@@ -189,6 +190,12 @@ public sealed class RecordQueryService(
 
     public VmadData? GetVmad(string formKey, string plugin) =>
         RequireRepository().GetVmad(formKey, plugin);
+
+    public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin) =>
+        RequireRepository().GetConditions(formKey, plugin);
+
+    public IReadOnlyList<string> GetConditionFunctions() =>
+        ConditionCodecRegistry.For(RequireSession().GameRelease.ToCategory())?.AvailableFunctions().ToList() ?? [];
 
     public PlacementRow? GetPlacement(string formKey, string plugin) =>
         RequireRepository().GetPlacement(formKey, plugin);

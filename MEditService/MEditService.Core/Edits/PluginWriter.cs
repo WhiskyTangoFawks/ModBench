@@ -111,6 +111,7 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
     public bool IsReadOnly(GameRelease release, string recordType, string fieldPath)
     {
         if (VmadPath.IsVmadPath(fieldPath)) return false;
+        if (ConditionPath.IsConditionPath(fieldPath)) return false;
         var schemas = _schemaReflector.GetSchemas(release);
         if (!schemas.TryGetValue(recordType, out var schema)) return true;
 
@@ -302,7 +303,7 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
             }
 
             foreach (var change in fieldChanges)
-                results.Record(TryApplyField(record, change, schemas), change.FieldPath);
+                results.Record(TryApplyField(record, change, schemas, ctx.Release), change.FieldPath);
         }
     }
 
@@ -470,13 +471,17 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
     private static ApplyOutcome TryApplyField(
         IMajorRecord record,
         PendingChange change,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        GameRelease release)
     {
         if (change.ChangeType == PendingChangeConstants.VmadStructOpChangeType)
             return ApplyVmadStructOp(record, change);
 
         if (VmadPath.IsVmadPath(change.FieldPath))
             return ApplyVmadField(record, change);
+
+        if (ConditionPath.IsConditionPath(change.FieldPath))
+            return ApplyConditionField(record, change, release);
 
         if (!schemas.TryGetValue(change.RecordType, out var schema))
             return ApplyOutcome.NotFound;
@@ -501,6 +506,21 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         VmadApplyResult.ReadOnly => ApplyOutcome.ReadOnly,
         _ => ApplyOutcome.NotFound,
     };
+
+    private static ApplyOutcome ApplyConditionField(IMajorRecord record, PendingChange change, GameRelease release)
+    {
+        if (ConditionCodecRegistry.For(release.ToCategory()) is not { } codec)
+            return ApplyOutcome.NotFound;
+        if (!ConditionPath.TryParse(change.FieldPath, out var fieldPath, out var index, out var subField))
+            return ApplyOutcome.NotFound;
+
+        var result = codec.ApplyFieldValue(record, fieldPath, index, subField, change.NewValue);
+        return result switch
+        {
+            ConditionApplyResult.Applied => ApplyOutcome.Applied,
+            _ => ApplyOutcome.NotFound,
+        };
+    }
 
     // Structural VMAD operations (phase 13.8): add/remove a property on a script.
     // The change value is an op payload { op, ... }; the op discriminator routes the work.

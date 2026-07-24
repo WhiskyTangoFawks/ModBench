@@ -6,6 +6,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Edits;
 
@@ -47,6 +48,11 @@ public sealed partial class EditOrchestrator(
         VmadData? vmadData = vmadFields.Count > 0 ? _query.GetVmad(formKey, plugin) : null;
         CollectVmadReadOnlyFields(vmadFields, vmadData, readOnlyFields);
 
+        var conditionFields = fields.Keys.Where(ConditionPath.IsConditionPath).ToList();
+        IReadOnlyList<ConditionOwner>? conditionOwners =
+            conditionFields.Count > 0 ? _query.GetConditions(formKey, plugin) : null;
+        CollectConditionReadOnlyFields(conditionFields, readOnlyFields);
+
         if (readOnlyFields.Count > 0)
             return new StageEditResult.ReadOnlyFields(readOnlyFields);
 
@@ -64,6 +70,7 @@ public sealed partial class EditOrchestrator(
         }
 
         CaptureVmadOldValues(vmadFields, vmadData, oldValues);
+        CaptureConditionOldValues(conditionFields, conditionOwners, oldValues);
 
         var headerGuardResult = CheckHeaderStageGuards(plugin, recordType!, fields, oldValues, session!);
         if (headerGuardResult != null) return headerGuardResult;
@@ -174,6 +181,66 @@ public sealed partial class EditOrchestrator(
 
             oldValues[path] = SerializeVmadOldValue(prop.Value);
         }
+    }
+
+    // A malformed condition path (fails ConditionPath.TryParse) is rejected the same way a
+    // malformed VMAD path is — surfaced as read-only rather than silently mis-staged.
+    private static void CollectConditionReadOnlyFields(List<string> conditionFields, List<string> readOnlyFields)
+    {
+        foreach (var path in conditionFields)
+        {
+            if (!ConditionPath.TryParse(path, out _, out _, out _))
+                readOnlyFields.Add(path);
+        }
+    }
+
+    private static void CaptureConditionOldValues(
+        List<string> conditionFields, IReadOnlyList<ConditionOwner>? owners, Dictionary<string, JsonElement> oldValues)
+    {
+        foreach (var path in conditionFields)
+        {
+            if (!ConditionPath.TryParse(path, out var fieldPath, out var index, out var subField))
+                continue;
+
+            var owner = owners?.FirstOrDefault(o => o.FieldPath == fieldPath);
+            if (owner == null || index < 0 || index >= owner.Conditions.Count)
+                continue;
+
+            oldValues[path] = ConditionOldValue(owner.Conditions[index], subField);
+        }
+    }
+
+    // The neutral ParsedCondition already has every sub-field this wire path can address; this just
+    // picks the one subField names and serializes it the same shape the matching edit payload uses
+    // (ConditionSection's field keys / Fallout4ConditionCodec.ApplyFieldValue's subField switch).
+    private static JsonElement ConditionOldValue(ParsedCondition condition, string subField)
+    {
+        if (subField == "Function") return JsonSerializer.SerializeToElement(condition.Function);
+        if (subField == "Operator") return JsonSerializer.SerializeToElement(condition.Operator.ToString());
+        if (subField == "UseGlobal") return JsonSerializer.SerializeToElement(condition.UseGlobal);
+        if (subField == "RunOn")
+        {
+            return JsonSerializer.SerializeToElement(
+                new { target = condition.RunOnTarget, reference = condition.RunOnReference });
+        }
+        if (subField == "Comparison")
+        {
+            return condition.UseGlobal
+                ? JsonSerializer.SerializeToElement(condition.ComparisonGlobal)
+                : JsonSerializer.SerializeToElement(condition.ComparisonFloat);
+        }
+        if (ConditionPath.TryParseParameterIndex(subField, out var paramIndex)
+            && paramIndex < condition.Parameters.Count)
+        {
+            var p = condition.Parameters[paramIndex];
+            return p.Category switch
+            {
+                ConditionParamCategory.Form => JsonSerializer.SerializeToElement(p.FormKey),
+                ConditionParamCategory.Text => JsonSerializer.SerializeToElement(p.Text),
+                _ => JsonSerializer.SerializeToElement(p.Number),
+            };
+        }
+        return PendingChangeConstants.NullElement;
     }
 
     private static VmadNamedValue? FindVmadProperty(VmadData? vmadData, string scriptName, string propName) =>
@@ -866,6 +933,10 @@ public sealed partial class EditOrchestrator(
             {
                 ExtractVmadValueRefs(fieldPath, newValue, result);
             }
+            else if (ConditionPath.IsConditionPath(fieldPath))
+            {
+                ExtractConditionValueRefs(fieldPath, newValue, result);
+            }
             else if (colsByName.TryGetValue(fieldPath, out var col))
             {
                 FormRefPathBuilder.Walk(col, _ => (object?)newValue, (path, fk) =>
@@ -880,6 +951,29 @@ public sealed partial class EditOrchestrator(
     {
         foreach (var fk in VmadCodec.ValueFormKeys(value))
             into.Add(new PendingFormRef(fieldPath, fieldPath, fk));
+    }
+
+    // A condition edit's FormKey-bearing shapes: a Form-category "Parameter\<n>" or "Comparison"
+    // (Use-Global) value is a bare FormKey string; "RunOn" carries one inside its "reference" member.
+    // Guarded by FormKey.TryFactory so a String-category parameter's plain text (also a JSON string,
+    // same wire shape) is never mistaken for a reference.
+    private static void ExtractConditionValueRefs(string fieldPath, JsonElement value, List<PendingFormRef> into)
+    {
+        if (!ConditionPath.TryParse(fieldPath, out _, out _, out var subField)) return;
+
+        if (subField == "RunOn" && value.ValueKind == JsonValueKind.Object
+            && value.TryGetProperty("reference", out var refEl) && refEl.ValueKind == JsonValueKind.String
+            && FormKey.TryFactory(refEl.GetString()!, out var refFk))
+        {
+            into.Add(new PendingFormRef(fieldPath, fieldPath, refFk.ToString()));
+            return;
+        }
+
+        if ((subField == "Comparison" || ConditionPath.TryParseParameterIndex(subField, out _))
+            && value.ValueKind == JsonValueKind.String && FormKey.TryFactory(value.GetString()!, out var fk))
+        {
+            into.Add(new PendingFormRef(fieldPath, fieldPath, fk.ToString()));
+        }
     }
 
     private (StageEditResult? earlyOut, IGameSession? session, string? recordType) ValidateEditContext(

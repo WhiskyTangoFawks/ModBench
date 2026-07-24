@@ -17,6 +17,13 @@ public static class PluginEndpoints
             .WithTags("Records")
             .Produces<IReadOnlyList<string>>();
 
+        // The condition function picker's catalog (#152) — filtered to what the loaded session's
+        // game actually resolves (ConditionCodecRegistry), not a hardcoded list.
+        app.MapGet("/condition-functions", (IRecordQueryService svc) => Results.Ok(svc.GetConditionFunctions()))
+            .WithName("GetConditionFunctions")
+            .WithTags("Records")
+            .Produces<IReadOnlyList<string>>();
+
         app.MapGet("/plugins/{plugin}/record-types", (string plugin, IRecordQueryService svc) =>
             Results.Ok(svc.GetPluginRecordTypes(Uri.UnescapeDataString(plugin))))
             .WithName("GetPluginRecordTypes")

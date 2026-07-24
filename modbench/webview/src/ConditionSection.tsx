@@ -1,15 +1,23 @@
 import React, { useState } from 'react';
 import type { Column } from './recordUtils';
 import type {
-  ConditionCompare, ConditionDiff, ConditionOperator, ConflictThis,
-  ParsedCondition, ParsedConditionParam,
+  ConditionCompare, ConditionDiff, ConditionOperator, ConflictThis, FieldMetadata,
+  ParsedCondition, ParsedConditionParam, PendingChange,
 } from './types';
 import { baseCell, headerCell, toggleBtnStyle, getCellStyle } from './gridStyles';
 import { FormKeyLink } from './FormKeyLink';
+import { FormKeyCell } from './FormKeyCell';
+import { ScalarCell } from './ScalarCell';
+import { ConditionFunctionPicker } from './ConditionFunctionPicker';
+import { conditionFieldPath, conditionParamPath } from './conditionPath';
+import type { RecordSessionClient } from './RecordSessionClient';
 
-// Read-only compare view for a record's conditions (CTDA), mirroring VmadSection's grid shape.
-// Each condition renders as a collapsed xEdit-style summary row with two-axis conflict coloring
-// (ADR-0016), expandable to its typed fields. Display only — editing is a later slice (ADR-0032).
+// Compare view for a record's conditions (CTDA), mirroring VmadSection's grid shape. Each
+// condition renders as a collapsed xEdit-style summary row with two-axis conflict coloring
+// (ADR-0016), expandable to its typed fields. Fields stage through the ordinary onEdit pending-
+// change path (#152) — the same mechanism every other scalar field in this app uses (ScalarCell /
+// FormKeyCell) — except the AND/OR logic gate, left read-only (deferred with add/remove/reorder,
+// #150's arity/order slice).
 
 const OPERATOR_SYMBOL: Record<ConditionOperator, string> = {
   EqualTo: '=',
@@ -19,6 +27,26 @@ const OPERATOR_SYMBOL: Record<ConditionOperator, string> = {
   LessThan: '<',
   LessThanOrEqualTo: '<=',
 };
+
+const OPERATOR_VALUES: ConditionOperator[] = [
+  'EqualTo', 'NotEqualTo', 'GreaterThan', 'GreaterThanOrEqualTo', 'LessThan', 'LessThanOrEqualTo',
+];
+
+// Condition.RunOnType names (Fallout4ConditionCodec's game-neutral RunOnTarget strings).
+const RUN_ON_TARGETS = [
+  'Subject', 'Target', 'Reference', 'CombatTarget', 'LinkedReference', 'QuestAlias',
+  'PackageData', 'EventData', 'CommandTarget', 'EventCameraRef', 'MyKiller',
+];
+
+function enumMeta(enumValues: string[]): FieldMetadata {
+  return { name: '', type: 'enum', isArray: false, validFormKeyTypes: [], enumValues };
+}
+function scalarMeta(type: 'int' | 'float' | 'string' | 'bool'): FieldMetadata {
+  return { name: '', type, isArray: false, validFormKeyTypes: [], enumValues: [] };
+}
+function formKeyMeta(validFormKeyTypes: string[] = []): FieldMetadata {
+  return { name: '', type: 'formKey', isArray: false, validFormKeyTypes, enumValues: [] };
+}
 
 function paramText(p: ParsedConditionParam): string {
   if (p.category === 'Form') return p.formKey ?? '';
@@ -44,12 +72,22 @@ function rowHasConflict(cellStates: Record<string, ConflictThis>): boolean {
   return Object.values(cellStates).some(s => s === 'ConflictWins' || s === 'ConflictLoses');
 }
 
-// One expandable field of a condition, rendered per plugin. Form-typed values become FormKey links.
-// `key` matches the backend's FieldCellStates id so the row colors on its own two-axis state.
+// Bound to one field's own wire path — editors just call onCommit(value) like any ScalarCell/
+// FormKeyCell in the rest of the grid.
+interface FieldEditCtx {
+  client: RecordSessionClient;
+  onOpen: (fk: string) => void;
+  onCommit: (value: unknown) => void;
+}
+
+// One expandable field of a condition, rendered per plugin. `key` matches the backend's
+// FieldCellStates id so the row colors on its own two-axis state, and (via wirePathFor) names the
+// ConditionPath sub-field this row edits.
 interface FieldSpec {
   key: string;
   label: string;
   render: (c: ParsedCondition, onOpen: (fk: string) => void) => React.ReactNode;
+  renderEdit?: (c: ParsedCondition, ctx: FieldEditCtx) => React.ReactNode;
 }
 
 function value(text: string): React.ReactNode {
@@ -71,20 +109,98 @@ function paramField(index: number): FieldSpec {
       const body = p.category === 'Form' ? link(p.formKey, onOpen) : value(paramText(p));
       return <span>{body}{typeCue}</span>;
     },
+    // Changing a condition's function reshapes this row's whole shape: the parameter's category is
+    // read fresh from the *new* ParsedCondition after a Function edit round-trips (the backend
+    // recomputes each slot from the new function's GetParameterTypes and resets stale slots —
+    // Fallout4ConditionCodec.ApplyFieldValue), so a stale value from the old function's shape never
+    // renders through the wrong-typed input here.
+    renderEdit: (c, ctx) => {
+      const p = c.parameters[index];
+      if (!p) return null;
+      if (p.category === 'Form') {
+        return (
+          <FormKeyCell value={p.formKey} meta={formKeyMeta()} editable
+            client={ctx.client} onOpen={ctx.onOpen} onCommit={ctx.onCommit} />
+        );
+      }
+      if (p.category === 'Text') {
+        return <ScalarCell value={p.text ?? ''} meta={scalarMeta('string')} editable onCommit={ctx.onCommit} />;
+      }
+      return <ScalarCell value={p.number ?? 0} meta={scalarMeta('int')} editable onCommit={ctx.onCommit} />;
+    },
   };
 }
 
 // Field rows shown when a condition is expanded. Parameter rows are appended per condition (their
-// count varies), so this covers only the fixed envelope.
+// count varies), so this covers only the fixed envelope. `gate` (AND/OR) has no renderEdit —
+// grouping edits are out of scope for #152 (grouped with add/remove/reorder in a later slice).
 const ENVELOPE_FIELDS: FieldSpec[] = [
-  { key: 'function', label: 'Function', render: c => value(c.function) },
-  { key: 'runOn', label: 'Run On', render: (c, onOpen) => c.runOnTarget === 'Reference'
+  {
+    key: 'function',
+    label: 'Function',
+    render: c => value(c.function),
+    renderEdit: (c, ctx) => <ConditionFunctionPicker value={c.function} client={ctx.client} onCommit={ctx.onCommit} />,
+  },
+  {
+    key: 'runOn',
+    label: 'Run On',
+    render: (c, onOpen) => c.runOnTarget === 'Reference'
       ? <span>Reference:&nbsp;{link(c.runOnReference, onOpen)}</span>
-      : value(c.runOnTarget) },
-  { key: 'operator', label: 'Operator', render: c => value(OPERATOR_SYMBOL[c.operator]) },
-  { key: 'comparison', label: 'Comparison', render: (c, onOpen) => c.useGlobal
+      : value(c.runOnTarget),
+    renderEdit: (c, ctx) => (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <ScalarCell
+          value={c.runOnTarget}
+          meta={enumMeta(RUN_ON_TARGETS)}
+          editable
+          onCommit={v => ctx.onCommit({ target: v, reference: v === 'Reference' ? (c.runOnReference ?? null) : null })}
+        />
+        {c.runOnTarget === 'Reference' && (
+          <FormKeyCell
+            value={c.runOnReference}
+            meta={formKeyMeta()}
+            editable
+            client={ctx.client}
+            onOpen={ctx.onOpen}
+            onCommit={fk => ctx.onCommit({ target: c.runOnTarget, reference: fk })}
+          />
+        )}
+      </span>
+    ),
+  },
+  {
+    key: 'operator',
+    label: 'Operator',
+    render: c => value(OPERATOR_SYMBOL[c.operator]),
+    renderEdit: (c, ctx) => <ScalarCell value={c.operator} meta={enumMeta(OPERATOR_VALUES)} editable onCommit={ctx.onCommit} />,
+  },
+  {
+    key: 'useGlobal',
+    label: 'Use Global',
+    render: c => value(c.useGlobal ? 'Yes' : 'No'),
+    renderEdit: (c, ctx) => <ScalarCell value={c.useGlobal} meta={scalarMeta('bool')} editable onCommit={ctx.onCommit} />,
+  },
+  {
+    key: 'comparison',
+    label: 'Comparison',
+    render: (c, onOpen) => c.useGlobal
       ? link(c.comparisonGlobal, onOpen)
-      : value(String(c.comparisonFloat ?? 0)) },
+      : value(String(c.comparisonFloat ?? 0)),
+    // Which input renders is read straight from the *current* useGlobal value (AC3) — no local
+    // toggle state to desync from the staged/refetched condition.
+    renderEdit: (c, ctx) => c.useGlobal
+      ? (
+        <FormKeyCell
+          value={c.comparisonGlobal}
+          meta={formKeyMeta(['glob'])}
+          editable
+          client={ctx.client}
+          onOpen={ctx.onOpen}
+          onCommit={ctx.onCommit}
+        />
+      )
+      : <ScalarCell value={c.comparisonFloat ?? 0} meta={scalarMeta('float')} editable onCommit={ctx.onCommit} />,
+  },
   { key: 'gate', label: 'Type', render: c => value(c.or ? 'OR' : 'AND') },
 ];
 
@@ -96,6 +212,17 @@ function fieldsFor(condition: ConditionDiff): FieldSpec[] {
   const paramFields = Array.from({ length: maxParams }, (_, i) => paramField(i));
   // Function, Parameters…, then the rest of the envelope — matching the summary's left-to-right order.
   return [ENVELOPE_FIELDS[0], ...paramFields, ...ENVELOPE_FIELDS.slice(1)];
+}
+
+// The ConditionPath wire path (Edits/ConditionPath.cs) this field's edits stage at, or null for a
+// field with no renderEdit (currently only `gate`).
+function wirePathFor(groupFieldPath: string, index: number, key: string): string | null {
+  const paramMatch = /^param:(\d+)$/.exec(key);
+  if (paramMatch) return conditionParamPath(groupFieldPath, index, Number(paramMatch[1]));
+  const subField: Record<string, string> = {
+    function: 'Function', runOn: 'RunOn', operator: 'Operator', useGlobal: 'UseGlobal', comparison: 'Comparison',
+  };
+  return subField[key] ? conditionFieldPath(groupFieldPath, index, subField[key]) : null;
 }
 
 function dash(): React.ReactNode {
@@ -119,15 +246,100 @@ function perPluginCells(
   });
 }
 
+function pendingValueText(v: unknown): string {
+  if (v && typeof v === 'object' && 'target' in (v as Record<string, unknown>)) {
+    return String((v as { target: unknown }).target);
+  }
+  if (typeof v === 'boolean') return v ? 'true' : 'false';
+  return String(v);
+}
+
+// All section-level edit plumbing, bundled so row builders stay simple. Mirrors VmadSection's
+// convention: immutableSet is required (fail-closed — see VmadSectionProps), everything else that
+// only matters once editing is wired is optional.
+interface SectionCtx {
+  columns: Column[];
+  onOpen: (fk: string) => void;
+  toggle: (key: string) => void;
+  isEditable: (plugin: string) => boolean;
+  onEdit?: (plugin: string, path: string, value: unknown) => void;
+  client?: RecordSessionClient;
+  pendingChangeMap?: Record<string, PendingChange>;
+  onRevert?: (changeId: string) => void;
+  onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
+  onRevealPendingChange?: (changeId: string) => void;
+}
+
+// Mirrors VmadSection's pending-column leaf rendering: the staged new value plus a revert control,
+// keyed by the same `${plugin}:${fieldPath}` convention RecordPanel's pendingChangeMap already uses
+// for every field type — a condition field needs no special-casing there.
+function pendingFieldCell(
+  rowKey: string,
+  i: number,
+  plugin: string,
+  wirePath: string | null,
+  ctx: SectionCtx,
+): React.ReactNode {
+  const change = wirePath && ctx.pendingChangeMap ? ctx.pendingChangeMap[`${plugin}:${wirePath}`] : undefined;
+  return (
+    <td
+      key={`${rowKey}:p${i}`}
+      style={{
+        ...baseCell,
+        fontStyle: 'italic',
+        backgroundColor: change ? 'rgba(255,200,50,0.10)' : undefined,
+        opacity: change ? 1 : 0.3,
+      }}
+      onContextMenu={change && ctx.onPendingContextMenu
+        ? e => { e.preventDefault(); ctx.onPendingContextMenu!(change.id, e.clientX, e.clientY); }
+        : undefined}
+      onClick={change && ctx.onRevealPendingChange
+        ? e => { if (!e.ctrlKey && !e.metaKey) ctx.onRevealPendingChange!(change.id); }
+        : undefined}
+    >
+      {change && (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span>{pendingValueText(change.newValue)}</span>
+          {ctx.onRevert && (
+            <button
+              onClick={e => { e.stopPropagation(); ctx.onRevert!(change.id); }}
+              title="Revert group"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--vscode-errorForeground, #f88)', fontSize: '11px', padding: 0, lineHeight: 1 }}
+            >↩</button>
+          )}
+        </span>
+      )}
+    </td>
+  );
+}
+
+function fieldCell(
+  field: FieldSpec,
+  condition: ConditionDiff,
+  plugin: string,
+  wirePath: string | null,
+  onOpen: (fk: string) => void,
+  ctx: SectionCtx,
+): React.ReactNode {
+  const c = condition.perPlugin[plugin];
+  if (!c) return dash();
+  if (field.renderEdit && wirePath && ctx.isEditable(plugin) && ctx.onEdit && ctx.client) {
+    const onEdit = ctx.onEdit;
+    const client = ctx.client;
+    return field.renderEdit(c, { client, onOpen, onCommit: v => onEdit(plugin, wirePath, v) });
+  }
+  return field.render(c, onOpen);
+}
+
 // The summary row plus, when expanded, one two-axis-colored row per field.
 function conditionRows(
   condition: ConditionDiff,
   key: string,
+  groupFieldPath: string,
   isExpanded: boolean,
-  columns: Column[],
-  onOpen: (fk: string) => void,
-  toggle: (key: string) => void,
+  ctx: SectionCtx,
 ): React.ReactNode[] {
+  const { columns, onOpen, toggle } = ctx;
   const labelStyle: React.CSSProperties = {
     ...baseCell,
     paddingLeft: 8,
@@ -154,12 +366,18 @@ function conditionRows(
     // Absent key = that field is identical across plugins → no coloring (never fall back to the
     // whole-condition state, which would recolor every field when only one differs).
     const states = condition.fieldCellStates[field.key] ?? {};
+    const wirePath = wirePathFor(groupFieldPath, condition.index, field.key);
     rows.push(
       <tr key={fieldKey}>
         <td style={{ ...baseCell, paddingLeft: 28, opacity: 0.85 }}>{field.label}</td>
-        {perPluginCells(columns, fieldKey, states, plugin => {
-          const c = condition.perPlugin[plugin];
-          return c ? field.render(c, onOpen) : dash();
+        {columns.map((col, i) => {
+          if (col.kind === 'pending') return pendingFieldCell(fieldKey, i, col.plugin, wirePath, ctx);
+          const plugin = col.override.plugin;
+          return (
+            <td key={`${fieldKey}:d${i}`} style={{ ...baseCell, ...getCellStyle(states[plugin]) }}>
+              {fieldCell(field, condition, plugin, wirePath, onOpen, ctx)}
+            </td>
+          );
         })}
       </tr>,
     );
@@ -171,10 +389,20 @@ interface ConditionSectionProps {
   conditions: ConditionCompare | null | undefined;
   columns: Column[];
   onOpen: (fk: string) => void;
+  // Mirrors VmadSectionProps: required, not optional — fail-closed. An empty set is the caller
+  // explicitly saying "every column is editable".
+  immutableSet: Set<string>;
+  onEdit?: (plugin: string, path: string, value: unknown) => void;
+  client?: RecordSessionClient;
+  pendingChangeMap?: Record<string, PendingChange>;
+  onRevert?: (changeId: string) => void;
+  onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
+  onRevealPendingChange?: (changeId: string) => void;
 }
 
 export function ConditionSection({
-  conditions, columns, onOpen,
+  conditions, columns, onOpen, immutableSet, onEdit, client,
+  pendingChangeMap, onRevert, onPendingContextMenu, onRevealPendingChange,
 }: Readonly<ConditionSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const groups = conditions?.groups ?? [];
@@ -186,6 +414,12 @@ export function ConditionSection({
     return next;
   });
 
+  const ctx: SectionCtx = {
+    columns, onOpen, toggle,
+    isEditable: plugin => !immutableSet.has(plugin),
+    onEdit, client, pendingChangeMap, onRevert, onPendingContextMenu, onRevealPendingChange,
+  };
+
   const rows: React.ReactNode[] = [
     <tr key="conditions-header">
       <td colSpan={columns.length + 1} style={headerCell}>Conditions</td>
@@ -195,7 +429,7 @@ export function ConditionSection({
   for (const group of groups) {
     for (const condition of group.conditions) {
       const key = `${group.fieldPath}#${condition.index}`;
-      rows.push(...conditionRows(condition, key, expanded.has(key), columns, onOpen, toggle));
+      rows.push(...conditionRows(condition, key, group.fieldPath, expanded.has(key), ctx));
     }
   }
 

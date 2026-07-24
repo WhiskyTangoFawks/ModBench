@@ -1,5 +1,6 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 
 namespace MEditService.Core.Queries;
 
@@ -16,6 +17,11 @@ public interface IRecordQueryService
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
     VmadData? GetVmad(string formKey, string plugin);
+    IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin);
+
+    // The condition function picker's catalog (#152): every function name the loaded session's
+    // game/category actually resolves — see ConditionCodecRegistry / IConditionCodec.AvailableFunctions.
+    IReadOnlyList<string> GetConditionFunctions();
     PlacementRow? GetPlacement(string formKey, string plugin);
 
     // ADR-0031: the /changes read surface (Pending Changes tree, pending-column rendering) — each
