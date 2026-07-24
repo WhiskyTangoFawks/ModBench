@@ -68,6 +68,21 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.DoesNotContain("header", types);
     }
 
+    // --- GET /condition-functions ---
+
+    [Fact]
+    public void GetConditionFunctions_Fallout4Session_ReturnsMutagenResolvedFunctionNames()
+    {
+        // Filtered to what Mutagen actually resolves for the loaded session's game (#152) — not a
+        // hardcoded list. GetIsID and GetDistance are ordinary FO4 condition functions; a name from
+        // a different game's Function enum (e.g. Skyrim-only) must not appear.
+        var functions = _svc.GetConditionFunctions();
+
+        Assert.Contains("GetIsID", functions);
+        Assert.Contains("GetDistance", functions);
+        Assert.True(functions.Count > 400);
+    }
+
     // --- GET /records ---
 
     [Fact]

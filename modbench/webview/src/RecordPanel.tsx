@@ -590,6 +590,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                 conditions={result.conditions}
                 columns={columns}
                 onOpen={handleOpen}
+                immutableSet={immutableSet}
+                onEdit={(plugin, path, value) => { void handleEdit(plugin, path, value); }}
+                client={client}
+                pendingChangeMap={pendingChangeMap}
+                onRevert={changeId => { void handleRevertGroup(changeId); }}
+                onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
+                onRevealPendingChange={handleRevealPendingChange}
               />
             )}
           </tbody>

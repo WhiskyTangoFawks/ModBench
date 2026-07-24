@@ -45,6 +45,10 @@ export interface RecordSessionClient {
   // Response so the panel reads the SaveGroupResponse body / status itself (ADR-0026 surfacing).
   saveGroup(changeId: string): Promise<Response>;
   revertGroup(changeId: string): Promise<Response>;
+  // #152: the condition function picker's catalog — every function name Mutagen resolves for the
+  // loaded session's game. A failed fetch yields [] so the picker just shows nothing to search,
+  // never a raw error state (mirrors groupMembers' non-fatal-read convention).
+  conditionFunctions(): Promise<string[]>;
 }
 
 export function createRecordSessionClient(port: number): RecordSessionClient {
@@ -165,6 +169,11 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
         parseAs: 'stream',
         fetch: fetchImpl,
       }));
+    },
+
+    async conditionFunctions() {
+      const { data, response } = await client.GET('/condition-functions', {});
+      return response.ok ? (data as string[]) : [];
     },
   };
 }

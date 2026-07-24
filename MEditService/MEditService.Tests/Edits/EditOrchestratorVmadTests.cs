@@ -59,6 +59,9 @@ public sealed class EditOrchestratorVmadTests
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
         public VmadData? GetVmad(string formKey, string plugin) =>
             throw new InvalidOperationException("GetVmad must not be called for non-VMAD edits");
+        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin) =>
+            inner.GetConditions(formKey, plugin);
+        public IReadOnlyList<string> GetConditionFunctions() => inner.GetConditionFunctions();
         public PlacementRow? GetPlacement(string formKey, string plugin) => inner.GetPlacement(formKey, plugin);
         public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
             inner.GetChanges(plugin, formKey, memberChangeId);
@@ -123,6 +126,9 @@ public sealed class EditOrchestratorVmadTests
                         new VmadNamedValue("VarProp", new VmadPropertyValue("Variable", "", null))
                     ])
                 ]);
+        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin) =>
+            inner.GetConditions(formKey, plugin);
+        public IReadOnlyList<string> GetConditionFunctions() => inner.GetConditionFunctions();
         public PlacementRow? GetPlacement(string formKey, string plugin) => inner.GetPlacement(formKey, plugin);
         public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
             inner.GetChanges(plugin, formKey, memberChangeId);

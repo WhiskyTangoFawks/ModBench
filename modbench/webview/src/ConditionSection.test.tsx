@@ -1,11 +1,12 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { ConditionSection } from './ConditionSection';
 import type { Column } from './recordUtils';
-import type { CompareOverride, ConditionCompare, ConditionDiff, ParsedCondition } from './types';
+import type { CompareOverride, ConditionCompare, ConditionDiff, ParsedCondition, PendingChange } from './types';
+import type { RecordSessionClient } from './RecordSessionClient';
 
 function override(plugin: string): CompareOverride {
   return {
@@ -38,12 +39,37 @@ function compare(conditions: ConditionDiff[]): ConditionCompare {
   return { groups: [{ fieldPath: 'Conditions', conditions }] };
 }
 
-function renderSection(conditions: ConditionCompare | null, plugins: string[]) {
+function fakeClient(overrides: Partial<RecordSessionClient> = {}): RecordSessionClient {
+  return {
+    searchRecords: vi.fn().mockResolvedValue([{ formKey: '001234:Q.esp', editorId: 'PickedQuest' }]),
+    conditionFunctions: vi.fn().mockResolvedValue(['GetIsID', 'GetDistance']),
+    ...overrides,
+  } as unknown as RecordSessionClient;
+}
+
+interface RenderOpts {
+  immutableSet?: Set<string>;
+  onEdit?: (plugin: string, path: string, value: unknown) => void;
+  client?: RecordSessionClient;
+  pendingChangeMap?: Record<string, PendingChange>;
+  onRevert?: (changeId: string) => void;
+}
+
+function renderSection(conditions: ConditionCompare | null, plugins: string[], opts: RenderOpts = {}) {
   const onOpen = vi.fn();
   const cols: Column[] = plugins.map(p => ({ kind: 'disk', override: override(p) }));
   const utils = render(
     <table><tbody>
-      <ConditionSection conditions={conditions} columns={cols} onOpen={onOpen} />
+      <ConditionSection
+        conditions={conditions}
+        columns={cols}
+        onOpen={onOpen}
+        immutableSet={opts.immutableSet ?? new Set()}
+        onEdit={opts.onEdit}
+        client={opts.client}
+        pendingChangeMap={opts.pendingChangeMap}
+        onRevert={opts.onRevert}
+      />
     </tbody></table>,
   );
   return { ...utils, onOpen };
@@ -139,5 +165,236 @@ describe('ConditionSection', () => {
     };
     expect(bgOf('Comparison')).not.toBe('');
     expect(bgOf('Function')).toBe('');
+  });
+
+  // ---- #152: editable fields ----
+
+  it('editing the Operator field stages onEdit with the CTDA wire path', () => {
+    const c = condition({ operator: 'EqualTo' });
+    const onEdit = vi.fn();
+    renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+      { onEdit, client: fakeClient() },
+    );
+    toggleRow('#1');
+
+    const operatorRow = within(screen.getByText('Operator').closest('tr')!);
+    fireEvent.click(operatorRow.getByText('EqualTo'));
+    const select = operatorRow.getByDisplayValue('EqualTo');
+    fireEvent.change(select, { target: { value: 'GreaterThan' } });
+    fireEvent.blur(select);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'CTDA\\Conditions\\0\\Operator', 'GreaterThan');
+  });
+
+  it('editing a Number-typed parameter stages onEdit at the Parameter\\<n> path', () => {
+    const c = condition({
+      function: 'GetStageDone',
+      parameters: [
+        { category: 'Form', typeName: 'Quest', formKey: '001234:Q.esp' },
+        { category: 'Number', typeName: 'QuestStage', number: 10 },
+      ],
+    });
+    const onEdit = vi.fn();
+    renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+      { onEdit, client: fakeClient() },
+    );
+    toggleRow('#1');
+
+    const paramRow = within(screen.getByText('Parameter 2').closest('tr')!);
+    fireEvent.click(paramRow.getByText('10'));
+    const numberInput = paramRow.getByDisplayValue('10');
+    fireEvent.change(numberInput, { target: { value: '42' } });
+    fireEvent.blur(numberInput);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'CTDA\\Conditions\\0\\Parameter\\1', 42);
+  });
+
+  it('toggling Use Global switches the Comparison input from number to a GLOB FormKey picker', () => {
+    const c = condition({ useGlobal: false, comparisonFloat: 3 });
+    const onEdit = vi.fn();
+    renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+      { onEdit, client: fakeClient() },
+    );
+    toggleRow('#1');
+
+    // Comparison starts as plain number text (not useGlobal).
+    expect(within(screen.getByText('Comparison').closest('tr')!).getByText('3')).toBeInTheDocument();
+
+    const useGlobalRow = within(screen.getByText('Use Global').closest('tr')!);
+    fireEvent.click(useGlobalRow.getByText('false'));
+    fireEvent.click(useGlobalRow.getByRole('checkbox'));
+
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'CTDA\\Conditions\\0\\UseGlobal', true);
+  });
+
+  it("renders a use-global condition's Comparison field as a FormKey-pickable button, not a number input", () => {
+    const c = condition({ useGlobal: true, comparisonFloat: null, comparisonGlobal: '00abcd:G.esp' });
+    renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+      { onEdit: vi.fn(), client: fakeClient() },
+    );
+    toggleRow('#1');
+
+    const comparisonRow = screen.getByText('Comparison').closest('tr')!;
+    expect(within(comparisonRow).getByText('00abcd:G.esp')).toBeInTheDocument();
+    expect(within(comparisonRow).queryByRole('spinbutton')).toBeNull();
+  });
+
+  it('selecting a new function via the function picker stages onEdit with the function name', async () => {
+    const c = condition({ function: 'GetIsID' });
+    const onEdit = vi.fn();
+    renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+      { onEdit, client: fakeClient() },
+    );
+    toggleRow('#1');
+
+    fireEvent.click(within(screen.getByText('Function').closest('tr')!).getByText('GetIsID'));
+    const input = await screen.findByPlaceholderText('Search function…');
+    fireEvent.change(input, { target: { value: 'Distance' } });
+    await waitFor(() => expect(screen.getByText('GetDistance')).toBeInTheDocument());
+    fireEvent.mouseDown(screen.getByText('GetDistance'));
+
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'CTDA\\Conditions\\0\\Function', 'GetDistance');
+  });
+
+  it("a function change's refetched ParsedCondition reshapes the parameter input's type", () => {
+    // Before: GetStageDone's first slot is Form-typed (Quest) -> FormKeyCell (a button).
+    const before = condition({
+      function: 'GetStageDone',
+      parameters: [{ category: 'Form', typeName: 'Quest', formKey: '001234:Q.esp' }],
+    });
+    const { rerender, onOpen } = renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': before }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+      { onEdit: vi.fn(), client: fakeClient() },
+    );
+    toggleRow('#1');
+    expect(within(screen.getByText('Parameter 1').closest('tr')!).getByText('001234:Q.esp')).toBeInTheDocument();
+
+    // After a Function edit round-trips: GetGraphVariableFloat's first slot is String-typed ->
+    // ScalarCell (a text input), never a stale FormKey button left over from the old shape.
+    const after = condition({
+      function: 'GetGraphVariableFloat',
+      parameters: [{ category: 'Text', typeName: 'String', text: 'bLeftHandedMode' }],
+    });
+    const cols: Column[] = [{ kind: 'disk', override: override('A.esp') }];
+    rerender(
+      <table><tbody>
+        <ConditionSection
+          conditions={compare([{ index: 0, perPlugin: { 'A.esp': after }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }])}
+          columns={cols}
+          onOpen={onOpen}
+          immutableSet={new Set()}
+          onEdit={vi.fn()}
+          client={fakeClient()}
+        />
+      </tbody></table>,
+    );
+
+    const paramRow = within(screen.getByText('Parameter 1').closest('tr')!);
+    expect(paramRow.queryByText('001234:Q.esp')).toBeNull();
+    fireEvent.click(paramRow.getByText('bLeftHandedMode'));
+    expect(paramRow.getByDisplayValue('bLeftHandedMode')).toBeInTheDocument();
+  });
+
+  it('editing a Text-typed (String) parameter stages onEdit at the Parameter\\<n> path', () => {
+    const c = condition({
+      function: 'GetGraphVariableFloat',
+      parameters: [{ category: 'Text', typeName: 'String', text: 'bLeftHandedMode' }],
+    });
+    const onEdit = vi.fn();
+    renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+      { onEdit, client: fakeClient() },
+    );
+    toggleRow('#1');
+
+    const paramRow = within(screen.getByText('Parameter 1').closest('tr')!);
+    fireEvent.click(paramRow.getByText('bLeftHandedMode'));
+    const textInput = paramRow.getByDisplayValue('bLeftHandedMode');
+    fireEvent.change(textInput, { target: { value: 'bRightHandedMode' } });
+    fireEvent.blur(textInput);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'CTDA\\Conditions\\0\\Parameter\\0', 'bRightHandedMode');
+  });
+
+  it("renders no inputs in an immutable plugin's column", () => {
+    const c = condition({ operator: 'EqualTo' });
+    renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+      { onEdit: vi.fn(), client: fakeClient(), immutableSet: new Set(['A.esp']) },
+    );
+    toggleRow('#1');
+
+    const operatorRow = screen.getByText('Operator').closest('tr')!;
+    expect(within(operatorRow).queryByRole('combobox')).toBeNull();
+    // Falls back to the read-only symbol rendering.
+    expect(within(operatorRow).getByText('=')).toBeInTheDocument();
+  });
+
+  it('without onEdit/client, fields render read-only (no inputs) regardless of immutableSet', () => {
+    const c = condition({ operator: 'EqualTo' });
+    renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+    );
+    toggleRow('#1');
+
+    const operatorRow = screen.getByText('Operator').closest('tr')!;
+    expect(within(operatorRow).queryByRole('combobox')).toBeNull();
+    expect(within(operatorRow).getByText('=')).toBeInTheDocument();
+  });
+
+  it('a pending condition field edit renders in the pending column with a revert control', () => {
+    const c = condition({ operator: 'EqualTo' });
+    const pendingChange: PendingChange = {
+      id: 'chg-1',
+      formKey: '000800:A.esp',
+      plugin: 'A.esp',
+      fieldPath: 'CTDA\\Conditions\\0\\Operator',
+      recordType: 'cobj',
+      oldValue: 'EqualTo',
+      newValue: 'GreaterThan',
+      source: 'user',
+      description: null,
+      timestamp: '2026-01-01T00:00:00Z',
+      changeType: 'field_edit',
+      groupId: null,
+    } as unknown as PendingChange;
+    const onRevert = vi.fn();
+
+    const onOpen = vi.fn();
+    const cols: Column[] = [{ kind: 'disk', override: override('A.esp') }, { kind: 'pending', plugin: 'A.esp' }];
+    render(
+      <table><tbody>
+        <ConditionSection
+          conditions={compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }])}
+          columns={cols}
+          onOpen={onOpen}
+          immutableSet={new Set()}
+          onEdit={vi.fn()}
+          client={fakeClient()}
+          pendingChangeMap={{ 'A.esp:CTDA\\Conditions\\0\\Operator': pendingChange }}
+          onRevert={onRevert}
+        />
+      </tbody></table>,
+    );
+    toggleRow('#1');
+
+    const operatorRow = screen.getByText('Operator').closest('tr')!;
+    expect(within(operatorRow).getByText('GreaterThan')).toBeInTheDocument();
+    fireEvent.click(within(operatorRow).getByTitle('Revert group'));
+    expect(onRevert).toHaveBeenCalledWith('chg-1');
   });
 });

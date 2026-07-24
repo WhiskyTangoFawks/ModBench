@@ -15,7 +15,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 describe('createRecordSessionClient', () => {
   it('exposes the record-session operations', () => {
     const client = createRecordSessionClient(5172);
-    for (const m of ['load', 'searchRecords', 'save', 'revert', 'copyTo', 'removeOverride', 'createRecord', 'groupMembers', 'saveGroup', 'revertGroup']) {
+    for (const m of ['load', 'searchRecords', 'save', 'revert', 'copyTo', 'removeOverride', 'createRecord', 'groupMembers', 'saveGroup', 'revertGroup', 'conditionFunctions']) {
       expect(client).toHaveProperty(m);
     }
   });
@@ -115,6 +115,32 @@ describe('RecordSessionClient.searchRecords', () => {
     controller.abort();
     await expect(createRecordSessionClient(5172).searchRecords('kw', [], controller.signal))
       .rejects.toThrow();
+  });
+});
+
+describe('RecordSessionClient.conditionFunctions', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    fetchMock = vi.fn(() => Promise.resolve(jsonResponse(['GetIsID', 'GetDistance'])));
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('returns the function name catalog on success', async () => {
+    const names = await createRecordSessionClient(5172).conditionFunctions();
+    expect(names).toEqual(['GetIsID', 'GetDistance']);
+  });
+
+  it('hits /condition-functions', async () => {
+    await createRecordSessionClient(5172).conditionFunctions();
+    const url = typeof fetchMock.mock.calls[0][0] === 'string' ? fetchMock.mock.calls[0][0] : fetchMock.mock.calls[0][0].url;
+    expect(url).toContain('/condition-functions');
+  });
+
+  it('returns [] on failure', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}, 500));
+    const names = await createRecordSessionClient(5172).conditionFunctions();
+    expect(names).toEqual([]);
   });
 });
 

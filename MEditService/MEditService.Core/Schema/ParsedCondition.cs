@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
@@ -11,6 +12,25 @@ public interface IConditionCodec
     // One entry per condition-bearing field on the record (empty if none). FieldPath is the owning
     // field, e.g. "Conditions".
     IEnumerable<ConditionOwner> Extract(IMajorRecordGetter record);
+
+    // Write-back (#152): applies one scalar condition-field edit in place on the mutable record.
+    // fieldPath is the owning field (e.g. "Conditions"), index the condition's position within it,
+    // subField the edited part (see ConditionPath in Edits/ for the wire-path convention that
+    // produces these three already-parsed pieces).
+    ConditionApplyResult ApplyFieldValue(IMajorRecord record, string fieldPath, int index, string subField, JsonElement value);
+
+    // The function picker's catalog (#152): every function name this game's Mutagen package
+    // resolves — not a hand-maintained ~479-entry list, so a game with a different Function enum
+    // never silently offers a name it can't actually parse or write.
+    IEnumerable<string> AvailableFunctions();
+}
+
+// Outcome of applying a value onto a Mutagen condition field. Mirrors VmadApplyResult's shape
+// (Applied/NotFound) — no ReadOnly case yet, since no condition sub-field is currently read-only.
+public enum ConditionApplyResult
+{
+    Applied,
+    NotFound,
 }
 
 public sealed record ConditionOwner(string FieldPath, IReadOnlyList<ParsedCondition> Conditions);

@@ -854,7 +854,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     // `Conditions` check is cheap and yields nothing for records without conditions.
     private void IndexConditions(IModGetter pluginMod, string plugin)
     {
-        var codec = ConditionCodecFor(pluginMod.GameRelease.ToCategory());
+        var codec = ConditionCodecRegistry.For(pluginMod.GameRelease.ToCategory());
         if (codec == null)
         {
             _logger.LogWarning("No condition codec for {Game}; skipping condition index for {Plugin}",
@@ -877,17 +877,6 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         _logger.LogInformation("Indexed conditions for {Count} records in {Plugin}", count, plugin);
     }
-
-    // The per-game condition-codec registry (ADR-0032). Adding a game is one entry here plus its
-    // codec; an absent game yields no codec and condition indexing is skipped with a warning.
-    private static readonly Dictionary<GameCategory, Func<IConditionCodec>> ConditionCodecs =
-        new()
-        {
-            [GameCategory.Fallout4] = static () => new Fallout4ConditionCodec(),
-        };
-
-    private static IConditionCodec? ConditionCodecFor(GameCategory category) =>
-        ConditionCodecs.TryGetValue(category, out var make) ? make() : null;
 
     private string ResolveRecordType(IMajorRecordGetter record)
     {
