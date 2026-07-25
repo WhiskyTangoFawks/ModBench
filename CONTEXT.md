@@ -88,7 +88,11 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 **Unsorted array**: Array with positional elements and no natural sort key (e.g. `Packages`, `Factions`). In compare grid: aligned by index. _Avoid: indexed array._
 
+**Child record**: Record type reachable through another record's array field but enumerated as its own top-level record row rather than nested inline (e.g. Quest's `Scenes` → SCEN, `DialogTopics` → DIAL, DialogTopic's `Responses` → INFO). Mutagen flattens it, so it carries its own FormKey and surfaces its own fields — including any conditions it owns — through its own top-level record; it must never also be re-nested inside its parent's row, which would duplicate them. Distinguishes an array holding true child records from one holding a plain sub-record struct with no FormKey of its own (e.g. Perk's `Effects`, holding `Effect`). See #169. _Avoid: sub-record (ambiguous with a plain struct), nested record._
+
 **VMAD (Virtual Machine Adapter)**: Papyrus scripting subrecord on NPC\_, QUST, PERK, PACK, SCEN, INFO, others. Contains named scripts with named properties (bool, int, float, string, FormKey, struct, and array variants). Has dedicated DuckDB tables; does not go through `SchemaReflector`. See phase-13.md, ADR-0019. _Avoid: script data, Papyrus data._
+
+**Condition (CTDA)**: A record's condition-testing list (Mutagen `Condition`, on-disk CTDA subrecord) — e.g. COBJ/Quest/Perk's `Conditions`, or Quest's `DialogConditions`/`UnusedConditions`. Discovered generically by shape (any property assignable to `IEnumerable<IConditionGetter>`), never a hardcoded field name, so a record with more than one condition-carrying field surfaces one independently-keyed group per field. Also discovered one array level below the record, inside a struct or list-of-struct field (e.g. `Perk.Effects[i].Conditions`), keyed by an indexed field path composing the enclosing array's own name and index (`Effects[2].Conditions`) — excluding any path through a Child record, which already surfaces its own conditions through its own top-level field. Has dedicated DuckDB tables; does not go through `SchemaReflector`. See ADR-0032, #150, #169. _Avoid: CTDA as glossary vocabulary (fine as the wire-path prefix in code)._
 
 ### Filters & scripts
 

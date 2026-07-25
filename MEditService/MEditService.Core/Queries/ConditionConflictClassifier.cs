@@ -26,7 +26,7 @@ public static class ConditionConflictClassifier
         var fieldPaths = present
             .SelectMany(i => i.Owners.Select(o => o.FieldPath))
             .Distinct(StringComparer.Ordinal)
-            .OrderBy(p => p, StringComparer.Ordinal)
+            .OrderBy(p => p, NaturalFieldPathComparer.Instance)
             .ToList();
 
         var groups = fieldPaths.ConvertAll(fieldPath =>
@@ -116,5 +116,59 @@ public static class ConditionConflictClassifier
         return string.Join("|",
             c.Function, c.Operator, c.Or, c.RunOnTarget, c.RunOnReference,
             c.UseGlobal, c.ComparisonFloat, c.ComparisonGlobal, parameters);
+    }
+
+    // Orders field paths so a nested group's embedded array index sorts numerically rather than
+    // character-by-character (#181) — a flat path like "Conditions" has no digit run and sorts by
+    // plain ordinal comparison same as before; a nested path like "Effects[2].Conditions" must sort
+    // before "Effects[10].Conditions", which plain StringComparer.Ordinal gets backwards (the
+    // character '1' < '2'). Splits each path into alternating digit/non-digit runs and compares
+    // digit runs as integers, non-digit runs ordinally — the general "natural sort" algorithm, not a
+    // condition-path-specific hack, so it also does the right thing for any future field-path shape
+    // that embeds a number.
+    private sealed class NaturalFieldPathComparer : IComparer<string>
+    {
+        public static readonly NaturalFieldPathComparer Instance = new();
+
+        public int Compare(string? x, string? y)
+        {
+            if (x == null || y == null) return string.CompareOrdinal(x, y);
+
+            var xRuns = SplitRuns(x);
+            var yRuns = SplitRuns(y);
+            var count = Math.Min(xRuns.Count, yRuns.Count);
+
+            for (var i = 0; i < count; i++)
+            {
+                var cmp = CompareRun(xRuns[i], yRuns[i]);
+                if (cmp != 0) return cmp;
+            }
+
+            return xRuns.Count.CompareTo(yRuns.Count);
+        }
+
+        private static int CompareRun(string a, string b)
+        {
+            var aIsDigits = a.Length > 0 && char.IsDigit(a[0]);
+            var bIsDigits = b.Length > 0 && char.IsDigit(b[0]);
+            if (aIsDigits && bIsDigits && long.TryParse(a, out var an) && long.TryParse(b, out var bn))
+                return an.CompareTo(bn);
+            return string.CompareOrdinal(a, b);
+        }
+
+        private static List<string> SplitRuns(string s)
+        {
+            var runs = new List<string>();
+            var start = 0;
+            while (start < s.Length)
+            {
+                var isDigit = char.IsDigit(s[start]);
+                var end = start + 1;
+                while (end < s.Length && char.IsDigit(s[end]) == isDigit) end++;
+                runs.Add(s[start..end]);
+                start = end;
+            }
+            return runs;
+        }
     }
 }

@@ -447,11 +447,23 @@ interface ConditionSectionProps {
   onRevealPendingChange?: (changeId: string) => void;
 }
 
+// A group's field path is indexed (composes an enclosing array's index, e.g. "Effects[2].
+// Conditions") exactly when it's nested one array level below the record (#181) — the same
+// shape-based signal the backend used to discover it, never a per-type name check.
+function isNestedGroupPath(fieldPath: string): boolean {
+  return fieldPath.includes('[');
+}
+
 export function ConditionSection({
   conditions, columns, onOpen, immutableSet, onEdit, client,
   pendingChangeMap, onRevert, onPendingContextMenu, onRevealPendingChange,
 }: Readonly<ConditionSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Per-group collapse (#181): a nested group defaults to collapsed (only its header shows until
+  // toggled), while a flat top-level group is never collapsed — unaffected, same as before this
+  // existed. Only overridden entries (the groups a user has actually clicked) are stored, so a
+  // group that appears later still gets the right default without needing to be seeded up front.
+  const [collapsedOverrides, setCollapsedOverrides] = useState<Record<string, boolean>>({});
   const groups = conditions?.groups ?? [];
   if (groups.length === 0) return null;
 
@@ -460,6 +472,14 @@ export function ConditionSection({
     if (next.has(key)) next.delete(key); else next.add(key);
     return next;
   });
+
+  const isGroupCollapsed = (fieldPath: string): boolean =>
+    collapsedOverrides[fieldPath] ?? isNestedGroupPath(fieldPath);
+
+  const toggleGroup = (fieldPath: string) => setCollapsedOverrides(prev => ({
+    ...prev,
+    [fieldPath]: !(prev[fieldPath] ?? isNestedGroupPath(fieldPath)),
+  }));
 
   const ctx: SectionCtx = {
     columns, onOpen, toggle,
@@ -475,11 +495,21 @@ export function ConditionSection({
   const rows: React.ReactNode[] = [];
 
   for (const group of groups) {
+    const nested = isNestedGroupPath(group.fieldPath);
+    const collapsed = nested && isGroupCollapsed(group.fieldPath);
     rows.push(
       <tr key={`${group.fieldPath}-header`}>
-        <td colSpan={columns.length + 1} style={headerCell}>{group.fieldPath}</td>
+        <td colSpan={columns.length + 1} style={headerCell}>
+          {nested && (
+            <button style={toggleBtnStyle} onClick={() => toggleGroup(group.fieldPath)}>
+              {collapsed ? '▶' : '▼'}
+            </button>
+          )}
+          {group.fieldPath}
+        </td>
       </tr>,
     );
+    if (collapsed) continue;
     for (const condition of group.conditions) {
       const key = `${group.fieldPath}#${condition.index}`;
       rows.push(...conditionRows(condition, group.conditions, key, group.fieldPath, expanded.has(key), ctx));
