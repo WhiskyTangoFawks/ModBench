@@ -552,10 +552,11 @@ describe('ConditionSection', () => {
     expect(screen.getByText('Subject.GetIsID = 1 AND')).toBeInTheDocument();
   });
 
-  // #182: scalar sub-field editing at a nested (indexed) path is now live — the reverse of #181's
-  // display-only rendering. Structural ops (add/move/remove) stay disabled: that's #183's scope,
-  // not this one's.
-  it('renders scalar field edit controls for a nested group, but no structural (add/move/remove) controls', () => {
+  // #182: scalar sub-field editing at a nested (indexed) path is live — the reverse of #181's
+  // display-only rendering. #183 extends the same group to structural ops (add/move/remove),
+  // which stage the whole nested list at its own composed field path — the nested analogue of
+  // #153's flat add/remove/reorder controls.
+  it('renders scalar field edit controls for a nested group, and structural (add/move/remove) controls', () => {
     const c = condition({ function: 'GetIsID', operator: 'EqualTo' });
     const onEdit = vi.fn();
     renderSection(
@@ -570,13 +571,12 @@ describe('ConditionSection', () => {
     fireEvent.click(screen.getByText('Effects[0].Conditions').closest('tr')!.querySelector('button')!);
     toggleRow('#1');
 
-    // Still no structural edit controls (add/move/remove) — that's #183's scope.
-    expect(screen.queryByTitle('Add condition')).toBeNull();
-    expect(screen.queryByTitle('Move condition up')).toBeNull();
-    expect(screen.queryByTitle('Move condition down')).toBeNull();
-    expect(screen.queryByTitle('Remove condition')).toBeNull();
+    // #183: structural controls now render for a nested group too.
+    expect(screen.getByTitle('Add condition')).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('Remove condition'));
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'Effects[0].Conditions', []);
 
-    // But the Operator field is now a live editor, and committing it stages onEdit with the
+    // But the Operator field is also a live editor, and committing it stages onEdit with the
     // composed indexed wire path — the same CTDA\<FieldPath>\<Index>\<SubField> shape a flat
     // group uses, just with the enclosing array's index folded into the FieldPath segment.
     const operatorRow = within(screen.getByText('Operator').closest('tr')!);
@@ -586,6 +586,70 @@ describe('ConditionSection', () => {
     fireEvent.blur(select);
 
     expect(onEdit).toHaveBeenCalledWith('A.esp', 'CTDA\\Effects[0].Conditions\\0\\Operator', 'GreaterThan');
+  });
+
+  // #183: the add-condition row also renders for a nested group now (previously gated off
+  // unconditionally — #181's "no add-condition control for a nested group").
+  it('renders an add-condition control for a nested group; clicking stages the grown list at the composed path', () => {
+    const c = condition({ operator: 'EqualTo' });
+    const onEdit = vi.fn();
+    renderSection(
+      multiCompare([
+        { fieldPath: 'Effects[0].Conditions', conditions: [{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
+      ]),
+      ['A.esp'],
+      { onEdit },
+    );
+
+    fireEvent.click(screen.getByText('Effects[0].Conditions').closest('tr')!.querySelector('button')!);
+    fireEvent.click(screen.getByTitle('Add condition'));
+
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'Effects[0].Conditions', [c, defaultCondition()]);
+  });
+
+  // #183: same immutable-column gate every other structural/scalar edit control already respects.
+  it('does not render structural (add/move/remove) controls for a nested group on an immutable plugin column', () => {
+    renderSection(
+      multiCompare([
+        { fieldPath: 'Effects[0].Conditions', conditions: [{ index: 0, perPlugin: { 'A.esp': condition() }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
+      ]),
+      ['A.esp'],
+      { onEdit: vi.fn(), immutableSet: new Set(['A.esp']) },
+    );
+
+    fireEvent.click(screen.getByText('Effects[0].Conditions').closest('tr')!.querySelector('button')!);
+
+    expect(screen.queryByTitle('Add condition')).toBeNull();
+    expect(screen.queryByTitle('Move condition up')).toBeNull();
+    expect(screen.queryByTitle('Move condition down')).toBeNull();
+    expect(screen.queryByTitle('Remove condition')).toBeNull();
+  });
+
+  // #183 AC3 (frontend side): two nested groups sharing the same enclosing array (Effects[0] and
+  // Effects[1]) must stage independently — an add/remove/move on one's group must never restage
+  // the other's, since each group's own field path already carries its own index.
+  it('add/remove/move on one nested group never restages a sibling nested group on the same enclosing array', () => {
+    const c0 = condition({ function: 'GetIsID' });
+    const c1 = condition({ function: 'GetDead' });
+    const onEdit = vi.fn();
+    renderSection(
+      multiCompare([
+        { fieldPath: 'Effects[0].Conditions', conditions: [{ index: 0, perPlugin: { 'A.esp': c0 }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
+        { fieldPath: 'Effects[1].Conditions', conditions: [{ index: 0, perPlugin: { 'A.esp': c1 }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
+      ]),
+      ['A.esp'],
+      { onEdit },
+    );
+
+    fireEvent.click(screen.getByText('Effects[0].Conditions').closest('tr')!.querySelector('button')!);
+    fireEvent.click(screen.getByText('Effects[1].Conditions').closest('tr')!.querySelector('button')!);
+
+    const addButtons = screen.getAllByTitle('Add condition');
+    expect(addButtons).toHaveLength(2);
+    fireEvent.click(addButtons[0]);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'Effects[0].Conditions', [c0, defaultCondition()]);
+    expect(onEdit).not.toHaveBeenCalledWith('A.esp', 'Effects[1].Conditions', expect.anything());
   });
 
   it('a flat top-level group (unindexed field path) still renders its condition rows open by default, unaffected by group collapse', () => {

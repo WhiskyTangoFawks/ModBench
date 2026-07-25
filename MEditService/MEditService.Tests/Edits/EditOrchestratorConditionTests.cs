@@ -416,4 +416,280 @@ public sealed class EditOrchestratorConditionTests
             Assert.Equal(questFk.ToString(), condRef.TargetFormKey);
         }
     }
+
+    // ---- #183: nested whole-list restage (own-list supersession, AC3) ----
+
+    private static (FormKey ingestibleFk, PluginFixtureData data) BuildTwoEffectNestedFixture(
+        string prefix, out string dataFolder, out string pluginsTxt)
+    {
+        FormKey ingestibleFk = default;
+        var data = new PluginFixtureBuilder(prefix)
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var ingestible = mod.Ingestibles.AddNew("Chem");
+                ingestibleFk = ingestible.FormKey;
+                var effect0 = new Effect { Data = new EffectData() };
+                effect0.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+                var effect1 = new Effect { Data = new EffectData() };
+                effect1.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.LessThan,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetDead },
+                });
+                ingestible.Effects.Add(effect0);
+                ingestible.Effects.Add(effect1);
+            })
+            .Build();
+        dataFolder = data.DataFolder;
+        pluginsTxt = data.PluginsTxtPath;
+        return (ingestibleFk, data);
+    }
+
+    // Restaging a nested list must supersede its own stale per-field CTDA\ pending edits — the
+    // nested analogue of StageEdit_ConditionListRestage_ClearsSupersededPerFieldPendingEdits.
+    [Fact]
+    public void StageEdit_NestedConditionListRestage_ClearsOwnStalePerFieldPendingEdits()
+    {
+        var (ingestibleFk, data) = BuildTwoEffectNestedFixture(
+            "eo-nested-list-restage-clears", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+
+            var priorFields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\Effects[0].Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+            var priorResult = orchestrator.StageEdit(ingestibleFk.ToString(), "TestPlugin.esp", priorFields, "user", null);
+            Assert.IsType<StageEditResult.Staged>(priorResult);
+
+            var newList = J("""
+                [
+                  { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                    "runOnReference": null, "useGlobal": false, "comparisonFloat": 1.0, "comparisonGlobal": null, "parameters": [] }
+                ]
+                """);
+            var restageResult = orchestrator.StageEdit(
+                ingestibleFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["Effects[0].Conditions"] = newList }, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(restageResult);
+            var pendingAfter = changes.GetPendingFields(ingestibleFk.ToString(), "TestPlugin.esp");
+            Assert.False(pendingAfter?.ContainsKey(@"CTDA\Effects[0].Conditions\0\Operator") ?? false);
+            Assert.True(pendingAfter?.ContainsKey("Effects[0].Conditions"));
+        }
+    }
+
+    // Restaging one index's nested list must never touch a sibling index's own pending edits on
+    // the same enclosing array — the nested analogue of
+    // StageEdit_ConditionListRestageOnOneField_LeavesSiblingFieldPendingEditIntact.
+    [Fact]
+    public void StageEdit_NestedConditionListRestageOnOneIndex_LeavesSiblingIndexPendingEditIntact()
+    {
+        var (ingestibleFk, data) = BuildTwoEffectNestedFixture(
+            "eo-nested-list-restage-sibling", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+
+            var siblingFields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\Effects[1].Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+            var siblingResult = orchestrator.StageEdit(ingestibleFk.ToString(), "TestPlugin.esp", siblingFields, "user", null);
+            Assert.IsType<StageEditResult.Staged>(siblingResult);
+
+            var newList = J("""
+                [
+                  { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                    "runOnReference": null, "useGlobal": false, "comparisonFloat": 1.0, "comparisonGlobal": null, "parameters": [] }
+                ]
+                """);
+            var restageResult = orchestrator.StageEdit(
+                ingestibleFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["Effects[0].Conditions"] = newList }, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(restageResult);
+            var pendingAfter = changes.GetPendingFields(ingestibleFk.ToString(), "TestPlugin.esp");
+            Assert.True(pendingAfter?.ContainsKey(@"CTDA\Effects[1].Conditions\0\Operator"));
+            Assert.True(pendingAfter?.ContainsKey("Effects[0].Conditions"));
+        }
+    }
+
+    // ---- #183 AC4: ancestor-array invalidation ----
+    // Restaging the enclosing array itself (the whole "Effects" list) invalidates every staged
+    // condition row keyed under it — both a per-field CTDA\ nested edit and a nested list's own
+    // restage — since the enclosing indices no longer hold once the array has been reordered/
+    // added-to/removed-from (ADR-0019). Scoped unconditionally by field-name prefix, gated only on
+    // a condition codec existing for this release — no schema lookup of whether "Effects" actually
+    // has nested conditions, since the prefix match is a no-op unless matching rows exist.
+
+    [Fact]
+    public void StageEdit_AncestorArrayRestage_InvalidatesStaleNestedPerFieldPendingEdit()
+    {
+        var (ingestibleFk, data) = BuildNestedFixture(
+            "eo-ancestor-invalidate-perfield", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+
+            var nestedFields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\Effects[0].Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+            var nestedResult = orchestrator.StageEdit(ingestibleFk.ToString(), "TestPlugin.esp", nestedFields, "user", null);
+            Assert.IsType<StageEditResult.Staged>(nestedResult);
+
+            // "effects" is the wire/column name (SchemaReflector.ToSnakeCase of the CLR "Effects"
+            // property) — the ordinary generic-array edit path this restage actually goes through,
+            // distinct from the PascalCase "Effects" the nested condition composed path uses.
+            var ancestorResult = orchestrator.StageEdit(
+                ingestibleFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["effects"] = J("[]") }, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(ancestorResult);
+            var pendingAfter = changes.GetPendingFields(ingestibleFk.ToString(), "TestPlugin.esp");
+            Assert.False(pendingAfter?.ContainsKey(@"CTDA\Effects[0].Conditions\0\Operator") ?? false);
+            Assert.True(pendingAfter?.ContainsKey("effects"));
+        }
+    }
+
+    [Fact]
+    public void StageEdit_AncestorArrayRestage_InvalidatesStaleNestedListRestage()
+    {
+        var (ingestibleFk, data) = BuildNestedFixture(
+            "eo-ancestor-invalidate-listrestage", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+
+            var newList = J("""
+                [
+                  { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                    "runOnReference": null, "useGlobal": false, "comparisonFloat": 1.0, "comparisonGlobal": null, "parameters": [] }
+                ]
+                """);
+            var nestedRestageResult = orchestrator.StageEdit(
+                ingestibleFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["Effects[0].Conditions"] = newList }, "user", null);
+            Assert.IsType<StageEditResult.Staged>(nestedRestageResult);
+
+            var ancestorResult = orchestrator.StageEdit(
+                ingestibleFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["effects"] = J("[]") }, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(ancestorResult);
+            var pendingAfter = changes.GetPendingFields(ingestibleFk.ToString(), "TestPlugin.esp");
+            Assert.False(pendingAfter?.ContainsKey("Effects[0].Conditions") ?? false);
+            Assert.True(pendingAfter?.ContainsKey("effects"));
+        }
+    }
+
+    // Restaging some *other* bare field on the same record (not the enclosing array) must never
+    // invalidate a nested condition group's pending rows — proves the invalidation is scoped by the
+    // literal field-name prefix, not a blanket clear of every condition row on the record.
+    [Fact]
+    public void StageEdit_UnrelatedFieldRestage_LeavesNestedConditionPendingRowsIntact()
+    {
+        var (ingestibleFk, data) = BuildNestedFixture(
+            "eo-ancestor-unrelated-field", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+
+            var nestedFields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\Effects[0].Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+            var nestedResult = orchestrator.StageEdit(ingestibleFk.ToString(), "TestPlugin.esp", nestedFields, "user", null);
+            Assert.IsType<StageEditResult.Staged>(nestedResult);
+
+            // "weight": an ordinary scalar field on the same record, unrelated to Effects.
+            var unrelatedResult = orchestrator.StageEdit(
+                ingestibleFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["weight"] = J("2.5") }, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(unrelatedResult);
+            var pendingAfter = changes.GetPendingFields(ingestibleFk.ToString(), "TestPlugin.esp");
+            Assert.True(pendingAfter?.ContainsKey(@"CTDA\Effects[0].Conditions\0\Operator"));
+        }
+    }
+
+    // Regression: every ancestor-invalidation test above uses "Effects"/"effects" — a single-word
+    // enclosing-array name where the wire/column name (SchemaReflector.ToSnakeCase) and the CLR
+    // PropertyName a nested composed path is keyed by (Fallout4ConditionCodec.ExtractNested's
+    // prop.Name) coincidentally differ only by case. A regression that dropped the RecordColumns
+    // ->PropertyName translation and fell back to a naive case-insensitive (or literal) match on
+    // the staged field name would still pass every one of those tests. Message.MenuButtons (wire
+    // "menu_buttons", CLR "MenuButtons" — the same fixture Fallout4ConditionCodecTests already uses
+    // to prove discovery is shape-generic, not hardcoded to "Effects") is a genuinely multi-word
+    // name the two conventions diverge on, so this actually pins the translation down.
+    private static (FormKey messageFk, PluginFixtureData data) BuildMenuButtonsNestedFixture(
+        string prefix, out string dataFolder, out string pluginsTxt)
+    {
+        FormKey messageFk = default;
+        var data = new PluginFixtureBuilder(prefix)
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var message = mod.Messages.AddNew("SomeMessage");
+                messageFk = message.FormKey;
+                var button = new MessageButton();
+                button.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+                message.MenuButtons.Add(button);
+            })
+            .Build();
+        dataFolder = data.DataFolder;
+        pluginsTxt = data.PluginsTxtPath;
+        return (messageFk, data);
+    }
+
+    [Fact]
+    public void StageEdit_AncestorArrayRestage_OnMultiWordArrayName_InvalidatesStaleNestedRows()
+    {
+        var (messageFk, data) = BuildMenuButtonsNestedFixture(
+            "eo-ancestor-invalidate-multiword", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+
+            var nestedFields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\MenuButtons[0].Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+            var nestedResult = orchestrator.StageEdit(messageFk.ToString(), "TestPlugin.esp", nestedFields, "user", null);
+            Assert.IsType<StageEditResult.Staged>(nestedResult);
+
+            // "menu_buttons" is the wire/column name (ToSnakeCase("MenuButtons")) — the ordinary
+            // generic-array edit path this restage actually goes through, distinct from the
+            // PascalCase "MenuButtons" the nested condition composed path uses.
+            var ancestorResult = orchestrator.StageEdit(
+                messageFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["menu_buttons"] = J("[]") }, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(ancestorResult);
+            var pendingAfter = changes.GetPendingFields(messageFk.ToString(), "TestPlugin.esp");
+            Assert.False(pendingAfter?.ContainsKey(@"CTDA\MenuButtons[0].Conditions\0\Operator") ?? false);
+            Assert.True(pendingAfter?.ContainsKey("menu_buttons"));
+        }
+    }
 }

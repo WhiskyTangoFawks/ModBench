@@ -474,11 +474,36 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
 
     // Record-level entry point PluginWriter calls for an add/remove/reorder restage: replaces the
     // entire condition list in place with freshly-materialized Condition instances. Mirrors
-    // ApplyFieldValue's record-level/list-level split.
-    public ConditionApplyResult ApplyListValue(IMajorRecord record, string fieldPath, JsonElement newList) =>
-        record.GetType().GetProperty(fieldPath)?.GetValue(record) is IList<Condition> conditions
+    // ApplyFieldValue's record-level/list-level split. #183: a composed fieldPath ("Effects[2].
+    // Conditions" — a nested list's own restage) routes through the same arrayProp -> element ->
+    // nestedField walk ApplyFieldValue's nested branch already uses, landing on the list-level
+    // ApplyListValue instead of the scalar one.
+    public ConditionApplyResult ApplyListValue(IMajorRecord record, string fieldPath, JsonElement newList)
+    {
+        if (TryParseNestedFieldPath(fieldPath, out var arrayProp, out var arrayIndex, out var nestedField))
+            return ApplyNestedListValue(record, arrayProp, arrayIndex, nestedField, newList);
+
+        return record.GetType().GetProperty(fieldPath)?.GetValue(record) is IList<Condition> conditions
             ? ApplyListValue(conditions, newList)
             : ConditionApplyResult.NotFound;
+    }
+
+    // Walks into the enclosing array (arrayProp) at arrayIndex, then the nested condition list
+    // (nestedField) on that element, before delegating to the same list-level ApplyListValue every
+    // flat/nested restage uses. Mirrors ApplyNestedFieldValue's resolution exactly, just landing on
+    // the whole-list applier instead of the single-condition one.
+    private static ConditionApplyResult ApplyNestedListValue(
+        IMajorRecord record, string arrayProp, int arrayIndex, string nestedField, JsonElement newList)
+    {
+        if (record.GetType().GetProperty(arrayProp)?.GetValue(record) is not System.Collections.IList array)
+            return ConditionApplyResult.NotFound;
+        if (arrayIndex < 0 || arrayIndex >= array.Count) return ConditionApplyResult.NotFound;
+        if (array[arrayIndex] is not { } element) return ConditionApplyResult.NotFound;
+        if (element.GetType().GetProperty(nestedField)?.GetValue(element) is not IList<Condition> conditions)
+            return ConditionApplyResult.NotFound;
+
+        return ApplyListValue(conditions, newList);
+    }
 
     // newList is a JSON array of ParsedCondition-shaped objects (camelCase field names) — the same
     // shape ConditionDiff.PerPlugin already sends the frontend, so this and Parse are inverses.
