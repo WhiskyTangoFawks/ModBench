@@ -628,4 +628,68 @@ public sealed class EditOrchestratorConditionTests
             Assert.True(pendingAfter?.ContainsKey(@"CTDA\Effects[0].Conditions\0\Operator"));
         }
     }
+
+    // Regression: every ancestor-invalidation test above uses "Effects"/"effects" — a single-word
+    // enclosing-array name where the wire/column name (SchemaReflector.ToSnakeCase) and the CLR
+    // PropertyName a nested composed path is keyed by (Fallout4ConditionCodec.ExtractNested's
+    // prop.Name) coincidentally differ only by case. A regression that dropped the RecordColumns
+    // ->PropertyName translation and fell back to a naive case-insensitive (or literal) match on
+    // the staged field name would still pass every one of those tests. Message.MenuButtons (wire
+    // "menu_buttons", CLR "MenuButtons" — the same fixture Fallout4ConditionCodecTests already uses
+    // to prove discovery is shape-generic, not hardcoded to "Effects") is a genuinely multi-word
+    // name the two conventions diverge on, so this actually pins the translation down.
+    private static (FormKey messageFk, PluginFixtureData data) BuildMenuButtonsNestedFixture(
+        string prefix, out string dataFolder, out string pluginsTxt)
+    {
+        FormKey messageFk = default;
+        var data = new PluginFixtureBuilder(prefix)
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var message = mod.Messages.AddNew("SomeMessage");
+                messageFk = message.FormKey;
+                var button = new MessageButton();
+                button.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+                message.MenuButtons.Add(button);
+            })
+            .Build();
+        dataFolder = data.DataFolder;
+        pluginsTxt = data.PluginsTxtPath;
+        return (messageFk, data);
+    }
+
+    [Fact]
+    public void StageEdit_AncestorArrayRestage_OnMultiWordArrayName_InvalidatesStaleNestedRows()
+    {
+        var (messageFk, data) = BuildMenuButtonsNestedFixture(
+            "eo-ancestor-invalidate-multiword", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+
+            var nestedFields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\MenuButtons[0].Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+            var nestedResult = orchestrator.StageEdit(messageFk.ToString(), "TestPlugin.esp", nestedFields, "user", null);
+            Assert.IsType<StageEditResult.Staged>(nestedResult);
+
+            // "menu_buttons" is the wire/column name (ToSnakeCase("MenuButtons")) — the ordinary
+            // generic-array edit path this restage actually goes through, distinct from the
+            // PascalCase "MenuButtons" the nested condition composed path uses.
+            var ancestorResult = orchestrator.StageEdit(
+                messageFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["menu_buttons"] = J("[]") }, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(ancestorResult);
+            var pendingAfter = changes.GetPendingFields(messageFk.ToString(), "TestPlugin.esp");
+            Assert.False(pendingAfter?.ContainsKey(@"CTDA\MenuButtons[0].Conditions\0\Operator") ?? false);
+            Assert.True(pendingAfter?.ContainsKey("menu_buttons"));
+        }
+    }
 }
