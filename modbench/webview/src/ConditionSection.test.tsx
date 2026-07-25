@@ -522,6 +522,81 @@ describe('ConditionSection', () => {
     expect(onEdit).not.toHaveBeenCalledWith('A.esp', 'UnusedConditions', expect.anything());
   });
 
+  // ---- #181: nested (per-array-item) condition groups ----
+
+  it('renders a nested group (indexed field path) collapsed by default: header shows, rows do not', () => {
+    const c = condition({ function: 'GetIsID' });
+    renderSection(
+      multiCompare([
+        { fieldPath: 'Effects[0].Conditions', conditions: [{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
+      ]),
+      ['A.esp'],
+    );
+
+    expect(screen.getByText('Effects[0].Conditions')).toBeInTheDocument();
+    expect(screen.queryByText('Subject.GetIsID = 1 AND')).toBeNull();
+    expect(screen.queryByText('#1')).toBeNull();
+  });
+
+  it('clicking a collapsed nested group header reveals its condition rows', () => {
+    const c = condition({ function: 'GetIsID' });
+    renderSection(
+      multiCompare([
+        { fieldPath: 'Effects[0].Conditions', conditions: [{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
+      ]),
+      ['A.esp'],
+    );
+
+    fireEvent.click(screen.getByText('Effects[0].Conditions').closest('tr')!.querySelector('button')!);
+
+    expect(screen.getByText('Subject.GetIsID = 1 AND')).toBeInTheDocument();
+  });
+
+  it('renders no edit affordances for a nested group, even on an editable plugin column', () => {
+    const c = condition({ function: 'GetIsID', operator: 'EqualTo' });
+    const onEdit = vi.fn();
+    const { container } = renderSection(
+      multiCompare([
+        { fieldPath: 'Effects[0].Conditions', conditions: [{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
+      ]),
+      ['A.esp'],
+      { onEdit, client: fakeClient() },
+    );
+
+    // Expand the nested group, then expand the condition row to its field details.
+    fireEvent.click(screen.getByText('Effects[0].Conditions').closest('tr')!.querySelector('button')!);
+    toggleRow('#1');
+
+    // No structural edit controls (add/move/remove) and no field-level editors anywhere in the section.
+    expect(screen.queryByTitle('Add condition')).toBeNull();
+    expect(screen.queryByTitle('Move condition up')).toBeNull();
+    expect(screen.queryByTitle('Move condition down')).toBeNull();
+    expect(screen.queryByTitle('Remove condition')).toBeNull();
+    expect(container.querySelector('select')).toBeNull();
+
+    // Operator renders its plain read-only symbol ("="), not the editable enum text ScalarCell
+    // would use — confirms the read-only render() path, not renderEdit(), is in play.
+    const operatorRow = screen.getByText('Operator').closest('tr')!;
+    expect(within(operatorRow).getByText('=')).toBeInTheDocument();
+    fireEvent.click(within(operatorRow).getByText('='));
+    expect(within(operatorRow).queryByDisplayValue('EqualTo')).toBeNull();
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it('a flat top-level group (unindexed field path) still renders its condition rows open by default, unaffected by group collapse', () => {
+    const c = condition({ function: 'GetIsID' });
+    renderSection(
+      multiCompare([
+        { fieldPath: 'Conditions', conditions: [{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
+      ]),
+      ['A.esp'],
+    );
+
+    expect(screen.getByText('Subject.GetIsID = 1 AND')).toBeInTheDocument();
+    // No group-level collapse affordance on a flat group's header.
+    expect(screen.getByText('Conditions').closest('tr')!.querySelector('button')).toBeNull();
+  });
+
   it('without onEdit, no add/remove/move controls render', () => {
     renderSection(
       compare([{ index: 0, perPlugin: { 'A.esp': condition() }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),

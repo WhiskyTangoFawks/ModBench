@@ -255,10 +255,26 @@ classification.
   `Fallout4ConditionCodec.Extract` reflecting over every top-level property shaped like a
   condition list, not a single hardcoded name; frontend: each `ConditionSection` group edits and
   restages at its own `group.fieldPath`) — editing, adding, removing, or reordering one field's
-  list never collides with a sibling condition-carrying field on the same record (#154). This
-  covers flat, top-level sibling fields only; per-array-item nested condition lists (e.g. a Perk
-  effect's own conditions, nested inside `Effects[i].Conditions[j].Conditions`) are tracked
-  separately (#169).
+  list never collides with a sibling condition-carrying field on the same record (#154).
+- Condition lists nested one array level below the record (e.g. a magic Effect's own
+  `Effects[i].Conditions` on Ingestible/Ingredient/Spell/ObjectEffect, a Message's
+  `MenuButtons[i].Conditions`) are discovered by the same shape test applied to each array element,
+  keyed by an indexed field path composing the enclosing array's own name and index with the
+  nested list's own name (e.g. `Effects[2].Conditions`) — the existing
+  `CTDA\<field path>\<index>\<subField>` wire path treats that whole composed string as one opaque
+  field path, so no DDL or wire-shape change was needed (#181). A path through a **Child record** (a
+  record type Mutagen enumerates as its own top-level row, e.g. Quest's `Scenes`/`DialogTopics`) is
+  excluded, since that record already surfaces its own conditions through its own top-level field.
+  Nested groups align across plugins positionally by the enclosing array's index (the glossary's
+  Unsorted array rule, ADR-0019) and sort by that index numerically, not lexicographically. In the
+  grid, a nested group renders collapsed by default — only its header shows until clicked — while a
+  flat top-level group is unaffected and keeps rendering fully open. Read-only for now, on both
+  ends: the frontend renders a nested group's rows display-only (no function/parameter/operator
+  inputs, no add/move/remove controls) rather than an editable control that would only fail later,
+  and `PluginWriter.IsReadOnly` rejects a nested (indexed) condition path at stage time as a second,
+  independent gate. Staging an edit at a nested path stays rejected until scalar editing lands
+  (#182), add/remove/reorder inside a nested list until #183, and two levels of nesting (a Perk
+  effect's own conditions, a Quest alias's/stage's own conditions) until #184.
 - **Add/remove/reorder** controls (Add, Move-up, Move-down, Remove) render per condition row,
   gated by the same immutable-column rule as every other edit. Unlike VMAD's structural ops
   (which dispatch a named op the backend applies), a condition list has no stable per-element

@@ -63,6 +63,80 @@ public class Fallout4ConditionCodecTests
         Assert.Empty(Codec.Extract(quest));
     }
 
+    // ---- Extract: per-array-item nested condition lists (#181) ----
+
+    // Ingestible.Effects[i].Conditions — the simplest, most widespread one-level nesting shape
+    // (also shared by Ingredient/Spell/ObjectEffect's own Effects lists). Effect is a plain Loqui
+    // struct (not IMajorRecordGetter), so it's a clean positive fixture with no child-record
+    // ambiguity.
+    [Fact]
+    public void Extract_ConditionNestedInsideArrayOfStructs_ReturnsIndexedOwner()
+    {
+        var ingestible = new Ingestible(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+        var effect = new Effect { Data = new EffectData() };
+        effect.Conditions.Add(new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } });
+        ingestible.Effects.Add(effect);
+
+        var owners = Codec.Extract(ingestible).ToList();
+
+        var owner = Assert.Single(owners);
+        Assert.Equal("Effects[0].Conditions", owner.FieldPath);
+        Assert.Single(owner.Conditions);
+    }
+
+    // Message.MenuButtons[i].Conditions — a different record type and a different array/list
+    // property name than Effects, proving discovery is shape-generic rather than hardcoded to
+    // "Effects".
+    [Fact]
+    public void Extract_ConditionNestedInsideDifferentlyNamedArray_ReturnsIndexedOwnerByThatArraysName()
+    {
+        var message = new Message(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+        var button = new MessageButton();
+        button.Conditions.Add(new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } });
+        message.MenuButtons.Add(button);
+
+        var owners = Codec.Extract(message).ToList();
+
+        var owner = Assert.Single(owners);
+        Assert.Equal("MenuButtons[0].Conditions", owner.FieldPath);
+    }
+
+    // Quest.Scenes[i] — Scene is itself IMajorRecordGetter (a "child record": record enumeration
+    // already flattens it into its own top-level SCEN row with its own top-level Conditions field),
+    // and it genuinely does declare a Conditions property directly on itself — so a naive shape-only
+    // walk would wrongly find "Scenes[0].Conditions" here. The child-record exclusion must suppress
+    // it, or this list would duplicate the same conditions Scene's own top-level record row already
+    // surfaces.
+    [Fact]
+    public void Extract_ArrayOfChildRecordType_ExcludesNestedConditions()
+    {
+        var quest = new Quest(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+        var scene = new Scene(FormKey.Factory("005678:Test.esp"), Fallout4Release.Fallout4);
+        scene.Conditions.Add(new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } });
+        quest.Scenes.Add(scene);
+
+        var owners = Codec.Extract(quest).ToList();
+
+        Assert.DoesNotContain(owners, o => o.FieldPath.StartsWith("Scenes[", StringComparison.Ordinal));
+    }
+
+    // Asserts only Extract's own string composition at a double-digit index. Numeric group
+    // ordering across single- and double-digit indices is ConditionConflictClassifier's job,
+    // covered by its own tests.
+    [Fact]
+    public void Extract_NestedConditionsAtDoubleDigitIndex_ComposesPathWithThatIndex()
+    {
+        var ingestible = new Ingestible(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+        for (var i = 0; i < 11; i++) ingestible.Effects.Add(new Effect { Data = new EffectData() });
+        ingestible.Effects[2].Conditions.Add(new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } });
+        ingestible.Effects[10].Conditions.Add(new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } });
+
+        var owners = Codec.Extract(ingestible).ToList();
+
+        Assert.Contains(owners, o => o.FieldPath == "Effects[2].Conditions");
+        Assert.Contains(owners, o => o.FieldPath == "Effects[10].Conditions");
+    }
+
     // ---- ApplyFieldValue: write-back (#152) ----
 
     [Fact]

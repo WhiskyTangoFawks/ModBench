@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Reflection;
 using System.Text.Json;
 using Mutagen.Bethesda.Fallout4;
@@ -16,11 +17,11 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     // condition list — the shape COBJ's `Conditions`, Quest's `DialogConditions`/`UnusedConditions`,
     // Perk's `Conditions`, etc. all share — rather than a single hardcoded property name, so a
     // record with more than one condition-carrying field (#154) surfaces one owner per field,
-    // independently keyed by that field's own name. Nested per-array-item condition lists (a
-    // Perk effect's own Conditions, a Quest alias's/stage's own Conditions — each doubly-indexed
-    // inside a parent array rather than a flat top-level property) are out of scope for this
-    // reflection pass — deferred to a follow-up ticket. Discovery is game-generic; Parse is
-    // FO4-specific.
+    // independently keyed by that field's own name. Also folds in ExtractNested's one-array-level
+    // nested owners (#181 — an Ingestible's Effects[i].Conditions, a Message's
+    // MenuButtons[i].Conditions). Two-level nesting (a Perk effect's own conditions doubly-indexed,
+    // a Quest alias's Conditions) is out of scope, deferred to a follow-up ticket. Discovery is
+    // game-generic; Parse is FO4-specific.
     public IEnumerable<ConditionOwner> Extract(IMajorRecordGetter record)
     {
         var owners = new List<ConditionOwner>();
@@ -32,8 +33,82 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
             var parsed = conditions.Select(Parse).ToList();
             if (parsed.Count > 0) owners.Add(new ConditionOwner(prop.Name, parsed));
         }
+        owners.AddRange(ExtractNested(record));
         return owners;
     }
+
+    // Per-array-item nested condition lists, one array level below the record (#181) — e.g. an
+    // Ingestible's Effects[i].Conditions, a Message's MenuButtons[i].Conditions. Same shape test as
+    // the flat pass above (IsConditionListProperty), just applied to each element of every
+    // array-of-struct property rather than to the record's own top-level properties, so a new
+    // nesting shape needs no new hardcoded property/array name here or anywhere else. Keyed by an
+    // indexed path composing the enclosing array's own property name and index with the nested
+    // list's own name (e.g. "Effects[2].Conditions") — the same CTDA\<FieldPath>\<Index>\<SubField>
+    // wire path just treats that whole composed string as one opaque FieldPath segment (#169).
+    private static IEnumerable<ConditionOwner> ExtractNested(IMajorRecordGetter record)
+    {
+        foreach (var prop in record.GetType().GetProperties())
+        {
+            if (!IsArrayOfNestableStructsProperty(prop)) continue;
+            if (prop.GetValue(record) is not IEnumerable items) continue;
+
+            var index = 0;
+            foreach (var item in items)
+            {
+                if (item != null)
+                    foreach (var owner in ExtractElementOwners(item, prop.Name, index))
+                        yield return owner;
+                index++;
+            }
+        }
+    }
+
+    // One array element's own condition-owning properties (there's normally at most one, but the
+    // shape test makes no such assumption), keyed by the composed "<ArrayProp>[<Index>].<NestedProp>"
+    // path.
+    private static IEnumerable<ConditionOwner> ExtractElementOwners(object item, string arrayPropName, int index)
+    {
+        foreach (var nested in item.GetType().GetProperties())
+        {
+            if (!IsConditionListProperty(nested)) continue;
+            if (nested.GetValue(item) is not IEnumerable<IConditionGetter> conditions) continue;
+
+            var parsed = conditions.Select(Parse).ToList();
+            if (parsed.Count > 0)
+                yield return new ConditionOwner($"{arrayPropName}[{index}].{nested.Name}", parsed);
+        }
+    }
+
+    // A property worth descending into for nested condition lists: an array/list of some struct
+    // element type, excluding element types that are FormLinks (nothing to nest into), plain
+    // scalars/enums (same reason), the record's own flat condition lists (already handled by
+    // Extract's top-level pass — descending into individual Condition elements would be pointless),
+    // and — the child-record exclusion (#169) — element types Mutagen enumerates as their own
+    // top-level major records (e.g. Quest's Scenes: a Scene is itself flattened into its own SCEN
+    // record row with its own top-level Conditions field, so nesting it again here would duplicate
+    // it). IMajorRecordGetter is the same signal SchemaReflector's own top-level table discovery
+    // uses — no hardcoded type list.
+    private static bool IsArrayOfNestableStructsProperty(PropertyInfo prop)
+    {
+        if (prop.GetIndexParameters().Length != 0) return false;
+        if (IsConditionListProperty(prop)) return false;
+
+        var elementType = GetEnumerableElementType(prop.PropertyType);
+        if (elementType == null) return false;
+        if (elementType.IsPrimitive || elementType.IsEnum || elementType == typeof(string)) return false;
+        if (typeof(IFormLinkGetter).IsAssignableFrom(elementType)) return false;
+        if (typeof(IMajorRecordGetter).IsAssignableFrom(elementType)) return false;
+        return true;
+    }
+
+    // The element type of the first IEnumerable<T> a type implements (declared or inherited) — null
+    // for non-generic/non-enumerable types. Works on the concrete runtime property types Extract
+    // walks (e.g. Noggog.ExtendedList<Effect>), not just the *Getter interfaces SchemaReflector's
+    // own IsListType checks.
+    private static Type? GetEnumerableElementType(Type type) =>
+        type.GetInterfaces().Prepend(type)
+            .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            ?.GetGenericArguments()[0];
 
     // Schema-level twin of Extract's own per-instance discovery — same shape check
     // (IsConditionListProperty), just applied to the CLR type rather than a live value, for callers
