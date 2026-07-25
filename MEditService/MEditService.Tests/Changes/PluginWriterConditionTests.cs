@@ -40,17 +40,46 @@ public class PluginWriterConditionTests
         Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "qust", fieldPath));
     }
 
-    // #181: a nested (per-array-item) condition path — its composed FieldPath segment contains an
-    // enclosing-array index, e.g. "Effects[0].Conditions" — has no write path yet (read-only this
-    // slice; scalar editing lands in #182). Before this test, IsReadOnly returned false for ANY
-    // CTDA\-prefixed path regardless of shape, so a nested path would stage as accepted and only
-    // fail later at save via Fallout4ConditionCodec.ApplyFieldValue's GetProperty lookup. Staging
-    // must reject it up front instead.
+    // #182: a nested (per-array-item) condition path — its composed FieldPath segment contains an
+    // enclosing-array index, e.g. "Effects[0].Conditions" — is now editable on the same terms as a
+    // flat one, as long as it actually resolves against the record's schema type (walking into the
+    // array element and checking it declares the named condition list). #181 rejected every such
+    // path unconditionally; this is the regression test flipped the other way.
     [Fact]
-    public void IsReadOnly_NestedConditionScalarPath_ReturnsTrue()
+    public void IsReadOnly_NestedConditionScalarPath_ReturnsFalse()
     {
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
-        Assert.True(writer.IsReadOnly(GameRelease.Fallout4, "alch", @"CTDA\Effects[0].Conditions\0\Function"));
+        Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "alch", @"CTDA\Effects[0].Conditions\0\Function"));
+    }
+
+    // #169/#182 AC#4: Quest.Aliases[i].Conditions is the explicit regression case for the
+    // permissive abstract-element-type rule — IAQuestAliasGetter is a marker interface with zero
+    // data properties, so only a check that falls back to concrete alias subtypes finds Conditions.
+    [Fact]
+    public void IsReadOnly_NestedConditionScalarPath_OnAbstractElementType_ReturnsFalse()
+    {
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+        Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "qust", @"CTDA\Aliases[0].Conditions\0\Function"));
+    }
+
+    // A nested path whose shape doesn't actually resolve against the record type (wrong nested
+    // field name) fails closed at stage time — same as an out-of-range enclosing index fails
+    // closed at save time (SaveAsync_ConditionNestedOutOfRangeIndex_AppearsInNotFound below); the
+    // two are deliberately enforced at different points (#169's AC: existence/range at write).
+    [Fact]
+    public void IsReadOnly_NestedConditionScalarPath_WrongNestedFieldName_ReturnsTrue()
+    {
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+        Assert.True(writer.IsReadOnly(GameRelease.Fallout4, "alch", @"CTDA\Effects[0].NotAConditionField\0\Function"));
+    }
+
+    // A syntactically malformed indexed segment (unbalanced bracket) is knowable from the string
+    // alone with no instance needed, so — unlike an out-of-range index — it fails closed at stage.
+    [Fact]
+    public void IsReadOnly_NestedConditionScalarPath_MalformedBracket_ReturnsTrue()
+    {
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+        Assert.True(writer.IsReadOnly(GameRelease.Fallout4, "alch", @"CTDA\Effects[0.Conditions\0\Function"));
     }
 
     // ---- Helpers ----
@@ -76,6 +105,10 @@ public class PluginWriterConditionTests
 
     private static PendingChange MakeConditionChange(FormKey formKey, string fieldPath, string json) =>
         new(Guid.NewGuid(), formKey.ToString(), "ConditionWrite.esp", fieldPath, "cobj",
+            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null);
+
+    private static PendingChange MakeConditionChange(FormKey formKey, string recordType, string fieldPath, string json) =>
+        new(Guid.NewGuid(), formKey.ToString(), "ConditionWrite.esp", fieldPath, recordType,
             JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null);
 
     private static IConstructibleObjectGetter ReloadCobj(string pluginPath, FormKey cobjKey)
@@ -389,5 +422,228 @@ public class PluginWriterConditionTests
         Assert.Equal(2, conditions.Count);
         Assert.Equal(CompareOperator.GreaterThan, conditions[0].CompareOperator);
         Assert.Equal(CompareOperator.LessThan, conditions[1].CompareOperator);
+    }
+
+    // ---- Nested (per-array-item) condition paths (#182) ----
+    // One round-trip per sub-field kind, at Ingestible.Effects[0].Conditions — the same fixture
+    // shape #181's discovery tests use. Mirrors the flat-group tests above one for one, proving
+    // scalar editing works on the same terms at an indexed path.
+
+    private static (string pluginPath, FormKey ingestibleFk, PluginFixtureData data) BuildNestedFixture(string prefix)
+    {
+        FormKey ingestibleFk = default;
+        var fixture = new PluginFixtureBuilder(prefix)
+            .WithPlugin("ConditionWrite.esp", mod =>
+            {
+                var ingestible = mod.Ingestibles.AddNew("Chem");
+                ingestibleFk = ingestible.FormKey;
+                var effect = new Effect { Data = new EffectData() };
+                effect.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    ComparisonValue = 1.0f,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+                ingestible.Effects.Add(effect);
+            })
+            .Build();
+        return (Path.Combine(fixture.DataFolder, "ConditionWrite.esp"), ingestibleFk, fixture);
+    }
+
+    private static IIngestibleGetter ReloadIngestible(string pluginPath, FormKey ingestibleKey)
+    {
+        var modPath = new ModPath(ModKey.FromFileName("ConditionWrite.esp"), pluginPath);
+        var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
+        return mod.Ingestibles.First(i => i.FormKey == ingestibleKey);
+    }
+
+    [Fact]
+    public async Task SaveAsync_NestedConditionOperatorEdit_WritesNewOperator()
+    {
+        var (path, ingestibleFk, fixture) = BuildNestedFixture("cond-nested-operator");
+        using var _ = fixture;
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var result = await writer.SaveAsync(path,
+            [MakeConditionChange(ingestibleFk, "alch", @"CTDA\Effects[0].Conditions\0\Operator", "\"GreaterThan\"")],
+            GameRelease.Fallout4);
+
+        Assert.Contains(@"CTDA\Effects[0].Conditions\0\Operator", result.Applied);
+        var cond = ReloadIngestible(path, ingestibleFk).Effects[0].Conditions[0];
+        Assert.Equal(CompareOperator.GreaterThan, cond.CompareOperator);
+    }
+
+    [Fact]
+    public async Task SaveAsync_NestedConditionFunctionEdit_ChangesFunctionAndResetsParameters()
+    {
+        FormKey ingestibleFk = default;
+        var quest = FormKey.Factory("001234:ConditionWrite.esp");
+        using var fixture = new PluginFixtureBuilder("cond-nested-function")
+            .WithPlugin("ConditionWrite.esp", mod =>
+            {
+                var ingestible = mod.Ingestibles.AddNew("Chem");
+                ingestibleFk = ingestible.FormKey;
+                var effect = new Effect { Data = new EffectData() };
+                var data = new FunctionConditionData { Function = Condition.Function.GetStageDone };
+                data.ParameterOneRecord.SetTo(quest);
+                effect.Conditions.Add(new ConditionFloat { Data = data });
+                ingestible.Effects.Add(effect);
+            })
+            .Build();
+        var path = Path.Combine(fixture.DataFolder, "ConditionWrite.esp");
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var result = await writer.SaveAsync(path,
+            [MakeConditionChange(ingestibleFk, "alch", @"CTDA\Effects[0].Conditions\0\Function", "\"GetGraphVariableFloat\"")],
+            GameRelease.Fallout4);
+
+        Assert.Contains(@"CTDA\Effects[0].Conditions\0\Function", result.Applied);
+        var data = (IFunctionConditionDataGetter)ReloadIngestible(path, ingestibleFk).Effects[0].Conditions[0].Data;
+        Assert.Equal(Condition.Function.GetGraphVariableFloat, data.Function);
+        Assert.True(data.ParameterOneRecord.FormKey.IsNull);
+    }
+
+    [Fact]
+    public async Task SaveAsync_NestedConditionNumberParameterEdit_WritesNumberSlot()
+    {
+        FormKey ingestibleFk = default;
+        using var fixture = new PluginFixtureBuilder("cond-nested-numparam")
+            .WithPlugin("ConditionWrite.esp", mod =>
+            {
+                var ingestible = mod.Ingestibles.AddNew("Chem");
+                ingestibleFk = ingestible.FormKey;
+                var effect = new Effect { Data = new EffectData() };
+                effect.Conditions.Add(new ConditionFloat
+                {
+                    Data = new FunctionConditionData { Function = Condition.Function.GetStageDone },
+                });
+                ingestible.Effects.Add(effect);
+            })
+            .Build();
+        var path = Path.Combine(fixture.DataFolder, "ConditionWrite.esp");
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var result = await writer.SaveAsync(path,
+            [MakeConditionChange(ingestibleFk, "alch", @"CTDA\Effects[0].Conditions\0\Parameter\1", "7")],
+            GameRelease.Fallout4);
+
+        Assert.Contains(@"CTDA\Effects[0].Conditions\0\Parameter\1", result.Applied);
+        var data = (IFunctionConditionDataGetter)ReloadIngestible(path, ingestibleFk).Effects[0].Conditions[0].Data;
+        Assert.Equal(7, data.ParameterTwoNumber);
+    }
+
+    [Fact]
+    public async Task SaveAsync_NestedConditionRunOnEdit_WritesRunOnTypeAndReference()
+    {
+        var (path, ingestibleFk, fixture) = BuildNestedFixture("cond-nested-runon");
+        using var _ = fixture;
+        var reference = FormKey.Factory("00dcba:ConditionWrite.esp");
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var json = $$"""{"target":"Reference","reference":"{{reference}}"}""";
+        var result = await writer.SaveAsync(path,
+            [MakeConditionChange(ingestibleFk, "alch", @"CTDA\Effects[0].Conditions\0\RunOn", json)],
+            GameRelease.Fallout4);
+
+        Assert.Contains(@"CTDA\Effects[0].Conditions\0\RunOn", result.Applied);
+        var data = ReloadIngestible(path, ingestibleFk).Effects[0].Conditions[0].Data;
+        Assert.Equal(Condition.RunOnType.Reference, data.RunOnType);
+        Assert.Equal(reference, data.Reference.FormKey);
+    }
+
+    [Fact]
+    public async Task SaveAsync_NestedConditionComparisonEdit_WritesFloatValue()
+    {
+        var (path, ingestibleFk, fixture) = BuildNestedFixture("cond-nested-comparison");
+        using var _ = fixture;
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var result = await writer.SaveAsync(path,
+            [MakeConditionChange(ingestibleFk, "alch", @"CTDA\Effects[0].Conditions\0\Comparison", "3.5")],
+            GameRelease.Fallout4);
+
+        Assert.Contains(@"CTDA\Effects[0].Conditions\0\Comparison", result.Applied);
+        var cond = Assert.IsAssignableFrom<IConditionFloatGetter>(ReloadIngestible(path, ingestibleFk).Effects[0].Conditions[0]);
+        Assert.Equal(3.5f, cond.ComparisonValue);
+    }
+
+    [Fact]
+    public async Task SaveAsync_NestedConditionUseGlobalEdit_SwitchesToGlobalConditionType()
+    {
+        var (path, ingestibleFk, fixture) = BuildNestedFixture("cond-nested-useglobal");
+        using var _ = fixture;
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var result = await writer.SaveAsync(path,
+            [MakeConditionChange(ingestibleFk, "alch", @"CTDA\Effects[0].Conditions\0\UseGlobal", "true")],
+            GameRelease.Fallout4);
+
+        Assert.Contains(@"CTDA\Effects[0].Conditions\0\UseGlobal", result.Applied);
+        Assert.IsAssignableFrom<IConditionGlobalGetter>(ReloadIngestible(path, ingestibleFk).Effects[0].Conditions[0]);
+    }
+
+    // #169's AC: an out-of-range enclosing index can only be caught with a live instance, so it's
+    // enforced here (at save) rather than at stage. Staged alongside one valid nested edit in the
+    // same save to prove the failure never turns into a partial write — the valid edit still lands
+    // and the out-of-range one is cleanly NotFound, not a thrown exception or a corrupted file.
+    [Fact]
+    public async Task SaveAsync_NestedConditionOutOfRangeEnclosingIndex_AppearsInNotFoundWithoutPartialWrite()
+    {
+        var (path, ingestibleFk, fixture) = BuildNestedFixture("cond-nested-outofrange");
+        using var _ = fixture;
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var changes = new[]
+        {
+            MakeConditionChange(ingestibleFk, "alch", @"CTDA\Effects[0].Conditions\0\Operator", "\"GreaterThan\""),
+            MakeConditionChange(ingestibleFk, "alch", @"CTDA\Effects[9].Conditions\0\Operator", "\"GreaterThan\""),
+        };
+
+        var result = await writer.SaveAsync(path, changes, GameRelease.Fallout4);
+
+        Assert.Contains(@"CTDA\Effects[9].Conditions\0\Operator", result.NotFound);
+        Assert.Contains(@"CTDA\Effects[0].Conditions\0\Operator", result.Applied);
+
+        var reloaded = ReloadIngestible(path, ingestibleFk);
+        Assert.Single(reloaded.Effects);
+        Assert.Equal(CompareOperator.GreaterThan, reloaded.Effects[0].Conditions[0].CompareOperator);
+    }
+
+    // #169/#182 AC#4: Quest.Aliases[i].Conditions — the write-side companion to the abstract-
+    // element-type IsReadOnly regression test above. AQuestAlias is a bare abstract setter base
+    // (no Conditions of its own); QuestReferenceAlias is a real concrete alias type that declares
+    // one, resolved here purely via the runtime instance's own concrete type (no fallback needed
+    // at write time — only the Type-only stage-time shape check needs the abstract-subtype scan).
+    [Fact]
+    public async Task SaveAsync_NestedConditionOnQuestAlias_WritesNewOperator()
+    {
+        FormKey questFk = default;
+        using var fixture = new PluginFixtureBuilder("cond-nested-alias")
+            .WithPlugin("ConditionWrite.esp", mod =>
+            {
+                var quest = mod.Quests.AddNew("AliasQuest");
+                questFk = quest.FormKey;
+                var alias = new QuestReferenceAlias();
+                alias.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+                quest.Aliases = [alias];
+            })
+            .Build();
+        var path = Path.Combine(fixture.DataFolder, "ConditionWrite.esp");
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var result = await writer.SaveAsync(path,
+            [MakeConditionChange(questFk, "qust", @"CTDA\Aliases[0].Conditions\0\Operator", "\"GreaterThan\"")],
+            GameRelease.Fallout4);
+
+        Assert.Contains(@"CTDA\Aliases[0].Conditions\0\Operator", result.Applied);
+        var modPath = new ModPath(ModKey.FromFileName("ConditionWrite.esp"), path);
+        var reloaded = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4)
+            .Quests.First(q => q.FormKey == questFk);
+        var alias = Assert.IsAssignableFrom<IQuestReferenceAliasGetter>(reloaded.Aliases![0]);
+        Assert.Equal(CompareOperator.GreaterThan, alias.Conditions[0].CompareOperator);
     }
 }

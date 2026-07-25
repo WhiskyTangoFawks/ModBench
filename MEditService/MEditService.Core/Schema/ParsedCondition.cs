@@ -21,6 +21,18 @@ public interface IConditionCodec
     // recognized consistently everywhere.
     bool IsConditionListField(Type recordType, string fieldPath);
 
+    // Stage-time shape check for an indexed nested path (#182: "Effects[2].Conditions" — arrayProp
+    // "Effects", nestedField "Conditions"; the numeric index is write-time-only, per #169's AC —
+    // existence/range are enforced at write, not here). A distinct method from IsConditionListField
+    // rather than an extension of it: that method also gates the bare-fieldpath whole-list-restage
+    // path (#153/#154), and loosening it for indexed paths would make a nested list's add/remove/
+    // reorder appear stageable before #183 actually extends ApplyListValue to resolve one. Accepts
+    // when the enclosing array's element type declares nestedField as a condition list directly, or
+    // — when the element type is abstract and declares nothing itself (Quest.Aliases's
+    // IAQuestAliasGetter is a marker interface with zero data properties) — when any concrete
+    // subtype does.
+    bool IsNestedConditionListField(Type recordType, string arrayProp, string nestedField);
+
     // Write-back (#152): applies one scalar condition-field edit in place on the mutable record.
     // fieldPath is the owning field (e.g. "Conditions"), index the condition's position within it,
     // subField the edited part (see ConditionPath in Edits/ for the wire-path convention that

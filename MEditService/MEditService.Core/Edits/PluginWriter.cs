@@ -111,18 +111,12 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
     public bool IsReadOnly(GameRelease release, string recordType, string fieldPath)
     {
         if (VmadPath.IsVmadPath(fieldPath)) return false;
-        if (ConditionPath.IsConditionPath(fieldPath))
-        {
-            // #181: a nested (per-array-item) condition path — composed FieldPath contains '[',
-            // e.g. "Effects[0].Conditions" — stays read-only this slice; there's no write path for
-            // it yet (scalar editing lands in #182). Reject here at stage time rather than accept
-            // and only fail later at save (Fallout4ConditionCodec.ApplyFieldValue's
-            // record.GetType().GetProperty returns null for a composed path). A malformed CTDA path
-            // fails closed the same way.
-            return !ConditionPath.TryParse(fieldPath, out var conditionFieldPath, out _, out _)
-                || conditionFieldPath.Contains('[');
-        }
+
         var schemas = _schemaReflector.GetSchemas(release);
+
+        if (ConditionPath.IsConditionPath(fieldPath))
+            return IsConditionPathReadOnly(release, recordType, fieldPath, schemas);
+
         if (!schemas.TryGetValue(recordType, out var schema)) return true;
 
         // #154: any of the record's condition-owning fields (not just a hardcoded "Conditions")
@@ -144,6 +138,30 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
 
         var col = schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath);
         return col?.Apply == null;
+    }
+
+    // #182: a CTDA-prefixed path is either flat (unchanged from before #182 — always editable) or
+    // a nested (per-array-item) path whose composed FieldPath segment contains '[', e.g.
+    // "Effects[0].Conditions". #181 rejected every nested path unconditionally; now it's editable
+    // exactly when it resolves against the record's schema type — a malformed indexed segment
+    // (unbalanced bracket, non-numeric index) fails closed here since it's knowable from the string
+    // alone, while an out-of-range enclosing index can only be caught with a live instance and is
+    // left to Fallout4ConditionCodec.ApplyFieldValue's NotFound at save time (#169's AC: existence/
+    // range enforced at write).
+    private static bool IsConditionPathReadOnly(
+        GameRelease release, string recordType, string fieldPath, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (!ConditionPath.TryParse(fieldPath, out var conditionFieldPath, out _, out _))
+            return true; // malformed CTDA envelope fails closed
+
+        if (!conditionFieldPath.Contains('[')) return false; // flat
+
+        if (!ConditionPath.TryParseNestedFieldPath(conditionFieldPath, out var arrayProp, out _, out var nestedField))
+            return true;
+
+        if (!schemas.TryGetValue(recordType, out var schema)) return true;
+        var codec = ConditionCodecRegistry.For(release.ToCategory());
+        return codec == null || !codec.IsNestedConditionListField(schema.RecordType, arrayProp, nestedField);
     }
 
     private static int HeaderColumnIndex(RecordTableSchema schema, string fieldPath)

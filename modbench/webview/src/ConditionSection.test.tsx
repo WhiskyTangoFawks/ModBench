@@ -552,10 +552,13 @@ describe('ConditionSection', () => {
     expect(screen.getByText('Subject.GetIsID = 1 AND')).toBeInTheDocument();
   });
 
-  it('renders no edit affordances for a nested group, even on an editable plugin column', () => {
+  // #182: scalar sub-field editing at a nested (indexed) path is now live — the reverse of #181's
+  // display-only rendering. Structural ops (add/move/remove) stay disabled: that's #183's scope,
+  // not this one's.
+  it('renders scalar field edit controls for a nested group, but no structural (add/move/remove) controls', () => {
     const c = condition({ function: 'GetIsID', operator: 'EqualTo' });
     const onEdit = vi.fn();
-    const { container } = renderSection(
+    renderSection(
       multiCompare([
         { fieldPath: 'Effects[0].Conditions', conditions: [{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
       ]),
@@ -567,20 +570,22 @@ describe('ConditionSection', () => {
     fireEvent.click(screen.getByText('Effects[0].Conditions').closest('tr')!.querySelector('button')!);
     toggleRow('#1');
 
-    // No structural edit controls (add/move/remove) and no field-level editors anywhere in the section.
+    // Still no structural edit controls (add/move/remove) — that's #183's scope.
     expect(screen.queryByTitle('Add condition')).toBeNull();
     expect(screen.queryByTitle('Move condition up')).toBeNull();
     expect(screen.queryByTitle('Move condition down')).toBeNull();
     expect(screen.queryByTitle('Remove condition')).toBeNull();
-    expect(container.querySelector('select')).toBeNull();
 
-    // Operator renders its plain read-only symbol ("="), not the editable enum text ScalarCell
-    // would use — confirms the read-only render() path, not renderEdit(), is in play.
-    const operatorRow = screen.getByText('Operator').closest('tr')!;
-    expect(within(operatorRow).getByText('=')).toBeInTheDocument();
-    fireEvent.click(within(operatorRow).getByText('='));
-    expect(within(operatorRow).queryByDisplayValue('EqualTo')).toBeNull();
-    expect(onEdit).not.toHaveBeenCalled();
+    // But the Operator field is now a live editor, and committing it stages onEdit with the
+    // composed indexed wire path — the same CTDA\<FieldPath>\<Index>\<SubField> shape a flat
+    // group uses, just with the enclosing array's index folded into the FieldPath segment.
+    const operatorRow = within(screen.getByText('Operator').closest('tr')!);
+    fireEvent.click(operatorRow.getByText('EqualTo'));
+    const select = operatorRow.getByDisplayValue('EqualTo');
+    fireEvent.change(select, { target: { value: 'GreaterThan' } });
+    fireEvent.blur(select);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'CTDA\\Effects[0].Conditions\\0\\Operator', 'GreaterThan');
   });
 
   it('a flat top-level group (unindexed field path) still renders its condition rows open by default, unaffected by group collapse', () => {
