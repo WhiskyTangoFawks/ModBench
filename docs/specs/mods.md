@@ -106,15 +106,16 @@ requires a deploy.**
 23. As a user, I want purge to preserve files the game or tools wrote into `Data/` that
     aren't mine (F4SE output, MCM INI writes) by moving them aside rather than deleting
     them, so that I don't lose generated data.
-24. As a user, I want a Launch Game action that deploys, runs the game, and purges on exit,
-    so that a single action gives me a clean run-and-restore cycle.
+24. As a user, I want Deploy and Purge to be explicit actions, independent of launching
+    anything, so that a deployed `Data/` persists across as many tool runs as I like and I
+    always know which state my game directory is in.
 25. As a user whose mods and game are on different volumes, I want Modbench to detect that
     at first deploy and offer a fix (move the staging folder, use a stock game folder, or
     fall back to symlinks) rather than failing cryptically, so that the constraint is
     surfaced, not hit blindly.
-26. As a user who lets MO2 or Vortex own deployment, I want Modbench to hide Deploy/Purge/
-    Launch entirely and only edit files in place, so that the two tools don't both try to
-    be the deployer.
+26. As a user who lets MO2 or Vortex own deployment, I want Modbench to hide Deploy/Purge and
+    the executable tasks entirely and only edit files in place, so that the two tools don't
+    both try to be the deployer.
 27. As a user, I want to keep a "stock game folder" — a vanilla copy outside Steam — and
     deploy into that, so that Steam updates and permissions can't clobber my deployed
     `Data/`.
@@ -140,14 +141,32 @@ requires a deploy.**
     losing-at-top view (base/master mods on top, winning overrides at the bottom, matching
     MO2) and winning-at-top, so that I can view the list in either direction — a view-order
     choice that never changes which mod wins.
+35. As a user, I want every executable I have configured in MO2 to appear as a VS Code task,
+    so that I can launch the game, F4SE, a plugin editor or a generator from Modbench without
+    re-declaring any of them.
+36. As a user, I want MO2 to stay the source of truth for what gets launched — binary,
+    arguments, working directory — so that Modbench never second-guesses whether I run the
+    Steam copy or a stock folder, or the base game or a script extender.
+37. As a Linux user, I want those tasks to run inside the game's existing Proton prefix, so
+    that the script extender and installed redistributables are present and I don't
+    hand-write a Wine invocation per tool.
+38. As a Linux user with tools MO2 cannot launch — a native script, or a Windows tool needing
+    a hand-rolled Wine wrapper — I want to declare them as tasks alongside the MO2 ones, so
+    that my whole toolchain lives in one picker.
+39. As a user, I want a task that needs a deployed `Data/` to tell me when nothing is
+    deployed, rather than running against a vanilla folder, so that a plugin editor or
+    generator never silently operates on the wrong data.
+40. As a user, I don't want Modbench writing task configuration into my instance folder, so
+    that editing executables in MO2 is enough and no generated file can go stale behind my
+    back.
 
 ## Implementation Decisions
 
 ### Scope
 
 - This spec covers the **Loadout surface**: the Mods tree, install, conflict/status
-  badges, deploy/purge/launch, the modlist source-adapter model, profile switching, and
-  the editing-backend lifecycle hook this surface owns.
+  badges, deploy/purge, launching executables as tasks, the modlist source-adapter model,
+  profile switching, and the editing-backend lifecycle hook this surface owns.
 - The mod manager is a subsystem of the VS Code extension (`modbench/src/modmanager/`). It
   is file/HTTP/JSON work and **never parses plugin binaries** beyond the tiny TES4-header
   master read; the C# backend stays a pure Mutagen + DuckDB record-editing service
@@ -197,7 +216,9 @@ share by inode anyway — record edits go straight to the source mod file with n
   (`fs.link` / `fs.symlink`). A hardlink is a second directory entry pointing to the same
   inode; deleting the link in `Data/` leaves the source mod file intact.
 - **External mode** (`deploymentMode: "external"`): when MO2 or Vortex owns deployment,
-  Deploy/Purge/Launch Game are hidden and Modbench only edits in place.
+  Deploy/Purge are hidden and Modbench only edits in place. Executable tasks are withheld
+  too — with no physical deploy of Modbench's making, an MO2 entry run outside usvfs would
+  see an undeployed game directory.
 - **Same-drive constraint**: `mods/` and the game directory must be on the same volume.
   Checked at first deploy; on violation, prompt to move the staging folder, create a stock
   game folder on the mods volume, or use the **symlink fallback** (no special permission on
@@ -316,7 +337,7 @@ The extension owns the editing backend process
   are distinct from record-level conflicts (the Editing context's `IConflictClassifier`) —
   each surfaces in its own view.
 
-### Deploy / purge / launch (Modbench-4, standalone mode)
+### Deploy / purge (Modbench-4, standalone mode)
 
 - **Deploy**: verify same-volume (else the stock-folder / symlink-fallback prompt);
   `fs.link` each winner into `Data/<relativePath>`, skipping existing non-manifest files
@@ -324,9 +345,125 @@ The extension owns the editing backend process
 - **Purge**: read the manifest, delete each listed hardlink, move `Data/` files that are
   neither in the manifest nor vanilla into `overwrite/` (F4SE outputs, MCM INI
   writes), then delete the manifest.
-- **Launch Game**: deploys, switches the sidebar to the editing views while the game runs,
-  launches the configured executable (`modbench.mods.launchCommand` template for
-  Proton/Wine/F4SE loaders), and purges on exit.
+- **Deploy and Purge are explicit, and independent of launching anything.** Deployment is a
+  *state* of the game directory, not a per-launch transient. MO2 can treat it as transient
+  because usvfs is a live VFS it holds up across however many tool runs; physical hardlinks
+  have no such lifetime, so "deployed" is a mode the user is in.
+- **Superseded**: a Launch Game action that deployed, ran the game, and purged on child exit
+  (with a `modbench.mods.launchCommand` template as the Proton/Wine escape hatch). Withdrawn
+  for three reasons, none of them cost: (1) *the launched process is not the game* — a script
+  extender loader starts it, injects, and exits, so exit-on-child is a false signal, which is
+  why MO2 tracks a whole process tree via a Job Object instead; (2) *purge mutates* — it
+  sweeps non-manifest `Data/` files into `overwrite/` and prunes directories, so a false exit
+  signal rearranges a running game's files; (3) *deployment must outlive any one run* —
+  plugin editors and generators read the deployed `Data/`, so a transient deploy points them
+  at a vanilla folder.
+- **Cost was never the objection.** Measured over 15,000 files on ext4/NVMe using the
+  deployer's actual sequential-await pattern: first deploy ~1.2 s, no-op re-deploy ~0.45 s,
+  purge ~0.76 s, and walking a real 14,865-file `mods/` ~0.14 s (warm cache). The coupling
+  was cheap and wrong, not expensive.
+
+### Launching executables as tasks (*specced, not yet implemented* — #96)
+
+Everything in this section is a decision, not current behavior: what ships today is the
+superseded Launch Game command described above. Implementation replaces it.
+
+Launching is a **VS Code task**, not a button. Tasks are the native "run a program" mechanism
+— a picker, user-editable configuration, terminal output, exit codes — and per
+[ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) the native capability is
+used rather than rebuilt. `launch.json` / `DebugConfigurationProvider` is *not* the right
+native mechanism despite the name: it is a debug-adapter contract, and there is no built-in
+"just run this executable" debug type, so it would mean writing a debug adapter whose only
+job is spawn-and-report-exit.
+
+**MO2's `[customExecutables]` is the launch registry.** Modbench does not synthesize an
+executable path, and does not decide between the Steam copy and a stock game folder, or
+between the base game and a script extender — `ModOrganizer.ini` already answers all of that
+per entry, carrying `binary`, `arguments`, `workingDirectory`, `steamAppID`, `title`,
+`toolbar` and `hide`. Modbench mirrors that registry; it never owns it.
+
+- **A `TaskProvider`, not generated configuration.** `contributes.taskDefinitions` declares
+  the task type; `provideTasks()` computes one task per entry at call time. No
+  `.vscode/tasks.json` is written — the workspace root *is* the MO2 instance directory, so
+  generating task configuration there would drop a stale, Modbench-owned file inside the
+  user's modlist.
+- **`ModOrganizer.ini` is re-read inside `provideTasks()`**, which VS Code calls lazily when
+  the task list is needed. An executable added or edited in MO2 therefore appears without a
+  restart and without a file watcher.
+- **`hide` and `toolbar` decide picker prominence**, not Modbench — they already encode which
+  entries the user actually launches.
+- **`ProcessExecution`, never `ShellExecution`.** Real entries carry arguments of the form
+  `-D:"…\Stock Game Folder\Data" -IKnowWhatImDoing` — spaces plus embedded quotes. An argv
+  array skips the shell quoting layer entirely.
+- **Exit codes are diagnostics, not lifecycle.** `onDidEndTaskProcess` reports the process
+  Modbench launched, which for a loader is not the game. No deployment state may hang off it.
+
+#### Path translation
+
+MO2 entries are authored against MO2's view of the filesystem, which is neither Modbench's
+nor Linux's. Two translations are mandatory:
+
+- **Wine drive letters.** `Z:` maps to the filesystem root, but **`C:` maps to the prefix's
+  `drive_c` and must not be stripped to `/`.** `normalizeGamePath` strips *any* drive letter,
+  which is correct only for `Z:`; it is applied solely to `gamePath` today, and consuming
+  executables — which routinely carry real `C:` tool paths — exposes that.
+- **Staging-relative binaries only resolve under usvfs.** An entry may point at
+  `mods/<Mod>/root/<tool>.exe`, which usvfs makes appear inside the game directory but which
+  is a plain staging path to Modbench. Such an entry is remapped to its deployed location, or
+  rejected with the reason surfaced — never executed at the staging path, where a loader would
+  fail to find the game beside it.
+
+#### Per-platform runner
+
+The entry supplies *what* to run; the platform decides *how*:
+
+- **Windows** — run the binary directly.
+- **Linux** — run it inside the game's **existing** Proton prefix (`compatdata/<appid>`),
+  where the script extender and installed redistributables live; a fresh prefix appears to
+  work and then fails at load. `umu-run` or `protontricks-launch --appid` are preferred over
+  raw `wine` because they derive `STEAM_COMPAT_DATA_PATH` and
+  `STEAM_COMPAT_CLIENT_INSTALL_PATH`, which a VS Code started from a desktop entry will not
+  have inherited. With neither available, fail with an actionable message rather than falling
+  back to a prefix that is wrong.
+- **Never `steam -applaunch`** — it launches the Steam library copy regardless of the entry's
+  binary, so a stock-folder loadout would run a game *without* the deployed mods: precisely
+  the silently-wrong-state failure [ADR-0026](../adr/0026-error-surfacing-policy.md) forbids.
+  It also returns immediately, so it cannot report anything about the run.
+
+Modbench runs natively on the host, so this is strictly more capable than MO2-under-Proton,
+which cannot invoke a native Linux binary at all.
+
+#### Arbitrary executables and wrapper scripts
+
+MO2's registry is not the whole toolchain. Some tools need a hand-rolled Wine wrapper, and a
+native shell script cannot be an MO2 entry at all, because MO2 under Proton has no way to
+execute one. Those are declared as **ordinary `tasks.json` tasks the user writes** — already
+supported by VS Code with no Modbench code. The objection above is to Modbench *generating*
+that file, not to a user owning one.
+
+The contributed task type is the integration point: a hand-written `"type": "modbench"` task
+resolves through `resolveTask()`, so a user's wrapper inherits the same Proton-prefix setup
+and deployed-`Data/` precondition as a mirrored MO2 entry instead of re-deriving the
+environment inside a shell script.
+
+#### Deployment precondition
+
+A task that reads the deployed `Data/` — plugin editors and generators, declared per task —
+**checks the deploy manifest first and refuses with an actionable message when nothing is
+deployed.** It does not silently auto-deploy: which state the game directory is in is exactly
+what a modder needs to know, and hiding it is the failure mode this decoupling exists to
+prevent.
+
+#### Tool writes
+
+Generators write into the real `Data/`, where MO2 would have caught those writes in
+`overwrite/` via usvfs. Purge's existing sweep of non-manifest, non-vanilla `Data/` files into
+`overwrite/` reproduces MO2's end state, but only at purge time rather than live. That
+difference is intentional and documented, not a defect.
+
+**Cross-surface hazard**: running a plugin editor as a task while an mEdit session holds the
+same plugins indexed leaves that index stale with no notification. Resolution is deferred, and
+it is an Editing-surface concern (see [medit.md](medit.md)), not a Loadout one.
 
 ### Overwrite folder (#40)
 
@@ -397,6 +534,10 @@ folder so the user can reassign or discard those files without leaving Modbench.
 - **Prior art**: `modlistText.test.ts`, `metaIni.test.ts`, `modOrganizerIni.test.ts`,
   `statusChecker.test.ts` — fixture-in / value-out style; real MO2 instance fixtures live
   under `modbench/src/modmanager/test/fixtures/`.
+- **Task-provider seams** (Vitest, no VS Code): parsing `[customExecutables]` into entries —
+  Qt's `<n>\key` array numbering, `Z:` versus `C:` drive translation, staging-relative binary
+  detection — asserted fixture-in / value-out against a real `ModOrganizer.ini`; and the
+  per-platform runner, asserted as a value (`{ command, args }`) without spawning anything.
 - **Reused integration seam** (`npm run test:integration`, real VS Code process): the tree
   renders from an instance; a checkbox toggle and a drag-reorder round-trip to
   `modlist.txt`; install from archive lands a disabled mod; profile switch reloads. Add any
@@ -416,6 +557,18 @@ folder so the user can reassign or discard those files without leaving Modbench.
   MO2 features, deferred.
 - **Delta / overlay editing** — loading an arbitrary overriding-plugin set side-by-side
   (xEdit-like) builds on `load-explicit`; deferred.
+- **Reimplementing modding tools natively** — plugin editors, patcher frameworks and LOD/
+  texture generators are *invoked* as tasks, not rebuilt. A task buys invocation, not
+  integration: no output parsing, no conflict awareness, no result surfacing.
+- **Building or repairing Proton prefixes** — Modbench runs inside the prefix the game already
+  has. Creating one, installing redistributables, or assigning a compatibility tool stays with
+  Steam and protontricks.
+- **Editing MO2's `[customExecutables]`** — *deferred, not rejected*. The registry is mirrored
+  read-only for now; adding or changing an executable is done in MO2, or as a user-owned
+  `tasks.json` entry. Write support is wanted eventually — the long-term goal is for Modbench
+  to replace MO2 outright — and would follow the same byte-faithful surgical-edit rule as
+  every other `ModOrganizer.ini` write. A guided wizard for adding executables is a separate
+  and much later question, and may never be worth building.
 
 ## Further Notes
 

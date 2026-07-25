@@ -4,7 +4,7 @@ One living spec per Modbench UI surface. A **surface** is a top-level UI unit th
 
 | Spec | Surface | Status |
 |---|---|---|
-| [mods.md](mods.md) | Mods (Loadout) — install, order, enable, deploy | Implemented |
+| [mods.md](mods.md) | Mods (Loadout) — install, order, enable, deploy | Implemented; executables-as-tasks specced (#96) |
 | [plugins.md](plugins.md) | Plugins (load order) — enable/reorder `plugins.txt` | Specced — ready to build |
 | [downloads.md](downloads.md) | Downloads — Nexus integration, download queue | Specced — MVP ready to build |
 | [medit.md](medit.md) | **mEdit — context overview** (session lifecycle, status bar, command palette, seams). Not a surface | Implemented |
