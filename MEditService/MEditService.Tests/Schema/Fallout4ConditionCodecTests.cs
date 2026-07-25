@@ -137,6 +137,50 @@ public class Fallout4ConditionCodecTests
         Assert.Contains(owners, o => o.FieldPath == "Effects[10].Conditions");
     }
 
+    // ---- IsNestedConditionListField: stage-time shape check (#182) ----
+    // The Type-only twin of ExtractNested's per-instance discovery, used by PluginWriter.IsReadOnly
+    // for a CTDA-prefixed indexed path. A separate method from IsConditionListField (#182 seam
+    // decision) so the bare-fieldpath whole-list-restage gate (#183's boundary) is never loosened
+    // as a side effect of resolving indexed paths here.
+
+    [Fact]
+    public void IsNestedConditionListField_ConcreteElementDeclaresConditionsDirectly_ReturnsTrue()
+    {
+        Assert.True(Codec.IsNestedConditionListField(typeof(IIngestibleGetter), "Effects", "Conditions"));
+    }
+
+    [Fact]
+    public void IsNestedConditionListField_UnknownArrayProperty_ReturnsFalse()
+    {
+        Assert.False(Codec.IsNestedConditionListField(typeof(IIngestibleGetter), "NotAnArray", "Conditions"));
+    }
+
+    [Fact]
+    public void IsNestedConditionListField_WrongNestedFieldName_ReturnsFalse()
+    {
+        Assert.False(Codec.IsNestedConditionListField(typeof(IIngestibleGetter), "Effects", "NotAConditionField"));
+    }
+
+    // Quest.Aliases[i].Conditions (#169/#182 AC#4): IAQuestAliasGetter is a marker interface with
+    // zero data properties — the direct-property check on the element type alone would say no. The
+    // permissive rule must accept anyway, because a concrete subtype (e.g. QuestReferenceAlias)
+    // declares Conditions. Getter-interface form (schema.RecordType, as PluginWriter.IsReadOnly
+    // uses it).
+    [Fact]
+    public void IsNestedConditionListField_AbstractElementType_AcceptsIfAnyConcreteSubtypeDeclaresConditions_GetterForm()
+    {
+        Assert.True(Codec.IsNestedConditionListField(typeof(IQuestGetter), "Aliases", "Conditions"));
+    }
+
+    // Setter-class form (record.GetType(), as EditOrchestrator.TryApplyField's dispatch uses it) —
+    // AQuestAlias (the setter-side abstract base) is just as bare as its getter-side marker
+    // interface, so the same fallback must apply here too.
+    [Fact]
+    public void IsNestedConditionListField_AbstractElementType_AcceptsIfAnyConcreteSubtypeDeclaresConditions_SetterForm()
+    {
+        Assert.True(Codec.IsNestedConditionListField(typeof(Quest), "Aliases", "Conditions"));
+    }
+
     // ---- ApplyFieldValue: write-back (#152) ----
 
     [Fact]

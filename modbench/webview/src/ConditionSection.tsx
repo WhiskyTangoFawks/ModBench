@@ -382,10 +382,10 @@ function conditionRows(
   ctx: SectionCtx,
 ): React.ReactNode[] {
   const { columns, onOpen, toggle } = ctx;
-  // #181: a nested group has no write path yet (read-only this slice) — never render an edit
-  // affordance (row controls, field inputs, add-condition control) for one, matching what
-  // PluginWriter.IsReadOnly now rejects at stage time. Gated the same way discovery itself is: by
-  // the field path's own shape, never a per-type check.
+  // #182: a nested group's scalar sub-field edits are live on the same terms as a flat group's —
+  // PluginWriter.IsReadOnly now accepts a nested path that resolves against the record's schema
+  // type. `nested` still gates the *structural* ops (row move/remove below, and addConditionRow in
+  // the caller): add/remove/reorder of a nested list's items is #183's scope, not this one's.
   const nested = isNestedGroupPath(groupFieldPath);
   const labelStyle: React.CSSProperties = {
     ...baseCell,
@@ -418,7 +418,10 @@ function conditionRows(
     // Absent key = that field is identical across plugins → no coloring (never fall back to the
     // whole-condition state, which would recolor every field when only one differs).
     const states = condition.fieldCellStates[field.key] ?? {};
-    const wirePath = nested ? null : wirePathFor(groupFieldPath, condition.index, field.key);
+    // #182: wirePath is now computed for a nested group too — wirePathFor/conditionFieldPath
+    // already compose the enclosing array's index into the FieldPath segment correctly with no
+    // change, since groupFieldPath is already the indexed string ("Effects[2].Conditions").
+    const wirePath = wirePathFor(groupFieldPath, condition.index, field.key);
     rows.push(
       <tr key={fieldKey}>
         <td style={{ ...baseCell, paddingLeft: 28, opacity: 0.85 }}>{field.label}</td>

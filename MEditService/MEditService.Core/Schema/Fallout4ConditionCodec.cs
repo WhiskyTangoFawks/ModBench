@@ -116,6 +116,32 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     public bool IsConditionListField(Type recordType, string fieldPath) =>
         recordType.GetProperty(fieldPath) is { } prop && IsConditionListProperty(prop);
 
+    // #182: the Type-only twin of ExtractNested's per-instance discovery — walks into the enclosing
+    // array property, then checks the element type (or, when abstract/interface and bare, any
+    // concrete subtype in the same assembly) for a condition-list property named nestedField.
+    // recordType is either the record's getter interface (PluginWriter.IsReadOnly, via
+    // schema.RecordType) or its concrete setter class (EditOrchestrator's record.GetType()
+    // dispatch) — both resolve the same way, since GetEnumerableElementType works on either shape.
+    public bool IsNestedConditionListField(Type recordType, string arrayProp, string nestedField)
+    {
+        if (recordType.GetProperty(arrayProp) is not { } arrayPropInfo) return false;
+
+        var elementType = GetEnumerableElementType(arrayPropInfo.PropertyType);
+        if (elementType == null) return false;
+
+        if (elementType.GetProperty(nestedField) is { } directProp && IsConditionListProperty(directProp))
+            return true;
+
+        // A concrete element type that doesn't declare the field directly has nothing further to
+        // check — only an abstract/interface marker (Quest.Aliases's IAQuestAliasGetter/
+        // AQuestAlias) gets the permissive concrete-subtype fallback.
+        if (!elementType.IsAbstract && !elementType.IsInterface) return false;
+
+        return elementType.Assembly.GetTypes()
+            .Where(t => !t.IsAbstract && !t.IsInterface && elementType.IsAssignableFrom(t))
+            .Any(t => t.GetProperty(nestedField) is { } p && IsConditionListProperty(p));
+    }
+
     // The one shape test that decides "is this property a condition list" everywhere it matters:
     // not an indexer, and its value would satisfy IEnumerable<IConditionGetter> (covers both
     // non-nullable ExtendedList<Condition> and nullable ExtendedList<Condition>? owners like
@@ -208,12 +234,76 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
 
     // Record-level entry point PluginWriter calls: finds the mutable condition list via the same
     // reflection Extract uses to discover it, then delegates to the directly-testable list-level
-    // overload below.
+    // overload below. A composed fieldPath (#182: "Effects[2].Conditions") routes through the
+    // nested resolver instead — record is always a concrete instance here (never the abstract
+    // getter-interface/setter-base Type that IsNestedConditionListField has to allow for), so
+    // walking arrayProp -> element -> nestedField never needs the stage-time permissive fallback:
+    // the live element's own GetType() is always concrete.
     public ConditionApplyResult ApplyFieldValue(
-        IMajorRecord record, string fieldPath, int index, string subField, JsonElement value) =>
-        record.GetType().GetProperty(fieldPath)?.GetValue(record) is IList<Condition> conditions
+        IMajorRecord record, string fieldPath, int index, string subField, JsonElement value)
+    {
+        if (TryParseNestedFieldPath(fieldPath, out var arrayProp, out var arrayIndex, out var nestedField))
+            return ApplyNestedFieldValue(record, arrayProp, arrayIndex, nestedField, index, subField, value);
+
+        return record.GetType().GetProperty(fieldPath)?.GetValue(record) is IList<Condition> conditions
             ? ApplyFieldValue(conditions, index, subField, value)
             : ConditionApplyResult.NotFound;
+    }
+
+    // Walks into the enclosing array (arrayProp) at arrayIndex, then the nested condition list
+    // (nestedField) on that element, before delegating to the same list-level ApplyFieldValue every
+    // flat/scalar edit uses. Any resolution failure (unknown array property, out-of-range index —
+    // #169's AC: caught here since only a live instance can know the real length, not the stage-time
+    // shape check — a null element, or the nested property not actually being a condition list on
+    // this concrete element) returns NotFound before any mutation, so a bad nested path can never
+    // produce a partial write.
+    private static ConditionApplyResult ApplyNestedFieldValue(
+        IMajorRecord record, string arrayProp, int arrayIndex, string nestedField,
+        int conditionIndex, string subField, JsonElement value)
+    {
+        if (record.GetType().GetProperty(arrayProp)?.GetValue(record) is not System.Collections.IList array)
+            return ConditionApplyResult.NotFound;
+        if (arrayIndex < 0 || arrayIndex >= array.Count) return ConditionApplyResult.NotFound;
+        if (array[arrayIndex] is not { } element) return ConditionApplyResult.NotFound;
+        if (element.GetType().GetProperty(nestedField)?.GetValue(element) is not IList<Condition> conditions)
+            return ConditionApplyResult.NotFound;
+
+        return ApplyFieldValue(conditions, conditionIndex, subField, value);
+    }
+
+    // Local mirror of ConditionPath.TryParseNestedFieldPath (Edits/ConditionPath.cs) — Schema owns
+    // no dependency on Edits, so this composed-path shape is recognized here independently rather
+    // than shared, the same way TryParseParameterIndex below is already duplicated for the same
+    // reason. Parses "Effects[2].Conditions" into its enclosing array property name/index and the
+    // nested condition-list property name; false for a flat (unbracketed) fieldPath or anything
+    // that doesn't match this one-level shape.
+    private static bool TryParseNestedFieldPath(
+        string fieldPath, out string arrayProp, out int arrayIndex, out string nestedField)
+    {
+        arrayProp = "";
+        arrayIndex = -1;
+        nestedField = "";
+
+        var openBracket = fieldPath.IndexOf('[');
+        if (openBracket <= 0) return false;
+
+        var closeBracket = fieldPath.IndexOf(']', openBracket);
+        if (closeBracket < 0) return false;
+
+        var afterBracket = closeBracket + 1;
+        if (afterBracket >= fieldPath.Length || fieldPath[afterBracket] != '.') return false;
+
+        var indexStr = fieldPath[(openBracket + 1)..closeBracket];
+        if (!int.TryParse(indexStr, out var parsedIndex) || parsedIndex < 0) return false;
+
+        var nested = fieldPath[(afterBracket + 1)..];
+        if (nested.Length == 0 || nested.Contains('[')) return false;
+
+        arrayProp = fieldPath[..openBracket];
+        arrayIndex = parsedIndex;
+        nestedField = nested;
+        return true;
+    }
 
     // subField is one of Function / RunOn / Operator / Comparison / UseGlobal / "Parameter\<n>"
     // (ConditionPath.SubField — Schema doesn't depend on Edits, so this reads it as a plain string).

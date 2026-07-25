@@ -318,4 +318,102 @@ public sealed class EditOrchestratorConditionTests
             Assert.True(pendingAfter?.ContainsKey("DialogConditions"));
         }
     }
+
+    // ---- Nested (per-array-item) condition paths (#182) ----
+    // Old-value capture and form-reference extraction key off ConditionPath.TryParse's opaque
+    // conditionFieldPath / the whole wire path, never off whether it contains '[' — so both already
+    // work for a composed indexed path with no code change. These are the regression tests proving
+    // that, now that PluginWriter.IsReadOnly stops blocking staging for a path that resolves.
+
+    private static (FormKey ingestibleFk, PluginFixtureData data) BuildNestedFixture(
+        string prefix, out string dataFolder, out string pluginsTxt)
+    {
+        FormKey ingestibleFk = default;
+        var data = new PluginFixtureBuilder(prefix)
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var ingestible = mod.Ingestibles.AddNew("Chem");
+                ingestibleFk = ingestible.FormKey;
+                var effect = new Effect { Data = new EffectData() };
+                effect.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    ComparisonValue = 1.0f,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+                ingestible.Effects.Add(effect);
+            })
+            .Build();
+        dataFolder = data.DataFolder;
+        pluginsTxt = data.PluginsTxtPath;
+        return (ingestibleFk, data);
+    }
+
+    [Fact]
+    public void StageEdit_NestedConditionOperatorEdit_StagedWithOldValueCaptured()
+    {
+        var (ingestibleFk, data) = BuildNestedFixture("eo-nested-cond-operator", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, _) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+            var fields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\Effects[0].Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+
+            var result = orchestrator.StageEdit(ingestibleFk.ToString(), "TestPlugin.esp", fields, "user", null);
+
+            var staged = Assert.IsType<StageEditResult.Staged>(result);
+            var change = Assert.Single(staged.Changes);
+            Assert.Equal(@"CTDA\Effects[0].Conditions\0\Operator", change.FieldPath);
+            Assert.Equal("GreaterThan", change.NewValue.GetString());
+
+            // Old value must be the in-plugin operator ("EqualTo"), not null — proves
+            // CaptureConditionOldValues already matches ExtractNested's composed owner FieldPath.
+            Assert.Equal(JsonValueKind.String, change.OldValue.ValueKind);
+            Assert.Equal("EqualTo", change.OldValue.GetString());
+        }
+    }
+
+    [Fact]
+    public void StageEdit_NestedConditionFormParameterEdit_AddsFormReference()
+    {
+        FormKey ingestibleFk = default, questFk = default;
+        using var data = new PluginFixtureBuilder("eo-nested-cond-formparam")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var quest = mod.Quests.AddNew("TargetQuest");
+                questFk = quest.FormKey;
+                var ingestible = mod.Ingestibles.AddNew("Chem");
+                ingestibleFk = ingestible.FormKey;
+                var effect = new Effect { Data = new EffectData() };
+                effect.Conditions.Add(new ConditionFloat
+                {
+                    Data = new FunctionConditionData { Function = Condition.Function.GetStageDone },
+                });
+                ingestible.Effects.Add(effect);
+            })
+            .Build();
+
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var fields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\Effects[0].Conditions\0\Parameter\0"] = J($"\"{questFk}\"")
+            };
+
+            var result = orchestrator.StageEdit(ingestibleFk.ToString(), "TestPlugin.esp", fields, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(result);
+            var drained = changes.DrainForPlugin("TestPlugin.esp");
+            var condRef = drained.FormRefsByFormKey[ingestibleFk.ToString()]
+                .FirstOrDefault(r => r.FieldPath.Equals(@"CTDA\Effects[0].Conditions\0\Parameter\0", StringComparison.Ordinal));
+            Assert.NotNull(condRef);
+            Assert.Equal(questFk.ToString(), condRef.TargetFormKey);
+        }
+    }
 }

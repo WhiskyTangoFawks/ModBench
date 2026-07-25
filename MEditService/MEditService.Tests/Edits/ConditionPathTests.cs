@@ -79,4 +79,81 @@ public sealed class ConditionPathTests
     {
         Assert.False(ConditionPath.TryParseParameterIndex("Function", out _));
     }
+
+    // ---- TryParseNestedFieldPath (#182): splits a composed conditionFieldPath segment
+    // ("Effects[2].Conditions") into the enclosing array's property name/index and the nested
+    // condition-list property name. Pure string parsing — no reflection, no CLR type. ----
+
+    [Fact]
+    public void TryParseNestedFieldPath_ValidOneLevelPath_ReturnsArrayPropIndexAndNestedField()
+    {
+        var ok = ConditionPath.TryParseNestedFieldPath(
+            "Effects[2].Conditions", out var arrayProp, out var arrayIndex, out var nestedField);
+        Assert.True(ok);
+        Assert.Equal("Effects", arrayProp);
+        Assert.Equal(2, arrayIndex);
+        Assert.Equal("Conditions", nestedField);
+    }
+
+    [Fact]
+    public void TryParseNestedFieldPath_FlatPathWithNoBracket_ReturnsFalse()
+    {
+        Assert.False(ConditionPath.TryParseNestedFieldPath(
+            "Conditions", out _, out _, out _));
+    }
+
+    [Fact]
+    public void TryParseNestedFieldPath_UnbalancedBracket_ReturnsFalse()
+    {
+        Assert.False(ConditionPath.TryParseNestedFieldPath(
+            "Effects[2.Conditions", out _, out _, out _));
+    }
+
+    [Fact]
+    public void TryParseNestedFieldPath_NonNumericIndex_ReturnsFalse()
+    {
+        Assert.False(ConditionPath.TryParseNestedFieldPath(
+            "Effects[abc].Conditions", out _, out _, out _));
+    }
+
+    [Fact]
+    public void TryParseNestedFieldPath_NegativeIndex_ReturnsFalse()
+    {
+        Assert.False(ConditionPath.TryParseNestedFieldPath(
+            "Effects[-1].Conditions", out _, out _, out _));
+    }
+
+    [Fact]
+    public void TryParseNestedFieldPath_MissingDotAfterBracket_ReturnsFalse()
+    {
+        Assert.False(ConditionPath.TryParseNestedFieldPath(
+            "Effects[2]Conditions", out _, out _, out _));
+    }
+
+    [Fact]
+    public void TryParseNestedFieldPath_EmptyNestedField_ReturnsFalse()
+    {
+        Assert.False(ConditionPath.TryParseNestedFieldPath(
+            "Effects[2].", out _, out _, out _));
+    }
+
+    // Two-level nesting (Perk.Effects[i].Conditions[j].Conditions) is #184's scope, not #182's —
+    // a nestedField that itself carries another bracket must not be silently accepted here.
+    [Fact]
+    public void TryParseNestedFieldPath_TwoLevelNestedField_ReturnsFalse()
+    {
+        Assert.False(ConditionPath.TryParseNestedFieldPath(
+            "Effects[2].Conditions[1].Conditions", out _, out _, out _));
+    }
+
+    [Fact]
+    public void TryParseNestedFieldPath_DoubleDigitIndex_ParsesCorrectly()
+    {
+        var ok = ConditionPath.TryParseNestedFieldPath(
+            "Effects[10].Conditions", out var arrayProp, out var arrayIndex, out var nestedField);
+        Assert.True(ok);
+        Assert.Equal("Effects", arrayProp);
+        Assert.Equal(10, arrayIndex);
+        Assert.Equal("Conditions", nestedField);
+    }
 }
