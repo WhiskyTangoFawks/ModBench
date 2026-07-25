@@ -119,11 +119,24 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
 
         if (!schemas.TryGetValue(recordType, out var schema)) return true;
 
+        var codec = ConditionCodecRegistry.For(release.ToCategory());
+
         // #154: any of the record's condition-owning fields (not just a hardcoded "Conditions")
         // is always editable via the whole-list-restage path — recognized by asking this game's
         // codec whether recordType actually has a condition-list property named fieldPath.
-        if (ConditionCodecRegistry.For(release.ToCategory()) is { } codec
-            && codec.IsConditionListField(schema.RecordType, fieldPath))
+        if (codec != null && codec.IsConditionListField(schema.RecordType, fieldPath))
+            return false;
+
+        // #183: a nested list's own whole-list restage stages at its bare composed path (no CTDA
+        // prefix, e.g. "Effects[0].Conditions") — the bare-path analogue of
+        // IsConditionPathReadOnly's nested branch below, minus the per-condition index (there is
+        // none; the restage replaces the whole nested list). A composed path that doesn't actually
+        // resolve against the record's schema type (wrong nested field name, malformed bracket)
+        // falls through to the ordinary column lookup below, which finds no such column and stays
+        // read-only — same fail-closed rule as the CTDA-prefixed case.
+        if (codec != null && fieldPath.Contains('[')
+            && ConditionPath.TryParseNestedFieldPath(fieldPath, out var arrayProp, out _, out var nestedField)
+            && codec.IsNestedConditionListField(schema.RecordType, arrayProp, nestedField))
         {
             return false;
         }
@@ -532,8 +545,17 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         // (not just "Conditions") — an instance is on hand here, so the check reflects directly
         // off record.GetType() rather than needing the recordType-string/schema lookup PluginWriter
         // .IsReadOnly uses when it only has a type name.
-        if (ConditionCodecRegistry.For(release.ToCategory()) is { } codec
-            && codec.IsConditionListField(record.GetType(), change.FieldPath))
+        var codec = ConditionCodecRegistry.For(release.ToCategory());
+        if (codec != null && codec.IsConditionListField(record.GetType(), change.FieldPath))
+            return ApplyConditionListField(record, change, release);
+
+        // #183: a nested list's own whole-list restage — bare composed path, e.g.
+        // "Effects[2].Conditions" — dispatches the same way once it resolves against this
+        // concrete record's element type. codec.ApplyListValue itself does the arrayProp/
+        // arrayIndex/nestedField walk; this only decides whether to route there at all.
+        if (codec != null && change.FieldPath.Contains('[')
+            && ConditionPath.TryParseNestedFieldPath(change.FieldPath, out var arrayProp, out _, out var nestedField)
+            && codec.IsNestedConditionListField(record.GetType(), arrayProp, nestedField))
         {
             return ApplyConditionListField(record, change, release);
         }

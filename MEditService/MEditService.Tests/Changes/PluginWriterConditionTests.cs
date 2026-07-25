@@ -82,6 +82,32 @@ public class PluginWriterConditionTests
         Assert.True(writer.IsReadOnly(GameRelease.Fallout4, "alch", @"CTDA\Effects[0.Conditions\0\Function"));
     }
 
+    // #183: a nested restage stages at the bare composed path (no CTDA prefix, no per-condition
+    // index) — the whole-list-restage analogue of the flat "Conditions" bare-path test above
+    // (IsReadOnly_ConditionListPath_ReturnsFalse), extended to an indexed nested path.
+    [Fact]
+    public void IsReadOnly_NestedConditionListPath_ReturnsFalse()
+    {
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+        Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "alch", "Effects[0].Conditions"));
+    }
+
+    // Same "fails closed at stage" rule as the CTDA-prefixed nested case: a nested field name that
+    // doesn't actually resolve against the record's schema type is read-only, not silently accepted.
+    [Fact]
+    public void IsReadOnly_NestedConditionListPath_WrongNestedFieldName_ReturnsTrue()
+    {
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+        Assert.True(writer.IsReadOnly(GameRelease.Fallout4, "alch", "Effects[0].NotAConditionField"));
+    }
+
+    [Fact]
+    public void IsReadOnly_NestedConditionListPath_MalformedBracket_ReturnsTrue()
+    {
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+        Assert.True(writer.IsReadOnly(GameRelease.Fallout4, "alch", "Effects[0.Conditions"));
+    }
+
     // ---- Helpers ----
 
     private static (string pluginPath, FormKey cobjFk, PluginFixtureData data) BuildFixture(string prefix)
@@ -645,5 +671,64 @@ public class PluginWriterConditionTests
             .Quests.First(q => q.FormKey == questFk);
         var alias = Assert.IsAssignableFrom<IQuestReferenceAliasGetter>(reloaded.Aliases![0]);
         Assert.Equal(CompareOperator.GreaterThan, alias.Conditions[0].CompareOperator);
+    }
+
+    // ---- Nested whole-list restage (#183): add/remove/move stage the entire nested list at its
+    // own composed indexed field path ("Effects[0].Conditions"), the same bare-path mechanism the
+    // flat SaveAsync_ConditionListRestage_ReplacesEntireList test proves for a top-level field. ----
+
+    [Fact]
+    public async Task SaveAsync_NestedConditionListRestage_ReplacesEntireList()
+    {
+        var (path, ingestibleFk, fixture) = BuildNestedFixture("cond-nested-list-restage");
+        using var _ = fixture;
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var newList = """
+            [
+              { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                "runOnReference": null, "useGlobal": false, "comparisonFloat": 5.0, "comparisonGlobal": null, "parameters": [] },
+              { "function": "GetDead", "operator": "NotEqualTo", "or": true, "runOnTarget": "Target",
+                "runOnReference": null, "useGlobal": false, "comparisonFloat": 0.0, "comparisonGlobal": null, "parameters": [] }
+            ]
+            """;
+
+        var result = await writer.SaveAsync(path,
+            [MakeConditionChange(ingestibleFk, "alch", "Effects[0].Conditions", newList)], GameRelease.Fallout4);
+
+        Assert.Contains("Effects[0].Conditions", result.Applied);
+        var conditions = ReloadIngestible(path, ingestibleFk).Effects[0].Conditions;
+        Assert.Equal(2, conditions.Count);
+        Assert.Equal(CompareOperator.EqualTo, conditions[0].CompareOperator);
+        Assert.Equal(CompareOperator.NotEqualTo, conditions[1].CompareOperator);
+        Assert.Equal(Condition.Flag.OR, conditions[1].Flags);
+    }
+
+    // #169's AC: an out-of-range enclosing index can only be caught with a live instance — the
+    // whole-list-restage analogue of SaveAsync_NestedConditionOutOfRangeEnclosingIndex... above.
+    [Fact]
+    public async Task SaveAsync_NestedConditionListRestageOutOfRangeIndex_AppearsInNotFoundWithoutPartialWrite()
+    {
+        var (path, ingestibleFk, fixture) = BuildNestedFixture("cond-nested-list-restage-oor");
+        using var _ = fixture;
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var newList = """
+            [
+              { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                "runOnReference": null, "useGlobal": false, "comparisonFloat": 5.0, "comparisonGlobal": null, "parameters": [] }
+            ]
+            """;
+
+        var result = await writer.SaveAsync(path,
+            [MakeConditionChange(ingestibleFk, "alch", "Effects[9].Conditions", newList)], GameRelease.Fallout4);
+
+        Assert.Contains("Effects[9].Conditions", result.NotFound);
+        Assert.Empty(result.Applied);
+
+        var reloaded = ReloadIngestible(path, ingestibleFk);
+        Assert.Single(reloaded.Effects);
+        Assert.Single(reloaded.Effects[0].Conditions);
+        Assert.Equal(CompareOperator.EqualTo, reloaded.Effects[0].Conditions[0].CompareOperator);
     }
 }

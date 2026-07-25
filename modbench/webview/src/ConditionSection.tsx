@@ -382,11 +382,6 @@ function conditionRows(
   ctx: SectionCtx,
 ): React.ReactNode[] {
   const { columns, onOpen, toggle } = ctx;
-  // #182: a nested group's scalar sub-field edits are live on the same terms as a flat group's —
-  // PluginWriter.IsReadOnly now accepts a nested path that resolves against the record's schema
-  // type. `nested` still gates the *structural* ops (row move/remove below, and addConditionRow in
-  // the caller): add/remove/reorder of a nested list's items is #183's scope, not this one's.
-  const nested = isNestedGroupPath(groupFieldPath);
   const labelStyle: React.CSSProperties = {
     ...baseCell,
     paddingLeft: 8,
@@ -404,7 +399,7 @@ function conditionRows(
         return (
           <span style={{ display: 'inline-flex', alignItems: 'center' }}>
             {c ? <span>{conditionSummary(c)}</span> : dash()}
-            {!nested && ctx.isEditable(plugin) && conditionRowControls(condition, groupConditions, groupFieldPath, plugin, ctx)}
+            {ctx.isEditable(plugin) && conditionRowControls(condition, groupConditions, groupFieldPath, plugin, ctx)}
           </span>
         );
       })}
@@ -522,8 +517,9 @@ export function ConditionSection({
       const key = `${group.fieldPath}#${condition.index}`;
       rows.push(...conditionRows(condition, group.conditions, key, group.fieldPath, expanded.has(key), ctx));
     }
-    // #181: no add-condition control for a nested group — read-only this slice, no write path yet.
-    if (!nested) rows.push(addConditionRow(group.fieldPath, group.conditions, ctx));
+    // #183: the add-condition row now renders for a nested group too — the write path (whole-list
+    // restage at the group's own composed field path) is live for both flat and nested groups.
+    rows.push(addConditionRow(group.fieldPath, group.conditions, ctx));
   }
 
   return <>{rows}</>;
