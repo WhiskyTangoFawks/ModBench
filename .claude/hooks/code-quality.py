@@ -66,6 +66,73 @@ def changed_files(root: str) -> list[str]:
     return out.splitlines()
 
 
+EDIT_TOOLS = ("Edit", "Write", "NotebookEdit")
+
+
+def _is_real_user_prompt(entry: dict) -> bool:
+    """True for an actual user message, not a tool_result (also type=='user')."""
+    if entry.get("type") != "user":
+        return False
+    content = entry.get("message", {}).get("content")
+    if not isinstance(content, list):
+        return True
+    return not any(isinstance(c, dict) and c.get("type") == "tool_result" for c in content)
+
+
+def _tool_use_blocks(entry: dict):
+    content = entry.get("message", {}).get("content")
+    if not isinstance(content, list):
+        return
+    for c in content:
+        if isinstance(c, dict) and c.get("type") == "tool_use":
+            yield c
+
+
+def _read_transcript(transcript_path: str | None) -> list[dict] | None:
+    if not transcript_path or not os.path.exists(transcript_path):
+        return None
+    try:
+        with open(transcript_path) as fh:
+            return [json.loads(line) for line in fh if line.strip()]
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _last_prompt_index(entries: list[dict]) -> int:
+    last_prompt_idx = -1
+    for i, entry in enumerate(entries):
+        if _is_real_user_prompt(entry):
+            last_prompt_idx = i
+    return last_prompt_idx
+
+
+def turn_edited_files(transcript_path: str | None) -> set[str] | None:
+    """Absolute paths touched by Edit/Write/NotebookEdit calls this turn.
+
+    `git diff --name-only HEAD` reports the whole working-tree diff, which
+    includes anything left uncommitted by earlier turns or other sessions —
+    not just what happened just now. Scope to this turn by reading the
+    transcript and collecting tool_use file_paths after the most recent real
+    user prompt.
+
+    Returns None if the transcript can't be read, so the caller can fall back
+    to the unscoped diff rather than silently under-report.
+    """
+    entries = _read_transcript(transcript_path)
+    if entries is None:
+        return None
+
+    edited = set()
+    for entry in entries[_last_prompt_index(entries) + 1:]:
+        for block in _tool_use_blocks(entry):
+            if block.get("name") not in EDIT_TOOLS:
+                continue
+            fp = (block.get("input") or {}).get("file_path")
+            if fp:
+                edited.add(os.path.realpath(fp))
+    return edited
+
+
 # ---------------------------------------------------------------- backend (C#)
 def build_sarif(root: str, csproj: str, sarif_path: str) -> None:
     """Compile one project in isolation, emitting a SARIF error log.
@@ -234,6 +301,12 @@ def main() -> int:
 
     root = repo_root()
     changed = changed_files(root)
+    if not changed:
+        return 0
+
+    turn_files = turn_edited_files(payload.get("transcript_path"))
+    if turn_files is not None:
+        changed = [f for f in changed if os.path.realpath(os.path.join(root, f)) in turn_files]
     if not changed:
         return 0
 
