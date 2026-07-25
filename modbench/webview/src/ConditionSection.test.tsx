@@ -552,6 +552,37 @@ describe('ConditionSection', () => {
     expect(screen.getByText('Subject.GetIsID = 1 AND')).toBeInTheDocument();
   });
 
+  it('renders no edit affordances for a nested group, even on an editable plugin column', () => {
+    const c = condition({ function: 'GetIsID', operator: 'EqualTo' });
+    const onEdit = vi.fn();
+    const { container } = renderSection(
+      multiCompare([
+        { fieldPath: 'Effects[0].Conditions', conditions: [{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
+      ]),
+      ['A.esp'],
+      { onEdit, client: fakeClient() },
+    );
+
+    // Expand the nested group, then expand the condition row to its field details.
+    fireEvent.click(screen.getByText('Effects[0].Conditions').closest('tr')!.querySelector('button')!);
+    toggleRow('#1');
+
+    // No structural edit controls (add/move/remove) and no field-level editors anywhere in the section.
+    expect(screen.queryByTitle('Add condition')).toBeNull();
+    expect(screen.queryByTitle('Move condition up')).toBeNull();
+    expect(screen.queryByTitle('Move condition down')).toBeNull();
+    expect(screen.queryByTitle('Remove condition')).toBeNull();
+    expect(container.querySelector('select')).toBeNull();
+
+    // Operator renders its plain read-only symbol ("="), not the editable enum text ScalarCell
+    // would use — confirms the read-only render() path, not renderEdit(), is in play.
+    const operatorRow = screen.getByText('Operator').closest('tr')!;
+    expect(within(operatorRow).getByText('=')).toBeInTheDocument();
+    fireEvent.click(within(operatorRow).getByText('='));
+    expect(within(operatorRow).queryByDisplayValue('EqualTo')).toBeNull();
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
   it('a flat top-level group (unindexed field path) still renders its condition rows open by default, unaffected by group collapse', () => {
     const c = condition({ function: 'GetIsID' });
     renderSection(

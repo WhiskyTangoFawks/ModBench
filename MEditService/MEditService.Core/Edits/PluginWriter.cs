@@ -111,7 +111,17 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
     public bool IsReadOnly(GameRelease release, string recordType, string fieldPath)
     {
         if (VmadPath.IsVmadPath(fieldPath)) return false;
-        if (ConditionPath.IsConditionPath(fieldPath)) return false;
+        if (ConditionPath.IsConditionPath(fieldPath))
+        {
+            // #181: a nested (per-array-item) condition path — composed FieldPath contains '[',
+            // e.g. "Effects[0].Conditions" — stays read-only this slice; there's no write path for
+            // it yet (scalar editing lands in #182). Reject here at stage time rather than accept
+            // and only fail later at save (Fallout4ConditionCodec.ApplyFieldValue's
+            // record.GetType().GetProperty returns null for a composed path). A malformed CTDA path
+            // fails closed the same way.
+            return !ConditionPath.TryParse(fieldPath, out var conditionFieldPath, out _, out _)
+                || conditionFieldPath.Contains('[');
+        }
         var schemas = _schemaReflector.GetSchemas(release);
         if (!schemas.TryGetValue(recordType, out var schema)) return true;
 

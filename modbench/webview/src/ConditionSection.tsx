@@ -382,6 +382,11 @@ function conditionRows(
   ctx: SectionCtx,
 ): React.ReactNode[] {
   const { columns, onOpen, toggle } = ctx;
+  // #181: a nested group has no write path yet (read-only this slice) — never render an edit
+  // affordance (row controls, field inputs, add-condition control) for one, matching what
+  // PluginWriter.IsReadOnly now rejects at stage time. Gated the same way discovery itself is: by
+  // the field path's own shape, never a per-type check.
+  const nested = isNestedGroupPath(groupFieldPath);
   const labelStyle: React.CSSProperties = {
     ...baseCell,
     paddingLeft: 8,
@@ -399,7 +404,7 @@ function conditionRows(
         return (
           <span style={{ display: 'inline-flex', alignItems: 'center' }}>
             {c ? <span>{conditionSummary(c)}</span> : dash()}
-            {ctx.isEditable(plugin) && conditionRowControls(condition, groupConditions, groupFieldPath, plugin, ctx)}
+            {!nested && ctx.isEditable(plugin) && conditionRowControls(condition, groupConditions, groupFieldPath, plugin, ctx)}
           </span>
         );
       })}
@@ -413,7 +418,7 @@ function conditionRows(
     // Absent key = that field is identical across plugins → no coloring (never fall back to the
     // whole-condition state, which would recolor every field when only one differs).
     const states = condition.fieldCellStates[field.key] ?? {};
-    const wirePath = wirePathFor(groupFieldPath, condition.index, field.key);
+    const wirePath = nested ? null : wirePathFor(groupFieldPath, condition.index, field.key);
     rows.push(
       <tr key={fieldKey}>
         <td style={{ ...baseCell, paddingLeft: 28, opacity: 0.85 }}>{field.label}</td>
@@ -514,7 +519,8 @@ export function ConditionSection({
       const key = `${group.fieldPath}#${condition.index}`;
       rows.push(...conditionRows(condition, group.conditions, key, group.fieldPath, expanded.has(key), ctx));
     }
-    rows.push(addConditionRow(group.fieldPath, group.conditions, ctx));
+    // #181: no add-condition control for a nested group — read-only this slice, no write path yet.
+    if (!nested) rows.push(addConditionRow(group.fieldPath, group.conditions, ctx));
   }
 
   return <>{rows}</>;

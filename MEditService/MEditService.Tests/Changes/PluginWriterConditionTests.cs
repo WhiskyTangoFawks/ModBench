@@ -40,6 +40,19 @@ public class PluginWriterConditionTests
         Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "qust", fieldPath));
     }
 
+    // #181: a nested (per-array-item) condition path — its composed FieldPath segment contains an
+    // enclosing-array index, e.g. "Effects[0].Conditions" — has no write path yet (read-only this
+    // slice; scalar editing lands in #182). Before this test, IsReadOnly returned false for ANY
+    // CTDA\-prefixed path regardless of shape, so a nested path would stage as accepted and only
+    // fail later at save via Fallout4ConditionCodec.ApplyFieldValue's GetProperty lookup. Staging
+    // must reject it up front instead.
+    [Fact]
+    public void IsReadOnly_NestedConditionScalarPath_ReturnsTrue()
+    {
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+        Assert.True(writer.IsReadOnly(GameRelease.Fallout4, "alch", @"CTDA\Effects[0].Conditions\0\Function"));
+    }
+
     // ---- Helpers ----
 
     private static (string pluginPath, FormKey cobjFk, PluginFixtureData data) BuildFixture(string prefix)

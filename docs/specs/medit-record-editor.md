@@ -268,10 +268,13 @@ classification.
   Nested groups align across plugins positionally by the enclosing array's index (the glossary's
   Unsorted array rule, ADR-0019) and sort by that index numerically, not lexicographically. In the
   grid, a nested group renders collapsed by default — only its header shows until clicked — while a
-  flat top-level group is unaffected and keeps rendering fully open. Read-only for now: staging an
-  edit at a nested path is rejected until scalar editing lands (#182), add/remove/reorder inside a
-  nested list until #183, and two levels of nesting (a Perk effect's own conditions, a Quest
-  alias's/stage's own conditions) until #184.
+  flat top-level group is unaffected and keeps rendering fully open. Read-only for now, on both
+  ends: the frontend renders a nested group's rows display-only (no function/parameter/operator
+  inputs, no add/move/remove controls) rather than an editable control that would only fail later,
+  and `PluginWriter.IsReadOnly` rejects a nested (indexed) condition path at stage time as a second,
+  independent gate. Staging an edit at a nested path stays rejected until scalar editing lands
+  (#182), add/remove/reorder inside a nested list until #183, and two levels of nesting (a Perk
+  effect's own conditions, a Quest alias's/stage's own conditions) until #184.
 - **Add/remove/reorder** controls (Add, Move-up, Move-down, Remove) render per condition row,
   gated by the same immutable-column rule as every other edit. Unlike VMAD's structural ops
   (which dispatch a named op the backend applies), a condition list has no stable per-element
