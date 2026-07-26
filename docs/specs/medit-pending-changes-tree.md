@@ -134,6 +134,13 @@ exactly what it will carry.
   node here, expanding the parent group for a multi-member change and showing the tree if it was
   hidden (#140, see [medit-record-editor.md](medit-record-editor.md)). Resolution is the
   provider's job; a change already saved or reverted resolves to nothing and is ignored.
+- **Refresh on webview mutation**: every mutating handler in the Record editor panel (stage,
+  copy-to-override, copy-as-new-record, remove-override, save group, revert group) posts a
+  `PENDING_CHANGED` message on success, which the extension host routes to
+  `changeGroupTreeProvider.refresh()` (#174, see [medit-record-editor.md](medit-record-editor.md)).
+  Without this the tree only reflected session-load and Plugins-tree-originated actions
+  (`SessionController`-routed commands) — a webview-staged edit was invisible here until an
+  unrelated refresh happened to fire.
 - Empty state: "No pending changes." A **failed fetch** yields an error node, never the empty
   state — an empty tree meaning "the request failed" is exactly the silently-wrong mental
   model [ADR-0026](../adr/0026-error-surfacing-policy.md) forbids. **Partial-save failure**

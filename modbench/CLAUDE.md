@@ -23,6 +23,7 @@ TypeScript VS Code extension. Root [CLAUDE.md](../CLAUDE.md) for project-wide in
 | `ApiClient` | Typed `openapi-fetch` client factory | Type alias for generated client; DTOs defined here |
 | `GamePathDetector` | Game path discovery (Steam VDF / Windows registry) | Pure utility; returns `GamePaths \| null` |
 | `webviewHtml` | HTML shell for record editor webview | No VS Code types except `Uri` string |
+| `recordPanelMessageRouter` | Webview→extension message dispatch for the record panel | Pure function, no VS Code types in signature except injected deps — testable without a harness |
 
 Placement:
 

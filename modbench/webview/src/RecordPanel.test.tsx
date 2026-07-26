@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
@@ -1479,5 +1479,119 @@ describe('RecordPanel — Pending column click-to-reveal (issue #140)', () => {
     expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
       type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
     }));
+  });
+});
+
+// ── Pending Changes tree notification (issue #174) ──────────────────────────────
+//
+// The record editor webview and the extension host's Pending Changes tree are different
+// processes, bridged only by postMessage. Every mutating handler here refreshes its own
+// webview state via `refresh(formKey)` on success, but that alone never reaches the tree —
+// each one must also post PENDING_CHANGED so extension.ts can call
+// changeGroupTreeProvider.refresh(). A failed mutation must not post it (nothing pending
+// actually changed).
+
+describe('RecordPanel — pending tree notification (issue #174)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.mocked(vscode.postMessage).mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('an ordinary field edit posts pendingChanged once staged', async () => {
+    renderPanel(compareResult);
+    await waitFor(() => screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('Override Name'));
+    const input = screen.getByDisplayValue('Override Name');
+    fireEvent.change(input, { target: { value: 'Changed Name' } });
+    fireEvent.blur(input);
+
+    await waitFor(() =>
+      expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
+    );
+  });
+
+  it('a rejected field edit does not post pendingChanged', async () => {
+    const save = vi.fn().mockResolvedValue(resp(409, {}));
+    renderPanel(compareResult, { save });
+    await waitFor(() => screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('Override Name'));
+    const input = screen.getByDisplayValue('Override Name');
+    fireEvent.change(input, { target: { value: 'Changed Name' } });
+    fireEvent.blur(input);
+
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(vscode.postMessage).not.toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED });
+  });
+
+  it('selecting a Copy as Override… target posts pendingChanged once staged', async () => {
+    const { client } = renderPanel(threePluginConflictResult, { plugins: threePluginsResponse });
+    await waitFor(() => screen.getByText('Bob'));
+    const mod1Header = screen.getByText('Mod1.esp').closest('th')!;
+    fireEvent.click(within(mod1Header).getByText('Copy as Override…'));
+    fireEvent.mouseDown(within(mod1Header).getByText('Mod2.esp'));
+
+    await waitFor(() => expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp'));
+    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED });
+  });
+
+  it('Remove Override posts pendingChanged once staged', async () => {
+    renderPanel(compareResult);
+    await waitFor(() => screen.getByText('MyMod.esp'));
+    fireEvent.contextMenu(screen.getByText('MyMod.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove Override' }));
+
+    await waitFor(() =>
+      expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
+    );
+  });
+
+  it('Copy All to Pending posts pendingChanged once staged', async () => {
+    renderPanel(threePluginConflictResult, { plugins: threePluginsResponse });
+    await waitFor(() => screen.getByText('Bob'));
+    fireEvent.contextMenu(screen.getByText('Mod1.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy All to Pending' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mod2.esp' }));
+
+    await waitFor(() =>
+      expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
+    );
+  });
+
+  it('Copy as New Record posts pendingChanged once staged', async () => {
+    const createRecord = vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Mod2.esp' }));
+    renderPanel(threePluginConflictResult, { plugins: threePluginsResponse, createRecord });
+    await waitFor(() => screen.getByText('Bob'));
+    fireEvent.contextMenu(screen.getByText('Mod1.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy as New Record' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mod2.esp' }));
+
+    await waitFor(() =>
+      expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
+    );
+  });
+
+  it('Save Group posts pendingChanged once the save completes', async () => {
+    const saveGroup = vi.fn().mockResolvedValue(okSave({}));
+    renderPanel(pendingNameResult, { changes: soloChange, saveGroup });
+    await waitFor(() => screen.getByText('Staged Name'));
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Save Group' }));
+
+    await waitFor(() =>
+      expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
+    );
+  });
+
+  it('the inline ↩ revert posts pendingChanged once the revert completes', async () => {
+    const revertGroup = vi.fn().mockResolvedValue(resp(204));
+    const groupMembers = vi.fn().mockResolvedValue(soloChange);
+    renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
+    await waitFor(() => screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByText('↩'));
+
+    await waitFor(() =>
+      expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
+    );
   });
 });
