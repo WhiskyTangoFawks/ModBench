@@ -114,25 +114,36 @@ public sealed partial class EditOrchestrator(
 
     private static bool IsRestageableConditionListField(string field, Type recordType, IConditionCodec codec) =>
         codec.IsConditionListField(recordType, field)
-        || (field.Contains('[')
-            && ConditionPath.TryParseNestedFieldPath(field, out var arrayProp, out _, out var nestedField)
-            && codec.IsNestedConditionListField(recordType, arrayProp, nestedField));
+        || (field.Contains('[') && codec.IsNestedConditionListField(recordType, field));
 
-    // #183 AC4: restaging the *enclosing* array itself invalidates every staged condition row keyed
-    // under it — both a per-field CTDA\ nested edit and a nested list's own restage — since the
+    // #183/#184 AC4: restaging any *ancestor* array invalidates every staged condition row keyed
+    // beneath it — both a per-field CTDA\ nested edit and a nested list's own restage — since the
     // enclosing indices no longer hold once that array has been reordered/added-to/removed-from
-    // (ADR-0019). Runs unconditionally for every bare, non-condition-path field being staged — no
-    // check of whether the field is actually an array, or actually houses nested conditions, since
-    // the prefix match is a no-op unless matching rows already exist.
+    // (ADR-0019). "Ancestor" generalizes to N levels for free here: restaging the outer array
+    // ("Effects") invalidates everything nested under it at any depth, and restaging a *middle*
+    // level's own list ("Effects[2].Conditions" — itself a bare, bracketed, non-CTDA field, e.g. a
+    // Perk effect's PerkCondition list) invalidates only what's staged deeper than that exact path
+    // ("Effects[2].Conditions[*].Conditions...") — never a sibling middle-level group at a different
+    // outer index ("Effects[5].Conditions..."). That fan-out/containment is exactly what a SQL LIKE
+    // prefix match already gives for free (RemoveFieldsWithPrefix): "Effects[" matches both depths
+    // beneath it, "Effects[2].Conditions[" matches only what's beneath that specific index. So the
+    // loop runs for *every* bare, non-condition-path field being staged — bracketed (a nested list's
+    // own restage) or not (a top-level array's restage) — with no check of whether the field is
+    // actually an array, or actually houses nested conditions further down, since the prefix match
+    // is a no-op unless matching rows already exist. Restaging a field's own exact path is never
+    // mistaken for restaging something beneath it: the prefix always has a trailing '[', which the
+    // field's own bare string, lacking one, can never start with.
     //
-    // The one schema lookup that *is* required: the staged field name is the wire/column name
+    // The one schema lookup that *is* required: an unbracketed field name is the wire/column name
     // (SchemaReflector.ToSnakeCase, e.g. "menu_buttons" — see SchemaReflectorTests' "aggro_radius_
     // behavior_enabled"), while a nested condition's composed path is keyed by the CLR PropertyName
     // instead (Fallout4ConditionCodec.ExtractNested's prop.Name, e.g. "MenuButtons[2].Conditions").
     // The two conventions share no literal prefix at all for a multi-word property without this
     // translation (ColumnSpec.PropertyName carries the original CLR name for exactly this reason) —
     // unlike single-word names such as "Effects"/"effects", which coincidentally differ only in
-    // case and would falsely appear to work without it.
+    // case and would falsely appear to work without it. A bracketed field is already the CLR-composed
+    // form (nothing in RecordColumns ever has a bracketed Name), so the lookup misses and `?? field`
+    // correctly falls through to the identity — no separate branch needed for the two shapes.
     private void ClearInvalidatedNestedConditionFields(
         string formKey, string plugin, Dictionary<string, JsonElement> fields,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, string recordType, GameRelease release)
@@ -140,7 +151,7 @@ public sealed partial class EditOrchestrator(
         if (ConditionCodecRegistry.For(release.ToCategory()) == null) return;
         if (!schemas.TryGetValue(recordType, out var schema)) return;
 
-        foreach (var field in fields.Keys.Where(f => !ConditionPath.IsConditionPath(f) && !f.Contains('[')))
+        foreach (var field in fields.Keys.Where(f => !ConditionPath.IsConditionPath(f)))
         {
             var arrayProp = schema.RecordColumns.FirstOrDefault(c => c.Name == field)?.PropertyName ?? field;
             _changes.RemoveFieldsWithPrefix(formKey, plugin, $"{arrayProp}[");

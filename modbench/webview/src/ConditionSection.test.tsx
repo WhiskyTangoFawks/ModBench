@@ -552,6 +552,30 @@ describe('ConditionSection', () => {
     expect(screen.getByText('Subject.GetIsID = 1 AND')).toBeInTheDocument();
   });
 
+  // #184 confirmation, not a production change: a two-level composed field path
+  // ("Effects[0].Conditions[0].Conditions", e.g. a Perk effect's own doubly-indexed conditions)
+  // still just contains '[', so isNestedGroupPath/the render loop treat it exactly like a one-level
+  // nested group — collapsed by default, expandable the same way — with no depth-specific branch.
+  it('renders a two-level nested group (doubly-indexed field path) collapsed by default, expandable the same way', () => {
+    const c = condition({ function: 'GetIsID' });
+    renderSection(
+      multiCompare([
+        {
+          fieldPath: 'Effects[0].Conditions[0].Conditions',
+          conditions: [{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }],
+        },
+      ]),
+      ['A.esp'],
+    );
+
+    expect(screen.getByText('Effects[0].Conditions[0].Conditions')).toBeInTheDocument();
+    expect(screen.queryByText('Subject.GetIsID = 1 AND')).toBeNull();
+
+    fireEvent.click(screen.getByText('Effects[0].Conditions[0].Conditions').closest('tr')!.querySelector('button')!);
+
+    expect(screen.getByText('Subject.GetIsID = 1 AND')).toBeInTheDocument();
+  });
+
   // #182: scalar sub-field editing at a nested (indexed) path is live — the reverse of #181's
   // display-only rendering. #183 extends the same group to structural ops (add/move/remove),
   // which stage the whole nested list at its own composed field path — the nested analogue of

@@ -135,4 +135,23 @@ public class ConditionConflictClassifierTests
         Assert.NotNull(diff.PerPlugin["Override.esp"]);
         Assert.Equal("Override.esp", diff.WinnerPlugin);
     }
+
+    // Confirmation, not a production change (#184): NaturalFieldPathComparer already splits the
+    // whole path into alternating digit/non-digit runs regardless of how many bracket pairs it
+    // contains, so a two-level composed path ("Effects[2].Conditions[10].Conditions") should already
+    // sort its second embedded index numerically against a single-digit one at the same position,
+    // with no code change needed to reach this depth.
+    [Fact]
+    public void Classify_TwoLevelNestedGroupFieldPaths_SortNumericallyByInnerEnclosingIndexToo()
+    {
+        var owner10 = new ConditionOwner("Effects[2].Conditions[10].Conditions", [Condition("GetIsID")]);
+        var owner2 = new ConditionOwner("Effects[2].Conditions[2].Conditions", [Condition("GetIsID")]);
+        var input = new ConditionPluginInput("Plugin.esp", 0, [owner10, owner2]);
+
+        var result = ConditionConflictClassifier.Classify([input]);
+
+        Assert.Equal(
+            ["Effects[2].Conditions[2].Conditions", "Effects[2].Conditions[10].Conditions"],
+            result.Compare.Groups.Select(g => g.FieldPath).ToArray());
+    }
 }

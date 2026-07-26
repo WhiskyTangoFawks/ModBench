@@ -692,4 +692,217 @@ public sealed class EditOrchestratorConditionTests
             Assert.True(pendingAfter?.ContainsKey("menu_buttons"));
         }
     }
+
+    // ---- #184: N-level invalidation — Perk.Effects[i].Conditions[j].Conditions ----
+    //
+    // Correction from the original plan: Perk's *middle* array (APerkEffect.Conditions, a list of
+    // PerkCondition wrappers) is never itself a restageable condition list — PerkCondition doesn't
+    // implement IConditionGetter, so IsNestedConditionListField correctly refuses
+    // "Effects[i].Conditions" as a bare restage target (PluginWriter.IsReadOnly stays true for it),
+    // and none of the four real FO4 two-level shapes has a genuinely-restageable intermediate list
+    // either — in every one of them the terminal condition list sits at the *second* array hop, not
+    // a third. So there is no real fixture for "restage a middle-level list, leaving a sibling
+    // middle-level group alone" as originally phrased. What *is* real and testable at two levels is
+    // "ancestor"/"sibling" one level deeper than #183's one-level tests: two PerkConditions under
+    // the same effect (index 0 and 1) prove inner-sibling isolation; two effects (0 and 1) prove
+    // outer-sibling isolation; restaging the top-level "effects" array proves ancestor invalidation
+    // cascades through both structural hops down to the terminal list.
+
+    private static (FormKey perkFk, PluginFixtureData data) BuildTwoLevelNestedFixture(
+        string prefix, out string dataFolder, out string pluginsTxt)
+    {
+        FormKey perkFk = default;
+        var data = new PluginFixtureBuilder(prefix)
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var perk = mod.Perks.AddNew("TestPerk");
+                perkFk = perk.FormKey;
+
+                var effect0 = new PerkQuestEffect();
+                var effect0Condition0 = new PerkCondition();
+                effect0Condition0.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+                var effect0Condition1 = new PerkCondition();
+                effect0Condition1.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+                effect0.Conditions.Add(effect0Condition0);
+                effect0.Conditions.Add(effect0Condition1);
+
+                var effect1 = new PerkQuestEffect();
+                var effect1Condition0 = new PerkCondition();
+                effect1Condition0.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.LessThan,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetDead },
+                });
+                effect1.Conditions.Add(effect1Condition0);
+
+                perk.Effects.Add(effect0);
+                perk.Effects.Add(effect1);
+            })
+            .Build();
+        dataFolder = data.DataFolder;
+        pluginsTxt = data.PluginsTxtPath;
+        return (perkFk, data);
+    }
+
+    // Own-list supersession (#183 Q3) generalized to two levels: restaging the terminal list at
+    // Effects[0].Conditions[0].Conditions must supersede its own stale CTDA\ rows at that exact
+    // composed path.
+    [Fact]
+    public void StageEdit_TwoLevelNestedConditionListRestage_ClearsOwnStalePerFieldPendingEdits()
+    {
+        var (perkFk, data) = BuildTwoLevelNestedFixture(
+            "eo-2level-restage-clears-own", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+
+            var priorFields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\Effects[0].Conditions[0].Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+            Assert.IsType<StageEditResult.Staged>(
+                orchestrator.StageEdit(perkFk.ToString(), "TestPlugin.esp", priorFields, "user", null));
+
+            var newList = J("""
+                [
+                  { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                    "runOnReference": null, "useGlobal": false, "comparisonFloat": 1.0, "comparisonGlobal": null, "parameters": [] }
+                ]
+                """);
+            var restageResult = orchestrator.StageEdit(
+                perkFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["Effects[0].Conditions[0].Conditions"] = newList }, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(restageResult);
+            var pendingAfter = changes.GetPendingFields(perkFk.ToString(), "TestPlugin.esp");
+            Assert.False(pendingAfter?.ContainsKey(@"CTDA\Effects[0].Conditions[0].Conditions\0\Operator") ?? false);
+            Assert.True(pendingAfter?.ContainsKey("Effects[0].Conditions[0].Conditions"));
+        }
+    }
+
+    // Inner-sibling isolation: restaging Effects[0].Conditions[0].Conditions (inner index 0) must
+    // never touch Effects[0].Conditions[1].Conditions's own pending edit — a different inner index
+    // under the *same* outer effect.
+    [Fact]
+    public void StageEdit_TwoLevelNestedConditionListRestage_LeavesInnerSiblingIndexPendingEditIntact()
+    {
+        var (perkFk, data) = BuildTwoLevelNestedFixture(
+            "eo-2level-inner-sibling", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+
+            var siblingFields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\Effects[0].Conditions[1].Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+            Assert.IsType<StageEditResult.Staged>(
+                orchestrator.StageEdit(perkFk.ToString(), "TestPlugin.esp", siblingFields, "user", null));
+
+            var newList = J("""
+                [
+                  { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                    "runOnReference": null, "useGlobal": false, "comparisonFloat": 1.0, "comparisonGlobal": null, "parameters": [] }
+                ]
+                """);
+            var restageResult = orchestrator.StageEdit(
+                perkFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["Effects[0].Conditions[0].Conditions"] = newList }, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(restageResult);
+            var pendingAfter = changes.GetPendingFields(perkFk.ToString(), "TestPlugin.esp");
+            Assert.True(pendingAfter?.ContainsKey(@"CTDA\Effects[0].Conditions[1].Conditions\0\Operator"));
+            Assert.True(pendingAfter?.ContainsKey("Effects[0].Conditions[0].Conditions"));
+        }
+    }
+
+    // Outer-sibling isolation: restaging Effects[0].Conditions[0].Conditions must never touch
+    // Effects[1].Conditions[0].Conditions's own pending edit — a different outer effect entirely.
+    [Fact]
+    public void StageEdit_TwoLevelNestedConditionListRestage_LeavesOuterSiblingIndexPendingEditIntact()
+    {
+        var (perkFk, data) = BuildTwoLevelNestedFixture(
+            "eo-2level-outer-sibling", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+
+            var siblingFields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\Effects[1].Conditions[0].Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+            Assert.IsType<StageEditResult.Staged>(
+                orchestrator.StageEdit(perkFk.ToString(), "TestPlugin.esp", siblingFields, "user", null));
+
+            var newList = J("""
+                [
+                  { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                    "runOnReference": null, "useGlobal": false, "comparisonFloat": 1.0, "comparisonGlobal": null, "parameters": [] }
+                ]
+                """);
+            var restageResult = orchestrator.StageEdit(
+                perkFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["Effects[0].Conditions[0].Conditions"] = newList }, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(restageResult);
+            var pendingAfter = changes.GetPendingFields(perkFk.ToString(), "TestPlugin.esp");
+            Assert.True(pendingAfter?.ContainsKey(@"CTDA\Effects[1].Conditions[0].Conditions\0\Operator"));
+            Assert.True(pendingAfter?.ContainsKey("Effects[0].Conditions[0].Conditions"));
+        }
+    }
+
+    // Ancestor invalidation (#183 AC4, generalized): restaging the *outermost* array ("effects",
+    // wire name) invalidates every staged row nested beneath it at both structural hops — both
+    // effects' terminal condition-list rows — in one shot, proving ancestor invalidation cascades
+    // from the top through every level down to the leaf, not just one hop.
+    [Fact]
+    public void StageEdit_OuterArrayRestage_InvalidatesTerminalListsUnderBothEffects()
+    {
+        var (perkFk, data) = BuildTwoLevelNestedFixture(
+            "eo-2level-outer-invalidate-both", out var dataFolder, out var pluginsTxt);
+        using var _ = data;
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(dataFolder, pluginsTxt, GameRelease.Fallout4);
+
+            var effect0Fields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\Effects[0].Conditions[0].Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+            Assert.IsType<StageEditResult.Staged>(
+                orchestrator.StageEdit(perkFk.ToString(), "TestPlugin.esp", effect0Fields, "user", null));
+
+            var effect1Fields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\Effects[1].Conditions[0].Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+            Assert.IsType<StageEditResult.Staged>(
+                orchestrator.StageEdit(perkFk.ToString(), "TestPlugin.esp", effect1Fields, "user", null));
+
+            var outerResult = orchestrator.StageEdit(
+                perkFk.ToString(), "TestPlugin.esp",
+                new Dictionary<string, JsonElement> { ["effects"] = J("[]") }, "user", null);
+
+            Assert.IsType<StageEditResult.Staged>(outerResult);
+            var pendingAfter = changes.GetPendingFields(perkFk.ToString(), "TestPlugin.esp");
+            Assert.False(pendingAfter?.ContainsKey(@"CTDA\Effects[0].Conditions[0].Conditions\0\Operator") ?? false);
+            Assert.False(pendingAfter?.ContainsKey(@"CTDA\Effects[1].Conditions[0].Conditions\0\Operator") ?? false);
+            Assert.True(pendingAfter?.ContainsKey("effects"));
+        }
+    }
 }

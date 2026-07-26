@@ -21,17 +21,24 @@ public interface IConditionCodec
     // recognized consistently everywhere.
     bool IsConditionListField(Type recordType, string fieldPath);
 
-    // Stage-time shape check for an indexed nested path (#182: "Effects[2].Conditions" — arrayProp
-    // "Effects", nestedField "Conditions"; the numeric index is write-time-only, per #169's AC —
-    // existence/range are enforced at write, not here). A distinct method from IsConditionListField
-    // rather than an extension of it: that method also gates the bare-fieldpath whole-list-restage
-    // path (#153/#154), and loosening it for indexed paths would make a nested list's add/remove/
-    // reorder appear stageable before #183 actually extends ApplyListValue to resolve one. Accepts
-    // when the enclosing array's element type declares nestedField as a condition list directly, or
-    // — when the element type is abstract and declares nothing itself (Quest.Aliases's
-    // IAQuestAliasGetter is a marker interface with zero data properties) — when any concrete
-    // subtype does.
-    bool IsNestedConditionListField(Type recordType, string arrayProp, string nestedField);
+    // Stage-time shape check for a composed indexed path of arbitrary depth (#182/#184: e.g.
+    // "Effects[2].Conditions" one level deep, or "Effects[2].Conditions[1].Conditions" two levels
+    // deep — the numeric indices are write-time-only, per #169's AC — existence/range are enforced
+    // at write, not here). Takes the raw composed field path rather than pre-parsed pieces: every
+    // production caller (PluginWriter, EditOrchestrator) only ever wanted the yes/no answer, never
+    // the parsed segments themselves, so parsing an arbitrary number of "<name>[<index>]." segments
+    // is entirely this codec's job now — callers just gate on fieldPath.Contains('[') before
+    // delegating here. A distinct method from IsConditionListField rather than an extension of it:
+    // that method also gates the bare-fieldpath whole-list-restage path (#153/#154), and loosening
+    // it for indexed paths would make a nested list's add/remove/reorder appear stageable before
+    // #183 actually extends ApplyListValue to resolve one. Accepts when, walking the composed path's
+    // array segments in order, each hop's element type declares the next segment's property (array
+    // or, at the terminal segment, condition list) directly — or, when an element type is abstract
+    // and declares nothing itself (Quest.Aliases's IAQuestAliasGetter is a marker interface with
+    // zero data properties), when any concrete subtype does. A malformed composed path (unbalanced
+    // bracket, non-numeric index, or one that doesn't resolve against recordType at all) returns
+    // false, same fail-closed rule as before.
+    bool IsNestedConditionListField(Type recordType, string composedFieldPath);
 
     // Write-back (#152): applies one scalar condition-field edit in place on the mutable record.
     // fieldPath is the owning field (e.g. "Conditions"), index the condition's position within it,

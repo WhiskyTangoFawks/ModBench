@@ -108,6 +108,34 @@ public class PluginWriterConditionTests
         Assert.True(writer.IsReadOnly(GameRelease.Fallout4, "alch", "Effects[0.Conditions"));
     }
 
+    // ---- Two levels of array-item nesting (#184): Perk.Effects[i].Conditions[j].Conditions —
+    // the case #154 was originally descoped from. Both the CTDA-prefixed scalar form and the bare
+    // whole-list-restage form resolve through the same generalized N-hop walk the one-level cases
+    // above use, just with one more segment.
+
+    [Fact]
+    public void IsReadOnly_TwoLevelNestedConditionScalarPath_ReturnsFalse()
+    {
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+        Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "perk", @"CTDA\Effects[0].Conditions[0].Conditions\0\Function"));
+    }
+
+    [Fact]
+    public void IsReadOnly_TwoLevelNestedConditionListPath_ReturnsFalse()
+    {
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+        Assert.False(writer.IsReadOnly(GameRelease.Fallout4, "perk", "Effects[0].Conditions[0].Conditions"));
+    }
+
+    // A two-level path whose terminal field name doesn't resolve fails closed exactly like the
+    // one-level case.
+    [Fact]
+    public void IsReadOnly_TwoLevelNestedConditionListPath_WrongTerminalFieldName_ReturnsTrue()
+    {
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+        Assert.True(writer.IsReadOnly(GameRelease.Fallout4, "perk", "Effects[0].Conditions[0].NotAConditionField"));
+    }
+
     // ---- Helpers ----
 
     private static (string pluginPath, FormKey cobjFk, PluginFixtureData data) BuildFixture(string prefix)
@@ -730,5 +758,110 @@ public class PluginWriterConditionTests
         Assert.Single(reloaded.Effects);
         Assert.Single(reloaded.Effects[0].Conditions);
         Assert.Equal(CompareOperator.EqualTo, reloaded.Effects[0].Conditions[0].CompareOperator);
+    }
+
+    // ---- Two levels of array-item nesting, write-back (#184): Perk.Effects[i].Conditions[j].
+    // Conditions. Same round-trip shape as the one-level Ingestible fixtures above, one segment
+    // deeper — proving ResolveNestedConditionList's N-hop walk actually reaches and mutates the
+    // real nested list, not just resolves its shape.
+
+    private static (string pluginPath, FormKey perkFk, PluginFixtureData data) BuildTwoLevelNestedFixture(string prefix)
+    {
+        FormKey perkFk = default;
+        var fixture = new PluginFixtureBuilder(prefix)
+            .WithPlugin("ConditionWrite.esp", mod =>
+            {
+                var perk = mod.Perks.AddNew("TestPerk");
+                perkFk = perk.FormKey;
+                var effect = new PerkQuestEffect();
+                var perkCondition = new PerkCondition();
+                perkCondition.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+                effect.Conditions.Add(perkCondition);
+                perk.Effects.Add(effect);
+            })
+            .Build();
+        return (Path.Combine(fixture.DataFolder, "ConditionWrite.esp"), perkFk, fixture);
+    }
+
+    private static IPerkGetter ReloadPerk(string pluginPath, FormKey perkKey)
+    {
+        var modPath = new ModPath(ModKey.FromFileName("ConditionWrite.esp"), pluginPath);
+        var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
+        return mod.Perks.First(p => p.FormKey == perkKey);
+    }
+
+    [Fact]
+    public async Task SaveAsync_TwoLevelNestedConditionOperatorEdit_WritesNewOperator()
+    {
+        var (path, perkFk, fixture) = BuildTwoLevelNestedFixture("cond-2level-operator");
+        using var _ = fixture;
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var result = await writer.SaveAsync(path,
+            [MakeConditionChange(perkFk, "perk", @"CTDA\Effects[0].Conditions[0].Conditions\0\Operator", "\"GreaterThan\"")],
+            GameRelease.Fallout4);
+
+        Assert.Contains(@"CTDA\Effects[0].Conditions[0].Conditions\0\Operator", result.Applied);
+        var cond = ReloadPerk(path, perkFk).Effects[0].Conditions[0].Conditions[0];
+        Assert.Equal(CompareOperator.GreaterThan, cond.CompareOperator);
+    }
+
+    [Fact]
+    public async Task SaveAsync_TwoLevelNestedConditionListRestage_ReplacesEntireList()
+    {
+        var (path, perkFk, fixture) = BuildTwoLevelNestedFixture("cond-2level-list-restage");
+        using var _ = fixture;
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var newList = """
+            [
+              { "function": "GetIsID", "operator": "EqualTo", "or": false, "runOnTarget": "Subject",
+                "runOnReference": null, "useGlobal": false, "comparisonFloat": 5.0, "comparisonGlobal": null, "parameters": [] },
+              { "function": "GetDead", "operator": "NotEqualTo", "or": true, "runOnTarget": "Target",
+                "runOnReference": null, "useGlobal": false, "comparisonFloat": 0.0, "comparisonGlobal": null, "parameters": [] }
+            ]
+            """;
+
+        var result = await writer.SaveAsync(path,
+            [MakeConditionChange(perkFk, "perk", "Effects[0].Conditions[0].Conditions", newList)], GameRelease.Fallout4);
+
+        Assert.Contains("Effects[0].Conditions[0].Conditions", result.Applied);
+        var conditions = ReloadPerk(path, perkFk).Effects[0].Conditions[0].Conditions;
+        Assert.Equal(2, conditions.Count);
+        Assert.Equal(CompareOperator.EqualTo, conditions[0].CompareOperator);
+        Assert.Equal(CompareOperator.NotEqualTo, conditions[1].CompareOperator);
+    }
+
+    // #169's AC generalized to two levels: an out-of-range index at *either* hop (outer Effects, or
+    // the middle PerkCondition list) can only be caught with a live instance, so both fail closed
+    // at save — never a partial write — the same way a one-level out-of-range enclosing index does.
+    [Theory]
+    [InlineData(@"CTDA\Effects[9].Conditions[0].Conditions\0\Operator")]
+    [InlineData(@"CTDA\Effects[0].Conditions[9].Conditions\0\Operator")]
+    public async Task SaveAsync_TwoLevelNestedConditionOutOfRangeAtEitherHop_AppearsInNotFoundWithoutPartialWrite(
+        string badPath)
+    {
+        var (path, perkFk, fixture) = BuildTwoLevelNestedFixture("cond-2level-outofrange");
+        using var _ = fixture;
+        var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
+
+        var changes = new[]
+        {
+            MakeConditionChange(perkFk, "perk", @"CTDA\Effects[0].Conditions[0].Conditions\0\Operator", "\"GreaterThan\""),
+            MakeConditionChange(perkFk, "perk", badPath, "\"GreaterThan\""),
+        };
+
+        var result = await writer.SaveAsync(path, changes, GameRelease.Fallout4);
+
+        Assert.Contains(badPath, result.NotFound);
+        Assert.Contains(@"CTDA\Effects[0].Conditions[0].Conditions\0\Operator", result.Applied);
+
+        var reloaded = ReloadPerk(path, perkFk);
+        Assert.Single(reloaded.Effects);
+        Assert.Equal(CompareOperator.GreaterThan, reloaded.Effects[0].Conditions[0].Conditions[0].CompareOperator);
     }
 }
