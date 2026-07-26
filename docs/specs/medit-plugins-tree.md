@@ -113,7 +113,7 @@ masters; there is no separate load-session step.
   List, and here). It is a **distinct axis** from the record filter below: this narrows *which
   plugins* appear; the record filter narrows *which records* appear under a plugin. The two
   compose.
-- **Top-level nodes**: one node per loaded plugin (children: Worldspaces + Interior Cells group
+- **Top-level nodes**: one node per loaded plugin (children: Worldspaces + cell - Interior group
   nodes plus flat record-type nodes), and a lazy-counted **Conflicts** node listing conflict
   records. `WRLD`/`CELL`/`REFR`/`ACHR` are shown spatially (below) and hidden from the flat
   record-type list.
@@ -167,7 +167,7 @@ masters; there is no separate load-session step.
 
 ### Worldspace / interior-cell tree
 
-- **Per-plugin**, under each plugin node: "Worldspaces" and "Interior Cells" group nodes show
+- **Per-plugin**, under each plugin node: "Worldspaces" and "cell - Interior" group nodes show
   what *that plugin* declares (records and overrides), never a cross-plugin winner. Placed
   records (REFR/ACHR) are indexed; parentage lives in `placement` / `cell_location` side tables
   ([ADR-0023](../adr/0023-placed-objects-indexed-with-placement-side-tables.md)).
