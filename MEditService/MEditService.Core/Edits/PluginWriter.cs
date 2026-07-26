@@ -127,19 +127,17 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         if (codec != null && codec.IsConditionListField(schema.RecordType, fieldPath))
             return false;
 
-        // #183: a nested list's own whole-list restage stages at its bare composed path (no CTDA
-        // prefix, e.g. "Effects[0].Conditions") — the bare-path analogue of
+        // #183/#184: a nested list's own whole-list restage stages at its bare composed path (no
+        // CTDA prefix, e.g. "Effects[0].Conditions" one level deep, or
+        // "Effects[0].Conditions[1].Conditions" two levels deep) — the bare-path analogue of
         // IsConditionPathReadOnly's nested branch below, minus the per-condition index (there is
-        // none; the restage replaces the whole nested list). A composed path that doesn't actually
-        // resolve against the record's schema type (wrong nested field name, malformed bracket)
-        // falls through to the ordinary column lookup below, which finds no such column and stays
-        // read-only — same fail-closed rule as the CTDA-prefixed case.
-        if (codec != null && fieldPath.Contains('[')
-            && ConditionPath.TryParseNestedFieldPath(fieldPath, out var arrayProp, out _, out var nestedField)
-            && codec.IsNestedConditionListField(schema.RecordType, arrayProp, nestedField))
-        {
+        // none; the restage replaces the whole nested list). The codec owns all parsing of the
+        // composed path now (#184) — a path that doesn't actually resolve against the record's
+        // schema type (wrong nested field name, malformed bracket, too-deep/unknown intermediate
+        // segment) falls through to the ordinary column lookup below, which finds no such column and
+        // stays read-only — same fail-closed rule as the CTDA-prefixed case.
+        if (codec != null && fieldPath.Contains('[') && codec.IsNestedConditionListField(schema.RecordType, fieldPath))
             return false;
-        }
 
         // The header's columns are written via HeaderColumnApply (ModHeader isn't an IMajorRecord,
         // so ColumnSpec.Apply is always null for it) — resolve editability from that list instead.
@@ -153,14 +151,15 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         return col?.Apply == null;
     }
 
-    // #182: a CTDA-prefixed path is either flat (unchanged from before #182 — always editable) or
-    // a nested (per-array-item) path whose composed FieldPath segment contains '[', e.g.
-    // "Effects[0].Conditions". #181 rejected every nested path unconditionally; now it's editable
-    // exactly when it resolves against the record's schema type — a malformed indexed segment
-    // (unbalanced bracket, non-numeric index) fails closed here since it's knowable from the string
-    // alone, while an out-of-range enclosing index can only be caught with a live instance and is
-    // left to Fallout4ConditionCodec.ApplyFieldValue's NotFound at save time (#169's AC: existence/
-    // range enforced at write).
+    // #182/#184: a CTDA-prefixed path is either flat (unchanged from before #182 — always editable)
+    // or a nested (per-array-item) path whose composed FieldPath segment contains '[', e.g.
+    // "Effects[0].Conditions" (one level) or "Effects[0].Conditions[1].Conditions" (two levels).
+    // #181 rejected every nested path unconditionally; now it's editable exactly when it resolves
+    // against the record's schema type — the codec owns parsing the composed path (arbitrary depth,
+    // #184) and fails closed itself on a malformed or unresolvable one, while an out-of-range
+    // enclosing index can only be caught with a live instance and is left to
+    // Fallout4ConditionCodec.ApplyFieldValue's NotFound at save time (#169's AC: existence/range
+    // enforced at write).
     private static bool IsConditionPathReadOnly(
         GameRelease release, string recordType, string fieldPath, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
@@ -169,12 +168,9 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
 
         if (!conditionFieldPath.Contains('[')) return false; // flat
 
-        if (!ConditionPath.TryParseNestedFieldPath(conditionFieldPath, out var arrayProp, out _, out var nestedField))
-            return true;
-
         if (!schemas.TryGetValue(recordType, out var schema)) return true;
         var codec = ConditionCodecRegistry.For(release.ToCategory());
-        return codec == null || !codec.IsNestedConditionListField(schema.RecordType, arrayProp, nestedField);
+        return codec == null || !codec.IsNestedConditionListField(schema.RecordType, conditionFieldPath);
     }
 
     private static int HeaderColumnIndex(RecordTableSchema schema, string fieldPath)
@@ -549,16 +545,13 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         if (codec != null && codec.IsConditionListField(record.GetType(), change.FieldPath))
             return ApplyConditionListField(record, change, release);
 
-        // #183: a nested list's own whole-list restage — bare composed path, e.g.
-        // "Effects[2].Conditions" — dispatches the same way once it resolves against this
-        // concrete record's element type. codec.ApplyListValue itself does the arrayProp/
-        // arrayIndex/nestedField walk; this only decides whether to route there at all.
-        if (codec != null && change.FieldPath.Contains('[')
-            && ConditionPath.TryParseNestedFieldPath(change.FieldPath, out var arrayProp, out _, out var nestedField)
-            && codec.IsNestedConditionListField(record.GetType(), arrayProp, nestedField))
-        {
+        // #183/#184: a nested list's own whole-list restage — bare composed path, e.g.
+        // "Effects[2].Conditions" (one level) or "Effects[2].Conditions[1].Conditions" (two levels)
+        // — dispatches the same way once it resolves against this concrete record's element type.
+        // codec.ApplyListValue itself does the full arrayProp/arrayIndex/nestedField walk at
+        // whatever depth the path composes; this only decides whether to route there at all.
+        if (codec != null && change.FieldPath.Contains('[') && codec.IsNestedConditionListField(record.GetType(), change.FieldPath))
             return ApplyConditionListField(record, change, release);
-        }
 
         if (!schemas.TryGetValue(change.RecordType, out var schema))
             return ApplyOutcome.NotFound;

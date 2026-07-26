@@ -37,36 +37,81 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
         return owners;
     }
 
-    // Per-array-item nested condition lists, one array level below the record (#181) — e.g. an
-    // Ingestible's Effects[i].Conditions, a Message's MenuButtons[i].Conditions. Same shape test as
-    // the flat pass above (IsConditionListProperty), just applied to each element of every
-    // array-of-struct property rather than to the record's own top-level properties, so a new
-    // nesting shape needs no new hardcoded property/array name here or anywhere else. Keyed by an
-    // indexed path composing the enclosing array's own property name and index with the nested
-    // list's own name (e.g. "Effects[2].Conditions") — the same CTDA\<FieldPath>\<Index>\<SubField>
-    // wire path just treats that whole composed string as one opaque FieldPath segment (#169).
-    private static IEnumerable<ConditionOwner> ExtractNested(IMajorRecordGetter record)
+    // Per-array-item nested condition lists, an arbitrary number of array levels below the record
+    // (#181 introduced one level; #184 generalizes to N) — e.g. an Ingestible's Effects[i].
+    // Conditions (one level), or a Perk's Effects[i].Conditions[j].Conditions (two levels: Effects
+    // is APerkEffect, whose own Conditions is a list of PerkCondition wrappers — not itself a
+    // condition list — each of which in turn declares the real terminal Conditions list). Same shape
+    // test as the flat pass above (IsConditionListProperty) and the array-shape test below
+    // (IsArrayOfNestableStructsProperty), just applied recursively to each element of every
+    // array-of-struct property reachable from the record, so a new nesting shape or depth needs no
+    // new hardcoded property/array name or depth constant anywhere. Keyed by an indexed path
+    // composing every enclosing array's own property name and index with the terminal list's own
+    // name (e.g. "Effects[2].Conditions[1].Conditions") — the same CTDA\<FieldPath>\<Index>\
+    // <SubField> wire path just treats that whole composed string as one opaque FieldPath segment
+    // (#169).
+    private static IEnumerable<ConditionOwner> ExtractNested(IMajorRecordGetter record) =>
+        WalkNestedArrays(record, "", depth: 0);
+
+    // The recursion bound #184's AC requires: a defensive circuit breaker, not a limit expected to
+    // ever bind on a real Mutagen type. The only way this walk could genuinely cycle is through a
+    // shared major-record reference, and IsArrayOfNestableStructsProperty's IMajorRecordGetter
+    // exclusion already rules that out before recursing (child records are enumerated as their own
+    // top-level rows, never walked into here) — every other Loqui-generated struct/list type FO4's
+    // real nesting map reaches is acyclic by construction. FO4's real maximum is two levels; this cap
+    // is generous well past that on purpose, so it only ever fires on a pathological type graph a
+    // future game's Mutagen package might introduce.
+    internal const int MaxNestedDepth = 8;
+
+    // Recursively walks every array-of-nestable-structs property reachable from `container` — the
+    // record itself at depth 0, then each array element in turn — composing the indexed path prefix
+    // as it descends, and yields one ConditionOwner per condition-list property found on any element
+    // at any depth. `container` is `object`, not IMajorRecordGetter, past depth 0: an array element
+    // (e.g. an APerkEffect or a PerkCondition) is a plain Loqui struct with no shared base beyond
+    // object, the same way ExtractElementOwners below has always taken one. internal (rather than
+    // private) solely so a test can exercise the depth cap directly with a self-referential
+    // plain-object fixture — the one scenario this cap defends against can't be expressed through a
+    // real IMajorRecordGetter, since no real Mutagen type is cyclic (see above).
+    internal static IEnumerable<ConditionOwner> WalkNestedArrays(object container, string pathPrefix, int depth)
     {
-        foreach (var prop in record.GetType().GetProperties())
+        if (depth >= MaxNestedDepth) yield break;
+
+        foreach (var prop in container.GetType().GetProperties())
         {
             if (!IsArrayOfNestableStructsProperty(prop)) continue;
-            if (prop.GetValue(record) is not IEnumerable items) continue;
+            if (prop.GetValue(container) is not IEnumerable items) continue;
 
-            var index = 0;
-            foreach (var item in items)
-            {
-                if (item != null)
-                    foreach (var owner in ExtractElementOwners(item, prop.Name, index))
-                        yield return owner;
-                index++;
-            }
+            foreach (var owner in WalkNestedArrayProperty(items, prop.Name, pathPrefix, depth))
+                yield return owner;
         }
     }
 
-    // One array element's own condition-owning properties (there's normally at most one, but the
-    // shape test makes no such assumption), keyed by the composed "<ArrayProp>[<Index>].<NestedProp>"
-    // path.
-    private static IEnumerable<ConditionOwner> ExtractElementOwners(object item, string arrayPropName, int index)
+    // One array property's elements: each non-null element contributes its own direct condition-list
+    // owners (ExtractElementOwners) and is itself a candidate container for a further nesting level
+    // (the recursive WalkNestedArrays call) — split out from WalkNestedArrays purely to keep each
+    // method's branching shallow enough to read at a glance.
+    private static IEnumerable<ConditionOwner> WalkNestedArrayProperty(
+        IEnumerable items, string propName, string pathPrefix, int depth)
+    {
+        var index = 0;
+        foreach (var item in items)
+        {
+            if (item != null)
+            {
+                var elementPrefix = $"{pathPrefix}{propName}[{index}].";
+                foreach (var owner in ExtractElementOwners(item, elementPrefix))
+                    yield return owner;
+                foreach (var owner in WalkNestedArrays(item, elementPrefix, depth + 1))
+                    yield return owner;
+            }
+            index++;
+        }
+    }
+
+    // One array element's own direct condition-owning properties (there's normally at most one, but
+    // the shape test makes no such assumption), keyed by the composed "<pathPrefix><NestedProp>"
+    // path — pathPrefix already ends in a trailing '.', e.g. "Effects[2].Conditions[1].".
+    private static IEnumerable<ConditionOwner> ExtractElementOwners(object item, string pathPrefix)
     {
         foreach (var nested in item.GetType().GetProperties())
         {
@@ -75,7 +120,7 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
 
             var parsed = conditions.Select(Parse).ToList();
             if (parsed.Count > 0)
-                yield return new ConditionOwner($"{arrayPropName}[{index}].{nested.Name}", parsed);
+                yield return new ConditionOwner($"{pathPrefix}{nested.Name}", parsed);
         }
     }
 
@@ -116,29 +161,65 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     public bool IsConditionListField(Type recordType, string fieldPath) =>
         recordType.GetProperty(fieldPath) is { } prop && IsConditionListProperty(prop);
 
-    // #182: the Type-only twin of ExtractNested's per-instance discovery — walks into the enclosing
-    // array property, then checks the element type (or, when abstract/interface and bare, any
-    // concrete subtype in the same assembly) for a condition-list property named nestedField.
-    // recordType is either the record's getter interface (PluginWriter.IsReadOnly, via
-    // schema.RecordType) or its concrete setter class (EditOrchestrator's record.GetType()
-    // dispatch) — both resolve the same way, since GetEnumerableElementType works on either shape.
-    public bool IsNestedConditionListField(Type recordType, string arrayProp, string nestedField)
+    // #182/#184: the Type-only twin of ExtractNested's per-instance discovery — walks recordType
+    // through the composed path's array segments in order (e.g. "Effects[2].Conditions[1]." for
+    // "Effects[2].Conditions[1].Conditions"), then checks the type reached at the end (or, when
+    // abstract/interface and bare, any concrete subtype in the same assembly) for a condition-list
+    // property named nestedField. recordType is either the record's getter interface
+    // (PluginWriter.IsReadOnly, via schema.RecordType) or its concrete setter class
+    // (EditOrchestrator's record.GetType() dispatch) — both resolve the same way, since
+    // GetEnumerableElementType works on either shape. Takes the raw composed path directly (#184) —
+    // parsing it (arbitrary depth, no upfront caller-side split) is entirely this method's job now.
+    public bool IsNestedConditionListField(Type recordType, string composedFieldPath)
     {
-        if (recordType.GetProperty(arrayProp) is not { } arrayPropInfo) return false;
+        if (!TryParseNestedFieldPath(composedFieldPath, out var segments, out var nestedField)) return false;
 
-        var elementType = GetEnumerableElementType(arrayPropInfo.PropertyType);
-        if (elementType == null) return false;
+        var currentType = recordType;
+        foreach (var segment in segments)
+        {
+            if (ResolveArrayElementType(currentType, segment.ArrayProp) is not { } elementType) return false;
+            currentType = elementType;
+        }
 
-        if (elementType.GetProperty(nestedField) is { } directProp && IsConditionListProperty(directProp))
+        return HasConditionListProperty(currentType, nestedField);
+    }
+
+    // Resolves arrayProp's array-of-struct element type on currentType directly, or — when
+    // currentType is abstract/interface and declares nothing itself — any concrete subtype's
+    // declared element type. The same permissive fallback #182 established at a single hop, now
+    // applied uniformly at every intermediate hop of an arbitrary-depth composed path (#184).
+    private static Type? ResolveArrayElementType(Type currentType, string arrayProp)
+    {
+        if (currentType.GetProperty(arrayProp) is { } directProp
+            && GetEnumerableElementType(directProp.PropertyType) is { } elementType)
+        {
+            return elementType;
+        }
+
+        if (!currentType.IsAbstract && !currentType.IsInterface) return null;
+
+        return currentType.Assembly.GetTypes()
+            .Where(t => !t.IsAbstract && !t.IsInterface && currentType.IsAssignableFrom(t))
+            .Select(t => t.GetProperty(arrayProp))
+            .OfType<PropertyInfo>()
+            .Select(p => GetEnumerableElementType(p.PropertyType))
+            .FirstOrDefault(e => e != null);
+    }
+
+    // The terminal check: currentType (or, if abstract/interface and bare, any concrete subtype)
+    // declares nestedField as a condition list. Quest.Aliases's IAQuestAliasGetter is a marker
+    // interface with zero data properties — a concrete alias subtype (e.g. QuestReferenceAlias)
+    // declares Conditions instead, so a bare abstract/interface type falls through to the same
+    // concrete-subtype fallback ResolveArrayElementType uses at intermediate hops.
+    private static bool HasConditionListProperty(Type currentType, string nestedField)
+    {
+        if (currentType.GetProperty(nestedField) is { } directProp && IsConditionListProperty(directProp))
             return true;
 
-        // A concrete element type that doesn't declare the field directly has nothing further to
-        // check — only an abstract/interface marker (Quest.Aliases's IAQuestAliasGetter/
-        // AQuestAlias) gets the permissive concrete-subtype fallback.
-        if (!elementType.IsAbstract && !elementType.IsInterface) return false;
+        if (!currentType.IsAbstract && !currentType.IsInterface) return false;
 
-        return elementType.Assembly.GetTypes()
-            .Where(t => !t.IsAbstract && !t.IsInterface && elementType.IsAssignableFrom(t))
+        return currentType.Assembly.GetTypes()
+            .Where(t => !t.IsAbstract && !t.IsInterface && currentType.IsAssignableFrom(t))
             .Any(t => t.GetProperty(nestedField) is { } p && IsConditionListProperty(p));
     }
 
@@ -234,74 +315,117 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
 
     // Record-level entry point PluginWriter calls: finds the mutable condition list via the same
     // reflection Extract uses to discover it, then delegates to the directly-testable list-level
-    // overload below. A composed fieldPath (#182: "Effects[2].Conditions") routes through the
-    // nested resolver instead — record is always a concrete instance here (never the abstract
-    // getter-interface/setter-base Type that IsNestedConditionListField has to allow for), so
-    // walking arrayProp -> element -> nestedField never needs the stage-time permissive fallback:
-    // the live element's own GetType() is always concrete.
+    // overload below. A composed fieldPath (#182/#184: "Effects[2].Conditions" one level deep, or
+    // "Effects[2].Conditions[1].Conditions" two levels deep) routes through the nested resolver
+    // instead — record is always a concrete instance here (never the abstract getter-interface/
+    // setter-base Type that IsNestedConditionListField has to allow for), so walking every
+    // arrayProp -> element hop down to nestedField never needs the stage-time permissive fallback:
+    // the live element's own GetType() is always concrete at every hop.
     public ConditionApplyResult ApplyFieldValue(
         IMajorRecord record, string fieldPath, int index, string subField, JsonElement value)
     {
-        if (TryParseNestedFieldPath(fieldPath, out var arrayProp, out var arrayIndex, out var nestedField))
-            return ApplyNestedFieldValue(record, arrayProp, arrayIndex, nestedField, index, subField, value);
+        if (TryParseNestedFieldPath(fieldPath, out var segments, out var nestedField))
+        {
+            return ResolveNestedConditionList(record, segments, nestedField) is { } conditions
+                ? ApplyFieldValue(conditions, index, subField, value)
+                : ConditionApplyResult.NotFound;
+        }
 
-        return record.GetType().GetProperty(fieldPath)?.GetValue(record) is IList<Condition> conditions
-            ? ApplyFieldValue(conditions, index, subField, value)
+        return record.GetType().GetProperty(fieldPath)?.GetValue(record) is IList<Condition> flatConditions
+            ? ApplyFieldValue(flatConditions, index, subField, value)
             : ConditionApplyResult.NotFound;
     }
 
-    // Walks into the enclosing array (arrayProp) at arrayIndex, then the nested condition list
-    // (nestedField) on that element, before delegating to the same list-level ApplyFieldValue every
-    // flat/scalar edit uses. Any resolution failure (unknown array property, out-of-range index —
+    // Walks each (arrayProp, index) hop on the live instance in order — e.g. Effects[2] then
+    // Conditions[1] — before landing on nestedField's condition list. record is always concrete
+    // here, so every hop's element GetType() is concrete too; no permissive abstract-type fallback
+    // is ever needed on this write path (that's IsNestedConditionListField's stage-time job, not
+    // this one's). Any resolution failure at any hop (unknown array property, out-of-range index —
     // #169's AC: caught here since only a live instance can know the real length, not the stage-time
-    // shape check — a null element, or the nested property not actually being a condition list on
-    // this concrete element) returns NotFound before any mutation, so a bad nested path can never
+    // shape check — a null element, or the terminal property not actually being a condition list on
+    // this concrete element) returns null before any mutation, so a bad nested path can never
     // produce a partial write.
-    private static ConditionApplyResult ApplyNestedFieldValue(
-        IMajorRecord record, string arrayProp, int arrayIndex, string nestedField,
-        int conditionIndex, string subField, JsonElement value)
+    private static IList<Condition>? ResolveNestedConditionList(
+        object container, IReadOnlyList<(string ArrayProp, int Index)> segments, string nestedField)
     {
-        if (record.GetType().GetProperty(arrayProp)?.GetValue(record) is not System.Collections.IList array)
-            return ConditionApplyResult.NotFound;
-        if (arrayIndex < 0 || arrayIndex >= array.Count) return ConditionApplyResult.NotFound;
-        if (array[arrayIndex] is not { } element) return ConditionApplyResult.NotFound;
-        if (element.GetType().GetProperty(nestedField)?.GetValue(element) is not IList<Condition> conditions)
-            return ConditionApplyResult.NotFound;
+        var current = container;
+        foreach (var (arrayProp, arrayIndex) in segments)
+        {
+            if (current.GetType().GetProperty(arrayProp)?.GetValue(current) is not System.Collections.IList array)
+                return null;
+            if (arrayIndex < 0 || arrayIndex >= array.Count) return null;
+            if (array[arrayIndex] is not { } element) return null;
+            current = element;
+        }
 
-        return ApplyFieldValue(conditions, conditionIndex, subField, value);
+        return current.GetType().GetProperty(nestedField)?.GetValue(current) as IList<Condition>;
     }
 
-    // Local mirror of ConditionPath.TryParseNestedFieldPath (Edits/ConditionPath.cs) — Schema owns
-    // no dependency on Edits, so this composed-path shape is recognized here independently rather
-    // than shared, the same way TryParseParameterIndex below is already duplicated for the same
-    // reason. Parses "Effects[2].Conditions" into its enclosing array property name/index and the
-    // nested condition-list property name; false for a flat (unbracketed) fieldPath or anything
-    // that doesn't match this one-level shape.
+    // The one parser for this composed-path shape in the codebase (#184): ConditionPath (Edits/) no
+    // longer keeps its own copy, since no production caller ever needed the parsed pieces themselves
+    // — every caller only ever wanted this codec's yes/no answer (IsNestedConditionListField) or its
+    // resolved write target (ResolveNestedConditionList above), both of which live here regardless.
+    // Parses "Effects[2].Conditions" (one array hop) or "Effects[2].Conditions[1].Conditions" (two
+    // hops), or any deeper composition, into its ordered array segments (property name + index, one
+    // per enclosing array) and the terminal condition-list property name. False for anything that
+    // doesn't match "(<name>[<nonneg-int>].)+<name>" — an empty path, a bracket with an empty
+    // preceding name, an unbalanced bracket, a non-numeric or negative index, or nothing left after
+    // the last segment — so a malformed path fails closed wherever it's checked. Always terminates:
+    // each successful iteration strictly shortens the remaining string, so no separate depth guard is
+    // needed here the way WalkNestedArrays needs one for live object-graph recursion above.
     private static bool TryParseNestedFieldPath(
-        string fieldPath, out string arrayProp, out int arrayIndex, out string nestedField)
+        string conditionFieldPath, out IReadOnlyList<(string ArrayProp, int Index)> segments, out string nestedField)
     {
-        arrayProp = "";
-        arrayIndex = -1;
-        nestedField = "";
+        var parsed = new List<(string, int)>();
+        var rest = conditionFieldPath;
 
-        var openBracket = fieldPath.IndexOf('[');
-        if (openBracket <= 0) return false;
+        while (true)
+        {
+            var openBracket = rest.IndexOf('[');
+            if (openBracket < 0) break;
+            if (openBracket == 0 || !TryParseSegment(rest, openBracket, out var segment, out var remainder))
+            {
+                segments = [];
+                nestedField = "";
+                return false;
+            }
 
-        var closeBracket = fieldPath.IndexOf(']', openBracket);
+            parsed.Add(segment);
+            rest = remainder;
+        }
+
+        if (parsed.Count == 0 || rest.Length == 0)
+        {
+            segments = [];
+            nestedField = "";
+            return false;
+        }
+
+        segments = parsed;
+        nestedField = rest;
+        return true;
+    }
+
+    // Parses one "<name>[<nonneg-int>]." segment starting at openBracket, returning the segment and
+    // whatever text follows the segment's trailing dot (which may itself start a further segment, or
+    // be the terminal nestedField — TryParseNestedFieldPath's loop decides which).
+    private static bool TryParseSegment(
+        string rest, int openBracket, out (string ArrayProp, int Index) segment, out string remainder)
+    {
+        segment = default;
+        remainder = "";
+
+        var closeBracket = rest.IndexOf(']', openBracket);
         if (closeBracket < 0) return false;
 
         var afterBracket = closeBracket + 1;
-        if (afterBracket >= fieldPath.Length || fieldPath[afterBracket] != '.') return false;
+        if (afterBracket >= rest.Length || rest[afterBracket] != '.') return false;
 
-        var indexStr = fieldPath[(openBracket + 1)..closeBracket];
+        var indexStr = rest[(openBracket + 1)..closeBracket];
         if (!int.TryParse(indexStr, out var parsedIndex) || parsedIndex < 0) return false;
 
-        var nested = fieldPath[(afterBracket + 1)..];
-        if (nested.Length == 0 || nested.Contains('[')) return false;
-
-        arrayProp = fieldPath[..openBracket];
-        arrayIndex = parsedIndex;
-        nestedField = nested;
+        segment = (rest[..openBracket], parsedIndex);
+        remainder = rest[(afterBracket + 1)..];
         return true;
     }
 
@@ -474,35 +598,23 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
 
     // Record-level entry point PluginWriter calls for an add/remove/reorder restage: replaces the
     // entire condition list in place with freshly-materialized Condition instances. Mirrors
-    // ApplyFieldValue's record-level/list-level split. #183: a composed fieldPath ("Effects[2].
-    // Conditions" — a nested list's own restage) routes through the same arrayProp -> element ->
-    // nestedField walk ApplyFieldValue's nested branch already uses, landing on the list-level
-    // ApplyListValue instead of the scalar one.
+    // ApplyFieldValue's record-level/list-level split. #183/#184: a composed fieldPath ("Effects[2].
+    // Conditions" one level deep, or "Effects[2].Conditions[1].Conditions" two levels deep — a
+    // nested list's own restage) routes through the same ResolveNestedConditionList walk
+    // ApplyFieldValue's nested branch already uses, landing on the list-level ApplyListValue instead
+    // of the scalar one.
     public ConditionApplyResult ApplyListValue(IMajorRecord record, string fieldPath, JsonElement newList)
     {
-        if (TryParseNestedFieldPath(fieldPath, out var arrayProp, out var arrayIndex, out var nestedField))
-            return ApplyNestedListValue(record, arrayProp, arrayIndex, nestedField, newList);
+        if (TryParseNestedFieldPath(fieldPath, out var segments, out var nestedField))
+        {
+            return ResolveNestedConditionList(record, segments, nestedField) is { } conditions
+                ? ApplyListValue(conditions, newList)
+                : ConditionApplyResult.NotFound;
+        }
 
-        return record.GetType().GetProperty(fieldPath)?.GetValue(record) is IList<Condition> conditions
-            ? ApplyListValue(conditions, newList)
+        return record.GetType().GetProperty(fieldPath)?.GetValue(record) is IList<Condition> flatConditions
+            ? ApplyListValue(flatConditions, newList)
             : ConditionApplyResult.NotFound;
-    }
-
-    // Walks into the enclosing array (arrayProp) at arrayIndex, then the nested condition list
-    // (nestedField) on that element, before delegating to the same list-level ApplyListValue every
-    // flat/nested restage uses. Mirrors ApplyNestedFieldValue's resolution exactly, just landing on
-    // the whole-list applier instead of the single-condition one.
-    private static ConditionApplyResult ApplyNestedListValue(
-        IMajorRecord record, string arrayProp, int arrayIndex, string nestedField, JsonElement newList)
-    {
-        if (record.GetType().GetProperty(arrayProp)?.GetValue(record) is not System.Collections.IList array)
-            return ConditionApplyResult.NotFound;
-        if (arrayIndex < 0 || arrayIndex >= array.Count) return ConditionApplyResult.NotFound;
-        if (array[arrayIndex] is not { } element) return ConditionApplyResult.NotFound;
-        if (element.GetType().GetProperty(nestedField)?.GetValue(element) is not IList<Condition> conditions)
-            return ConditionApplyResult.NotFound;
-
-        return ApplyListValue(conditions, newList);
     }
 
     // newList is a JSON array of ParsedCondition-shaped objects (camelCase field names) — the same

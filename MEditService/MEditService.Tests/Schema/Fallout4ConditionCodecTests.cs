@@ -137,28 +137,167 @@ public class Fallout4ConditionCodecTests
         Assert.Contains(owners, o => o.FieldPath == "Effects[10].Conditions");
     }
 
-    // ---- IsNestedConditionListField: stage-time shape check (#182) ----
+    // ---- Extract: two levels of array-item nesting (#184) ----
+
+    // Perk.Effects[i].Conditions[j].Conditions — the case #154 was originally descoped from. The
+    // middle level (APerkEffect.Conditions) is a list of PerkCondition wrappers, not itself a
+    // condition list (PerkCondition doesn't implement IConditionGetter) — so this exercises a real
+    // second recursion hop, not just a coincidentally-named middle field.
+    [Fact]
+    public void Extract_TwoLevelNesting_PerkEffectConditions_ReturnsDoublyIndexedOwner()
+    {
+        var perk = new Perk(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+        var effect = new PerkQuestEffect();
+        var perkCondition = new PerkCondition();
+        perkCondition.Conditions.Add(new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } });
+        effect.Conditions.Add(perkCondition);
+        perk.Effects.Add(effect);
+
+        var owners = Codec.Extract(perk).ToList();
+
+        var owner = Assert.Single(owners);
+        Assert.Equal("Effects[0].Conditions[0].Conditions", owner.FieldPath);
+        Assert.Single(owner.Conditions);
+    }
+
+    // A Perk with several effects, only some carrying conditions, shows a group only for the ones
+    // that do (#184 AC).
+    [Fact]
+    public void Extract_TwoLevelNesting_OnlySomeEffectsCarryConditions_ReturnsOwnersOnlyForThose()
+    {
+        var perk = new Perk(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+        perk.Effects.Add(new PerkQuestEffect()); // no conditions at all
+        var withConditions = new PerkQuestEffect();
+        var perkCondition = new PerkCondition();
+        perkCondition.Conditions.Add(new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } });
+        withConditions.Conditions.Add(perkCondition);
+        withConditions.Conditions.Add(new PerkCondition()); // a PerkCondition wrapper with an empty list
+        perk.Effects.Add(withConditions);
+
+        var owners = Codec.Extract(perk).ToList();
+
+        var owner = Assert.Single(owners);
+        Assert.Equal("Effects[1].Conditions[0].Conditions", owner.FieldPath);
+    }
+
+    [Fact]
+    public void Extract_TwoLevelNesting_QuestStageLogEntryConditions_ReturnsDoublyIndexedOwner()
+    {
+        var quest = new Quest(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+        var stage = new QuestStage();
+        var logEntry = new QuestLogEntry();
+        logEntry.Conditions.Add(new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } });
+        stage.LogEntries.Add(logEntry);
+        quest.Stages.Add(stage);
+
+        var owners = Codec.Extract(quest).ToList();
+
+        Assert.Contains(owners, o => o.FieldPath == "Stages[0].LogEntries[0].Conditions");
+    }
+
+    [Fact]
+    public void Extract_TwoLevelNesting_QuestObjectiveTargetConditions_ReturnsDoublyIndexedOwner()
+    {
+        var quest = new Quest(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+        var objective = new QuestObjective();
+        var target = new QuestObjectiveTarget();
+        target.Conditions.Add(new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } });
+        objective.Targets.Add(target);
+        quest.Objectives.Add(objective);
+
+        var owners = Codec.Extract(quest).ToList();
+
+        Assert.Contains(owners, o => o.FieldPath == "Objectives[0].Targets[0].Conditions");
+    }
+
+    [Fact]
+    public void Extract_TwoLevelNesting_SceneActionStartSceneConditions_ReturnsDoublyIndexedOwner()
+    {
+        var scene = new Scene(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+        var action = new SceneAction();
+        var startScene = new StartScene { Conditions = [] };
+        startScene.Conditions!.Add(new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } });
+        action.StartScenes.Add(startScene);
+        scene.Actions.Add(action);
+
+        var owners = Codec.Extract(scene).ToList();
+
+        Assert.Contains(owners, o => o.FieldPath == "Actions[0].StartScenes[0].Conditions");
+    }
+
+    // ---- WalkNestedArrays: the discovery walk's recursion bound (#184 AC) ----
+    // internal (not exercised through the public Extract(IMajorRecordGetter) seam): a genuine object
+    // cycle can never be built from real Mutagen types, since IsArrayOfNestableStructsProperty's
+    // child-record exclusion already breaks the only realistic cycle path (a shared major-record
+    // reference) before recursing. This fixture proves the depth cap itself would stop a pathological
+    // graph if one ever existed, using a plain self-referential test-only type no real Mutagen record
+    // could express.
+
+    private sealed class CyclicNode
+    {
+        public List<CyclicNode> Children { get; } = [];
+    }
+
+    [Fact]
+    public void WalkNestedArrays_SelfReferentialTypeGraph_StopsAtMaxDepthRatherThanRecursingForever()
+    {
+        var root = new CyclicNode();
+        root.Children.Add(root); // a one-node cycle: root is its own child
+
+        var owners = Fallout4ConditionCodec.WalkNestedArrays(root, "", depth: 0).ToList();
+
+        // No condition lists anywhere in this graph — the assertion that matters is that this call
+        // returns at all (a real cycle without the cap would recurse until a StackOverflowException).
+        Assert.Empty(owners);
+    }
+
+    [Fact]
+    public void WalkNestedArrays_AtOrPastMaxDepth_YieldsNothingWithoutRecursing()
+    {
+        var root = new CyclicNode();
+        root.Children.Add(new CyclicNode());
+
+        var owners = Fallout4ConditionCodec.WalkNestedArrays(root, "", depth: Fallout4ConditionCodec.MaxNestedDepth).ToList();
+
+        Assert.Empty(owners);
+    }
+
+    // ---- IsNestedConditionListField: stage-time shape check (#182, generalized to N levels #184) ----
     // The Type-only twin of ExtractNested's per-instance discovery, used by PluginWriter.IsReadOnly
     // for a CTDA-prefixed indexed path. A separate method from IsConditionListField (#182 seam
     // decision) so the bare-fieldpath whole-list-restage gate (#183's boundary) is never loosened
-    // as a side effect of resolving indexed paths here.
+    // as a side effect of resolving indexed paths here. #184: takes the raw composed field path
+    // directly and parses it internally (arbitrary depth), rather than pre-parsed arrayProp/
+    // nestedField pieces — no production caller ever needed the parsed pieces themselves.
 
     [Fact]
     public void IsNestedConditionListField_ConcreteElementDeclaresConditionsDirectly_ReturnsTrue()
     {
-        Assert.True(Codec.IsNestedConditionListField(typeof(IIngestibleGetter), "Effects", "Conditions"));
+        Assert.True(Codec.IsNestedConditionListField(typeof(IIngestibleGetter), "Effects[0].Conditions"));
     }
 
     [Fact]
     public void IsNestedConditionListField_UnknownArrayProperty_ReturnsFalse()
     {
-        Assert.False(Codec.IsNestedConditionListField(typeof(IIngestibleGetter), "NotAnArray", "Conditions"));
+        Assert.False(Codec.IsNestedConditionListField(typeof(IIngestibleGetter), "NotAnArray[0].Conditions"));
     }
 
     [Fact]
     public void IsNestedConditionListField_WrongNestedFieldName_ReturnsFalse()
     {
-        Assert.False(Codec.IsNestedConditionListField(typeof(IIngestibleGetter), "Effects", "NotAConditionField"));
+        Assert.False(Codec.IsNestedConditionListField(typeof(IIngestibleGetter), "Effects[0].NotAConditionField"));
+    }
+
+    [Fact]
+    public void IsNestedConditionListField_MalformedComposedPath_ReturnsFalse()
+    {
+        Assert.False(Codec.IsNestedConditionListField(typeof(IIngestibleGetter), "Effects[abc].Conditions"));
+    }
+
+    [Fact]
+    public void IsNestedConditionListField_FlatUnbracketedPath_ReturnsFalse()
+    {
+        Assert.False(Codec.IsNestedConditionListField(typeof(IIngestibleGetter), "Conditions"));
     }
 
     // Quest.Aliases[i].Conditions (#169/#182 AC#4): IAQuestAliasGetter is a marker interface with
@@ -169,7 +308,7 @@ public class Fallout4ConditionCodecTests
     [Fact]
     public void IsNestedConditionListField_AbstractElementType_AcceptsIfAnyConcreteSubtypeDeclaresConditions_GetterForm()
     {
-        Assert.True(Codec.IsNestedConditionListField(typeof(IQuestGetter), "Aliases", "Conditions"));
+        Assert.True(Codec.IsNestedConditionListField(typeof(IQuestGetter), "Aliases[0].Conditions"));
     }
 
     // Setter-class form (record.GetType(), as EditOrchestrator.TryApplyField's dispatch uses it) —
@@ -178,7 +317,30 @@ public class Fallout4ConditionCodecTests
     [Fact]
     public void IsNestedConditionListField_AbstractElementType_AcceptsIfAnyConcreteSubtypeDeclaresConditions_SetterForm()
     {
-        Assert.True(Codec.IsNestedConditionListField(typeof(Quest), "Aliases", "Conditions"));
+        Assert.True(Codec.IsNestedConditionListField(typeof(Quest), "Aliases[0].Conditions"));
+    }
+
+    // ---- IsNestedConditionListField: two-level composed path (#184) ----
+
+    // Perk.Effects[i].Conditions[j].Conditions — the case #154 was originally descoped from. Both
+    // hops (Effects -> APerkEffect, Conditions -> PerkCondition) must resolve in order before the
+    // terminal Conditions (ExtendedList<Condition>) is checked.
+    [Fact]
+    public void IsNestedConditionListField_TwoLevelComposedPath_ResolvesEachHopInOrder()
+    {
+        Assert.True(Codec.IsNestedConditionListField(typeof(IPerkGetter), "Effects[0].Conditions[0].Conditions"));
+    }
+
+    [Fact]
+    public void IsNestedConditionListField_TwoLevelComposedPath_WrongMiddleHopName_ReturnsFalse()
+    {
+        Assert.False(Codec.IsNestedConditionListField(typeof(IPerkGetter), "Effects[0].NotAField[0].Conditions"));
+    }
+
+    [Fact]
+    public void IsNestedConditionListField_TwoLevelComposedPath_WrongTerminalFieldName_ReturnsFalse()
+    {
+        Assert.False(Codec.IsNestedConditionListField(typeof(IPerkGetter), "Effects[0].Conditions[0].NotAConditionField"));
     }
 
     // ---- ApplyFieldValue: write-back (#152) ----

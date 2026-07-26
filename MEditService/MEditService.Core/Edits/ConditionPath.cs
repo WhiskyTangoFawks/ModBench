@@ -53,41 +53,4 @@ public static class ConditionPath
         if (!subField.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
         return int.TryParse(subField[prefix.Length..], out paramIndex) && paramIndex >= 0;
     }
-
-    // Parses a composed conditionFieldPath segment (#182: "Effects[2].Conditions", the shape #181's
-    // ExtractNested composes) into the enclosing array's property name/index and the nested
-    // condition-list property name. Pure string parsing — no reflection, no CLR type; PluginWriter
-    // (stage-time shape check) and Fallout4ConditionCodec (write-time resolution — a local
-    // duplicate, since Schema doesn't depend on Edits) each resolve the parsed pieces against a
-    // record type/instance themselves. False for anything that doesn't match "<name>[<nonneg-int>].
-    // <name>" — including a two-level nested field (Perk.Effects[i].Conditions[j].Conditions is
-    // #184's scope, not this one) — so a malformed or not-yet-supported path fails closed at stage
-    // time rather than being silently accepted.
-    public static bool TryParseNestedFieldPath(
-        string conditionFieldPath, out string arrayProp, out int arrayIndex, out string nestedField)
-    {
-        arrayProp = "";
-        arrayIndex = -1;
-        nestedField = "";
-
-        var openBracket = conditionFieldPath.IndexOf('[');
-        if (openBracket <= 0) return false;
-
-        var closeBracket = conditionFieldPath.IndexOf(']', openBracket);
-        if (closeBracket < 0) return false;
-
-        var afterBracket = closeBracket + 1;
-        if (afterBracket >= conditionFieldPath.Length || conditionFieldPath[afterBracket] != '.') return false;
-
-        var indexStr = conditionFieldPath[(openBracket + 1)..closeBracket];
-        if (!int.TryParse(indexStr, out var parsedIndex) || parsedIndex < 0) return false;
-
-        var nested = conditionFieldPath[(afterBracket + 1)..];
-        if (nested.Length == 0 || nested.Contains('[')) return false;
-
-        arrayProp = conditionFieldPath[..openBracket];
-        arrayIndex = parsedIndex;
-        nestedField = nested;
-        return true;
-    }
 }
