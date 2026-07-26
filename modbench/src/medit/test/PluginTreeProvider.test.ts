@@ -440,6 +440,20 @@ describe('PluginNode', () => {
   });
 });
 
+// ── InteriorCellsNode ─────────────────────────────────────────────────────────
+
+describe('InteriorCellsNode', () => {
+  it('has no icon, so it sorts alphabetically alongside icon-less record-type nodes', () => {
+    const node = new InteriorCellsNode('M.esp');
+    expect(node.iconPath).toBeUndefined();
+  });
+
+  it('labels itself "cell - Interior" to group alphabetically near "Cell" (xEdit convention)', () => {
+    const node = new InteriorCellsNode('M.esp');
+    expect(node.label).toBe('cell - Interior');
+  });
+});
+
 // ── RecordTypeNode ────────────────────────────────────────────────────────────
 
 describe('RecordTypeNode', () => {
@@ -557,7 +571,7 @@ describe('PluginTreeProvider worldspace tree', () => {
     const labels = children.map(c => c.label);
 
     expect(labels).toContain('Worldspaces');
-    expect(labels).toContain('Interior Cells');
+    expect(labels).toContain('cell - Interior');
     expect(labels).toContain('WEAP');
     expect(labels).not.toContain('refr');
     expect(labels).not.toContain('cell');

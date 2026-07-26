@@ -148,9 +148,8 @@ export class PlacedNode extends vscode.TreeItem {
 export class InteriorCellsNode extends vscode.TreeItem {
   readonly kind = 'interiorCells' as const;
   constructor(public readonly plugin: string) {
-    super('Interior Cells', vscode.TreeItemCollapsibleState.Collapsed);
+    super('cell - Interior', vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'interiorCells';
-    this.iconPath = new vscode.ThemeIcon('home');
   }
 }
 
