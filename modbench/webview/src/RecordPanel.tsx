@@ -22,6 +22,15 @@ const mEditWindow = window as Window & typeof globalThis & {
 
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
 
+// Issue #174: the record editor webview and the extension host's Pending Changes tree are
+// different processes, bridged only by postMessage — refresh(formKey) below only re-fetches
+// this webview's own state, never the tree. Every handler that successfully stages, saves, or
+// reverts a pending change calls this once the mutation is confirmed so extension.ts can
+// refresh the tree in response.
+function notifyPendingChanged() {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED });
+}
+
 // ── RecordPanel ───────────────────────────────────────────────────────────────
 
 export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }>) {
@@ -147,6 +156,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       }
       return;
     }
+    notifyPendingChanged();
     await refresh(formKey);
   }
 
@@ -175,6 +185,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       setActionError(detail || `Revert failed: ${resp.statusText}`);
       return;
     }
+    notifyPendingChanged();
     await refresh(formKey);
   }
 
@@ -193,6 +204,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     const body = await resp.json().catch(() => ({})) as { byPlugin?: Record<string, SaveResult>; reindexFailure?: ReindexFailure | null };
     const messages = [partialSaveMessage(body.byPlugin), staleIndexMessage(body.reindexFailure)].filter(Boolean);
     setActionError(messages.length > 0 ? messages.join(' ') : null);
+    notifyPendingChanged();
     await refresh(formKey);
   }
 
@@ -204,6 +216,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         setActionError(resp.status === 409 ? 'Plugin is read-only' : `Copy failed: ${resp.statusText}`);
         return;
       }
+      notifyPendingChanged();
       await refresh(formKey);
     } catch (e) {
       setActionError(`Copy failed: ${e instanceof Error ? e.message : 'network error'}`);
@@ -221,6 +234,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         setActionError(resp.status === 409 ? 'Plugin is read-only' : `Remove failed: ${resp.statusText}`);
         return;
       }
+      notifyPendingChanged();
       await refresh(formKey);
     } catch (e) {
       setActionError(`Remove failed: ${e instanceof Error ? e.message : 'network error'}`);
@@ -313,7 +327,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       const patchResp = await client.save(newFormKey, targetPlugin, fields);
       if (!patchResp.ok) {
         setActionError(`Copy failed: ${patchResp.statusText}`);
+        return;
       }
+      notifyPendingChanged();
     } catch (e) {
       setActionError(`Copy failed: ${e instanceof Error ? e.message : 'network error'}`);
     }

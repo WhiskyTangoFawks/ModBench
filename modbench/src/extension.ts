@@ -12,7 +12,8 @@ import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type Pen
 import { ApiPluginRepository } from './medit/PluginRepository';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from './medit/messages';
+import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './medit/messages';
+import { routeRecordPanelMessage, type RevealDeps } from './medit/recordPanelMessageRouter';
 import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from './modmanager/ModListProvider';
@@ -1091,40 +1092,7 @@ function promptPluginName(): Thenable<string | undefined> {
   });
 }
 
-// Issue #140: the record panel's Pending column posts a change id; this resolves it to a tree
-// node and reveals it, expanding a multi-member group's parent and showing the tree if it was
-// collapsed or not visible (`focus: true`). No record semantics live here — resolution is the
-// provider's job (`resolveChange`), this is purely the VS Code plumbing the webview can't do
-// itself. A change that is no longer pending (already saved or reverted) resolves to
-// `undefined` and is logged, not thrown (ADR-0026-style: recoverable, not a toast).
-async function revealPendingChange(changeId: string, deps: RevealDeps | undefined): Promise<void> {
-  if (!deps) return;
-  try {
-    const node = await deps.provider.resolveChange(changeId);
-    if (!node) {
-      deps.log(`[revealPendingChange] change ${changeId} is no longer pending (saved or reverted)`);
-      return;
-    }
-    await deps.view.reveal(node, { select: true, focus: true, expand: true });
-  } catch (err) {
-    // An explicit user action failed (they clicked the cell), so ADR-0026 wants a notification,
-    // not a silent log — unlike the no-longer-pending branch above, which is recoverable.
-    deps.reporter.report('error', 'Could not reveal that pending change.', err instanceof Error ? err.message : String(err));
-  }
-}
-
 const RECORD_PANEL_KEY = '__record_view__';
-
-// Issue #140: reveal deps bundled into one optional param so a record panel not wired for
-// reveal (there is exactly one, but keeping the seam explicit) still compiles — and so
-// openRecordPanel's own parameter count doesn't grow every time the panel needs one more
-// thing from the extension host.
-interface RevealDeps {
-  provider: PendingChangesTreeProvider;
-  view: vscode.TreeView<PendingTreeNode>;
-  log: (msg: string) => void;
-  reporter: Reporter;
-}
 
 function openRecordPanel(
   context: vscode.ExtensionContext,
@@ -1157,16 +1125,7 @@ function openRecordPanel(
     panel.onDidDispose(() => openPanels.delete(RECORD_PANEL_KEY));
   }
 
-  panel.webview.onDidReceiveMessage((msg: unknown) => {
-    if (typeof msg === 'object' && msg !== null && 'type' in msg) {
-      const m = msg as WebviewToExtension;
-      if (m.type === WEBVIEW_TO_EXTENSION.OPEN_RECORD) {
-        vscode.commands.executeCommand('modbench.openEditor', { formKey: m.formKey, label: m.formKey });
-      } else if (m.type === WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE) {
-        void revealPendingChange(m.changeId, reveal);
-      }
-    }
-  });
+  panel.webview.onDidReceiveMessage((msg: unknown) => { void routeRecordPanelMessage(msg, { reveal }); });
 
   const scriptUri = panel.webview.asWebviewUri(
     vscode.Uri.file(path.join(context.extensionPath, 'out', 'webview', 'assets', 'main.js'))
