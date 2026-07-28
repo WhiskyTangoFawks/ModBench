@@ -487,6 +487,7 @@ export interface components {
             overrides?: components["schemas"]["CompareOverride"][] | null;
             diffs?: components["schemas"]["FieldDiff"][] | null;
             conflictAll?: components["schemas"]["ConflictAll"];
+            hasVmad?: boolean;
             vmad?: components["schemas"]["VmadCompare"];
             conditions?: components["schemas"]["ConditionCompare"];
         };

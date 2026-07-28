@@ -135,10 +135,16 @@ public record ConditionGroupDiff(string FieldPath, IReadOnlyList<ConditionDiff> 
 
 public record ConditionCompare(IReadOnlyList<ConditionGroupDiff> Groups);
 
+// HasVmad (issue #179): the record type's schema-level capability to carry a VMAD subrecord at
+// all (Schema.RecordTableSchema.HasVmad, reflected from Mutagen's IHaveVirtualMachineAdapterGetter)
+// — distinct from Vmad above, which is per-record *data* (null whenever no plugin happens to have
+// scripts, even for a VMAD-capable type like an un-scripted NPC). The frontend gates whether it
+// renders a Scripts (VMAD) section at all on HasVmad, not on Vmad's presence.
 public record CompareResult(
     IReadOnlyList<CompareOverride> Overrides,
     IReadOnlyList<FieldDiff> Diffs,
     ConflictAll ConflictAll,
+    bool HasVmad,
     VmadCompare? Vmad = null,
     ConditionCompare? Conditions = null);
 

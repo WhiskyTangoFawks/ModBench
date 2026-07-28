@@ -142,6 +142,11 @@ export interface CompareResult {
   overrides: CompareOverride[];
   diffs: FieldDiff[];
   conflictAll: ConflictAll;
+  // Issue #179: schema-level capability ("can this record type ever carry VMAD at all",
+  // reflected from Mutagen's IHaveVirtualMachineAdapterGetter) — distinct from `vmad` below,
+  // which is per-record *data* and is null/absent for a VMAD-capable record that simply has no
+  // scripts yet. Gates whether RecordPanel renders a Scripts (VMAD) section at all.
+  hasVmad: boolean;
   vmad?: VmadCompare | null;
   conditions?: ConditionCompare | null;
 }

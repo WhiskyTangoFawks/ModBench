@@ -97,10 +97,18 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // Conditions section (Fallout4ConditionCodec.Extract) as the one place they're surfaced.
         var conditionCodec = ConditionCodecRegistry.For(category);
 
+        // #179: resolved once per category, game-neutral like everything else here — each game
+        // assembly declares its own IHaveVirtualMachineAdapterGetter in its flat
+        // Mutagen.Bethesda.{category} namespace (no shared cross-game interface exists), the same
+        // one Records/DuckDbRecordRepository.IndexVmad keys off for a given game's compiled type.
+        // Null (a hypothetical future game without the concept) means no table in that category
+        // can ever carry VMAD.
+        var vmadInterfaceType = assembly.GetType($"Mutagen.Bethesda.{category}.IHaveVirtualMachineAdapterGetter");
+
         var schemas = new Dictionary<string, RecordTableSchema>();
         foreach (var (tableName, getterType) in discovered)
         {
-            var schema = BuildSchema(tableName, getterType, getterTypeToTable, logger, conditionCodec);
+            var schema = BuildSchema(tableName, getterType, getterTypeToTable, logger, conditionCodec, vmadInterfaceType);
             var (addNew, remove, addExisting) = BuildLifecycleDelegates(modType, getterType);
 
             schemas[tableName] = addNew == null ? schema : new RecordTableSchema
@@ -109,6 +117,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 DisplayName = schema.DisplayName,
                 RecordType = schema.RecordType,
                 RecordColumns = schema.RecordColumns,
+                HasVmad = schema.HasVmad,
                 AddNew = addNew,
                 Remove = remove,
                 AddExisting = addExisting,
@@ -209,6 +218,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             HeaderColumnExtract = extracts,
             HeaderColumnApply = applies,
             EslFlagValue = eslFlagValue,
+            HasVmad = false, // a mod header is never a major record; VMAD is structurally not a concept here
         };
     }
 
@@ -319,7 +329,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     private static RecordTableSchema BuildSchema(
         string tableName, Type getterType, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger,
-        IConditionCodec? conditionCodec)
+        IConditionCodec? conditionCodec, Type? vmadInterfaceType)
     {
         var baseSkip = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -366,7 +376,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             TableName = tableName,
             DisplayName = RecordDisplayNames.For(tableName),
             RecordType = getterType,
-            RecordColumns = columns
+            RecordColumns = columns,
+            HasVmad = vmadInterfaceType?.IsAssignableFrom(getterType) ?? false,
         };
     }
 

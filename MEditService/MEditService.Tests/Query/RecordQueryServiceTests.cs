@@ -207,6 +207,35 @@ public sealed class RecordQueryServiceTests : IDisposable
     }
 
     [Fact]
+    public void GetCompare_NpcRecord_HasVmadIsTrue()
+    {
+        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
+        var compare = _svc.GetCompare(all.Items[0].FormKey);
+
+        Assert.NotNull(compare);
+        Assert.True(compare!.HasVmad);
+    }
+
+    [Fact]
+    public void GetCompare_CmpoRecord_HasVmadIsFalse()
+    {
+        // Issue #179: CMPO ("Component") categorically cannot carry VMAD — the capability flag
+        // must be false even though this specific record obviously has no VMAD data either way,
+        // distinguishing "this type can never have scripts" from "this record has none yet".
+        FormKey componentKey = default;
+        var data = new PluginFixtureBuilder("rqs-vmad-cmpo")
+            .WithPlugin("Base.esp", mod => componentKey = mod.Components.AddNew("SomeComponent").FormKey)
+            .Build();
+        using (data)
+            WithCompareService(data, svc =>
+            {
+                var compare = svc.GetCompare(componentKey.ToString());
+                Assert.NotNull(compare);
+                Assert.False(compare!.HasVmad);
+            });
+    }
+
+    [Fact]
     public void GetCompare_RecordIdenticalExceptVmad_ClassifiesAsConflict()
     {
         FormKey npcKey = default;

@@ -645,6 +645,46 @@ describe('RecordPanel — no VMAD section on the header record (issue #119)', ()
   });
 });
 
+// Issue #179: CMPO ("Component") records categorically cannot carry a VMAD (script attachment)
+// subrecord — the backend now reflects this per record type (RecordTableSchema.HasVmad, sourced
+// from Mutagen's IHaveVirtualMachineAdapterGetter) and threads it onto CompareResult.hasVmad.
+const vmadIncapableCompareResult = {
+  conflictAll: 'OnlyOne',
+  hasVmad: false,
+  overrides: [
+    {
+      formKey: '000001:MyMod.esp',
+      plugin: 'MyMod.esp',
+      loadOrderIndex: 0,
+      isWinner: true,
+      editorId: 'SomeComponent',
+      fields: [{ metadata: strMeta, value: 'Some Component' }],
+      pendingFields: {},
+      conflictThis: 'OnlyOne',
+    },
+  ],
+  diffs: [
+    {
+      fieldName: 'Name',
+      values: { 'MyMod.esp': 'Some Component' },
+      winnerPlugin: 'MyMod.esp',
+      winnerValue: 'Some Component',
+      cellStates: {},
+    },
+  ],
+};
+
+describe('RecordPanel — no VMAD section on a VMAD-incapable record type (issue #179)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('does not show a Scripts (VMAD) section when hasVmad is false, even on a non-header record', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:MyMod.esp');
+    renderPanel(vmadIncapableCompareResult);
+    await waitFor(() => screen.getByText('Name'));
+    expect(screen.queryByText('Scripts (VMAD)')).not.toBeInTheDocument();
+  });
+});
+
 // ── Top-level pending no-op suppression ──────────────────────────────────────
 
 describe('RecordPanel — top-level pending suppressed when identical to disk', () => {

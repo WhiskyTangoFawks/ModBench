@@ -586,7 +586,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
               }
               return rows;
             })}
-            {!isHeaderRecord && (
+            {!isHeaderRecord && result.hasVmad && (
               <VmadSection
                           vmad={result.vmad}
                           columns={columns}
