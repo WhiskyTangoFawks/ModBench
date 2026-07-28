@@ -674,6 +674,35 @@ const vmadIncapableCompareResult = {
   ],
 };
 
+// A VMAD-capable record type (e.g. an NPC) with no scripts attached yet — hasVmad: true but no
+// `vmad` data. VmadSection should still render its (empty, addable) section: hasVmad gates whether
+// the section can ever appear for this type, not whether this particular record has scripts.
+const vmadCapableCompareResult = {
+  conflictAll: 'OnlyOne',
+  hasVmad: true,
+  overrides: [
+    {
+      formKey: '000001:MyMod.esp',
+      plugin: 'MyMod.esp',
+      loadOrderIndex: 0,
+      isWinner: true,
+      editorId: 'TestNPC',
+      fields: [{ metadata: strMeta, value: 'Test Name' }],
+      pendingFields: {},
+      conflictThis: 'OnlyOne',
+    },
+  ],
+  diffs: [
+    {
+      fieldName: 'Name',
+      values: { 'MyMod.esp': 'Test Name' },
+      winnerPlugin: 'MyMod.esp',
+      winnerValue: 'Test Name',
+      cellStates: {},
+    },
+  ],
+};
+
 describe('RecordPanel — no VMAD section on a VMAD-incapable record type (issue #179)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -682,6 +711,12 @@ describe('RecordPanel — no VMAD section on a VMAD-incapable record type (issue
     renderPanel(vmadIncapableCompareResult);
     await waitFor(() => screen.getByText('Name'));
     expect(screen.queryByText('Scripts (VMAD)')).not.toBeInTheDocument();
+  });
+
+  it('still shows a Scripts (VMAD) section on a non-header record when hasVmad is true', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:MyMod.esp');
+    renderPanel(vmadCapableCompareResult);
+    await waitFor(() => expect(screen.getByText('Scripts (VMAD)')).toBeInTheDocument());
   });
 });
 
