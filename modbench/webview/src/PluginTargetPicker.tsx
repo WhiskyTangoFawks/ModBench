@@ -2,11 +2,12 @@ import React, { useEffect } from 'react';
 import { ColumnHeaderMenuItem } from './ColumnHeaderMenuItem';
 import type { PluginInfo } from './RecordSessionClient';
 
-// Issue #3: the target-plugin picker for "Copy All to Pending"/"Copy as New Record". More than
-// one plugin can be mutable at once (every non-implicit-master plugin in the loadout), so there
-// is no single "active editable plugin" to assume — same reason the #86 "Copy as Override…"
-// button picker in PluginHeader exists. Positioned/closed like ColumnHeaderMenu (position:fixed
-// at the triggering click, closes on outside click or Escape) since it opens from that menu.
+// Issue #3: the target-plugin picker for "Copy All to Pending"/"Copy as New Record", and (#176)
+// "Copy as Override…" (formerly its own picker inline in PluginHeader, added in #86 — retired
+// in favor of this shared one). More than one plugin can be mutable at once (every
+// non-implicit-master plugin in the loadout), so there is no single "active editable plugin" to
+// assume. Positioned/closed like ColumnHeaderMenu (position:fixed at the triggering click, closes
+// on outside click or Escape) since it opens from that menu.
 interface PluginTargetPickerProps {
   x: number;
   y: number;

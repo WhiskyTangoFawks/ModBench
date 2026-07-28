@@ -108,7 +108,8 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
   load order (left = master, right = winning override), plus a **Pending** column for any plugin
   with staged changes. Column headers show the plugin name as a chip (lock icon on immutable);
   left-click collapses/expands a column (state persisted in session); right-click offers Copy
-  All to Pending, Copy as New Record, and Remove Override (disabled for immutable).
+  All to Pending, Copy as New Record, Copy as Override… (stages the currently-loaded record as
+  an override in a picked target plugin), and Remove Override (disabled for immutable).
 
 ### Editing
 

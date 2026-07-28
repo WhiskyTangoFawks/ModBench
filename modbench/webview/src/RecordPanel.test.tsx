@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
@@ -156,11 +156,6 @@ describe('RecordPanel', () => {
     expect(screen.queryByText('View')).not.toBeInTheDocument();
   });
 
-  it('offers Copy as Override… on a mutable column with no mode to enter first', async () => {
-    renderPanel(compareResult);
-    await waitFor(() => expect(screen.getByText('Copy as Override…')).toBeInTheDocument());
-  });
-
   // Issue #136: the panel's Save button called POST /plugins/{plugin}/save — a route the
   // backend does not implement and will not, because ADR-0029 scopes save to a ChangeGroup,
   // never to a plugin. A control that claims to save but 404s is a false affordance
@@ -168,15 +163,8 @@ describe('RecordPanel', () => {
   // tree; the Pending column's group-scoped Save/Revert is its own ticket.
   it('offers no per-plugin Save — save is scoped to a ChangeGroup, not a plugin', async () => {
     renderPanel(compareResult);
-    await waitFor(() => screen.getByText('Copy as Override…'));
+    await waitFor(() => screen.getByText('MyMod.esp'));
     expect(screen.queryByText('Save')).not.toBeInTheDocument();
-  });
-
-  it('offers no Copy as Override… on an immutable column', async () => {
-    renderPanel(compareResult);
-    await waitFor(() => screen.getByText('(read-only)'));
-    // Fallout4.esm is immutable, MyMod.esp is not — exactly one column gets the action.
-    expect(screen.getAllByText('Copy as Override…')).toHaveLength(1);
   });
 
   // Issue #111: a cell in an immutable column never activates an input, however it is clicked
@@ -984,12 +972,13 @@ describe('RecordPanel — column header context menu', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('right-clicking a plugin column header shows Copy All to Pending, Copy as New Record, and Remove Override', async () => {
+  it('right-clicking a plugin column header shows Copy All to Pending, Copy as New Record, Copy as Override…, and Remove Override', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('MyMod.esp'));
     fireEvent.contextMenu(screen.getByText('MyMod.esp').closest('th')!);
     expect(screen.getByRole('menuitem', { name: 'Copy All to Pending' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Copy as New Record' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Copy as Override…' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Remove Override' })).toBeInTheDocument();
   });
 
@@ -1002,6 +991,17 @@ describe('RecordPanel — column header context menu', () => {
 
     fireEvent.contextMenu(screen.getByText('MyMod.esp').closest('th')!);
     expect(screen.getByRole('menuitem', { name: 'Remove Override' })).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  // Issue #176: unlike Remove Override, Copy as Override… never touches the right-clicked
+  // column's own plugin — handleCopyTo only reads the currently-loaded record and writes to
+  // whatever target the user picks next — so it stays enabled even from an immutable column,
+  // the same way Copy All to Pending / Copy as New Record already do.
+  it('Copy as Override… is enabled even when right-clicking an immutable column', async () => {
+    renderPanel(compareResult);
+    await waitFor(() => screen.getByText('Fallout4.esm'));
+    fireEvent.contextMenu(screen.getByText('Fallout4.esm').closest('th')!);
+    expect(screen.getByRole('menuitem', { name: 'Copy as Override…' })).not.toHaveAttribute('aria-disabled', 'true');
   });
 
   it('pressing Escape closes the menu', async () => {
@@ -1124,6 +1124,45 @@ describe('RecordPanel — Copy as New Record', () => {
     // …then stages every source field onto the newly-created FormKey.
     await waitFor(() =>
       expect(client.save).toHaveBeenCalledWith('000099:Mod2.esp', 'Mod2.esp', { Name: 'Bob' }),
+    );
+  });
+});
+
+// ── Copy as Override… (issue #176) ─────────────────────────────────────────────
+//
+// Formerly a standalone button in each mutable PluginHeader column; now the same handleCopyTo
+// flow, triggered from the right-click menu and reusing the shared PluginTargetPicker unmodified
+// — same self-exclusion as Copy All to Pending / Copy as New Record (issue #176 design: "one
+// shared component, one behavior"). Unlike those two, handleCopyTo(target) never reads the
+// right-clicked column's plugin — it always copies the currently-loaded record (formKey) —
+// so there is no per-source-column field payload to assert here, only the target and formKey.
+
+describe('RecordPanel — Copy as Override…', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('opens a target picker offering mutable plugins other than the source column', async () => {
+    renderPanel(threePluginConflictResult, { plugins: threePluginsResponse });
+    await waitFor(() => screen.getByText('Bob'));
+    fireEvent.contextMenu(screen.getByText('Mod1.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy as Override…' }));
+
+    expect(screen.getByRole('menuitem', { name: 'Mod2.esp' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Mod1.esp' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Fallout4.esm' })).not.toBeInTheDocument();
+  });
+
+  it('selecting a target copies the current record to it via copyTo', async () => {
+    const { client } = renderPanel(threePluginConflictResult, { plugins: threePluginsResponse });
+    await waitFor(() => screen.getByText('Bob'));
+    fireEvent.contextMenu(screen.getByText('Mod1.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy as Override…' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mod2.esp' }));
+
+    await waitFor(() =>
+      expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp'),
     );
   });
 });
@@ -1602,9 +1641,9 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
   it('selecting a Copy as Override… target posts pendingChanged once staged', async () => {
     const { client } = renderPanel(threePluginConflictResult, { plugins: threePluginsResponse });
     await waitFor(() => screen.getByText('Bob'));
-    const mod1Header = screen.getByText('Mod1.esp').closest('th')!;
-    fireEvent.click(within(mod1Header).getByText('Copy as Override…'));
-    fireEvent.mouseDown(within(mod1Header).getByText('Mod2.esp'));
+    fireEvent.contextMenu(screen.getByText('Mod1.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy as Override…' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mod2.esp' }));
 
     await waitFor(() => expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp'));
     expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED });
