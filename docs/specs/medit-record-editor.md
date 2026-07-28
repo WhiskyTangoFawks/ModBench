@@ -234,6 +234,10 @@ classification.
   one column per plugin; the whole thing is absent for record types that carry no condition
   fields at all (#154). It reuses the grid's `Column`/`cellStates` conflict coloring rather than a
   separate modal or panel (ADR-0032).
+- A condition-owning field renders **only** in its Condition section, never also as a raw generic
+  field row above — `SchemaReflector` excludes any property `IConditionCodec.IsConditionListField`
+  recognizes from the generic reflection pass, the same way it already excludes `FormKey`/`EditorID`/
+  other structural fields (#178).
 - Each row renders a human-readable summary — function name, its typed parameters, the Run On
   target, comparison operator, and comparison value — instead of raw struct fields.
 - The section is **editable on the same terms as the field rows and the VMAD section**: leaf
