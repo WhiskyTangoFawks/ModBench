@@ -91,10 +91,16 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         var modType = assembly.GetType($"Mutagen.Bethesda.{category}.{category}Mod");
 
+        // #178: resolved once per category (condition codecs are stateless per-call factories,
+        // and the codec itself doesn't vary per table) — passed into BuildSchema so it can skip
+        // condition-shaped properties the same way baseSkip skips other fields, keeping the
+        // Conditions section (Fallout4ConditionCodec.Extract) as the one place they're surfaced.
+        var conditionCodec = ConditionCodecRegistry.For(category);
+
         var schemas = new Dictionary<string, RecordTableSchema>();
         foreach (var (tableName, getterType) in discovered)
         {
-            var schema = BuildSchema(tableName, getterType, getterTypeToTable, logger);
+            var schema = BuildSchema(tableName, getterType, getterTypeToTable, logger, conditionCodec);
             var (addNew, remove, addExisting) = BuildLifecycleDelegates(modType, getterType);
 
             schemas[tableName] = addNew == null ? schema : new RecordTableSchema
@@ -312,7 +318,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     private static RecordTableSchema BuildSchema(
-        string tableName, Type getterType, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+        string tableName, Type getterType, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger,
+        IConditionCodec? conditionCodec)
     {
         var baseSkip = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -320,8 +327,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             "MajorRecordFlagsRaw", "SubgraphRevision"
         };
 
+        // #178: condition-shaped properties (e.g. Perk.Conditions, Quest.DialogConditions/
+        // UnusedConditions) are already surfaced by the game's IConditionCodec into the record
+        // editor's dedicated Conditions section — reflecting them again here would duplicate
+        // them as plain array columns. Game-generic: the shape test lives behind the codec
+        // (IsConditionListField), not a hardcoded field-name list, so a game with no registered
+        // codec (conditionCodec == null) simply skips no extra fields here.
         var grouped = GetAllInterfaceProperties(getterType)
             .Where(p => !baseSkip.Contains(p.Name))
+            .Where(p => conditionCodec == null || !conditionCodec.IsConditionListField(getterType, p.Name))
             .GroupBy(p => ToSnakeCase(p.Name), StringComparer.OrdinalIgnoreCase);
 
         var columns = new List<ColumnSpec>();
