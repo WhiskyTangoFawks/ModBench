@@ -26,15 +26,10 @@ function baseProps() {
     override: override(),
     isImmutable: false,
     isHeaderRecord: false,
-    showCopyPicker: false,
-    mutableTargets: basePlugins.filter(p => !p.isImmutable && p.name !== 'MyMod.esp'),
     showMasterPicker: false,
     loadedPlugins: basePlugins,
     collapsed: false,
     onToggleCollapse: vi.fn(),
-    onOpenCopyPicker: vi.fn(),
-    onCloseCopyPicker: vi.fn(),
-    onCopyTo: vi.fn(),
     onOpenMasterPicker: vi.fn(),
     onCloseMasterPicker: vi.fn(),
     onAddMaster: vi.fn(),
@@ -55,37 +50,26 @@ describe('PluginHeader', () => {
     expect(onToggleCollapse).toHaveBeenCalled();
   });
 
-  it('collapsed: hides load-order/winner line and action buttons', () => {
+  it('collapsed: hides load-order/winner line', () => {
     render(<PluginHeader {...baseProps()} collapsed={true} />);
     expect(screen.queryByText('[1] ✓ winner')).not.toBeInTheDocument();
-    expect(screen.queryByText('Copy as Override…')).not.toBeInTheDocument();
   });
 
-  it('shows "(read-only)" for an immutable column and hides action buttons', () => {
+  it('shows "(read-only)" for an immutable column', () => {
     render(<PluginHeader {...baseProps()} isImmutable={true} />);
     expect(screen.getByText('(read-only)')).toBeInTheDocument();
+  });
+
+  // Issue #176: the standalone button is retired in favor of the "Copy as Override…" item on
+  // the record grid's right-click context menu (ColumnHeaderMenu/RecordPanel).
+  it('does not render a Copy as Override… button', () => {
+    render(<PluginHeader {...baseProps()} />);
     expect(screen.queryByText('Copy as Override…')).not.toBeInTheDocument();
   });
 
-  it('mutable column shows the Copy as Override… button but not Add Master unless a header record', () => {
+  it('mutable, non-header-record column shows no structural action buttons', () => {
     render(<PluginHeader {...baseProps()} />);
-    expect(screen.getByText('Copy as Override…')).toBeInTheDocument();
     expect(screen.queryByText('Add Master…')).not.toBeInTheDocument();
-  });
-
-  it('clicking Copy as Override… opens the copy picker', () => {
-    const onOpenCopyPicker = vi.fn();
-    render(<PluginHeader {...baseProps()} onOpenCopyPicker={onOpenCopyPicker} />);
-    fireEvent.click(screen.getByText('Copy as Override…'));
-    expect(onOpenCopyPicker).toHaveBeenCalled();
-  });
-
-  it('showCopyPicker lists mutableTargets and calls onCopyTo on selection', () => {
-    const onCopyTo = vi.fn();
-    render(<PluginHeader {...baseProps()} showCopyPicker={true} onCopyTo={onCopyTo} />);
-    expect(screen.getByText('Other.esp')).toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByText('Other.esp'));
-    expect(onCopyTo).toHaveBeenCalledWith('Other.esp');
   });
 
   it('header record: shows Add Master… and lists candidates excluding self and current masters', () => {

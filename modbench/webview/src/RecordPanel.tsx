@@ -41,21 +41,21 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   const [immutableSet, setImmutableSet] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [copyPickerPlugin, setCopyPickerPlugin] = useState<string | null>(null);
   const [masterPickerPlugin, setMasterPickerPlugin] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
   // Issue #3: collapsed plugin columns, keyed by plugin name. Deliberately NOT reset by the
-  // LOAD_RECORD handler below (unlike copyPickerPlugin/masterPickerPlugin) — collapse state
+  // LOAD_RECORD handler below (unlike masterPickerPlugin) — collapse state
   // is meant to persist across record-to-record navigation within the same panel session.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
   // Issue #3: transient drag payload — doesn't need to trigger a re-render, so a ref rather
   // than state. Cleared on drop (successful or rejected).
   const dragPayloadRef = useRef<{ fieldName: string; value: unknown } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ plugin: string; x: number; y: number } | null>(null);
-  // Issue #3: target-plugin picker shared by "Copy All to Pending" and "Copy as New Record" —
+  // Issue #3 (+#176: also Copy as Override…): target-plugin picker shared by "Copy All to
+  // Pending", "Copy as New Record", and "Copy as Override…" —
   // same UI (position:fixed at the context menu's click coordinates, mutable-plugins-minus-source
   // target list), branching on `mode` only in onSelect.
-  const [targetPickerSource, setTargetPickerSource] = useState<{ plugin: string; x: number; y: number; mode: 'copyAll' | 'newRecord' } | null>(null);
+  const [targetPickerSource, setTargetPickerSource] = useState<{ plugin: string; x: number; y: number; mode: 'copyAll' | 'newRecord' | 'copyOverride' } | null>(null);
   // Issue #139: right-click menu on a pending value (Save Group / Revert Group), keyed on the
   // member change id it acts on; and the multi-member revert confirmation the ↩ / Revert Group
   // raise before dropping a whole component.
@@ -99,7 +99,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         setAllChanges([]);
         setError(null);
         setActionError(null);
-        setCopyPickerPlugin(null);
         setMasterPickerPlugin(null);
         void refreshRef.current(msg.formKey);
       }
@@ -397,15 +396,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         override={col.override}
                         isImmutable={immutableSet.has(col.override.plugin)}
                         isHeaderRecord={isHeaderRecord}
-                        showCopyPicker={copyPickerPlugin === col.override.plugin}
-                        mutableTargets={allPlugins.filter(p => !p.isImmutable)}
                         showMasterPicker={masterPickerPlugin === col.override.plugin}
                         loadedPlugins={allPlugins}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleColumnCollapse(col.override.plugin)}
-                        onOpenCopyPicker={() => setCopyPickerPlugin(col.override.plugin)}
-                        onCloseCopyPicker={() => setCopyPickerPlugin(null)}
-                        onCopyTo={p => { void handleCopyTo(p); }}
                         onOpenMasterPicker={() => setMasterPickerPlugin(col.override.plugin)}
                         onCloseMasterPicker={() => setMasterPickerPlugin(null)}
                         onAddMaster={newMasters => { void handleEdit(col.override.plugin, 'masters', newMasters); }}
@@ -626,6 +620,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
           onClose={() => setContextMenu(null)}
           onCopyAllToPending={() => { setTargetPickerSource({ ...contextMenu, mode: 'copyAll' }); setContextMenu(null); }}
           onCopyAsNewRecord={() => { setTargetPickerSource({ ...contextMenu, mode: 'newRecord' }); setContextMenu(null); }}
+          onCopyAsOverride={() => { setTargetPickerSource({ ...contextMenu, mode: 'copyOverride' }); setContextMenu(null); }}
           onRemoveOverride={() => { const plugin = contextMenu.plugin; setContextMenu(null); void handleRemoveOverride(plugin); }}
         />
       )}
@@ -639,6 +634,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
             const { plugin: source, mode } = targetPickerSource;
             setTargetPickerSource(null);
             if (mode === 'copyAll') void handleCopyAllToPending(source, target);
+            // Issue #176: Copy as Override… never reads the right-clicked column's plugin —
+            // handleCopyTo always copies the currently-loaded record (formKey) to the chosen
+            // target, same as the button it replaces.
+            else if (mode === 'copyOverride') void handleCopyTo(target);
             else void handleCopyAsNewRecord(source, target);
           }}
         />

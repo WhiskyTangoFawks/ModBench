@@ -6,15 +6,10 @@ interface PluginHeaderProps {
   override: RecordDetail;
   isImmutable: boolean;
   isHeaderRecord: boolean;
-  showCopyPicker: boolean;
-  mutableTargets: PluginInfo[];
   showMasterPicker: boolean;
   loadedPlugins: PluginInfo[];
   collapsed: boolean;
   onToggleCollapse: () => void;
-  onOpenCopyPicker: () => void;
-  onCloseCopyPicker: () => void;
-  onCopyTo: (target: string) => void;
   onOpenMasterPicker: () => void;
   onCloseMasterPicker: () => void;
   onAddMaster: (newMasters: string[]) => void;
@@ -31,9 +26,8 @@ function currentMasters(o: RecordDetail): string[] {
 
 export function PluginHeader({
   override: o, isImmutable, isHeaderRecord,
-  showCopyPicker, mutableTargets, showMasterPicker, loadedPlugins,
+  showMasterPicker, loadedPlugins,
   collapsed, onToggleCollapse,
-  onOpenCopyPicker, onCloseCopyPicker, onCopyTo,
   onOpenMasterPicker, onCloseMasterPicker, onAddMaster,
 }: PluginHeaderProps) {
   const masters = currentMasters(o);
@@ -52,7 +46,7 @@ export function PluginHeader({
     <div>
       {/* Issue #3: left-click the plugin-name chip collapses/expands this column;
           kept as its own click target (not the whole <th>) so it never swallows the
-          Save/Copy/Add-Master button clicks below it. */}
+          Add-Master button click below it. */}
       <div onClick={onToggleCollapse} style={{ cursor: 'pointer' }}>{o.plugin}</div>
       {!collapsed && (
         <>
@@ -69,50 +63,6 @@ export function PluginHeader({
       {/* Issue #111: no mode gate — a mutable column's structural actions are always available. */}
       {!collapsed && !isImmutable && (
         <div style={{ marginTop: 3, position: 'relative' }}>
-          <button style={btnStyle} onClick={onOpenCopyPicker}>
-            Copy as Override…
-          </button>
-          {showCopyPicker && (
-            // onMouseDown on items fires before onBlur, so selection works correctly
-            <div
-              onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) onCloseCopyPicker(); }}
-              tabIndex={-1}
-              style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                zIndex: 10,
-                background: 'var(--vscode-dropdown-background, #3c3c3c)',
-                border: '1px solid var(--vscode-dropdown-border, #555)',
-                borderRadius: 2,
-                minWidth: 180,
-                maxHeight: 200,
-                overflowY: 'auto',
-                outline: 'none',
-              }}
-            >
-              {mutableTargets.length === 0 && (
-                <div style={{ padding: '4px 8px', opacity: 0.5, fontSize: '11px' }}>No mutable plugins</div>
-              )}
-              {mutableTargets.map(p => (
-                <div
-                  key={p.name}
-                  onMouseDown={() => { onCopyTo(p.name); onCloseCopyPicker(); }}
-                  style={{
-                    padding: '4px 8px',
-                    cursor: 'pointer',
-                    fontSize: '11px',
-                    color: 'var(--vscode-dropdown-foreground, #ccc)',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--vscode-list-hoverBackground, #2a2d2e)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = ''; }}
-                >
-                  {p.name}
-                  <span style={{ opacity: 0.55, marginLeft: 6 }}>[{p.loadOrderIndex}]</span>
-                </div>
-              ))}
-            </div>
-          )}
           {isHeaderRecord && (
             <>
               <button style={btnStyle} onClick={onOpenMasterPicker}>

@@ -13,10 +13,11 @@ interface ColumnHeaderMenuProps {
   onClose: () => void;
   onCopyAllToPending: () => void;
   onCopyAsNewRecord: () => void;
+  onCopyAsOverride: () => void;
   onRemoveOverride: () => void;
 }
 
-export function ColumnHeaderMenu({ x, y, disabledRemove, onClose, onCopyAllToPending, onCopyAsNewRecord, onRemoveOverride }: ColumnHeaderMenuProps) {
+export function ColumnHeaderMenu({ x, y, disabledRemove, onClose, onCopyAllToPending, onCopyAsNewRecord, onCopyAsOverride, onRemoveOverride }: ColumnHeaderMenuProps) {
   useEffect(() => {
     const close = (e: MouseEvent | KeyboardEvent) => {
       if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
@@ -52,6 +53,7 @@ export function ColumnHeaderMenu({ x, y, disabledRemove, onClose, onCopyAllToPen
     >
       <ColumnHeaderMenuItem label="Copy All to Pending" onActivate={onCopyAllToPending} />
       <ColumnHeaderMenuItem label="Copy as New Record" onActivate={onCopyAsNewRecord} />
+      <ColumnHeaderMenuItem label="Copy as Override…" onActivate={onCopyAsOverride} />
       <ColumnHeaderMenuItem label="Remove Override" disabled={disabledRemove} onActivate={onRemoveOverride} />
     </ul>
   );
