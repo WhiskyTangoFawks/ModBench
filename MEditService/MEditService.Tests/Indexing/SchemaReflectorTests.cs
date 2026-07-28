@@ -39,6 +39,25 @@ public class SchemaReflectorTests
         Assert.False(schemas.ContainsKey("navi"));
     }
 
+    // ── Issue #179: VMAD capability gate ───────────────────────────────────────
+
+    [Fact]
+    public void GetSchemas_Cmpo_HasVmad_IsFalse()
+    {
+        // CMPO ("Component") has no VMAD subrecord per xEdit's format definition
+        // (wbDefinitionsFO4.pas) — Component_Generated.cs doesn't implement
+        // IHaveVirtualMachineAdapterGetter, so the schema-level flag must be false.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        Assert.False(schemas["cmpo"].HasVmad);
+    }
+
+    [Fact]
+    public void GetSchemas_Npc_HasVmad_IsTrue()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        Assert.True(schemas["npc_"].HasVmad);
+    }
+
     // ── Issue #110: xEdit-parity display names ────────────────────────────────
 
     [Fact]

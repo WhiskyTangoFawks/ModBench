@@ -149,7 +149,8 @@ public sealed class RecordQueryService(
                 conflictAll = ConflictRules.Escalate(conflictAll, conditionResult.ConflictContribution);
             }
 
-            return new CompareResult(annotated, classification.Diffs, conflictAll, vmad, conditions);
+            var hasVmad = RequireSchemas()[tableName].HasVmad;
+            return new CompareResult(annotated, classification.Diffs, conflictAll, hasVmad, vmad, conditions);
         }
         return null;
     }

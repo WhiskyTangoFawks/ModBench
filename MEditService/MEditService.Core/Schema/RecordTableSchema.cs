@@ -41,6 +41,17 @@ public sealed class RecordTableSchema
     public required string DisplayName { get; init; }
 
     /// <summary>
+    /// Whether this record type can carry a VMAD (script attachment) subrecord — computed once at
+    /// schema-reflection time from Mutagen's own type system
+    /// (<c>IHaveVirtualMachineAdapterGetter</c>), the same interface
+    /// <see cref="Records.DuckDbRecordRepository.IndexVmad"/> already keys off. Issue #179: drives
+    /// whether the frontend renders a Scripts (VMAD) section at all, rather than relying on
+    /// per-record data (a VMAD-capable type with no scripts yet should still show an empty,
+    /// addable section; a VMAD-incapable type like CMPO must never show one).
+    /// </summary>
+    public required bool HasVmad { get; init; }
+
+    /// <summary>
     /// Adds a new blank record with the given FormKey to the correct group on <paramref name="mod"/>.
     /// Null when the group property could not be resolved via reflection.
     /// </summary>

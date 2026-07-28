@@ -30,7 +30,7 @@ public class PendingChangeResolverTests
         string tableName, string displayName, params ColumnSpec[] columns) =>
         new Dictionary<string, RecordTableSchema>
         {
-            [tableName] = new() { TableName = tableName, DisplayName = displayName, RecordType = typeof(object), RecordColumns = columns },
+            [tableName] = new() { TableName = tableName, DisplayName = displayName, RecordType = typeof(object), RecordColumns = columns, HasVmad = false },
         };
 
     [Fact]
