@@ -149,7 +149,6 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: changeGroupTreeProvider,
     canSelectMany: true,
   });
-  changeGroupTreeView.title = 'mEdit — Pending Changes';
   // ── Mod List (Loadout) view ──────────────────────────────────────────────────
   // The open workspace root IS the MO2 instance (see modbench/CLAUDE.md). Until
   // the Loadout↔Editing toggle lands (Modbench-5), Mod List is the only visible view.
