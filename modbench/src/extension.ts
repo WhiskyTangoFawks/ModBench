@@ -817,6 +817,11 @@ function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
     log('[extension] No workspace folder open — Mod List view not registered.');
+    // #192: explicit, not left implicitly falsy — the viewsWelcome `when` clause
+    // also guards on VS Code's own `workspaceFolderCount != 0`, so this key's
+    // value never actually matters with no workspace open, but every exit path
+    // sets it rather than leaving a third, implicit "never set" state.
+    void vscode.commands.executeCommand('setContext', 'modbench.workspaceIsMo2Instance', false);
     return undefined;
   }
   // #192: an MO2 instance is the folder containing ModOrganizer.ini, mods/, and
