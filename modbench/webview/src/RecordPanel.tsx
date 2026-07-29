@@ -222,9 +222,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     }
   }
 
-  // Issue #3: "Remove Override" — stages a delete of this plugin's override of the current
-  // record (Phase 10's DeleteRecords endpoint, reached here via the same raw-fetch pattern as
-  // handleCopyTo — the webview never routes through SessionController/ApiClient).
+  // Issue #3: "Remove" (renamed from "Remove Override" in #177) — stages a delete of this
+  // plugin's override of the current record (Phase 10's DeleteRecords endpoint, reached here
+  // via the same raw-fetch pattern as handleCopyTo — the webview never routes through
+  // SessionController/ApiClient).
   async function handleRemoveOverride(plugin: string) {
     setActionError(null);
     try {

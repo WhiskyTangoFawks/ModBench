@@ -19,7 +19,7 @@ describe('ColumnHeaderMenu', () => {
     expect(screen.getByRole('menuitem', { name: 'Copy All to Pending' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Copy as New Record' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Copy as Override…' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Remove Override' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Remove' })).toBeInTheDocument();
   });
 
   it('calls the matching handler when an item is clicked', () => {
@@ -36,9 +36,9 @@ describe('ColumnHeaderMenu', () => {
     expect(onCopyAsOverride).toHaveBeenCalled();
   });
 
-  it('disables Remove Override when disabledRemove is true', () => {
+  it('disables Remove when disabledRemove is true', () => {
     render(<ColumnHeaderMenu {...baseProps()} disabledRemove={true} />);
-    expect(screen.getByRole('menuitem', { name: 'Remove Override' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: 'Remove' })).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('closes on outside click', () => {
