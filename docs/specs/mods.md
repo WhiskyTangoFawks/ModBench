@@ -226,6 +226,12 @@ share by inode anyway — record edits go straight to the source mod file with n
   Deploy/Purge are hidden and Modbench only edits in place. Executable tasks are withheld
   too — with no physical deploy of Modbench's making, an MO2 entry run outside usvfs would
   see an undeployed game directory.
+- **Alpha default is `external`.** The alpha ships alongside MO2, not instead of it — MO2
+  stays the deployer/launcher and the showcase is editing and mod management, neither of
+  which needs a deploy. Deploy/Purge/Launch Game are withdrawn from both the title bar and
+  the command palette at this default, so a fresh install exposes no path that writes into
+  the game directory. Standalone deploy stays fully implemented and reachable by explicitly
+  setting `deploymentMode: "standalone"`, keeping the post-alpha path (#96) testable (#186).
 - **Same-drive constraint**: `mods/` and the game directory must be on the same volume.
   Checked at first deploy; on violation, prompt to move the staging folder, create a stock
   game folder on the mods volume, or use the **symlink fallback** (no special permission on
@@ -356,9 +362,8 @@ The extension owns the editing backend process
   *state* of the game directory, not a per-launch transient. MO2 can treat it as transient
   because usvfs is a live VFS it holds up across however many tool runs; physical hardlinks
   have no such lifetime, so "deployed" is a mode the user is in.
-- **Superseded**: a Launch Game action that deployed, ran the game, and purged on child exit
-  (with a `modbench.mods.launchCommand` template as the Proton/Wine escape hatch). Withdrawn
-  for three reasons, none of them cost: (1) *the launched process is not the game* — a script
+- **Superseded**: a Launch Game action that deployed, ran the game, and purged on child exit.
+  Withdrawn for three reasons, none of them cost: (1) *the launched process is not the game* — a script
   extender loader starts it, injects, and exits, so exit-on-child is a false signal, which is
   why MO2 tracks a whole process tree via a Job Object instead; (2) *purge mutates* — it
   sweeps non-manifest `Data/` files into `overwrite/` and prunes directories, so a false exit
