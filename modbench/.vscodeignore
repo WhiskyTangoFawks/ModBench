@@ -1,6 +1,8 @@
 # Ship only the bundled runtime (out/ + the published backend/) — not sources.
 .vscode/**
 .vscode-test/**
+.vscode-test.mjs
+CLAUDE.md
 src/**
 webview/**
 node_modules/**
@@ -13,6 +15,12 @@ esbuild.mjs
 vitest.config.*
 **/*.test.*
 
-# Keep: out/ (bundled extension + webview) and backend/ (published self-contained service)
+# Keep: out/ (bundled extension + webview) and backend/ (published self-contained
+# service). vsce's negate matching is a blanket OR over the whole file, not
+# gitignore-style last-match-wins — a broad `!out/**` would rescue everything
+# under out/, including the **/*.map and **/*.test.* exclusions above,
+# regardless of line order. Whitelist exactly the runtime output instead of
+# re-including the whole tree.
 !backend/**
-!out/**
+!out/extension.js
+!out/webview/**

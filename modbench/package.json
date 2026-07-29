@@ -3,6 +3,13 @@
   "displayName": "Modbench",
   "description": "Modbench: install, order, and deploy mods; view, edit, and compare Bethesda plugin files (.esp/.esm/.esl)",
   "version": "0.0.1",
+  "publisher": "whiskytangofawks",
+  "license": "GPL-3.0-only",
+  "icon": "images/medit.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WhiskyTangoFawks/ModBench.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -560,10 +567,12 @@
     "generate-api": "openapi-typescript http://localhost:5172/swagger/v1/swagger.json -o src/medit/generated/api.ts",
     "test:unit": "vitest run",
     "test:integration": "tsc -p tsconfig.integration.json && vscode-test",
-    "lint": "eslint src webview/src"
+    "lint": "eslint src webview/src",
+    "prepackage": "cp ../LICENSE ./LICENSE",
+    "package": "vsce package"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@eslint/js": "^9.39.4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -578,6 +587,7 @@
     "@vitest/coverage-v8": "^2.1.9",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "3.9.2",
     "esbuild": "^0.28.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.1.1",
