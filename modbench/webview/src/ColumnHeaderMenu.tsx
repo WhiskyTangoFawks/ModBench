@@ -5,7 +5,7 @@ import { ColumnHeaderMenuItem } from './ColumnHeaderMenuItem';
 // RowContextMenu (role="menu"/"menuitem", position:fixed at the click coordinates,
 // closes on outside click or Escape) — that is this webview's only existing
 // context-menu precedent, kept local here since it's mEdit-specific vocabulary
-// ("Remove Override"), not shared across the Mod-Management boundary.
+// ("Remove"), not shared across the Mod-Management boundary.
 interface ColumnHeaderMenuProps {
   x: number;
   y: number;
@@ -54,7 +54,7 @@ export function ColumnHeaderMenu({ x, y, disabledRemove, onClose, onCopyAllToPen
       <ColumnHeaderMenuItem label="Copy All to Pending" onActivate={onCopyAllToPending} />
       <ColumnHeaderMenuItem label="Copy as New Record" onActivate={onCopyAsNewRecord} />
       <ColumnHeaderMenuItem label="Copy as Override…" onActivate={onCopyAsOverride} />
-      <ColumnHeaderMenuItem label="Remove Override" disabled={disabledRemove} onActivate={onRemoveOverride} />
+      <ColumnHeaderMenuItem label="Remove" disabled={disabledRemove} onActivate={onRemoveOverride} />
     </ul>
   );
 }

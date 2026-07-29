@@ -972,28 +972,28 @@ describe('RecordPanel — column header context menu', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('right-clicking a plugin column header shows Copy All to Pending, Copy as New Record, Copy as Override…, and Remove Override', async () => {
+  it('right-clicking a plugin column header shows Copy All to Pending, Copy as New Record, Copy as Override…, and Remove', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('MyMod.esp'));
     fireEvent.contextMenu(screen.getByText('MyMod.esp').closest('th')!);
     expect(screen.getByRole('menuitem', { name: 'Copy All to Pending' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Copy as New Record' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Copy as Override…' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Remove Override' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Remove' })).toBeInTheDocument();
   });
 
-  it('Remove Override is disabled on an immutable plugin column, enabled on a mutable one', async () => {
+  it('Remove is disabled on an immutable plugin column, enabled on a mutable one', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Fallout4.esm'));
 
     fireEvent.contextMenu(screen.getByText('Fallout4.esm').closest('th')!);
-    expect(screen.getByRole('menuitem', { name: 'Remove Override' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: 'Remove' })).toHaveAttribute('aria-disabled', 'true');
 
     fireEvent.contextMenu(screen.getByText('MyMod.esp').closest('th')!);
-    expect(screen.getByRole('menuitem', { name: 'Remove Override' })).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: 'Remove' })).not.toHaveAttribute('aria-disabled', 'true');
   });
 
-  // Issue #176: unlike Remove Override, Copy as Override… never touches the right-clicked
+  // Issue #176: unlike Remove, Copy as Override… never touches the right-clicked
   // column's own plugin — handleCopyTo only reads the currently-loaded record and writes to
   // whatever target the user picks next — so it stays enabled even from an immutable column,
   // the same way Copy All to Pending / Copy as New Record already do.
@@ -1025,30 +1025,30 @@ describe('RecordPanel — column header context menu', () => {
   });
 });
 
-// ── Remove Override (issue #3) ────────────────────────────────────────────────
+// ── Remove (issue #3, renamed from "Remove Override" in #177) ─────────────────
 
-describe('RecordPanel — Remove Override', () => {
+describe('RecordPanel — Remove', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('clicking Remove Override on a mutable column stages a delete via removeOverride', async () => {
+  it('clicking Remove on a mutable column stages a delete via removeOverride', async () => {
     const { client } = renderPanel(compareResult);
     await waitFor(() => screen.getByText('MyMod.esp'));
     fireEvent.contextMenu(screen.getByText('MyMod.esp').closest('th')!);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove Override' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
 
     await waitFor(() =>
       expect(client.removeOverride).toHaveBeenCalledWith('000001:Fallout4.esm', 'MyMod.esp'),
     );
   });
 
-  it('Remove Override is disabled and inert on an immutable column — no delete call is made', async () => {
+  it('Remove is disabled and inert on an immutable column — no delete call is made', async () => {
     const { client } = renderPanel(compareResult);
     await waitFor(() => screen.getByText('Fallout4.esm'));
     fireEvent.contextMenu(screen.getByText('Fallout4.esm').closest('th')!);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove Override' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
 
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(client.removeOverride).not.toHaveBeenCalled();
@@ -1649,11 +1649,11 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
     expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED });
   });
 
-  it('Remove Override posts pendingChanged once staged', async () => {
+  it('Remove posts pendingChanged once staged', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('MyMod.esp'));
     fireEvent.contextMenu(screen.getByText('MyMod.esp').closest('th')!);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove Override' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
 
     await waitFor(() =>
       expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
