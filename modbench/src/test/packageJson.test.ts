@@ -23,3 +23,30 @@ describe('package.json viewsWelcome (#192)', () => {
     expect(welcome!.when).toContain('workspaceFolderCount != 0');
   });
 });
+
+describe('package.json standalone Deploy/Purge/Launch Game withdrawal (#186)', () => {
+  it('defaults deploymentMode to external so the alpha never exposes standalone deploy without explicit opt-in', () => {
+    const prop = pkg.contributes.configuration.properties['modbench.mods.deploymentMode'];
+    expect(prop, 'expected modbench.mods.deploymentMode to still be declared').toBeTruthy();
+    expect(prop.default).toBe('external');
+  });
+
+  it('removes the launchCommand setting — dead once Launch Game is withdrawn from the default path', () => {
+    expect(pkg.contributes.configuration.properties['modbench.mods.launchCommand']).toBeUndefined();
+  });
+
+  it('gates Deploy/Purge/Launch Game in the command palette the same as the title bar, closing the Ctrl+Shift+P hole', () => {
+    const palette = pkg.contributes.menus.commandPalette as { command: string; when: string }[];
+    expect(palette, 'expected a contributes.menus.commandPalette section').toBeTruthy();
+
+    for (const command of ['modbench.modList.deploy', 'modbench.modList.purge', 'modbench.modList.launchGame']) {
+      const entry = palette.find((e) => e.command === command);
+      expect(entry, `expected a commandPalette entry for ${command}`).toBeTruthy();
+      // Same gate as the view/title button for this command, so palette and title bar can never diverge.
+      const titleBarEntry = (pkg.contributes.menus['view/title'] as { command: string; when: string }[])
+        .find((e) => e.command === command);
+      expect(titleBarEntry, `expected a view/title entry for ${command}`).toBeTruthy();
+      expect(titleBarEntry!.when).toContain(entry!.when);
+    }
+  });
+});

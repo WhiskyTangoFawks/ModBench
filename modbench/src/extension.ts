@@ -1028,9 +1028,10 @@ function setupScripts(cfg: vscode.WorkspaceConfiguration): { scriptsPath: string
 /** Seed and watch the deployment-mode context key (standalone vs external manager). */
 function registerDeploymentModeContext(context: vscode.ExtensionContext): void {
   // Deploy/Purge/Launch are standalone-only; hidden when an external manager owns
-  // deployment. Default standalone (the mechanism on Linux, where USVFS is absent).
+  // deployment. Default external for the alpha — MO2 stays the deployer/launcher
+  // until standalone deploy ships post-alpha (#96, #186).
   const applyDeploymentMode = () => {
-    const mode = vscode.workspace.getConfiguration('modbench').get('mods.deploymentMode') ?? 'standalone';
+    const mode = vscode.workspace.getConfiguration('modbench').get('mods.deploymentMode') ?? 'external';
     void vscode.commands.executeCommand('setContext', 'modbench.deploymentStandalone', mode !== 'external');
   };
   applyDeploymentMode();
@@ -1107,10 +1108,7 @@ function registerDeployCommands(
         // Switch to the Plugin List view while the game runs (mirrors launchMedit).
         setViewMode('editing');
         const executable = path.join(gd.root, 'Fallout4.exe');
-        const template = (config().get('mods.launchCommand') as string) || '';
-        const child = template
-          ? cp.spawn(template.replaceAll('${executable}', executable), { shell: true, cwd: gd.root, detached: true, stdio: 'ignore' })
-          : cp.spawn(executable, { cwd: gd.root, detached: true, stdio: 'ignore' });
+        const child = cp.spawn(executable, { cwd: gd.root, detached: true, stdio: 'ignore' });
         child.on('error', (e) => reporter.report('error', 'Failed to launch the game.', e.message));
         child.on('exit', () => {
           void purge(instanceRoot, gd, reporter).catch((e) => log(`[deploy] purge on exit failed: ${String(e)}`));

@@ -53,15 +53,9 @@
             "Modbench hardlinks the merged mod view into the game directory's Data/ (the mechanism on Linux, where MO2's USVFS is unavailable).",
             "An external manager (MO2/Vortex) owns deployment; Modbench hides Deploy/Purge/Launch Game."
           ],
-          "default": "standalone",
+          "default": "external",
           "scope": "resource",
           "description": "Who deploys mods into the game directory."
-        },
-        "modbench.mods.launchCommand": {
-          "type": "string",
-          "default": "",
-          "scope": "resource",
-          "description": "Optional override for Launch Game. Template with a ${executable} placeholder (e.g. for Proton/Wine or an F4SE loader). Leave blank to spawn the executable directly."
         }
       }
     },
@@ -303,6 +297,20 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "modbench.modList.deploy",
+          "when": "modbench.deploymentStandalone"
+        },
+        {
+          "command": "modbench.modList.purge",
+          "when": "modbench.deploymentStandalone"
+        },
+        {
+          "command": "modbench.modList.launchGame",
+          "when": "modbench.deploymentStandalone"
+        }
+      ],
       "view/title": [
         {
           "command": "modbench.pluginListTree.filter",
