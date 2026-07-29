@@ -32,6 +32,7 @@ modbench/.vscode-test.mjs
 modbench/out/
 modbench/backend/
 modbench/tsconfig.integration.json
+modbench/LICENSE
 
 # OS
 .DS_Store

@@ -20,6 +20,7 @@ npm run build             # type-check + bundle extension + webview
 npm run test:unit         # Vitest, no backend
 npm run test:integration  # real VS Code process (~10s), no backend
 npm run generate-api      # regen typed API client — needs fresh backend; see /regenerate-api
+npm run package           # build alpha .vsix — pinned local @vscode/vsce, no npx/global install
 ```
 
 - `/validate` — run at end of every task; wraps gates above.
