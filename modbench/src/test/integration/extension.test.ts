@@ -255,23 +255,12 @@ describe('Overwrite row (#82)', () => {
   const provider = () => (ext?.exports as { modListProvider?: ModListLike } | undefined)?.modListProvider;
 
   // The pinned Overwrite row is appended only once the modlist loads (it sits
-  // after the mod roots). The bare test workspace is not an MO2 instance, so lay
-  // down a minimal one — ModOrganizer.ini + an empty Default profile modlist —
-  // just for this suite, and remove it after.
-  before(() => {
-    if (!root) return;
-    fs.writeFileSync(path.join(root, 'ModOrganizer.ini'), '[General]\ngameName=Fallout4\nselected_profile=Default\n');
-    fs.mkdirSync(path.join(root, 'profiles', 'Default'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'modlist.txt'), '');
-    fs.mkdirSync(path.join(root, 'mods'), { recursive: true });
-  });
-
+  // after the mod roots). The committed test workspace fixture (#192) is
+  // already a minimal valid MO2 instance — only the suite-scoped overwrite/
+  // dir needs cleanup here.
   after(() => {
     if (!root) return;
     fs.rmSync(overwriteDir, { recursive: true, force: true });
-    fs.rmSync(path.join(root, 'ModOrganizer.ini'), { force: true });
-    fs.rmSync(path.join(root, 'profiles'), { recursive: true, force: true });
-    fs.rmSync(path.join(root, 'mods'), { recursive: true, force: true });
   });
 
   it('exposes the live ModListProvider from activate()', () => {
@@ -318,9 +307,11 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
   const treeProvider = () => (ext?.exports as { treeProvider?: TreeLike } | undefined)?.treeProvider;
   let gameDir = '';
 
-  // enterEditing needs a resolvable game directory and a readable active profile
-  // to reach POST /session/load-explicit. Lay down a minimal MO2 instance plus a
-  // game dir with a Data/ folder, scoped to this suite.
+  // enterEditing needs a resolvable game directory and an enabled plugin in the
+  // active profile to reach POST /session/load-explicit. The committed test
+  // workspace fixture (#192) already supplies a valid MO2 instance (empty
+  // plugins.txt) — only the suite-scoped plugins.txt content and game dir are
+  // set up here.
   before(async () => {
     if (!root) return;
     resetMockBackend();
@@ -329,11 +320,7 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
 
-    fs.writeFileSync(path.join(root, 'ModOrganizer.ini'), '[General]\ngameName=Fallout4\nselected_profile=Default\n');
-    fs.mkdirSync(path.join(root, 'profiles', 'Default'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'modlist.txt'), '');
     fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n');
-    fs.mkdirSync(path.join(root, 'mods'), { recursive: true });
   });
 
   after(async () => {
@@ -341,9 +328,7 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
     await vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
-    fs.rmSync(path.join(root, 'ModOrganizer.ini'), { force: true });
-    fs.rmSync(path.join(root, 'profiles'), { recursive: true, force: true });
-    fs.rmSync(path.join(root, 'mods'), { recursive: true, force: true });
+    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '');
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
@@ -390,6 +375,9 @@ describe('mEdit plugin tree title reflects view mode (#109)', () => {
   } | undefined;
   let gameDir = '';
 
+  // The committed test workspace fixture (#192) already supplies a valid MO2
+  // instance (empty plugins.txt) — only the suite-scoped plugins.txt content
+  // and game dir are set up here.
   before(async () => {
     if (!root) return;
     resetMockBackend();
@@ -398,11 +386,7 @@ describe('mEdit plugin tree title reflects view mode (#109)', () => {
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
 
-    fs.writeFileSync(path.join(root, 'ModOrganizer.ini'), '[General]\ngameName=Fallout4\nselected_profile=Default\n');
-    fs.mkdirSync(path.join(root, 'profiles', 'Default'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'modlist.txt'), '');
     fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n');
-    fs.mkdirSync(path.join(root, 'mods'), { recursive: true });
   });
 
   after(async () => {
@@ -410,9 +394,12 @@ describe('mEdit plugin tree title reflects view mode (#109)', () => {
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
     await vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
-    fs.rmSync(path.join(root, 'ModOrganizer.ini'), { force: true });
-    fs.rmSync(path.join(root, 'profiles'), { recursive: true, force: true });
-    fs.rmSync(path.join(root, 'mods'), { recursive: true, force: true });
+    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '');
+    // This suite's own Launch Game test deploys against gameDir before the
+    // (failing, fake) launch — that writes mods/.medit-manifest.json. purge()
+    // never runs since the spawn errors rather than exits, so clean the manifest
+    // up by hand to keep the committed fixture pristine across runs.
+    fs.rmSync(path.join(root, 'mods', '.medit-manifest.json'), { force: true });
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 

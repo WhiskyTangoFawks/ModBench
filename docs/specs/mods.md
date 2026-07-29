@@ -179,6 +179,13 @@ requires a deploy.**
 - **The open VS Code workspace root is the MO2 instance directory.** `mods/`, `profiles/`,
   and `ModOrganizer.ini` are read relative to it; there is no separate instance-path
   config.
+- **A workspace missing `ModOrganizer.ini`, `mods/`, or `profiles/` isn't an MO2 instance**,
+  detected structurally (existence only, never content) at activation. The Mods view shows
+  persistent `viewsWelcome` content — "this isn't an MO2 instance, open the folder
+  containing `ModOrganizer.ini`" — instead of an error tree (issue #192). A real instance
+  with a genuinely corrupt or unreadable `modlist.txt` still reports as an error
+  ([ADR-0026](../adr/0026-error-surfacing-policy.md)) — that distinction is structural
+  presence vs. content, not "did a read fail."
 - Modbench edits mod files in place and MO2 deploys them on its next run, so the two
   **coexist at the filesystem level** — no process handoff, no VFS
   ([ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md)).
