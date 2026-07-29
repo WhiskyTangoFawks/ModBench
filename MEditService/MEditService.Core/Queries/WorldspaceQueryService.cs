@@ -27,7 +27,7 @@ public sealed class WorldspaceQueryService(ISessionManager session, IPendingChan
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin)
     {
         var repo = RequireRepository();
-        return [.. repo.GetRecords("worldspace", plugin, null, WorldspaceListLimit, 0).Items.Select(r => new WorldspaceSummary(r.FormKey, r.EditorId))];
+        return [.. repo.GetRecords("wrld", plugin, null, WorldspaceListLimit, 0).Items.Select(r => new WorldspaceSummary(r.FormKey, r.EditorId))];
     }
 
     public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey)

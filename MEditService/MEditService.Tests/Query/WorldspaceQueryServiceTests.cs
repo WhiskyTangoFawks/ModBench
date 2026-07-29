@@ -3,6 +3,7 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Tests.RealData;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Query;
@@ -107,6 +108,22 @@ public class WorldspaceQueryServiceTests
         Assert.Equal(
             [(0, 0), (0, 2), (1, 1)],
             block00.SubBlocks.Select(s => (s.X, s.Y)).ToArray());
+    }
+
+    // Regression (#173): GetWorldspaces queried table "worldspace", but the schema's real table
+    // name — like every other spatial type ("cell", "refr", "achr") — is the raw record
+    // signature lowercased ("wrld"). The StubReader above ignores its table-name argument, so it
+    // can't catch this; this test runs against a real DuckDbRecordRepository (via the committed
+    // cut-down Fallout4.esm fixture) so a wrong table name surfaces as a real failure.
+    [Fact]
+    public void GetWorldspaces_RealRepository_ReturnsCommonwealthWorldspace()
+    {
+        using var fixture = new CutDownPluginFixture();
+        var svc = new WorldspaceQueryService(new StubSession(fixture.Repo), DuckDbTestFactory.MakePendingChangeService());
+
+        var result = svc.GetWorldspaces(CutDownPluginFixture.PluginFileName);
+
+        Assert.Contains(result, w => w.EditorId == "Commonwealth");
     }
 
     [Fact]
