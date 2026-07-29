@@ -98,6 +98,13 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "modbench.modList",
+        "contents": "This isn't an MO2 instance.\nOpen the folder containing `ModOrganizer.ini`, alongside `mods/` and `profiles/`.\n[Open Folder…](command:vscode.openFolder)",
+        "when": "modbench.viewMode == 'loadout' && workspaceFolderCount != 0 && !modbench.workspaceIsMo2Instance"
+      }
+    ],
     "commands": [
       {
         "command": "modbench.openEditor",

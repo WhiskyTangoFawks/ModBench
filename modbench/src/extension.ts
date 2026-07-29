@@ -16,6 +16,7 @@ import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './medit/messages'
 import { routeRecordPanelMessage, type RevealDeps } from './medit/recordPanelMessageRouter';
 import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
+import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from './modmanager/ModListProvider';
 import { createOverwriteWatcher } from './modmanager/overwriteWatcher';
 import { createModsWatcher } from './modmanager/modsWatcher';
@@ -39,6 +40,15 @@ const DEFAULT_PLUGIN_TREE_TITLE = 'Plugins'; // must match package.json's declar
 const EDITING_PLUGIN_TREE_TITLE = 'mEdit — Plugins';
 
 const meditConfig = () => vscode.workspace.getConfiguration('modbench');
+
+/** #192: stub provider for the Mods view when the workspace isn't an MO2
+ *  instance. Always empty so VS Code's `viewsWelcome` contribution (gated on
+ *  `modbench.workspaceIsMo2Instance`) renders instead of the tree — getTreeItem
+ *  is unreachable since getChildren never yields an element to render. */
+const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
+  getTreeItem: () => { throw new Error('unreachable — NOT_MO2_INSTANCE_PROVIDER never yields children'); },
+  getChildren: () => [],
+};
 
 /** Single choke point for `modbench.viewMode` transitions (#109) — every entry/exit
  *  path calls this instead of `setContext` directly, so the editing plugin tree's
@@ -772,6 +782,24 @@ function registerModsAutoRegisterWatcher(
   });
 }
 
+/** #192: the workspace is open but isn't an MO2 instance (ModOrganizer.ini,
+ *  mods/, profiles/ absent). Don't build a provider that would only fail
+ *  lazily on first read — register the Mods view with an always-empty stub so
+ *  its native `viewsWelcome` contribution (gated on
+ *  `modbench.workspaceIsMo2Instance`) renders an actionable message instead
+ *  of an error tree node. */
+function registerNotMo2InstanceWelcome(
+  instanceRoot: string,
+  context: vscode.ExtensionContext,
+  log: (msg: string) => void,
+): void {
+  log(`[extension] Workspace "${instanceRoot}" is not an MO2 instance — showing welcome content instead of the Mods tree.`);
+  void vscode.commands.executeCommand('setContext', 'modbench.workspaceIsMo2Instance', false);
+  context.subscriptions.push(
+    vscode.window.createTreeView('modbench.modList', { treeDataProvider: NOT_MO2_INSTANCE_PROVIDER }),
+  );
+}
+
 interface LoadoutViewDeps {
   context: vscode.ExtensionContext;
   log: (msg: string) => void;
@@ -782,14 +810,28 @@ interface LoadoutViewDeps {
 }
 /** Register the Loadout (Mod List) view and its commands. Returns the live
  *  ModListProvider (exposed via activate() for integration tests), or undefined
- *  with a neutral log when no workspace (MO2 instance) is open. */
+ *  with a neutral log when no workspace is open, or when the workspace isn't
+ *  an MO2 instance (#192 — the Mods view shows welcome content instead). */
 function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined {
   const { context, log, revealLog, controller, changeGroupTreeProvider, openPanels } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
     log('[extension] No workspace folder open — Mod List view not registered.');
+    // #192: explicit, not left implicitly falsy — the viewsWelcome `when` clause
+    // also guards on VS Code's own `workspaceFolderCount != 0`, so this key's
+    // value never actually matters with no workspace open, but every exit path
+    // sets it rather than leaving a third, implicit "never set" state.
+    void vscode.commands.executeCommand('setContext', 'modbench.workspaceIsMo2Instance', false);
     return undefined;
   }
+  // #192: an MO2 instance is the folder containing ModOrganizer.ini, mods/, and
+  // profiles/ — distinct from a real instance with a genuinely unreadable/corrupt
+  // modlist, which still reports as an error tree node (ADR-0026).
+  if (!isMo2Instance(instanceRoot)) {
+    registerNotMo2InstanceWelcome(instanceRoot, context, log);
+    return undefined;
+  }
+  void vscode.commands.executeCommand('setContext', 'modbench.workspaceIsMo2Instance', true);
     const modListReporter = makeReporter(log, 'modList');
     const modlistSource = new Mo2ModlistSource(instanceRoot, log, modListReporter);
     // Resolve the game's Data folder ONCE (#78): the single GameDirectory resolver
