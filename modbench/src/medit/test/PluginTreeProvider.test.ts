@@ -558,7 +558,7 @@ describe('PluginTreeProvider worldspace tree', () => {
   it('adds Worldspaces and Interior Cells nodes and hides spatial record types', async () => {
     const repo = makeRepository({
       recordTypes: [
-        { type: 'worldspace', count: 1 },
+        { type: 'wrld', count: 1 },
         { type: 'cell', count: 4 },
         { type: 'refr', count: 99 },
         { type: 'WEAP', count: 5 },
@@ -575,11 +575,11 @@ describe('PluginTreeProvider worldspace tree', () => {
     expect(labels).toContain('WEAP');
     expect(labels).not.toContain('refr');
     expect(labels).not.toContain('cell');
-    expect(labels).not.toContain('worldspace');
+    expect(labels).not.toContain('wrld');
   });
 
   it('expands a worldspace into its TopCell and blocks', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'worldspace', count: 1 }] });
+    const repo = makeRepository({ recordTypes: [{ type: 'wrld', count: 1 }] });
     (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World' }]);
     (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
       topCell: { formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null },

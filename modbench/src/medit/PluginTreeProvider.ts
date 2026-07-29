@@ -8,7 +8,7 @@ import type { PluginRepository } from './PluginRepository';
 const PAGE_SIZE = 50;
 
 // Record types represented spatially in the worldspace tree — hidden from the flat type list.
-const SPATIAL_TYPES = new Set(['worldspace', 'cell', 'refr', 'achr']);
+const SPATIAL_TYPES = new Set(['wrld', 'cell', 'refr', 'achr']);
 
 function formId(formKey: string): string {
   return formKey.split(':')[0];
@@ -308,7 +308,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     try {
       const types = await this.repository.getRecordTypes(node.plugin.name);
       const nodes: PluginTreeNode[] = [];
-      if (types.some(t => t.type === 'worldspace')) nodes.push(new WorldspacesNode(node.plugin.name));
+      if (types.some(t => t.type === 'wrld')) nodes.push(new WorldspacesNode(node.plugin.name));
       if (types.some(t => t.type === 'cell')) nodes.push(new InteriorCellsNode(node.plugin.name));
       for (const t of types) {
         if (!SPATIAL_TYPES.has(t.type)) nodes.push(new RecordTypeNode(node.plugin.name, t.type, t.count, t.displayName));
