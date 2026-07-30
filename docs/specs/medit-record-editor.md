@@ -139,7 +139,11 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
   left-click collapses/expands a column (state persisted in session); right-click offers **Copy
   as Override** (copies the right-clicked plugin's own version of the record, not necessarily the
   overall winner, into a picked target plugin), **Copy as New** (same values, a fresh FormKey in
-  the target), and **Remove** (disabled for immutable).
+  the target), and **Remove** (disabled for immutable). The grid's scroll region is bound to the
+  panel's viewport, not to its own content height, so a horizontal scrollbar (for wide grids with
+  many plugin columns) stays reachable at the bottom of the visible viewport regardless of
+  vertical scroll position, instead of only appearing at the bottom of a possibly very tall table
+  (#175).
 
 ### Editing
 

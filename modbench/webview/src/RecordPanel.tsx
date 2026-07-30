@@ -346,7 +346,20 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     return map;
   }, [allChanges]);
 
+  // Issue #175: pinned to the viewport (not the document) so the panel's height is always
+  // bounded, regardless of how tall the compare grid's content gets — the flex-column layout
+  // below then gives the grid its own scroll region instead of letting the whole document grow
+  // to fit the table. `boxSizing: border-box` keeps the padding inside that viewport bound.
   const containerStyle: React.CSSProperties = {
+    position: 'fixed',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
     padding: '12px',
     fontFamily: mono,
     fontSize: '12px',
@@ -368,15 +381,21 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
 
   return (
     <div style={containerStyle}>
-      <div style={{ marginBottom: 10, fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center' }}>
+      <div style={{ flex: '0 0 auto', marginBottom: 10, fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center' }}>
         {title}
       </div>
       {actionError && (
-        <div style={{ marginBottom: 8, fontSize: '11px', color: 'var(--vscode-errorForeground, #f88)', padding: '3px 6px', border: '1px solid var(--vscode-inputValidation-errorBorder, #f88)', borderRadius: 2 }}>
+        <div style={{ flex: '0 0 auto', marginBottom: 8, fontSize: '11px', color: 'var(--vscode-errorForeground, #f88)', padding: '3px 6px', border: '1px solid var(--vscode-inputValidation-errorBorder, #f88)', borderRadius: 2 }}>
           {actionError}
         </div>
       )}
-      <div style={{ overflowX: 'auto' }}>
+      {/* Issue #175: flex:1 + minHeight:0 lets this wrapper shrink to the remaining viewport
+          space instead of growing with the table's full height (the flex-item default of
+          min-height:auto would otherwise defeat this). overflow:auto then gives it its own
+          native scrollbars pinned to its own (viewport-bound) edges, so the horizontal scrollbar
+          stays reachable regardless of vertical scroll position — it never lives at the bottom
+          of unbounded content. */}
+      <div style={{ flex: '1 1 auto', minHeight: 0, overflow: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', tableLayout: 'auto' }}>
           <thead>
             <tr>

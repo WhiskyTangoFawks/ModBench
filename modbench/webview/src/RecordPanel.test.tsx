@@ -266,6 +266,41 @@ describe('RecordPanel — OnlyOne record display', () => {
   });
 });
 
+// Issue #175: the compare grid's own horizontal scrollbar used to sit at the bottom of the
+// (possibly very tall) table, off-screen unless the whole document was scrolled all the way
+// down. jsdom has no layout engine, so this can't assert real scrollbar visibility — instead it
+// asserts the CSS mechanism a real browser uses to pin the grid's scroll area (and therefore its
+// scrollbars) to the viewport regardless of vertical scroll position: a position:fixed panel
+// laid out as a flex column, with the grid wrapper as a flex:1/minHeight:0 child that owns its
+// own overflow instead of growing with the table's content.
+describe('RecordPanel — grid scroll container stays viewport-bound (#175)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('pins the panel to the viewport with a flex-column layout', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    const { container } = renderPanel(compareResult);
+    await waitFor(() => screen.getByText('Name'));
+    const panel = container.firstElementChild as HTMLElement;
+    expect(panel.style.position).toBe('fixed');
+    expect(panel.style.top).toBe('0px');
+    expect(panel.style.right).toBe('0px');
+    expect(panel.style.bottom).toBe('0px');
+    expect(panel.style.left).toBe('0px');
+    expect(panel.style.display).toBe('flex');
+    expect(panel.style.flexDirection).toBe('column');
+  });
+
+  it('gives the grid wrapper its own bounded overflow instead of growing with the table', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    renderPanel(compareResult);
+    await waitFor(() => screen.getByText('Name'));
+    const wrapper = screen.getByRole('table').parentElement as HTMLElement;
+    expect(wrapper.style.overflow).toBe('auto');
+    expect(wrapper.style.flex).toBe('1 1 auto');
+    expect(wrapper.style.minHeight).toBe('0');
+  });
+});
+
 describe('RecordPanel — conflict color coding', () => {
   afterEach(() => vi.unstubAllGlobals());
 
