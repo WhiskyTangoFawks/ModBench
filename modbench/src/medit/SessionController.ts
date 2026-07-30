@@ -1,4 +1,5 @@
 import type { ApiClient } from './ApiClient';
+import { errorText } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
 import { reportSkippedPlugins } from './sessionFailures';
 import type { ReindexFailure, SaveOutcome } from './saveClassification';
@@ -23,9 +24,9 @@ export class SessionController {
   }
 
   async createPlugin(name: string): Promise<void> {
-    const { response } = await this.deps.client.POST('/plugins/create', { body: { name } });
+    const { error, response } = await this.deps.client.POST('/plugins/create', { body: { name } });
     if (!response.ok) {
-      const text = await response.text();
+      const text = errorText(error);
       this.log(`[SessionController] createPlugin failed (${response.status}): ${text}`);
       this.deps.showError(`mEdit: Failed to create plugin — ${text}`);
       return;
@@ -34,12 +35,12 @@ export class SessionController {
   }
 
   async copyRecordTo(formKey: string, target: string): Promise<void> {
-    const { response } = await this.deps.client.POST(
+    const { error, response } = await this.deps.client.POST(
       '/records/{formKey}/copy-to/{targetPlugin}',
       { params: { path: { formKey, targetPlugin: target } }, body: {} },
     );
     if (!response.ok) {
-      const text = await response.text();
+      const text = errorText(error);
       this.log(`[SessionController] copyRecordTo failed (${response.status}): ${text}`);
       this.deps.showError(`mEdit: Copy failed — ${text}`);
       return;
@@ -55,11 +56,11 @@ export class SessionController {
     gameDirectory: string,
     gameRelease = 'Fallout4',
   ): Promise<void> {
-    const { data, response } = await this.deps.client.POST('/session/load-explicit', {
+    const { data, error, response } = await this.deps.client.POST('/session/load-explicit', {
       body: { plugins, gameDirectory, gameRelease },
     });
     if (!response.ok) {
-      const text = await response.text();
+      const text = errorText(error);
       this.log(`[SessionController] loadExplicitSession failed (${response.status}): ${text}`);
       this.deps.showError(`mEdit: Failed to load session — ${text}`);
       return;
@@ -114,9 +115,9 @@ export class SessionController {
 
   async deleteRecords(records: { formKey: string; plugin: string }[]): Promise<boolean> {
     try {
-      const { response } = await this.deps.client.POST('/records/delete', { body: { records } });
+      const { error, response } = await this.deps.client.POST('/records/delete', { body: { records } });
       if (!response.ok) {
-        const text = await response.text();
+        const text = errorText(error);
         this.log(`[SessionController] deleteRecords failed (${response.status}): ${text}`);
         this.deps.showError(`mEdit: Delete failed — ${text}`);
         return false;
@@ -138,12 +139,12 @@ export class SessionController {
     templateFormKey?: string,
   ): Promise<void> {
     try {
-      const { response } = await this.deps.client.POST(
+      const { error, response } = await this.deps.client.POST(
         '/plugins/{plugin}/cells/{cellFormKey}/placed',
         { params: { path: { plugin, cellFormKey } }, body: { recordType, placementGroup, templateFormKey } },
       );
       if (!response.ok) {
-        const text = await response.text();
+        const text = errorText(error);
         this.log(`[SessionController] createPlaced failed (${response.status}): ${text}`);
         this.deps.showError(`mEdit: Create placed failed — ${text}`);
         return;
@@ -156,7 +157,7 @@ export class SessionController {
   }
 
   async saveGroup(groupId: string): Promise<void> {
-    const { data, response } = await this.deps.client.POST('/change-groups/{groupId}/save', {
+    const { data, error, response } = await this.deps.client.POST('/change-groups/{groupId}/save', {
       params: { path: { groupId } },
     });
     if (response.ok || response.status === 404) {
@@ -169,7 +170,7 @@ export class SessionController {
       this.deps.refreshTree();
       return;
     }
-    const text = await response.text();
+    const text = errorText(error);
     this.log(`[SessionController] saveGroup failed (${response.status}): ${text}`);
     this.deps.showError(`mEdit: Save failed — ${text}`);
   }
@@ -223,14 +224,14 @@ export class SessionController {
   }
 
   async revertGroup(groupId: string): Promise<void> {
-    const { response } = await this.deps.client.DELETE('/changes/group/{groupId}', {
+    const { error, response } = await this.deps.client.DELETE('/changes/group/{groupId}', {
       params: { path: { groupId } },
     });
     if (response.ok) {
       this.deps.refreshGroupTree();
       return;
     }
-    const text = await response.text();
+    const text = errorText(error);
     this.log(`[SessionController] revertGroup failed (${response.status}): ${text}`);
     this.deps.showError(`mEdit: Revert failed — ${text}`);
   }

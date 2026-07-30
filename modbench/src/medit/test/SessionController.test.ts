@@ -4,6 +4,21 @@ import type { PluginMetadata } from '../ApiClient';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
+/** Mimics a real non-ok openapi-fetch result: `error` is already parsed from the
+ *  body, and the underlying Response's body stream is drained — a second
+ *  `response.text()` call throws, just like real `fetch`. Production code must
+ *  read `error`, not re-read the body (see the `launchMedit` "Body is unusable" bug). */
+function drainedError(status: number, error: string) {
+  return {
+    error,
+    response: {
+      ok: false,
+      status,
+      text: () => Promise.reject(new TypeError('Body is unusable: Body has already been read')),
+    },
+  };
+}
+
 function makePlugins(count: number): PluginMetadata[] {
   return Array.from({ length: count }, (_, i) => ({
     name: `Plugin${i}.esp`,
@@ -30,15 +45,14 @@ function makeClient({
     GET: vi.fn().mockResolvedValue({ data: plugins, response: { ok: true } }),
     POST: vi.fn().mockImplementation((path: string) => {
       if (path === '/plugins/create') {
-        return Promise.resolve({
-          response: { ok: createPluginOk, status: createPluginOk ? 200 : 400, text: () => Promise.resolve('Bad Request') },
-          data: createPluginOk ? { name: 'test.esp' } : undefined,
-        });
+        return Promise.resolve(
+          createPluginOk
+            ? { response: { ok: true, status: 200 }, data: { name: 'test.esp' } }
+            : drainedError(400, 'Bad Request'),
+        );
       }
       if (path === '/records/{formKey}/copy-to/{targetPlugin}') {
-        return Promise.resolve({
-          response: { ok: copyRecordOk, status: copyRecordOk ? 200 : 400, text: () => Promise.resolve('Copy failed') },
-        });
+        return Promise.resolve(copyRecordOk ? { response: { ok: true, status: 200 } } : drainedError(400, 'Copy failed'));
       }
       return Promise.resolve({ response: { ok: true } });
     }),
@@ -250,7 +264,7 @@ describe('SessionController.saveGroup', () => {
   it('treats 404 as success and refreshes both trees', async () => {
     const client = {
       ...makeClient(),
-      POST: vi.fn().mockResolvedValue({ response: { ok: false, status: 404, text: () => Promise.resolve('Not found') } }),
+      POST: vi.fn().mockResolvedValue(drainedError(404, 'Not found')),
       DELETE: vi.fn(),
     };
     const deps = makeDeps({ client });
@@ -266,7 +280,7 @@ describe('SessionController.saveGroup', () => {
   it('shows error on 409 and does not refresh', async () => {
     const client = {
       ...makeClient(),
-      POST: vi.fn().mockResolvedValue({ response: { ok: false, status: 409, text: () => Promise.resolve('immutable') } }),
+      POST: vi.fn().mockResolvedValue(drainedError(409, 'immutable')),
       DELETE: vi.fn(),
     };
     const deps = makeDeps({ client });
@@ -306,7 +320,7 @@ describe('SessionController.revertGroup', () => {
   it('shows error on failure and does not refresh', async () => {
     const client = {
       ...makeClient(),
-      DELETE: vi.fn().mockResolvedValue({ response: { ok: false, status: 500, text: () => Promise.resolve('server error') } }),
+      DELETE: vi.fn().mockResolvedValue(drainedError(500, 'server error')),
     };
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
@@ -345,7 +359,7 @@ describe('SessionController.saveAllGroups', () => {
       GET: vi.fn().mockResolvedValue({ data: [{ id: 'g1' }, { id: 'g2' }], response: { ok: true } }),
       POST: vi.fn().mockImplementation(() => {
         postCalls++;
-        if (postCalls === 2) return Promise.resolve({ response: { ok: false, status: 500, text: () => Promise.resolve('disk full') } });
+        if (postCalls === 2) return Promise.resolve(drainedError(500, 'disk full'));
         return Promise.resolve({ response: { ok: true, status: 200 } });
       }),
       DELETE: vi.fn(),
@@ -434,7 +448,7 @@ describe('SessionController.saveGroups', () => {
       ...makeClient(),
       POST: vi.fn().mockImplementation(() => {
         postCalls++;
-        if (postCalls === 2) return Promise.resolve({ response: { ok: false, status: 500, text: () => Promise.resolve('disk full') } });
+        if (postCalls === 2) return Promise.resolve(drainedError(500, 'disk full'));
         return Promise.resolve({ data: {}, response: { ok: true, status: 200 } });
       }),
       DELETE: vi.fn(),
@@ -495,7 +509,7 @@ describe('SessionController.revertGroups', () => {
   it('reports every failed revert in one aggregated message, not one per group', async () => {
     const client = {
       ...makeClient(),
-      DELETE: vi.fn().mockResolvedValue({ response: { ok: false, status: 500, text: () => Promise.resolve('err') } }),
+      DELETE: vi.fn().mockResolvedValue(drainedError(500, 'err')),
     };
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
@@ -671,9 +685,7 @@ describe('SessionController.deleteRecords', () => {
   it('shows error and returns false on 409 conflict', async () => {
     const client = {
       ...makeClient(),
-      POST: vi.fn().mockResolvedValue({
-        response: { ok: false, status: 409, text: () => Promise.resolve('blocked') },
-      }),
+      POST: vi.fn().mockResolvedValue(drainedError(409, 'blocked')),
     };
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
@@ -730,9 +742,7 @@ describe('SessionController.createPlaced', () => {
   it('shows error on non-ok response', async () => {
     const client = {
       ...makeClient(),
-      POST: vi.fn().mockResolvedValue({
-        response: { ok: false, status: 422, text: () => Promise.resolve('invalid type') },
-      }),
+      POST: vi.fn().mockResolvedValue(drainedError(422, 'invalid type')),
     };
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
@@ -820,7 +830,7 @@ describe('SessionController.loadExplicitSession', () => {
   it('shows an error and does not refresh when the load fails', async () => {
     const client = {
       ...makeClient(),
-      POST: vi.fn().mockResolvedValue({ response: { ok: false, status: 400, text: () => Promise.resolve('bad dir') } }),
+      POST: vi.fn().mockResolvedValue(drainedError(400, 'bad dir')),
     };
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);

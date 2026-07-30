@@ -15,11 +15,18 @@ function makePlugin(i: number): PluginMetadata {
   };
 }
 
+// openapi-fetch already reads the body to produce `error` on a non-ok response,
+// draining it — a real Response throws "Body is unusable" on a second .text() call.
 function nonOkClient() {
   return {
     GET: vi.fn().mockResolvedValue({
       data: undefined,
-      response: { ok: false, status: 500, text: () => Promise.resolve('boom') },
+      error: 'boom',
+      response: {
+        ok: false,
+        status: 500,
+        text: () => Promise.reject(new TypeError('Body is unusable: Body has already been read')),
+      },
     }),
   } as any;
 }
@@ -59,7 +66,12 @@ describe('ApiPluginRepository.getPlugins', () => {
     const client = {
       GET: vi.fn().mockResolvedValue({
         data: undefined,
-        response: { ok: false, status: 503, text: () => Promise.resolve('No session loaded.') },
+        error: 'No session loaded.',
+        response: {
+          ok: false,
+          status: 503,
+          text: () => Promise.reject(new TypeError('Body is unusable: Body has already been read')),
+        },
       }),
     } as any;
     const repo = new ApiPluginRepository(client);
@@ -167,7 +179,11 @@ describe('ApiPluginRepository.setFilter', () => {
   it('returns error text when response is not ok', async () => {
     const client = {
       POST: vi.fn().mockResolvedValue({
-        response: { ok: false, text: () => Promise.resolve('Filter SQL must return a form_key column') },
+        error: 'Filter SQL must return a form_key column',
+        response: {
+          ok: false,
+          text: () => Promise.reject(new TypeError('Body is unusable: Body has already been read')),
+        },
       }),
     } as any;
     const repo = new ApiPluginRepository(client);

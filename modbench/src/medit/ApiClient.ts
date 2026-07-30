@@ -72,3 +72,13 @@ export interface WorldspaceBlocks {
 export function createApiClient(port: number) {
   return createClient<paths>({ baseUrl: `http://localhost:${port}` });
 }
+
+/** Stringify openapi-fetch's `error` value from a non-ok response. openapi-fetch
+ *  already reads the body to produce this (JSON-parsed where possible) — the
+ *  underlying Response's body stream is drained, so callers must use this instead
+ *  of `response.text()`, which throws "Body is unusable" on a second read. */
+export function errorText(error: unknown): string {
+  if (typeof error === 'string') return error;
+  if (error === undefined || error === null) return '';
+  return JSON.stringify(error);
+}

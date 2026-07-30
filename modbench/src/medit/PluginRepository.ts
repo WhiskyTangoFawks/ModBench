@@ -3,6 +3,7 @@ import type {
   ApiClient, PluginMetadata, RecordSummary,
   WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
 } from './ApiClient';
+import { errorText } from './ApiClient';
 
 type PluginResponse = components['schemas']['PluginResponse'];
 type GeneratedRecordSummary = components['schemas']['RecordSummary'];
@@ -95,9 +96,9 @@ export class ApiPluginRepository implements PluginRepository {
   // a silent empty list indistinguishable from genuinely empty data (issues #75,
   // #129, ADR-0026). A 200 with an empty/absent body is a legitimate empty result.
   // Genuine network-level throws propagate as-is. Mirrors the getPlugins convention.
-  private async ensureOk(what: string, response: Response): Promise<void> {
+  private ensureOk(what: string, response: Response, error?: unknown): void {
     if (response.ok) return;
-    const text = await response.text().catch(() => ''); // best-effort detail; a body-read failure is non-fatal — the status carries the error
+    const text = errorText(error);
     const detail = text ? `: ${text}` : '';
     const msg = `${what} failed (${response.status})${detail}`;
     this.log(`[PluginRepository] ${msg}`);
@@ -105,24 +106,24 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   async getPlugins(): Promise<PluginMetadata[]> {
-    const { data, response } = await this.client.GET('/plugins', {});
-    await this.ensureOk('GET /plugins', response);
+    const { data, error, response } = await this.client.GET('/plugins', {});
+    this.ensureOk('GET /plugins', response, error);
     return (data ?? []).map(toPluginMetadata);
   }
 
   async getRecordTypes(plugin: string): Promise<{ type: string; count: number; displayName: string }[]> {
-    const { data, response } = await this.client.GET('/plugins/{plugin}/record-types', {
+    const { data, error, response } = await this.client.GET('/plugins/{plugin}/record-types', {
       params: { path: { plugin } },
     });
-    await this.ensureOk(`getRecordTypes(${plugin})`, response);
+    this.ensureOk(`getRecordTypes(${plugin})`, response, error);
     return (data ?? []).map(toRecordTypeCount);
   }
 
   async getRecords(plugin: string, type: string, offset: number, limit: number): Promise<RecordPage> {
-    const { data, response } = await this.client.GET('/records', {
+    const { data, error, response } = await this.client.GET('/records', {
       params: { query: { plugin, type, offset, limit } },
     });
-    await this.ensureOk(`getRecords(${plugin}, ${type})`, response);
+    this.ensureOk(`getRecords(${plugin}, ${type})`, response, error);
     return {
       items: (data?.items ?? []).map(toRecordSummary),
       total: data?.total ?? 0,
@@ -131,9 +132,9 @@ export class ApiPluginRepository implements PluginRepository {
 
   async setFilter(sql: string): Promise<string | null> {
     try {
-      const { response } = await this.client.POST('/session/filter', { body: { sql } });
+      const { error, response } = await this.client.POST('/session/filter', { body: { sql } });
       if (!response.ok) {
-        const text = await response.text();
+        const text = errorText(error);
         this.log(`[PluginRepository] setFilter failed (${response.status}): ${text}`);
         return text;
       }
@@ -146,9 +147,9 @@ export class ApiPluginRepository implements PluginRepository {
 
   async clearFilter(): Promise<void> {
     try {
-      const { response } = await this.client.DELETE('/session/filter', {});
+      const { error, response } = await this.client.DELETE('/session/filter', {});
       if (!response.ok) {
-        const text = await response.text();
+        const text = errorText(error);
         this.log(`[PluginRepository] clearFilter failed (${response.status}): ${text}`);
       }
     } catch (e) {
@@ -157,16 +158,16 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   async getActiveFilter(): Promise<string | null> {
-    const { data, response } = await this.client.GET('/session/filter', {});
-    await this.ensureOk('getActiveFilter', response);
+    const { data, error, response } = await this.client.GET('/session/filter', {});
+    this.ensureOk('getActiveFilter', response, error);
     return data?.sql ?? null;
   }
 
   async getWorldspaces(plugin: string): Promise<WorldspaceSummary[]> {
-    const { data, response } = await this.client.GET('/plugins/{plugin}/worldspaces', {
+    const { data, error, response } = await this.client.GET('/plugins/{plugin}/worldspaces', {
       params: { path: { plugin } },
     });
-    await this.ensureOk(`getWorldspaces(${plugin})`, response);
+    this.ensureOk(`getWorldspaces(${plugin})`, response, error);
     return (data ?? []).map((w: GenWorldspace) => ({
       formKey: w.formKey ?? '',
       editorId: w.editorId ?? null,
@@ -174,10 +175,10 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   async getWorldspaceBlocks(plugin: string, worldspaceFormKey: string): Promise<WorldspaceBlocks> {
-    const { data, response } = await this.client.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
+    const { data, error, response } = await this.client.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
       params: { path: { plugin, formKey: worldspaceFormKey } },
     });
-    await this.ensureOk(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, response);
+    this.ensureOk(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, response, error);
     return {
       topCell: data?.topCell ? toCellSummary(data.topCell) : null,
       blocks: (data?.blocks ?? []).map(b => ({
@@ -193,10 +194,10 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   async getCellReferences(plugin: string, cellFormKey: string): Promise<CellReferences> {
-    const { data, response } = await this.client.GET('/plugins/{plugin}/cells/{formKey}/references', {
+    const { data, error, response } = await this.client.GET('/plugins/{plugin}/cells/{formKey}/references', {
       params: { path: { plugin, formKey: cellFormKey } },
     });
-    await this.ensureOk(`getCellReferences(${plugin}, ${cellFormKey})`, response);
+    this.ensureOk(`getCellReferences(${plugin}, ${cellFormKey})`, response, error);
     return {
       persistent: (data?.persistent ?? []).map(toPlacedSummary),
       temporary: (data?.temporary ?? []).map(toPlacedSummary),
@@ -204,10 +205,10 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   async getInteriorCells(plugin: string, offset: number, limit: number): Promise<CellPage> {
-    const { data, response } = await this.client.GET('/plugins/{plugin}/interior-cells', {
+    const { data, error, response } = await this.client.GET('/plugins/{plugin}/interior-cells', {
       params: { path: { plugin }, query: { offset, limit } },
     });
-    await this.ensureOk(`getInteriorCells(${plugin})`, response);
+    this.ensureOk(`getInteriorCells(${plugin})`, response, error);
     return {
       items: (data?.items ?? []).map(toCellSummary),
       total: data?.total ?? 0,
