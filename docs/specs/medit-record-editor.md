@@ -1,7 +1,9 @@
 # mEdit Record editor panel — Surface Specification
 
-**Status: Implemented.** One known gap is called out where it bites: FormKey resolution
-(#141).
+**Status: Implemented, with the interaction model below (ADR-0033) partway shipped.** Left-click-
+edits-everywhere and column-header consolidation are tracked in #198–#203; compound-field drag and
+right-click Copy are decided but not yet ticketed. One known gap is called out where it bites:
+FormKey resolution (#141).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
@@ -63,7 +65,7 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
    number, toggle, dropdown, flag multi-select, FormKey picker), so that editing is
    type-appropriate and I can't enter a nonsensical value — with no mode to enter first, and
    only the cell I clicked becoming an input, so the grid stays readable.
-8. As a user, I want my edits shown as pending changes (highlighted, with an inline revert)
+8. As a user, I want my edits shown as pending changes (highlighted, revertable via right-click)
    rather than written immediately, so that I can review a batch before committing and back out
    an edit I regret.
 9. As a user, I want a pending column to appear for a plugin with staged changes, so that I can
@@ -73,15 +75,18 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
 11. As a user, I want a column-header menu to copy a plugin's whole record into my editable
     plugin as pending changes, copy it as a new record, or stage removal of that plugin's
     override, so that common override operations are one action.
-12. As a user, I want to drag a value from one plugin's column into another to copy it as a
-    pending change, so that reconciling a conflict is direct manipulation.
+12. As a user, I want to drag a value — scalar or whole compound field alike — from one plugin's
+    column into another to copy it as a pending change, so that reconciling a conflict is direct
+    manipulation; and to copy/paste a single field via right-click when the target isn't
+    conveniently reachable by drag, so that I control exactly what gets written and where without
+    leaving the record I am working on.
 13. As a user, I want to save or revert a pending value from here — acting on that change's
-    whole ChangeGroup, never on part of one — or copy the current values into another plugin,
-    so that I control exactly what gets written and where without leaving the record I am
-    working on.
-14. As a user, I want clicking a pending value to reveal that change in the Pending Changes
+    whole ChangeGroup, never on part of one — or copy a specific plugin's version of the whole
+    record into another plugin, so that I control exactly what gets written and where without
+    leaving the record I am working on.
+14. As a user, I want to right-click a pending value to reveal that change in the Pending Changes
     tree, so that I can get from "what did I change here" to "what else does this drag along"
-    without hunting.
+    without hunting — while plain click still edits it directly, the same as any other cell.
 15. As a user, I want to rename a mutable record's FormID, with validation that the new id is
     free and that immutable references don't block it, so that renumbering is safe and the
     errors are explained rather than silent.
@@ -93,6 +98,30 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
     cleanly and never invites an edit that can't happen.
 
 ## Implementation Decisions
+
+### Interaction model
+
+One gesture, one meaning, everywhere a value lives in this panel — the compare grid, VMAD, and
+Condition sections alike ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md)):
+
+- **Left-click** — edit in place. The only thing plain click ever does, on any mutable cell (disk
+  or pending alike). Never navigation, never reveal, never a menu.
+- **Click-and-hold, drag, drop** — copy this value's content directly into wherever it's dropped.
+  Available from any cell regardless of the *source* column's mutability (only the drop target's
+  mutability gates the drop); applies to compound (struct/array) fields via their header/summary
+  row exactly as it applies to a scalar leaf's value.
+- **Right-click** — the only place a named, discrete action lives: **Copy** / **Paste** on a
+  field, **Reveal in Pending Changes Tree** / **Save Group** / **Revert Group** on a pending cell,
+  **Copy as Override** / **Copy as New** / **Remove** on a column header. An action reachable
+  through right-click is never also reachable a second way (no standalone revert icon once Revert
+  Group exists).
+- **Ctrl+click** — acknowledged for now as a fourth, navigation-only gesture (follows a FormKey
+  reference to its record). Whether it survives once a right-click "Go to Record" exists is still
+  undecided — see Further Notes.
+
+No cell shows an affordance for an action it cannot perform — a cell's resting cursor reflects
+every gesture actually available on it (drag is possible regardless of mutability, so its cursor
+shows that at rest), not just whichever leaf renderer happens to own the pixel under the pointer.
 
 ### The panel
 
@@ -107,9 +136,10 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
   plugin hidden by default); one **column per plugin** that contains the record's FormKey, in
   load order (left = master, right = winning override), plus a **Pending** column for any plugin
   with staged changes. Column headers show the plugin name as a chip (lock icon on immutable);
-  left-click collapses/expands a column (state persisted in session); right-click offers Copy
-  All to Pending, Copy as New Record, Copy as Override… (stages the currently-loaded record as
-  an override in a picked target plugin), and Remove (disabled for immutable).
+  left-click collapses/expands a column (state persisted in session); right-click offers **Copy
+  as Override** (copies the right-clicked plugin's own version of the record, not necessarily the
+  overall winner, into a picked target plugin), **Copy as New** (same values, a fresh FormKey in
+  the target), and **Remove** (disabled for immutable).
 
 ### Editing
 
@@ -117,15 +147,21 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
   user enters: a cell in a non-immutable column renders as text and swaps to its input **on
   click**, reverting to text on commit or blur — only the clicked cell, never the whole grid,
   since reading conflicts at a glance is the grid's primary job. This is xEdit's
-  `toEditOnClick`. Immutable columns never activate an input. Dragging is always available,
-  except on a cell whose own input is active (a draggable ancestor would otherwise swallow text
-  selection inside the input).
+  `toEditOnClick`. Immutable columns never activate an input. Dragging (copy this value into
+  another column) is available on **every** cell regardless of that cell's own editability — only
+  the *drop target's* mutability gates the drop — so a cell's resting cursor reflects that: it
+  shows the drag affordance at rest and only takes on a text-input look once actually clicked into
+  its editing state, never before ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md)).
+  Dragging is suppressed only while that cell's own input is currently active (a draggable
+  ancestor would otherwise swallow text selection inside the input).
 - **Cells render by field schema type**: strings/numbers/bools as text/number/toggle inputs;
   enums as their name via a `<select>`; flags as active flag names via a per-flag multi-select;
   FormKeys as a link — `Ctrl+click` follows it, plain click opens a FormKey picker filtered by
   `validFormKeyTypes`, and the link affordance appears on `Ctrl`-hover only when the reference
-  resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows.
-  Pending-change cells show the new value on a yellow background with a revert (↩) button.
+  resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows,
+  and are themselves drag sources for their whole value via that summary row, the same as a
+  scalar leaf. Pending-change cells show the new value on a yellow background and are directly
+  editable on the same terms as disk cells — no separate revert control (see Pending column).
 - **Unsorted array fields have arity and order controls in the field grid** — each element row
   carries move-up / move-down (swap with the neighbour, disabled at the first/last position) and
   a remove control, and the parent array row carries an add control that appends a default-valued
@@ -136,10 +172,13 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
   its own separate element/struct add/remove.
 - **Editing stages pending changes** rather than writing immediately. Copying a whole record
   into another plugin is a **column-header** action, not a panel-level one — **Copy as
-  Override…** on each mutable column's header opens a picker of the other mutable plugins.
-  There is no single "active editable plugin" for a panel-level control to assume. A cell value
-  can also be **dragged between plugin columns** to copy it as a pending change into the target
-  (which must be editable; the source need not be).
+  Override** on a column's header opens a picker of the other mutable plugins and copies *that
+  column's* version of the record (not necessarily the overall winner) into the one picked.
+  There is no single "active editable plugin" for a panel-level control to assume. A single
+  field's value can instead be **dragged between plugin columns** to copy just that field as a
+  pending change into the target (which must be editable; the source need not be) — or **copied
+  and pasted via right-click** (Copy on the source field, Paste on the target) when the target
+  isn't conveniently reachable by drag, or lives outside mEdit entirely.
 
 ### Pending column
 
@@ -150,20 +189,20 @@ not implement and will not, so it was deleted (#136); the actions below replace 
 Every action is scoped to a **ChangeGroup**, never to part of one and never to a record or a
 plugin:
 
-- **Plain click** on a pending value reveals that change in the
-  [Pending Changes tree](medit-pending-changes-tree.md), selecting its node and expanding the
-  parent group for a multi-member change. The gesture is free because pending cells are not
-  editable, and it keeps `Ctrl+click` meaning "follow the reference" uniformly across every cell
-  in the grid. A change already saved or reverted resolves to nothing and is ignored.
-- **Right-click** offers Save Group and Revert Group for that change's group. Save Group writes
-  every plugin in the component and consumes its pending rows; the grid reloads to reflect what
-  reached disk.
-- The inline **revert (↩)** reverts the change's *group*, identically to the context menu's
-  Revert Group — the confirmation keys on member count, not on which control fired it. For a
-  group of one — the common case — that is exactly "revert this field" and fires straight away;
-  for an entangled change both confirm first, listing the members, rather than firing the 409 the
-  backend would return for a partial group revert (ADR-0028). The member count is read from
-  `GET /changes` for the change's component; the panel never surfaces a raw 409.
+- **Plain click** on a pending value edits it directly, on the same terms as a disk cell
+  ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md)) — there is no lock on
+  the corresponding disk cell in response; both stay editable simultaneously for now (revisit
+  later if that proves confusing in practice).
+- **Right-click** on a pending value offers **Reveal in Pending Changes Tree** (selects its node
+  in the [Pending Changes tree](medit-pending-changes-tree.md), expanding the parent group for a
+  multi-member change; a change already saved or reverted resolves to nothing and is logged, not
+  thrown), **Save Group** (writes every plugin in the component and consumes its pending rows; the
+  grid reloads to reflect what reached disk), and **Revert Group** — the group's only three
+  actions, all in one menu, no separate inline control. Revert's confirmation keys on member
+  count, not on which control fired it: a group of one — the common case — is exactly "revert this
+  field" and fires straight away; an entangled change confirms first, listing the members, rather
+  than firing the 409 the backend would return for a partial group revert (ADR-0028). The member
+  count is read from `GET /changes` for the change's component; the panel never surfaces a raw 409.
 - A **partial save** is surfaced, never silent (ADR-0026): the banner names which plugins wrote,
   partially wrote, and could not write, and states the unwritten changes stay queued. A save that
   reached disk but whose post-commit reindex failed reads instead as a completed-save warning to
@@ -381,3 +420,10 @@ section, and any future surface):
 - #111 also established that editability is per **column**, replacing a mode: before it, the
   cells were never told which columns were immutable, so a read-only column rendered inputs
   whose stage the backend then rejected with a 409.
+- **Open question: does `Ctrl+click`-to-follow survive alongside a right-click "Go to Record"?**
+  [ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md) acknowledges `Ctrl+click`
+  as a fourth gesture for now without resolving this. The tension: it's undiscoverable (no visible
+  UI element hints at it) but is also shipped, xEdit-familiar muscle memory: removing it costs
+  existing users a gesture they already rely on; keeping it alongside a menu item means two ways
+  to do the same thing, the exact redundancy this ADR otherwise rules out everywhere else in this
+  surface. Unresolved until decided explicitly.
