@@ -103,7 +103,20 @@ public sealed class SessionManager(
             var mod = session.GetMod(plugin.Name)!;
 
             _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
-            repository.Index(mod, plugin.LoadOrderIndex);
+            try
+            {
+                repository.Index(mod, plugin.LoadOrderIndex);
+            }
+            catch (Exception ex)
+            {
+                // A single plugin with malformed record data (e.g. Mutagen can't parse it) must not
+                // abort the whole load order — same isolation GameSession already gives ImportGetter
+                // failures, extended to this later indexing stage (Index() runs in its own DuckDB
+                // transaction, so the rollback on throw leaves no partial rows behind).
+                _logger.LogWarning(ex, "Failed to index {Plugin}; its records will not be queryable this session", plugin.Name);
+                session.RecordIndexFailure(plugin.Name, ex.Message);
+                continue;
+            }
 
             if (!plugin.IsImmutable)
                 _nextFormIds[plugin.Name] = SafeNextFormId(mod);

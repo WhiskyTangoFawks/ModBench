@@ -19,6 +19,12 @@ public sealed class GameSession : IGameSession
     public GameRelease GameRelease { get; }
     public IReadOnlyList<PluginMetadata> Plugins => _plugins;
     public IReadOnlyList<PluginLoadFailure> LoadFailures => _loadFailures;
+
+    // Lets SessionManager report a post-open failure (e.g. an indexing throw from malformed
+    // record data Mutagen can't parse) through the same partial-success channel as the
+    // ImportGetter failures captured below, without re-opening the whole load order.
+    internal void RecordIndexFailure(string pluginName, string reason) =>
+        _loadFailures.Add(new PluginLoadFailure(pluginName, reason));
     public ILinkCache LinkCache { get; }
     public string? FilterSql { get; set; }
 

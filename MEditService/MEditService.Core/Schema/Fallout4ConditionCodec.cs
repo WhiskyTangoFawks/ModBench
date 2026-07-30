@@ -33,7 +33,22 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
             var parsed = conditions.Select(Parse).ToList();
             if (parsed.Count > 0) owners.Add(new ConditionOwner(prop.Name, parsed));
         }
-        owners.AddRange(ExtractNested(record));
+
+        try
+        {
+            owners.AddRange(ExtractNested(record));
+        }
+        catch (Exception ex)
+        {
+            // ExtractNested's own array-path/index detail (from WalkNestedArrayProperty) says
+            // *where* in the record the malformed data is; this adds *which record*, since that's
+            // reported per-plugin (SessionManager.IndexAndStore), not per-record — without it, a
+            // user can't find the offending entry in xEdit.
+            var editorId = record.EditorID is { } eid ? $" ('{eid}')" : "";
+            throw new InvalidOperationException(
+                $"{record.GetType().Name} {record.FormKey}{editorId}: {ex.Message}", ex);
+        }
+
         return owners;
     }
 
@@ -90,21 +105,44 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     // owners (ExtractElementOwners) and is itself a candidate container for a further nesting level
     // (the recursive WalkNestedArrays call) — split out from WalkNestedArrays purely to keep each
     // method's branching shallow enough to read at a glance.
+    //
+    // Enumeration is manual (not a plain foreach) so a MoveNext() failure — a malformed binary
+    // plugin's lazy Mutagen overlay throwing while parsing one array entry — can be rethrown with
+    // the property path and index that failed; a plain foreach would lose both once the exception
+    // left this frame. yield return must stay outside the try/catch MoveNextOrThrow wraps (C# bars
+    // yield inside a try with a catch clause), so disposal only needs a try/finally here.
     private static IEnumerable<ConditionOwner> WalkNestedArrayProperty(
         IEnumerable items, string propName, string pathPrefix, int depth)
     {
-        var index = 0;
-        foreach (var item in items)
+        var enumerator = items.GetEnumerator();
+        try
         {
-            if (item != null)
+            for (var index = 0; MoveNextOrThrow(enumerator, pathPrefix, propName, index); index++)
             {
+                if (enumerator.Current is not { } item) continue;
+
                 var elementPrefix = $"{pathPrefix}{propName}[{index}].";
                 foreach (var owner in ExtractElementOwners(item, elementPrefix))
                     yield return owner;
                 foreach (var owner in WalkNestedArrays(item, elementPrefix, depth + 1))
                     yield return owner;
             }
-            index++;
+        }
+        finally
+        {
+            (enumerator as IDisposable)?.Dispose();
+        }
+    }
+
+    private static bool MoveNextOrThrow(IEnumerator enumerator, string pathPrefix, string propName, int index)
+    {
+        try
+        {
+            return enumerator.MoveNext();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"{pathPrefix}{propName}[{index}]: {ex.Message}", ex);
         }
     }
 

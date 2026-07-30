@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Text.Json;
 using MEditService.Core.Schema;
 using Mutagen.Bethesda.Fallout4;
@@ -260,6 +261,42 @@ public class Fallout4ConditionCodecTests
         var owners = Fallout4ConditionCodec.WalkNestedArrays(root, "", depth: Fallout4ConditionCodec.MaxNestedDepth).ToList();
 
         Assert.Empty(owners);
+    }
+
+    // A malformed binary plugin's Mutagen overlay can throw mid-enumeration of an array property
+    // (e.g. #<issue>: a PerkEntryPointAbsoluteValue with an unexpected parameter type flag) — the
+    // raw Mutagen exception alone doesn't say *where* in the record's array it happened. The walk
+    // must re-throw with the array property's own path and the index that failed, since that's the
+    // coordinate a user needs to find the offending entry in xEdit.
+
+    private sealed class ThrowingAtIndexList(int throwAtIndex) : IEnumerable<object>
+    {
+        public IEnumerator<object> GetEnumerator()
+        {
+            for (var i = 0; i <= throwAtIndex; i++)
+            {
+                if (i == throwAtIndex) throw new InvalidOperationException("malformed entry");
+                yield return new object();
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    private sealed class ContainerWithThrowingArray
+    {
+        public ThrowingAtIndexList Effects { get; } = new(throwAtIndex: 2);
+    }
+
+    [Fact]
+    public void WalkNestedArrays_EnumerationThrowsPartway_WrapsWithPropertyPathAndIndex()
+    {
+        var root = new ContainerWithThrowingArray();
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            Fallout4ConditionCodec.WalkNestedArrays(root, "", depth: 0).ToList());
+
+        Assert.Equal("Effects[2]: malformed entry", ex.Message);
     }
 
     // ---- IsNestedConditionListField: stage-time shape check (#182, generalized to N levels #184) ----
