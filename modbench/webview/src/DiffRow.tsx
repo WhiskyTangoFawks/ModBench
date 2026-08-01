@@ -244,8 +244,16 @@ export function DiffRow({
               : '…';
             const collapsedLabel = meta.type === 'array' ? `[${len}]` : '{…}';
             const showAdd = isExpanded && onArrayAdd && !immutableSet.has(o.plugin);
+            // Issue #204 / ADR-0033: a compound (struct/array) field's summary row is a drag
+            // source for its whole value, exactly like a scalar leaf — every value-bearing cell,
+            // expanded or collapsed, wired uniformly rather than branching on isExpanded.
             return (
-              <td key={`disk:${o.plugin}`} style={cellStyle}>
+              <DiskCell
+                key={`disk:${o.plugin}`}
+                style={cellStyle}
+                onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin])}
+                onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
+              >
                 {!isExpanded && (
                   <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
                     {collapsedLabel}<CheckErrorIcon checkError={checkError} />
@@ -253,7 +261,7 @@ export function DiffRow({
                 )}
                 {showAdd && <ArrayAddButton onClick={() => onArrayAdd(o.plugin)} />}
                 {arrayEdit && !immutableSet.has(o.plugin) && <ArrayElementControls plugin={o.plugin} controls={arrayEdit} />}
-              </td>
+              </DiskCell>
             );
           }
           // Issue #3: a leaf field-value cell can be dragged into another plugin's column to

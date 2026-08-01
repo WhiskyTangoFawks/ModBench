@@ -997,6 +997,47 @@ describe('RecordPanel — drag-drop stages a pending field change', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(client.save).not.toHaveBeenCalled();
   });
+
+  // Issue #204 / ADR-0033: a compound (struct/array) field's collapsed summary row is a drag
+  // source for its whole value too — not just scalar leaves. Reuses structCompareResult (the
+  // struct sub-rows fixture below) rather than a new fixture.
+  it('dragging a collapsed struct summary onto another column stages the whole struct value, and logs it the same as a scalar drag', async () => {
+    vi.mocked(vscode.postMessage).mockClear();
+    const { client } = renderPanel(structCompareResult);
+    await waitFor(() => expect(screen.getAllByText('{…}').length).toBeGreaterThan(0));
+
+    // Fallout4.esm (immutable, first column) is the drag source; MyMod.esp (mutable, second
+    // column) is the drop target — only the target's mutability gates the drop.
+    const cells = screen.getAllByText('{…}');
+    const sourceCell = cells[0].closest('td')!;
+    const targetCell = cells[1].closest('td')!;
+
+    fireEvent.dragStart(sourceCell);
+    fireEvent.drop(targetCell);
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm',
+        'MyMod.esp',
+        { Bounds: { X: 10, Y: 20 } },
+        undefined,
+      ),
+    );
+
+    // Issue #200's policy: a successful drag-copy logs DEBUG the same as any other staged edit
+    // (handleEdit is the single shared call site) — pinned explicitly here so a later refactor
+    // of the hasChildren branch can't silently drop it, the same way #200 pinned it for VMAD
+    // and Condition leaf edits sharing that same call site.
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'debug',
+      message: expect.stringContaining('MyMod.esp'),
+    }));
+    const [{ message }] = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
+      .map(([m]: [{ message?: string }]) => m).filter((m: { message?: string }) => m.message);
+    expect(message).toContain('Bounds');
+    expect(message).toContain('000001:Fallout4.esm');
+  });
 });
 
 // ── Column header context menu (issue #3) ─────────────────────────────────────

@@ -144,6 +144,37 @@ describe('DiffRow — drag affordance on leaf cells', () => {
   });
 });
 
+// Issue #204 / ADR-0033: a struct/array field's collapsed summary row is a drag source too —
+// there is no cell kind that silently opts out of the copy gesture.
+describe('DiffRow — drag affordance on compound (hasChildren) cells', () => {
+  const arrMeta: FieldMetadata = { name: 'Items', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [] };
+
+  function renderCompoundRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
+    return renderRow({
+      hasChildren: true,
+      diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': ['a', 'b'], 'MyMod.esp': ['a', 'b'] } }),
+      fieldMetaMap: { Items: arrMeta },
+      ...overrides,
+    });
+  }
+
+  it('dragging a collapsed struct/array summary calls onCellDragStart with the field name and its value', () => {
+    const onCellDragStart = vi.fn();
+    renderCompoundRow({ onCellDragStart });
+    const cell = screen.getAllByText('[2]')[0].closest('td')!;
+    fireEvent.dragStart(cell);
+    expect(onCellDragStart).toHaveBeenCalledWith('Items', ['a', 'b']);
+  });
+
+  it('dropping on a collapsed struct/array summary calls onCellDrop with the field name and target plugin', () => {
+    const onCellDrop = vi.fn();
+    renderCompoundRow({ onCellDrop });
+    const cell = screen.getAllByText('[2]')[1].closest('td')!;
+    fireEvent.drop(cell);
+    expect(onCellDrop).toHaveBeenCalledWith('Items', 'MyMod.esp', expect.any(Function));
+  });
+});
+
 describe('DiffRow — pending companion column', () => {
   const change: PendingChange = {
     id: 'c1', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fieldPath: 'Name',
