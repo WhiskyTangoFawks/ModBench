@@ -2,14 +2,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const executeCommand = vi.fn();
 const createQuickPick = vi.fn();
+const showQuickPick = vi.fn();
 vi.mock('vscode', () => ({
   commands: { executeCommand: (...args: unknown[]) => executeCommand(...args) },
-  window: { createQuickPick: (...args: unknown[]) => createQuickPick(...args) },
+  window: {
+    createQuickPick: (...args: unknown[]) => createQuickPick(...args),
+    showQuickPick: (...args: unknown[]) => showQuickPick(...args),
+  },
 }));
 
 import {
-  routeRecordPanelMessage, revealPendingChange, pickFormKeyViaQuickPick,
-  type RevealDeps, type FormKeyPickerDeps,
+  routeRecordPanelMessage, revealPendingChange, pickFormKeyViaQuickPick, pickConditionFunctionViaQuickPick,
+  type RevealDeps, type FormKeyPickerDeps, type ConditionFunctionPickerDeps,
 } from './recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 import type { PendingTreeNode } from './PendingChangesTreeProvider';
@@ -24,7 +28,7 @@ import type { RecordSummary } from './ApiClient';
 // command calling the exported `revealPendingChange` directly (see the describe block below),
 // since resolving a changeId to a tree node never needed the webview in the first place.
 
-beforeEach(() => { createQuickPick.mockClear(); });
+beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); });
 
 // #200: fake of the leveled 'Modbench' channel Pick the router forwards LOG messages to.
 function fakeChannel() {
@@ -93,7 +97,7 @@ describe('routeRecordPanelMessage', () => {
 
   it('OPEN_RECORD executes modbench.openEditor with formKey and label', async () => {
     const { reveal } = fakeReveal();
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: '000001:Fallout4.esm' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: '000001:Fallout4.esm' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined });
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.openEditor', { formKey: '000001:Fallout4.esm', label: '000001:Fallout4.esm' });
   });
@@ -101,7 +105,7 @@ describe('routeRecordPanelMessage', () => {
   it('an unrecognized message type is a no-op', async () => {
     const { reveal, refresh, revealFn } = fakeReveal();
 
-    await routeRecordPanelMessage({ type: 'somethingElse' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined });
+    await routeRecordPanelMessage({ type: 'somethingElse' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined });
 
     expect(executeCommand).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
@@ -109,8 +113,8 @@ describe('routeRecordPanelMessage', () => {
   });
 
   it('a non-object message is a no-op', async () => {
-    await expect(routeRecordPanelMessage('not an object', { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined })).resolves.toBeUndefined();
-    await expect(routeRecordPanelMessage(null, { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined })).resolves.toBeUndefined();
+    await expect(routeRecordPanelMessage('not an object', { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined })).resolves.toBeUndefined();
+    await expect(routeRecordPanelMessage(null, { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined })).resolves.toBeUndefined();
   });
 
   // Issue #174: the new branch — every successful pending-change mutation in the webview
@@ -118,13 +122,13 @@ describe('routeRecordPanelMessage', () => {
   it('PENDING_CHANGED refreshes the pending changes tree provider', async () => {
     const { reveal, refresh } = fakeReveal();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, { reveal, channel: fakeChannel(), formKeyPicker: undefined });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined });
 
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('PENDING_CHANGED with reveal deps undefined is a no-op, not a throw', async () => {
-    await expect(routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined })).resolves.toBeUndefined();
+    await expect(routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined })).resolves.toBeUndefined();
   });
 
   // Issue #200: the webview has no route to the 'Modbench' channel of its own — LOG is the
@@ -133,7 +137,7 @@ describe('routeRecordPanelMessage', () => {
     const { reveal } = fakeReveal();
     const channel = fakeChannel();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'staged edit' }, { reveal, channel, formKeyPicker: undefined });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'staged edit' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined });
 
     expect(channel.debug).toHaveBeenCalledWith('staged edit');
     expect(channel.info).not.toHaveBeenCalled();
@@ -144,7 +148,7 @@ describe('routeRecordPanelMessage', () => {
     const { reveal } = fakeReveal();
     const channel = fakeChannel();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'info', message: 'saved group' }, { reveal, channel, formKeyPicker: undefined });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'info', message: 'saved group' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined });
 
     expect(channel.info).toHaveBeenCalledWith('saved group');
     expect(channel.debug).not.toHaveBeenCalled();
@@ -155,7 +159,7 @@ describe('routeRecordPanelMessage', () => {
     const { reveal } = fakeReveal();
     const channel = fakeChannel();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'warn', message: 'rejected drop' }, { reveal, channel, formKeyPicker: undefined });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'warn', message: 'rejected drop' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined });
 
     expect(channel.warn).toHaveBeenCalledWith('rejected drop');
     expect(channel.debug).not.toHaveBeenCalled();
@@ -165,7 +169,7 @@ describe('routeRecordPanelMessage', () => {
   it('LOG with reveal deps undefined still forwards to the channel', async () => {
     const channel = fakeChannel();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'x' }, { reveal: undefined, channel, formKeyPicker: undefined });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'x' }, { reveal: undefined, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined });
 
     expect(channel.debug).toHaveBeenCalledWith('x');
   });
@@ -357,7 +361,7 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER (issue #210)', () => 
     const { reveal } = fakeReveal();
     await expect(routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: [] },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined },
     )).resolves.toBeUndefined();
     expect(createQuickPick).not.toHaveBeenCalled();
   });
@@ -371,7 +375,7 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER (issue #210)', () => 
 
     const dispatchPromise = routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: ['npc_'] },
-      { reveal, channel: fakeChannel(), formKeyPicker: { repository: { searchRecords }, reply } },
+      { reveal, channel: fakeChannel(), formKeyPicker: { repository: { searchRecords }, reply }, conditionFunctionPicker: undefined },
     );
     qp.selectedItems = [{ label: 'Picked [X]', formKey: 'X' }];
     accept();
@@ -389,11 +393,103 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER (issue #210)', () => 
 
     const dispatchPromise = routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r2', seed: '', validTypes: [] },
-      { reveal, channel: fakeChannel(), formKeyPicker: { repository: { searchRecords }, reply } },
+      { reveal, channel: fakeChannel(), formKeyPicker: { repository: { searchRecords }, reply }, conditionFunctionPicker: undefined },
     );
     hideWithoutAccept();
     await dispatchPromise;
 
     expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: 'r2', formKey: null });
+  });
+});
+
+// Issue #211: the condition-function picker as a native QuickPick — unlike #210's FormKey picker
+// (pickFormKeyViaQuickPick above), the catalogue is bounded/game-scoped and fetched once, so this
+// is a plain `showQuickPick` over a fetched array rather than a debounced `createQuickPick`
+// search. "Seeded with the current value" means the seed is sorted to array index 0 —
+// showQuickPick has no activeItem option, so array order is the only way to pre-highlight an item
+// (VS Code focuses the first item by default).
+describe('pickConditionFunctionViaQuickPick (issue #211)', () => {
+  function fakeDeps(getConditionFunctions = vi.fn().mockResolvedValue([])): {
+    deps: ConditionFunctionPickerDeps; getConditionFunctions: typeof getConditionFunctions; reply: ReturnType<typeof vi.fn>;
+  } {
+    const reply = vi.fn();
+    return { deps: { repository: { getConditionFunctions }, reply }, getConditionFunctions, reply };
+  }
+
+  it('fetches the catalogue exactly once and sorts the current value to index 0', async () => {
+    const getConditionFunctions = vi.fn().mockResolvedValue(['GetDistance', 'GetIsID', 'GetStageDone']);
+    const { deps } = fakeDeps(getConditionFunctions);
+    showQuickPick.mockResolvedValue(undefined);
+
+    await pickConditionFunctionViaQuickPick(deps, 'GetIsID');
+
+    expect(getConditionFunctions).toHaveBeenCalledTimes(1);
+    expect(showQuickPick).toHaveBeenCalledWith(
+      ['GetIsID', 'GetDistance', 'GetStageDone'],
+      expect.anything(),
+    );
+  });
+
+  it('passes the catalogue through unreordered when the seed is empty (adding a value with no prior function)', async () => {
+    const getConditionFunctions = vi.fn().mockResolvedValue(['GetDistance', 'GetIsID']);
+    const { deps } = fakeDeps(getConditionFunctions);
+    showQuickPick.mockResolvedValue(undefined);
+
+    await pickConditionFunctionViaQuickPick(deps, '');
+
+    expect(showQuickPick).toHaveBeenCalledWith(['GetDistance', 'GetIsID'], expect.anything());
+  });
+
+  it('resolves with the picked function name', async () => {
+    const { deps } = fakeDeps(vi.fn().mockResolvedValue(['GetDistance', 'GetIsID']));
+    showQuickPick.mockResolvedValue('GetDistance');
+
+    expect(await pickConditionFunctionViaQuickPick(deps, 'GetIsID')).toBe('GetDistance');
+  });
+
+  it('resolves null when dismissed without a selection (Escape/blur) — the condition is left unchanged', async () => {
+    const { deps } = fakeDeps(vi.fn().mockResolvedValue(['GetDistance', 'GetIsID']));
+    showQuickPick.mockResolvedValue(undefined);
+
+    expect(await pickConditionFunctionViaQuickPick(deps, 'GetIsID')).toBeNull();
+  });
+});
+
+describe('routeRecordPanelMessage — OPEN_CONDITION_FUNCTION_PICKER (issue #211)', () => {
+  it('with conditionFunctionPicker deps undefined is a no-op', async () => {
+    const { reveal } = fakeReveal();
+    await expect(routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER, requestId: 'r1', seed: '' },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined },
+    )).resolves.toBeUndefined();
+    expect(showQuickPick).not.toHaveBeenCalled();
+  });
+
+  it('opens a QuickPick and replies with the picked function, correlated by requestId', async () => {
+    const { reveal } = fakeReveal();
+    const getConditionFunctions = vi.fn().mockResolvedValue(['GetDistance', 'GetIsID']);
+    const reply = vi.fn();
+    showQuickPick.mockResolvedValue('GetDistance');
+
+    await routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER, requestId: 'r1', seed: 'GetIsID' },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: { repository: { getConditionFunctions }, reply } },
+    );
+
+    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId: 'r1', functionName: 'GetDistance' });
+  });
+
+  it('replies with functionName: null when the picker is dismissed without a selection', async () => {
+    const { reveal } = fakeReveal();
+    const getConditionFunctions = vi.fn().mockResolvedValue(['GetDistance', 'GetIsID']);
+    const reply = vi.fn();
+    showQuickPick.mockResolvedValue(undefined);
+
+    await routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER, requestId: 'r2', seed: '' },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: { repository: { getConditionFunctions }, reply } },
+    );
+
+    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId: 'r2', functionName: null });
   });
 });

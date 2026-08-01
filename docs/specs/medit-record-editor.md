@@ -336,9 +336,17 @@ classification.
   (`Fallout4ConditionCodec.ApplyFieldValue`), so no parameter value from a different function's
   shape can silently persist in the wrong type. Toggling Use-Global swaps the comparison-value
   input between a plain number and a GLOB-record FormKey picker.
-- The function picker is a searchable list backed by `GET /condition-functions`, filtered
-  server-side to the functions Mutagen actually resolves for the record's game/category — never
-  a hardcoded, unfiltered enum dump.
+- The function picker is a native **QuickPick** (#211; same round-trip through the extension host
+  as the FormKey QuickPick above, since the webview cannot call `vscode.window.showQuickPick`
+  itself) listing the function catalogue backed by `GET /condition-functions`, filtered
+  server-side to the functions Mutagen actually resolves for the record's game/category — never a
+  hardcoded, unfiltered enum dump. Unlike the FormKey QuickPick, the catalogue is small and
+  game-scoped, so it's fetched once (not per keystroke) and handed to a plain `showQuickPick` —
+  filter-as-you-type is VS Code's own built-in list filtering, not a hand-rolled search. "Seeded
+  with the current value" means the current function is sorted to the front of the item array —
+  `showQuickPick` has no `activeItem` option the way `QuickPick` does, so array order is the only
+  way to pre-highlight an item; VS Code focuses the first item by default. Escape/blur leaves the
+  condition's function unchanged.
 - The AND/OR flag between conditions renders read-only.
 - Each condition-owning field is keyed and staged independently by its own field name (backend:
   `ConditionOwner.FieldPath`/`ConditionGroupDiff.FieldPath`, discovered by

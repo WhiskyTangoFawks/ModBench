@@ -52,10 +52,18 @@ export interface RouteRecordPanelMessageDeps {
   // broadcast — see messages.ts' FORM_KEY_PICKED doc comment), so this whole bundle is
   // reconstructed per message rather than shared like `reveal`/`channel`.
   formKeyPicker: FormKeyPickerDeps | undefined;
+  // Issue #211: same per-message reconstruction as formKeyPicker above, for the same reason —
+  // the reply must go back to the one panel that asked.
+  conditionFunctionPicker: ConditionFunctionPickerDeps | undefined;
 }
 
 export interface FormKeyPickerDeps {
   repository: Pick<PluginRepository, 'searchRecords'>;
+  reply: (msg: ExtensionToWebview) => void;
+}
+
+export interface ConditionFunctionPickerDeps {
+  repository: Pick<PluginRepository, 'getConditionFunctions'>;
   reply: (msg: ExtensionToWebview) => void;
 }
 
@@ -125,6 +133,48 @@ export async function pickFormKeyViaQuickPick(
   });
 }
 
+// Issue #211: the condition-function picker as a native QuickPick — same bridge shape as
+// pickFormKeyViaQuickPick above (the webview cannot call vscode.window.showQuickPick itself), but
+// simpler: the function catalogue is bounded and game-scoped, so it's fetched once and handed to
+// a plain `showQuickPick` rather than driven through `createQuickPick`'s debounced per-keystroke
+// search. "Seeded with the current value" (AC1) is satisfied by sorting the seed to index 0 of
+// the array passed to showQuickPick — showQuickPick has no activeItem/activeItems option (only
+// createQuickPick does), so array order is the only way to pre-highlight an item; VS Code focuses
+// the first item by default. A seed absent from the catalogue (or empty, e.g. a function-less
+// value) leaves the array unreordered. Resolves to the picked function name, or null when
+// dismissed without a selection (Escape/blur) — the caller leaves the condition unchanged, same
+// convention as pickFormKeyViaQuickPick.
+export async function pickConditionFunctionViaQuickPick(
+  deps: ConditionFunctionPickerDeps, seed: string,
+): Promise<string | null> {
+  const all = await deps.repository.getConditionFunctions();
+  const items = seed && all.includes(seed) ? [seed, ...all.filter(f => f !== seed)] : all;
+  const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Select a condition function…' });
+  return picked ?? null;
+}
+
+// Issue #211: extracted so routeRecordPanelMessage's own branch stays a single statement,
+// matching the shape of every other branch below it — the "deps present?" guard (a no-op when
+// this panel wasn't wired for the picker) and the QuickPick-then-reply sequence both live here
+// instead of inline, keeping the dispatcher's own cyclomatic complexity from growing with every
+// picker this bridge shape gets reused for.
+async function replyFormKeyPicked(
+  deps: FormKeyPickerDeps | undefined, m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER }>,
+): Promise<void> {
+  if (!deps) return;
+  const formKey = await pickFormKeyViaQuickPick(deps, m.seed, m.validTypes);
+  deps.reply({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: m.requestId, formKey });
+}
+
+// Issue #211: same shape as replyFormKeyPicked above, for the condition-function QuickPick.
+async function replyConditionFunctionPicked(
+  deps: ConditionFunctionPickerDeps | undefined, m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER }>,
+): Promise<void> {
+  if (!deps) return;
+  const functionName = await pickConditionFunctionViaQuickPick(deps, m.seed);
+  deps.reply({ type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId: m.requestId, functionName });
+}
+
 // Issue #174: the record editor webview and the extension host are different processes,
 // bridged only by `postMessage` — this is the single dispatch point for every message the
 // webview sends up. Kept as a plain function (not a class/registered-handler pattern) so it's
@@ -140,8 +190,8 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
   } else if (m.type === WEBVIEW_TO_EXTENSION.LOG) {
     deps.channel[m.level](m.message);
   } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER) {
-    if (!deps.formKeyPicker) return;
-    const formKey = await pickFormKeyViaQuickPick(deps.formKeyPicker, m.seed, m.validTypes);
-    deps.formKeyPicker.reply({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: m.requestId, formKey });
+    await replyFormKeyPicked(deps.formKeyPicker, m);
+  } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER) {
+    await replyConditionFunctionPicked(deps.conditionFunctionPicker, m);
   }
 }

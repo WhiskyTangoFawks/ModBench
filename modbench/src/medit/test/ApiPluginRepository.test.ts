@@ -291,6 +291,31 @@ describe('ApiPluginRepository.getActiveFilter', () => {
   });
 });
 
+// Issue #211: the condition-function catalogue backing the extension-host QuickPick. Unlike most
+// PluginRepository reads (ensureOk-then-throw), this mirrors the deleted webview-side
+// RecordSessionClient.conditionFunctions()'s degrade-to-[] convention (closer precedent:
+// setFilter/clearFilter's catch-and-log-no-throw above) — a failed fetch must never surface as a
+// raw error, per #211's AC3.
+describe('ApiPluginRepository.getConditionFunctions', () => {
+  it('calls GET /condition-functions and returns the catalog on success', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({ data: ['GetIsID', 'GetDistance'], response: { ok: true } }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const names = await repo.getConditionFunctions();
+
+    expect(names).toEqual(['GetIsID', 'GetDistance']);
+    expect(client.GET).toHaveBeenCalledWith('/condition-functions', expect.anything());
+  });
+
+  it('returns [] on a failed fetch instead of throwing', async () => {
+    const repo = new ApiPluginRepository(nonOkClient());
+
+    expect(await repo.getConditionFunctions()).toEqual([]);
+  });
+});
+
 describe('ApiPluginRepository.getWorldspaces', () => {
   it('maps worldspace summaries on an OK response', async () => {
     const client = {

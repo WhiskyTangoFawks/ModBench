@@ -79,6 +79,13 @@ export interface PluginRepository {
   // webview-side RecordSessionClient.searchRecords this replaces). Capped at 20 results, matching
   // the old picker's page size.
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
+  // Issue #211: the condition-function picker's catalog — every function name Mutagen resolves
+  // for the loaded session's game, backing the extension-host QuickPick. Degrades to [] on a
+  // failed fetch (mirrors setFilter/clearFilter's catch-and-log-no-throw below, not the
+  // ensureOk-then-throw convention most reads here use) — a failed catalogue fetch must never
+  // surface as a raw error, same as the deleted webview-side RecordSessionClient
+  // .conditionFunctions() it replaces.
+  getConditionFunctions(): Promise<string[]>;
   setFilter(sql: string): Promise<string | null>; // returns error message or null on success
   clearFilter(): Promise<void>;
   getActiveFilter(): Promise<string | null>;
@@ -151,6 +158,20 @@ export class ApiPluginRepository implements PluginRepository {
       items: (data?.items ?? []).map(toRecordSummary),
       total: data?.total ?? 0,
     };
+  }
+
+  async getConditionFunctions(): Promise<string[]> {
+    try {
+      const { data, response } = await this.client.GET('/condition-functions', {});
+      if (!response.ok) {
+        this.log(`[PluginRepository] getConditionFunctions failed (${response.status})`);
+        return [];
+      }
+      return data ?? [];
+    } catch (e) {
+      this.log(`[PluginRepository] getConditionFunctions failed: ${e instanceof Error ? e.message : String(e)}`);
+      return [];
+    }
   }
 
   async setFilter(sql: string): Promise<string | null> {

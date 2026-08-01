@@ -5,14 +5,13 @@ import type {
   ConditionCompare, ConditionDiff, ConditionOperator, ConflictThis, FieldMetadata,
   ParsedCondition, ParsedConditionParam, PendingChange,
 } from './types';
-import { baseCell, headerCell, toggleBtnStyle, getCellStyle } from './gridStyles';
+import { baseCell, headerCell, toggleBtnStyle, getCellStyle, mono, fg } from './gridStyles';
 import { FormKeyLink } from './FormKeyLink';
 import { FormKeyCell } from './FormKeyCell';
 import { ScalarCell } from './ScalarCell';
-import { ConditionFunctionPicker } from './ConditionFunctionPicker';
+import { pickConditionFunction } from './conditionFunctionPickerBridge';
 import { CONDITION_SUBFIELD_WIRE, conditionFieldPath, conditionParamPath } from './conditionPath';
 import { applyConditionListOp, currentConditionList, overlayPendingEdits } from './conditionOps';
-import type { RecordSessionClient } from './RecordSessionClient';
 
 // Compare view for a record's conditions (CTDA), mirroring VmadSection's grid shape. Each
 // condition renders as a collapsed xEdit-style summary row with two-axis conflict coloring
@@ -24,6 +23,31 @@ import type { RecordSessionClient } from './RecordSessionClient';
 const iconBtnStyle: React.CSSProperties = {
   background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: 0, lineHeight: 1,
 };
+
+const functionButtonStyle: React.CSSProperties = {
+  background: 'var(--vscode-input-background, #3c3c3c)',
+  border: '1px solid var(--vscode-input-border, #555)',
+  color: fg,
+  cursor: 'pointer',
+  fontFamily: mono,
+  fontSize: '12px',
+  padding: '1px 4px',
+};
+
+// Issue #211: the function field's editor — a plain button opening the native QuickPick bridge,
+// replacing the deleted ConditionFunctionPicker's rendered dropdown. `fn` is the condition's
+// current function, passed as the QuickPick's seed; a truthy pick stages onCommit the same way
+// every other renderEdit here does, a null pick (Escape/blur) leaves the field untouched.
+function functionEditor(fn: string, onCommit: (v: string) => void): React.ReactNode {
+  return (
+    <button
+      onClick={() => { void pickConditionFunction(fn).then(picked => { if (picked) onCommit(picked); }); }}
+      style={functionButtonStyle}
+    >
+      {fn || <span style={{ opacity: 0.5 }}>— click to pick</span>}
+    </button>
+  );
+}
 
 const OPERATOR_SYMBOL: Record<ConditionOperator, string> = {
   EqualTo: '=',
@@ -79,9 +103,10 @@ function rowHasConflict(cellStates: Record<string, ConflictThis>): boolean {
 }
 
 // Bound to one field's own wire path — editors just call onCommit(value) like any ScalarCell/
-// FormKeyCell in the rest of the grid.
+// FormKeyCell in the rest of the grid. Issue #211: no longer carries `client` — the function
+// field's editor (the only past consumer) now goes through the conditionFunctionPickerBridge
+// instead of RecordSessionClient.conditionFunctions().
 interface FieldEditCtx {
-  client: RecordSessionClient;
   onOpen: (fk: string) => void;
   onCommit: (value: unknown) => void;
 }
@@ -145,7 +170,7 @@ const ENVELOPE_FIELDS: FieldSpec[] = [
     key: 'function',
     label: 'Function',
     render: c => value(c.function),
-    renderEdit: (c, ctx) => <ConditionFunctionPicker value={c.function} client={ctx.client} onCommit={ctx.onCommit} />,
+    renderEdit: (c, ctx) => functionEditor(c.function, ctx.onCommit),
   },
   {
     key: 'runOn',
@@ -264,7 +289,6 @@ interface SectionCtx {
   toggle: (key: string) => void;
   isEditable: (plugin: string) => boolean;
   onEdit?: (plugin: string, path: string, value: unknown) => void;
-  client?: RecordSessionClient;
   pendingChangeMap?: Record<string, PendingChange>;
 }
 
@@ -293,9 +317,8 @@ function pendingFieldCell(
 ): React.ReactNode {
   const change = wirePath && ctx.pendingChangeMap ? ctx.pendingChangeMap[`${plugin}:${wirePath}`] : undefined;
   const base = condition.perPlugin[plugin];
-  const editable = change && wirePath && field.renderEdit && base && ctx.onEdit && ctx.client;
+  const editable = change && wirePath && field.renderEdit && base && ctx.onEdit;
   const onEdit = ctx.onEdit;
-  const client = ctx.client;
   return (
     <td
       key={`${rowKey}:p${i}`}
@@ -310,7 +333,7 @@ function pendingFieldCell(
       {change && (editable
         ? field.renderEdit(
             overlayPendingEdits(base, condition.index, groupFieldPath, plugin, ctx.pendingChangeMap),
-            { client, onOpen, onCommit: v => onEdit(plugin, wirePath, v) },
+            { onOpen, onCommit: v => onEdit(plugin, wirePath, v) },
           )
         : <span>{pendingValueText(change.newValue)}</span>)}
     </td>
@@ -327,10 +350,9 @@ function fieldCell(
 ): React.ReactNode {
   const c = condition.perPlugin[plugin];
   if (!c) return dash();
-  if (field.renderEdit && wirePath && ctx.isEditable(plugin) && ctx.onEdit && ctx.client) {
+  if (field.renderEdit && wirePath && ctx.isEditable(plugin) && ctx.onEdit) {
     const onEdit = ctx.onEdit;
-    const client = ctx.client;
-    return field.renderEdit(c, { client, onOpen, onCommit: v => onEdit(plugin, wirePath, v) });
+    return field.renderEdit(c, { onOpen, onCommit: v => onEdit(plugin, wirePath, v) });
   }
   return field.render(c, onOpen);
 }
@@ -445,7 +467,6 @@ interface ConditionSectionProps {
   // explicitly saying "every column is editable".
   immutableSet: Set<string>;
   onEdit?: (plugin: string, path: string, value: unknown) => void;
-  client?: RecordSessionClient;
   pendingChangeMap?: Record<string, PendingChange>;
 }
 
@@ -457,7 +478,7 @@ function isNestedGroupPath(fieldPath: string): boolean {
 }
 
 export function ConditionSection({
-  conditions, columns, onOpen, immutableSet, onEdit, client,
+  conditions, columns, onOpen, immutableSet, onEdit,
   pendingChangeMap,
 }: Readonly<ConditionSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -486,7 +507,7 @@ export function ConditionSection({
   const ctx: SectionCtx = {
     columns, onOpen, toggle,
     isEditable: plugin => !immutableSet.has(plugin),
-    onEdit, client, pendingChangeMap,
+    onEdit, pendingChangeMap,
   };
 
   // #154: a record can have more than one condition-carrying field (e.g. a Quest's

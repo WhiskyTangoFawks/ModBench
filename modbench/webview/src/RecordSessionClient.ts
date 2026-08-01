@@ -45,11 +45,11 @@ export interface RecordSessionClient {
   // Issue #139: save/revert the whole component a member change belongs to. Both return the raw
   // Response so the panel reads the SaveGroupResponse body / status itself (ADR-0026 surfacing).
   saveGroup(changeId: string): Promise<Response>;
+  // Issue #211: revertGroup is the last write here — the condition-function picker's catalog
+  // (formerly `conditionFunctions()` above) moved off this client entirely. It's a native
+  // QuickPick now, fetched in the extension host via PluginRepository.getConditionFunctions()
+  // instead of round-tripping through this webview, same as #210's searchRecords removal.
   revertGroup(changeId: string): Promise<Response>;
-  // #152: the condition function picker's catalog — every function name Mutagen resolves for the
-  // loaded session's game. A failed fetch yields [] so the picker just shows nothing to search,
-  // never a raw error state (mirrors groupMembers' non-fatal-read convention).
-  conditionFunctions(): Promise<string[]>;
 }
 
 export function createRecordSessionClient(port: number): RecordSessionClient {
@@ -152,11 +152,6 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
         parseAs: 'stream',
         fetch: fetchImpl,
       }));
-    },
-
-    async conditionFunctions() {
-      const { data, response } = await client.GET('/condition-functions', {});
-      return response.ok ? (data as string[]) : [];
     },
   };
 }

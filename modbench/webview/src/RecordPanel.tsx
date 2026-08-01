@@ -722,7 +722,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                 onOpen={handleOpen}
                 immutableSet={immutableSet}
                 onEdit={(plugin, path, value) => { void handleEdit(plugin, path, value); }}
-                client={client}
                 pendingChangeMap={pendingChangeMap}
               />
             )}
