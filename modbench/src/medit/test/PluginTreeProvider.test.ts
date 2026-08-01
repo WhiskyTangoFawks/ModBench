@@ -561,6 +561,7 @@ describe('PluginTreeProvider worldspace tree', () => {
         { type: 'wrld', count: 1 },
         { type: 'cell', count: 4 },
         { type: 'refr', count: 99 },
+        { type: 'achr', count: 12 },
         { type: 'WEAP', count: 5 },
       ],
     });
@@ -574,6 +575,7 @@ describe('PluginTreeProvider worldspace tree', () => {
     expect(labels).toContain('cell - Interior');
     expect(labels).toContain('WEAP');
     expect(labels).not.toContain('refr');
+    expect(labels).not.toContain('achr');
     expect(labels).not.toContain('cell');
     expect(labels).not.toContain('wrld');
   });
