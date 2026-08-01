@@ -165,7 +165,7 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
   resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows,
   and are themselves drag sources for their whole value via that summary row, the same as a
   scalar leaf, collapsed or expanded alike (#204). Pending-change cells show the new value on a yellow background and are directly
-  editable on the same terms as disk cells — no separate revert control (see Pending column).
+  editable on the same terms as disk cells, plus an inline revert control (see Pending column).
 - **Unsorted array fields have arity and order controls in the field grid** — each element row
   carries move-up / move-down (swap with the neighbour, disabled at the first/last position) and
   a remove control, and the parent array row carries an add control that appends a default-valued
@@ -194,15 +194,18 @@ Every action is scoped to a **ChangeGroup**, never to part of one and never to a
 plugin:
 
 - **Plain click** on a pending value edits it directly, on the same terms as a disk cell
-  ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md)) — there is no lock on
-  the corresponding disk cell in response; both stay editable simultaneously for now (revisit
-  later if that proves confusing in practice).
+  ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md), #203) — there is no
+  lock on the corresponding disk cell in response; both stay editable simultaneously for now
+  (revisit later if that proves confusing in practice). This holds in the main field grid, the
+  VMAD section, and the Condition section alike — three independent render paths, one rule.
 - **Right-click** on a pending value offers **Reveal in Pending Changes Tree** (selects its node
   in the [Pending Changes tree](medit-pending-changes-tree.md), expanding the parent group for a
   multi-member change; a change already saved or reverted resolves to nothing and is logged, not
   thrown), **Save Group** (writes every plugin in the component and consumes its pending rows; the
   grid reloads to reflect what reached disk), and **Revert Group** — the group's only three
-  actions, all in one menu, no separate inline control. Revert's confirmation keys on member
+  actions, all in one menu. Revert additionally keeps an inline ↩ shortcut on the pending cell —
+  a sibling of the value, not a descendant, so clicking it reverts without activating the cell's
+  editor. Revert's confirmation keys on member
   count, not on which control fired it: a group of one — the common case — is exactly "revert this
   field" and fires straight away; an entangled change confirms first, listing the members, rather
   than firing the 409 the backend would return for a partial group revert (ADR-0028). The member

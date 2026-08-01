@@ -505,7 +505,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                   onEdit={(plugin, fieldName, value) => { void handleEdit(plugin, fieldName, value); }}
                   onRevert={changeId => { void handleRevertGroup(changeId); }}
                   onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
-                  onRevealPendingChange={handleRevealPendingChange}
                   context={{ kind: 'top-level' }}
                   hasChildren={hasChildren}
                   isExpanded={isExpanded}
@@ -549,7 +548,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         }}
                         onRevert={changeId => { void handleRevertGroup(changeId); }}
                         onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
-                        onRevealPendingChange={handleRevealPendingChange}
                         context={{ kind: 'array-element', overrideMeta: elementMeta, parentFieldName: diff.fieldName }}
                         hasChildren={(child.children?.length ?? 0) > 0}
                         isExpanded={elemExpanded}
@@ -597,7 +595,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                             }}
                             onRevert={changeId => { void handleRevertGroup(changeId); }}
                             onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
-                            onRevealPendingChange={handleRevealPendingChange}
                             context={{ kind: 'grandchild', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName, parentFieldIndex: elemIdx }}
                           />,
                         );
@@ -629,7 +626,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         }}
                         onRevert={changeId => { void handleRevertGroup(changeId); }}
                         onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
-                        onRevealPendingChange={handleRevealPendingChange}
                         context={{ kind: 'struct-child', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName }}
                       />,
                     );
@@ -648,7 +644,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                           onEdit={(plugin, vmadPath, value) => { void handleEdit(plugin, vmadPath, value); }}
                           onRevert={changeId => { void handleRevertGroup(changeId); }}
                           onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
-                          onRevealPendingChange={handleRevealPendingChange}
                           onStructOp={(plugin, vmadPath, op) => { void handleVmadStructOp(plugin, vmadPath, op); }}
                           client={client}
                         />
@@ -664,7 +659,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                 pendingChangeMap={pendingChangeMap}
                 onRevert={changeId => { void handleRevertGroup(changeId); }}
                 onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
-                onRevealPendingChange={handleRevealPendingChange}
               />
             )}
           </tbody>
@@ -705,6 +699,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
           x={pendingMenu.x}
           y={pendingMenu.y}
           onClose={() => setPendingMenu(null)}
+          onReveal={() => { const id = pendingMenu.changeId; setPendingMenu(null); handleRevealPendingChange(id); }}
           onSaveGroup={() => { const id = pendingMenu.changeId; setPendingMenu(null); void handleSaveGroup(id); }}
           onRevertGroup={() => { const id = pendingMenu.changeId; setPendingMenu(null); void handleRevertGroup(id); }}
         />

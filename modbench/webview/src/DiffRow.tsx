@@ -188,11 +188,10 @@ interface DiffRowProps {
   onOpen: (fk: string) => void;
   onEdit: (plugin: string, fieldName: string, value: unknown) => void;
   onRevert: (changeId: string) => void;
+  // Issue #203: right-click a pending value → Save Group / Revert Group / Reveal in Pending
+  // Changes Tree, all from the shared PendingCellMenu (RecordPanel owns the reveal wiring) —
+  // this row only ever needs to open that menu, never call reveal itself.
   onPendingContextMenu: (changeId: string, x: number, y: number) => void;
-  // Issue #140: plain click on a pending value reveals its change in the Pending Changes tree.
-  // Free gesture — pending cells are never editable — and kept off Ctrl+click, which still
-  // means "follow the reference" uniformly across every cell in the grid.
-  onRevealPendingChange: (changeId: string) => void;
   onCellDragStart: (fieldName: string, value: unknown) => void;
   onCellDrop: (fieldName: string, targetPlugin: string, applyValue: (value: unknown) => void) => void;
   context: RowContext;
@@ -211,7 +210,7 @@ interface DiffRowProps {
 export function DiffRow({
   diff, conflictAll, columns, overrideMap, fieldMetaMap, immutableSet, client,
   pendingChangeMap, collapsedColumns, onOpen, onEdit, onRevert, onPendingContextMenu,
-  onRevealPendingChange, onCellDragStart, onCellDrop,
+  onCellDragStart, onCellDrop,
   context, hasChildren, isExpanded, onToggle, arrayEdit, onArrayAdd,
 }: DiffRowProps) {
   const meta = context.kind === 'top-level' ? fieldMetaMap[diff.fieldName] : context.overrideMeta;
@@ -314,16 +313,10 @@ export function DiffRow({
         return (
           <td
             key={`pending:${col.plugin}`}
-            // Issue #139: right-click a pending value → group-scoped Save/Revert. Gated on the
-            // same showActions as the inline ↩ (top-level and struct-child rows carry a change id).
+            // Issue #139: right-click a pending value → group-scoped Save/Revert/Reveal (#203
+            // adds Reveal to this menu). Gated on the same showActions as the inline ↩ (top-level
+            // and struct-child rows carry a change id).
             onContextMenu={change && showActions ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); } : undefined}
-            // Issue #140: plain click reveals the change in the Pending Changes tree. Ctrl/meta-
-            // click is left alone so it falls through to the cell's own FormKeyLink, which follows
-            // the reference — never both on the same click (the link doesn't stop propagation, so
-            // without this guard a Ctrl+click here would fire the reveal too).
-            onClick={change && showActions
-              ? e => { if (!e.ctrlKey && !e.metaKey) onRevealPendingChange(change.id); }
-              : undefined}
             style={{
               ...baseCell,
               backgroundColor: hasPending ? 'rgba(255,200,50,0.10)' : undefined,
@@ -333,14 +326,18 @@ export function DiffRow({
           >
             {hasPending && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                {/* Issue #137: the pending value renders through the same type-aware renderer the
-                    disk columns use, in its read-only form (editable=false) — enums/flags resolve
-                    to names, FormKeys become links — so the Pending column reads in the same
-                    language as the row it is being compared against. Issue #159: the FormKey
+                {/* Issue #203: a pending value is directly editable, on the same terms as a disk
+                    cell — same renderCell the disk columns use, same onEdit call shape
+                    (plugin, diff.fieldName, value). Editable is unconditional here rather than
+                    re-checking immutableSet: buildColumns (recordUtils.ts) only ever creates a
+                    'pending' column for a plugin that isn't immutable, so a pending column's own
+                    plugin is always mutable — plain click now edits instead of revealing (#140's
+                    reveal moved to the right-click menu above). Issue #159: the FormKey
                     resolution comes from the staged change's own `resolutions`, keyed by this
                     row's sub-path within the change's NewValue (pendingResolutionPath) — the
                     same tri-state signal disk columns use, not a stand-in. */}
-                <span>{renderCell(pendingValue, meta, false, client, onOpen, () => {}, undefined,
+                <span>{renderCell(pendingValue, meta, true, client, onOpen,
+                  v => onEdit(col.plugin, diff.fieldName, v), undefined,
                   meta.type === 'formKey' ? pendingResolution : undefined)}</span>
                 {change && showActions && (
                   <button

@@ -69,7 +69,6 @@ type RenderOpts = {
   onEdit?: ReturnType<typeof vi.fn>;
   onRevert?: ReturnType<typeof vi.fn>;
   onPendingContextMenu?: ReturnType<typeof vi.fn>;
-  onRevealPendingChange?: ReturnType<typeof vi.fn>;
   onStructOp?: ReturnType<typeof vi.fn>;
   pendingChangeMap?: Record<string, PendingChange>;
   withPendingCol?: string; // plugin to add a pending column for
@@ -92,7 +91,6 @@ function renderSection(vmad: VmadCompare | null, plugins: string[], opts: Render
           onEdit={opts.onEdit}
           onRevert={opts.onRevert}
           onPendingContextMenu={opts.onPendingContextMenu}
-          onRevealPendingChange={opts.onRevealPendingChange}
           onStructOp={opts.onStructOp}
           pendingChangeMap={opts.pendingChangeMap}
           client={stubClient}
@@ -414,44 +412,29 @@ describe('VmadSection array editing', () => {
     expect(onPendingContextMenu).toHaveBeenCalledWith(chg.id, expect.any(Number), expect.any(Number));
   });
 
-  // Issue #140: a VMAD pending value reveals its change like any other pending cell — the
-  // record editor spec states the Pending column's click-to-reveal for "a pending value"
-  // uniformly, with no VMAD exception.
-  it('plain-clicking a VMAD pending value emits the reveal request with the change id', () => {
-    const onRevealPendingChange = vi.fn();
+  // Issue #203 (reverses #140): reveal moved to the right-click menu everywhere, VMAD included.
+  // An array/struct pending cell shows a restaged-subtree summary, not a single scalar value —
+  // same as its disk-side container summary, it has nothing to swap to an editor, so plain click
+  // now does nothing at all (no reveal, no edit).
+  it('plain-clicking a container (array) pending value does nothing — not editable, no reveal', () => {
+    const onEdit = vi.fn();
     const chg = pendingChange('A.esm', String.raw`VMAD\S\Items`, [10, 20, 0]);
-    renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
-      onRevealPendingChange,
+    const { container } = renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
+      onEdit,
       withPendingCol: 'A.esm',
       pendingChangeMap: { [String.raw`A.esm:VMAD\S\Items`]: chg },
     });
     toggle('S');
 
     fireEvent.click(screen.getByText('[10,20,0]'));
-    expect(onRevealPendingChange).toHaveBeenCalledWith(chg.id);
+    expect(container.querySelectorAll('input, select, textarea')).toHaveLength(0);
   });
 
-  it('Ctrl+clicking a VMAD pending value does not reveal it', () => {
-    const onRevealPendingChange = vi.fn();
-    const chg = pendingChange('A.esm', String.raw`VMAD\S\Items`, [10, 20, 0]);
-    renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
-      onRevealPendingChange,
-      withPendingCol: 'A.esm',
-      pendingChangeMap: { [String.raw`A.esm:VMAD\S\Items`]: chg },
-    });
-    toggle('S');
-
-    fireEvent.click(screen.getByText('[10,20,0]'), { ctrlKey: true });
-    expect(onRevealPendingChange).not.toHaveBeenCalled();
-  });
-
-  it('clicking the inline ↩ on a VMAD pending cell reverts without also revealing', () => {
+  it('clicking the inline ↩ on a VMAD pending cell reverts without opening an editor', () => {
     const onRevert = vi.fn();
-    const onRevealPendingChange = vi.fn();
     const chg = pendingChange('A.esm', String.raw`VMAD\S\Items`, [10, 20, 0]);
-    renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
+    const { container } = renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
       onRevert,
-      onRevealPendingChange,
       withPendingCol: 'A.esm',
       pendingChangeMap: { [String.raw`A.esm:VMAD\S\Items`]: chg },
     });
@@ -459,7 +442,7 @@ describe('VmadSection array editing', () => {
 
     fireEvent.click(screen.getByTitle('Revert group'));
     expect(onRevert).toHaveBeenCalledWith(chg.id);
-    expect(onRevealPendingChange).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('input, select, textarea')).toHaveLength(0);
   });
 
   it('editing an element calls onEdit with the full new array as atomic value', () => {
@@ -950,10 +933,10 @@ describe('VmadSection editing', () => {
     expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Target`, { formKey: '000123:Foo.esp', alias: 5 });
   });
 
-  it('pending VMAD change shows new value and revert button; clicking revert calls onRevert', () => {
+  it('pending VMAD change shows new value and revert button; clicking revert calls onRevert without activating the editor', () => {
     const onRevert = vi.fn();
     const chg = pendingChange('A.esm', String.raw`VMAD\MyScript\Enabled`, true);
-    renderSection(boolVmad(), ['A.esm'], {
+    const { container } = renderSection(boolVmad(), ['A.esm'], {
       onRevert,
       withPendingCol: 'A.esm',
       pendingChangeMap: { [String.raw`A.esm:VMAD\MyScript\Enabled`]: chg },
@@ -965,6 +948,42 @@ describe('VmadSection editing', () => {
     expect(revertBtn).toBeInTheDocument();
     fireEvent.click(revertBtn);
     expect(onRevert).toHaveBeenCalledWith(chg.id);
+    // Issue #203: this scalar leaf's pending cell is now click-to-edit, and ↩ sits inside it —
+    // clicking ↩ must revert without also activating the checkbox editor (stopPropagation).
+    expect(container.querySelectorAll('input, select, textarea')).toHaveLength(0);
+  });
+
+  // Issue #203: a pending scalar/object leaf value is directly editable, on the same terms as a
+  // disk cell — same ClickToEdit + VmadScalarEditor/VmadObjectEditor pair, fed the staged value
+  // instead of the disk value.
+  it('clicking a pending scalar VMAD value activates its editor, not a reveal', () => {
+    const chg = pendingChange('A.esm', String.raw`VMAD\MyScript\Enabled`, true);
+    const { container } = renderSection(boolVmad(), ['A.esm'], {
+      onEdit: vi.fn(),
+      withPendingCol: 'A.esm',
+      pendingChangeMap: { [String.raw`A.esm:VMAD\MyScript\Enabled`]: chg },
+    });
+    toggle('MyScript');
+
+    fireEvent.click(screen.getByText('true'));
+
+    expect(container.querySelector('input[type="checkbox"]')).toBeInTheDocument();
+  });
+
+  it('committing an edit on a pending scalar VMAD value calls onEdit with the VMAD path and new value', () => {
+    const onEdit = vi.fn();
+    const chg = pendingChange('A.esm', String.raw`VMAD\MyScript\Enabled`, true);
+    renderSection(boolVmad(), ['A.esm'], {
+      onEdit,
+      withPendingCol: 'A.esm',
+      pendingChangeMap: { [String.raw`A.esm:VMAD\MyScript\Enabled`]: chg },
+    });
+    toggle('MyScript');
+
+    fireEvent.click(screen.getByText('true'));
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\MyScript\Enabled`, false);
   });
 
   it('Variable, array, and struct properties show no edit widget in edit mode', () => {
@@ -1027,7 +1046,10 @@ describe('VmadSection editing', () => {
     expect(onStructOp).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\IsActive`, { op: 'remove_property' });
   });
 
-  it('a pending remove_property renders the property as removed', () => {
+  // Issue #203: a pending remove_property is a structural op, not a plain leaf value — it stays
+  // read-only (nothing to edit in place) even though the column is mutable, distinguishing it
+  // from an ordinary scalar/object pending edit a few tests up.
+  it('a pending remove_property renders the property as removed and is not click-editable', () => {
     const chg = pendingChange('A.esm', String.raw`VMAD\S\IsActive`, { op: 'remove_property' });
     const vmad: VmadCompare = {
       scripts: [script({
@@ -1035,14 +1057,17 @@ describe('VmadSection editing', () => {
         properties: [prop({ name: 'IsActive', kind: 'scalar', values: { 'A.esm': true }, types: { 'A.esm': 'Bool' } })],
       })],
     };
-    renderSection(vmad, ['A.esm'], {
+    const { container } = renderSection(vmad, ['A.esm'], {
       withPendingCol: 'A.esm',
       pendingChangeMap: { [`A.esm:${chg.fieldPath}`]: chg },
       onRevert: vi.fn(),
+      onEdit: vi.fn(),
     });
     toggle('S');
 
     expect(screen.getByText('removed')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('removed'));
+    expect(container.querySelectorAll('input, select, textarea')).toHaveLength(0);
   });
 
   it('a pending add_property renders as a new added row', () => {

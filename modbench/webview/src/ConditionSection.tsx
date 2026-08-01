@@ -10,7 +10,7 @@ import { FormKeyCell } from './FormKeyCell';
 import { ScalarCell } from './ScalarCell';
 import { ConditionFunctionPicker } from './ConditionFunctionPicker';
 import { CONDITION_SUBFIELD_WIRE, conditionFieldPath, conditionParamPath } from './conditionPath';
-import { applyConditionListOp, currentConditionList } from './conditionOps';
+import { applyConditionListOp, currentConditionList, overlayPendingEdits } from './conditionOps';
 import type { RecordSessionClient } from './RecordSessionClient';
 
 // Compare view for a record's conditions (CTDA), mirroring VmadSection's grid shape. Each
@@ -268,21 +268,39 @@ interface SectionCtx {
   client?: RecordSessionClient;
   pendingChangeMap?: Record<string, PendingChange>;
   onRevert?: (changeId: string) => void;
+  // Issue #139/#203: right-click a pending value → Save Group / Revert Group / Reveal in Pending
+  // Changes Tree, all from the shared PendingCellMenu RecordPanel owns.
   onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
-  onRevealPendingChange?: (changeId: string) => void;
 }
 
-// Mirrors VmadSection's pending-column leaf rendering: the staged new value plus a revert control,
-// keyed by the same `${plugin}:${fieldPath}` convention RecordPanel's pendingChangeMap already uses
-// for every field type — a condition field needs no special-casing there.
+// Issue #203: a pending condition field is directly editable, on the same terms as a disk cell —
+// same field.renderEdit widget the disk cell uses (ScalarCell/FormKeyCell/etc, each already
+// click-to-activate on its own), fed a condition overlaid with every staged field for this
+// condition+plugin rather than just the one being rendered. Overlaying only the rendered field
+// would be wrong the moment two fields are staged together on one condition: Comparison's editor
+// reads UseGlobal to pick FormKeyCell vs ScalarCell, so a stale (non-overlaid) UseGlobal would
+// show/commit through the wrong widget even though UseGlobal's own pending change is sitting
+// right there in the same map (overlayPendingEdits, conditionOps.ts).
+//
+// Editable is unconditional (no immutableSet re-check): a 'pending' column only ever exists for a
+// plugin buildColumns (recordUtils.ts) already found non-immutable, so the plugin here is always
+// mutable.
 function pendingFieldCell(
   rowKey: string,
   i: number,
   plugin: string,
   wirePath: string | null,
+  field: FieldSpec,
+  condition: ConditionDiff,
+  groupFieldPath: string,
+  onOpen: (fk: string) => void,
   ctx: SectionCtx,
 ): React.ReactNode {
   const change = wirePath && ctx.pendingChangeMap ? ctx.pendingChangeMap[`${plugin}:${wirePath}`] : undefined;
+  const base = condition.perPlugin[plugin];
+  const editable = change && wirePath && field.renderEdit && base && ctx.onEdit && ctx.client;
+  const onEdit = ctx.onEdit;
+  const client = ctx.client;
   return (
     <td
       key={`${rowKey}:p${i}`}
@@ -295,13 +313,15 @@ function pendingFieldCell(
       onContextMenu={change && ctx.onPendingContextMenu
         ? e => { e.preventDefault(); ctx.onPendingContextMenu!(change.id, e.clientX, e.clientY); }
         : undefined}
-      onClick={change && ctx.onRevealPendingChange
-        ? e => { if (!e.ctrlKey && !e.metaKey) ctx.onRevealPendingChange!(change.id); }
-        : undefined}
     >
       {change && (
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span>{pendingValueText(change.newValue)}</span>
+          {editable
+            ? field.renderEdit(
+                overlayPendingEdits(base, condition.index, groupFieldPath, plugin, ctx.pendingChangeMap),
+                { client, onOpen, onCommit: v => onEdit(plugin, wirePath, v) },
+              )
+            : <span>{pendingValueText(change.newValue)}</span>}
           {ctx.onRevert && (
             <button
               onClick={e => { e.stopPropagation(); ctx.onRevert!(change.id); }}
@@ -421,7 +441,7 @@ function conditionRows(
       <tr key={fieldKey}>
         <td style={{ ...baseCell, paddingLeft: 28, opacity: 0.85 }}>{field.label}</td>
         {columns.map((col, i) => {
-          if (col.kind === 'pending') return pendingFieldCell(fieldKey, i, col.plugin, wirePath, ctx);
+          if (col.kind === 'pending') return pendingFieldCell(fieldKey, i, col.plugin, wirePath, field, condition, groupFieldPath, onOpen, ctx);
           const plugin = col.override.plugin;
           return (
             <td key={`${fieldKey}:d${i}`} style={{ ...baseCell, ...getCellStyle(states[plugin]) }}>
@@ -447,7 +467,6 @@ interface ConditionSectionProps {
   pendingChangeMap?: Record<string, PendingChange>;
   onRevert?: (changeId: string) => void;
   onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
-  onRevealPendingChange?: (changeId: string) => void;
 }
 
 // A group's field path is indexed (composes an enclosing array's index, e.g. "Effects[2].
@@ -459,7 +478,7 @@ function isNestedGroupPath(fieldPath: string): boolean {
 
 export function ConditionSection({
   conditions, columns, onOpen, immutableSet, onEdit, client,
-  pendingChangeMap, onRevert, onPendingContextMenu, onRevealPendingChange,
+  pendingChangeMap, onRevert, onPendingContextMenu,
 }: Readonly<ConditionSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Per-group collapse (#181): a nested group defaults to collapsed (only its header shows until
@@ -487,7 +506,7 @@ export function ConditionSection({
   const ctx: SectionCtx = {
     columns, onOpen, toggle,
     isEditable: plugin => !immutableSet.has(plugin),
-    onEdit, client, pendingChangeMap, onRevert, onPendingContextMenu, onRevealPendingChange,
+    onEdit, client, pendingChangeMap, onRevert, onPendingContextMenu,
   };
 
   // #154: a record can have more than one condition-carrying field (e.g. a Quest's

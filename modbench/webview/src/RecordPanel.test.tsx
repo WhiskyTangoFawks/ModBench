@@ -1376,17 +1376,16 @@ describe('RecordPanel — pending cells render type-aware (issue #137)', () => {
     expect(screen.queryByText('undefined')).not.toBeInTheDocument();
   });
 
-  // Guard, not a red-driver: routing the pending value through renderCell (which is capable of
-  // rendering editable controls) newly risks the pending cell becoming editable. Rule 6 / the
-  // issue require it stay read-only — clicking must never surface an input.
-  it('keeps the pending cell non-editable — clicking surfaces no input', async () => {
+  // Issue #203 (reverses #137's read-only guard): routing the pending value through renderCell
+  // with editable=true means every field type's own editor is now reachable from the pending
+  // cell too, flags included — clicking "Fire, Ice" opens the same multi-select checkboxes a
+  // disk cell's flag field would.
+  it('clicking a pending flags value opens its multi-select editor, the same as a disk cell', async () => {
     renderPanel(pendingFlagsResult);
     await waitFor(() => screen.getByText('Flags'));
 
     fireEvent.click(screen.getByText('Fire, Ice'));
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox')).toHaveLength(3); // Fire, Ice, Shock
   });
 });
 
@@ -1569,12 +1568,7 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
   });
 });
 
-// ── Pending column click-to-reveal (issue #140) ─────────────────────────────────
-//
-// Plain click on a pending value reveals that change in the Pending Changes tree — a message
-// to the extension host, which resolves the change id to a node and calls TreeView.reveal
-// (not this seam's concern; see PendingChangesTreeProvider.resolveChange). Ctrl+click must
-// keep meaning "follow the reference" uniformly, including on a pending FormKey value.
+// Fixtures shared by the two describe blocks below (right-click reveal, and direct editing).
 
 const pendingFkResult = {
   conflictAll: 'Override',
@@ -1599,35 +1593,12 @@ const soloChangeFk = [{
   resolutions: { '': { state: 'ResolvedValidType', recordType: 'race', editorId: 'SomeRace' } },
 }];
 
-describe('RecordPanel — Pending column click-to-reveal (issue #140)', () => {
+describe('RecordPanel — Pending column right-click reveal (issue #203, moved from plain-click)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     vi.mocked(vscode.postMessage).mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
-
-  it('plain click on a pending value posts revealPendingChange with the change id', async () => {
-    renderPanel(pendingNameResult, { changes: soloChange });
-    await waitFor(() => screen.getByText('Staged Name'));
-
-    fireEvent.click(screen.getByText('Staged Name'));
-
-    expect(vscode.postMessage).toHaveBeenCalledWith({
-      type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
-      changeId: 'chg-1',
-    });
-  });
-
-  it('plain click on a pending value does not begin an edit — pending cells stay non-editable', async () => {
-    const save = vi.fn().mockResolvedValue(resp(200, []));
-    renderPanel(pendingNameResult, { changes: soloChange, save });
-    await waitFor(() => screen.getByText('Staged Name'));
-
-    fireEvent.click(screen.getByText('Staged Name'));
-
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(save).not.toHaveBeenCalled();
-  });
 
   it('Ctrl+click on a pending FormKey value still posts openRecord, not a reveal', async () => {
     renderPanel(pendingFkResult, { changes: soloChangeFk });
@@ -1658,17 +1629,82 @@ describe('RecordPanel — Pending column click-to-reveal (issue #140)', () => {
     }));
   });
 
-  it('right-click still offers Save Group / Revert Group after the reveal wiring', async () => {
+  it('right-click offers Reveal in Pending Changes Tree alongside Save Group / Revert Group', async () => {
     renderPanel(pendingNameResult, { changes: soloChange });
     await waitFor(() => screen.getByText('Staged Name'));
 
     fireEvent.contextMenu(screen.getByText('Staged Name'));
 
+    expect(screen.getByRole('menuitem', { name: 'Reveal in Pending Changes Tree' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Save Group' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Revert Group' })).toBeInTheDocument();
     expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
       type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
     }));
+  });
+
+  // Issue #203: reveal moves from plain-click to the pending cell's right-click menu.
+  it('right-clicking a pending value then choosing Reveal posts revealPendingChange with the change id', async () => {
+    renderPanel(pendingNameResult, { changes: soloChange });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reveal in Pending Changes Tree' }));
+
+    expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
+      changeId: 'chg-1',
+    });
+    expect(screen.queryByRole('menuitem', { name: 'Reveal in Pending Changes Tree' })).not.toBeInTheDocument();
+  });
+});
+
+// ── Pending column direct editing (issue #203, reverses #140) ───────────────────
+//
+// A pending value's cell is now directly editable, on the same terms as a disk cell — plain
+// click no longer reveals the change in the Pending Changes tree; that gesture moved to the
+// right-click menu tested above.
+
+describe('RecordPanel — Pending column direct editing (issue #203)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.mocked(vscode.postMessage).mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('plain click on a pending value opens an editable input, on the same terms as a disk cell', async () => {
+    renderPanel(pendingNameResult, { changes: soloChange });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.click(screen.getByText('Staged Name'));
+
+    expect(screen.getByDisplayValue('Staged Name')).toBeInTheDocument();
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
+    }));
+  });
+
+  // Issue #200/#203: a pending-cell edit reaches the SAME handleEdit→stageChange path a disk-cell
+  // edit does — no new/separate logging code — so it logs DEBUG identically (pinned explicitly,
+  // matching how #200 already pinned this for the drag-copy path sharing the same call site).
+  it('committing an edit on a pending value stages it and logs DEBUG the same as a disk-cell edit', async () => {
+    const save = vi.fn().mockResolvedValue(resp(200, []));
+    renderPanel(pendingNameResult, { changes: soloChange, save });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    fireEvent.click(screen.getByText('Staged Name'));
+    const input = screen.getByDisplayValue('Staged Name');
+    fireEvent.change(input, { target: { value: 'Re-edited Name' } });
+    fireEvent.blur(input);
+
+    await waitFor(() => expect(save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp', { Name: 'Re-edited Name' }, undefined,
+    ));
+    expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'debug',
+      message: expect.stringContaining('MyMod.esp'),
+    });
   });
 });
 
@@ -1913,6 +1949,36 @@ describe('RecordPanel — action logging (issue #200)', () => {
     expect(message).toContain('000001:Fallout4.esm');
   });
 
+  // Issue #203: a pending-cell edit (VMAD included) reaches the SAME handleEdit→stageChange path
+  // as the disk-cell edit above — no new/separate logging code — pinned explicitly rather than
+  // assumed, the same way #200 pins the disk-cell/drag-copy cases sharing that call site.
+  it('editing a pending VMAD scalar value logs a DEBUG line naming the plugin, VMAD path, and record', async () => {
+    const vmadPendingResult = {
+      ...vmadEditableCompareResult,
+      overrides: [{ ...vmadEditableCompareResult.overrides[0], pendingFields: { [String.raw`VMAD\MyScript\Enabled`]: true } }],
+    };
+    const pendingVmadChange = [{
+      id: 'chg-vmad', plugin: 'MyMod.esp', fieldPath: String.raw`VMAD\MyScript\Enabled`,
+      recordType: 'npc_', formKey: '000001:Fallout4.esm', newValue: true,
+    }];
+    renderPanel(vmadPendingResult, { plugins: mutablePlugin, changes: pendingVmadChange });
+    await waitFor(() => screen.getByText('MyScript'));
+    fireEvent.click(screen.getByText('MyScript').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('true'));
+    fireEvent.click(screen.getByText('true'));
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'debug',
+      message: expect.stringContaining('MyMod.esp'),
+    }));
+    const [{ message }] = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
+      .map(([m]: [{ message?: string }]) => m).filter((m: { message?: string }) => m.message);
+    expect(message).toContain(String.raw`VMAD\MyScript\Enabled`);
+    expect(message).toContain('000001:Fallout4.esm');
+  });
+
   // Issue #200: same rationale as the VMAD case above — Condition leaf edits share the exact
   // same stageChange call, tested explicitly rather than assumed.
   it('a Condition leaf edit logs a DEBUG line naming the plugin, condition path, and record', async () => {
@@ -1931,6 +1997,38 @@ describe('RecordPanel — action logging (issue #200)', () => {
     const [{ message }] = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
       .map(([m]: [{ message?: string }]) => m).filter((m: { message?: string }) => m.message);
     expect(message).toContain(String.raw`CTDA\Conditions\0\UseGlobal`);
+    expect(message).toContain('000001:Fallout4.esm');
+  });
+
+  // Issue #203: same rationale as the pending VMAD case above — a pending Condition field edit
+  // reaches the SAME handleEdit→stageChange path as the disk-cell edit above, no new/separate
+  // logging code — pinned explicitly rather than assumed.
+  it('editing a pending Condition field logs a DEBUG line naming the plugin, condition path, and record', async () => {
+    const conditionPendingResult = {
+      ...conditionEditableCompareResult,
+      overrides: [{ ...conditionEditableCompareResult.overrides[0], pendingFields: { [String.raw`CTDA\Conditions\0\Operator`]: 'GreaterThan' } }],
+    };
+    const pendingConditionChange = [{
+      id: 'chg-cond', plugin: 'MyMod.esp', fieldPath: String.raw`CTDA\Conditions\0\Operator`,
+      recordType: 'cobj', formKey: '000001:Fallout4.esm', newValue: 'GreaterThan',
+    }];
+    renderPanel(conditionPendingResult, { plugins: mutablePlugin, changes: pendingConditionChange });
+    await waitFor(() => screen.getByText('#1'));
+    fireEvent.click(screen.getByText('#1').closest('tr')!.querySelector('button')!);
+    const operatorRow = screen.getByText('Operator').closest('tr')!;
+    fireEvent.click(within(operatorRow).getByText('GreaterThan'));
+    const select = within(operatorRow).getByRole('combobox');
+    fireEvent.change(select, { target: { value: 'LessThan' } });
+    fireEvent.blur(select);
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'debug',
+      message: expect.stringContaining('MyMod.esp'),
+    }));
+    const [{ message }] = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
+      .map(([m]: [{ message?: string }]) => m).filter((m: { message?: string }) => m.message);
+    expect(message).toContain(String.raw`CTDA\Conditions\0\Operator`);
     expect(message).toContain('000001:Fallout4.esm');
   });
 

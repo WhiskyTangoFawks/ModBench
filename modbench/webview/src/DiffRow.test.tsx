@@ -55,7 +55,6 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     onEdit: vi.fn(),
     onRevert: vi.fn(),
     onPendingContextMenu: vi.fn(),
-    onRevealPendingChange: vi.fn(),
     onCellDragStart: vi.fn(),
     onCellDrop: vi.fn(),
     context: { kind: 'top-level' },
@@ -199,27 +198,42 @@ describe('DiffRow — pending companion column', () => {
     expect(screen.getByTitle('Revert group')).toBeInTheDocument();
   });
 
-  it('clicking the revert button calls onRevert with the change id and does not bubble to reveal', () => {
+  it('clicking the revert button calls onRevert with the change id and does not open the editor', () => {
     const onRevert = vi.fn();
-    const onRevealPendingChange = vi.fn();
-    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onRevert, onRevealPendingChange }))}</tbody></table>);
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onRevert }))}</tbody></table>);
     fireEvent.click(screen.getByTitle('Revert group'));
     expect(onRevert).toHaveBeenCalledWith('c1');
-    expect(onRevealPendingChange).not.toHaveBeenCalled();
+    expect(screen.queryByDisplayValue('pending-value')).not.toBeInTheDocument();
   });
 
-  it('plain click on the pending cell (not the revert button) reveals the change', () => {
-    const onRevealPendingChange = vi.fn();
-    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onRevealPendingChange }))}</tbody></table>);
+  // Issue #203: plain click on a pending value now edits it directly, on the same terms as a
+  // disk cell — reveal moved to the right-click menu (see PendingCellMenu). This replaces the
+  // #140 "plain click reveals" test above, which pinned exactly the behavior #203 reverses.
+  it('plain click on the pending cell activates an editable input, not a reveal', () => {
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps())}</tbody></table>);
     fireEvent.click(screen.getByText('pending-value'));
-    expect(onRevealPendingChange).toHaveBeenCalledWith('c1');
+    expect(screen.getByDisplayValue('pending-value')).toBeInTheDocument();
   });
 
-  it('Ctrl+click on the pending cell does not reveal', () => {
-    const onRevealPendingChange = vi.fn();
-    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onRevealPendingChange }))}</tbody></table>);
-    fireEvent.click(screen.getByText('pending-value'), { ctrlKey: true });
-    expect(onRevealPendingChange).not.toHaveBeenCalled();
+  it('committing an edit on the pending cell calls onEdit with plugin/fieldName/value, the same shape a disk-cell edit uses', () => {
+    const onEdit = vi.fn();
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onEdit }))}</tbody></table>);
+    fireEvent.click(screen.getByText('pending-value'));
+    const input = screen.getByDisplayValue('pending-value');
+    fireEvent.change(input, { target: { value: 'edited-again' } });
+    fireEvent.blur(input);
+    expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Name', 'edited-again');
+  });
+
+  // Issue #203 AC: "the disk cell for that same field remains editable too (no lock)" — editing
+  // the pending cell must not disable the disk cell for the same row/plugin.
+  it('the disk cell for the same field stays editable while the pending cell is also editable', () => {
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps())}</tbody></table>);
+    // Both plugin columns render 'disk-value' (see override() default fixture); MyMod.esp's disk
+    // cell is the second occurrence, same as the "editability follows immutableSet" tests above.
+    const diskCells = screen.getAllByText('disk-value');
+    fireEvent.click(diskCells[1]);
+    expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
   });
 
   it('right-click on the pending cell calls onPendingContextMenu with the change id and coordinates', () => {
