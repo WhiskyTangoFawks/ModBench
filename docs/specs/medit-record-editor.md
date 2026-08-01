@@ -112,13 +112,25 @@ Condition sections alike ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-
   row exactly as it applies to a scalar leaf's value.
 - **Right-click** — the only place a named, discrete action lives: **Copy** / **Paste** on a
   field, **Reveal in Pending Changes Tree** / **Save Group** / **Revert Group** on a pending cell,
-  **Copy as Override** / **Copy as New** / **Remove** on a column header. An action reachable
-  through right-click is never also reachable a second way (no standalone revert icon once Revert
-  Group exists). The pending-cell menu is VS Code's own native context menu
-  (`contributes.menus["webview/context"]`, gated on a `data-vscode-context` attribute the cell
-  carries — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s native-first
-  precedent applied inside the webview, #208) rather than a rendered overlay; Copy/Paste on a
-  field and the column-header menu are still hand-drawn pending their own migration (#209).
+  **Copy All to Pending** / **Copy as New Record** / **Copy as Override…** / **Remove** / **Add
+  Master…** on a column header (the last only on the header record's own column, and only when
+  mutable — ADR-0033: no standalone control once an action is right-click-reachable, same rule
+  #207 applied to the inline revert button). An action reachable through right-click is never also
+  reachable a second way (no standalone revert icon once Revert Group exists; no standalone Add
+  Master… button once its menu entry exists). Both the pending-cell menu (#208) and the
+  column-header menu (#209) are VS Code's own native context menu
+  (`contributes.menus["webview/context"]`, gated on a `data-vscode-context` attribute the cell/
+  header carries — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s
+  native-first precedent applied inside the webview) rather than a rendered overlay; only Copy/
+  Paste on a field is still hand-drawn, pending its own migration. Column-header actions that need
+  a target plugin (all but Remove) open a `showQuickPick` listing the mutable plugins minus the
+  right-clicked column, with a "New Plugin…" entry — the same QuickPick `modbench.copyAsOverrideInto`
+  already opens from the plugins tree, extended to accept the column header's record identity
+  too, rather than a second picker implementation; filterable and keyboard-first, but no longer
+  positioned at the click like the retired in-webview list. Add Master…'s own QuickPick lists
+  every loaded plugin minus the header record's own plugin minus whatever's already a master —
+  deliberately not filtered to mutable plugins (a master is very often an immutable base-game/DLC
+  esm) — and has no "New Plugin…" entry.
 - **Ctrl+click** — acknowledged for now as a fourth, navigation-only gesture (follows a FormKey
   reference to its record). Whether it survives once a right-click "Go to Record" exists is still
   undecided — see Further Notes.
@@ -140,10 +152,14 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
   plugin hidden by default); one **column per plugin** that contains the record's FormKey, in
   load order (left = master, right = winning override), plus a **Pending** column for any plugin
   with staged changes. Column headers show the plugin name as a chip (lock icon on immutable);
-  left-click collapses/expands a column (state persisted in session); right-click offers **Copy
-  as Override** (copies the right-clicked plugin's own version of the record, not necessarily the
-  overall winner, into a picked target plugin), **Copy as New** (same values, a fresh FormKey in
-  the target), and **Remove** (disabled for immutable). The grid's scroll region is bound to the
+  left-click collapses/expands a column (state persisted in session); right-click opens VS Code's
+  own native menu offering **Copy All to Pending** (every field from the right-clicked column into
+  a picked target plugin) / **Copy as New Record** (same values, a fresh FormKey in the target) /
+  **Copy as Override…** (copies the *currently-loaded* record — not necessarily the right-clicked
+  column's own version — into a picked target plugin; the same `modbench.copyAsOverrideInto`
+  command the plugins tree uses) / **Remove**, absent rather than merely disabled for an immutable
+  column / **Add Master…** (header record's own column only, mutable only). The grid's scroll
+  region is bound to the
   panel's viewport, not to its own content height, so a horizontal scrollbar (for wide grids with
   many plugin columns) stays reachable at the bottom of the visible viewport regardless of
   vertical scroll position, instead of only appearing at the bottom of a possibly very tall table

@@ -205,6 +205,26 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.columnHeader.copyAllToPending",
+        "title": "Copy All to Pending",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.columnHeader.copyAsNewRecord",
+        "title": "Copy as New Record",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.columnHeader.removeOverride",
+        "title": "Remove",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.columnHeader.addMaster",
+        "title": "Add Master…",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.modList.filter",
         "title": "Modbench: Filter Mods…",
         "icon": "$(search)"
@@ -579,6 +599,31 @@
           "command": "modbench.pendingCell.revertGroup",
           "when": "webviewId == 'modbench' && webviewSection == 'pendingCell'",
           "group": "modbench@3"
+        },
+        {
+          "command": "modbench.columnHeader.copyAllToPending",
+          "when": "webviewId == 'modbench' && webviewSection == 'columnHeader'",
+          "group": "modbench@4"
+        },
+        {
+          "command": "modbench.columnHeader.copyAsNewRecord",
+          "when": "webviewId == 'modbench' && webviewSection == 'columnHeader'",
+          "group": "modbench@5"
+        },
+        {
+          "command": "modbench.copyAsOverrideInto",
+          "when": "webviewId == 'modbench' && webviewSection == 'columnHeader'",
+          "group": "modbench@6"
+        },
+        {
+          "command": "modbench.columnHeader.addMaster",
+          "when": "webviewId == 'modbench' && webviewSection == 'columnHeader' && isHeaderRecord && !immutable",
+          "group": "modbench@7"
+        },
+        {
+          "command": "modbench.columnHeader.removeOverride",
+          "when": "webviewId == 'modbench' && webviewSection == 'columnHeader' && !immutable",
+          "group": "modbench@8"
         }
       ]
     },

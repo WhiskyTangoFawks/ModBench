@@ -1,19 +1,17 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { PluginHeader } from './PluginHeader';
-import { ColumnHeaderMenu } from './ColumnHeaderMenu';
 import { RevertGroupConfirm } from './RevertGroupConfirm';
-import { PluginTargetPicker } from './PluginTargetPicker';
 import { DiffRow } from './DiffRow';
 import { partialSaveMessage, staleIndexMessage } from '../../src/medit/saveClassification';
 import type { ReindexFailure, SaveResult } from '../../src/medit/saveClassification';
-import { buildColumns, defaultElementValue, parseElementIndex, updateArrayAtKey } from './recordUtils';
+import { buildColumns, columnHeaderContext, currentMasters, defaultElementValue, parseElementIndex, updateArrayAtKey } from './recordUtils';
 import { mono, fg, baseCell, headerCell, getConflictBg } from './gridStyles';
 import { VmadSection } from './VmadSection';
 import { ConditionSection } from './ConditionSection';
 import type { CompareOverride, CompareResult, ConflictThis, FieldMetadata, PatchRecordValidationError, PendingChange } from './types';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type LogLevel } from './messages';
-import type { PluginInfo, RecordSessionClient } from './RecordSessionClient';
+import type { RecordSessionClient } from './RecordSessionClient';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey: string;
@@ -50,27 +48,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   const [formKey, setFormKey] = useState<string>(mEditWindow.mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
   const [allChanges, setAllChanges] = useState<PendingChange[]>([]);
-  const [allPlugins, setAllPlugins] = useState<PluginInfo[]>([]);
   const [immutableSet, setImmutableSet] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [masterPickerPlugin, setMasterPickerPlugin] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
   // Issue #3: collapsed plugin columns, keyed by plugin name. Deliberately NOT reset by the
-  // LOAD_RECORD handler below (unlike masterPickerPlugin) — collapse state
-  // is meant to persist across record-to-record navigation within the same panel session.
+  // LOAD_RECORD handler below — collapse state is meant to persist across record-to-record
+  // navigation within the same panel session.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
   // Issue #3: transient drag payload — doesn't need to trigger a re-render, so a ref rather
   // than state. Cleared on drop (successful or rejected). Issue #206: carries sourcePlugin too —
   // without it, handleCellDrop has no way to tell a drop back onto the same cell it came from
   // apart from a real cross-column copy.
   const dragPayloadRef = useRef<{ fieldName: string; value: unknown; sourcePlugin: string } | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ plugin: string; x: number; y: number } | null>(null);
-  // Issue #3 (+#176: also Copy as Override…): target-plugin picker shared by "Copy All to
-  // Pending", "Copy as New Record", and "Copy as Override…" —
-  // same UI (position:fixed at the context menu's click coordinates, mutable-plugins-minus-source
-  // target list), branching on `mode` only in onSelect.
-  const [targetPickerSource, setTargetPickerSource] = useState<{ plugin: string; x: number; y: number; mode: 'copyAll' | 'newRecord' | 'copyOverride' } | null>(null);
   // Issue #139: the multi-member revert confirmation Revert Group raises before dropping a
   // whole component (#208: the menu that opens it is now native — see the LOAD_RECORD-sibling
   // message branches below for Save Group / Revert Group's own dispatch).
@@ -84,7 +74,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       if (!loaded.ok) throw new Error(loaded.error);
       setResult(loaded.result);
       if (loaded.changes) setAllChanges(loaded.changes);
-      if (loaded.plugins) setAllPlugins(loaded.plugins);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -109,14 +98,50 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     revertGroup: (changeId: string) => void;
   }>({ allChanges: [], saveGroup: () => {}, revertGroup: () => {} });
 
+  // Issue #209: same staleness problem as pendingCellActionsRef above, for the column-header
+  // menu's five native commands (none of which carry a changeId — self-filtering is on `formKey`
+  // instead, since these act on whichever record this panel currently has loaded, not a specific
+  // pending change). copyAllToPending/copyAsNewRecord/copyTo/removeOverride are called with the
+  // signatures their own handlers already take; addMaster is synthesized here since the inline
+  // master picker that used to own it (PluginHeader) is gone — see currentMasters below.
+  const columnHeaderActionsRef = useRef<{
+    formKey: string;
+    copyAllToPending: (sourcePlugin: string, targetPlugin: string) => void;
+    copyAsNewRecord: (sourcePlugin: string, targetPlugin: string) => void;
+    copyAsOverride: (targetPlugin: string) => void;
+    removeOverride: (plugin: string) => void;
+    addMaster: (plugin: string, newMaster: string) => void;
+  }>({
+    formKey: '', copyAllToPending: () => {}, copyAsNewRecord: () => {}, copyAsOverride: () => {},
+    removeOverride: () => {}, addMaster: () => {},
+  });
+
   // When the handler drives a new-formKey navigation it calls refresh directly,
   // so the [formKey] effect must skip to avoid a double request.
   const prevFormKeyRef = useRef(formKey);
   const skipNextRefreshEffect = useRef(false);
 
   // Listen for loadRecord messages from extension (panel reuse), plus #208's Save Group/Revert
-  // Group broadcasts from the native pending-cell menu commands.
+  // Group and #209's column-header broadcasts from the native menu commands.
   useEffect(() => {
+    // Issue #209: the column-header menu's five broadcasts, factored out of `handler` below so
+    // its own branching doesn't balloon — each one only fires when this panel is the one showing
+    // the mutated record (formKey self-filter, no changeId here).
+    const handleColumnHeaderMessage = (msg: ExtensionToWebview) => {
+      const actions = columnHeaderActionsRef.current;
+      if (!('formKey' in msg) || msg.formKey !== actions.formKey) return;
+      if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_ALL_TO_PENDING) {
+        actions.copyAllToPending(msg.sourcePlugin, msg.targetPlugin);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD) {
+        actions.copyAsNewRecord(msg.sourcePlugin, msg.targetPlugin);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE) {
+        actions.copyAsOverride(msg.targetPlugin);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE) {
+        actions.removeOverride(msg.plugin);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER) {
+        actions.addMaster(msg.plugin, msg.newMaster);
+      }
+    };
     const handler = (event: MessageEvent) => {
       const msg = event.data as ExtensionToWebview;
       if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) {
@@ -129,7 +154,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         setAllChanges([]);
         setError(null);
         setActionError(null);
-        setMasterPickerPlugin(null);
         void refreshRef.current(msg.formKey);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP) {
         const { allChanges: changes, saveGroup } = pendingCellActionsRef.current;
@@ -137,6 +161,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       } else if (msg.type === EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP) {
         const { allChanges: changes, revertGroup } = pendingCellActionsRef.current;
         if (changes.some(c => c.id === msg.changeId)) revertGroup(msg.changeId);
+      } else {
+        handleColumnHeaderMessage(msg);
       }
     };
     window.addEventListener('message', handler);
@@ -405,6 +431,32 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     }
   }
 
+  // Issue #209: "Add Master…" moved from PluginHeader's own inline dropdown (deleted) to the
+  // column-header's native menu — the append-to-masters logic (previously the JSX-inline
+  // `onAddMaster` lambda) lives here now instead, using the live (pending-aware) masters list at
+  // broadcast-receipt time rather than whatever the extension host's QuickPick candidate list
+  // was built from (it can only have seen a snapshot carried in data-vscode-context).
+  function handleAddMaster(plugin: string, newMaster: string) {
+    const override = overrideMap[plugin];
+    if (!override) return;
+    void handleEdit(plugin, 'masters', [...currentMasters(override), newMaster]);
+  }
+
+  // Issue #209: keeps columnHeaderActionsRef current every render, mirroring
+  // pendingCellActionsRef below — the mount-only message listener's column-header branches
+  // always need this render's formKey/overrideMap-derived handlers, not whatever closed over
+  // pendingCellActionsRef when the listener was first attached.
+  useLayoutEffect(() => {
+    columnHeaderActionsRef.current = {
+      formKey,
+      copyAllToPending: (sourcePlugin, targetPlugin) => { void handleCopyAllToPending(sourcePlugin, targetPlugin); },
+      copyAsNewRecord: (sourcePlugin, targetPlugin) => { void handleCopyAsNewRecord(sourcePlugin, targetPlugin); },
+      copyAsOverride: targetPlugin => { void handleCopyTo(targetPlugin); },
+      removeOverride: plugin => { void handleRemoveOverride(plugin); },
+      addMaster: handleAddMaster,
+    };
+  });
+
   const columns = useMemo(
     () => result ? buildColumns(result.overrides, immutableSet) : [],
     [result, immutableSet],
@@ -473,26 +525,24 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
               {columns.map(col => {
                 if (col.kind === 'disk') {
                   const isCollapsed = collapsedColumns.has(col.override.plugin);
+                  const isImmutable = immutableSet.has(col.override.plugin);
                   return (
                     <th
                       key={`disk:${col.override.plugin}`}
                       style={{ ...headerCell, textAlign: 'left', minWidth: isCollapsed ? '48px' : '200px', backgroundColor: getHeaderBg(col.override.conflictThis) }}
-                      onContextMenu={e => {
-                        e.preventDefault();
-                        setContextMenu({ plugin: col.override.plugin, x: e.clientX, y: e.clientY });
-                      }}
+                      // Issue #209: the column-header menu (Copy All to Pending / Copy as New
+                      // Record / Copy as Override… / Remove / Add Master) is VS Code's own
+                      // `webview/context` menu now — no `onContextMenu`/`preventDefault()` here
+                      // any more, same migration switch as #208's pending cells.
+                      data-vscode-context={columnHeaderContext(
+                        formKey, col.override.plugin, isImmutable, isHeaderRecord, currentMasters(col.override),
+                      )}
                     >
                       <PluginHeader
                         override={col.override}
-                        isImmutable={immutableSet.has(col.override.plugin)}
-                        isHeaderRecord={isHeaderRecord}
-                        showMasterPicker={masterPickerPlugin === col.override.plugin}
-                        loadedPlugins={allPlugins}
+                        isImmutable={isImmutable}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleColumnCollapse(col.override.plugin)}
-                        onOpenMasterPicker={() => setMasterPickerPlugin(col.override.plugin)}
-                        onCloseMasterPicker={() => setMasterPickerPlugin(null)}
-                        onAddMaster={newMasters => { void handleEdit(col.override.plugin, 'masters', newMasters); }}
                       />
                     </th>
                   );
@@ -684,36 +734,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
           </tbody>
         </table>
       </div>
-      {contextMenu && (
-        <ColumnHeaderMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          disabledRemove={immutableSet.has(contextMenu.plugin)}
-          onClose={() => setContextMenu(null)}
-          onCopyAllToPending={() => { setTargetPickerSource({ ...contextMenu, mode: 'copyAll' }); setContextMenu(null); }}
-          onCopyAsNewRecord={() => { setTargetPickerSource({ ...contextMenu, mode: 'newRecord' }); setContextMenu(null); }}
-          onCopyAsOverride={() => { setTargetPickerSource({ ...contextMenu, mode: 'copyOverride' }); setContextMenu(null); }}
-          onRemoveOverride={() => { const plugin = contextMenu.plugin; setContextMenu(null); void handleRemoveOverride(plugin); }}
-        />
-      )}
-      {targetPickerSource && (
-        <PluginTargetPicker
-          x={targetPickerSource.x}
-          y={targetPickerSource.y}
-          targets={allPlugins.filter(p => !p.isImmutable && p.name !== targetPickerSource.plugin)}
-          onClose={() => setTargetPickerSource(null)}
-          onSelect={target => {
-            const { plugin: source, mode } = targetPickerSource;
-            setTargetPickerSource(null);
-            if (mode === 'copyAll') void handleCopyAllToPending(source, target);
-            // Issue #176: Copy as Override… never reads the right-clicked column's plugin —
-            // handleCopyTo always copies the currently-loaded record (formKey) to the chosen
-            // target, same as the button it replaces.
-            else if (mode === 'copyOverride') void handleCopyTo(target);
-            else void handleCopyAsNewRecord(source, target);
-          }}
-        />
-      )}
       {revertConfirm && (
         <RevertGroupConfirm
           members={revertConfirm.members}

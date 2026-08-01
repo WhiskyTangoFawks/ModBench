@@ -145,6 +145,16 @@ describe('modbench command registration', () => {
     'modbench.pendingCell.reveal',
     'modbench.pendingCell.saveGroup',
     'modbench.pendingCell.revertGroup',
+    // #209: the column-header's native `webview/context` menu commands — same shape as #208's
+    // pendingCell.* above (package.json's contributes.menus["webview/context"], gated on
+    // webviewId/webviewSection/immutable/isHeaderRecord, not testable from this harness; and
+    // RecordPanel's data-vscode-context wiring, unit-tested). modbench.copyAsOverrideInto
+    // (already listed above) is reused for Copy as Override… from this same menu — no separate
+    // command id for it.
+    'modbench.columnHeader.copyAllToPending',
+    'modbench.columnHeader.copyAsNewRecord',
+    'modbench.columnHeader.removeOverride',
+    'modbench.columnHeader.addMaster',
     'modbench.createPlaced',
     'modbench.modList.filter',
     'modbench.modList.switchProfile',

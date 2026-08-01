@@ -54,8 +54,10 @@ describe('RecordSessionClient.load', () => {
     if (!r.ok) return;
     expect(r.result.conflictAll).toBe('OnlyOne');
     expect(r.changes).toEqual([{ id: 'c1' }]);
-    expect(r.plugins).toEqual([{ name: 'A.esp', isImmutable: true, loadOrderIndex: 0 }]);
-    // Immutable-set resolution lives behind the client (issue #122 AC).
+    // Immutable-set resolution lives behind the client (issue #122 AC). #209: the raw plugin
+    // list itself is no longer exposed on LoadResult — it fetches /plugins internally only to
+    // derive this set, since its only consumer (the deleted PluginTargetPicker/Add Master
+    // dropdown) is gone.
     expect(r.immutableSet).toEqual(new Set(['A.esp']));
   });
 
@@ -79,7 +81,6 @@ describe('RecordSessionClient.load', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.changes).toBeNull();
-    expect(r.plugins).toBeNull();
     expect(r.immutableSet).toBeNull();
   });
 });

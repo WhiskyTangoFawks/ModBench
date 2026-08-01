@@ -1,5 +1,5 @@
-import type { CompareOverride, FieldMetadata } from './types';
-import type { PendingCellContext } from './messages';
+import type { CompareOverride, FieldMetadata, RecordDetail } from './types';
+import type { ColumnHeaderContext, PendingCellContext } from './messages';
 
 export function toStr(v: unknown): string {
   if (v == null) return '';
@@ -21,6 +21,34 @@ export function pendingCellContext(changeId: string): string {
   return JSON.stringify({
     webviewSection: 'pendingCell', changeId, preventDefaultContextMenuItems: true,
   } satisfies PendingCellContext);
+}
+
+// Issue #86: the header record's "masters" field, pending-aware (a still-unsaved Add Master
+// already counts as current — matches the backend's CheckMasterEdit baseline convention).
+// Moved here from PluginHeader.tsx in #209: RecordPanel now needs it too, to build the column
+// header's data-vscode-context (below) and to compute the appended list when the native Add
+// Master command's broadcast comes back in.
+export function currentMasters(o: RecordDetail): string[] {
+  const disk = o.fields.find(f => f.metadata.name === 'masters')?.value;
+  const pending = o.pendingFields?.masters;
+  const value = Array.isArray(pending) ? pending : disk;
+  return Array.isArray(value) ? value as string[] : [];
+}
+
+// Issue #209: the column-header right-click menu (Copy All to Pending / Copy as New Record /
+// Copy as Override… / Remove / Add Master) is native now too — same mechanism as
+// pendingCellContext above, carried by the header `<th>` instead of a pending cell. `plugin` is
+// this column's own plugin (the copy actions' exclude-from-target-picker source; Remove's
+// direct target); `masters` backs the Add Master command's candidate list without a round trip
+// back into the webview to ask (see ColumnHeaderContext's own doc comment for why that list is
+// NOT filtered to mutable plugins the way the copy actions' picker is).
+export function columnHeaderContext(
+  formKey: string, plugin: string, immutable: boolean, isHeaderRecord: boolean, masters: string[],
+): string {
+  return JSON.stringify({
+    webviewSection: 'columnHeader', formKey, plugin, immutable, isHeaderRecord, masters,
+    preventDefaultContextMenuItems: true,
+  } satisfies ColumnHeaderContext);
 }
 
 export type Column =
