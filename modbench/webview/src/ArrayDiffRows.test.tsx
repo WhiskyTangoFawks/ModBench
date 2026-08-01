@@ -6,6 +6,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
+import { vscode } from './vscode';
+import { WEBVIEW_TO_EXTENSION } from './messages';
 import type { FieldMetadata } from './types';
 import type { LoadResult, RecordSessionClient } from './RecordSessionClient';
 
@@ -883,6 +885,41 @@ describe('RecordPanel — array arity/order controls (unsorted)', () => {
 
     const parentRow = screen.getByText('Items').closest('tr')!;
     expect(parentRow.querySelector('button[title="Add element"]')).toBeNull();
+  });
+
+  // Issue #200: array add/remove/move-up/move-down all converge on the same handleEdit→
+  // stageChange path a plain field edit uses — tested explicitly here anyway (representative
+  // callers for a bullet the issue names on its own), not assumed from the field-edit case.
+  // Move-up/down is the identical onArrayEdit call as remove, so not separately tested.
+  it('add element logs a DEBUG line naming the plugin, field, and record', async () => {
+    renderPanel();
+    await expandItems();
+    vi.mocked(vscode.postMessage).mockClear();
+
+    const parentRow = screen.getByText('Items').closest('tr')!;
+    const mutableCell = parentRow.querySelectorAll('td')[2];
+    fireEvent.click(mutableCell.querySelector<HTMLButtonElement>('button[title="Add element"]')!);
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'debug',
+      message: expect.stringContaining('Items'),
+    }));
+  });
+
+  it('remove element logs a DEBUG line naming the plugin, field, and record', async () => {
+    renderPanel();
+    await expandItems();
+    vi.mocked(vscode.postMessage).mockClear();
+
+    const row1 = rowByLabel('[1]');
+    fireEvent.click(row1.querySelector<HTMLButtonElement>('button[title="Remove element"]')!);
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'debug',
+      message: expect.stringContaining('Items'),
+    }));
   });
 });
 

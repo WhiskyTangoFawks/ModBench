@@ -14,7 +14,7 @@ import { ApiPluginRepository } from './medit/PluginRepository';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './medit/messages';
-import { routeRecordPanelMessage, type RevealDeps } from './medit/recordPanelMessageRouter';
+import { routeRecordPanelMessage, type RevealDeps, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
 import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
@@ -217,16 +217,17 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     provider: changeGroupTreeProvider, view: changeGroupTreeView, log,
     reporter: makeReporter(outputChannel, 'revealPendingChange'),
   };
+  const routerDeps: RouteRecordPanelMessageDeps = { reveal, channel: outputChannel };
   return [
     vscode.commands.registerCommand('modbench.refreshTree', () => treeProvider.refresh()),
     vscode.commands.registerCommand('modbench.closeMedit', () => exitToLoadout()),
     vscode.commands.registerCommand('modbench.reloadSession', () => treeProvider.refresh()),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
-        vscode.ViewColumn.One, reveal);
+        vscode.ViewColumn.One, routerDeps);
     }),
     vscode.commands.registerCommand('modbench.openCompare', () => {
-      openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One, reveal);
+      openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One, routerDeps);
     }),
     vscode.commands.registerCommand('modbench.loadMore', (node: LoadMoreNode) => treeProvider.loadMore(node)),
     vscode.commands.registerCommand('modbench.newPlugin', async () => {
@@ -274,7 +275,7 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
         context, openPanels,
         node.record.formKey, node.record.editorId, port,
         (fk) => { void vscode.commands.executeCommand('modbench.openEditor', { formKey: fk, label: fk }); },
-        (fk) => { openRecordPanel(context, openPanels, fk, fk, port, vscode.ViewColumn.Beside, reveal); },
+        (fk) => { openRecordPanel(context, openPanels, fk, fk, port, vscode.ViewColumn.Beside, routerDeps); },
       );
     }),
   ];
@@ -1138,7 +1139,9 @@ function openRecordPanel(
   formKey: string | undefined,
   port: number,
   viewColumn: vscode.ViewColumn = vscode.ViewColumn.One,
-  reveal?: RevealDeps,
+  // #200: bundled as the router's own dep shape (not two trailing params) — kept the parameter
+  // count under the lint budget and there's no reason to unpack it only to repack it below.
+  routerDeps: RouteRecordPanelMessageDeps,
 ) {
   if (viewColumn !== vscode.ViewColumn.Beside) {
     const existing = openPanels.get(RECORD_PANEL_KEY);
@@ -1162,7 +1165,7 @@ function openRecordPanel(
     panel.onDidDispose(() => openPanels.delete(RECORD_PANEL_KEY));
   }
 
-  panel.webview.onDidReceiveMessage((msg: unknown) => { void routeRecordPanelMessage(msg, { reveal }); });
+  panel.webview.onDidReceiveMessage((msg: unknown) => { void routeRecordPanelMessage(msg, routerDeps); });
 
   const scriptUri = panel.webview.asWebviewUri(
     vscode.Uri.file(path.join(context.extensionPath, 'out', 'webview', 'assets', 'main.js'))
