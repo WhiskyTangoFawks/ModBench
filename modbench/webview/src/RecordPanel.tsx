@@ -62,8 +62,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // is meant to persist across record-to-record navigation within the same panel session.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
   // Issue #3: transient drag payload — doesn't need to trigger a re-render, so a ref rather
-  // than state. Cleared on drop (successful or rejected).
-  const dragPayloadRef = useRef<{ fieldName: string; value: unknown } | null>(null);
+  // than state. Cleared on drop (successful or rejected). Issue #206: carries sourcePlugin too —
+  // without it, handleCellDrop has no way to tell a drop back onto the same cell it came from
+  // apart from a real cross-column copy.
+  const dragPayloadRef = useRef<{ fieldName: string; value: unknown; sourcePlugin: string } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ plugin: string; x: number; y: number } | null>(null);
   // Issue #3 (+#176: also Copy as Override…): target-plugin picker shared by "Copy All to
   // Pending", "Copy as New Record", and "Copy as Override…" —
@@ -284,8 +286,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE, changeId });
   }
 
-  function handleCellDragStart(fieldName: string, value: unknown) {
-    dragPayloadRef.current = { fieldName, value };
+  function handleCellDragStart(fieldName: string, value: unknown, sourcePlugin: string) {
+    dragPayloadRef.current = { fieldName, value, sourcePlugin };
   }
 
   // Issue #3: target must be an editable plugin — reject a drop onto an immutable column as a
@@ -296,6 +298,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     const payload = dragPayloadRef.current;
     dragPayloadRef.current = null;
     if (!payload || payload.fieldName !== fieldName) return;
+    // Issue #206: dropping a value back onto the exact cell it was dragged from is a no-op
+    // gesture, not an edit or a rejection — silent, same as the fieldName-mismatch guard above,
+    // and checked before the immutable-column guard below so a self-drop onto an immutable
+    // column's own cell stays silent too rather than logging a WARN it doesn't deserve.
+    if (payload.sourcePlugin === targetPlugin) return;
     if (immutableSet.has(targetPlugin)) {
       // Issue #200: was a silent no-op — the system correctly refused this, so it's a WARN,
       // not silence (#198's policy).

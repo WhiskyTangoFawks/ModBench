@@ -1038,6 +1038,89 @@ describe('RecordPanel — drag-drop stages a pending field change', () => {
     expect(message).toContain('Bounds');
     expect(message).toContain('000001:Fallout4.esm');
   });
+
+  // Issue #206: dropping a field's value back onto the exact cell it was dragged from is a
+  // no-op gesture, not an edit — it must stage nothing and log nothing, regardless of whether
+  // that cell's column happens to be mutable or immutable.
+  it('dropping a field onto the cell it was dragged from (a mutable column) stages nothing and logs nothing', async () => {
+    vi.mocked(vscode.postMessage).mockClear();
+    const { client } = renderPanel(compareResult);
+    await waitFor(() => screen.getByText('Override Name'));
+
+    const cell = screen.getByText('Override Name').closest('td')!;
+    fireEvent.dragStart(cell);
+    fireEvent.drop(cell);
+
+    // Let any (incorrect) async staging work run before asserting its absence.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(client.save).not.toHaveBeenCalled();
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.LOG }),
+    );
+  });
+
+  // The self-drop guard must run before the immutable-column guard: dropping back onto an
+  // immutable source cell is still a no-op gesture (silent), not a rejection (WARN) — those are
+  // different things even though both end in "nothing staged".
+  it('dropping a field onto the cell it was dragged from (an immutable column) stages nothing and does not log a WARN', async () => {
+    vi.mocked(vscode.postMessage).mockClear();
+    const { client } = renderPanel(compareResult);
+    await waitFor(() => screen.getByText('Original Name'));
+
+    const cell = screen.getByText('Original Name').closest('td')!;
+    fireEvent.dragStart(cell);
+    fireEvent.drop(cell);
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(client.save).not.toHaveBeenCalled();
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.LOG }),
+    );
+  });
+
+  // Distinct from a self-drop: two different mutable columns that happen to already hold the
+  // same value are still a real cross-column copy — the guard must key off plugin identity, not
+  // value equality, or this would wrongly get swallowed too.
+  it('dropping onto a different mutable column still stages, even when its value already equals the source', async () => {
+    const identicalValueResult = {
+      conflictAll: 'NoConflict',
+      overrides: [
+        {
+          formKey: '000001:Fallout4.esm', plugin: 'Mod1.esp', loadOrderIndex: 1, isWinner: false,
+          editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Same Name' }],
+          pendingFields: {}, conflictThis: 'Master',
+        },
+        {
+          formKey: '000001:Fallout4.esm', plugin: 'Mod2.esp', loadOrderIndex: 2, isWinner: true,
+          editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Same Name' }],
+          pendingFields: {}, conflictThis: 'ConflictWins',
+        },
+      ],
+      diffs: [
+        {
+          fieldName: 'Name',
+          values: { 'Mod1.esp': 'Same Name', 'Mod2.esp': 'Same Name' },
+          winnerPlugin: 'Mod2.esp', winnerValue: 'Same Name',
+          cellStates: {},
+        },
+      ],
+    };
+    const { client } = renderPanel(identicalValueResult, { plugins: threePluginsResponse });
+    await waitFor(() => screen.getAllByText('Same Name'));
+
+    const cells = screen.getAllByText('Same Name');
+    fireEvent.dragStart(cells[0].closest('td')!);
+    fireEvent.drop(cells[1].closest('td')!);
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm',
+        'Mod2.esp',
+        { Name: 'Same Name' },
+        undefined,
+      ),
+    );
+  });
 });
 
 // ── Column header context menu (issue #3) ─────────────────────────────────────
