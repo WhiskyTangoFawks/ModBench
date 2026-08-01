@@ -25,6 +25,7 @@ TypeScript VS Code extension. Root [CLAUDE.md](../CLAUDE.md) for project-wide in
 | `webviewHtml` | HTML shell for record editor webview | No VS Code types except `Uri` string |
 | `recordPanelMessageRouter` | Webview→extension message dispatch for the record panel | Pure function, no VS Code types in signature except injected deps — testable without a harness |
 | `reporter` | ADR-0026 surfacing reporter (`makeReporter`): logs at the level matching severity, toasts on warning/error | Takes the leveled channel directly (`.warn`/`.error`), not the flat `log` shim — testable without a harness (`vi.mock('vscode')`) |
+| `backendLog` | `makeBackendLogForwarder`: one line of backend console output → the matching leveled channel call | Sole owner of Serilog-console-format knowledge; parse is tolerant — an untagged line is still forwarded, never dropped |
 
 Placement:
 
@@ -49,6 +50,7 @@ Update when: new command (add ID to `EXPECTED_COMMANDS`) or new `extension.ts` b
 
 - One `vscode.LogOutputChannel` (`'Modbench'`, created with `{ log: true }` — issue #198), created in `extension.ts`. Its native `.debug/.info/.warn/.error` methods drive the Output panel's level filter and stamp timestamps automatically.
 - Call sites local to `extension.ts` call the channel's leveled methods directly (DEBUG/INFO for routine actions, WARN when the system correctly refuses something, ERROR for an actual failure). Other modules doing HTTP/async-error handling (`BackendManager`, `PluginRepository`, `SessionController`, etc.) still take a flat `log: (msg: string) => void` compat shim — their own releveling is tracked separately, not yet done.
+- The spawned backend's Serilog console output is piped (`stdio: ['ignore','pipe','pipe']`) and forwarded line-by-line into the same channel, prefixed `[backend]`, at its parsed level (issue #199) — so the level filter governs backend and frontend lines alike. Only for a backend *we spawn*: an attached dev-launched one keeps logging to its own terminal. Streams are drained unconditionally — an unread pipe blocks the backend's writes.
 - Every `catch` logs to the channel before showing UI or swallowing. No silent `catch {}`.
 - `PluginTreeProvider`/`ModListProvider`: error tree node instead of empty list on fetch/read failure. `ModListProvider`'s status-badge calc (secondary, non-blocking) degrades badges + warns instead — silently-absent badges would look like "no conflicts."
 - Webview: every async op checks `resp.ok`, sets error state on failure. No fire-and-forget fetches.

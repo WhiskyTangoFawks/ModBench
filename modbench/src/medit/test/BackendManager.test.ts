@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as http from 'node:http';
 import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 
 vi.mock('node:http');
 
@@ -98,7 +99,11 @@ describe('BackendManager', () => {
 // ── spawn / teardown / crash-restart ─────────────────────────────────────────
 
 function makeChild() {
-  return Object.assign(new EventEmitter(), { kill: vi.fn() });
+  return Object.assign(new EventEmitter(), {
+    kill: vi.fn(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+  });
 }
 
 /** http.get returns 200 iff `state.healthy`, else ECONNREFUSED. */
@@ -140,6 +145,72 @@ describe('BackendManager.start', () => {
 
     expect(spawn).not.toHaveBeenCalled();
     expect(mgr.isHealthy).toBe(true);
+  });
+});
+
+/** Backend output arrives asynchronously (readline); poll until `n` lines land. */
+async function waitForLines(lines: string[], n: number) {
+  for (let i = 0; i < 50 && lines.length < n; i++) await new Promise((r) => setTimeout(r, 2));
+}
+
+describe('BackendManager output forwarding', () => {
+  let statusBar: ReturnType<typeof makeStatusBar>;
+  beforeEach(() => { statusBar = makeStatusBar(); vi.resetAllMocks(); });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('forwards whole lines from stdout and stderr', async () => {
+    const state = { healthy: false };
+    makeToggleableHttpGet(state);
+    const child = makeChild();
+    const spawn = vi.fn(() => { state.healthy = true; return child; });
+    const lines: string[] = [];
+
+    const mgr = new BackendManager({
+      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x',
+      onOutput: (l) => lines.push(l),
+    });
+    await mgr.start();
+
+    child.stdout.write('[08:30:45 INF] Indexed 500 records\n');
+    child.stderr.write('[08:30:46 ERR] Session load failed\n');
+    await waitForLines(lines, 2);
+
+    expect(lines).toEqual(['[08:30:45 INF] Indexed 500 records', '[08:30:46 ERR] Session load failed']);
+  });
+
+  it('reassembles a line split across chunks and strips the CRLF a Windows backend writes', async () => {
+    const state = { healthy: false };
+    makeToggleableHttpGet(state);
+    const child = makeChild();
+    const spawn = vi.fn(() => { state.healthy = true; return child; });
+    const lines: string[] = [];
+
+    const mgr = new BackendManager({
+      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x',
+      onOutput: (l) => lines.push(l),
+    });
+    await mgr.start();
+
+    child.stdout.write('[08:30:45 INF] Indexed ');
+    child.stdout.write('500 records\r\n');
+    await waitForLines(lines, 1);
+
+    expect(lines).toEqual(['[08:30:45 INF] Indexed 500 records']);
+  });
+
+  it('drains the streams even with no onOutput — an unread pipe would block the backend', async () => {
+    const state = { healthy: false };
+    makeToggleableHttpGet(state);
+    const child = makeChild();
+    const spawn = vi.fn(() => { state.healthy = true; return child; });
+
+    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x' });
+    await mgr.start();
+
+    child.stdout.write('[08:30:45 INF] nobody is listening\n');
+    await new Promise((r) => setTimeout(r, 5));
+
+    expect(child.stdout.readableFlowing).toBe(true);
   });
 });
 
@@ -214,6 +285,30 @@ describe('BackendManager crash-restart / stop', () => {
 
     expect(spawn.mock.calls.length).toBeLessThanOrEqual(5); // bounded, not infinite
     expect(statuses).toContain('disconnected');
+  });
+
+  it('forwards output from the restarted child, not just the first one', async () => {
+    const state = { healthy: false };
+    makeToggleableHttpGet(state);
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); state.healthy = true; return c; });
+    const lines: string[] = [];
+
+    const mgr = new BackendManager({
+      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x',
+      onOutput: (l) => lines.push(l),
+    });
+    await mgr.start();
+
+    const restarted = new Promise<void>((res) => mgr.on('restarted', () => res()));
+    state.healthy = false;
+    children[0].emit('exit', 1);
+    await restarted;
+
+    children[1].stdout.write('[08:30:50 INF] back up\n');
+    await waitForLines(lines, 1);
+
+    expect(lines).toEqual(['[08:30:50 INF] back up']);
   });
 
   it('stop() kills the child and suppresses restart', async () => {

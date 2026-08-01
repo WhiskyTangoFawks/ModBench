@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as cp from 'child_process';
 import { BackendManager } from './medit/BackendManager';
+import { makeBackendLogForwarder } from './medit/backendLog';
 import { createApiClient } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController } from './medit/SessionController';
@@ -110,7 +111,7 @@ export function activate(context: vscode.ExtensionContext) {
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   context.subscriptions.push(statusBarItem);
 
-  backendManager = createBackendManager(port, log, statusBarItem);
+  backendManager = createBackendManager(port, outputChannel, statusBarItem);
 
   const client = createApiClient(port);
   const repository = new ApiPluginRepository(client, log);
@@ -984,15 +985,19 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
 
 
 /** Construct the editing backend manager wired to the bundled binary + status bar. */
-function createBackendManager(port: number, log: (msg: string) => void, statusBarItem: vscode.StatusBarItem): BackendManager {
+function createBackendManager(port: number, channel: vscode.LogOutputChannel, statusBarItem: vscode.StatusBarItem): BackendManager {
   // Bundled backend binary (see build:backend / .vscodeignore). __dirname is
   // out/ at runtime; the published self-contained executable lives in backend/.
   const backendExe = process.platform === 'win32' ? 'MEditService.Api.exe' : 'MEditService.Api';
   return new BackendManager({
     port,
-    log,
+    log: (msg) => channel.info(msg),
+    // #199: pipe the backend's Serilog console output into the same channel,
+    // at its own level. Only applies to a backend we spawn — an attached
+    // dev-launched one still logs to its own terminal.
+    onOutput: makeBackendLogForwarder(channel),
     executablePath: path.join(__dirname, '..', 'backend', backendExe),
-    spawn: (exe, args) => cp.spawn(exe, args, { detached: false, stdio: 'ignore' }),
+    spawn: (exe, args) => cp.spawn(exe, args, { detached: false, stdio: ['ignore', 'pipe', 'pipe'] }),
     statusBar: {
       setText: (t) => { statusBarItem.text = t; },
       show: () => statusBarItem.show(),

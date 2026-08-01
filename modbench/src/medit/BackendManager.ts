@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import * as http from 'node:http';
+import * as readline from 'node:readline';
 
 export type BackendStatus = 'starting' | 'attached' | 'disconnected';
 
@@ -15,6 +16,9 @@ export interface BackendProcess {
   kill(): void;
   on(event: 'exit', cb: (code: number | null) => void): void;
   on(event: 'error', cb: (err: Error) => void): void;
+  /** Present when spawned with piped stdio (#199); absent on 'ignore'. */
+  stdout?: NodeJS.ReadableStream | null;
+  stderr?: NodeJS.ReadableStream | null;
 }
 
 export type SpawnFn = (executablePath: string, args: string[]) => BackendProcess;
@@ -25,6 +29,9 @@ export interface BackendManagerOptions {
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
   log?: (msg: string) => void;
+  /** Receives each line the spawned backend writes to stdout/stderr (#199).
+   *  Levelling lives in the caller's forwarder, not here. */
+  onOutput?: (line: string) => void;
   /** Spawns the bundled backend; omitted in attach-only/test contexts. */
   spawn?: SpawnFn;
   /** Path to the bundled backend executable. */
@@ -37,6 +44,7 @@ export class BackendManager extends EventEmitter {
   private readonly pollIntervalMs: number;
   private readonly pollTimeoutMs: number;
   private readonly log: (msg: string) => void;
+  private readonly onOutput: (line: string) => void;
   private readonly spawnFn?: SpawnFn;
   private readonly executablePath?: string;
 
@@ -59,6 +67,7 @@ export class BackendManager extends EventEmitter {
     this.pollIntervalMs = opts.pollIntervalMs ?? 500;
     this.pollTimeoutMs = opts.pollTimeoutMs ?? 30_000;
     this.log = opts.log ?? (() => {});
+    this.onOutput = opts.onOutput ?? (() => {});
     this.spawnFn = opts.spawn;
     this.executablePath = opts.executablePath;
 
@@ -95,10 +104,22 @@ export class BackendManager extends EventEmitter {
       this.child = child;
       child.on('error', (err) => this.log(`[BackendManager] spawn error: ${err.message}`));
       child.on('exit', (code) => this.handleExit(code));
+      this.forwardOutput(child);
     }
 
     await this.connect(gen);
     if (this._isHealthy) this.restartAttempts = 0;
+  }
+
+  /** Pipe the child's console output line-by-line to `onOutput`. Subscribed
+   *  unconditionally: a piped stream nobody reads fills its OS buffer and then
+   *  blocks the backend's writes, so draining isn't optional. Re-runs per spawn,
+   *  so a crash-restarted child is forwarded too. */
+  private forwardOutput(child: BackendProcess): void {
+    for (const stream of [child.stdout, child.stderr]) {
+      if (!stream) continue;
+      readline.createInterface({ input: stream }).on('line', (line) => this.onOutput(line));
+    }
   }
 
   /** Deliberate teardown: kill the backend and cancel any in-flight start. */
