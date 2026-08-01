@@ -192,7 +192,7 @@ interface DiffRowProps {
   // Changes Tree, all from the shared PendingCellMenu (RecordPanel owns the reveal wiring) —
   // this row only ever needs to open that menu, never call reveal itself.
   onPendingContextMenu: (changeId: string, x: number, y: number) => void;
-  onCellDragStart: (fieldName: string, value: unknown) => void;
+  onCellDragStart: (fieldName: string, value: unknown, sourcePlugin: string) => void;
   onCellDrop: (fieldName: string, targetPlugin: string, applyValue: (value: unknown) => void) => void;
   context: RowContext;
   hasChildren?: boolean;
@@ -250,7 +250,7 @@ export function DiffRow({
               <DiskCell
                 key={`disk:${o.plugin}`}
                 style={cellStyle}
-                onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin])}
+                onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
                 onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
               >
                 {!isExpanded && (
@@ -273,7 +273,7 @@ export function DiffRow({
             <DiskCell
               key={`disk:${o.plugin}`}
               style={cellStyle}
-              onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin])}
+              onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
               onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
             >
               {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin), client, onOpen,

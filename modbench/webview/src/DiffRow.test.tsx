@@ -126,12 +126,14 @@ describe('DiffRow — editability follows immutableSet', () => {
 });
 
 describe('DiffRow — drag affordance on leaf cells', () => {
-  it('dragging a disk cell calls onCellDragStart with the field name and its value', () => {
+  it('dragging a disk cell calls onCellDragStart with the field name, its value, and the source plugin', () => {
     const onCellDragStart = vi.fn();
     renderRow({ onCellDragStart });
     const cell = screen.getAllByText('disk-value')[0].closest('td')!;
     fireEvent.dragStart(cell);
-    expect(onCellDragStart).toHaveBeenCalledWith('Name', 'disk-value');
+    // Issue #206: the source plugin must be carried too — handleCellDrop has no other way to
+    // detect a self-drop (same cell dragged back onto itself).
+    expect(onCellDragStart).toHaveBeenCalledWith('Name', 'disk-value', 'Fallout4.esm');
   });
 
   it('dropping on a cell calls onCellDrop with the field name and target plugin', () => {
@@ -157,12 +159,13 @@ describe('DiffRow — drag affordance on compound (hasChildren) cells', () => {
     });
   }
 
-  it('dragging a collapsed struct/array summary calls onCellDragStart with the field name and its value', () => {
+  it('dragging a collapsed struct/array summary calls onCellDragStart with the field name, its value, and the source plugin', () => {
     const onCellDragStart = vi.fn();
     renderCompoundRow({ onCellDragStart });
     const cell = screen.getAllByText('[2]')[0].closest('td')!;
     fireEvent.dragStart(cell);
-    expect(onCellDragStart).toHaveBeenCalledWith('Items', ['a', 'b']);
+    // Issue #206: same source-plugin requirement as the leaf-cell case above.
+    expect(onCellDragStart).toHaveBeenCalledWith('Items', ['a', 'b'], 'Fallout4.esm');
   });
 
   it('dropping on a collapsed struct/array summary calls onCellDrop with the field name and target plugin', () => {
