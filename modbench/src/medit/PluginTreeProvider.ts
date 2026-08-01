@@ -7,9 +7,6 @@ import type { PluginRepository } from './PluginRepository';
 
 const PAGE_SIZE = 50;
 
-// Record types represented spatially in the worldspace tree — hidden from the flat type list.
-const SPATIAL_TYPES = new Set(['wrld', 'cell', 'refr', 'achr']);
-
 function formId(formKey: string): string {
   return formKey.split(':')[0];
 }
@@ -179,6 +176,20 @@ export type PluginTreeNode =
   | WorldspacesNode | WorldspaceNode | BlockNode | SubBlockNode | CellNode
   | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorLoadMoreNode | ErrorNode;
 
+// Record types that get their own dedicated node in the worldspace tree, keyed by raw
+// signature — the single source of truth for which spatial type maps to which node
+// (issue #197: previously a set membership check and a separate equality check per type,
+// which could drift out of sync the way #173 did).
+const SPATIAL_NODE_FACTORIES: Record<string, (pluginName: string) => PluginTreeNode> = {
+  wrld: (pluginName) => new WorldspacesNode(pluginName),
+  cell: (pluginName) => new InteriorCellsNode(pluginName),
+};
+
+// Record types represented spatially in the worldspace tree — hidden from the flat type
+// list. refr/achr nest under the cell hierarchy (fetchCellGroups) rather than getting a
+// top-level node of their own, so they're not in SPATIAL_NODE_FACTORIES.
+const SPATIAL_TYPES = new Set([...Object.keys(SPATIAL_NODE_FACTORIES), 'refr', 'achr']);
+
 type PageCache = Map<string, { items: RecordSummary[]; total: number }>;
 type CellPageCache = Map<string, { items: CellSummary[]; total: number }>;
 
@@ -307,9 +318,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private async fetchPluginChildren(node: PluginNode): Promise<PluginTreeNode[]> {
     try {
       const types = await this.repository.getRecordTypes(node.plugin.name);
+      const typesPresent = new Set(types.map(t => t.type));
       const nodes: PluginTreeNode[] = [];
-      if (types.some(t => t.type === 'wrld')) nodes.push(new WorldspacesNode(node.plugin.name));
-      if (types.some(t => t.type === 'cell')) nodes.push(new InteriorCellsNode(node.plugin.name));
+      for (const [type, makeNode] of Object.entries(SPATIAL_NODE_FACTORIES)) {
+        if (typesPresent.has(type)) nodes.push(makeNode(node.plugin.name));
+      }
       for (const t of types) {
         if (!SPATIAL_TYPES.has(t.type)) nodes.push(new RecordTypeNode(node.plugin.name, t.type, t.count, t.displayName));
       }
