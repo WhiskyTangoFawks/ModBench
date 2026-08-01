@@ -12,6 +12,23 @@ export const EXTENSION_TO_WEBVIEW = {
   // so the native command calls it directly and never touches the webview.
   PENDING_CELL_SAVE_GROUP: 'pendingCellSaveGroup',
   PENDING_CELL_REVERT_GROUP: 'pendingCellRevertGroup',
+  // #209: the column-header menu is a native `webview/context` contribution too, but unlike the
+  // pending-cell commands above, none of these five actions' real work moved to the extension
+  // host — Copy All to Pending / Copy as New Record / Add Master need field data
+  // (`overrideMap`/`currentMasters`) that only exists in this webview's already-loaded
+  // CompareResult, and Copy as Override / Remove already had their own working webview-side
+  // fetch (RecordSessionClient.copyTo/removeOverride) that the extension host would otherwise
+  // have to re-derive. So the command handler's only extension-host-side job is resolving *which*
+  // plugin (QuickPick, mutable-list-plus-"New Plugin…" for the copy actions, all-loaded-plugins-
+  // minus-current-masters for Add Master) — then it broadcasts the resolved target down to every
+  // open record panel, same self-filtering shape as Save/Revert Group above but keyed on
+  // `formKey` (there is no changeId here) so only the panel actually showing the mutated record
+  // acts on it.
+  COLUMN_HEADER_COPY_ALL_TO_PENDING: 'columnHeaderCopyAllToPending',
+  COLUMN_HEADER_COPY_AS_NEW_RECORD: 'columnHeaderCopyAsNewRecord',
+  COLUMN_HEADER_COPY_AS_OVERRIDE: 'columnHeaderCopyAsOverride',
+  COLUMN_HEADER_REMOVE_OVERRIDE: 'columnHeaderRemoveOverride',
+  COLUMN_HEADER_ADD_MASTER: 'columnHeaderAddMaster',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -39,7 +56,12 @@ export type WebviewToExtension =
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP; changeId: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP; changeId: string };
+  | { type: typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP; changeId: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_ALL_TO_PENDING; formKey: string; sourcePlugin: string; targetPlugin: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD; formKey: string; sourcePlugin: string; targetPlugin: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE; formKey: string; targetPlugin: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE; formKey: string; plugin: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER; formKey: string; plugin: string; newMaster: string };
 
 // #208: the merged `data-vscode-context` object VS Code's webview preload forwards as a
 // `webview/context` command's sole argument — shared shape between the cell (recordUtils.ts'
@@ -48,5 +70,24 @@ export type ExtensionToWebview =
 export interface PendingCellContext {
   webviewSection: 'pendingCell';
   changeId: string;
+  preventDefaultContextMenuItems: true;
+}
+
+// #209: same mechanism as PendingCellContext above, carried by each plugin column header's `<th>`
+// instead of a pending cell. `plugin` is the right-clicked column's own plugin — the "source" that
+// copy actions exclude from their target QuickPick and Remove/Add Master act on directly. `masters`
+// is the header record's current (pending-aware) masters list, needed by modbench.columnHeader.
+// addMaster to compute its candidate list (all loaded plugins minus self minus already-a-master —
+// deliberately NOT the mutable-only filter the copy actions use, see recordUtils.ts) without a
+// round trip back into the webview just to ask. `immutable`/`isHeaderRecord` back the native
+// menu's `when` clauses (Remove absent on an immutable column; Add Master only on the header
+// record's own column, ADR-0033 — no standalone control once an action is right-click-reachable).
+export interface ColumnHeaderContext {
+  webviewSection: 'columnHeader';
+  formKey: string;
+  plugin: string;
+  immutable: boolean;
+  isHeaderRecord: boolean;
+  masters: string[];
   preventDefaultContextMenuItems: true;
 }

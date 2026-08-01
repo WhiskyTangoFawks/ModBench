@@ -13,7 +13,7 @@ import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type Pen
 import { ApiPluginRepository } from './medit/PluginRepository';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type PendingCellContext } from './medit/messages';
+import { EXTENSION_TO_WEBVIEW, type ColumnHeaderContext, type ExtensionToWebview, type PendingCellContext } from './medit/messages';
 import { routeRecordPanelMessage, revealPendingChange, type RevealDeps, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
 import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
@@ -207,6 +207,7 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
     ...registerRecordViewCommands(deps),
     ...registerChangeGroupCommands(deps),
     ...registerCopyCreateCommands(deps),
+    ...registerColumnHeaderCommands(deps),
   ];
 }
 
@@ -425,37 +426,96 @@ function registerChangeGroupCommands(deps: EditorCommandDeps): vscode.Disposable
   ];
 }
 
+// #209: the "New Plugin…" affordance every target-plugin QuickPick offers (Copy as Override…,
+// and — new in #209 — Copy All to Pending / Copy as New Record, now that they share this same
+// picker). Add Master deliberately does NOT use this — see pickAddMasterCandidate below.
+const NEW_PLUGIN_LABEL = '$(add) New Plugin…';
+
+// #209: extracted from modbench.copyAsOverrideInto's command body (previously the only caller)
+// so Copy All to Pending / Copy as New Record can share it too — "no second picker
+// implementation survives" applies to this QuickPick construction, not just the deleted React
+// components. Candidates are every mutable plugin minus `excludePlugin` (the column-header
+// menu's own right-clicked column, when invoked that way; the plugins-tree call site passes
+// none, matching its pre-#209 behavior exactly).
+async function pickTargetPlugin(
+  repository: ApiPluginRepository, controller: SessionController, excludePlugin?: string,
+): Promise<string | undefined> {
+  const allPlugins = await repository.getPlugins();
+  const mutablePlugins = allPlugins.filter(p => !p.isImmutable && p.name !== excludePlugin);
+  const items: vscode.QuickPickItem[] = [
+    { label: NEW_PLUGIN_LABEL, description: 'Create a new plugin and copy into it' },
+    ...mutablePlugins.map(p => ({ label: p.name, description: `[${p.loadOrderIndex}]` })),
+  ];
+  const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Select target plugin' });
+  if (!picked) return undefined;
+  if (picked.label !== NEW_PLUGIN_LABEL) return picked.label;
+  const name = await promptPluginName();
+  if (!name) return undefined;
+  await controller.createPlugin(name);
+  return name;
+}
+
+// #209: Add Master's candidate list is deliberately NOT pickTargetPlugin's mutable-plugins-only
+// list — a master is very often an immutable base-game/DLC esm, so filtering those out would
+// remove the primary real-world case. Candidates are every loaded plugin minus the header
+// record's own plugin minus whatever's already a master (pending-aware `masters`, carried by the
+// column header's data-vscode-context so this needs no round trip back into the webview to ask).
+// No "New Plugin…" either — declaring a brand-new empty plugin as your own master isn't
+// something the retired inline picker ever offered, and nothing here asks for that scope.
+async function pickAddMasterCandidate(
+  repository: ApiPluginRepository, excludePlugin: string, masters: string[],
+): Promise<string | undefined> {
+  const allPlugins = await repository.getPlugins();
+  const candidates = allPlugins.filter(p => p.name !== excludePlugin && !masters.includes(p.name));
+  const items: vscode.QuickPickItem[] = candidates.map(p => ({ label: p.name, description: `[${p.loadOrderIndex}]` }));
+  const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Select a master to add' });
+  return picked?.label;
+}
+
+// #209: shared by every column-header command below whose real work only exists in the webview
+// (see messages.ts' COLUMN_HEADER_* doc comment for why) — same broadcast-and-self-filter shape
+// as #208's Save/Revert Group, just keyed on `formKey` instead of `changeId`.
+function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, msg: ExtensionToWebview) {
+  for (const panel of recordPanels) void panel.webview.postMessage(msg);
+}
+
 /** Copy-as-override and create-placed record commands. */
 function registerCopyCreateCommands(deps: EditorCommandDeps): vscode.Disposable[] {
-  const { repository, controller } = deps;
+  const { repository, controller, recordPanels } = deps;
   return [
-    vscode.commands.registerCommand('modbench.copyAsOverrideInto', async (node?: RecordNode | PlacedNode) => {
-      const formKey = node instanceof PlacedNode ? node.placed.formKey : node?.record?.formKey;
+    // #209: extended to accept an explicit record identity (the column header's own
+    // ColumnHeaderContext) alongside the plugins-tree's RecordNode/PlacedNode — resolved first by
+    // instanceof so the existing tree call site is untouched. The two call shapes still diverge
+    // after the target is picked: tree-invoked keeps calling controller.copyRecordTo directly
+    // (unchanged); column-header-invoked broadcasts instead, so the mutation actually runs
+    // through the webview's own already-working handleCopyTo (HTTP + refresh + error surfacing)
+    // rather than re-deriving that in the extension host and leaving the open panel stale.
+    vscode.commands.registerCommand('modbench.copyAsOverrideInto', async (arg?: RecordNode | PlacedNode | ColumnHeaderContext) => {
+      let formKey: string | undefined;
+      let excludePlugin: string | undefined;
+      let fromColumnHeader = false;
+      if (arg instanceof PlacedNode) {
+        formKey = arg.placed.formKey;
+      } else if (arg instanceof RecordNode) {
+        formKey = arg.record?.formKey;
+      } else if (arg) {
+        formKey = arg.formKey;
+        excludePlugin = arg.plugin;
+        fromColumnHeader = true;
+      }
       if (!formKey) {
         vscode.window.showErrorMessage('Modbench: No record selected.');
         return;
       }
 
-      const allPlugins = await repository.getPlugins();
-      const mutablePlugins = allPlugins.filter(p => !p.isImmutable);
-      const NEW_PLUGIN_LABEL = '$(add) New Plugin…';
-      const items: vscode.QuickPickItem[] = [
-        { label: NEW_PLUGIN_LABEL, description: 'Create a new plugin and copy into it' },
-        ...mutablePlugins.map(p => ({ label: p.name, description: `[${p.loadOrderIndex}]` })),
-      ];
+      const targetPlugin = await pickTargetPlugin(repository, controller, excludePlugin);
+      if (!targetPlugin) return;
 
-      const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Select target plugin' });
-      if (!picked) return;
-
-      let targetPlugin = picked.label;
-      if (picked.label === NEW_PLUGIN_LABEL) {
-        const name = await promptPluginName();
-        if (!name) return;
-        await controller.createPlugin(name);
-        targetPlugin = name;
+      if (fromColumnHeader) {
+        broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE, formKey, targetPlugin });
+      } else {
+        await controller.copyRecordTo(formKey, targetPlugin);
       }
-
-      await controller.copyRecordTo(formKey, targetPlugin);
     }),
     vscode.commands.registerCommand('modbench.createPlaced', async (node?: PlacedGroupNode) => {
       if (!node) return;
@@ -472,6 +532,50 @@ function registerCopyCreateCommands(deps: EditorCommandDeps): vscode.Disposable[
         node.plugin, node.cellFormKey, recordType.label.toLowerCase(),
         node.group, templateFormKey || undefined,
       );
+    }),
+  ];
+}
+
+// #209: Copy All to Pending / Copy as New Record / Remove / Add Master have no plugins-tree
+// equivalent to reuse — they only ever existed as column-header actions — so each gets its own
+// new command (split out from registerCopyCreateCommands to stay under the file's size budget).
+// Copy All to Pending and Copy as New Record still share pickTargetPlugin with
+// modbench.copyAsOverrideInto rather than re-implementing it.
+function registerColumnHeaderCommands(deps: EditorCommandDeps): vscode.Disposable[] {
+  const { repository, controller, recordPanels } = deps;
+  return [
+    vscode.commands.registerCommand('modbench.columnHeader.copyAllToPending', async (ctx?: ColumnHeaderContext) => {
+      if (!ctx) return;
+      const targetPlugin = await pickTargetPlugin(repository, controller, ctx.plugin);
+      if (!targetPlugin) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_ALL_TO_PENDING, formKey: ctx.formKey, sourcePlugin: ctx.plugin, targetPlugin,
+      });
+    }),
+    vscode.commands.registerCommand('modbench.columnHeader.copyAsNewRecord', async (ctx?: ColumnHeaderContext) => {
+      if (!ctx) return;
+      const targetPlugin = await pickTargetPlugin(repository, controller, ctx.plugin);
+      if (!targetPlugin) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD, formKey: ctx.formKey, sourcePlugin: ctx.plugin, targetPlugin,
+      });
+    }),
+    // No target plugin needed — the `when` clause on this command's webview/context contribution
+    // (package.json) already keeps it absent for an immutable column, matching today's disabled
+    // Remove item.
+    vscode.commands.registerCommand('modbench.columnHeader.removeOverride', (ctx?: ColumnHeaderContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: ctx.formKey, plugin: ctx.plugin,
+      });
+    }),
+    vscode.commands.registerCommand('modbench.columnHeader.addMaster', async (ctx?: ColumnHeaderContext) => {
+      if (!ctx) return;
+      const newMaster = await pickAddMasterCandidate(repository, ctx.plugin, ctx.masters);
+      if (!newMaster) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER, formKey: ctx.formKey, plugin: ctx.plugin, newMaster,
+      });
     }),
   ];
 }

@@ -19,9 +19,13 @@ export interface FormKeySearchResult {
 // changes/plugins failure comes back as `null` so the panel leaves that slice of state
 // untouched — preserving the pre-seam behavior where only the parts that succeeded were applied.
 // The immutable set is resolved from the plugin list here (behind the client), null when plugins
-// failed, so the panel doesn't re-derive it.
+// failed, so the panel doesn't re-derive it. #209: the raw plugin list itself (`PluginInfo[]`) is
+// no longer exposed on this type — its only consumer was RecordPanel's own `allPlugins` state,
+// which fed the now-deleted PluginTargetPicker/Add Master dropdown; target-plugin resolution for
+// the column-header menu happens via a VS Code QuickPick in the extension host now, which asks
+// PluginRepository directly rather than through this webview-side client.
 export type LoadResult =
-  | { ok: true; result: CompareResult; changes: PendingChange[] | null; plugins: PluginInfo[] | null; immutableSet: Set<string> | null }
+  | { ok: true; result: CompareResult; changes: PendingChange[] | null; immutableSet: Set<string> | null }
   | { ok: false; error: string };
 
 // Issue #122: the webview-side typed backend client. Owns every backend call the record panel
@@ -82,7 +86,6 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
         ok: true,
         result: cmp.data as CompareResult,
         changes: chg.response.ok ? (chg.data as PendingChange[]) : null,
-        plugins: pluginList,
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => p.name)) : null,
       };
     },
