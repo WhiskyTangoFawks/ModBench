@@ -44,6 +44,17 @@ describe('ScalarCell — editable column renders text until clicked', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
+  // Issue #204 / ADR-0033: the inactive-state span must not assert its own cursor — a mutable
+  // cell is a drag source the whole time (DiskCell sets `grab` on the parent <td>), and an
+  // inline `cursor: 'text'` here would visually mask that until the cell is actually clicked
+  // into edit. jsdom can't prove which cursor paints (no cascade), so this only proves the
+  // mask itself is gone.
+  it('does not mask the parent drag cursor with its own cursor style before being clicked', () => {
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} onCommit={vi.fn()} />);
+    const textEl = screen.getByText('Dogmeat').parentElement!;
+    expect(textEl.style.cursor).not.toBe('text');
+  });
+
   it('swaps to a text input for string type when clicked', () => {
     render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('Dogmeat'));

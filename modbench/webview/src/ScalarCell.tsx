@@ -33,8 +33,11 @@ export function ScalarCell({ value, meta, editable, onCommit }: ScalarCellProps)
   if (!editable) return <ScalarText value={value} />;
 
   if (!active) {
+    // Issue #204 / ADR-0033: no cursor override here — the parent DiskCell's `grab` cursor is
+    // this cell's resting affordance (it's a drag source the whole time); a text-caret would
+    // falsely imply only editing is possible until the cell is actually clicked into edit.
     return (
-      <span onClick={() => setActive(true)} style={{ cursor: 'text', display: 'block', minHeight: '1em' }}>
+      <span onClick={() => setActive(true)} style={{ display: 'block', minHeight: '1em' }}>
         <ScalarText value={value} />
       </span>
     );

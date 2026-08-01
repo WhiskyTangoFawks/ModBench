@@ -155,7 +155,7 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
   another column) is available on **every** cell regardless of that cell's own editability — only
   the *drop target's* mutability gates the drop — so a cell's resting cursor reflects that: it
   shows the drag affordance at rest and only takes on a text-input look once actually clicked into
-  its editing state, never before ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md)).
+  its editing state, never before ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md), #204).
   Dragging is suppressed only while that cell's own input is currently active (a draggable
   ancestor would otherwise swallow text selection inside the input).
 - **Cells render by field schema type**: strings/numbers/bools as text/number/toggle inputs;
@@ -164,7 +164,7 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
   `validFormKeyTypes`, and the link affordance appears on `Ctrl`-hover only when the reference
   resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows,
   and are themselves drag sources for their whole value via that summary row, the same as a
-  scalar leaf. Pending-change cells show the new value on a yellow background and are directly
+  scalar leaf, collapsed or expanded alike (#204). Pending-change cells show the new value on a yellow background and are directly
   editable on the same terms as disk cells — no separate revert control (see Pending column).
 - **Unsorted array fields have arity and order controls in the field grid** — each element row
   carries move-up / move-down (swap with the neighbour, disabled at the first/last position) and
