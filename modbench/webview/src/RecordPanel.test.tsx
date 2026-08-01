@@ -103,7 +103,7 @@ function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordSessionClient 
     copyTo: vi.fn().mockResolvedValue(resp(200, [])),
     removeOverride: opts.removeOverride ?? vi.fn().mockResolvedValue(resp(200, {})),
     createRecord: opts.createRecord ?? vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Mod2.esp' })),
-    // Issue #139: group save/revert + the member-count read that decides the ↩ confirmation.
+    // Issue #139: group save/revert + the member-count read that decides the Revert Group confirmation.
     // groupMembers defaults to the staged changes (a group of one), the no-confirmation path.
     saveGroup: opts.saveGroup ?? vi.fn().mockResolvedValue(resp(200, { byPlugin: {}, reindexFailure: null })),
     revertGroup: opts.revertGroup ?? vi.fn().mockResolvedValue(resp(204)),
@@ -1475,7 +1475,7 @@ describe('RecordPanel — pending cells render type-aware (issue #137)', () => {
 // ── Pending column save / revert (issue #139) ──────────────────────────────────
 //
 // The Pending column's actions, every one scoped to a ChangeGroup (ADR-0029). A staged edit
-// to Name on the mutable column, with a matching pending change so the ↩ and the group actions
+// to Name on the mutable column, with a matching pending change so the group actions
 // key on its id.
 
 const pendingNameResult = {
@@ -1570,40 +1570,14 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
     expect(screen.queryByText(/could not write/)).not.toBeInTheDocument();
   });
 
-  it('the inline ↩ on a group of one reverts immediately with no confirmation', async () => {
-    const revertGroup = vi.fn().mockResolvedValue(resp(204));
-    const groupMembers = vi.fn().mockResolvedValue(soloChange);
-    renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
-    await waitFor(() => screen.getByText('Staged Name'));
-
-    fireEvent.click(screen.getByText('↩'));
-
-    await waitFor(() => expect(revertGroup).toHaveBeenCalledWith('chg-1'));
-    // No confirmation modal for a group of one.
-    expect(screen.queryByRole('button', { name: 'Revert' })).not.toBeInTheDocument();
-  });
-
-  it('the inline ↩ on a multi-member group confirms, listing the members, before reverting', async () => {
-    const revertGroup = vi.fn().mockResolvedValue(resp(204));
-    const groupMembers = vi.fn().mockResolvedValue(twoMemberGroup);
-    renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
-    await waitFor(() => screen.getByText('Staged Name'));
-
-    fireEvent.click(screen.getByText('↩'));
-
-    // The confirmation lists the linked member that travels with the group.
-    await waitFor(() => expect(screen.getByText(/BoundWeapon/)).toBeInTheDocument());
-    // Nothing is reverted until the user confirms.
-    expect(revertGroup).not.toHaveBeenCalled();
-  });
-
   it('reverting the whole group on confirm calls revertGroup, not the single-change endpoint', async () => {
     const revertGroup = vi.fn().mockResolvedValue(resp(204));
     const groupMembers = vi.fn().mockResolvedValue(twoMemberGroup);
     const { client } = renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
     await waitFor(() => screen.getByText('Staged Name'));
 
-    fireEvent.click(screen.getByText('↩'));
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Revert Group' }));
     await waitFor(() => screen.getByRole('button', { name: 'Revert' }));
     fireEvent.click(screen.getByRole('button', { name: 'Revert' }));
 
@@ -1617,7 +1591,8 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
     renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
     await waitFor(() => screen.getByText('Staged Name'));
 
-    fireEvent.click(screen.getByText('↩'));
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Revert Group' }));
     await waitFor(() => screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
@@ -1693,20 +1668,6 @@ describe('RecordPanel — Pending column right-click reveal (issue #203, moved f
       type: WEBVIEW_TO_EXTENSION.OPEN_RECORD,
       formKey: '00099999:MyMod.esp',
     });
-    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
-      type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
-    }));
-  });
-
-  it('clicking the inline ↩ reverts the group and does not also post a reveal', async () => {
-    const revertGroup = vi.fn().mockResolvedValue(resp(204));
-    const groupMembers = vi.fn().mockResolvedValue(soloChange);
-    renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
-    await waitFor(() => screen.getByText('Staged Name'));
-
-    fireEvent.click(screen.getByText('↩'));
-
-    await waitFor(() => expect(revertGroup).toHaveBeenCalledWith('chg-1'));
     expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
       type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
     }));
@@ -1892,12 +1853,13 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
     );
   });
 
-  it('the inline ↩ revert posts pendingChanged once the revert completes', async () => {
+  it('Revert Group posts pendingChanged once the revert completes', async () => {
     const revertGroup = vi.fn().mockResolvedValue(resp(204));
     const groupMembers = vi.fn().mockResolvedValue(soloChange);
     renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
     await waitFor(() => screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByText('↩'));
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Revert Group' }));
 
     await waitFor(() =>
       expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
@@ -2145,12 +2107,13 @@ describe('RecordPanel — action logging (issue #200)', () => {
     }));
   });
 
-  it('Revert Group (inline ↩, single member) logs an INFO line naming the change', async () => {
+  it('Revert Group (single member) logs an INFO line naming the change', async () => {
     const revertGroup = vi.fn().mockResolvedValue(resp(204));
     const groupMembers = vi.fn().mockResolvedValue(soloChange);
     renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
     await waitFor(() => screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByText('↩'));
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Revert Group' }));
 
     await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
       type: WEBVIEW_TO_EXTENSION.LOG,

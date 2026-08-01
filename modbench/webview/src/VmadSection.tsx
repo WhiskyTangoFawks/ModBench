@@ -28,7 +28,6 @@ interface VmadSectionProps {
   immutableSet: Set<string>;
   pendingChangeMap?: Record<string, PendingChange>;
   onEdit?: (plugin: string, vmadPath: string, value: unknown) => void;
-  onRevert?: (changeId: string) => void;
   // Issue #139/#203: right-click a pending value → Save Group / Revert Group / Reveal in Pending
   // Changes Tree, all from the shared PendingCellMenu RecordPanel owns — threaded down to every
   // pending-cell renderer so VMAD pending values offer the same actions as ordinary fields.
@@ -451,9 +450,9 @@ function pendingOpLabel(v: unknown): React.ReactNode {
 }
 
 // Renders a pending add_property in the pending column: an inline editor (scalar) in edit mode that
-// re-issues the same add op with the new value, else a read-only value. Plus a revert control.
-function AddedPendingCell({ change, editable, onStructOp, onRevert, onPendingContextMenu }: Readonly<{
-  change: PendingChange; editable?: boolean; onStructOp?: OnStructOp; onRevert?: (id: string) => void;
+// re-issues the same add op with the new value, else a read-only value.
+function AddedPendingCell({ change, editable, onStructOp, onPendingContextMenu }: Readonly<{
+  change: PendingChange; editable?: boolean; onStructOp?: OnStructOp;
   onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
 }>) {
   const op = change.newValue as StructOp & { type: string; name: string; value: unknown };
@@ -465,15 +464,11 @@ function AddedPendingCell({ change, editable, onStructOp, onRevert, onPendingCon
   // anywhere else in the pending column any more — reveal lives on the right-click menu only.
   const editing = editable && onStructOp && kind;
   return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+    <span
       onContextMenu={onPendingContextMenu ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); } : undefined}>
       {editing
         ? <VmadScalarEditor value={op.value} type={kind} onCommit={reissue} ariaLabel={`Added value for ${op.name}`} />
         : <span>{toStr(op.value)}</span>}
-      {onRevert && (
-        <button onClick={e => { e.stopPropagation(); onRevert(change.id); }} title="Revert group"
-          style={{ ...iconBtnStyle, color: 'var(--vscode-errorForeground, #f88)', fontSize: '11px' }}>↩</button>
-      )}
     </span>
   );
 }
@@ -482,7 +477,7 @@ function AddedPendingCell({ change, editable, onStructOp, onRevert, onPendingCon
 
 export function VmadSection({
   vmad, columns, onOpen,
-  immutableSet, pendingChangeMap, onEdit, onRevert, onPendingContextMenu, onStructOp, client,
+  immutableSet, pendingChangeMap, onEdit, onPendingContextMenu, onStructOp, client,
 }: Readonly<VmadSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -553,38 +548,19 @@ export function VmadSection({
               ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); }
               : undefined}
           >
-            {hasPending && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                {editableLeaf
-                  ? (
-                    <ClickToEdit read={pendingOpLabel(change.newValue)}>
-                      {leafProp.kind === 'scalar'
-                        ? <VmadScalarEditor value={change.newValue} type={scalarType(leafProp)}
-                            onCommit={v => onEdit(col.plugin, vmadPath, v)} />
-                        : client != null
-                          ? <VmadObjectEditor value={change.newValue} client={client}
-                              onCommit={v => onEdit(col.plugin, vmadPath, v)} />
-                          : pendingOpLabel(change.newValue)}
-                    </ClickToEdit>
-                  )
-                  : pendingOpLabel(change.newValue)}
-                {onRevert && (
-                  <button
-                    onClick={e => { e.stopPropagation(); onRevert(change.id); }}
-                    title="Revert group"
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: 'var(--vscode-errorForeground, #f88)',
-                      fontSize: '11px',
-                      padding: 0,
-                      lineHeight: 1,
-                    }}
-                  >↩</button>
-                )}
-              </span>
-            )}
+            {hasPending && (editableLeaf
+              ? (
+                <ClickToEdit read={pendingOpLabel(change.newValue)}>
+                  {leafProp.kind === 'scalar'
+                    ? <VmadScalarEditor value={change.newValue} type={scalarType(leafProp)}
+                        onCommit={v => onEdit(col.plugin, vmadPath, v)} />
+                    : client != null
+                      ? <VmadObjectEditor value={change.newValue} client={client}
+                          onCommit={v => onEdit(col.plugin, vmadPath, v)} />
+                      : pendingOpLabel(change.newValue)}
+                </ClickToEdit>
+              )
+              : pendingOpLabel(change.newValue))}
           </td>
         );
       }
@@ -710,7 +686,7 @@ export function VmadSection({
               }}>
                 {/* editable is unconditional: col.kind === 'pending' already means this plugin is
                     mutable (buildColumns, recordUtils.ts) — see the valueCells comment above. */}
-                {change && <AddedPendingCell change={change} editable onStructOp={onStructOp} onRevert={onRevert} onPendingContextMenu={onPendingContextMenu} />}
+                {change && <AddedPendingCell change={change} editable onStructOp={onStructOp} onPendingContextMenu={onPendingContextMenu} />}
               </td>
             );
           }
@@ -770,12 +746,7 @@ export function VmadSection({
               }}
               onContextMenu={change && onPendingContextMenu
                 ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); }
-                : undefined}>
-                {change && onRevert && (
-                  <button onClick={e => { e.stopPropagation(); onRevert(change.id); }} title="Revert group"
-                    style={{ ...iconBtnStyle, color: 'var(--vscode-errorForeground, #f88)', fontSize: '11px' }}>↩</button>
-                )}
-              </td>
+                : undefined} />
             );
           }
           return <td key={`as:${name}:d${i}`} style={{ ...baseCell, opacity: 0.3 }} />;

@@ -541,28 +541,6 @@ describe('RecordPanel — array child rows (pending highlight)', () => {
     );
     expect(highlightedCells.length).toBe(0);
   });
-
-  it('revert button ↩ appears on parent Items row', async () => {
-    renderPanel();
-    await waitFor(() => screen.getByText('Items'));
-
-    const parentRow = screen.getByText('Items').closest('tr')!;
-    expect(parentRow.querySelector('button[title="Revert group"]')).toBeTruthy();
-  });
-
-  it('revert button ↩ does NOT appear on element child rows', async () => {
-    renderPanel();
-    await waitFor(() => screen.getByText('▶'));
-    fireEvent.click(screen.getByText('▶'));
-    await waitFor(() => screen.getByText('[1]'));
-
-    const row1 = screen.getByText('[1]').closest('tr')!;
-    expect(row1.querySelector('button[title="Revert group"]')).toBeNull();
-
-    const row0Td = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!;
-    const row0 = row0Td.closest('tr')!;
-    expect(row0.querySelector('button[title="Revert group"]')).toBeNull();
-  });
 });
 
 describe('RecordPanel — array element edit', () => {
@@ -633,15 +611,6 @@ describe('RecordPanel — struct sub-field pending highlight', () => {
     expect(highlightedCells.length).toBe(0);
   });
 
-  it('revert button ↩ appears on X1 sub-field row (triggers parent struct change)', async () => {
-    renderPanel();
-    await waitFor(() => screen.getByText('▶'));
-    fireEvent.click(screen.getByText('▶'));
-    await waitFor(() => screen.getByText('X1'));
-
-    const x1Row = screen.getByText('X1').closest('tr')!;
-    expect(x1Row.querySelector('button[title="Revert group"]')).toBeTruthy();
-  });
 });
 
 // ── Struct sub-field edit ─────────────────────────────────────────────────────
@@ -745,15 +714,6 @@ describe('RecordPanel — grandchild rows (struct sub-fields inside array elemen
     expect(highlightedCells.length).toBe(0);
   });
 
-  it('revert button ↩ does NOT appear on grandchild rows', async () => {
-    await expandToGrandchildren();
-
-    const priorityRow = screen.getByText('Priority').closest('tr')!;
-    expect(priorityRow.querySelector('button[title="Revert group"]')).toBeNull();
-
-    const pkgIdRow = screen.getByText('PkgId').closest('tr')!;
-    expect(pkgIdRow.querySelector('button[title="Revert group"]')).toBeNull();
-  });
 });
 
 // ── #142: array arity/order controls (unsorted arrays only) ───────────────────

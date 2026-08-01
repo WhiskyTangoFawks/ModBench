@@ -53,7 +53,6 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     collapsedColumns: new Set(),
     onOpen: vi.fn(),
     onEdit: vi.fn(),
-    onRevert: vi.fn(),
     onPendingContextMenu: vi.fn(),
     onCellDragStart: vi.fn(),
     onCellDrop: vi.fn(),
@@ -195,18 +194,12 @@ describe('DiffRow — pending companion column', () => {
     });
   }
 
-  it('renders the pending value and a revert button', () => {
+  // Issue #207 / ADR-0033: revert lives only on the right-click menu's Revert Group — no
+  // standalone icon on the pending cell now that it exists there.
+  it('renders the pending value with no inline revert control', () => {
     render(<table><tbody>{React.createElement(DiffRow, pendingProps())}</tbody></table>);
     expect(screen.getByText('pending-value')).toBeInTheDocument();
-    expect(screen.getByTitle('Revert group')).toBeInTheDocument();
-  });
-
-  it('clicking the revert button calls onRevert with the change id and does not open the editor', () => {
-    const onRevert = vi.fn();
-    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onRevert }))}</tbody></table>);
-    fireEvent.click(screen.getByTitle('Revert group'));
-    expect(onRevert).toHaveBeenCalledWith('c1');
-    expect(screen.queryByDisplayValue('pending-value')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Revert group')).not.toBeInTheDocument();
   });
 
   // Issue #203: plain click on a pending value now edits it directly, on the same terms as a
@@ -371,16 +364,17 @@ describe('DiffRow — pending companion column', () => {
   it('renders nothing in the pending column when there is no pending value', () => {
     const master = override('Fallout4.esm');
     const mod = override('MyMod.esp'); // no pendingFields
-    render(<table><tbody>{React.createElement(DiffRow, baseProps({
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, baseProps({
       columns: [diskColumn(master), diskColumn(mod), pendingColumn('MyMod.esp')],
       overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
     }))}</tbody></table>);
-    expect(screen.queryByTitle('Revert group')).not.toBeInTheDocument();
+    const pendingCell = container.querySelectorAll('td')[3];
+    expect(pendingCell.textContent).toBe('');
   });
 });
 
 describe('DiffRow — non-top-level contexts', () => {
-  it('array-element / struct-child / grandchild rows indent and hide the ↩ except struct-child', () => {
+  it('array-element / struct-child / grandchild rows indent (array-element example)', () => {
     const master = override('Fallout4.esm');
     const mod = override('MyMod.esp', { pendingFields: { Items: ['x', 'y'] } });
     const elementMeta: FieldMetadata = { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
@@ -396,8 +390,6 @@ describe('DiffRow — non-top-level contexts', () => {
       pendingChangeMap: { 'MyMod.esp:Items': change },
       context: { kind: 'array-element', overrideMeta: elementMeta, parentFieldName: 'Items' },
     }))}</tbody></table>);
-    // array-element rows never carry the inline revert affordance (showActions is false).
-    expect(screen.queryByTitle('Revert group')).not.toBeInTheDocument();
     const fieldCell = screen.getByText('[1]').closest('td')!;
     expect(fieldCell.style.paddingLeft).toBe('24px');
   });

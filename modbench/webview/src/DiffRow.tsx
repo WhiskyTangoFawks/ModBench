@@ -187,7 +187,6 @@ interface DiffRowProps {
   collapsedColumns: Set<string>;
   onOpen: (fk: string) => void;
   onEdit: (plugin: string, fieldName: string, value: unknown) => void;
-  onRevert: (changeId: string) => void;
   // Issue #203: right-click a pending value → Save Group / Revert Group / Reveal in Pending
   // Changes Tree, all from the shared PendingCellMenu (RecordPanel owns the reveal wiring) —
   // this row only ever needs to open that menu, never call reveal itself.
@@ -209,7 +208,7 @@ interface DiffRowProps {
 
 export function DiffRow({
   diff, conflictAll, columns, overrideMap, fieldMetaMap, immutableSet, client,
-  pendingChangeMap, collapsedColumns, onOpen, onEdit, onRevert, onPendingContextMenu,
+  pendingChangeMap, collapsedColumns, onOpen, onEdit, onPendingContextMenu,
   onCellDragStart, onCellDrop,
   context, hasChildren, isExpanded, onToggle, arrayEdit, onArrayAdd,
 }: DiffRowProps) {
@@ -314,8 +313,8 @@ export function DiffRow({
           <td
             key={`pending:${col.plugin}`}
             // Issue #139: right-click a pending value → group-scoped Save/Revert/Reveal (#203
-            // adds Reveal to this menu). Gated on the same showActions as the inline ↩ (top-level
-            // and struct-child rows carry a change id).
+            // adds Reveal to this menu; ADR-0033 makes right-click the only place Revert Group
+            // lives). Gated on showActions — top-level and struct-child rows carry a change id.
             onContextMenu={change && showActions ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); } : undefined}
             style={{
               ...baseCell,
@@ -324,40 +323,19 @@ export function DiffRow({
               opacity: hasPending ? 1 : 0.3,
             }}
           >
-            {hasPending && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                {/* Issue #203: a pending value is directly editable, on the same terms as a disk
-                    cell — same renderCell the disk columns use, same onEdit call shape
-                    (plugin, diff.fieldName, value). Editable is unconditional here rather than
-                    re-checking immutableSet: buildColumns (recordUtils.ts) only ever creates a
-                    'pending' column for a plugin that isn't immutable, so a pending column's own
-                    plugin is always mutable — plain click now edits instead of revealing (#140's
-                    reveal moved to the right-click menu above). Issue #159: the FormKey
-                    resolution comes from the staged change's own `resolutions`, keyed by this
-                    row's sub-path within the change's NewValue (pendingResolutionPath) — the
-                    same tri-state signal disk columns use, not a stand-in. */}
-                <span>{renderCell(pendingValue, meta, true, client, onOpen,
-                  v => onEdit(col.plugin, diff.fieldName, v), undefined,
-                  meta.type === 'formKey' ? pendingResolution : undefined)}</span>
-                {change && showActions && (
-                  <button
-                    // stopPropagation: the ↩ sits inside the cell that plain-click reveals
-                    // (#140) — reverting must not also fire a reveal on the same click.
-                    onClick={e => { e.stopPropagation(); onRevert(change.id); }}
-                    title="Revert group"
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: 'var(--vscode-errorForeground, #f88)',
-                      fontSize: '11px',
-                      padding: 0,
-                      lineHeight: 1,
-                    }}
-                  >↩</button>
-                )}
-              </span>
-            )}
+            {/* Issue #203: a pending value is directly editable, on the same terms as a disk
+                cell — same renderCell the disk columns use, same onEdit call shape
+                (plugin, diff.fieldName, value). Editable is unconditional here rather than
+                re-checking immutableSet: buildColumns (recordUtils.ts) only ever creates a
+                'pending' column for a plugin that isn't immutable, so a pending column's own
+                plugin is always mutable — plain click now edits instead of revealing (#140's
+                reveal moved to the right-click menu above). Issue #159: the FormKey
+                resolution comes from the staged change's own `resolutions`, keyed by this
+                row's sub-path within the change's NewValue (pendingResolutionPath) — the
+                same tri-state signal disk columns use, not a stand-in. */}
+            {hasPending && renderCell(pendingValue, meta, true, client, onOpen,
+              v => onEdit(col.plugin, diff.fieldName, v), undefined,
+              meta.type === 'formKey' ? pendingResolution : undefined)}
           </td>
         );
       })}

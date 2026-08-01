@@ -164,8 +164,9 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
   `validFormKeyTypes`, and the link affordance appears on `Ctrl`-hover only when the reference
   resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows,
   and are themselves drag sources for their whole value via that summary row, the same as a
-  scalar leaf, collapsed or expanded alike (#204). Pending-change cells show the new value on a yellow background and are directly
-  editable on the same terms as disk cells, plus an inline revert control (see Pending column).
+  scalar leaf, collapsed or expanded alike (#204). Pending-change cells show the new value on a
+  yellow background and are directly editable on the same terms as disk cells (see Pending
+  column for how they're reverted).
 - **Unsorted array fields have arity and order controls in the field grid** — each element row
   carries move-up / move-down (swap with the neighbour, disabled at the first/last position) and
   a remove control, and the parent array row carries an add control that appends a default-valued
@@ -203,9 +204,9 @@ plugin:
   multi-member change; a change already saved or reverted resolves to nothing and is logged, not
   thrown), **Save Group** (writes every plugin in the component and consumes its pending rows; the
   grid reloads to reflect what reached disk), and **Revert Group** — the group's only three
-  actions, all in one menu. Revert additionally keeps an inline ↩ shortcut on the pending cell —
-  a sibling of the value, not a descendant, so clicking it reverts without activating the cell's
-  editor. Revert's confirmation keys on member
+  actions, all in one menu, and the only way to trigger any of them
+  ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md): no standalone revert
+  icon on the cell now that Revert Group lives in the menu). Revert's confirmation keys on member
   count, not on which control fired it: a group of one — the common case — is exactly "revert this
   field" and fires straight away; an entangled change confirms first, listing the members, rather
   than firing the 409 the backend would return for a partial group revert (ADR-0028). The member
@@ -377,8 +378,8 @@ section, and any future surface):
    (add / remove / move-up / move-down, swap-based, on non-immutable columns) and **absent** for
    sorted (`wbArrayS`) arrays, whose order is sort-key-derived (#142). The VMAD section keeps its
    own add/remove element and add/remove struct.
-4. **Pending values** always show the new value (not the old), on a yellow background with a
-   revert button.
+4. **Pending values** always show the new value (not the old), on a yellow background; revert is
+   menu-only (right-click **Revert Group**, see Pending column), not a cell-level control.
 5. **Null / missing fields** render as an empty cell, never "null"/"undefined".
 6. **Read-only cells** in immutable plugin columns are never editable and render no input on
    click.
