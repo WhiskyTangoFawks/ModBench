@@ -47,6 +47,11 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   `/regenerate-api` → frontend (`PluginRepository`/`SessionController`) →
   `package.json` commands/menus + `extension.ts` registration → `EXPECTED_COMMANDS` in
   integration test.
+- Native-first, webviews included: before designing any interaction, ask "which VS
+  Code surface already does this?" and copy its answer — menus, pickers, confirms,
+  prompts, trees and clipboard all have one. A webview is justified by what it
+  *renders*, never by the chrome around it. Full mapping in
+  [modbench/CLAUDE.md](modbench/CLAUDE.md) § Invariants; ADR-0027 is the precedent.
 - Read `/tdd` before planning any implementation breakdown — always, even if it
   won't end up as literal red/green slices.
 - Solving pre-existing problems found along the way is in scope — not scope creep.
