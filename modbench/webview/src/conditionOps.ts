@@ -107,7 +107,12 @@ export function currentConditionList(
   return result;
 }
 
-function overlayPendingEdits(
+// Issue #203: also the base a pending field cell's own editor renders from — overlaying every
+// staged field for this condition+plugin (not just the one field the cell is rendering) matters
+// because a field's renderEdit can read a *sibling* field to pick its widget (e.g. `comparison`
+// branches on `useGlobal`); overlaying only the rendered field would show/commit against a stale
+// sibling when both are staged at once.
+export function overlayPendingEdits(
   base: ParsedCondition,
   index: number,
   fieldPath: string,

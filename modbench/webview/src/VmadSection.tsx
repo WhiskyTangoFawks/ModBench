@@ -29,13 +29,10 @@ interface VmadSectionProps {
   pendingChangeMap?: Record<string, PendingChange>;
   onEdit?: (plugin: string, vmadPath: string, value: unknown) => void;
   onRevert?: (changeId: string) => void;
-  // Issue #139: right-click a pending value → Save Group / Revert Group. Threaded down to every
+  // Issue #139/#203: right-click a pending value → Save Group / Revert Group / Reveal in Pending
+  // Changes Tree, all from the shared PendingCellMenu RecordPanel owns — threaded down to every
   // pending-cell renderer so VMAD pending values offer the same actions as ordinary fields.
   onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
-  // Issue #140: plain click on a pending value reveals its change in the Pending Changes tree —
-  // the same gesture and the same guard as the field grid's pending column (Ctrl/meta-click is
-  // left alone so an object leaf's FormKeyLink can still follow the reference).
-  onRevealPendingChange?: (changeId: string) => void;
   onStructOp?: OnStructOp;
   client?: RecordSessionClient;
 }
@@ -455,23 +452,21 @@ function pendingOpLabel(v: unknown): React.ReactNode {
 
 // Renders a pending add_property in the pending column: an inline editor (scalar) in edit mode that
 // re-issues the same add op with the new value, else a read-only value. Plus a revert control.
-function AddedPendingCell({ change, editable, onStructOp, onRevert, onPendingContextMenu, onRevealPendingChange }: Readonly<{
+function AddedPendingCell({ change, editable, onStructOp, onRevert, onPendingContextMenu }: Readonly<{
   change: PendingChange; editable?: boolean; onStructOp?: OnStructOp; onRevert?: (id: string) => void;
   onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
-  onRevealPendingChange?: (changeId: string) => void;
 }>) {
   const op = change.newValue as StructOp & { type: string; name: string; value: unknown };
   const kind = opScalarKind(op.type);
   const reissue = (v: unknown) => onStructOp?.(change.plugin, change.fieldPath, { ...op, value: v });
-  // Issue #140: this cell can itself be editable (a not-yet-saved add_property can be re-issued
-  // with a new value) — unlike every other pending cell, which is always read-only. Reveal-on-
-  // click only applies to the read-only rendering; a click meant to open the value editor must
-  // not also fire a reveal.
+  // Issue #203: this cell can itself be editable (a not-yet-saved add_property can be re-issued
+  // with a new value) — unlike every other structural-op pending cell (remove_property, set_type),
+  // which stays read-only since there's no scalar to edit. Plain click never reveals here or
+  // anywhere else in the pending column any more — reveal lives on the right-click menu only.
   const editing = editable && onStructOp && kind;
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-      onContextMenu={onPendingContextMenu ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); } : undefined}
-      onClick={!editing && onRevealPendingChange ? e => { if (!e.ctrlKey && !e.metaKey) onRevealPendingChange(change.id); } : undefined}>
+      onContextMenu={onPendingContextMenu ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); } : undefined}>
       {editing
         ? <VmadScalarEditor value={op.value} type={kind} onCommit={reissue} ariaLabel={`Added value for ${op.name}`} />
         : <span>{toStr(op.value)}</span>}
@@ -487,7 +482,7 @@ function AddedPendingCell({ change, editable, onStructOp, onRevert, onPendingCon
 
 export function VmadSection({
   vmad, columns, onOpen,
-  immutableSet, pendingChangeMap, onEdit, onRevert, onPendingContextMenu, onRevealPendingChange, onStructOp, client,
+  immutableSet, pendingChangeMap, onEdit, onRevert, onPendingContextMenu, onStructOp, client,
 }: Readonly<VmadSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -522,16 +517,29 @@ export function VmadSection({
 
   const totalCols = columns.length + 1;
 
+  // Issue #203: a pending scalar/object leaf value is directly editable, on the same terms as a
+  // disk cell — `leafProp` (present only for a depth-1 property row, never for a script row or a
+  // container's own root) identifies which VmadPropertyDiff owns this column so the pending cell
+  // can pick the same ClickToEdit + VmadScalarEditor/VmadObjectEditor pair the disk cell uses,
+  // fed the staged value instead of the disk one. A pending value that is itself a structural op
+  // (add_property/remove_property/set_type — isStructOp) has nothing scalar to edit in place and
+  // stays read-only, same as before. Editable is unconditional (no immutableSet re-check): a
+  // 'pending' column only ever exists for a plugin buildColumns (recordUtils.ts) already found
+  // non-immutable, so the plugin here is always mutable.
   const valueCells = (
     rowKey: string,
     cellStates: Record<string, ConflictThis | undefined>,
     render: (plugin: string) => React.ReactNode,
     vmadPath?: string,
+    leafProp?: VmadPropertyDiff,
   ): React.ReactNode[] =>
     columns.map((col, i) => {
       if (col.kind === 'pending') {
         const change = vmadPath && pendingChangeMap ? pendingChangeMap[`${col.plugin}:${vmadPath}`] : undefined;
         const hasPending = change != null;
+        const editableLeaf = hasPending && onEdit && vmadPath && leafProp
+          && (leafProp.kind === 'scalar' || leafProp.kind === 'object')
+          && !isStructOp(change.newValue);
         return (
           <td
             key={`${rowKey}:p${i}`}
@@ -544,13 +552,22 @@ export function VmadSection({
             onContextMenu={hasPending && onPendingContextMenu
               ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); }
               : undefined}
-            onClick={hasPending && onRevealPendingChange
-              ? e => { if (!e.ctrlKey && !e.metaKey) onRevealPendingChange(change.id); }
-              : undefined}
           >
             {hasPending && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                {pendingOpLabel(change.newValue)}
+                {editableLeaf
+                  ? (
+                    <ClickToEdit read={pendingOpLabel(change.newValue)}>
+                      {leafProp.kind === 'scalar'
+                        ? <VmadScalarEditor value={change.newValue} type={scalarType(leafProp)}
+                            onCommit={v => onEdit(col.plugin, vmadPath, v)} />
+                        : client != null
+                          ? <VmadObjectEditor value={change.newValue} client={client}
+                              onCommit={v => onEdit(col.plugin, vmadPath, v)} />
+                          : pendingOpLabel(change.newValue)}
+                    </ClickToEdit>
+                  )
+                  : pendingOpLabel(change.newValue)}
                 {onRevert && (
                   <button
                     onClick={e => { e.stopPropagation(); onRevert(change.id); }}
@@ -643,7 +660,8 @@ export function VmadSection({
                 <RemovePropertyButton plugin={plugin} scriptName={scriptName} propName={p.name} onStructOp={onStructOp} />
               </span>
             : propertyCell(plugin, rowCtx),
-          arrayVmadPath ?? leafPath ?? structRootPath)}
+          arrayVmadPath ?? leafPath ?? structRootPath,
+          depth === 1 ? p : undefined)}
       </tr>,
     );
 
@@ -690,7 +708,9 @@ export function VmadSection({
                 backgroundColor: change ? 'rgba(255,200,50,0.10)' : undefined,
                 opacity: change ? 1 : 0.3,
               }}>
-                {change && <AddedPendingCell change={change} editable={isEditable(col.plugin)} onStructOp={onStructOp} onRevert={onRevert} onPendingContextMenu={onPendingContextMenu} onRevealPendingChange={onRevealPendingChange} />}
+                {/* editable is unconditional: col.kind === 'pending' already means this plugin is
+                    mutable (buildColumns, recordUtils.ts) — see the valueCells comment above. */}
+                {change && <AddedPendingCell change={change} editable onStructOp={onStructOp} onRevert={onRevert} onPendingContextMenu={onPendingContextMenu} />}
               </td>
             );
           }
@@ -750,9 +770,6 @@ export function VmadSection({
               }}
               onContextMenu={change && onPendingContextMenu
                 ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); }
-                : undefined}
-              onClick={change && onRevealPendingChange
-                ? e => { if (!e.ctrlKey && !e.metaKey) onRevealPendingChange(change.id); }
                 : undefined}>
                 {change && onRevert && (
                   <button onClick={e => { e.stopPropagation(); onRevert(change.id); }} title="Revert group"

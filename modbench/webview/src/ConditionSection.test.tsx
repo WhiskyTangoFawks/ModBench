@@ -398,9 +398,150 @@ describe('ConditionSection', () => {
     toggleRow('#1');
 
     const operatorRow = screen.getByText('Operator').closest('tr')!;
-    expect(within(operatorRow).getByText('GreaterThan')).toBeInTheDocument();
+    expect(within(operatorRow).getByTitle('Revert group')).toBeInTheDocument();
     fireEvent.click(within(operatorRow).getByTitle('Revert group'));
     expect(onRevert).toHaveBeenCalledWith('chg-1');
+    // Issue #203: this Operator pending cell is now click-to-edit, and ↩ sits inside it —
+    // clicking ↩ must revert without also activating the select editor (stopPropagation).
+    expect(within(operatorRow).queryByRole('combobox')).toBeNull();
+  });
+
+  // ── Issue #203: pending condition fields are directly editable ──────────────────
+  //
+  // Same terms as the disk cell: a Condition field's editor (ScalarCell/FormKeyCell, via
+  // field.renderEdit) is itself click-to-activate — fieldCell only decides *whether* to hand the
+  // pending cell that editor at all, gated on the column's mutability, exactly like the disk cell.
+
+  function condChange(fieldPath: string, newValue: unknown, id = 'chg-1'): PendingChange {
+    return {
+      id, formKey: '000800:A.esp', plugin: 'A.esp', fieldPath, recordType: 'cobj',
+      oldValue: null, newValue, source: 'user', description: null,
+      timestamp: '2026-01-01T00:00:00Z', changeType: 'field_edit', groupId: null,
+    } as unknown as PendingChange;
+  }
+
+  it('clicking a pending condition field activates its own editable widget, seeded with the staged value', () => {
+    const c = condition({ operator: 'EqualTo' });
+    const cols: Column[] = [{ kind: 'disk', override: override('A.esp') }, { kind: 'pending', plugin: 'A.esp' }];
+    render(
+      <table><tbody>
+        <ConditionSection
+          conditions={compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }])}
+          columns={cols}
+          onOpen={vi.fn()}
+          immutableSet={new Set()}
+          onEdit={vi.fn()}
+          client={fakeClient()}
+          pendingChangeMap={{ 'A.esp:CTDA\\Conditions\\0\\Operator': condChange('CTDA\\Conditions\\0\\Operator', 'GreaterThan') }}
+        />
+      </tbody></table>,
+    );
+    toggleRow('#1');
+
+    const operatorRow = screen.getByText('Operator').closest('tr')!;
+    // Read state before any click: disk shows its own value, pending shows the staged one —
+    // neither is an input yet (matches the disk cell's own click-to-activate rule).
+    expect(within(operatorRow).getByText('EqualTo')).toBeInTheDocument();
+    expect(within(operatorRow).getByText('GreaterThan')).toBeInTheDocument();
+    expect(within(operatorRow).queryByRole('combobox')).toBeNull();
+
+    fireEvent.click(within(operatorRow).getByText('GreaterThan'));
+
+    const select = within(operatorRow).getByRole('combobox');
+    expect((select as HTMLSelectElement).value).toBe('GreaterThan');
+  });
+
+  it('committing an edit on a pending condition field calls onEdit with the wire path and new value', () => {
+    const c = condition({ operator: 'EqualTo' });
+    const onEdit = vi.fn();
+    const cols: Column[] = [{ kind: 'disk', override: override('A.esp') }, { kind: 'pending', plugin: 'A.esp' }];
+    render(
+      <table><tbody>
+        <ConditionSection
+          conditions={compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }])}
+          columns={cols}
+          onOpen={vi.fn()}
+          immutableSet={new Set()}
+          onEdit={onEdit}
+          client={fakeClient()}
+          pendingChangeMap={{ 'A.esp:CTDA\\Conditions\\0\\Operator': condChange('CTDA\\Conditions\\0\\Operator', 'GreaterThan') }}
+        />
+      </tbody></table>,
+    );
+    toggleRow('#1');
+
+    const operatorRow = screen.getByText('Operator').closest('tr')!;
+    fireEvent.click(within(operatorRow).getByText('GreaterThan'));
+    const select = within(operatorRow).getByRole('combobox');
+    fireEvent.change(select, { target: { value: 'LessThan' } });
+    fireEvent.blur(select);
+
+    expect(onEdit).toHaveBeenCalledWith('A.esp', 'CTDA\\Conditions\\0\\Operator', 'LessThan');
+  });
+
+  // Required check (not a stylistic nicety): a field's renderEdit can read a *sibling* field to
+  // pick its widget — Comparison branches on UseGlobal. If the pending cell overlaid only the
+  // field it renders, staging both UseGlobal and Comparison at once would render Comparison's
+  // editor against the STALE disk UseGlobal (still false), so the pending cell would show the
+  // stale disk float (5) instead of the staged GLOB FormKey.
+  it('overlays every staged field on the condition, not just the one being rendered — a pending Comparison cell reflects a staged UseGlobal', () => {
+    const c = condition({ useGlobal: false, comparisonFloat: 5, comparisonGlobal: null });
+    const cols: Column[] = [{ kind: 'disk', override: override('A.esp') }, { kind: 'pending', plugin: 'A.esp' }];
+    render(
+      <table><tbody>
+        <ConditionSection
+          conditions={compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }])}
+          columns={cols}
+          onOpen={vi.fn()}
+          immutableSet={new Set()}
+          onEdit={vi.fn()}
+          client={fakeClient()}
+          pendingChangeMap={{
+            'A.esp:CTDA\\Conditions\\0\\UseGlobal': condChange('CTDA\\Conditions\\0\\UseGlobal', true, 'chg-ug'),
+            'A.esp:CTDA\\Conditions\\0\\Comparison': condChange('CTDA\\Conditions\\0\\Comparison', '00abcd:G.esp', 'chg-cmp'),
+          }}
+        />
+      </tbody></table>,
+    );
+    toggleRow('#1');
+
+    const comparisonRow = screen.getByText('Comparison').closest('tr')!;
+    const pendingCell = comparisonRow.querySelectorAll('td')[2]; // field label, disk, pending
+    // A FormKeyCell/FormKeyLink renders as a <button> (the "read state" IS the link, no separate
+    // activation step) — a stale (non-overlaid) UseGlobal would instead pick ScalarCell(float),
+    // whose read state is a plain, non-button span showing the disk value "5". Checking the tag,
+    // not just the text, is what actually falsifies the single-field-overlay bug: a bespoke
+    // read-only text renderer could otherwise show the right string via either path.
+    const glob = within(pendingCell).getByText('00abcd:G.esp');
+    expect(glob.tagName).toBe('BUTTON');
+    expect(within(pendingCell).queryByText('5')).toBeNull();
+  });
+
+  it('right-clicking a pending condition field requests the pending context menu', () => {
+    const c = condition({ operator: 'EqualTo' });
+    const onPendingContextMenu = vi.fn();
+    const cols: Column[] = [{ kind: 'disk', override: override('A.esp') }, { kind: 'pending', plugin: 'A.esp' }];
+    render(
+      <table><tbody>
+        <ConditionSection
+          conditions={compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }])}
+          columns={cols}
+          onOpen={vi.fn()}
+          immutableSet={new Set()}
+          onEdit={vi.fn()}
+          client={fakeClient()}
+          pendingChangeMap={{ 'A.esp:CTDA\\Conditions\\0\\Operator': condChange('CTDA\\Conditions\\0\\Operator', 'GreaterThan') }}
+          onPendingContextMenu={onPendingContextMenu}
+        />
+      </tbody></table>,
+    );
+    toggleRow('#1');
+
+    const operatorRow = screen.getByText('Operator').closest('tr')!;
+    const pendingCell = operatorRow.querySelectorAll('td')[2];
+    fireEvent.contextMenu(pendingCell);
+
+    expect(onPendingContextMenu).toHaveBeenCalledWith('chg-1', expect.any(Number), expect.any(Number));
   });
 
   // ---- #153: add/remove/reorder controls ----

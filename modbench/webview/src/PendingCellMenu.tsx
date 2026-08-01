@@ -8,11 +8,15 @@ interface PendingCellMenuProps {
   x: number;
   y: number;
   onClose: () => void;
+  // Issue #203: plain-click on a pending cell no longer reveals it in the Pending Changes tree
+  // (the cell is directly editable now) — the gesture moves here, first in the menu since it's
+  // the read-only "what is this" action ahead of the two mutating ones.
+  onReveal: () => void;
   onSaveGroup: () => void;
   onRevertGroup: () => void;
 }
 
-export function PendingCellMenu({ x, y, onClose, onSaveGroup, onRevertGroup }: PendingCellMenuProps) {
+export function PendingCellMenu({ x, y, onClose, onReveal, onSaveGroup, onRevertGroup }: Readonly<PendingCellMenuProps>) {
   useEffect(() => {
     const close = (e: MouseEvent | KeyboardEvent) => {
       if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
@@ -43,6 +47,7 @@ export function PendingCellMenu({ x, y, onClose, onSaveGroup, onRevertGroup }: P
         zIndex: 1000,
       }}
     >
+      <ColumnHeaderMenuItem label="Reveal in Pending Changes Tree" onActivate={onReveal} />
       <ColumnHeaderMenuItem label="Save Group" onActivate={onSaveGroup} />
       <ColumnHeaderMenuItem label="Revert Group" onActivate={onRevertGroup} />
     </ul>
