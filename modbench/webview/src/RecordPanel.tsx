@@ -578,7 +578,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                   overrideMap={overrideMap}
                   fieldMetaMap={fieldMetaMap}
                   immutableSet={immutableSet}
-                  client={client}
                   pendingChangeMap={pendingChangeMap}
                   collapsedColumns={collapsedColumns}
                   onCellDragStart={handleCellDragStart}
@@ -617,7 +616,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         overrideMap={overrideMap}
                         fieldMetaMap={fieldMetaMap}
                         immutableSet={immutableSet}
-                        client={client}
                         pendingChangeMap={pendingChangeMap}
                         collapsedColumns={collapsedColumns}
                         onCellDragStart={handleCellDragStart}
@@ -658,7 +656,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                             overrideMap={overrideMap}
                             fieldMetaMap={fieldMetaMap}
                             immutableSet={immutableSet}
-                            client={client}
                             pendingChangeMap={pendingChangeMap}
                             collapsedColumns={collapsedColumns}
                             onCellDragStart={handleCellDragStart}
@@ -688,7 +685,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         overrideMap={overrideMap}
                         fieldMetaMap={fieldMetaMap}
                         immutableSet={immutableSet}
-                        client={client}
                         pendingChangeMap={pendingChangeMap}
                         collapsedColumns={collapsedColumns}
                         onCellDragStart={handleCellDragStart}
@@ -717,7 +713,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                           pendingChangeMap={pendingChangeMap}
                           onEdit={(plugin, vmadPath, value) => { void handleEdit(plugin, vmadPath, value); }}
                           onStructOp={(plugin, vmadPath, op) => { void handleVmadStructOp(plugin, vmadPath, op); }}
-                          client={client}
                         />
             )}
             {!isHeaderRecord && (

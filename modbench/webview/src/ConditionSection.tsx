@@ -126,7 +126,7 @@ function paramField(index: number): FieldSpec {
       if (p.category === 'Form') {
         return (
           <FormKeyCell value={p.formKey} meta={formKeyMeta()} editable
-            client={ctx.client} onOpen={ctx.onOpen} onCommit={ctx.onCommit} />
+            onOpen={ctx.onOpen} onCommit={ctx.onCommit} />
         );
       }
       if (p.category === 'Text') {
@@ -166,7 +166,6 @@ const ENVELOPE_FIELDS: FieldSpec[] = [
             value={c.runOnReference}
             meta={formKeyMeta()}
             editable
-            client={ctx.client}
             onOpen={ctx.onOpen}
             onCommit={fk => ctx.onCommit({ target: c.runOnTarget, reference: fk })}
           />
@@ -200,7 +199,6 @@ const ENVELOPE_FIELDS: FieldSpec[] = [
           value={c.comparisonGlobal}
           meta={formKeyMeta(['glob'])}
           editable
-          client={ctx.client}
           onOpen={ctx.onOpen}
           onCommit={ctx.onCommit}
         />

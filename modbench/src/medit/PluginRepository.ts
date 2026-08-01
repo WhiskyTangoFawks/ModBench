@@ -73,6 +73,12 @@ export interface PluginRepository {
   getPlugins(): Promise<PluginMetadata[]>;
   getRecordTypes(plugin: string): Promise<{ type: string; count: number; displayName: string }[]>;
   getRecords(plugin: string, type: string, offset: number, limit: number): Promise<RecordPage>;
+  // Issue #210: the FormKey picker's own search — free-text `query` matched against EditorID or
+  // (as of #210) a FormKey-shaped string, scoped to `validTypes` only when there's exactly one
+  // (an unscoped/multi-type field searches across every record type, same as the deleted
+  // webview-side RecordSessionClient.searchRecords this replaces). Capped at 20 results, matching
+  // the old picker's page size.
+  searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
   setFilter(sql: string): Promise<string | null>; // returns error message or null on success
   clearFilter(): Promise<void>;
   getActiveFilter(): Promise<string | null>;
@@ -124,6 +130,23 @@ export class ApiPluginRepository implements PluginRepository {
       params: { query: { plugin, type, offset, limit } },
     });
     this.ensureOk(`getRecords(${plugin}, ${type})`, response, error);
+    return {
+      items: (data?.items ?? []).map(toRecordSummary),
+      total: data?.total ?? 0,
+    };
+  }
+
+  async searchRecords(query: string, validTypes: string[]): Promise<RecordPage> {
+    const { data, error, response } = await this.client.GET('/records', {
+      params: {
+        query: {
+          search: query,
+          ...(validTypes.length === 1 ? { type: validTypes[0] } : {}),
+          limit: 20,
+        },
+      },
+    });
+    this.ensureOk(`searchRecords(${query})`, response, error);
     return {
       items: (data?.items ?? []).map(toRecordSummary),
       total: data?.total ?? 0,

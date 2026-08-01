@@ -9,11 +9,6 @@ export interface PluginInfo {
   loadOrderIndex: number;
 }
 
-export interface FormKeySearchResult {
-  formKey: string;
-  editorId: string | null;
-}
-
 // Issue #122: the composite view for a single record. `load` fires compare + changes + plugins
 // in parallel; a compare failure fails the whole load (the panel has nothing to show), while a
 // changes/plugins failure comes back as `null` so the panel leaves that slice of state
@@ -30,12 +25,13 @@ export type LoadResult =
 
 // Issue #122: the webview-side typed backend client. Owns every backend call the record panel
 // makes — mirrors the host-side ApiClient (openapi-fetch over the generated `paths` types), so
-// there are no hand-built URL strings or stringly-typed request shapes. Read choreography
-// (load, searchRecords) is fully parsed here; writes return the raw Response so the panel keeps
-// its existing status-code / body-shape error handling verbatim.
+// there are no hand-built URL strings or stringly-typed request shapes. Read choreography (load)
+// is fully parsed here; writes return the raw Response so the panel keeps its existing
+// status-code / body-shape error handling verbatim. #210: searchRecords moved off this client —
+// the FormKey picker it backed is a native QuickPick now, and its search runs in the extension
+// host via PluginRepository.searchRecords instead of round-tripping through this webview.
 export interface RecordSessionClient {
   load(formKey: string): Promise<LoadResult>;
-  searchRecords(query: string, validTypes: string[], signal?: AbortSignal): Promise<FormKeySearchResult[]>;
   save(formKey: string, plugin: string, fields: Record<string, unknown>, changeType?: string): Promise<Response>;
   revert(changeId: string): Promise<Response>;
   copyTo(formKey: string, targetPlugin: string): Promise<Response>;
@@ -88,23 +84,6 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
         changes: chg.response.ok ? (chg.data as PendingChange[]) : null,
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => p.name)) : null,
       };
-    },
-
-    async searchRecords(query, validTypes, signal) {
-      const { data, response } = await client.GET('/records', {
-        params: {
-          query: {
-            search: query,
-            ...(validTypes.length === 1 ? { type: validTypes[0] } : {}),
-            limit: 20,
-          },
-        },
-        signal,
-      });
-      // A failed (non-abort) search throws rather than returning [], so the picker's catch leaves
-      // the prior results visible — matching the pre-seam `if (!r.ok) return` (no state update).
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return (data?.items ?? []) as FormKeySearchResult[];
     },
 
     save(formKey, plugin, fields, changeType) {

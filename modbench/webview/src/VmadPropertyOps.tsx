@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { fg, mono } from './gridStyles';
-import { FormKeyPicker } from './FormKeyPicker';
+import { pickFormKey } from './formKeyPickerBridge';
 import { ModalShell } from './ModalShell';
-import type { RecordSessionClient } from './RecordSessionClient';
 import { ADDABLE_TYPES, PROP_FLAGS, defaultOpValue, opScalarKind, type OnStructOp } from './vmadOps';
 
 // ── structural ops (13.8): add / remove property ───────────────────────────────
@@ -23,15 +22,13 @@ const dialogInputStyle: React.CSSProperties = {
 
 const flagSelectStyle: React.CSSProperties = { ...dialogInputStyle, fontSize: '11px' };
 
-export function AddPropertyDialog({ client, onConfirm, onCancel }: Readonly<{
-  client?: RecordSessionClient;
+export function AddPropertyDialog({ onConfirm, onCancel }: Readonly<{
   onConfirm: (v: { name: string; type: string; value: unknown }) => void;
   onCancel: () => void;
 }>) {
   const [name, setName] = useState('');
   const [type, setType] = useState<string>('Int');
   const [value, setValue] = useState<unknown>(() => defaultOpValue('Int'));
-  const [picking, setPicking] = useState(false);
 
   function changeType(t: string) { setType(t); setValue(defaultOpValue(t)); }
 
@@ -58,18 +55,20 @@ export function AddPropertyDialog({ client, onConfirm, onCancel }: Readonly<{
         />
       );
     }
-    if (type === 'Object' && client != null) {
+    if (type === 'Object') {
       const fk = (value as { formKey?: string }).formKey ?? '';
-      if (picking) {
-        return (
-          <FormKeyPicker client={client} validTypes={[]}
-            onSelect={f => { setValue({ formKey: f, alias: -1 }); setPicking(false); }}
-            onClose={() => setPicking(false)} />
-        );
-      }
-      return <button aria-label="New property value" style={inputStyle} onClick={() => setPicking(true)}>
-        {fk || <span style={{ opacity: 0.5 }}>— click to pick</span>}
-      </button>;
+      // Issue #210: the picker itself is a native QuickPick (only the extension host can call
+      // vscode.window.createQuickPick) — there's no current reference to seed here (this is a
+      // brand-new property), so pickFormKey gets an empty seed.
+      return (
+        <button
+          aria-label="New property value"
+          style={inputStyle}
+          onClick={() => { void pickFormKey(fk, []).then(f => { if (f) setValue({ formKey: f, alias: -1 }); }); }}
+        >
+          {fk || <span style={{ opacity: 0.5 }}>— click to pick</span>}
+        </button>
+      );
     }
     return <span style={{ opacity: 0.5 }}>(empty)</span>;
   }
@@ -90,8 +89,8 @@ export function AddPropertyDialog({ client, onConfirm, onCancel }: Readonly<{
   );
 }
 
-export function AddPropertyButton({ plugin, scriptName, onStructOp, client }: Readonly<{
-  plugin: string; scriptName: string; onStructOp: OnStructOp; client?: RecordSessionClient;
+export function AddPropertyButton({ plugin, scriptName, onStructOp }: Readonly<{
+  plugin: string; scriptName: string; onStructOp: OnStructOp;
 }>) {
   const [open, setOpen] = useState(false);
   return (
@@ -99,7 +98,6 @@ export function AddPropertyButton({ plugin, scriptName, onStructOp, client }: Re
       <button title="Add property" onClick={() => setOpen(true)} style={structBtnStyle}>+ prop</button>
       {open && (
         <AddPropertyDialog
-          client={client}
           onCancel={() => setOpen(false)}
           onConfirm={({ name, type, value }) => {
             setOpen(false);

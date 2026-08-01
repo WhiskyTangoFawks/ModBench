@@ -33,4 +33,22 @@ public class SearchRecordsTests(TestPluginFixture fixture)
         Assert.Equal(expected.Total, actual.Total);
         Assert.Equal(expected.Items.Count, actual.Items.Count);
     }
+
+    // Issue #210: the picker's search has no `type` filter when a field allows more than one
+    // record type (e.g. any object reference), so it goes through the multi-table union path
+    // rather than single-table GetRecords — the FormKey-shaped match needs to resolve there too.
+    [Fact]
+    public void SearchRecords_AcrossTables_ByFormKey_ResolvesRecord()
+    {
+        using var manager = MakeLoadedManager();
+        var reader = manager.Repository!;
+
+        var byEditorId = reader.GetRecords("npc_", null, "TestNPC01", 10, 0);
+        var formKey = byEditorId.Items[0].FormKey;
+
+        var result = reader.SearchRecords(["npc_", "weap"], null, formKey, 10, 0);
+
+        Assert.Equal(1, result.Total);
+        Assert.Equal(formKey, result.Items[0].FormKey);
+    }
 }

@@ -65,6 +65,7 @@ function makeRepository(overrides: Partial<{
     getPlugins: vi.fn().mockResolvedValue(overrides.plugins ?? [makePlugin(0), makePlugin(1)]),
     getRecordTypes: vi.fn().mockResolvedValue(overrides.recordTypes ?? [{ type: 'WEAP', count: 5, displayName: 'Weapon' }]),
     getRecords: vi.fn().mockResolvedValue(overrides.records ?? { items: [makeRecord(0)], total: 1 }),
+    searchRecords: vi.fn().mockResolvedValue({ items: [], total: 0 }),
     setFilter: vi.fn().mockResolvedValue(null),
     clearFilter: vi.fn().mockResolvedValue(undefined),
     getActiveFilter: vi.fn().mockResolvedValue(null),

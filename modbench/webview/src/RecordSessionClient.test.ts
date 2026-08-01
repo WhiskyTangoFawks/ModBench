@@ -3,7 +3,7 @@ import { createRecordSessionClient } from './RecordSessionClient';
 
 // The client is the record panel's single backend seam. `fetch` is the genuine external
 // boundary here, so these tests stub it — everything above the client injects a fake client
-// instead (see RecordPanel.test / FormKeyPicker.test).
+// instead (see RecordPanel.test).
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -15,7 +15,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 describe('createRecordSessionClient', () => {
   it('exposes the record-session operations', () => {
     const client = createRecordSessionClient(5172);
-    for (const m of ['load', 'searchRecords', 'save', 'revert', 'copyTo', 'removeOverride', 'createRecord', 'groupMembers', 'saveGroup', 'revertGroup', 'conditionFunctions']) {
+    for (const m of ['load', 'save', 'revert', 'copyTo', 'removeOverride', 'createRecord', 'groupMembers', 'saveGroup', 'revertGroup', 'conditionFunctions']) {
       expect(client).toHaveProperty(m);
     }
   });
@@ -82,40 +82,6 @@ describe('RecordSessionClient.load', () => {
     if (!r.ok) return;
     expect(r.changes).toBeNull();
     expect(r.immutableSet).toBeNull();
-  });
-});
-
-describe('RecordSessionClient.searchRecords', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
-  beforeEach(() => {
-    fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ items: [{ formKey: '000001:A.esp', editorId: 'kw' }] })));
-    vi.stubGlobal('fetch', fetchMock);
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('returns the items on success', async () => {
-    const items = await createRecordSessionClient(5172).searchRecords('kw', []);
-    expect(items).toEqual([{ formKey: '000001:A.esp', editorId: 'kw' }]);
-  });
-
-  it('includes the type param for a single valid type', async () => {
-    await createRecordSessionClient(5172).searchRecords('sword', ['kywd']);
-    const url = typeof fetchMock.mock.calls[0][0] === 'string' ? fetchMock.mock.calls[0][0] : fetchMock.mock.calls[0][0].url;
-    expect(url).toContain('type=kywd');
-  });
-
-  it('omits the type param when multiple valid types', async () => {
-    await createRecordSessionClient(5172).searchRecords('sword', ['kywd', 'armo']);
-    const url = typeof fetchMock.mock.calls[0][0] === 'string' ? fetchMock.mock.calls[0][0] : fetchMock.mock.calls[0][0].url;
-    expect(url).not.toContain('type=');
-  });
-
-  it('returns [] when the signal is already aborted', async () => {
-    fetchMock.mockRejectedValue(new DOMException('aborted', 'AbortError'));
-    const controller = new AbortController();
-    controller.abort();
-    await expect(createRecordSessionClient(5172).searchRecords('kw', [], controller.signal))
-      .rejects.toThrow();
   });
 });
 

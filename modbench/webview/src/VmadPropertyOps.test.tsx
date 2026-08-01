@@ -1,12 +1,15 @@
 import '@testing-library/jest-dom';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+
+// Issue #210: the Object-value control now calls pickFormKey (the native-QuickPick bridge)
+// instead of rendering an inline picker. Mocked here so these tests assert the call, not any
+// rendered picker DOM.
+const pickFormKey = vi.fn().mockResolvedValue(null);
+vi.mock('./formKeyPickerBridge', () => ({ pickFormKey: (...args: unknown[]) => pickFormKey(...args) }));
 
 import { AddPropertyButton, AddPropertyDialog, RemovePropertyButton, SetTypeControl, PropertyFlagsControl } from './VmadPropertyOps';
-import type { RecordSessionClient } from './RecordSessionClient';
-
-const stubClient = { searchRecords: vi.fn().mockResolvedValue([]) } as unknown as RecordSessionClient;
 
 describe('AddPropertyButton', () => {
   it('opens the Add property dialog on click', () => {
@@ -34,6 +37,8 @@ describe('AddPropertyButton', () => {
 });
 
 describe('AddPropertyDialog — value control per type', () => {
+  afterEach(() => { pickFormKey.mockClear(); });
+
   it('defaults to an Int value control', () => {
     render(<AddPropertyDialog onConfirm={vi.fn()} onCancel={vi.fn()} />);
     expect(screen.getByLabelText('New property value')).toHaveAttribute('type', 'number');
@@ -51,17 +56,22 @@ describe('AddPropertyDialog — value control per type', () => {
     expect(screen.getByLabelText('New property value')).toHaveAttribute('type', 'text');
   });
 
-  it('shows an empty placeholder for non-scalar types with no client', () => {
+  // Issue #210: there's no current reference for a brand-new property, so the picker opens with
+  // an empty seed — never "(empty)"'s unconditioned-on-client fallback (that gate went away with
+  // the inline picker; the button is always the Object-type control now).
+  it('clicking the value control for Object opens the picker with an empty seed', () => {
     render(<AddPropertyDialog onConfirm={vi.fn()} onCancel={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('New property type'), { target: { value: 'Object' } });
-    expect(screen.getByText('(empty)')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('New property value'));
+    expect(pickFormKey).toHaveBeenCalledWith('', []);
   });
 
-  it('offers a FormKey picker for Object when a client is supplied', () => {
-    render(<AddPropertyDialog client={stubClient} onConfirm={vi.fn()} onCancel={vi.fn()} />);
+  it('shows the picked FormKey on the button once pickFormKey resolves', async () => {
+    pickFormKey.mockResolvedValueOnce('00001A:Fallout4.esm');
+    render(<AddPropertyDialog onConfirm={vi.fn()} onCancel={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('New property type'), { target: { value: 'Object' } });
     fireEvent.click(screen.getByLabelText('New property value'));
-    expect(screen.getByPlaceholderText('Search EditorID…')).toBeInTheDocument();
+    await vi.waitFor(() => expect(screen.getByText('00001A:Fallout4.esm')).toBeInTheDocument());
   });
 
   it('disables Add until a name is entered', () => {

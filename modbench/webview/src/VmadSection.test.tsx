@@ -3,16 +3,15 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
+// Issue #210: VmadObjectEditor now imports the pickFormKey bridge, which touches vscode.ts's
+// acquireVsCodeApi() at module load — stubbed here since these tests don't exercise the picker
+// itself (see VmadObjectEditor.test.tsx for that).
+vi.mock('./formKeyPickerBridge', () => ({ pickFormKey: vi.fn().mockResolvedValue(null) }));
+
 import { VmadSection } from './VmadSection';
 import type { Column } from './recordUtils';
 import { pendingCellContext } from './recordUtils';
 import type { CompareOverride, PendingChange, VmadCompare, VmadScriptDiff, VmadPropertyDiff } from './types';
-import type { RecordSessionClient } from './RecordSessionClient';
-
-// Issue #122: VMAD editors (object property picker, add-property dialog) take the injected
-// client instead of a port. These tests don't drive a live search, so a stub whose presence
-// just enables the editor branches is enough.
-const stubClient = { searchRecords: vi.fn().mockResolvedValue([]) } as unknown as RecordSessionClient;
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -90,7 +89,6 @@ function renderSection(vmad: VmadCompare | null, plugins: string[], opts: Render
           onEdit={opts.onEdit}
           onStructOp={opts.onStructOp}
           pendingChangeMap={opts.pendingChangeMap}
-          client={stubClient}
         />
       </tbody>
     </table>,

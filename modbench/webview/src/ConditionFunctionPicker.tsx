@@ -10,10 +10,12 @@ export interface ConditionFunctionPickerProps {
 
 // Searchable function picker (#152) — the ~479 shared condition-function slots (filtered server-
 // side to the loaded game/category via GET /condition-functions) are too many for a flat <select>,
-// so this mirrors FormKeyPicker's search-box UX: button shows the current value, click opens a
-// filter-as-you-type list. The catalog is fetched once per picker session (game-scoped, small),
-// then filtered client-side — unlike FormKeyPicker's per-keystroke server search, which exists for
-// a much larger, per-record-type result set this catalog doesn't have.
+// so this is a rendered search-box: button shows the current value, click opens a filter-as-you-
+// type list. The catalog is fetched once per picker session (game-scoped, small), then filtered
+// client-side — unlike the FormKey picker (#210, now a native QuickPick in the extension host),
+// this one is intentionally still a rendered dropdown: the catalog is small/game-scoped, not a
+// per-keystroke server search over a much larger per-record-type result set. Migrating this one
+// to a native surface too is out of scope for #210.
 export function ConditionFunctionPicker({ value, client, onCommit }: Readonly<ConditionFunctionPickerProps>) {
   const [picking, setPicking] = useState(false);
   const [all, setAll] = useState<string[]>([]);

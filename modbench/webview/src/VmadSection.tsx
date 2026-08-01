@@ -4,7 +4,6 @@ import type { ConflictThis, PendingChange, VmadCompare, VmadKind, VmadPropertyDi
 import { toStr, pendingCellContext } from './recordUtils';
 import { baseCell, headerCell, toggleBtnStyle, getCellStyle, fg } from './gridStyles';
 import { FormKeyLink } from './FormKeyLink';
-import type { RecordSessionClient } from './RecordSessionClient';
 import { VmadScalarEditor } from './VmadScalarEditor';
 import { VmadObjectEditor } from './VmadObjectEditor';
 import { AddPropertyButton, RemovePropertyButton, SetTypeControl, PropertyFlagsControl } from './VmadPropertyOps';
@@ -29,7 +28,6 @@ interface VmadSectionProps {
   pendingChangeMap?: Record<string, PendingChange>;
   onEdit?: (plugin: string, vmadPath: string, value: unknown) => void;
   onStructOp?: OnStructOp;
-  client?: RecordSessionClient;
 }
 
 export interface ArrayEditCtx {
@@ -306,7 +304,6 @@ interface LeafCellCtx {
   // Issue #111: per-column editability — a leaf cell in an immutable column never edits.
   isEditable: (plugin: string) => boolean;
   onEdit?: OnEdit;
-  client?: RecordSessionClient;
   onOpen: (fk: string) => void;
 }
 
@@ -343,7 +340,7 @@ function renderLeafCell(
   ctx: LeafCellCtx,
   typesDiffer: boolean,
 ): React.ReactNode {
-  const { isEditable, onEdit, client, onOpen } = ctx;
+  const { isEditable, onEdit, onOpen } = ctx;
   const typeCue = typesDiffer ? `(${p.types[plugin]})` : null;
   const read = leafContent(p, plugin, onOpen, typeCue);
   if (!isEditable(plugin) || !onEdit) return read;
@@ -370,10 +367,10 @@ function renderLeafCell(
       </ClickToEdit>
     );
   }
-  if (p.kind === 'object' && client != null) {
+  if (p.kind === 'object') {
     return (
       <ClickToEdit read={read}>
-        <VmadObjectEditor value={p.values[plugin]} client={client} onCommit={commit} />
+        <VmadObjectEditor value={p.values[plugin]} onCommit={commit} />
       </ClickToEdit>
     );
   }
@@ -474,7 +471,7 @@ function AddedPendingCell({ change, editable, onStructOp }: Readonly<{
 
 export function VmadSection({
   vmad, columns, onOpen,
-  immutableSet, pendingChangeMap, onEdit, onStructOp, client,
+  immutableSet, pendingChangeMap, onEdit, onStructOp,
 }: Readonly<VmadSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -549,10 +546,8 @@ export function VmadSection({
                   {leafProp.kind === 'scalar'
                     ? <VmadScalarEditor value={change.newValue} type={scalarType(leafProp)}
                         onCommit={v => onEdit(col.plugin, vmadPath, v)} />
-                    : client != null
-                      ? <VmadObjectEditor value={change.newValue} client={client}
-                          onCommit={v => onEdit(col.plugin, vmadPath, v)} />
-                      : pendingOpLabel(change.newValue)}
+                    : <VmadObjectEditor value={change.newValue}
+                        onCommit={v => onEdit(col.plugin, vmadPath, v)} />}
                 </ClickToEdit>
               )
               : pendingOpLabel(change.newValue))}
@@ -583,7 +578,7 @@ export function VmadSection({
     );
   }
 
-  const leafCtx: LeafCellCtx = { isEditable, onEdit, client, onOpen };
+  const leafCtx: LeafCellCtx = { isEditable, onEdit, onOpen };
 
   const pushPropertyRows = (
     p: VmadPropertyDiff,
@@ -710,7 +705,7 @@ export function VmadSection({
           isEditable(plugin) && onStructOp
             ? <span style={inlineCell}>
                 <ScriptFlagsControl plugin={plugin} scriptName={s.name} current={s.flags[plugin] ?? null} onStructOp={onStructOp} />
-                <AddPropertyButton plugin={plugin} scriptName={s.name} onStructOp={onStructOp} client={client} />
+                <AddPropertyButton plugin={plugin} scriptName={s.name} onStructOp={onStructOp} />
                 <RemoveScriptButton plugin={plugin} scriptName={s.name} onStructOp={onStructOp} />
               </span>
             : (s.flags[plugin] ?? null))}

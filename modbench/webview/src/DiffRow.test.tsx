@@ -3,13 +3,15 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
+// Issue #210: FormKeyCell (rendered for formKey-typed fields) now imports the pickFormKey
+// bridge, which touches vscode.ts's acquireVsCodeApi() at module load — stubbed here since
+// these tests don't exercise the picker itself (see FormKeyCell.test.tsx for that).
+vi.mock('./formKeyPickerBridge', () => ({ pickFormKey: vi.fn().mockResolvedValue(null) }));
+
 import { DiffRow } from './DiffRow';
 import type { Column } from './recordUtils';
 import { pendingCellContext } from './recordUtils';
 import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
-import type { RecordSessionClient } from './RecordSessionClient';
-
-const client = {} as unknown as RecordSessionClient;
 
 const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
 
@@ -49,7 +51,6 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
     fieldMetaMap: { Name: strMeta },
     immutableSet: new Set(['Fallout4.esm']),
-    client,
     pendingChangeMap: {},
     collapsedColumns: new Set(),
     onOpen: vi.fn(),

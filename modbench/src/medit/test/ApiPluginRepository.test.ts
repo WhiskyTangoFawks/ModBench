@@ -160,6 +160,59 @@ describe('ApiPluginRepository.getRecords', () => {
   });
 });
 
+describe('ApiPluginRepository.searchRecords', () => {
+  // Issue #210: the FormKey picker moved into the extension host — it needs its own record
+  // search, mirroring the deleted webview-side RecordSessionClient.searchRecords: `type` is only
+  // sent when the field allows exactly one record type, and results are capped at 20.
+  it('calls GET /records with search + limit, and type when validTypes has exactly one entry', async () => {
+    const records = [makeRecord(0), makeRecord(1)];
+    const client = {
+      GET: vi.fn().mockResolvedValue({ data: { items: records, total: 2 }, response: { ok: true } }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const result = await repo.searchRecords('sword', ['weap']);
+
+    expect(result.items).toEqual(records);
+    expect(result.total).toBe(2);
+    expect(client.GET).toHaveBeenCalledWith(
+      '/records',
+      expect.objectContaining({ params: { query: { search: 'sword', type: 'weap', limit: 20 } } }),
+    );
+  });
+
+  it('omits type when validTypes is empty or has more than one entry', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({ data: { items: [], total: 0 }, response: { ok: true } }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    await repo.searchRecords('kw', []);
+    expect(client.GET).toHaveBeenLastCalledWith(
+      '/records',
+      expect.objectContaining({ params: { query: { search: 'kw', limit: 20 } } }),
+    );
+
+    await repo.searchRecords('kw', ['weap', 'armo']);
+    expect(client.GET).toHaveBeenLastCalledWith(
+      '/records',
+      expect.objectContaining({ params: { query: { search: 'kw', limit: 20 } } }),
+    );
+  });
+
+  it('returns empty result when data is undefined', async () => {
+    const client = { GET: vi.fn().mockResolvedValue({ data: undefined, response: { ok: true } }) } as any;
+    const repo = new ApiPluginRepository(client);
+
+    expect(await repo.searchRecords('kw', [])).toEqual({ items: [], total: 0 });
+  });
+
+  it('throws on a non-OK response', async () => {
+    const repo = new ApiPluginRepository(nonOkClient());
+    await expect(repo.searchRecords('kw', [])).rejects.toThrow(/500/);
+  });
+});
+
 describe('ApiPluginRepository.setFilter', () => {
   it('calls POST /session/filter and returns null on success', async () => {
     const client = {
