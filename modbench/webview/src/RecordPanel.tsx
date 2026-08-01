@@ -13,7 +13,7 @@ import { VmadSection } from './VmadSection';
 import { ConditionSection } from './ConditionSection';
 import type { CompareOverride, CompareResult, ConflictThis, FieldMetadata, PatchRecordValidationError, PendingChange } from './types';
 import { vscode } from './vscode';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type LogLevel } from './messages';
 import type { PluginInfo, RecordSessionClient } from './RecordSessionClient';
 
 const mEditWindow = window as Window & typeof globalThis & {
@@ -29,6 +29,20 @@ const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConf
 // refresh the tree in response.
 function notifyPendingChanged() {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED });
+}
+
+// Issue #200: the webview has no route to the 'Modbench' output channel (#198) of its own —
+// same bridge as notifyPendingChanged above. Message text carries identity only (plugin,
+// field/path, formKey/changeId) — never the value itself, to avoid dumping array/struct
+// payloads into the Output panel.
+function logAction(level: LogLevel, message: string) {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level, message });
+}
+
+// Issue #200: shared by Save Group and Revert Group's log lines below — a changeId alone
+// doesn't say which plugin/field/record was affected, and both handlers need the same lookup.
+function changeIdentity(change: PendingChange | undefined): string {
+  return change ? ` (${change.fieldPath} on ${change.plugin}, record ${change.formKey})` : '';
 }
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
@@ -115,15 +129,25 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   }, [formKey]);
 
   async function handleEdit(plugin: string, fieldName: string, value: unknown) {
-    await stageChange(plugin, { [fieldName]: value });
+    if (await stageChange(plugin, { [fieldName]: value })) {
+      // Issue #200: covers disk-cell click-to-edit, VMAD/Condition leaf edits, array
+      // add/remove/move, and a successful drag-drop copy uniformly — every one of them calls
+      // handleEdit, with no source-specific branching, so one log call covers them all. Logged
+      // here rather than inside stageChange itself: handleCopyAllToPending ("Copy All to
+      // Pending", #202's surface, deliberately untouched) also calls stageChange directly and
+      // must stay silent.
+      logAction('debug', `Staged field edit on ${plugin}: ${fieldName} (record ${formKey})`);
+    }
   }
 
   // VMAD structural ops (phase 13.8): stage an op payload under a single change type.
   async function handleVmadStructOp(plugin: string, vmadPath: string, op: unknown) {
-    await stageChange(plugin, { [vmadPath]: op }, 'vmad_struct_op');
+    if (await stageChange(plugin, { [vmadPath]: op }, 'vmad_struct_op')) {
+      logAction('debug', `Staged vmad_struct_op on ${plugin}: ${vmadPath} (record ${formKey})`);
+    }
   }
 
-  async function stageChange(plugin: string, fields: Record<string, unknown>, changeType?: string) {
+  async function stageChange(plugin: string, fields: Record<string, unknown>, changeType?: string): Promise<boolean> {
     setActionError(null);
     const resp = await client.save(formKey, plugin, fields, changeType);
     if (!resp.ok) {
@@ -153,10 +177,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       } else {
         setActionError(`Error: ${resp.statusText}`);
       }
-      return;
+      return false;
     }
     notifyPendingChanged();
     await refresh(formKey);
+    return true;
   }
 
   // Issue #139: the ↩ and the context menu's Revert Group both revert the change's whole
@@ -184,6 +209,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       setActionError(detail || `Revert failed: ${resp.statusText}`);
       return;
     }
+    // Issue #200: looked up before refresh() replaces allChanges.
+    const identity = changeIdentity(allChanges.find(c => c.id === changeId));
+    logAction('info', `Reverted group ${changeId}${identity}`);
     notifyPendingChanged();
     await refresh(formKey);
   }
@@ -203,6 +231,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     const body = await resp.json().catch(() => ({})) as { byPlugin?: Record<string, SaveResult>; reindexFailure?: ReindexFailure | null };
     const messages = [partialSaveMessage(body.byPlugin), staleIndexMessage(body.reindexFailure)].filter(Boolean);
     setActionError(messages.length > 0 ? messages.join(' ') : null);
+    // Issue #200: looked up before refresh() replaces allChanges.
+    const identity = changeIdentity(allChanges.find(c => c.id === changeId));
+    logAction('info', `Saved group ${changeId}${identity}`);
     notifyPendingChanged();
     await refresh(formKey);
   }
@@ -234,6 +265,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         setActionError(resp.status === 409 ? 'Plugin is read-only' : `Remove failed: ${resp.statusText}`);
         return;
       }
+      logAction('info', `Removed override of ${plugin} (record ${formKey})`);
       notifyPendingChanged();
       await refresh(formKey);
     } catch (e) {
@@ -264,7 +296,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     const payload = dragPayloadRef.current;
     dragPayloadRef.current = null;
     if (!payload || payload.fieldName !== fieldName) return;
-    if (immutableSet.has(targetPlugin)) return;
+    if (immutableSet.has(targetPlugin)) {
+      // Issue #200: was a silent no-op — the system correctly refused this, so it's a WARN,
+      // not silence (#198's policy).
+      logAction('warn', `Rejected drop of '${fieldName}' onto immutable plugin ${targetPlugin}`);
+      return;
+    }
     applyValue(payload.value);
   }
 
@@ -329,6 +366,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         setActionError(`Copy failed: ${patchResp.statusText}`);
         return;
       }
+      logAction('info', `Copied ${sourcePlugin} (record ${formKey}) as new record ${newFormKey} on ${targetPlugin}`);
       notifyPendingChanged();
     } catch (e) {
       setActionError(`Copy failed: ${e instanceof Error ? e.message : 'network error'}`);

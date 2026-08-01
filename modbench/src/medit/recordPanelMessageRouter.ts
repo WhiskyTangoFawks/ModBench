@@ -38,6 +38,10 @@ async function revealPendingChange(changeId: string, deps: RevealDeps | undefine
 
 export interface RouteRecordPanelMessageDeps {
   reveal: RevealDeps | undefined;
+  // #200: the leveled 'Modbench' channel (#198) the webview has no direct route to — the
+  // webview composes the full message text (it has the plugin/field/record identity), this is
+  // a pure level→method forward, no VS Code types beyond the injected Pick.
+  channel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
 }
 
 // Issue #174: the record editor webview and the extension host are different processes,
@@ -54,5 +58,7 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
     await revealPendingChange(m.changeId, deps.reveal);
   } else if (m.type === WEBVIEW_TO_EXTENSION.PENDING_CHANGED) {
     deps.reveal?.provider.refresh();
+  } else if (m.type === WEBVIEW_TO_EXTENSION.LOG) {
+    deps.channel[m.level](m.message);
   }
 }

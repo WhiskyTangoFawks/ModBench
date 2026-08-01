@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
@@ -1742,5 +1742,243 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
     await waitFor(() =>
       expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
     );
+  });
+});
+
+// ── Action logging (issue #200) ─────────────────────────────────────────────────
+//
+// The webview has no route to the 'Modbench' output channel (#198) of its own — it's a
+// separate process from the extension host, bridged only by postMessage. Every already-shipped
+// interaction below must post a LOG message describing what happened, per #198's DEBUG/INFO/WARN
+// policy.
+
+const vmadEditableCompareResult = {
+  conflictAll: 'OnlyOne',
+  hasVmad: true,
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 0, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Test Name' }],
+      pendingFields: {}, conflictThis: 'OnlyOne',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
+    winnerPlugin: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {},
+  }],
+  vmad: {
+    scripts: [{
+      name: 'MyScript', flags: { 'MyMod.esp': 'Local' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+      properties: [{
+        name: 'Enabled', kind: 'scalar', values: { 'MyMod.esp': false }, types: { 'MyMod.esp': 'Bool' },
+        winnerPlugin: 'MyMod.esp', cellStates: {}, children: null,
+      }],
+    }],
+  },
+};
+
+const conditionEditableCompareResult = {
+  conflictAll: 'OnlyOne',
+  hasVmad: false,
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 0, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Test Name' }],
+      pendingFields: {}, conflictThis: 'OnlyOne',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
+    winnerPlugin: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {},
+  }],
+  conditions: {
+    groups: [{
+      fieldPath: 'Conditions',
+      conditions: [{
+        index: 0,
+        perPlugin: {
+          'MyMod.esp': {
+            function: 'GetStageDone', operator: 'EqualTo', or: false, runOnTarget: 'Subject',
+            runOnReference: null, useGlobal: false, comparisonFloat: 3, comparisonGlobal: null, parameters: [],
+          },
+        },
+        winnerPlugin: 'MyMod.esp', cellStates: {}, fieldCellStates: {},
+      }],
+    }],
+  },
+};
+
+const mutablePlugin = [{ name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0 }];
+
+describe('RecordPanel — action logging (issue #200)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    vi.mocked(vscode.postMessage).mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('a disk-cell field edit logs a DEBUG line naming the plugin, field, and record', async () => {
+    renderPanel(compareResult);
+    await waitFor(() => screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('Override Name'));
+    const input = screen.getByDisplayValue('Override Name');
+    fireEvent.change(input, { target: { value: 'Changed Name' } });
+    fireEvent.blur(input);
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'debug',
+      message: expect.stringContaining('MyMod.esp'),
+    }));
+    const [{ message }] = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
+      .map(([m]: [{ message?: string }]) => m).filter((m: { message?: string }) => m.message);
+    expect(message).toContain('Name');
+    expect(message).toContain('000001:Fallout4.esm');
+  });
+
+  it('a rejected field edit does not log', async () => {
+    const save = vi.fn().mockResolvedValue(resp(409, {}));
+    renderPanel(compareResult, { save });
+    await waitFor(() => screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('Override Name'));
+    const input = screen.getByDisplayValue('Override Name');
+    fireEvent.change(input, { target: { value: 'Changed Name' } });
+    fireEvent.blur(input);
+
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.LOG }));
+  });
+
+  // Issue #200: VMAD leaf edits funnel through the identical handleEdit→stageChange path as a
+  // disk-cell edit above, with no source-specific branching — tested explicitly anyway (a shared
+  // surface with multiple renderers is exactly where "wired the obvious one, missed the others"
+  // hides).
+  it('a VMAD leaf edit logs a DEBUG line naming the plugin, VMAD path, and record', async () => {
+    renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('MyScript'));
+    fireEvent.click(screen.getByText('MyScript').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('false'));
+    fireEvent.click(screen.getByText('false'));
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'debug',
+      message: expect.stringContaining('MyMod.esp'),
+    }));
+    const [{ message }] = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
+      .map(([m]: [{ message?: string }]) => m).filter((m: { message?: string }) => m.message);
+    expect(message).toContain(String.raw`VMAD\MyScript\Enabled`);
+    expect(message).toContain('000001:Fallout4.esm');
+  });
+
+  // Issue #200: same rationale as the VMAD case above — Condition leaf edits share the exact
+  // same stageChange call, tested explicitly rather than assumed.
+  it('a Condition leaf edit logs a DEBUG line naming the plugin, condition path, and record', async () => {
+    renderPanel(conditionEditableCompareResult, { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('#1'));
+    fireEvent.click(screen.getByText('#1').closest('tr')!.querySelector('button')!);
+    const useGlobalRow = screen.getByText('Use Global').closest('tr')!;
+    fireEvent.click(within(useGlobalRow).getByText('false'));
+    fireEvent.click(within(useGlobalRow).getByRole('checkbox'));
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'debug',
+      message: expect.stringContaining('MyMod.esp'),
+    }));
+    const [{ message }] = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
+      .map(([m]: [{ message?: string }]) => m).filter((m: { message?: string }) => m.message);
+    expect(message).toContain(String.raw`CTDA\Conditions\0\UseGlobal`);
+    expect(message).toContain('000001:Fallout4.esm');
+  });
+
+  it('dropping a field value onto an immutable target logs a WARN instead of a silent no-op', async () => {
+    renderPanel(compareResult);
+    await waitFor(() => screen.getByText('Override Name'));
+    const sourceCell = screen.getByText('Override Name').closest('td')!;
+    const targetCell = screen.getByText('Original Name').closest('td')!;
+
+    fireEvent.dragStart(sourceCell);
+    fireEvent.drop(targetCell);
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'warn',
+      message: expect.stringContaining('Fallout4.esm'),
+    }));
+  });
+
+  it('Save Group logs an INFO line naming the change', async () => {
+    const saveGroup = vi.fn().mockResolvedValue(okSave({}));
+    renderPanel(pendingNameResult, { changes: soloChange, saveGroup });
+    await waitFor(() => screen.getByText('Staged Name'));
+    fireEvent.contextMenu(screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Save Group' }));
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'info',
+      message: expect.stringContaining('chg-1'),
+    }));
+  });
+
+  it('Revert Group (inline ↩, single member) logs an INFO line naming the change', async () => {
+    const revertGroup = vi.fn().mockResolvedValue(resp(204));
+    const groupMembers = vi.fn().mockResolvedValue(soloChange);
+    renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
+    await waitFor(() => screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByText('↩'));
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'info',
+      message: expect.stringContaining('chg-1'),
+    }));
+  });
+
+  it('Copy as New Record logs an INFO line naming source, target, and the new record', async () => {
+    const createRecord = vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Mod2.esp' }));
+    renderPanel(threePluginConflictResult, { plugins: threePluginsResponse, createRecord });
+    await waitFor(() => screen.getByText('Bob'));
+    fireEvent.contextMenu(screen.getByText('Mod1.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy as New Record' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mod2.esp' }));
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'info',
+      message: expect.stringContaining('000099:Mod2.esp'),
+    }));
+  });
+
+  it('Remove logs an INFO line naming the plugin and record', async () => {
+    renderPanel(compareResult);
+    await waitFor(() => screen.getByText('MyMod.esp'));
+    fireEvent.contextMenu(screen.getByText('MyMod.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'info',
+      message: expect.stringContaining('MyMod.esp'),
+    }));
+  });
+
+  // Issue #200: "Copy All to Pending" and "Copy as Override…" are #202's surface, deliberately
+  // untouched here — both stage through the same low-level stageChange as every field edit
+  // above, so this locks in that the log call lives at handleEdit/handleVmadStructOp (its
+  // named callers), not inside stageChange itself, where it would leak onto every caller.
+  it('Copy All to Pending does not log — out of scope, owned by #202', async () => {
+    renderPanel(threePluginConflictResult, { plugins: threePluginsResponse });
+    await waitFor(() => screen.getByText('Bob'));
+    fireEvent.contextMenu(screen.getByText('Mod1.esp').closest('th')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy All to Pending' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mod2.esp' }));
+
+    await waitFor(() =>
+      expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
+    );
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.LOG }));
   });
 });

@@ -380,6 +380,24 @@ section, and any future surface):
 6. **Read-only cells** in immutable plugin columns are never editable and render no input on
    click.
 
+### Action logging
+
+Editor interactions emit a leveled line on the **Modbench** output channel (#198), so the
+channel's native level filter controls volume. The webview has no channel of its own: it posts a
+`LOG` message over the existing webview→extension-host bridge and the router dispatches it to the
+channel at the carried level (#200).
+
+- **DEBUG** — the field-edit family: a committed disk-cell edit, a VMAD or Condition leaf edit, a
+  successful drag-copy between plugin columns, and array add / remove / move-up / move-down. These
+  are high-frequency and fine-grained.
+- **INFO** — discrete persist/discard operations: Save Group and Revert Group on a pending cell,
+  and the column-header Copy as New Record and Remove.
+- **WARN** — the system correctly refusing something: dropping a dragged value onto an immutable
+  target column, which stages nothing.
+
+Lines carry **identity only** — plugin, field path, and record FormKey — never the field's old or
+new value, so a large array or struct edit can't flood the panel.
+
 ## Testing Decisions
 
 - **Good tests assert external behavior, not implementation details** — given a compare
