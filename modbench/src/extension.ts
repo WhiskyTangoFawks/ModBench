@@ -29,6 +29,7 @@ import { buildExplicitPlugins } from './modmanager/explicitSession';
 import { detectRoot } from './modmanager/install/detectRoot';
 import { extractArchive } from './modmanager/install/extractArchive';
 import { openDownloadsPanel } from './modmanager/DownloadsPanel';
+import { makeReporter } from './reporter';
 
 let backendManager: BackendManager | undefined;
 let pluginTreeView: vscode.TreeView<PluginTreeNode> | undefined;
@@ -66,18 +67,6 @@ function exitToLoadout(): void {
   backendManager?.stop();
 }
 
-/** ADR-0026 surfacing reporter: logs always, shows a toast for warning/error. */
-function makeReporter(log: (msg: string) => void, tag: string): Reporter {
-  return {
-    report: (severity, message, detail) => {
-      const suffix = detail ? ` — ${detail}` : '';
-      log(`[${tag}] ${severity}: ${message}${suffix}`);
-      if (severity === 'error') void vscode.window.showErrorMessage(`Modbench: ${message}`);
-      else void vscode.window.showWarningMessage(`Modbench: ${message}`);
-    },
-  };
-}
-
 /** Shared cross-surface filter widget (Mods tree, Plugin List, Plugins tree):
  *  a transient InputBox that live-narrows a list as the user types and
  *  restores the unfiltered list on dismiss. Registers `commandId` to open it. */
@@ -113,9 +102,10 @@ export function activate(context: vscode.ExtensionContext) {
   const cfg = vscode.workspace.getConfiguration('modbench');
   const port: number = cfg.get('backendPort') ?? 5172;
 
-  const outputChannel = vscode.window.createOutputChannel('Modbench');
+  const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
   context.subscriptions.push(outputChannel);
-  const log = (msg: string) => outputChannel.appendLine(`[${new Date().toISOString()}] ${msg}`);
+  // #198: `log` is now a compat shim (defaults to .info) for modules taking a flat `(msg) => void`.
+  const log = (msg: string) => outputChannel.info(msg);
 
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   context.subscriptions.push(statusBarItem);
@@ -167,7 +157,7 @@ export function activate(context: vscode.ExtensionContext) {
   registerDeploymentModeContext(context);
 
   const modListProvider = registerLoadoutView({
-    context, log, revealLog: () => outputChannel.show(true), controller, changeGroupTreeProvider, openPanels,
+    context, log, outputChannel, revealLog: () => outputChannel.show(true), controller, changeGroupTreeProvider, openPanels,
   });
 
   context.subscriptions.push(
@@ -175,7 +165,7 @@ export function activate(context: vscode.ExtensionContext) {
     changeGroupTreeView,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerEditorCommands({
-      context, openPanels, port, treeProvider, treeView, controller, repository, scriptsPath, changeGroupTreeProvider, changeGroupTreeView, log,
+      context, openPanels, port, treeProvider, treeView, controller, repository, scriptsPath, changeGroupTreeProvider, changeGroupTreeView, log, outputChannel,
     }),
   );
 
@@ -184,9 +174,9 @@ export function activate(context: vscode.ExtensionContext) {
   // is no auto-connect / auto-wizard at activation; show a neutral idle state.
   statusBarItem.text = '$(plug) mEdit';
 
-  // Exposed for integration tests (pinned Overwrite row #82; editing tree after
-  // launch #75; editing tree title follows view mode #109) — unused in production.
-  return { modListProvider, treeProvider, treeView, changeGroupTreeView };
+  // Exposed for integration tests (pinned Overwrite row #82; editing tree after launch #75;
+  // editing tree title follows view mode #109; leveled output channel #198) — unused in production.
+  return { modListProvider, treeProvider, treeView, changeGroupTreeView, outputChannel };
 }
 
 
@@ -204,6 +194,7 @@ interface EditorCommandDeps {
   changeGroupTreeProvider: PendingChangesTreeProvider;
   changeGroupTreeView: vscode.TreeView<PendingTreeNode>;
   log: (msg: string) => void;
+  outputChannel: vscode.LogOutputChannel;
 }
 
 /** Editor-side commands, grouped so no single registrar exceeds the size budget. */
@@ -219,11 +210,11 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
 function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
     context, openPanels, port, treeProvider, controller, scriptsPath,
-    changeGroupTreeProvider, changeGroupTreeView, log,
+    changeGroupTreeProvider, changeGroupTreeView, log, outputChannel,
   } = deps;
   const reveal: RevealDeps = {
     provider: changeGroupTreeProvider, view: changeGroupTreeView, log,
-    reporter: makeReporter(log, 'revealPendingChange'),
+    reporter: makeReporter(outputChannel, 'revealPendingChange'),
   };
   return [
     vscode.commands.registerCommand('modbench.refreshTree', () => treeProvider.refresh()),
@@ -456,11 +447,11 @@ interface ModListCoreDeps {
   modlistSource: Mo2ModlistSource;
   updateProfileDescription: () => Promise<void>;
   enterEditing: (progress?: vscode.Progress<{ message?: string }>) => Promise<void>;
-  log: (msg: string) => void;
+  outputChannel: vscode.LogOutputChannel;
 }
 /** Loadout core commands: refresh, switch profile, filter, launch mEdit. */
 function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[] {
-  const { modListProvider, modlistSource, updateProfileDescription, enterEditing, log } = deps;
+  const { modListProvider, modlistSource, updateProfileDescription, enterEditing, outputChannel } = deps;
   return [
       vscode.commands.registerCommand('modbench.modList.refresh', () => {
         modListProvider.invalidate();
@@ -517,7 +508,7 @@ function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[]
             (progress) => enterEditing(progress),
           );
         } catch (err) {
-          log(`[extension] launchMedit failed: ${err instanceof Error ? err.message : String(err)}`);
+          outputChannel.error(`[extension] launchMedit failed: ${err instanceof Error ? err.message : String(err)}`);
           exitToLoadout(); // reset the view and tear down any half-started backend
           void vscode.window.showErrorMessage('Modbench: Failed to enter editing mode.');
         }
@@ -587,12 +578,12 @@ function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
 interface ModContextDeps {
   instanceRoot: string;
   modlistSource: Mo2ModlistSource;
-  log: (msg: string) => void;
+  outputChannel: vscode.LogOutputChannel;
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>;
 }
 /** Loadout per-mod context commands: reveal, separator ops, uninstall, Nexus. */
 function registerModContextCommands(deps: ModContextDeps): vscode.Disposable[] {
-  const { instanceRoot, modlistSource, log, runModAction } = deps;
+  const { instanceRoot, modlistSource, outputChannel, runModAction } = deps;
   return [
       vscode.commands.registerCommand('modbench.modList.mod.openInExplorer', async (node: ModNode) => {
         if (node?.kind !== 'mod') return;
@@ -611,7 +602,7 @@ function registerModContextCommands(deps: ModContextDeps): vscode.Disposable[] {
         try {
           separators = await modlistSource.listSeparators();
         } catch (err) {
-          log(`[extension] moveToSeparator listSeparators failed: ${err instanceof Error ? err.message : String(err)}`);
+          outputChannel.error(`[extension] moveToSeparator listSeparators failed: ${err instanceof Error ? err.message : String(err)}`);
           void vscode.window.showErrorMessage(`Modbench: Failed to read mod list.`);
           return;
         }
@@ -680,6 +671,7 @@ function registerSeparatorCommands(deps: SeparatorCmdDeps): vscode.Disposable[] 
 interface PluginListDeps {
   modlistSource: Mo2ModlistSource;
   log: (msg: string) => void;
+  outputChannel: vscode.LogOutputChannel;
   reporter: Reporter;
   instanceRoot: string;
   dataFolder: Promise<string | undefined>;
@@ -690,7 +682,7 @@ interface PluginListDeps {
  *  plugins.txt immediately); a title-bar Refresh forces a re-read. `instanceRoot`
  *  enables the order-aware missing-master badge (issue #67). */
 function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
-  const { modlistSource, log, reporter, instanceRoot, dataFolder } = deps;
+  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder } = deps;
   const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
   const pluginListView = vscode.window.createTreeView('modbench.pluginListTree', {
     treeDataProvider: pluginListProvider,
@@ -707,7 +699,7 @@ function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
         } catch (err) {
           // ADR-0026: a failed user action must surface, not silently leave the checkbox
           // out of sync with disk. Log detail, notify, and refresh to resync the checkbox.
-          log(`[extension] toggling "${node.plugin.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
+          outputChannel.error(`[extension] toggling "${node.plugin.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
           void vscode.window.showErrorMessage(`Modbench: Failed to update "${node.plugin.name}".`);
           pluginListProvider.invalidate();
         }
@@ -719,14 +711,14 @@ function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
       const filePath = await pluginListProvider.resolvePluginPath(name);
       if (!filePath) {
         // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
-        log(`[extension] revealInExplorer could not resolve a path for "${name}"`);
+        outputChannel.error(`[extension] revealInExplorer could not resolve a path for "${name}"`);
         void vscode.window.showErrorMessage(`Modbench: Could not resolve a file location for "${name}".`);
         return;
       }
       try {
         await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(filePath));
       } catch (err) {
-        log(`[extension] revealInExplorer for "${name}" failed: ${err instanceof Error ? err.message : String(err)}`);
+        outputChannel.error(`[extension] revealInExplorer for "${name}" failed: ${err instanceof Error ? err.message : String(err)}`);
         void vscode.window.showErrorMessage(`Modbench: Failed to reveal "${name}" in Explorer.`);
       }
     }),
@@ -741,7 +733,7 @@ function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
 function registerOverwriteView(
   instanceRoot: string,
   modListProvider: ModListProvider,
-  log: (msg: string) => void,
+  outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable[] {
   return [
     createOverwriteWatcher(instanceRoot, () => modListProvider.invalidate()),
@@ -753,7 +745,7 @@ function registerOverwriteView(
       try {
         await vscode.commands.executeCommand('revealInExplorer', node.resourceUri);
       } catch (err) {
-        log(`[extension] revealInExplorer for overwrite/ failed: ${err instanceof Error ? err.message : String(err)}`);
+        outputChannel.error(`[extension] revealInExplorer for overwrite/ failed: ${err instanceof Error ? err.message : String(err)}`);
         void vscode.window.showErrorMessage('Modbench: Failed to reveal the overwrite folder in the Explorer.');
       }
     }),
@@ -768,7 +760,7 @@ function registerModsAutoRegisterWatcher(
   instanceRoot: string,
   modlistSource: Mo2ModlistSource,
   modListProvider: ModListProvider,
-  log: (msg: string) => void,
+  outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable {
   return createModsWatcher(instanceRoot, () => {
     modlistSource
@@ -777,7 +769,7 @@ function registerModsAutoRegisterWatcher(
         if (added.length > 0) modListProvider.invalidate();
       })
       .catch((err: unknown) => {
-        log(`[extension] auto-registering mods/ folders failed: ${err instanceof Error ? err.message : String(err)}`);
+        outputChannel.error(`[extension] auto-registering mods/ folders failed: ${err instanceof Error ? err.message : String(err)}`);
       });
   });
 }
@@ -791,9 +783,9 @@ function registerModsAutoRegisterWatcher(
 function registerNotMo2InstanceWelcome(
   instanceRoot: string,
   context: vscode.ExtensionContext,
-  log: (msg: string) => void,
+  outputChannel: vscode.LogOutputChannel,
 ): void {
-  log(`[extension] Workspace "${instanceRoot}" is not an MO2 instance — showing welcome content instead of the Mods tree.`);
+  outputChannel.info(`[extension] Workspace "${instanceRoot}" is not an MO2 instance — showing welcome content instead of the Mods tree.`);
   void vscode.commands.executeCommand('setContext', 'modbench.workspaceIsMo2Instance', false);
   context.subscriptions.push(
     vscode.window.createTreeView('modbench.modList', { treeDataProvider: NOT_MO2_INSTANCE_PROVIDER }),
@@ -803,6 +795,7 @@ function registerNotMo2InstanceWelcome(
 interface LoadoutViewDeps {
   context: vscode.ExtensionContext;
   log: (msg: string) => void;
+  outputChannel: vscode.LogOutputChannel;
   revealLog: () => void;
   controller: SessionController;
   changeGroupTreeProvider: PendingChangesTreeProvider;
@@ -813,10 +806,10 @@ interface LoadoutViewDeps {
  *  with a neutral log when no workspace is open, or when the workspace isn't
  *  an MO2 instance (#192 — the Mods view shows welcome content instead). */
 function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined {
-  const { context, log, revealLog, controller, changeGroupTreeProvider, openPanels } = deps;
+  const { context, log, outputChannel, revealLog, controller, changeGroupTreeProvider, openPanels } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
-    log('[extension] No workspace folder open — Mod List view not registered.');
+    outputChannel.info('[extension] No workspace folder open — Mod List view not registered.');
     // #192: explicit, not left implicitly falsy — the viewsWelcome `when` clause
     // also guards on VS Code's own `workspaceFolderCount != 0`, so this key's
     // value never actually matters with no workspace open, but every exit path
@@ -828,11 +821,11 @@ function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined
   // profiles/ — distinct from a real instance with a genuinely unreadable/corrupt
   // modlist, which still reports as an error tree node (ADR-0026).
   if (!isMo2Instance(instanceRoot)) {
-    registerNotMo2InstanceWelcome(instanceRoot, context, log);
+    registerNotMo2InstanceWelcome(instanceRoot, context, outputChannel);
     return undefined;
   }
   void vscode.commands.executeCommand('setContext', 'modbench.workspaceIsMo2Instance', true);
-    const modListReporter = makeReporter(log, 'modList');
+    const modListReporter = makeReporter(outputChannel, 'modList');
     const modlistSource = new Mo2ModlistSource(instanceRoot, log, modListReporter);
     // Resolve the game's Data folder ONCE (#78): the single GameDirectory resolver
     // (config override → ini gamePath → autodetect) is kicked off here and its
@@ -843,7 +836,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined
     const dataFolder: Promise<string | undefined> = resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths())
       .then((gd) => gd?.dataFolder)
       .catch((e: unknown) => {
-        log(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`);
+        outputChannel.error(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`);
         return undefined;
       });
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
@@ -857,7 +850,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined
       try {
         modListView.description = await modlistSource.getActiveProfile();
       } catch (err) {
-        log(`[extension] reading active profile failed: ${err instanceof Error ? err.message : String(err)}`);
+        outputChannel.error(`[extension] reading active profile failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
     void updateProfileDescription();
@@ -867,7 +860,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined
         await action();
         modListProvider.invalidate();
       } catch (err) {
-        log(`[extension] ${logLabel} failed: ${err instanceof Error ? err.message : String(err)}`);
+        outputChannel.error(`[extension] ${logLabel} failed: ${err instanceof Error ? err.message : String(err)}`);
         void vscode.window.showErrorMessage(`Modbench: ${failMessage}`);
       }
     };
@@ -883,11 +876,11 @@ function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined
             `arrangement (the scripted installer is coming later).`,
         );
     };
-    const enterEditing = makeEnterEditing({ instanceRoot, modlistSource, controller, changeGroupTreeProvider, log, revealLog });
+    const enterEditing = makeEnterEditing({ instanceRoot, modlistSource, controller, changeGroupTreeProvider, outputChannel, revealLog });
 
     backendManager!.on('restarted', () => {
       void enterEditing().catch((err: unknown) =>
-        log(`[extension] reload after backend restart failed: ${err instanceof Error ? err.message : String(err)}`),
+        outputChannel.error(`[extension] reload after backend restart failed: ${err instanceof Error ? err.message : String(err)}`),
       );
     });
 
@@ -901,20 +894,20 @@ function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined
           } catch (err) {
             // ADR-0026: a failed user action must surface, not silently leave the checkbox
             // out of sync with disk. Log detail, notify, and refresh to resync the checkbox.
-            log(`[extension] toggling "${node.mod.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
+            outputChannel.error(`[extension] toggling "${node.mod.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
             void vscode.window.showErrorMessage(`Modbench: Failed to update "${node.mod.name}".`);
             modListProvider.invalidate();
           }
         }
       }),
-      ...registerModListCoreCommands({ modListProvider, modlistSource, updateProfileDescription, enterEditing, log }),
-      ...registerDeployCommands(instanceRoot, modlistSource, log),
+      ...registerModListCoreCommands({ modListProvider, modlistSource, updateProfileDescription, enterEditing, outputChannel }),
+      ...registerDeployCommands(instanceRoot, modlistSource, outputChannel),
       ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
-      ...registerModContextCommands({ instanceRoot, modlistSource, log, runModAction }),
+      ...registerModContextCommands({ instanceRoot, modlistSource, outputChannel, runModAction }),
       ...registerSeparatorCommands({ modlistSource, runModAction }),
-      ...registerOverwriteView(instanceRoot, modListProvider, log),
-      registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, log),
-      ...registerPluginListView({ modlistSource, log, reporter: makeReporter(log, 'pluginList'), instanceRoot, dataFolder }),
+      ...registerOverwriteView(instanceRoot, modListProvider, outputChannel),
+      registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, outputChannel),
+      ...registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder }),
       ...registerDownloadsCommands({ context, openPanels, instanceRoot, log }),
     );
     return modListProvider;
@@ -941,7 +934,7 @@ interface EnterEditingDeps {
   modlistSource: Mo2ModlistSource;
   controller: SessionController;
   changeGroupTreeProvider: PendingChangesTreeProvider;
-  log: (msg: string) => void;
+  outputChannel: vscode.LogOutputChannel;
   /** Surface the Modbench output channel so the user can watch the launch steps. */
   revealLog: () => void;
 }
@@ -951,7 +944,7 @@ type LaunchProgress = vscode.Progress<{ message?: string }>;
  *  crash-restart reload path. `progress` (when launched by the user) is updated
  *  with the plugin count during the long, blocking index step. */
 function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) => Promise<void> {
-  const { instanceRoot, modlistSource, controller, changeGroupTreeProvider, log, revealLog } = deps;
+  const { instanceRoot, modlistSource, controller, changeGroupTreeProvider, outputChannel, revealLog } = deps;
   return async (progress?: LaunchProgress): Promise<void> => {
       revealLog(); // the load can take a while; let the user watch the step log
       const gd = await resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths());
@@ -965,7 +958,7 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
       // Spawn/attach the backend and walk the mod tree concurrently — independent
       // work; the health gate is applied after they join.
       progress?.report({ message: 'starting backend…' });
-      log('[extension] entering editing: starting backend and building plugin list');
+      outputChannel.info('[extension] entering editing: starting backend and building plugin list');
       const [, plugins] = await Promise.all([
         backendManager!.start(),
         buildExplicitPlugins(modlistSource, instanceRoot, gd.dataFolder),
@@ -978,14 +971,14 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
       // load-explicit is one blocking call that indexes every plugin — the slow part.
       // There's no progress stream, so name the count and warn it can take a while.
       progress?.report({ message: `indexing ${plugins.length} plugins… (this can take a while)` });
-      log(`[extension] backend healthy; loading session (${plugins.length} plugins)`);
+      outputChannel.info(`[extension] backend healthy; loading session (${plugins.length} plugins)`);
       await controller.loadExplicitSession(plugins, gd.dataFolder);
       await controller.syncFilterState();
       changeGroupTreeProvider.refresh();
       // Reveal the editing views only now — the pluginTree's first GET /plugins must
       // not fire before the session is loaded, or it renders empty (issue #75).
       setViewMode('editing');
-      log('[extension] editing session ready');
+      outputChannel.info('[extension] editing session ready');
   };
 }
 
@@ -1052,12 +1045,12 @@ export function deactivate() {
 function registerDeployCommands(
   instanceRoot: string,
   modlistSource: Mo2ModlistSource,
-  log: (msg: string) => void,
+  outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable[] {
   const config = meditConfig;
   const detectPaths = makeDetectPaths();
 
-  const reporter = makeReporter(log, 'deploy');
+  const reporter = makeReporter(outputChannel, 'deploy');
 
   const resolveGd = async () => {
     const gd = await resolveGameDirectory(instanceRoot, config(), detectPaths);
@@ -1111,7 +1104,7 @@ function registerDeployCommands(
         const child = cp.spawn(executable, { cwd: gd.root, detached: true, stdio: 'ignore' });
         child.on('error', (e) => reporter.report('error', 'Failed to launch the game.', e.message));
         child.on('exit', () => {
-          void purge(instanceRoot, gd, reporter).catch((e) => log(`[deploy] purge on exit failed: ${String(e)}`));
+          void purge(instanceRoot, gd, reporter).catch((e) => outputChannel.error(`[deploy] purge on exit failed: ${String(e)}`));
         });
       } catch (err) {
         reporter.report('error', 'Launch Game failed.', err instanceof Error ? err.message : String(err));

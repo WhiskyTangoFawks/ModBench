@@ -102,6 +102,21 @@ describe('modbench activation', () => {
   });
 });
 
+// ── Output channel (#198) ───────────────────────────────────────────────────────
+
+describe('Modbench output channel (#198)', () => {
+  it('is created as a leveled LogOutputChannel, not a plain text channel', () => {
+    const channel = (ext?.exports as { outputChannel?: vscode.LogOutputChannel } | undefined)?.outputChannel;
+    assert.ok(channel, 'activate() should return { outputChannel }');
+    // A plain vscode.OutputChannel has none of these — only { log: true } adds them.
+    assert.strictEqual(typeof channel?.debug, 'function', 'expected a .debug() method');
+    assert.strictEqual(typeof channel?.info, 'function', 'expected an .info() method');
+    assert.strictEqual(typeof channel?.warn, 'function', 'expected a .warn() method');
+    assert.strictEqual(typeof channel?.error, 'function', 'expected an .error() method');
+    assert.ok(channel && 'logLevel' in channel, "expected VS Code's native level filter to apply (logLevel)");
+  });
+});
+
 // ── Command registration ───────────────────────────────────────────────────────
 
 describe('modbench command registration', () => {
