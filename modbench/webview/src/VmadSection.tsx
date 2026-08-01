@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { Column } from './recordUtils';
 import type { ConflictThis, PendingChange, VmadCompare, VmadKind, VmadPropertyDiff } from './types';
-import { toStr } from './recordUtils';
+import { toStr, pendingCellContext } from './recordUtils';
 import { baseCell, headerCell, toggleBtnStyle, getCellStyle, fg } from './gridStyles';
 import { FormKeyLink } from './FormKeyLink';
 import type { RecordSessionClient } from './RecordSessionClient';
@@ -28,10 +28,6 @@ interface VmadSectionProps {
   immutableSet: Set<string>;
   pendingChangeMap?: Record<string, PendingChange>;
   onEdit?: (plugin: string, vmadPath: string, value: unknown) => void;
-  // Issue #139/#203: right-click a pending value → Save Group / Revert Group / Reveal in Pending
-  // Changes Tree, all from the shared PendingCellMenu RecordPanel owns — threaded down to every
-  // pending-cell renderer so VMAD pending values offer the same actions as ordinary fields.
-  onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
   onStructOp?: OnStructOp;
   client?: RecordSessionClient;
 }
@@ -451,9 +447,8 @@ function pendingOpLabel(v: unknown): React.ReactNode {
 
 // Renders a pending add_property in the pending column: an inline editor (scalar) in edit mode that
 // re-issues the same add op with the new value, else a read-only value.
-function AddedPendingCell({ change, editable, onStructOp, onPendingContextMenu }: Readonly<{
+function AddedPendingCell({ change, editable, onStructOp }: Readonly<{
   change: PendingChange; editable?: boolean; onStructOp?: OnStructOp;
-  onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
 }>) {
   const op = change.newValue as StructOp & { type: string; name: string; value: unknown };
   const kind = opScalarKind(op.type);
@@ -463,9 +458,11 @@ function AddedPendingCell({ change, editable, onStructOp, onPendingContextMenu }
   // which stays read-only since there's no scalar to edit. Plain click never reveals here or
   // anywhere else in the pending column any more — reveal lives on the right-click menu only.
   const editing = editable && onStructOp && kind;
+  // Issue #208: this cell always has a change (it's the caller's job to only render
+  // AddedPendingCell when one exists — see pushAddedRow below), so the native menu's gating
+  // context is unconditional here, unlike the other two VMAD sites below.
   return (
-    <span
-      onContextMenu={onPendingContextMenu ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); } : undefined}>
+    <span data-vscode-context={pendingCellContext(change.id)}>
       {editing
         ? <VmadScalarEditor value={op.value} type={kind} onCommit={reissue} ariaLabel={`Added value for ${op.name}`} />
         : <span>{toStr(op.value)}</span>}
@@ -477,7 +474,7 @@ function AddedPendingCell({ change, editable, onStructOp, onPendingContextMenu }
 
 export function VmadSection({
   vmad, columns, onOpen,
-  immutableSet, pendingChangeMap, onEdit, onPendingContextMenu, onStructOp, client,
+  immutableSet, pendingChangeMap, onEdit, onStructOp, client,
 }: Readonly<VmadSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -544,9 +541,7 @@ export function VmadSection({
               fontStyle: 'italic',
               opacity: hasPending ? 1 : 0.3,
             }}
-            onContextMenu={hasPending && onPendingContextMenu
-              ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); }
-              : undefined}
+            data-vscode-context={hasPending ? pendingCellContext(change.id) : undefined}
           >
             {hasPending && (editableLeaf
               ? (
@@ -686,7 +681,7 @@ export function VmadSection({
               }}>
                 {/* editable is unconditional: col.kind === 'pending' already means this plugin is
                     mutable (buildColumns, recordUtils.ts) — see the valueCells comment above. */}
-                {change && <AddedPendingCell change={change} editable onStructOp={onStructOp} onPendingContextMenu={onPendingContextMenu} />}
+                {change && <AddedPendingCell change={change} editable onStructOp={onStructOp} />}
               </td>
             );
           }
@@ -744,9 +739,7 @@ export function VmadSection({
                 backgroundColor: change ? 'rgba(255,200,50,0.10)' : undefined,
                 opacity: change ? 1 : 0.3,
               }}
-              onContextMenu={change && onPendingContextMenu
-                ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); }
-                : undefined} />
+              data-vscode-context={change ? pendingCellContext(change.id) : undefined} />
             );
           }
           return <td key={`as:${name}:d${i}`} style={{ ...baseCell, opacity: 0.3 }} />;

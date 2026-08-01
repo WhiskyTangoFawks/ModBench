@@ -13,8 +13,8 @@ import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type Pen
 import { ApiPluginRepository } from './medit/PluginRepository';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './medit/messages';
-import { routeRecordPanelMessage, type RevealDeps, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
+import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type PendingCellContext } from './medit/messages';
+import { routeRecordPanelMessage, revealPendingChange, type RevealDeps, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
 import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
@@ -120,7 +120,7 @@ export function activate(context: vscode.ExtensionContext) {
     void vscode.commands.executeCommand('setContext', 'modbench.hasPendingChanges', hasPending);
   });
   const openPanels = new Map<string, vscode.WebviewPanel>();
-
+  const recordPanels = new Set<vscode.WebviewPanel>();
   const { scriptsPath, filterProvider } = setupScripts(cfg);
 
   const setFilterActive = (active: boolean, sql?: string) => {
@@ -166,7 +166,7 @@ export function activate(context: vscode.ExtensionContext) {
     changeGroupTreeView,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerEditorCommands({
-      context, openPanels, port, treeProvider, treeView, controller, repository, scriptsPath, changeGroupTreeProvider, changeGroupTreeView, log, outputChannel,
+      context, openPanels, recordPanels, port, treeProvider, treeView, controller, repository, scriptsPath, changeGroupTreeProvider, changeGroupTreeView, log, outputChannel,
     }),
   );
 
@@ -184,6 +184,9 @@ export function activate(context: vscode.ExtensionContext) {
 interface EditorCommandDeps {
   context: vscode.ExtensionContext;
   openPanels: Map<string, vscode.WebviewPanel>;
+  // #208: every open 'modbench'-viewType record panel — see openRecordPanel's recordPanels
+  // param and modbench.pendingCell.saveGroup/revertGroup below.
+  recordPanels: Set<vscode.WebviewPanel>;
   port: number;
   treeProvider: PluginTreeProvider;
   treeView: vscode.TreeView<PluginTreeNode>;
@@ -210,7 +213,7 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
 /** Record view/navigation + filter commands. */
 function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
-    context, openPanels, port, treeProvider, controller, scriptsPath,
+    context, openPanels, recordPanels, port, treeProvider, controller, scriptsPath,
     changeGroupTreeProvider, changeGroupTreeView, log, outputChannel,
   } = deps;
   const reveal: RevealDeps = {
@@ -224,11 +227,12 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     vscode.commands.registerCommand('modbench.reloadSession', () => treeProvider.refresh()),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
-        vscode.ViewColumn.One, routerDeps);
+        vscode.ViewColumn.One, { routerDeps, recordPanels });
     }),
     vscode.commands.registerCommand('modbench.openCompare', () => {
-      openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One, routerDeps);
+      openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One, { routerDeps, recordPanels });
     }),
+    ...registerPendingCellCommands(reveal, recordPanels),
     vscode.commands.registerCommand('modbench.loadMore', (node: LoadMoreNode) => treeProvider.loadMore(node)),
     vscode.commands.registerCommand('modbench.newPlugin', async () => {
       const name = await promptPluginName();
@@ -275,8 +279,37 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
         context, openPanels,
         node.record.formKey, node.record.editorId, port,
         (fk) => { void vscode.commands.executeCommand('modbench.openEditor', { formKey: fk, label: fk }); },
-        (fk) => { openRecordPanel(context, openPanels, fk, fk, port, vscode.ViewColumn.Beside, routerDeps); },
+        (fk) => { openRecordPanel(context, openPanels, fk, fk, port, vscode.ViewColumn.Beside, { routerDeps, recordPanels }); },
       );
+    }),
+  ];
+}
+
+// #208: the pending cell's right-click menu is VS Code's own `webview/context` contribution now
+// (contributes.menus in package.json) — these are the three commands it invokes, each receiving
+// the cell's merged data-vscode-context object (at minimum `changeId`) as its sole argument.
+// Reveal's work (resolving a changeId to a Pending Changes tree node) is entirely
+// extension-host-side, so it calls the existing revealPendingChange directly — no webview round
+// trip. Save Group/Revert Group's work (RecordSessionClient HTTP, the multi-member confirm
+// dialog, the partial-save/stale-reindex banner) only exists in the webview, so those broadcast
+// to every open record panel; each self-filters on whether it holds the changeId.
+function registerPendingCellCommands(reveal: RevealDeps, recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
+  const broadcast = (
+    type: typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP | typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP,
+    changeId: string | undefined,
+  ) => {
+    if (!changeId) return;
+    for (const panel of recordPanels) void panel.webview.postMessage({ type, changeId } satisfies ExtensionToWebview);
+  };
+  return [
+    vscode.commands.registerCommand('modbench.pendingCell.reveal', (ctx?: PendingCellContext) => {
+      if (ctx?.changeId) void revealPendingChange(ctx.changeId, reveal);
+    }),
+    vscode.commands.registerCommand('modbench.pendingCell.saveGroup', (ctx?: PendingCellContext) => {
+      broadcast(EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP, ctx?.changeId);
+    }),
+    vscode.commands.registerCommand('modbench.pendingCell.revertGroup', (ctx?: PendingCellContext) => {
+      broadcast(EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP, ctx?.changeId);
     }),
   ];
 }
@@ -1132,6 +1165,17 @@ function promptPluginName(): Thenable<string | undefined> {
 
 const RECORD_PANEL_KEY = '__record_view__';
 
+// #200/#208: bundled as one trailing param (not two/three) — kept the parameter count under the
+// lint budget and there's no reason to unpack them only to repack below. recordPanels is every
+// open 'modbench'-viewType panel (main *and* any "Beside" one — see showReferencedBy's
+// open-beside path); the pending-cell native menu commands broadcast a changeId to every panel
+// in it and let each one self-filter (see RecordPanel.tsx) rather than picking "the right one"
+// here.
+interface OpenRecordPanelDeps {
+  routerDeps: RouteRecordPanelMessageDeps;
+  recordPanels: Set<vscode.WebviewPanel>;
+}
+
 function openRecordPanel(
   context: vscode.ExtensionContext,
   openPanels: Map<string, vscode.WebviewPanel>,
@@ -1139,9 +1183,7 @@ function openRecordPanel(
   formKey: string | undefined,
   port: number,
   viewColumn: vscode.ViewColumn = vscode.ViewColumn.One,
-  // #200: bundled as the router's own dep shape (not two trailing params) — kept the parameter
-  // count under the lint budget and there's no reason to unpack it only to repack it below.
-  routerDeps: RouteRecordPanelMessageDeps,
+  { routerDeps, recordPanels }: OpenRecordPanelDeps,
 ) {
   if (viewColumn !== vscode.ViewColumn.Beside) {
     const existing = openPanels.get(RECORD_PANEL_KEY);
@@ -1164,6 +1206,9 @@ function openRecordPanel(
     openPanels.set(RECORD_PANEL_KEY, panel);
     panel.onDidDispose(() => openPanels.delete(RECORD_PANEL_KEY));
   }
+
+  recordPanels.add(panel);
+  panel.onDidDispose(() => recordPanels.delete(panel));
 
   panel.webview.onDidReceiveMessage((msg: unknown) => { void routeRecordPanelMessage(msg, routerDeps); });
 

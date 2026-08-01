@@ -114,7 +114,11 @@ Condition sections alike ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-
   field, **Reveal in Pending Changes Tree** / **Save Group** / **Revert Group** on a pending cell,
   **Copy as Override** / **Copy as New** / **Remove** on a column header. An action reachable
   through right-click is never also reachable a second way (no standalone revert icon once Revert
-  Group exists).
+  Group exists). The pending-cell menu is VS Code's own native context menu
+  (`contributes.menus["webview/context"]`, gated on a `data-vscode-context` attribute the cell
+  carries — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s native-first
+  precedent applied inside the webview, #208) rather than a rendered overlay; Copy/Paste on a
+  field and the column-header menu are still hand-drawn pending their own migration (#209).
 - **Ctrl+click** — acknowledged for now as a fourth, navigation-only gesture (follows a FormKey
   reference to its record). Whether it survives once a right-click "Go to Record" exists is still
   undecided — see Further Notes.
@@ -199,18 +203,27 @@ plugin:
   lock on the corresponding disk cell in response; both stay editable simultaneously for now
   (revisit later if that proves confusing in practice). This holds in the main field grid, the
   VMAD section, and the Condition section alike — three independent render paths, one rule.
-- **Right-click** on a pending value offers **Reveal in Pending Changes Tree** (selects its node
-  in the [Pending Changes tree](medit-pending-changes-tree.md), expanding the parent group for a
-  multi-member change; a change already saved or reverted resolves to nothing and is logged, not
-  thrown), **Save Group** (writes every plugin in the component and consumes its pending rows; the
-  grid reloads to reflect what reached disk), and **Revert Group** — the group's only three
-  actions, all in one menu, and the only way to trigger any of them
+- **Right-click** on a pending value opens VS Code's own native context menu (#208 —
+  `contributes.menus["webview/context"]`, gated by a `data-vscode-context` attribute the cell
+  carries; the cell must not call `preventDefault()` on the contextmenu event, or VS Code's
+  webview preload suppresses its own menu) offering **Reveal in Pending Changes Tree** (selects
+  its node in the [Pending Changes tree](medit-pending-changes-tree.md), expanding the parent
+  group for a multi-member change; a change already saved or reverted resolves to nothing and is
+  logged, not thrown), **Save Group** (writes every plugin in the component and consumes its
+  pending rows; the grid reloads to reflect what reached disk), and **Revert Group** — the
+  group's only three actions, all in one menu, and the only way to trigger any of them
   ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md): no standalone revert
-  icon on the cell now that Revert Group lives in the menu). Revert's confirmation keys on member
-  count, not on which control fired it: a group of one — the common case — is exactly "revert this
-  field" and fires straight away; an entangled change confirms first, listing the members, rather
-  than firing the 409 the backend would return for a partial group revert (ADR-0028). The member
-  count is read from `GET /changes` for the change's component; the panel never surfaces a raw 409.
+  icon on the cell now that Revert Group lives in the menu). VS Code's built-in Cut/Copy/Paste
+  entries are suppressed on this menu. Reveal resolves entirely in the extension host (no webview
+  round trip); Save Group and Revert Group's work (the HTTP calls, the confirmation below, the
+  partial-save/stale-reindex banner) only exists in the webview, so the command broadcasts to
+  every open record panel and each one silently ignores a change id it doesn't hold — a change id
+  is never shared across two different records, so at most one panel ever acts. Revert's
+  confirmation keys on member count, not on which control fired it: a group of one — the common
+  case — is exactly "revert this field" and fires straight away; an entangled change confirms
+  first, listing the members, rather than firing the 409 the backend would return for a partial
+  group revert (ADR-0028). The member count is read from `GET /changes` for the change's
+  component; the panel never surfaces a raw 409.
 - A **partial save** is surfaced, never silent (ADR-0026): the banner names which plugins wrote,
   partially wrote, and could not write, and states the unwritten changes stay queued. A save that
   reached disk but whose post-commit reindex failed reads instead as a completed-save warning to
