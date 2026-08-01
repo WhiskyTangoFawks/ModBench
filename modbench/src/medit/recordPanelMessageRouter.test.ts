@@ -3,15 +3,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const executeCommand = vi.fn();
 vi.mock('vscode', () => ({ commands: { executeCommand: (...args: unknown[]) => executeCommand(...args) } }));
 
-import { routeRecordPanelMessage, type RevealDeps } from './recordPanelMessageRouter';
+import { routeRecordPanelMessage, revealPendingChange, type RevealDeps } from './recordPanelMessageRouter';
 import { WEBVIEW_TO_EXTENSION } from './messages';
 import type { PendingTreeNode } from './PendingChangesTreeProvider';
 
 // Issue #174: routeRecordPanelMessage is the extracted, unit-testable body of
 // openRecordPanel's onDidReceiveMessage handler in extension.ts — the single dispatch point
 // for every message the record editor webview posts up. Pulled out here specifically so this
-// logic (both the pre-existing REVEAL_PENDING_CHANGE/OPEN_RECORD branches and the new
-// PENDING_CHANGED/LOG branches) has a seam that doesn't require a real VS Code test harness.
+// logic (the pre-existing OPEN_RECORD branch and the PENDING_CHANGED/LOG branches) has a seam
+// that doesn't require a real VS Code test harness. Issue #208: REVEAL_PENDING_CHANGE is no
+// longer one of these branches — reveal is now the native `modbench.pendingCell.reveal`
+// command calling the exported `revealPendingChange` directly (see the describe block below),
+// since resolving a changeId to a tree node never needed the webview in the first place.
 
 // #200: fake of the leveled 'Modbench' channel Pick the router forwards LOG messages to.
 function fakeChannel() {
@@ -48,40 +51,6 @@ describe('routeRecordPanelMessage', () => {
     await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: '000001:Fallout4.esm' }, { reveal, channel: fakeChannel() });
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.openEditor', { formKey: '000001:Fallout4.esm', label: '000001:Fallout4.esm' });
-  });
-
-  it('REVEAL_PENDING_CHANGE for a resolvable change reveals it selected/focused/expanded', async () => {
-    const node = { id: 'chg-1' } as unknown as PendingTreeNode;
-    const { reveal, revealFn } = fakeReveal({ resolveChange: () => Promise.resolve(node) });
-
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE, changeId: 'chg-1' }, { reveal, channel: fakeChannel() });
-
-    expect(revealFn).toHaveBeenCalledWith(node, { select: true, focus: true, expand: true });
-  });
-
-  it('REVEAL_PENDING_CHANGE for a change no longer pending logs and does not reveal', async () => {
-    const { reveal, revealFn, log } = fakeReveal({ resolveChange: () => Promise.resolve(undefined) });
-
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE, changeId: 'chg-1' }, { reveal, channel: fakeChannel() });
-
-    expect(revealFn).not.toHaveBeenCalled();
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('chg-1'));
-  });
-
-  it('REVEAL_PENDING_CHANGE reports an error (not a throw) when resolution fails', async () => {
-    const { reveal, report } = fakeReveal({ resolveChange: () => Promise.reject(new Error('boom')) });
-
-    await expect(routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE, changeId: 'chg-1' }, { reveal, channel: fakeChannel() },
-    )).resolves.toBeUndefined();
-
-    expect(report).toHaveBeenCalledWith('error', expect.any(String), 'boom');
-  });
-
-  it('REVEAL_PENDING_CHANGE with reveal deps undefined is a no-op', async () => {
-    await expect(routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE, changeId: 'chg-1' }, { reveal: undefined, channel: fakeChannel() },
-    )).resolves.toBeUndefined();
   });
 
   it('an unrecognized message type is a no-op', async () => {
@@ -154,5 +123,42 @@ describe('routeRecordPanelMessage', () => {
     await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'x' }, { reveal: undefined, channel });
 
     expect(channel.debug).toHaveBeenCalledWith('x');
+  });
+});
+
+// Issue #208: reveal moved off the webview↔extension message bridge entirely — the native
+// `modbench.pendingCell.reveal` command calls this function directly with the changeId from
+// the merged data-vscode-context object, so it's exercised here as a plain function call
+// rather than through routeRecordPanelMessage's dispatch (these are the same four behaviors
+// the old REVEAL_PENDING_CHANGE branch covered above, unchanged).
+describe('revealPendingChange (issue #208)', () => {
+  it('reveals a resolvable change selected/focused/expanded', async () => {
+    const node = { id: 'chg-1' } as unknown as PendingTreeNode;
+    const { reveal, revealFn } = fakeReveal({ resolveChange: () => Promise.resolve(node) });
+
+    await revealPendingChange('chg-1', reveal);
+
+    expect(revealFn).toHaveBeenCalledWith(node, { select: true, focus: true, expand: true });
+  });
+
+  it('a change no longer pending logs and does not reveal', async () => {
+    const { reveal, revealFn, log } = fakeReveal({ resolveChange: () => Promise.resolve(undefined) });
+
+    await revealPendingChange('chg-1', reveal);
+
+    expect(revealFn).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('chg-1'));
+  });
+
+  it('reports an error (not a throw) when resolution fails', async () => {
+    const { reveal, report } = fakeReveal({ resolveChange: () => Promise.reject(new Error('boom')) });
+
+    await expect(revealPendingChange('chg-1', reveal)).resolves.toBeUndefined();
+
+    expect(report).toHaveBeenCalledWith('error', expect.any(String), 'boom');
+  });
+
+  it('with reveal deps undefined is a no-op', async () => {
+    await expect(revealPendingChange('chg-1', undefined)).resolves.toBeUndefined();
   });
 });

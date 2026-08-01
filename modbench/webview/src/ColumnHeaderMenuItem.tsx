@@ -1,9 +1,11 @@
 import React from 'react';
 import { baseCell } from './gridStyles';
 
-// Issue #3: a single `role="menuitem"` row shared by every context menu in the record panel
-// (ColumnHeaderMenu, PendingCellMenu, PluginTargetPicker) — same click/keyboard-activate/hover
-// chrome each of them would otherwise repeat.
+// Issue #3: a single `role="menuitem"` row shared by every hand-drawn context menu remaining in
+// the record panel (ColumnHeaderMenu, PluginTargetPicker) — same click/keyboard-activate/hover
+// chrome each would otherwise repeat. The pending-cell menu (#208) no longer uses this: it's
+// VS Code's own native `webview/context` menu now. Survives only while ColumnHeaderMenu is still
+// hand-drawn (#209 migrates that one too).
 interface ColumnHeaderMenuItemProps {
   label: string;
   disabled?: boolean;

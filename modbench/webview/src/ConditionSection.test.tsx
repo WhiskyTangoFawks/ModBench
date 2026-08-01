@@ -6,6 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { ConditionSection } from './ConditionSection';
 import { defaultCondition } from './conditionOps';
 import type { Column } from './recordUtils';
+import { pendingCellContext } from './recordUtils';
 import type { CompareOverride, ConditionCompare, ConditionDiff, ParsedCondition, PendingChange } from './types';
 import type { RecordSessionClient } from './RecordSessionClient';
 
@@ -473,9 +474,11 @@ describe('ConditionSection', () => {
     expect(within(pendingCell).queryByText('5')).toBeNull();
   });
 
-  it('right-clicking a pending condition field requests the pending context menu', () => {
+  // Issue #139/#208: a pending condition field offers Save Group / Revert Group like any other
+  // pending cell, now via VS Code's native `webview/context` menu — gated by the cell's own
+  // `data-vscode-context` attribute rather than a callback prop wired to a hand-drawn menu.
+  it('a pending condition field carries a data-vscode-context attribute gating the native menu on its change id', () => {
     const c = condition({ operator: 'EqualTo' });
-    const onPendingContextMenu = vi.fn();
     const cols: Column[] = [{ kind: 'disk', override: override('A.esp') }, { kind: 'pending', plugin: 'A.esp' }];
     render(
       <table><tbody>
@@ -487,7 +490,6 @@ describe('ConditionSection', () => {
           onEdit={vi.fn()}
           client={fakeClient()}
           pendingChangeMap={{ 'A.esp:CTDA\\Conditions\\0\\Operator': condChange('CTDA\\Conditions\\0\\Operator', 'GreaterThan') }}
-          onPendingContextMenu={onPendingContextMenu}
         />
       </tbody></table>,
     );
@@ -495,9 +497,8 @@ describe('ConditionSection', () => {
 
     const operatorRow = screen.getByText('Operator').closest('tr')!;
     const pendingCell = operatorRow.querySelectorAll('td')[2];
-    fireEvent.contextMenu(pendingCell);
 
-    expect(onPendingContextMenu).toHaveBeenCalledWith('chg-1', expect.any(Number), expect.any(Number));
+    expect(pendingCell.getAttribute('data-vscode-context')).toBe(pendingCellContext('chg-1'));
   });
 
   // ---- #153: add/remove/reorder controls ----

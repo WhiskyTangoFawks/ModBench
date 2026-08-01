@@ -14,13 +14,16 @@ export interface RevealDeps {
   reporter: Reporter;
 }
 
-// Issue #140: resolves a pending change id to a tree node and reveals it, expanding a
+// Issue #140/#208: resolves a pending change id to a tree node and reveals it, expanding a
 // multi-member group's parent and showing the tree if it was collapsed or not visible
 // (`focus: true`). No record semantics live here — resolution is the provider's job
 // (`resolveChange`), this is purely the VS Code plumbing the webview can't do itself. A
 // change that is no longer pending (already saved or reverted) resolves to `undefined` and
-// is logged, not thrown (ADR-0026-style: recoverable, not a toast).
-async function revealPendingChange(changeId: string, deps: RevealDeps | undefined): Promise<void> {
+// is logged, not thrown (ADR-0026-style: recoverable, not a toast). Exported: issue #208's
+// native `modbench.pendingCell.reveal` command calls this directly (the work is entirely
+// extension-host-side — TreeProvider/TreeView — so unlike Save Group/Revert Group it never
+// needs to round-trip through the webview).
+export async function revealPendingChange(changeId: string, deps: RevealDeps | undefined): Promise<void> {
   if (!deps) return;
   try {
     const node = await deps.provider.resolveChange(changeId);
@@ -54,8 +57,6 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
   const m = msg as WebviewToExtension;
   if (m.type === WEBVIEW_TO_EXTENSION.OPEN_RECORD) {
     await vscode.commands.executeCommand('modbench.openEditor', { formKey: m.formKey, label: m.formKey });
-  } else if (m.type === WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE) {
-    await revealPendingChange(m.changeId, deps.reveal);
   } else if (m.type === WEBVIEW_TO_EXTENSION.PENDING_CHANGED) {
     deps.reveal?.provider.refresh();
   } else if (m.type === WEBVIEW_TO_EXTENSION.LOG) {

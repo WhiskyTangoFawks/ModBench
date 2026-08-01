@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { Column } from './recordUtils';
+import { pendingCellContext } from './recordUtils';
 import type {
   ConditionCompare, ConditionDiff, ConditionOperator, ConflictThis, FieldMetadata,
   ParsedCondition, ParsedConditionParam, PendingChange,
@@ -267,9 +268,6 @@ interface SectionCtx {
   onEdit?: (plugin: string, path: string, value: unknown) => void;
   client?: RecordSessionClient;
   pendingChangeMap?: Record<string, PendingChange>;
-  // Issue #139/#203: right-click a pending value → Save Group / Revert Group / Reveal in Pending
-  // Changes Tree, all from the shared PendingCellMenu RecordPanel owns.
-  onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
 }
 
 // Issue #203: a pending condition field is directly editable, on the same terms as a disk cell —
@@ -309,9 +307,7 @@ function pendingFieldCell(
         backgroundColor: change ? 'rgba(255,200,50,0.10)' : undefined,
         opacity: change ? 1 : 0.3,
       }}
-      onContextMenu={change && ctx.onPendingContextMenu
-        ? e => { e.preventDefault(); ctx.onPendingContextMenu!(change.id, e.clientX, e.clientY); }
-        : undefined}
+      data-vscode-context={change ? pendingCellContext(change.id) : undefined}
     >
       {change && (editable
         ? field.renderEdit(
@@ -453,7 +449,6 @@ interface ConditionSectionProps {
   onEdit?: (plugin: string, path: string, value: unknown) => void;
   client?: RecordSessionClient;
   pendingChangeMap?: Record<string, PendingChange>;
-  onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
 }
 
 // A group's field path is indexed (composes an enclosing array's index, e.g. "Effects[2].
@@ -465,7 +460,7 @@ function isNestedGroupPath(fieldPath: string): boolean {
 
 export function ConditionSection({
   conditions, columns, onOpen, immutableSet, onEdit, client,
-  pendingChangeMap, onPendingContextMenu,
+  pendingChangeMap,
 }: Readonly<ConditionSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Per-group collapse (#181): a nested group defaults to collapsed (only its header shows until
@@ -493,7 +488,7 @@ export function ConditionSection({
   const ctx: SectionCtx = {
     columns, onOpen, toggle,
     isEditable: plugin => !immutableSet.has(plugin),
-    onEdit, client, pendingChangeMap, onPendingContextMenu,
+    onEdit, client, pendingChangeMap,
   };
 
   // #154: a record can have more than one condition-carrying field (e.g. a Quest's

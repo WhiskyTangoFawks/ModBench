@@ -5,6 +5,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { VmadSection } from './VmadSection';
 import type { Column } from './recordUtils';
+import { pendingCellContext } from './recordUtils';
 import type { CompareOverride, PendingChange, VmadCompare, VmadScriptDiff, VmadPropertyDiff } from './types';
 import type { RecordSessionClient } from './RecordSessionClient';
 
@@ -67,7 +68,6 @@ type RenderOpts = {
   onOpen?: ReturnType<typeof vi.fn>;
   immutable?: string[];
   onEdit?: ReturnType<typeof vi.fn>;
-  onPendingContextMenu?: ReturnType<typeof vi.fn>;
   onStructOp?: ReturnType<typeof vi.fn>;
   pendingChangeMap?: Record<string, PendingChange>;
   withPendingCol?: string; // plugin to add a pending column for
@@ -88,7 +88,6 @@ function renderSection(vmad: VmadCompare | null, plugins: string[], opts: Render
           onOpen={onOpen}
           immutableSet={new Set(opts.immutable ?? [])}
           onEdit={opts.onEdit}
-          onPendingContextMenu={opts.onPendingContextMenu}
           onStructOp={opts.onStructOp}
           pendingChangeMap={opts.pendingChangeMap}
           client={stubClient}
@@ -392,19 +391,19 @@ describe('VmadSection array editing', () => {
     expect(screen.queryByTitle('Revert group')).not.toBeInTheDocument();
   });
 
-  // Issue #139: a VMAD pending value offers Save Group / Revert Group like any other pending cell.
-  it('right-clicking a VMAD pending value requests the pending context menu', () => {
-    const onPendingContextMenu = vi.fn();
+  // Issue #139/#208: a VMAD pending value offers Save Group / Revert Group like any other
+  // pending cell, now via VS Code's native `webview/context` menu — gated by the cell's own
+  // `data-vscode-context` attribute rather than a callback prop wired to a hand-drawn menu.
+  it('a VMAD pending value carries a data-vscode-context attribute gating the native menu on its change id', () => {
     const chg = pendingChange('A.esm', String.raw`VMAD\S\Items`, [10, 20, 0]);
     renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
-      onPendingContextMenu,
       withPendingCol: 'A.esm',
       pendingChangeMap: { [String.raw`A.esm:VMAD\S\Items`]: chg },
     });
     toggle('S');
 
-    fireEvent.contextMenu(screen.getByText('[10,20,0]'));
-    expect(onPendingContextMenu).toHaveBeenCalledWith(chg.id, expect.any(Number), expect.any(Number));
+    const cell = screen.getByText('[10,20,0]').closest('td')!;
+    expect(cell.getAttribute('data-vscode-context')).toBe(pendingCellContext(chg.id));
   });
 
   // Issue #203 (reverses #140): reveal moved to the right-click menu everywhere, VMAD included.
@@ -1030,6 +1029,9 @@ describe('VmadSection editing', () => {
     expect(screen.getByText('NewProp')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
     expect(screen.queryByTitle('Revert group')).not.toBeInTheDocument();
+    // Issue #208: AddedPendingCell's own gating context for the native `webview/context` menu.
+    expect(screen.getByText('42').closest('[data-vscode-context]')?.getAttribute('data-vscode-context'))
+      .toBe(pendingCellContext(chg.id));
   });
 
   it('editing a pending-added property re-issues add_property with the new value', () => {
@@ -1097,6 +1099,10 @@ describe('VmadSection editing', () => {
 
     expect(screen.getByText('NewScript')).toBeInTheDocument();
     expect(screen.queryByTitle('Revert group')).not.toBeInTheDocument();
+    // Issue #208: the pending td itself has no visible content, only the gating context.
+    const row = screen.getByText('NewScript').closest('tr')!;
+    expect(row.querySelector('[data-vscode-context]')?.getAttribute('data-vscode-context'))
+      .toBe(pendingCellContext(chg.id));
   });
 
   // ── change property type (13.8.3) ──────────────────────────────────────────

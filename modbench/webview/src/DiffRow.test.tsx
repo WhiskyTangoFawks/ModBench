@@ -5,6 +5,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 
 import { DiffRow } from './DiffRow';
 import type { Column } from './recordUtils';
+import { pendingCellContext } from './recordUtils';
 import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
 import type { RecordSessionClient } from './RecordSessionClient';
 
@@ -53,7 +54,6 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     collapsedColumns: new Set(),
     onOpen: vi.fn(),
     onEdit: vi.fn(),
-    onPendingContextMenu: vi.fn(),
     onCellDragStart: vi.fn(),
     onCellDrop: vi.fn(),
     context: { kind: 'top-level' },
@@ -203,8 +203,9 @@ describe('DiffRow — pending companion column', () => {
   });
 
   // Issue #203: plain click on a pending value now edits it directly, on the same terms as a
-  // disk cell — reveal moved to the right-click menu (see PendingCellMenu). This replaces the
-  // #140 "plain click reveals" test above, which pinned exactly the behavior #203 reverses.
+  // disk cell — reveal moved to the right-click menu (#208: now VS Code's native context menu).
+  // This replaces the #140 "plain click reveals" test above, which pinned exactly the behavior
+  // #203 reverses.
   it('plain click on the pending cell activates an editable input, not a reveal', () => {
     render(<table><tbody>{React.createElement(DiffRow, pendingProps())}</tbody></table>);
     fireEvent.click(screen.getByText('pending-value'));
@@ -232,11 +233,17 @@ describe('DiffRow — pending companion column', () => {
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
   });
 
-  it('right-click on the pending cell calls onPendingContextMenu with the change id and coordinates', () => {
-    const onPendingContextMenu = vi.fn();
-    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onPendingContextMenu }))}</tbody></table>);
-    fireEvent.contextMenu(screen.getByText('pending-value'), { clientX: 42, clientY: 7 });
-    expect(onPendingContextMenu).toHaveBeenCalledWith('c1', 42, 7);
+  // Issue #208: the pending cell's right-click menu is now VS Code's own `webview/context`
+  // contribution, gated by `data-vscode-context` rather than a hand-drawn menu wired through a
+  // callback prop — so this asserts the attribute VS Code's preload script reads (merged with
+  // the invoked command's `webviewId`), not a synthetic contextmenu dispatch.
+  it('the pending cell carries a data-vscode-context attribute gating the native menu on this change id', () => {
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps())}</tbody></table>);
+    const cell = screen.getByText('pending-value').closest('td')!;
+    expect(cell.getAttribute('data-vscode-context')).toBe(pendingCellContext('c1'));
+    expect(JSON.parse(cell.getAttribute('data-vscode-context')!)).toEqual({
+      webviewSection: 'pendingCell', changeId: 'c1', preventDefaultContextMenuItems: true,
+    });
   });
 
   // Issue #159: the pending column renders a FormKey field's staged value through the same

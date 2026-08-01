@@ -190,6 +190,21 @@
         "icon": "$(discard)"
       },
       {
+        "command": "modbench.pendingCell.reveal",
+        "title": "Reveal in Pending Changes Tree",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.pendingCell.saveGroup",
+        "title": "Save Group",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.pendingCell.revertGroup",
+        "title": "Revert Group",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.modList.filter",
         "title": "Modbench: Filter Mods…",
         "icon": "$(search)"
@@ -547,6 +562,23 @@
           "command": "modbench.revertGroup",
           "when": "view == modbench.changeGroupTree && viewItem == pendingGroup",
           "group": "inline"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "modbench.pendingCell.reveal",
+          "when": "webviewId == 'modbench' && webviewSection == 'pendingCell'",
+          "group": "modbench@1"
+        },
+        {
+          "command": "modbench.pendingCell.saveGroup",
+          "when": "webviewId == 'modbench' && webviewSection == 'pendingCell'",
+          "group": "modbench@2"
+        },
+        {
+          "command": "modbench.pendingCell.revertGroup",
+          "when": "webviewId == 'modbench' && webviewSection == 'pendingCell'",
+          "group": "modbench@3"
         }
       ]
     },

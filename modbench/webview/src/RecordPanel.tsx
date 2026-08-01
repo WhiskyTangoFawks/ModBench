@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { PluginHeader } from './PluginHeader';
 import { ColumnHeaderMenu } from './ColumnHeaderMenu';
-import { PendingCellMenu } from './PendingCellMenu';
 import { RevertGroupConfirm } from './RevertGroupConfirm';
 import { PluginTargetPicker } from './PluginTargetPicker';
 import { DiffRow } from './DiffRow';
@@ -72,10 +71,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // same UI (position:fixed at the context menu's click coordinates, mutable-plugins-minus-source
   // target list), branching on `mode` only in onSelect.
   const [targetPickerSource, setTargetPickerSource] = useState<{ plugin: string; x: number; y: number; mode: 'copyAll' | 'newRecord' | 'copyOverride' } | null>(null);
-  // Issue #139: right-click menu on a pending value (Save Group / Revert Group), keyed on the
-  // member change id it acts on; and the multi-member revert confirmation Revert Group raises
-  // before dropping a whole component.
-  const [pendingMenu, setPendingMenu] = useState<{ changeId: string; x: number; y: number } | null>(null);
+  // Issue #139: the multi-member revert confirmation Revert Group raises before dropping a
+  // whole component (#208: the menu that opens it is now native — see the LOAD_RECORD-sibling
+  // message branches below for Save Group / Revert Group's own dispatch).
   const [revertConfirm, setRevertConfirm] = useState<{ changeId: string; members: PendingChange[] } | null>(null);
 
   const refresh = useCallback(async (fk: string) => {
@@ -96,12 +94,28 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   const refreshRef = useRef(refresh);
   useLayoutEffect(() => { refreshRef.current = refresh; }, [refresh]);
 
+  // Issue #208: Save Group / Revert Group's actual work (client HTTP, the multi-member confirm,
+  // the partial-save/stale-reindex banner) only exists in this webview — the native
+  // modbench.pendingCell.saveGroup/revertGroup commands broadcast a changeId to every open
+  // record panel rather than trying to guess which one was right-clicked (OS focus at command-
+  // dispatch time isn't a reliable signal); each panel self-filters against its own allChanges
+  // before acting, so at most one panel's check ever passes (a changeId is a global id — see
+  // PendingChangesTreeProvider.resolveChange — never shared across two different records). The
+  // mount-only message listener below needs the latest allChanges/handlers on every message, not
+  // whatever closed over it at mount — same staleness problem refreshRef solves for refresh.
+  const pendingCellActionsRef = useRef<{
+    allChanges: PendingChange[];
+    saveGroup: (changeId: string) => void;
+    revertGroup: (changeId: string) => void;
+  }>({ allChanges: [], saveGroup: () => {}, revertGroup: () => {} });
+
   // When the handler drives a new-formKey navigation it calls refresh directly,
   // so the [formKey] effect must skip to avoid a double request.
   const prevFormKeyRef = useRef(formKey);
   const skipNextRefreshEffect = useRef(false);
 
-  // Listen for loadRecord messages from extension (panel reuse)
+  // Listen for loadRecord messages from extension (panel reuse), plus #208's Save Group/Revert
+  // Group broadcasts from the native pending-cell menu commands.
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const msg = event.data as ExtensionToWebview;
@@ -117,6 +131,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         setActionError(null);
         setMasterPickerPlugin(null);
         void refreshRef.current(msg.formKey);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP) {
+        const { allChanges: changes, saveGroup } = pendingCellActionsRef.current;
+        if (changes.some(c => c.id === msg.changeId)) saveGroup(msg.changeId);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP) {
+        const { allChanges: changes, revertGroup } = pendingCellActionsRef.current;
+        if (changes.some(c => c.id === msg.changeId)) revertGroup(msg.changeId);
       }
     };
     window.addEventListener('message', handler);
@@ -240,6 +260,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     await refresh(formKey);
   }
 
+  // Issue #208: keeps pendingCellActionsRef current every render so the mount-only message
+  // listener's broadcast branches (above) always self-filter against this render's allChanges
+  // and call this render's handleSaveGroup/handleRevertGroup — not whichever closure existed
+  // when the listener was first attached.
+  useLayoutEffect(() => {
+    pendingCellActionsRef.current = {
+      allChanges,
+      saveGroup: id => { void handleSaveGroup(id); },
+      revertGroup: id => { void handleRevertGroup(id); },
+    };
+  });
+
   async function handleCopyTo(targetPlugin: string) {
     setActionError(null);
     try {
@@ -277,13 +309,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
 
   function handleOpen(fk: string) {
     vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: fk });
-  }
-
-  // Issue #140: plain click on a pending value → reveal that change in the Pending Changes
-  // tree. The extension host resolves the change id to a node and reveals it; the webview
-  // cannot call TreeView.reveal itself.
-  function handleRevealPendingChange(changeId: string) {
-    vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE, changeId });
   }
 
   function handleCellDragStart(fieldName: string, value: unknown, sourcePlugin: string) {
@@ -510,7 +535,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                   onCellDrop={handleCellDrop}
                   onOpen={handleOpen}
                   onEdit={(plugin, fieldName, value) => { void handleEdit(plugin, fieldName, value); }}
-                  onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                   context={{ kind: 'top-level' }}
                   hasChildren={hasChildren}
                   isExpanded={isExpanded}
@@ -552,7 +576,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         onEdit={(plugin, elemKey, newValue) => {
                           void handleEdit(plugin, diff.fieldName, updateArrayAtKey(resolveCurrentArr(plugin), elemKey, newValue, elementMeta.isSortable ?? false));
                         }}
-                        onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                         context={{ kind: 'array-element', overrideMeta: elementMeta, parentFieldName: diff.fieldName }}
                         hasChildren={(child.children?.length ?? 0) > 0}
                         isExpanded={elemExpanded}
@@ -598,7 +621,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                               updatedArr[elemIdx] = { ...curElem, [subField]: subValue };
                               void handleEdit(plugin, diff.fieldName, updatedArr);
                             }}
-                            onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                             context={{ kind: 'grandchild', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName, parentFieldIndex: elemIdx }}
                           />,
                         );
@@ -628,7 +650,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                           const cur = pending !== undefined ? { ...disk, ...pending } : disk;
                           void handleEdit(plugin, diff.fieldName, { ...cur, [subField]: subValue });
                         }}
-                        onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                         context={{ kind: 'struct-child', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName }}
                       />,
                     );
@@ -645,7 +666,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                           immutableSet={immutableSet}
                           pendingChangeMap={pendingChangeMap}
                           onEdit={(plugin, vmadPath, value) => { void handleEdit(plugin, vmadPath, value); }}
-                          onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                           onStructOp={(plugin, vmadPath, op) => { void handleVmadStructOp(plugin, vmadPath, op); }}
                           client={client}
                         />
@@ -659,7 +679,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                 onEdit={(plugin, path, value) => { void handleEdit(plugin, path, value); }}
                 client={client}
                 pendingChangeMap={pendingChangeMap}
-                onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
               />
             )}
           </tbody>
@@ -693,16 +712,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
             else if (mode === 'copyOverride') void handleCopyTo(target);
             else void handleCopyAsNewRecord(source, target);
           }}
-        />
-      )}
-      {pendingMenu && (
-        <PendingCellMenu
-          x={pendingMenu.x}
-          y={pendingMenu.y}
-          onClose={() => setPendingMenu(null)}
-          onReveal={() => { const id = pendingMenu.changeId; setPendingMenu(null); handleRevealPendingChange(id); }}
-          onSaveGroup={() => { const id = pendingMenu.changeId; setPendingMenu(null); void handleSaveGroup(id); }}
-          onRevertGroup={() => { const id = pendingMenu.changeId; setPendingMenu(null); void handleRevertGroup(id); }}
         />
       )}
       {revertConfirm && (

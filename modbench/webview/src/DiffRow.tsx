@@ -4,7 +4,7 @@ import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { baseCell, toggleBtnStyle, getCellStyle } from './gridStyles';
-import { pendingIfChanged, extractPendingElementValue } from './recordUtils';
+import { pendingIfChanged, extractPendingElementValue, pendingCellContext } from './recordUtils';
 import type { Column } from './recordUtils';
 import type { CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
 import type { RecordSessionClient } from './RecordSessionClient';
@@ -187,10 +187,6 @@ interface DiffRowProps {
   collapsedColumns: Set<string>;
   onOpen: (fk: string) => void;
   onEdit: (plugin: string, fieldName: string, value: unknown) => void;
-  // Issue #203: right-click a pending value → Save Group / Revert Group / Reveal in Pending
-  // Changes Tree, all from the shared PendingCellMenu (RecordPanel owns the reveal wiring) —
-  // this row only ever needs to open that menu, never call reveal itself.
-  onPendingContextMenu: (changeId: string, x: number, y: number) => void;
   onCellDragStart: (fieldName: string, value: unknown, sourcePlugin: string) => void;
   onCellDrop: (fieldName: string, targetPlugin: string, applyValue: (value: unknown) => void) => void;
   context: RowContext;
@@ -208,7 +204,7 @@ interface DiffRowProps {
 
 export function DiffRow({
   diff, conflictAll, columns, overrideMap, fieldMetaMap, immutableSet, client,
-  pendingChangeMap, collapsedColumns, onOpen, onEdit, onPendingContextMenu,
+  pendingChangeMap, collapsedColumns, onOpen, onEdit,
   onCellDragStart, onCellDrop,
   context, hasChildren, isExpanded, onToggle, arrayEdit, onArrayAdd,
 }: DiffRowProps) {
@@ -312,10 +308,12 @@ export function DiffRow({
         return (
           <td
             key={`pending:${col.plugin}`}
-            // Issue #139: right-click a pending value → group-scoped Save/Revert/Reveal (#203
-            // adds Reveal to this menu; ADR-0033 makes right-click the only place Revert Group
-            // lives). Gated on showActions — top-level and struct-child rows carry a change id.
-            onContextMenu={change && showActions ? e => { e.preventDefault(); onPendingContextMenu(change.id, e.clientX, e.clientY); } : undefined}
+            // Issue #139/#208: right-click a pending value → group-scoped Save/Revert/Reveal,
+            // now VS Code's own `webview/context` menu (ADR-0033 makes right-click the only
+            // place Revert Group lives). Gated on showActions — top-level and struct-child rows
+            // carry a change id. No `onContextMenu`/`preventDefault()` here any more — that's
+            // what let the old hand-drawn menu suppress VS Code's native one.
+            data-vscode-context={change && showActions ? pendingCellContext(change.id) : undefined}
             style={{
               ...baseCell,
               backgroundColor: hasPending ? 'rgba(255,200,50,0.10)' : undefined,

@@ -139,6 +139,12 @@ describe('modbench command registration', () => {
     'modbench.revertGroup',
     'modbench.saveAllGroups',
     'modbench.revertAllGroups',
+    // #208: the pending cell's native `webview/context` menu commands — see package.json's
+    // contributes.menus["webview/context"] (gated on webviewId/webviewSection, not testable
+    // from this harness) and RecordPanel's data-vscode-context wiring (unit-tested).
+    'modbench.pendingCell.reveal',
+    'modbench.pendingCell.saveGroup',
+    'modbench.pendingCell.revertGroup',
     'modbench.createPlaced',
     'modbench.modList.filter',
     'modbench.modList.switchProfile',

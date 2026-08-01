@@ -1,9 +1,26 @@
 import type { CompareOverride, FieldMetadata } from './types';
+import type { PendingCellContext } from './messages';
 
 export function toStr(v: unknown): string {
   if (v == null) return '';
   if (typeof v === 'string') return v;
   return JSON.stringify(v) ?? '';
+}
+
+// Issue #208: the pending cell's right-click menu (Reveal in Pending Changes Tree / Save Group /
+// Revert Group) is VS Code's own `contributes.menus["webview/context"]` now, not a hand-drawn
+// `<ul role="menu">`. `webviewSection` is the gating key every menu entry's `when` clause checks
+// (alongside VS Code's own `webviewId`, which equals the view type passed to
+// `createWebviewPanel` — 'modbench'); `changeId` is forwarded to the invoked command as part of
+// the merged context object. `preventDefaultContextMenuItems` suppresses the built-in Cut/Copy/
+// Paste entries. Shared by every render site that owns a pending cell (DiffRow, VmadSection x3,
+// ConditionSection) so the shape can't drift between them — the cell must NOT also call
+// `e.preventDefault()` on the contextmenu event, or VS Code's webview preload bails and the
+// native menu never opens (that omission is the actual migration switch, site by site).
+export function pendingCellContext(changeId: string): string {
+  return JSON.stringify({
+    webviewSection: 'pendingCell', changeId, preventDefaultContextMenuItems: true,
+  } satisfies PendingCellContext);
 }
 
 export type Column =

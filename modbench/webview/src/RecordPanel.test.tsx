@@ -75,6 +75,17 @@ function resp(status: number, body: unknown = {}) {
   return { ok: status < 400, status, statusText: `HTTP ${status}`, json: () => Promise.resolve(body) } as unknown as Response;
 }
 
+// Issue #208: Save Group / Revert Group on a pending cell now arrive as a broadcast message
+// from the native `webview/context` menu's extension-host command, not a menu-item click —
+// every open record panel gets the same message and self-filters on whether it holds a pending
+// change with this id. This simulates the broadcast landing on this panel.
+function postPendingCellAction(
+  type: typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP | typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP,
+  changeId: string,
+) {
+  window.dispatchEvent(new MessageEvent('message', { data: { type, changeId } }));
+}
+
 interface FakeOpts {
   changes?: unknown[];
   plugins?: unknown[];
@@ -1516,13 +1527,23 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
 
-  it('right-clicking a pending value offers Save Group and Revert Group', async () => {
+  // Issue #208: the pending cell's right-click menu is now VS Code's own `webview/context`
+  // contribution — no rendered menu items to assert on (VS Code exposes no menu contents to
+  // either test harness). What's left to verify from here is that Save Group / Revert Group
+  // still land on the right change and preserve every existing outcome, now triggered by the
+  // extension-host broadcast a native menu-item click produces (postPendingCellAction) instead
+  // of a menu-item click. The cell's own `data-vscode-context` gating is covered at the
+  // DiffRow/VmadSection/ConditionSection unit level; the new command ids are covered by
+  // EXPECTED_COMMANDS in the integration test.
+
+  it('a pending value in the main grid carries the data-vscode-context gating the native menu, through the full render path', async () => {
     renderPanel(pendingNameResult, { changes: soloChange });
     await waitFor(() => screen.getByText('Staged Name'));
 
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-    expect(screen.getByRole('menuitem', { name: 'Save Group' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Revert Group' })).toBeInTheDocument();
+    const cell = screen.getByText('Staged Name').closest('td')!;
+    expect(JSON.parse(cell.getAttribute('data-vscode-context')!)).toEqual({
+      webviewSection: 'pendingCell', changeId: 'chg-1', preventDefaultContextMenuItems: true,
+    });
   });
 
   it('Save Group saves that change\'s component and refreshes the grid', async () => {
@@ -1530,8 +1551,7 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
     const { client } = renderPanel(pendingNameResult, { changes: soloChange, saveGroup });
     await waitFor(() => screen.getByText('Staged Name'));
 
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Save Group' }));
+    postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP, 'chg-1');
 
     await waitFor(() => expect(saveGroup).toHaveBeenCalledWith('chg-1'));
     // The grid is reloaded to reflect what reached disk (load fires again after the save).
@@ -1546,8 +1566,7 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
     renderPanel(pendingNameResult, { changes: soloChange, saveGroup });
     await waitFor(() => screen.getByText('Staged Name'));
 
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Save Group' }));
+    postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP, 'chg-1');
 
     await waitFor(() => expect(screen.getByText(/could not write MyMod\.esp/)).toBeInTheDocument());
     expect(screen.getByText(/remain queued/)).toBeInTheDocument();
@@ -1561,13 +1580,25 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
     renderPanel(pendingNameResult, { changes: soloChange, saveGroup });
     await waitFor(() => screen.getByText('Staged Name'));
 
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Save Group' }));
+    postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP, 'chg-1');
 
     await waitFor(() => expect(screen.getByText(/index is now stale/)).toBeInTheDocument());
     // A completed-but-stale save is a warning, not a failure — it must not claim the save failed.
     expect(screen.queryByText(/Partial save/)).not.toBeInTheDocument();
     expect(screen.queryByText(/could not write/)).not.toBeInTheDocument();
+  });
+
+  // Issue #208: a Save Group broadcast for a changeId this panel doesn't hold (i.e. it landed
+  // on some other open record panel) must be a silent no-op, not an attempt against the wrong
+  // record.
+  it('a Save Group broadcast for a changeId this panel does not hold is a silent no-op', async () => {
+    const saveGroup = vi.fn().mockResolvedValue(okSave({}));
+    renderPanel(pendingNameResult, { changes: soloChange, saveGroup });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP, 'chg-not-mine');
+
+    expect(saveGroup).not.toHaveBeenCalled();
   });
 
   it('reverting the whole group on confirm calls revertGroup, not the single-change endpoint', async () => {
@@ -1576,8 +1607,7 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
     const { client } = renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
     await waitFor(() => screen.getByText('Staged Name'));
 
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Revert Group' }));
+    postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP, 'chg-1');
     await waitFor(() => screen.getByRole('button', { name: 'Revert' }));
     fireEvent.click(screen.getByRole('button', { name: 'Revert' }));
 
@@ -1591,38 +1621,48 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
     renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
     await waitFor(() => screen.getByText('Staged Name'));
 
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Revert Group' }));
+    postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP, 'chg-1');
     await waitFor(() => screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(revertGroup).not.toHaveBeenCalled();
   });
 
-  it('Revert Group from the context menu confirms for a multi-member group', async () => {
+  it('Revert Group confirms for a multi-member group', async () => {
     const revertGroup = vi.fn().mockResolvedValue(resp(204));
     const groupMembers = vi.fn().mockResolvedValue(twoMemberGroup);
     renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
     await waitFor(() => screen.getByText('Staged Name'));
 
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Revert Group' }));
+    postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP, 'chg-1');
 
     await waitFor(() => expect(screen.getByText(/BoundWeapon/)).toBeInTheDocument());
     expect(revertGroup).not.toHaveBeenCalled();
   });
 
-  it('Revert Group from the context menu on a group of one reverts with no confirmation', async () => {
+  it('Revert Group on a group of one reverts with no confirmation', async () => {
     const revertGroup = vi.fn().mockResolvedValue(resp(204));
     const groupMembers = vi.fn().mockResolvedValue(soloChange);
     renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
     await waitFor(() => screen.getByText('Staged Name'));
 
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Revert Group' }));
+    postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP, 'chg-1');
 
     await waitFor(() => expect(revertGroup).toHaveBeenCalledWith('chg-1'));
     expect(screen.queryByRole('button', { name: 'Revert' })).not.toBeInTheDocument();
+  });
+
+  // Issue #208: same self-filter guarantee as Save Group above.
+  it('a Revert Group broadcast for a changeId this panel does not hold is a silent no-op', async () => {
+    const revertGroup = vi.fn().mockResolvedValue(resp(204));
+    const groupMembers = vi.fn().mockResolvedValue(soloChange);
+    renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
+    await waitFor(() => screen.getByText('Staged Name'));
+
+    postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP, 'chg-not-mine');
+
+    expect(groupMembers).not.toHaveBeenCalled();
+    expect(revertGroup).not.toHaveBeenCalled();
   });
 });
 
@@ -1651,6 +1691,13 @@ const soloChangeFk = [{
   resolutions: { '': { state: 'ResolvedValidType', recordType: 'race', editorId: 'SomeRace' } },
 }];
 
+// Issue #208: Reveal in Pending Changes Tree moved off the webview↔extension message bridge
+// entirely — resolving a changeId to a tree node is extension-host-only work
+// (PendingChangesTreeProvider/TreeView), so the native `modbench.pendingCell.reveal` command
+// calls recordPanelMessageRouter's exported `revealPendingChange` directly and never posts
+// anything to/from this webview. That behavior (happy path, no-longer-pending logs not throws,
+// resolution error reports) is covered by recordPanelMessageRouter.test.ts's own
+// `revealPendingChange` describe block; there's nothing left to exercise from the webview side.
 describe('RecordPanel — Pending column right-click reveal (issue #203, moved from plain-click)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
@@ -1658,7 +1705,7 @@ describe('RecordPanel — Pending column right-click reveal (issue #203, moved f
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('Ctrl+click on a pending FormKey value still posts openRecord, not a reveal', async () => {
+  it('Ctrl+click on a pending FormKey value still posts openRecord', async () => {
     renderPanel(pendingFkResult, { changes: soloChangeFk });
     await waitFor(() => screen.getByText('SomeRace'));
 
@@ -1668,38 +1715,6 @@ describe('RecordPanel — Pending column right-click reveal (issue #203, moved f
       type: WEBVIEW_TO_EXTENSION.OPEN_RECORD,
       formKey: '00099999:MyMod.esp',
     });
-    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
-      type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
-    }));
-  });
-
-  it('right-click offers Reveal in Pending Changes Tree alongside Save Group / Revert Group', async () => {
-    renderPanel(pendingNameResult, { changes: soloChange });
-    await waitFor(() => screen.getByText('Staged Name'));
-
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-
-    expect(screen.getByRole('menuitem', { name: 'Reveal in Pending Changes Tree' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Save Group' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Revert Group' })).toBeInTheDocument();
-    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
-      type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
-    }));
-  });
-
-  // Issue #203: reveal moves from plain-click to the pending cell's right-click menu.
-  it('right-clicking a pending value then choosing Reveal posts revealPendingChange with the change id', async () => {
-    renderPanel(pendingNameResult, { changes: soloChange });
-    await waitFor(() => screen.getByText('Staged Name'));
-
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Reveal in Pending Changes Tree' }));
-
-    expect(vscode.postMessage).toHaveBeenCalledWith({
-      type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
-      changeId: 'chg-1',
-    });
-    expect(screen.queryByRole('menuitem', { name: 'Reveal in Pending Changes Tree' })).not.toBeInTheDocument();
   });
 });
 
@@ -1723,9 +1738,6 @@ describe('RecordPanel — Pending column direct editing (issue #203)', () => {
     fireEvent.click(screen.getByText('Staged Name'));
 
     expect(screen.getByDisplayValue('Staged Name')).toBeInTheDocument();
-    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
-      type: WEBVIEW_TO_EXTENSION.REVEAL_PENDING_CHANGE,
-    }));
   });
 
   // Issue #200/#203: a pending-cell edit reaches the SAME handleEdit→stageChange path a disk-cell
@@ -1845,8 +1857,7 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
     const saveGroup = vi.fn().mockResolvedValue(okSave({}));
     renderPanel(pendingNameResult, { changes: soloChange, saveGroup });
     await waitFor(() => screen.getByText('Staged Name'));
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Save Group' }));
+    postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP, 'chg-1');
 
     await waitFor(() =>
       expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
@@ -1858,8 +1869,7 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
     const groupMembers = vi.fn().mockResolvedValue(soloChange);
     renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
     await waitFor(() => screen.getByText('Staged Name'));
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Revert Group' }));
+    postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP, 'chg-1');
 
     await waitFor(() =>
       expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
@@ -2097,8 +2107,7 @@ describe('RecordPanel — action logging (issue #200)', () => {
     const saveGroup = vi.fn().mockResolvedValue(okSave({}));
     renderPanel(pendingNameResult, { changes: soloChange, saveGroup });
     await waitFor(() => screen.getByText('Staged Name'));
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Save Group' }));
+    postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP, 'chg-1');
 
     await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
       type: WEBVIEW_TO_EXTENSION.LOG,
@@ -2112,8 +2121,7 @@ describe('RecordPanel — action logging (issue #200)', () => {
     const groupMembers = vi.fn().mockResolvedValue(soloChange);
     renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
     await waitFor(() => screen.getByText('Staged Name'));
-    fireEvent.contextMenu(screen.getByText('Staged Name'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Revert Group' }));
+    postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP, 'chg-1');
 
     await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
       type: WEBVIEW_TO_EXTENSION.LOG,
