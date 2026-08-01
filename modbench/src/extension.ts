@@ -215,23 +215,26 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
 function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
     context, openPanels, recordPanels, port, treeProvider, controller, scriptsPath,
-    changeGroupTreeProvider, changeGroupTreeView, log, outputChannel,
+    changeGroupTreeProvider, changeGroupTreeView, log, outputChannel, repository,
   } = deps;
   const reveal: RevealDeps = {
     provider: changeGroupTreeProvider, view: changeGroupTreeView, log,
     reporter: makeReporter(outputChannel, 'revealPendingChange'),
   };
-  const routerDeps: RouteRecordPanelMessageDeps = { reveal, channel: outputChannel };
+  // #210: formKeyPicker is left undefined here — its `reply` must post back to the one panel
+  // that asked (never a broadcast), so openRecordPanel rebuilds this bundle per panel at the
+  // onDidReceiveMessage call site rather than sharing one instance the way reveal/channel are.
+  const routerDeps: RouteRecordPanelMessageDeps = { reveal, channel: outputChannel, formKeyPicker: undefined };
   return [
     vscode.commands.registerCommand('modbench.refreshTree', () => treeProvider.refresh()),
     vscode.commands.registerCommand('modbench.closeMedit', () => exitToLoadout()),
     vscode.commands.registerCommand('modbench.reloadSession', () => treeProvider.refresh()),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
-        vscode.ViewColumn.One, { routerDeps, recordPanels });
+        vscode.ViewColumn.One, { routerDeps, recordPanels, repository });
     }),
     vscode.commands.registerCommand('modbench.openCompare', () => {
-      openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One, { routerDeps, recordPanels });
+      openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One, { routerDeps, recordPanels, repository });
     }),
     ...registerPendingCellCommands(reveal, recordPanels),
     vscode.commands.registerCommand('modbench.loadMore', (node: LoadMoreNode) => treeProvider.loadMore(node)),
@@ -280,7 +283,7 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
         context, openPanels,
         node.record.formKey, node.record.editorId, port,
         (fk) => { void vscode.commands.executeCommand('modbench.openEditor', { formKey: fk, label: fk }); },
-        (fk) => { openRecordPanel(context, openPanels, fk, fk, port, vscode.ViewColumn.Beside, { routerDeps, recordPanels }); },
+        (fk) => { openRecordPanel(context, openPanels, fk, fk, port, vscode.ViewColumn.Beside, { routerDeps, recordPanels, repository }); },
       );
     }),
   ];
@@ -1278,6 +1281,10 @@ const RECORD_PANEL_KEY = '__record_view__';
 interface OpenRecordPanelDeps {
   routerDeps: RouteRecordPanelMessageDeps;
   recordPanels: Set<vscode.WebviewPanel>;
+  // #210: threaded through so the FormKey picker's search (PluginRepository.searchRecords) is
+  // available per panel — see the onDidReceiveMessage wiring below for why it's rebuilt per
+  // panel/per message rather than folded into the shared routerDeps.
+  repository: ApiPluginRepository;
 }
 
 function openRecordPanel(
@@ -1287,7 +1294,7 @@ function openRecordPanel(
   formKey: string | undefined,
   port: number,
   viewColumn: vscode.ViewColumn = vscode.ViewColumn.One,
-  { routerDeps, recordPanels }: OpenRecordPanelDeps,
+  { routerDeps, recordPanels, repository }: OpenRecordPanelDeps,
 ) {
   if (viewColumn !== vscode.ViewColumn.Beside) {
     const existing = openPanels.get(RECORD_PANEL_KEY);
@@ -1314,7 +1321,15 @@ function openRecordPanel(
   recordPanels.add(panel);
   panel.onDidDispose(() => recordPanels.delete(panel));
 
-  panel.webview.onDidReceiveMessage((msg: unknown) => { void routeRecordPanelMessage(msg, routerDeps); });
+  // #210: formKeyPicker.reply is bound to this specific panel — the QuickPick a request opens
+  // only ever exists for the one click that asked, so the reply is never broadcast to
+  // recordPanels the way #208/#209's commands are.
+  panel.webview.onDidReceiveMessage((msg: unknown) => {
+    void routeRecordPanelMessage(msg, {
+      ...routerDeps,
+      formKeyPicker: { repository, reply: (m) => void panel.webview.postMessage(m) },
+    });
+  });
 
   const scriptUri = panel.webview.asWebviewUri(
     vscode.Uri.file(path.join(context.extensionPath, 'out', 'webview', 'assets', 'main.js'))

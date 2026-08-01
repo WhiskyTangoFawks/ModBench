@@ -117,7 +117,6 @@ function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordSessionClient 
   } as unknown as LoadResult;
   return {
     load: opts.load ?? vi.fn().mockResolvedValue(okLoad),
-    searchRecords: vi.fn().mockResolvedValue([]),
     save: opts.save ?? vi.fn().mockResolvedValue(resp(200, [])),
     revert: vi.fn().mockResolvedValue(resp(200, [])),
     copyTo: vi.fn().mockResolvedValue(resp(200, [])),

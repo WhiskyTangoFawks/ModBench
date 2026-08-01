@@ -446,7 +446,6 @@ function fakeClient(): RecordSessionClient {
   const resp = { ok: true, status: 200, statusText: 'HTTP 200', json: () => Promise.resolve([]) } as unknown as Response;
   return {
     load: vi.fn().mockImplementation(() => Promise.resolve(loadReturn())),
-    searchRecords: vi.fn().mockResolvedValue([]),
     save: vi.fn().mockResolvedValue(resp),
     revert: vi.fn().mockResolvedValue(resp),
     copyTo: vi.fn().mockResolvedValue(resp),

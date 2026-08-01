@@ -29,6 +29,13 @@ export const EXTENSION_TO_WEBVIEW = {
   COLUMN_HEADER_COPY_AS_OVERRIDE: 'columnHeaderCopyAsOverride',
   COLUMN_HEADER_REMOVE_OVERRIDE: 'columnHeaderRemoveOverride',
   COLUMN_HEADER_ADD_MASTER: 'columnHeaderAddMaster',
+  // #210: the FormKey picker's reply — unlike every message above, this is a direct reply to the
+  // one panel that asked (via `requestId`, matched by the webview-side pickFormKey bridge), never
+  // a broadcast: the QuickPick that produced it only ever existed for that one request, so there
+  // is no "which panel does this belong to" question to answer. `formKey: null` means the user
+  // dismissed the picker (Escape/blur) — the caller leaves its field unchanged, same as the
+  // deleted inline FormKeyPicker's onClose.
+  FORM_KEY_PICKED: 'formKeyPicked',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -43,6 +50,14 @@ export const WEBVIEW_TO_EXTENSION = {
   // (it has the plugin/field/record identity); the router on the other end just forwards it to
   // the matching leveled call.
   LOG: 'log',
+  // #210: the FormKey picker moved off the webview (which cannot call vscode.window.createQuickPick
+  // itself — only the extension host can) onto a native QuickPick. Every FormKeyCell/
+  // VmadObjectEditor/AddPropertyDialog call site posts this and awaits the matching
+  // FORM_KEY_PICKED reply (see pickFormKey in the webview) instead of rendering the old inline
+  // picker. `seed` is the current reference (empty string when there is none, e.g. adding a new
+  // property) — shown in the QuickPick's value and used to pre-select the matching item.
+  // `validTypes` is the field's allowed record types, same filter the deleted picker applied.
+  OPEN_FORM_KEY_PICKER: 'openFormKeyPicker',
 } as const;
 
 export type LogLevel = 'debug' | 'info' | 'warn';
@@ -51,7 +66,8 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_RECORD; formKey: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_RECORD_BESIDE; formKey: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.PENDING_CHANGED }
-  | { type: typeof WEBVIEW_TO_EXTENSION.LOG; level: LogLevel; message: string };
+  | { type: typeof WEBVIEW_TO_EXTENSION.LOG; level: LogLevel; message: string }
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] };
 
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
@@ -61,7 +77,8 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD; formKey: string; sourcePlugin: string; targetPlugin: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE; formKey: string; targetPlugin: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE; formKey: string; plugin: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER; formKey: string; plugin: string; newMaster: string };
+  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER; formKey: string; plugin: string; newMaster: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null };
 
 // #208: the merged `data-vscode-context` object VS Code's webview preload forwards as a
 // `webview/context` command's sole argument — shared shape between the cell (recordUtils.ts'

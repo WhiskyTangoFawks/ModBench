@@ -103,6 +103,48 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal("TestNPC01", result.Items[0].EditorId);
     }
 
+    // Issue #210: the FormKey picker seeds its QuickPick with the record's own FormKey, which
+    // is only coherent if searching by that FormKey resolves it — the backend previously matched
+    // `search` against EditorID only, so a seeded FormKey (or a pasted one, #201) matched nothing.
+    [Fact]
+    public void GetRecords_SearchByFormKey_ResolvesRecord()
+    {
+        var byEditorId = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 10, offset: 0);
+        var formKey = byEditorId.Items[0].FormKey;
+
+        var result = _svc.GetRecords(type: "npc_", plugin: null, search: formKey, limit: 10, offset: 0);
+
+        Assert.Equal(1, result.Total);
+        Assert.Equal(formKey, result.Items[0].FormKey);
+        Assert.Equal("TestNPC01", result.Items[0].EditorId);
+    }
+
+    // A FormKey-shaped query is matched case-insensitively against the canonical stored form —
+    // the picker seeds from whatever casing a resolved link displays, and #201's "paste a FormKey"
+    // path can't assume the user typed the exact stored case.
+    [Fact]
+    public void GetRecords_SearchByFormKey_IsCaseInsensitive()
+    {
+        var byEditorId = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 10, offset: 0);
+        var formKey = byEditorId.Items[0].FormKey;
+
+        var result = _svc.GetRecords(type: "npc_", plugin: null, search: formKey.ToLowerInvariant(), limit: 10, offset: 0);
+
+        Assert.Equal(1, result.Total);
+        Assert.Equal(formKey, result.Items[0].FormKey);
+    }
+
+    // A search string that merely looks close to a FormKey but doesn't fully parse (too short,
+    // bad delimiter, non-hex id) must fall back to the EditorID path, not throw or silently
+    // match everything.
+    [Fact]
+    public void GetRecords_SearchByMalformedFormKeyLikeString_FallsBackToEditorIdMatch_NoResults()
+    {
+        var result = _svc.GetRecords(type: "npc_", plugin: null, search: "ZZZZZZ:NotAFormKey.esp", limit: 10, offset: 0);
+
+        Assert.Equal(0, result.Total);
+    }
+
     [Fact]
     public void GetRecords_ByPlugin_FiltersResults()
     {

@@ -180,9 +180,18 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
   ancestor would otherwise swallow text selection inside the input).
 - **Cells render by field schema type**: strings/numbers/bools as text/number/toggle inputs;
   enums as their name via a `<select>`; flags as active flag names via a per-flag multi-select;
-  FormKeys as a link — `Ctrl+click` follows it, plain click opens a FormKey picker filtered by
-  `validFormKeyTypes`, and the link affordance appears on `Ctrl`-hover only when the reference
-  resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows,
+  FormKeys as a link — `Ctrl+click` follows it, plain click on a mutable column opens a native
+  **QuickPick** (#210; the webview cannot call `vscode.window.createQuickPick` itself, so this
+  round-trips through the extension host), seeded with the current reference and filtered by
+  `validFormKeyTypes`. Typing searches records as you type (200ms debounce), matching EditorID or
+  — since #210 — a FormKey-shaped query directly, with the same "EditorID [FormKey]" item labels
+  the picker always used; Escape leaves the field unchanged. "Seeded ... and pre-selected" means
+  the matching record is the active/highlighted item in the QuickPick's results list — VS Code's
+  `QuickPick` has no `InputBox`-style `valueSelection`, so the seeded *text* itself is visible but
+  not selectable the way an `<input>`'s select-on-focus would be; `Ctrl+A` clears it to search
+  fresh. The same picker backs the VMAD add-property dialog's Object-typed value and the VMAD
+  table's Object-property cells. The link affordance appears on `Ctrl`-hover only when the
+  reference resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows,
   and are themselves drag sources for their whole value via that summary row, the same as a
   scalar leaf, collapsed or expanded alike (#204). Pending-change cells show the new value on a
   yellow background and are directly editable on the same terms as disk cells (see Pending

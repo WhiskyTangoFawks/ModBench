@@ -724,8 +724,26 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         }
         if (search != null)
         {
-            conditions.Add($"editor_id ILIKE ${values.Count + 1}");
-            values.Add($"%{search}%");
+            // Issue #210: a FormKey-shaped query (e.g. seeded by the picker from the record's own
+            // reference, or pasted per #201) resolves directly against the exact stored form_key
+            // rather than an EditorID substring match — form_key values are always stored via
+            // Mutagen's own FormKey.ToString(), so round-tripping the query through
+            // FormKey.TryFactory/.ToString() canonicalizes case/format to match. A query that merely
+            // looks FormKey-ish but doesn't fully parse falls through to the EditorID match below,
+            // same as always.
+            if (Mutagen.Bethesda.Plugins.FormKey.TryFactory(search, out var formKey))
+            {
+                // Case-insensitive: FormKey.TryFactory canonicalizes the hex id but does not
+                // re-case the ModKey (plugin) portion against known data, so a user-typed
+                // lowercase plugin name would otherwise miss an exact case-sensitive match.
+                conditions.Add($"LOWER(form_key) = LOWER(${values.Count + 1})");
+                values.Add(formKey.ToString());
+            }
+            else
+            {
+                conditions.Add($"editor_id ILIKE ${values.Count + 1}");
+                values.Add($"%{search}%");
+            }
         }
         if (filterActive)
             conditions.Add("form_key IN (SELECT form_key FROM _filter)");

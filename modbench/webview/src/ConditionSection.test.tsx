@@ -3,6 +3,11 @@ import React from 'react';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
+// Issue #210: FormKeyCell (rendered for formKey-typed fields) now imports the pickFormKey
+// bridge, which touches vscode.ts's acquireVsCodeApi() at module load — stubbed here since
+// these tests don't exercise the picker itself (see FormKeyCell.test.tsx for that).
+vi.mock('./formKeyPickerBridge', () => ({ pickFormKey: vi.fn().mockResolvedValue(null) }));
+
 import { ConditionSection } from './ConditionSection';
 import { defaultCondition } from './conditionOps';
 import type { Column } from './recordUtils';
@@ -47,7 +52,6 @@ function multiCompare(groups: Array<{ fieldPath: string; conditions: ConditionDi
 
 function fakeClient(overrides: Partial<RecordSessionClient> = {}): RecordSessionClient {
   return {
-    searchRecords: vi.fn().mockResolvedValue([{ formKey: '001234:Q.esp', editorId: 'PickedQuest' }]),
     conditionFunctions: vi.fn().mockResolvedValue(['GetIsID', 'GetDistance']),
     ...overrides,
   } as unknown as RecordSessionClient;

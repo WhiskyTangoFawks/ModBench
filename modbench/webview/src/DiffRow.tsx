@@ -7,7 +7,6 @@ import { baseCell, toggleBtnStyle, getCellStyle } from './gridStyles';
 import { pendingIfChanged, extractPendingElementValue, pendingCellContext } from './recordUtils';
 import type { Column } from './recordUtils';
 import type { CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
-import type { RecordSessionClient } from './RecordSessionClient';
 
 // Issue #142: per-element move-up/move-down/remove controls for unsorted array rows. Only
 // created by the caller (RecordPanel) when the element's metadata reports `isSortable !== true`
@@ -96,7 +95,6 @@ function renderCell(
   value: unknown,
   meta: FieldMetadata,
   editable: boolean,
-  client: RecordSessionClient,
   onOpen: (fk: string) => void,
   onCommit: (v: unknown) => void,
   checkError?: string | null,
@@ -105,7 +103,7 @@ function renderCell(
   if (meta.type === 'formKey') {
     return (
       <FormKeyCell
-        value={value} meta={meta} editable={editable} client={client}
+        value={value} meta={meta} editable={editable}
         onOpen={onOpen} onCommit={fk => onCommit(fk)} checkError={checkError} resolution={resolution}
       />
     );
@@ -182,7 +180,6 @@ interface DiffRowProps {
   // flag: editability is per-column, so an immutable column never renders an input even
   // though the panel as a whole is always editable.
   immutableSet: Set<string>;
-  client: RecordSessionClient;
   pendingChangeMap: Record<string, PendingChange>;
   collapsedColumns: Set<string>;
   onOpen: (fk: string) => void;
@@ -203,7 +200,7 @@ interface DiffRowProps {
 }
 
 export function DiffRow({
-  diff, conflictAll, columns, overrideMap, fieldMetaMap, immutableSet, client,
+  diff, conflictAll, columns, overrideMap, fieldMetaMap, immutableSet,
   pendingChangeMap, collapsedColumns, onOpen, onEdit,
   onCellDragStart, onCellDrop,
   context, hasChildren, isExpanded, onToggle, arrayEdit, onArrayAdd,
@@ -271,7 +268,7 @@ export function DiffRow({
               onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
               onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
             >
-              {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin), client, onOpen,
+              {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin), onOpen,
                 v => onEdit(o.plugin, diff.fieldName, v), checkError, diff.resolutions?.[o.plugin])}
               {arrayEdit && !immutableSet.has(o.plugin) && <ArrayElementControls plugin={o.plugin} controls={arrayEdit} />}
             </DiskCell>
@@ -331,7 +328,7 @@ export function DiffRow({
                 resolution comes from the staged change's own `resolutions`, keyed by this
                 row's sub-path within the change's NewValue (pendingResolutionPath) — the
                 same tri-state signal disk columns use, not a stand-in. */}
-            {hasPending && renderCell(pendingValue, meta, true, client, onOpen,
+            {hasPending && renderCell(pendingValue, meta, true, onOpen,
               v => onEdit(col.plugin, diff.fieldName, v), undefined,
               meta.type === 'formKey' ? pendingResolution : undefined)}
           </td>
