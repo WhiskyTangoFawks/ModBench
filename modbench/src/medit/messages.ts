@@ -36,6 +36,11 @@ export const EXTENSION_TO_WEBVIEW = {
   // dismissed the picker (Escape/blur) — the caller leaves its field unchanged, same as the
   // deleted inline FormKeyPicker's onClose.
   FORM_KEY_PICKED: 'formKeyPicked',
+  // #211: same direct-reply shape as FORM_KEY_PICKED above (keyed by requestId, never a
+  // broadcast) — the condition-function picker's QuickPick only ever exists for the one request
+  // that opened it. `functionName: null` means the user dismissed the picker (Escape/blur) — the
+  // caller leaves the condition's function unchanged, same convention as FORM_KEY_PICKED.
+  CONDITION_FUNCTION_PICKED: 'conditionFunctionPicked',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -58,6 +63,14 @@ export const WEBVIEW_TO_EXTENSION = {
   // property) — shown in the QuickPick's value and used to pre-select the matching item.
   // `validTypes` is the field's allowed record types, same filter the deleted picker applied.
   OPEN_FORM_KEY_PICKER: 'openFormKeyPicker',
+  // #211: the condition-function picker moved off the webview the same way #210 moved the
+  // FormKey picker — onto a native `showQuickPick` over the loaded game's function catalogue
+  // (bounded, game-scoped, fetched once — no per-keystroke search, unlike OPEN_FORM_KEY_PICKER
+  // above). `seed` is the condition's current function; the extension host sorts it to the front
+  // of the QuickPick's item array (showQuickPick has no activeItem option — array order is the
+  // only way to pre-highlight an item) instead of pre-selecting via `.activeItems` the way the
+  // FormKey QuickPick does.
+  OPEN_CONDITION_FUNCTION_PICKER: 'openConditionFunctionPicker',
 } as const;
 
 export type LogLevel = 'debug' | 'info' | 'warn';
@@ -67,7 +80,8 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_RECORD_BESIDE; formKey: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.PENDING_CHANGED }
   | { type: typeof WEBVIEW_TO_EXTENSION.LOG; level: LogLevel; message: string }
-  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] };
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER; requestId: string; seed: string };
 
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
@@ -78,7 +92,8 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE; formKey: string; targetPlugin: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE; formKey: string; plugin: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER; formKey: string; plugin: string; newMaster: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null };
+  | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
+  | { type: typeof EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED; requestId: string; functionName: string | null };
 
 // #208: the merged `data-vscode-context` object VS Code's webview preload forwards as a
 // `webview/context` command's sole argument — shared shape between the cell (recordUtils.ts'

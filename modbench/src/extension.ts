@@ -221,10 +221,13 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     provider: changeGroupTreeProvider, view: changeGroupTreeView, log,
     reporter: makeReporter(outputChannel, 'revealPendingChange'),
   };
-  // #210: formKeyPicker is left undefined here — its `reply` must post back to the one panel
-  // that asked (never a broadcast), so openRecordPanel rebuilds this bundle per panel at the
-  // onDidReceiveMessage call site rather than sharing one instance the way reveal/channel are.
-  const routerDeps: RouteRecordPanelMessageDeps = { reveal, channel: outputChannel, formKeyPicker: undefined };
+  // #210/#211: formKeyPicker/conditionFunctionPicker are left undefined here — each `reply` must
+  // post back to the one panel that asked (never a broadcast), so openRecordPanel rebuilds these
+  // bundles per panel at the onDidReceiveMessage call site rather than sharing one instance the
+  // way reveal/channel are.
+  const routerDeps: RouteRecordPanelMessageDeps = {
+    reveal, channel: outputChannel, formKeyPicker: undefined, conditionFunctionPicker: undefined,
+  };
   return [
     vscode.commands.registerCommand('modbench.refreshTree', () => treeProvider.refresh()),
     vscode.commands.registerCommand('modbench.closeMedit', () => exitToLoadout()),
@@ -1321,13 +1324,14 @@ function openRecordPanel(
   recordPanels.add(panel);
   panel.onDidDispose(() => recordPanels.delete(panel));
 
-  // #210: formKeyPicker.reply is bound to this specific panel — the QuickPick a request opens
-  // only ever exists for the one click that asked, so the reply is never broadcast to
-  // recordPanels the way #208/#209's commands are.
+  // #210/#211: formKeyPicker/conditionFunctionPicker .reply is bound to this specific panel — the
+  // QuickPick a request opens only ever exists for the one click that asked, so the reply is
+  // never broadcast to recordPanels the way #208/#209's commands are.
   panel.webview.onDidReceiveMessage((msg: unknown) => {
     void routeRecordPanelMessage(msg, {
       ...routerDeps,
       formKeyPicker: { repository, reply: (m) => void panel.webview.postMessage(m) },
+      conditionFunctionPicker: { repository, reply: (m) => void panel.webview.postMessage(m) },
     });
   });
 

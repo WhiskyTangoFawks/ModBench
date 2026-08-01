@@ -1,19 +1,27 @@
 import '@testing-library/jest-dom';
 import React from 'react';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // Issue #210: FormKeyCell (rendered for formKey-typed fields) now imports the pickFormKey
 // bridge, which touches vscode.ts's acquireVsCodeApi() at module load — stubbed here since
 // these tests don't exercise the picker itself (see FormKeyCell.test.tsx for that).
 vi.mock('./formKeyPickerBridge', () => ({ pickFormKey: vi.fn().mockResolvedValue(null) }));
 
+// Issue #211: the function field's editor now calls pickConditionFunction (the native-QuickPick
+// bridge) instead of rendering the deleted ConditionFunctionPicker inline dropdown — mocked here
+// so these tests assert the call/resolution, not any picker DOM (the picker itself is unit-tested
+// in conditionFunctionPickerBridge.test.ts and recordPanelMessageRouter.test.ts).
+const pickConditionFunction = vi.fn().mockResolvedValue(null);
+vi.mock('./conditionFunctionPickerBridge', () => ({
+  pickConditionFunction: (...args: unknown[]) => pickConditionFunction(...args),
+}));
+
 import { ConditionSection } from './ConditionSection';
 import { defaultCondition } from './conditionOps';
 import type { Column } from './recordUtils';
 import { pendingCellContext } from './recordUtils';
 import type { CompareOverride, ConditionCompare, ConditionDiff, ParsedCondition, PendingChange } from './types';
-import type { RecordSessionClient } from './RecordSessionClient';
 
 function override(plugin: string): CompareOverride {
   return {
@@ -50,17 +58,9 @@ function multiCompare(groups: Array<{ fieldPath: string; conditions: ConditionDi
   return { groups };
 }
 
-function fakeClient(overrides: Partial<RecordSessionClient> = {}): RecordSessionClient {
-  return {
-    conditionFunctions: vi.fn().mockResolvedValue(['GetIsID', 'GetDistance']),
-    ...overrides,
-  } as unknown as RecordSessionClient;
-}
-
 interface RenderOpts {
   immutableSet?: Set<string>;
   onEdit?: (plugin: string, path: string, value: unknown) => void;
-  client?: RecordSessionClient;
   pendingChangeMap?: Record<string, PendingChange>;
 }
 
@@ -75,7 +75,6 @@ function renderSection(conditions: ConditionCompare | null, plugins: string[], o
         onOpen={onOpen}
         immutableSet={opts.immutableSet ?? new Set()}
         onEdit={opts.onEdit}
-        client={opts.client}
         pendingChangeMap={opts.pendingChangeMap}
       />
     </tbody></table>,
@@ -88,6 +87,8 @@ function toggleRow(label: string) {
 }
 
 describe('ConditionSection', () => {
+  afterEach(() => { pickConditionFunction.mockClear(); });
+
   it('renders nothing when there are no condition groups', () => {
     const { container } = renderSection(null, ['A.esp']);
     expect(container.querySelector('td')).toBeNull();
@@ -183,7 +184,7 @@ describe('ConditionSection', () => {
     renderSection(
       compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
       ['A.esp'],
-      { onEdit, client: fakeClient() },
+      { onEdit },
     );
     toggleRow('#1');
 
@@ -208,7 +209,7 @@ describe('ConditionSection', () => {
     renderSection(
       compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
       ['A.esp'],
-      { onEdit, client: fakeClient() },
+      { onEdit },
     );
     toggleRow('#1');
 
@@ -227,7 +228,7 @@ describe('ConditionSection', () => {
     renderSection(
       compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
       ['A.esp'],
-      { onEdit, client: fakeClient() },
+      { onEdit },
     );
     toggleRow('#1');
 
@@ -246,7 +247,7 @@ describe('ConditionSection', () => {
     renderSection(
       compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
       ['A.esp'],
-      { onEdit: vi.fn(), client: fakeClient() },
+      { onEdit: vi.fn() },
     );
     toggleRow('#1');
 
@@ -255,23 +256,40 @@ describe('ConditionSection', () => {
     expect(within(comparisonRow).queryByRole('spinbutton')).toBeNull();
   });
 
+  // Issue #211: the function field's editor now opens a native QuickPick (via
+  // pickConditionFunction, mocked above) instead of the deleted rendered dropdown.
   it('selecting a new function via the function picker stages onEdit with the function name', async () => {
     const c = condition({ function: 'GetIsID' });
     const onEdit = vi.fn();
+    pickConditionFunction.mockResolvedValueOnce('GetDistance');
     renderSection(
       compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
       ['A.esp'],
-      { onEdit, client: fakeClient() },
+      { onEdit },
     );
     toggleRow('#1');
 
     fireEvent.click(within(screen.getByText('Function').closest('tr')!).getByText('GetIsID'));
-    const input = await screen.findByPlaceholderText('Search function…');
-    fireEvent.change(input, { target: { value: 'Distance' } });
-    await waitFor(() => expect(screen.getByText('GetDistance')).toBeInTheDocument());
-    fireEvent.mouseDown(screen.getByText('GetDistance'));
 
-    expect(onEdit).toHaveBeenCalledWith('A.esp', 'CTDA\\Conditions\\0\\Function', 'GetDistance');
+    expect(pickConditionFunction).toHaveBeenCalledWith('GetIsID');
+    await waitFor(() => expect(onEdit).toHaveBeenCalledWith('A.esp', 'CTDA\\Conditions\\0\\Function', 'GetDistance'));
+  });
+
+  it('cancelling the function picker (resolves null) leaves the condition unchanged', async () => {
+    const c = condition({ function: 'GetIsID' });
+    const onEdit = vi.fn();
+    pickConditionFunction.mockResolvedValueOnce(null);
+    renderSection(
+      compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
+      ['A.esp'],
+      { onEdit },
+    );
+    toggleRow('#1');
+
+    fireEvent.click(within(screen.getByText('Function').closest('tr')!).getByText('GetIsID'));
+    await waitFor(() => expect(pickConditionFunction).toHaveBeenCalled());
+
+    expect(onEdit).not.toHaveBeenCalled();
   });
 
   it("a function change's refetched ParsedCondition reshapes the parameter input's type", () => {
@@ -283,7 +301,7 @@ describe('ConditionSection', () => {
     const { rerender, onOpen } = renderSection(
       compare([{ index: 0, perPlugin: { 'A.esp': before }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
       ['A.esp'],
-      { onEdit: vi.fn(), client: fakeClient() },
+      { onEdit: vi.fn() },
     );
     toggleRow('#1');
     expect(within(screen.getByText('Parameter 1').closest('tr')!).getByText('001234:Q.esp')).toBeInTheDocument();
@@ -303,7 +321,6 @@ describe('ConditionSection', () => {
           onOpen={onOpen}
           immutableSet={new Set()}
           onEdit={vi.fn()}
-          client={fakeClient()}
         />
       </tbody></table>,
     );
@@ -323,7 +340,7 @@ describe('ConditionSection', () => {
     renderSection(
       compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
       ['A.esp'],
-      { onEdit, client: fakeClient() },
+      { onEdit },
     );
     toggleRow('#1');
 
@@ -341,7 +358,7 @@ describe('ConditionSection', () => {
     renderSection(
       compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }]),
       ['A.esp'],
-      { onEdit: vi.fn(), client: fakeClient(), immutableSet: new Set(['A.esp']) },
+      { onEdit: vi.fn(), immutableSet: new Set(['A.esp']) },
     );
     toggleRow('#1');
 
@@ -389,7 +406,6 @@ describe('ConditionSection', () => {
           onOpen={vi.fn()}
           immutableSet={new Set()}
           onEdit={vi.fn()}
-          client={fakeClient()}
           pendingChangeMap={{ 'A.esp:CTDA\\Conditions\\0\\Operator': condChange('CTDA\\Conditions\\0\\Operator', 'GreaterThan') }}
         />
       </tbody></table>,
@@ -424,7 +440,6 @@ describe('ConditionSection', () => {
           onOpen={vi.fn()}
           immutableSet={new Set()}
           onEdit={onEdit}
-          client={fakeClient()}
           pendingChangeMap={{ 'A.esp:CTDA\\Conditions\\0\\Operator': condChange('CTDA\\Conditions\\0\\Operator', 'GreaterThan') }}
         />
       </tbody></table>,
@@ -456,7 +471,6 @@ describe('ConditionSection', () => {
           onOpen={vi.fn()}
           immutableSet={new Set()}
           onEdit={vi.fn()}
-          client={fakeClient()}
           pendingChangeMap={{
             'A.esp:CTDA\\Conditions\\0\\UseGlobal': condChange('CTDA\\Conditions\\0\\UseGlobal', true, 'chg-ug'),
             'A.esp:CTDA\\Conditions\\0\\Comparison': condChange('CTDA\\Conditions\\0\\Comparison', '00abcd:G.esp', 'chg-cmp'),
@@ -492,7 +506,6 @@ describe('ConditionSection', () => {
           onOpen={vi.fn()}
           immutableSet={new Set()}
           onEdit={vi.fn()}
-          client={fakeClient()}
           pendingChangeMap={{ 'A.esp:CTDA\\Conditions\\0\\Operator': condChange('CTDA\\Conditions\\0\\Operator', 'GreaterThan') }}
         />
       </tbody></table>,
@@ -690,7 +703,7 @@ describe('ConditionSection', () => {
         { fieldPath: 'Effects[0].Conditions', conditions: [{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }] },
       ]),
       ['A.esp'],
-      { onEdit, client: fakeClient() },
+      { onEdit },
     );
 
     // Expand the nested group, then expand the condition row to its field details.
