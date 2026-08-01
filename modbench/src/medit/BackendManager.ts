@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import * as http from 'node:http';
 import * as readline from 'node:readline';
+import type { BackendStream } from './backendLog';
 
 export type BackendStatus = 'starting' | 'attached' | 'disconnected';
 
@@ -29,9 +30,9 @@ export interface BackendManagerOptions {
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
   log?: (msg: string) => void;
-  /** Receives each line the spawned backend writes to stdout/stderr (#199).
-   *  Levelling lives in the caller's forwarder, not here. */
-  onOutput?: (line: string) => void;
+  /** Receives each line the spawned backend writes, with the stream it came from
+   *  (#199). Levelling lives in the caller's forwarder, not here. */
+  onOutput?: (line: string, source: BackendStream) => void;
   /** Spawns the bundled backend; omitted in attach-only/test contexts. */
   spawn?: SpawnFn;
   /** Path to the bundled backend executable. */
@@ -44,7 +45,7 @@ export class BackendManager extends EventEmitter {
   private readonly pollIntervalMs: number;
   private readonly pollTimeoutMs: number;
   private readonly log: (msg: string) => void;
-  private readonly onOutput: (line: string) => void;
+  private readonly onOutput: (line: string, source: BackendStream) => void;
   private readonly spawnFn?: SpawnFn;
   private readonly executablePath?: string;
 
@@ -116,9 +117,11 @@ export class BackendManager extends EventEmitter {
    *  blocks the backend's writes, so draining isn't optional. Re-runs per spawn,
    *  so a crash-restarted child is forwarded too. */
   private forwardOutput(child: BackendProcess): void {
-    for (const stream of [child.stdout, child.stderr]) {
+    const streams: [BackendStream, NodeJS.ReadableStream | null | undefined][] =
+      [['stdout', child.stdout], ['stderr', child.stderr]];
+    for (const [source, stream] of streams) {
       if (!stream) continue;
-      readline.createInterface({ input: stream }).on('line', (line) => this.onOutput(line));
+      readline.createInterface({ input: stream }).on('line', (line) => this.onOutput(line, source));
     }
   }
 

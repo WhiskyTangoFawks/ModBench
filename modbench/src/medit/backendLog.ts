@@ -10,6 +10,13 @@ const LEVELS: Record<string, keyof LeveledChannel> = {
 /** `[HH:mm:ss LVL] ` — the leading half of Serilog's default console template. */
 const TAG = /^\[\d{2}:\d{2}:\d{2} ([A-Z]{3})\] /;
 
+export type BackendStream = 'stdout' | 'stderr';
+
+/** Level an untagged line falls back to. Serilog tags everything it writes to
+ *  stdout; untagged stderr is the runtime itself (a .NET crash dump), which must
+ *  not arrive as routine chatter. */
+const UNTAGGED: Record<BackendStream, keyof LeveledChannel> = { stdout: 'info', stderr: 'error' };
+
 /** Routes one line of backend console output to the matching leveled call on the
  *  Modbench channel (#199). The only backend→frontend coupling this introduces is
  *  Serilog's console template, and it is deliberately tolerant: an unrecognized
@@ -17,16 +24,19 @@ const TAG = /^\[\d{2}:\d{2}:\d{2} ([A-Z]{3})\] /;
  *
  *  Stateful by necessity — Serilog appends exception stack traces as untagged
  *  lines after their message, so a continuation inherits the last seen level
- *  instead of being demoted out of the reader's level filter. */
-export function makeBackendLogForwarder(channel: LeveledChannel): (line: string) => void {
-  let level: keyof LeveledChannel = 'info';
-  return (line) => {
+ *  instead of being demoted out of the reader's level filter. That carry-over is
+ *  tracked per stream: the two are written independently, so letting stdout's
+ *  level leak into stderr would file a crash dump under whatever routine line
+ *  happened to arrive last. */
+export function makeBackendLogForwarder(channel: LeveledChannel): (line: string, source: BackendStream) => void {
+  const level = { ...UNTAGGED };
+  return (line, source) => {
     if (!line.trim()) return;
     const tag = TAG.exec(line);
     if (tag && tag[1] in LEVELS) {
-      level = LEVELS[tag[1]];
+      level[source] = LEVELS[tag[1]];
       line = line.slice(tag[0].length); // channel stamps its own timestamp + level
     }
-    channel[level](`[backend] ${line}`);
+    channel[level[source]](`[backend] ${line}`);
   };
 }

@@ -153,49 +153,48 @@ async function waitForLines(lines: string[], n: number) {
   for (let i = 0; i < 50 && lines.length < n; i++) await new Promise((r) => setTimeout(r, 2));
 }
 
+/** A started manager whose spawned child's output is collected as `"<line> <source>"`. */
+async function startWithOutput(statusBar: StatusBarAdapter) {
+  const state = { healthy: false };
+  makeToggleableHttpGet(state);
+  const child = makeChild();
+  const spawn = vi.fn(() => { state.healthy = true; return child; });
+  const lines: string[] = [];
+
+  const mgr = new BackendManager({
+    port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x',
+    onOutput: (line, source) => lines.push(`${line} ${source}`),
+  });
+  await mgr.start();
+  return { mgr, child, lines };
+}
+
 describe('BackendManager output forwarding', () => {
   let statusBar: ReturnType<typeof makeStatusBar>;
   beforeEach(() => { statusBar = makeStatusBar(); vi.resetAllMocks(); });
   afterEach(() => vi.restoreAllMocks());
 
-  it('forwards whole lines from stdout and stderr', async () => {
-    const state = { healthy: false };
-    makeToggleableHttpGet(state);
-    const child = makeChild();
-    const spawn = vi.fn(() => { state.healthy = true; return child; });
-    const lines: string[] = [];
-
-    const mgr = new BackendManager({
-      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x',
-      onOutput: (l) => lines.push(l),
-    });
-    await mgr.start();
+  it('forwards whole lines, tagged with the stream they came from', async () => {
+    const { child, lines } = await startWithOutput(statusBar);
 
     child.stdout.write('[08:30:45 INF] Indexed 500 records\n');
-    child.stderr.write('[08:30:46 ERR] Session load failed\n');
+    child.stderr.write('Unhandled exception. boom\n');
     await waitForLines(lines, 2);
 
-    expect(lines).toEqual(['[08:30:45 INF] Indexed 500 records', '[08:30:46 ERR] Session load failed']);
+    expect(lines).toEqual([
+      '[08:30:45 INF] Indexed 500 records stdout',
+      'Unhandled exception. boom stderr',
+    ]);
   });
 
   it('reassembles a line split across chunks and strips the CRLF a Windows backend writes', async () => {
-    const state = { healthy: false };
-    makeToggleableHttpGet(state);
-    const child = makeChild();
-    const spawn = vi.fn(() => { state.healthy = true; return child; });
-    const lines: string[] = [];
-
-    const mgr = new BackendManager({
-      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x',
-      onOutput: (l) => lines.push(l),
-    });
-    await mgr.start();
+    const { child, lines } = await startWithOutput(statusBar);
 
     child.stdout.write('[08:30:45 INF] Indexed ');
     child.stdout.write('500 records\r\n');
     await waitForLines(lines, 1);
 
-    expect(lines).toEqual(['[08:30:45 INF] Indexed 500 records']);
+    expect(lines).toEqual(['[08:30:45 INF] Indexed 500 records stdout']);
   });
 
   it('drains the streams even with no onOutput — an unread pipe would block the backend', async () => {
