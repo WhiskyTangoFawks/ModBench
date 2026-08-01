@@ -57,7 +57,6 @@ interface RenderOpts {
   onEdit?: (plugin: string, path: string, value: unknown) => void;
   client?: RecordSessionClient;
   pendingChangeMap?: Record<string, PendingChange>;
-  onRevert?: (changeId: string) => void;
 }
 
 function renderSection(conditions: ConditionCompare | null, plugins: string[], opts: RenderOpts = {}) {
@@ -73,7 +72,6 @@ function renderSection(conditions: ConditionCompare | null, plugins: string[], o
         onEdit={opts.onEdit}
         client={opts.client}
         pendingChangeMap={opts.pendingChangeMap}
-        onRevert={opts.onRevert}
       />
     </tbody></table>,
   );
@@ -361,51 +359,6 @@ describe('ConditionSection', () => {
     expect(within(operatorRow).getByText('=')).toBeInTheDocument();
   });
 
-  it('a pending condition field edit renders in the pending column with a revert control', () => {
-    const c = condition({ operator: 'EqualTo' });
-    const pendingChange: PendingChange = {
-      id: 'chg-1',
-      formKey: '000800:A.esp',
-      plugin: 'A.esp',
-      fieldPath: 'CTDA\\Conditions\\0\\Operator',
-      recordType: 'cobj',
-      oldValue: 'EqualTo',
-      newValue: 'GreaterThan',
-      source: 'user',
-      description: null,
-      timestamp: '2026-01-01T00:00:00Z',
-      changeType: 'field_edit',
-      groupId: null,
-    } as unknown as PendingChange;
-    const onRevert = vi.fn();
-
-    const onOpen = vi.fn();
-    const cols: Column[] = [{ kind: 'disk', override: override('A.esp') }, { kind: 'pending', plugin: 'A.esp' }];
-    render(
-      <table><tbody>
-        <ConditionSection
-          conditions={compare([{ index: 0, perPlugin: { 'A.esp': c }, winnerPlugin: 'A.esp', cellStates: {}, fieldCellStates: {} }])}
-          columns={cols}
-          onOpen={onOpen}
-          immutableSet={new Set()}
-          onEdit={vi.fn()}
-          client={fakeClient()}
-          pendingChangeMap={{ 'A.esp:CTDA\\Conditions\\0\\Operator': pendingChange }}
-          onRevert={onRevert}
-        />
-      </tbody></table>,
-    );
-    toggleRow('#1');
-
-    const operatorRow = screen.getByText('Operator').closest('tr')!;
-    expect(within(operatorRow).getByTitle('Revert group')).toBeInTheDocument();
-    fireEvent.click(within(operatorRow).getByTitle('Revert group'));
-    expect(onRevert).toHaveBeenCalledWith('chg-1');
-    // Issue #203: this Operator pending cell is now click-to-edit, and ↩ sits inside it —
-    // clicking ↩ must revert without also activating the select editor (stopPropagation).
-    expect(within(operatorRow).queryByRole('combobox')).toBeNull();
-  });
-
   // ── Issue #203: pending condition fields are directly editable ──────────────────
   //
   // Same terms as the disk cell: a Condition field's editor (ScalarCell/FormKeyCell, via
@@ -444,6 +397,9 @@ describe('ConditionSection', () => {
     expect(within(operatorRow).getByText('EqualTo')).toBeInTheDocument();
     expect(within(operatorRow).getByText('GreaterThan')).toBeInTheDocument();
     expect(within(operatorRow).queryByRole('combobox')).toBeNull();
+    // Issue #207 / ADR-0033: no standalone revert icon on the pending cell — Revert Group lives
+    // only on the right-click menu.
+    expect(within(operatorRow).queryByTitle('Revert group')).not.toBeInTheDocument();
 
     fireEvent.click(within(operatorRow).getByText('GreaterThan'));
 

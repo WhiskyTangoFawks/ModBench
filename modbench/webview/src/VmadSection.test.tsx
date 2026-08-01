@@ -67,7 +67,6 @@ type RenderOpts = {
   onOpen?: ReturnType<typeof vi.fn>;
   immutable?: string[];
   onEdit?: ReturnType<typeof vi.fn>;
-  onRevert?: ReturnType<typeof vi.fn>;
   onPendingContextMenu?: ReturnType<typeof vi.fn>;
   onStructOp?: ReturnType<typeof vi.fn>;
   pendingChangeMap?: Record<string, PendingChange>;
@@ -89,7 +88,6 @@ function renderSection(vmad: VmadCompare | null, plugins: string[], opts: Render
           onOpen={onOpen}
           immutableSet={new Set(opts.immutable ?? [])}
           onEdit={opts.onEdit}
-          onRevert={opts.onRevert}
           onPendingContextMenu={opts.onPendingContextMenu}
           onStructOp={opts.onStructOp}
           pendingChangeMap={opts.pendingChangeMap}
@@ -379,11 +377,11 @@ describe('VmadSection array editing', () => {
     expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Items`, [10, 30, 20]);
   });
 
-  it('pending array change shows on the parent row pending column with revert button', () => {
-    const onRevert = vi.fn();
+  // Issue #207 / ADR-0033: revert lives only on the right-click menu's Revert Group — no
+  // standalone icon on the pending cell now that it exists there.
+  it('pending array change shows on the parent row pending column, with no inline revert control', () => {
     const chg = pendingChange('A.esm', String.raw`VMAD\S\Items`, [10, 20, 0]);
     renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
-      onRevert,
       withPendingCol: 'A.esm',
       pendingChangeMap: { [String.raw`A.esm:VMAD\S\Items`]: chg },
     });
@@ -391,10 +389,7 @@ describe('VmadSection array editing', () => {
 
     // Pending column on the parent array row shows the new array value
     expect(screen.getByText('[10,20,0]')).toBeInTheDocument();
-    const revertBtn = screen.getByTitle('Revert group');
-    expect(revertBtn).toBeInTheDocument();
-    fireEvent.click(revertBtn);
-    expect(onRevert).toHaveBeenCalledWith(chg.id);
+    expect(screen.queryByTitle('Revert group')).not.toBeInTheDocument();
   });
 
   // Issue #139: a VMAD pending value offers Save Group / Revert Group like any other pending cell.
@@ -427,21 +422,6 @@ describe('VmadSection array editing', () => {
     toggle('S');
 
     fireEvent.click(screen.getByText('[10,20,0]'));
-    expect(container.querySelectorAll('input, select, textarea')).toHaveLength(0);
-  });
-
-  it('clicking the inline ↩ on a VMAD pending cell reverts without opening an editor', () => {
-    const onRevert = vi.fn();
-    const chg = pendingChange('A.esm', String.raw`VMAD\S\Items`, [10, 20, 0]);
-    const { container } = renderSection(arrayVmad('scalar', [10, 20]), ['A.esm'], {
-      onRevert,
-      withPendingCol: 'A.esm',
-      pendingChangeMap: { [String.raw`A.esm:VMAD\S\Items`]: chg },
-    });
-    toggle('S');
-
-    fireEvent.click(screen.getByTitle('Revert group'));
-    expect(onRevert).toHaveBeenCalledWith(chg.id);
     expect(container.querySelectorAll('input, select, textarea')).toHaveLength(0);
   });
 
@@ -633,21 +613,6 @@ describe('VmadSection structList + struct structural edits (13.7)', () => {
     expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Bounds`, [
       { name: 'Y', type: 'Int', flags: 'Edited', intValue: 2 },
     ]);
-  });
-
-  it('pending struct change shows on the struct property row with a working revert', () => {
-    const onRevert = vi.fn();
-    const chg = pendingChange('A.esm', String.raw`VMAD\S\Bounds`, [{ name: 'X', type: 'Int', intValue: 99 }]);
-    renderSection(structVmad(), ['A.esm'], {
-      onRevert,
-      withPendingCol: 'A.esm',
-      pendingChangeMap: { [String.raw`A.esm:VMAD\S\Bounds`]: chg },
-    });
-    toggle('S');
-
-    const revertBtn = screen.getByTitle('Revert group');
-    fireEvent.click(revertBtn);
-    expect(onRevert).toHaveBeenCalledWith(chg.id);
   });
 });
 
@@ -933,26 +898,6 @@ describe('VmadSection editing', () => {
     expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Target`, { formKey: '000123:Foo.esp', alias: 5 });
   });
 
-  it('pending VMAD change shows new value and revert button; clicking revert calls onRevert without activating the editor', () => {
-    const onRevert = vi.fn();
-    const chg = pendingChange('A.esm', String.raw`VMAD\MyScript\Enabled`, true);
-    const { container } = renderSection(boolVmad(), ['A.esm'], {
-      onRevert,
-      withPendingCol: 'A.esm',
-      pendingChangeMap: { [String.raw`A.esm:VMAD\MyScript\Enabled`]: chg },
-    });
-    toggle('MyScript');
-
-    expect(screen.getByText('true')).toBeInTheDocument();
-    const revertBtn = screen.getByTitle('Revert group');
-    expect(revertBtn).toBeInTheDocument();
-    fireEvent.click(revertBtn);
-    expect(onRevert).toHaveBeenCalledWith(chg.id);
-    // Issue #203: this scalar leaf's pending cell is now click-to-edit, and ↩ sits inside it —
-    // clicking ↩ must revert without also activating the checkbox editor (stopPropagation).
-    expect(container.querySelectorAll('input, select, textarea')).toHaveLength(0);
-  });
-
   // Issue #203: a pending scalar/object leaf value is directly editable, on the same terms as a
   // disk cell — same ClickToEdit + VmadScalarEditor/VmadObjectEditor pair, fed the staged value
   // instead of the disk value.
@@ -1060,7 +1005,6 @@ describe('VmadSection editing', () => {
     const { container } = renderSection(vmad, ['A.esm'], {
       withPendingCol: 'A.esm',
       pendingChangeMap: { [`A.esm:${chg.fieldPath}`]: chg },
-      onRevert: vi.fn(),
       onEdit: vi.fn(),
     });
     toggle('S');
@@ -1070,7 +1014,9 @@ describe('VmadSection editing', () => {
     expect(container.querySelectorAll('input, select, textarea')).toHaveLength(0);
   });
 
-  it('a pending add_property renders as a new added row', () => {
+  // Issue #207 / ADR-0033: AddedPendingCell (a pending add_property row) carries no inline
+  // revert control either — revert lives only on the right-click menu's Revert Group.
+  it('a pending add_property renders as a new added row, with no inline revert control', () => {
     const chg = pendingChange('A.esm', String.raw`VMAD\S\NewProp`, {
       op: 'add_property', type: 'Int', name: 'NewProp', flags: 'Edited', value: 42,
     });
@@ -1078,12 +1024,12 @@ describe('VmadSection editing', () => {
     renderSection(vmad, ['A.esm'], {
       withPendingCol: 'A.esm',
       pendingChangeMap: { [`A.esm:${chg.fieldPath}`]: chg },
-      onRevert: vi.fn(),
     });
     toggle('S');
 
     expect(screen.getByText('NewProp')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
+    expect(screen.queryByTitle('Revert group')).not.toBeInTheDocument();
   });
 
   it('editing a pending-added property re-issues add_property with the new value', () => {
@@ -1138,17 +1084,19 @@ describe('VmadSection editing', () => {
     expect(onStructOp).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S`, { op: 'remove_script' });
   });
 
-  it('a pending add_script renders as a new added script row', () => {
+  // Issue #207 / ADR-0033: the pendingScriptAdds row carries no inline revert control either —
+  // revert lives only on the right-click menu's Revert Group.
+  it('a pending add_script renders as a new added script row, with no inline revert control', () => {
     const chg = pendingChange('A.esm', String.raw`VMAD\NewScript`, {
       op: 'add_script', name: 'NewScript', flags: 'Local', properties: [],
     });
     renderSection(null, ['A.esm'], {
       withPendingCol: 'A.esm',
       pendingChangeMap: { [`A.esm:${chg.fieldPath}`]: chg },
-      onRevert: vi.fn(),
     });
 
     expect(screen.getByText('NewScript')).toBeInTheDocument();
+    expect(screen.queryByTitle('Revert group')).not.toBeInTheDocument();
   });
 
   // ── change property type (13.8.3) ──────────────────────────────────────────
@@ -1180,7 +1128,6 @@ describe('VmadSection editing', () => {
     renderSection(vmad, ['A.esm'], {
       withPendingCol: 'A.esm',
       pendingChangeMap: { [`A.esm:${chg.fieldPath}`]: chg },
-      onRevert: vi.fn(),
     });
     toggle('S');
 

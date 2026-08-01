@@ -73,8 +73,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // target list), branching on `mode` only in onSelect.
   const [targetPickerSource, setTargetPickerSource] = useState<{ plugin: string; x: number; y: number; mode: 'copyAll' | 'newRecord' | 'copyOverride' } | null>(null);
   // Issue #139: right-click menu on a pending value (Save Group / Revert Group), keyed on the
-  // member change id it acts on; and the multi-member revert confirmation the ↩ / Revert Group
-  // raise before dropping a whole component.
+  // member change id it acts on; and the multi-member revert confirmation Revert Group raises
+  // before dropping a whole component.
   const [pendingMenu, setPendingMenu] = useState<{ changeId: string; x: number; y: number } | null>(null);
   const [revertConfirm, setRevertConfirm] = useState<{ changeId: string; members: PendingChange[] } | null>(null);
 
@@ -186,7 +186,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     return true;
   }
 
-  // Issue #139: the ↩ and the context menu's Revert Group both revert the change's whole
+  // Issue #139: Revert Group (right-click menu only, ADR-0033) reverts the change's whole
   // component (ADR-0029). A group of one reverts straight away — the common case, exactly
   // "revert this field"; a multi-member group confirms first, listing what travels with it,
   // rather than firing the backend's 409 for a partial group revert (ADR-0028). The member
@@ -510,7 +510,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                   onCellDrop={handleCellDrop}
                   onOpen={handleOpen}
                   onEdit={(plugin, fieldName, value) => { void handleEdit(plugin, fieldName, value); }}
-                  onRevert={changeId => { void handleRevertGroup(changeId); }}
                   onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                   context={{ kind: 'top-level' }}
                   hasChildren={hasChildren}
@@ -553,7 +552,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         onEdit={(plugin, elemKey, newValue) => {
                           void handleEdit(plugin, diff.fieldName, updateArrayAtKey(resolveCurrentArr(plugin), elemKey, newValue, elementMeta.isSortable ?? false));
                         }}
-                        onRevert={changeId => { void handleRevertGroup(changeId); }}
                         onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                         context={{ kind: 'array-element', overrideMeta: elementMeta, parentFieldName: diff.fieldName }}
                         hasChildren={(child.children?.length ?? 0) > 0}
@@ -600,7 +598,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                               updatedArr[elemIdx] = { ...curElem, [subField]: subValue };
                               void handleEdit(plugin, diff.fieldName, updatedArr);
                             }}
-                            onRevert={changeId => { void handleRevertGroup(changeId); }}
                             onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                             context={{ kind: 'grandchild', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName, parentFieldIndex: elemIdx }}
                           />,
@@ -631,7 +628,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                           const cur = pending !== undefined ? { ...disk, ...pending } : disk;
                           void handleEdit(plugin, diff.fieldName, { ...cur, [subField]: subValue });
                         }}
-                        onRevert={changeId => { void handleRevertGroup(changeId); }}
                         onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                         context={{ kind: 'struct-child', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName }}
                       />,
@@ -649,7 +645,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                           immutableSet={immutableSet}
                           pendingChangeMap={pendingChangeMap}
                           onEdit={(plugin, vmadPath, value) => { void handleEdit(plugin, vmadPath, value); }}
-                          onRevert={changeId => { void handleRevertGroup(changeId); }}
                           onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
                           onStructOp={(plugin, vmadPath, op) => { void handleVmadStructOp(plugin, vmadPath, op); }}
                           client={client}
@@ -664,7 +659,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                 onEdit={(plugin, path, value) => { void handleEdit(plugin, path, value); }}
                 client={client}
                 pendingChangeMap={pendingChangeMap}
-                onRevert={changeId => { void handleRevertGroup(changeId); }}
                 onPendingContextMenu={(changeId, x, y) => setPendingMenu({ changeId, x, y })}
               />
             )}

@@ -267,7 +267,6 @@ interface SectionCtx {
   onEdit?: (plugin: string, path: string, value: unknown) => void;
   client?: RecordSessionClient;
   pendingChangeMap?: Record<string, PendingChange>;
-  onRevert?: (changeId: string) => void;
   // Issue #139/#203: right-click a pending value → Save Group / Revert Group / Reveal in Pending
   // Changes Tree, all from the shared PendingCellMenu RecordPanel owns.
   onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
@@ -314,23 +313,12 @@ function pendingFieldCell(
         ? e => { e.preventDefault(); ctx.onPendingContextMenu!(change.id, e.clientX, e.clientY); }
         : undefined}
     >
-      {change && (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {editable
-            ? field.renderEdit(
-                overlayPendingEdits(base, condition.index, groupFieldPath, plugin, ctx.pendingChangeMap),
-                { client, onOpen, onCommit: v => onEdit(plugin, wirePath, v) },
-              )
-            : <span>{pendingValueText(change.newValue)}</span>}
-          {ctx.onRevert && (
-            <button
-              onClick={e => { e.stopPropagation(); ctx.onRevert!(change.id); }}
-              title="Revert group"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--vscode-errorForeground, #f88)', fontSize: '11px', padding: 0, lineHeight: 1 }}
-            >↩</button>
-          )}
-        </span>
-      )}
+      {change && (editable
+        ? field.renderEdit(
+            overlayPendingEdits(base, condition.index, groupFieldPath, plugin, ctx.pendingChangeMap),
+            { client, onOpen, onCommit: v => onEdit(plugin, wirePath, v) },
+          )
+        : <span>{pendingValueText(change.newValue)}</span>)}
     </td>
   );
 }
@@ -465,7 +453,6 @@ interface ConditionSectionProps {
   onEdit?: (plugin: string, path: string, value: unknown) => void;
   client?: RecordSessionClient;
   pendingChangeMap?: Record<string, PendingChange>;
-  onRevert?: (changeId: string) => void;
   onPendingContextMenu?: (changeId: string, x: number, y: number) => void;
 }
 
@@ -478,7 +465,7 @@ function isNestedGroupPath(fieldPath: string): boolean {
 
 export function ConditionSection({
   conditions, columns, onOpen, immutableSet, onEdit, client,
-  pendingChangeMap, onRevert, onPendingContextMenu,
+  pendingChangeMap, onPendingContextMenu,
 }: Readonly<ConditionSectionProps>): React.ReactElement | null {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Per-group collapse (#181): a nested group defaults to collapsed (only its header shows until
@@ -506,7 +493,7 @@ export function ConditionSection({
   const ctx: SectionCtx = {
     columns, onOpen, toggle,
     isEditable: plugin => !immutableSet.has(plugin),
-    onEdit, client, pendingChangeMap, onRevert, onPendingContextMenu,
+    onEdit, client, pendingChangeMap, onPendingContextMenu,
   };
 
   // #154: a record can have more than one condition-carrying field (e.g. a Quest's
