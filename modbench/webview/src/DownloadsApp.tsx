@@ -4,9 +4,8 @@ import {
   EXTENSION_TO_WEBVIEW,
   WEBVIEW_TO_EXTENSION,
   type ExtensionToWebview,
-  type WebviewToExtension,
 } from './downloadsMessages';
-import { filterHiddenRows, filterRowsByName, sortDownloadRows, type DownloadRow, type DownloadSortColumn } from './downloadsModel';
+import { downloadRowContext, filterHiddenRows, filterRowsByName, sortDownloadRows, type DownloadRow, type DownloadSortColumn } from './downloadsModel';
 import { baseCell, headerCell } from './gridStyles';
 
 type State =
@@ -40,104 +39,12 @@ function handleRefresh() {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.REFRESH });
 }
 
-interface RowContextMenuProps {
-  readonly x: number;
-  readonly y: number;
-  readonly row: DownloadRow;
-  readonly onClose: () => void;
-}
-
-interface MenuItemProps {
-  readonly label: string;
-  readonly disabled?: boolean;
-  readonly onActivate: () => void;
-}
-
-function MenuItem({ label, disabled, onActivate }: MenuItemProps) {
-  const activate = () => {
-    if (disabled) return;
-    onActivate();
-  };
-  return (
-    <li
-      role="menuitem"
-      aria-disabled={disabled ? 'true' : undefined}
-      tabIndex={disabled ? -1 : 0}
-      style={{ cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, padding: baseCell.padding }}
-      onClick={activate}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') activate();
-      }}
-      onMouseEnter={(e) => {
-        if (!disabled) e.currentTarget.style.background = 'var(--vscode-list-hoverBackground,#2a2d2e)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = '';
-      }}
-    >
-      {label}
-    </li>
-  );
-}
-
-/** Row-scoped context menu — the seam future row actions (Delete, Hide/Unhide)
- *  each add one more item to. Nav actions gate on the row's `.meta`-derived
- *  flags: Visit on Nexus needs a `modID`, Open Meta File needs a sidecar. */
-function RowContextMenu({ x, y, row, onClose }: RowContextMenuProps) {
-  const post = (type: WebviewToExtension['type']) => {
-    vscode.postMessage({ type, name: row.name });
-    onClose();
-  };
-  return (
-    <ul
-      role="menu"
-      style={{
-        position: 'fixed',
-        top: y,
-        left: x,
-        listStyle: 'none',
-        margin: 0,
-        padding: 4,
-        // No space after the comma in the var() fallback: happy-dom (the
-        // webview test environment) silently drops color-valued styles that
-        // contain "var(--x, y)" with a space, but accepts "var(--x,y)".
-        backgroundColor: 'var(--vscode-menu-background,#3c3c3c)',
-        color: 'var(--vscode-menu-foreground,#ccc)',
-        border: '1px solid var(--vscode-menu-border,#454545)',
-        borderRadius: 2,
-        zIndex: 1000,
-      }}
-    >
-      <MenuItem label="Install" onActivate={() => post(WEBVIEW_TO_EXTENSION.INSTALL)} />
-      <MenuItem
-        label="Visit on Nexus"
-        disabled={!row.modID}
-        onActivate={() => post(WEBVIEW_TO_EXTENSION.VISIT_NEXUS)}
-      />
-      <MenuItem label="Open File" onActivate={() => post(WEBVIEW_TO_EXTENSION.OPEN_FILE)} />
-      <MenuItem
-        label="Open Meta File"
-        disabled={!row.hasMeta}
-        onActivate={() => post(WEBVIEW_TO_EXTENSION.OPEN_META)}
-      />
-      <MenuItem label="Reveal in Explorer" onActivate={() => post(WEBVIEW_TO_EXTENSION.REVEAL)} />
-      <MenuItem label="Delete" onActivate={() => post(WEBVIEW_TO_EXTENSION.DELETE)} />
-      {/* One item; label + message flip on the row's hidden flag (removed=true). */}
-      <MenuItem
-        label={row.hidden ? 'Unhide' : 'Hide'}
-        onActivate={() => post(row.hidden ? WEBVIEW_TO_EXTENSION.UNHIDE : WEBVIEW_TO_EXTENSION.HIDE)}
-      />
-    </ul>
-  );
-}
-
 export function DownloadsApp() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [sort, setSort] = useState<{ column: DownloadSortColumn; descending: boolean }>({
     column: 'mtimeMs',
     descending: true,
   });
-  const [menu, setMenu] = useState<{ x: number; y: number; row: DownloadRow } | null>(null);
   const [showHidden, setShowHidden] = useState(false);
   const [filterText, setFilterText] = useState('');
   // Single-row selection (issue #73), keyed on the row's name — transient view
@@ -161,20 +68,6 @@ export function DownloadsApp() {
     vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.READY });
     return () => window.removeEventListener('message', handler);
   }, []);
-
-  useEffect(() => {
-    if (!menu) return;
-    const close = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
-      setMenu(null);
-    };
-    window.addEventListener('click', close);
-    window.addEventListener('keydown', close);
-    return () => {
-      window.removeEventListener('click', close);
-      window.removeEventListener('keydown', close);
-    };
-  }, [menu]);
 
   if (state.kind === 'loading') return <div>Loading…</div>;
   if (state.kind === 'error') return <div>{state.message}</div>;
@@ -240,8 +133,7 @@ export function DownloadsApp() {
               return (
                 <tr
                   key={row.name}
-                  // Hidden rows are only present here under Show hidden; dim them
-                  // (same inline-opacity convention as a disabled MenuItem).
+                  // Hidden rows are only present here under Show hidden; dim them.
                   // Selected row gets the theme-aware list-selection highlight;
                   // selection only moves (no click-to-deselect), so a scalar
                   // selectedName is all the state single-row selection needs.
@@ -255,10 +147,12 @@ export function DownloadsApp() {
                     }),
                   }}
                   onClick={() => setSelectedName(row.name)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setMenu({ x: e.clientX, y: e.clientY, row });
-                  }}
+                  // Issue #214: right-click a row -> VS Code's own `webview/context` menu
+                  // (Install/Visit on Nexus/Open File/Open Meta File/Reveal/Delete/Hide|Unhide),
+                  // gated by this attribute instead of a hand-drawn `<ul role="menu">`. No
+                  // `onContextMenu`/`preventDefault()` here any more — that's what let the old
+                  // hand-drawn menu suppress VS Code's native one.
+                  data-vscode-context={downloadRowContext(row)}
                 >
                   <td style={cell(COLUMN_STYLE.name)}>{row.name}</td>
                   <td style={cell(COLUMN_STYLE.status)}>{row.status}</td>
@@ -270,7 +164,6 @@ export function DownloadsApp() {
           </tbody>
         </table>
       )}
-      {menu && <RowContextMenu x={menu.x} y={menu.y} row={menu.row} onClose={() => setMenu(null)} />}
     </div>
   );
 }

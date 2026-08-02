@@ -324,6 +324,46 @@
         "icon": "$(archive)"
       },
       {
+        "command": "modbench.downloads.install",
+        "title": "Install",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.downloads.visitNexus",
+        "title": "Visit on Nexus",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.downloads.openFile",
+        "title": "Open File",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.downloads.openMeta",
+        "title": "Open Meta File",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.downloads.reveal",
+        "title": "Reveal in Explorer",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.downloads.delete",
+        "title": "Delete",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.downloads.hide",
+        "title": "Hide",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.downloads.unhide",
+        "title": "Unhide",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.pluginListTree.refresh",
         "title": "Modbench: Refresh Plugin List",
         "icon": "$(refresh)"
@@ -624,6 +664,46 @@
           "command": "modbench.columnHeader.removeOverride",
           "when": "webviewId == 'modbench' && webviewSection == 'columnHeader' && !immutable",
           "group": "modbench@8"
+        },
+        {
+          "command": "modbench.downloads.install",
+          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow'",
+          "group": "downloads@1"
+        },
+        {
+          "command": "modbench.downloads.visitNexus",
+          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow' && hasModID",
+          "group": "downloads@2"
+        },
+        {
+          "command": "modbench.downloads.openFile",
+          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow'",
+          "group": "downloads@3"
+        },
+        {
+          "command": "modbench.downloads.openMeta",
+          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow' && hasMeta",
+          "group": "downloads@4"
+        },
+        {
+          "command": "modbench.downloads.reveal",
+          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow'",
+          "group": "downloads@5"
+        },
+        {
+          "command": "modbench.downloads.delete",
+          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow'",
+          "group": "downloads@6"
+        },
+        {
+          "command": "modbench.downloads.hide",
+          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow' && !hidden",
+          "group": "downloads@7"
+        },
+        {
+          "command": "modbench.downloads.unhide",
+          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow' && hidden",
+          "group": "downloads@7"
         }
       ]
     },

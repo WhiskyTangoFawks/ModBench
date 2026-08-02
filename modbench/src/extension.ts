@@ -29,7 +29,7 @@ import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
 import { buildExplicitPlugins } from './modmanager/explicitSession';
 import { detectRoot } from './modmanager/install/detectRoot';
 import { extractArchive } from './modmanager/install/extractArchive';
-import { openDownloadsPanel } from './modmanager/DownloadsPanel';
+import { openDownloadsPanel, registerDownloadsRowCommands } from './modmanager/DownloadsPanel';
 import { makeReporter } from './reporter';
 
 let backendManager: BackendManager | undefined;
@@ -1065,13 +1065,16 @@ interface DownloadsDeps {
   instanceRoot: string;
   log: (msg: string) => void;
 }
-/** Downloads tab: opens the editor-tab webview listing downloads/ archives. */
+/** Downloads tab: opens the editor-tab webview listing downloads/ archives, plus the row's
+ *  native `webview/context` menu commands (#214) — see DownloadsPanel.ts'
+ *  registerDownloadsRowCommands and package.json's contributes.menus["webview/context"]. */
 function registerDownloadsCommands(deps: DownloadsDeps): vscode.Disposable[] {
   const { context, openPanels, instanceRoot, log } = deps;
   return [
     vscode.commands.registerCommand('modbench.downloads.open', () => {
       openDownloadsPanel(context, openPanels, instanceRoot, log);
     }),
+    ...registerDownloadsRowCommands(instanceRoot, log),
   ];
 }
 

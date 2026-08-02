@@ -177,6 +177,17 @@ describe('modbench command registration', () => {
     'modbench.modList.separator.delete',
     'modbench.modList.overwrite.reveal',
     'modbench.downloads.open',
+    // #214: the Downloads row's native `webview/context` menu commands — see package.json's
+    // contributes.menus["webview/context"] (gated on webviewId/webviewSection, not testable
+    // from this harness) and DownloadsApp's data-vscode-context wiring (unit-tested).
+    'modbench.downloads.install',
+    'modbench.downloads.visitNexus',
+    'modbench.downloads.openFile',
+    'modbench.downloads.openMeta',
+    'modbench.downloads.reveal',
+    'modbench.downloads.delete',
+    'modbench.downloads.hide',
+    'modbench.downloads.unhide',
     'modbench.pluginListTree.refresh',
     'modbench.pluginListTree.filter',
     'modbench.pluginListTree.revealInExplorer',
