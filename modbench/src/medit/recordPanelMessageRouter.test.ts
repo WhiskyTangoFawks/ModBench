@@ -292,6 +292,29 @@ describe('pickFormKeyViaQuickPick (issue #210)', () => {
     await resultPromise;
   });
 
+  // Issue #218 AC 3: the seed is the composite the cell displays, not the bare FormKey, so that a
+  // *mutable* FormKey cell can hand over what it shows — the picker's input is native, so Ctrl+A/
+  // Ctrl+C there is the copy path on a column that has no read-only surface. The search half
+  // already tolerated this (normalizeFormKeyQuery), but pre-selection compared the raw seed
+  // against item.formKey and would have silently stopped matching.
+  it('pre-selects the seeded record when the seed is a whole "EditorID [FormKey]" composite', async () => {
+    const record = makeRecord(1, 'Seeded');
+    const { deps, searchRecords } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
+    const { qp } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const composite = `Seeded [${record.formKey}]`;
+    const resultPromise = pickFormKeyViaQuickPick(deps, composite, ['npc_']);
+    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+
+    expect(qp.value).toBe(composite);
+    expect(searchRecords).toHaveBeenCalledWith(record.formKey, ['npc_']);
+    expect(qp.activeItems).toEqual([{ label: composite, formKey: record.formKey }]);
+
+    qp.hide();
+    await resultPromise;
+  });
+
   it('an empty seed does not search — items stay empty', async () => {
     const { deps, searchRecords } = fakeDeps();
     const { qp } = makeFakeQuickPick();

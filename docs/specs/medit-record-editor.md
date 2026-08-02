@@ -210,8 +210,11 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
   enums as their name via a `<select>`; flags as active flag names via a per-flag multi-select;
   FormKeys as a link — `Ctrl+click` follows it, plain click on a mutable column opens a native
   **QuickPick** (#210; the webview cannot call `vscode.window.createQuickPick` itself, so this
-  round-trips through the extension host), seeded with the current reference and filtered by
-  `validFormKeyTypes`. Typing searches records as you type (200ms debounce), matching EditorID or
+  round-trips through the extension host), seeded with the current reference — as the same
+  `EditorID [FormKey]` composite the cell displays and the picker's own items use (#218), not the
+  bare FormKey, so the input does not contradict the list beneath it — and filtered by
+  `validFormKeyTypes`. The seed goes through the same normalization a pasted composite does, so it
+  costs the search nothing. Typing searches records as you type (200ms debounce), matching EditorID or
   — since #210 — a FormKey-shaped query directly, with the same "EditorID [FormKey]" item labels
   the picker always used; Escape leaves the field unchanged. **This QuickPick is also the paste
   target for a FormKey cell** — it is a native input, so `Ctrl+V` into it needs nothing built. A
@@ -224,7 +227,11 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
   the matching record is the active/highlighted item in the QuickPick's results list — VS Code's
   `QuickPick` has no `InputBox`-style `valueSelection`, so the seeded *text* itself is visible but
   not selectable the way an `<input>`'s select-on-focus would be; `Ctrl+A` clears it to search
-  fresh. The same picker backs the VMAD add-property dialog's Object-typed value and the VMAD
+  fresh. **A consequence, and the one asymmetry left in the cursor contract:** a *mutable* FormKey
+  cell has no read-only surface — plain click is spent on the picker — so if the QuickPick's input
+  cannot be selected and copied, that cell cannot hand over its own displayed value the way every
+  other cell can. Seeding with the composite makes the reference at least fully *visible* there;
+  whether it is also copyable is unverified (#218). The same picker backs the VMAD add-property dialog's Object-typed value and the VMAD
   table's Object-property cells. The link affordance appears on `Ctrl`-hover only when the
   reference resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows,
   and are themselves drag sources for their whole value via that summary row, the same as a
