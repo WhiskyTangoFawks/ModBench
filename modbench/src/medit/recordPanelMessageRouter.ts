@@ -139,7 +139,9 @@ export async function pickFormKeyViaQuickPick(
       if (mySeq !== seq) return;
       const qpItems = items.map(toFormKeyQuickPickItem);
       quickPick.items = qpItems;
-      const seeded = qpItems.find(i => i.formKey === seed);
+      // Issue #218: normalized, because the seed is the composite the cell displays — comparing
+      // the raw seed against a bare formKey would match only when the reference is unresolved.
+      const seeded = qpItems.find(i => i.formKey === normalizeFormKeyQuery(seed));
       if (seeded) quickPick.activeItems = [seeded];
     } finally {
       if (mySeq === seq) quickPick.busy = false;

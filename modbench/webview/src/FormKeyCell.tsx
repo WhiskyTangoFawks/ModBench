@@ -39,7 +39,13 @@ export function FormKeyCell({ value, meta, editable, onOpen, onCommit, checkErro
   // A null reference offers nothing to select, so it activates nothing (the `—` placeholder rule).
   function onPlainClick() {
     if (editable) {
-      void pickFormKey(fk ?? '', meta.validFormKeyTypes).then(picked => { if (picked) onCommit(picked); });
+      // Issue #218: seeded with the composite this cell displays, not the bare FormKey. A mutable
+      // column has no read-only surface, so the picker's native input is where its value is
+      // selected and copied — seeding it with something the cell never showed left the one column
+      // kind that can edit a reference unable to hand it over. The picker normalizes a composite
+      // back to its reference before searching, so this costs the search nothing.
+      void pickFormKey(fk ? formKeyLabel(fk, resolution) : '', meta.validFormKeyTypes)
+        .then(picked => { if (picked) onCommit(picked); });
       return;
     }
     if (fk !== null) setActive(true);

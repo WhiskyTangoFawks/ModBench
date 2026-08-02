@@ -184,6 +184,19 @@ describe('FormKeyCell — editable column', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  // Issue #218 AC 3, the mutable half. A mutable column has no read-only surface — plain click
+  // opens the QuickPick — so the picker's own native input is where a user selects and copies this
+  // cell's value. Seeding it with the bare FormKey meant the one column kind that *can* edit a
+  // reference was the one that could not hand over what it displayed. The picker normalizes a
+  // composite back to its reference before searching (#218), so this costs the search nothing, and
+  // it also stops the input contradicting the list beneath it, where every item is a composite.
+  it('seeds the picker with the composite label the cell displays', () => {
+    const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
+    fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
+    expect(pickFormKey).toHaveBeenCalledWith('DogmeatRace [000019:Fallout4.esm]', ['race']);
+  });
+
   it('Ctrl+click navigates instead of opening the picker', () => {
     const onOpen = vi.fn();
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} onOpen={onOpen} onCommit={vi.fn()} resolution={resolvedFixture} />);
