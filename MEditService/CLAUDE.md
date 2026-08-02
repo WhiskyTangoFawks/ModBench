@@ -33,4 +33,4 @@ Every endpoint needs `.Produces<T>()` (success) + `.ProducesProblem(status)` (ea
 - Endpoint catch: `_logger.LogError(ex, "...")` before `Results.Problem(ex.Message)`; never `ex.ToString()` (leaks stack trace); never return from catch unlogged.
 - Best-effort catches: `_logger.LogWarning`, no silent `catch {}` — except `SchemaReflector`'s per-call property-accessor lambdas (avoid log noise).
 - Structured properties: `_logger.LogInformation("Indexed {Count} records for {Plugin}", n, name)`.
-- `LogInformation` for state transitions, `LogDebug` for per-record/per-column trace.
+- `LogInformation` for state transitions, `LogTrace` for per-record/per-column trace.
