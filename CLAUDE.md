@@ -43,6 +43,7 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   sorted, `wbArray` = unsorted), `modorganizer/` (MO2 C++, e.g.
   `src/downloadmanager.cpp` for `.meta` semantics), `SFRecordCompareEngine/`
   (UX-parity reference).
+  `vscode-docs` for vscode api documentation
 - New end-to-end command = 4 touch points, else half-wired: backend endpoint +
   `/regenerate-api` → frontend (`PluginRepository`/`SessionController`) →
   `package.json` commands/menus + `extension.ts` registration → `EXPECTED_COMMANDS` in

@@ -184,9 +184,11 @@ describe('FormKeyCell — resolution-driven label and affordance', () => {
   const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
   const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-  it('labels the link with the resolved EditorID', () => {
+  // Issue #218: the composite, not the bare EditorID — asserted here as well as at the FormKeyLink
+  // seam because this is the path the compare grid's generic FormKey fields actually take.
+  it('labels the link with the resolved EditorID [FormKey] composite', () => {
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
-    expect(screen.getByText('DogmeatRace')).toBeInTheDocument();
+    expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]')).toBeInTheDocument();
   });
 
   it('shows the affordance for a resolved-wrong-type reference even though it carries a checkError', () => {
@@ -198,7 +200,7 @@ describe('FormKeyCell — resolution-driven label and affordance', () => {
         resolution={wrongType}
       />,
     );
-    const link = screen.getByText('SomeNpc');
+    const link = screen.getByText('SomeNpc [00001A:Fallout4.esm]');
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
     expect(link.style.textDecoration).toBe('underline');

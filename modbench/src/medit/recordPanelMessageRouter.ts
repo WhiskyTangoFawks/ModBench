@@ -85,6 +85,25 @@ function toFormKeyQuickPickItem(r: RecordSummary): vscode.QuickPickItem & { form
   return { label: r.editorId ? `${r.editorId} [${r.formKey}]` : r.formKey, formKey: r.formKey };
 }
 
+// Issue #218: since FormKey cells display the same "EditorID [FormKey]" composite these items do,
+// a user can copy a cell and paste the whole label into another FormKey cell's picker — where
+// searching for the literal would find nothing. A bracketed query is searched on the bracket's
+// contents; anything else is searched as typed, so bare EditorIDs and bare FormKeys behave exactly
+// as they did before (#210).
+//
+// The *first* bracketed segment wins, not the last: a VMAD object reference reads
+// "SomeNPC [000123:Foo.esp] [2]", where the trailing bracket is the alias index, not the identity.
+// And when the label and the FormKey disagree — a stale copy, a hand-edited string — the FormKey
+// is what resolves, because it is the identity and the EditorID is decoration.
+//
+// An empty or whitespace-only capture falls back to the query as typed rather than to '': the
+// caller treats an empty query as "clear the list", which would read as "no matches" for something
+// the user did type.
+export function normalizeFormKeyQuery(query: string): string {
+  const bracketed = /\[([^\]]*)\]/.exec(query)?.[1]?.trim();
+  return bracketed || query;
+}
+
 // Issue #210: the FormKey picker as a native QuickPick — the webview can't call
 // vscode.window.createQuickPick itself, so this is the extension-host half of the bridge
 // (pickFormKey on the webview side posts OPEN_FORM_KEY_PICKER and awaits the reply this
@@ -97,6 +116,12 @@ function toFormKeyQuickPickItem(r: RecordSummary): vscode.QuickPickItem & { form
 // `validTypes` filter the deleted picker used; a stale in-flight search is dropped via a
 // sequence guard, never allowed to clobber a newer one. Resolves to the picked FormKey, or
 // null on Escape/blur (no selection) — the caller leaves its field unchanged either way.
+//
+// Issue #218: every query — seeded or typed — goes through normalizeFormKeyQuery first, so a whole
+// "EditorID [FormKey]" label pasted from a cell searches on the reference it names. This is also
+// what makes paste into a FormKey cell need nothing built: the QuickPick is a native input, so
+// Ctrl+V already works, and the autocomplete is what makes it safe — a pasted reference is not
+// committed until it has resolved to a real record in the list.
 export async function pickFormKeyViaQuickPick(
   deps: FormKeyPickerDeps, seed: string, validTypes: string[],
 ): Promise<string | null> {
@@ -110,7 +135,7 @@ export async function pickFormKeyViaQuickPick(
     if (!query.trim()) { quickPick.items = []; return; }
     quickPick.busy = true;
     try {
-      const { items } = await deps.repository.searchRecords(query, validTypes);
+      const { items } = await deps.repository.searchRecords(normalizeFormKeyQuery(query), validTypes);
       if (mySeq !== seq) return;
       const qpItems = items.map(toFormKeyQuickPickItem);
       quickPick.items = qpItems;

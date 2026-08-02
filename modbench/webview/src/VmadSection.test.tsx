@@ -746,8 +746,14 @@ describe('VmadSection — Ctrl+click follows the reference instead of editing', 
 
   // Issue #158: VMAD Object properties now source their FormKeyLink resolution from the real
   // ADR-0031 signal (VmadPropertyDiff.resolutions), not the well-formedness regex proxy this
-  // replaces. A resolved reference renders its EditorID as the link label...
-  it('a resolved VMAD object reference renders the EditorID as its label', () => {
+  // replaces. A resolved reference renders its EditorID in the link label...
+  //
+  // Issue #218: ...as the composite "EditorID [FormKey]", the same label the compare grid and the
+  // picker use — one component, so the two surfaces cannot drift. The alias suffix stays outside
+  // it: VmadSection splits "000123:Foo.esp [2]" and renders "[2]" as a sibling, so the reference
+  // reads "SomeNPC [000123:Foo.esp] [2]" and the *first* bracketed segment is still the FormKey —
+  // which is why the picker's normalizer takes the first match, not the last.
+  it('a resolved VMAD object reference renders the composite EditorID [FormKey] as its label', () => {
     const resolvedVmad: VmadCompare = {
       scripts: [script({
         name: 'S',
@@ -764,8 +770,8 @@ describe('VmadSection — Ctrl+click follows the reference instead of editing', 
     renderSection(resolvedVmad, ['A.esm'], {});
     toggle('S');
 
-    expect(screen.getByText('SomeNPC')).toBeInTheDocument();
-    expect(screen.queryByText('000123:Foo.esp')).not.toBeInTheDocument();
+    expect(screen.getByText('SomeNPC [000123:Foo.esp]')).toBeInTheDocument();
+    expect(screen.getByText('[2]')).toBeInTheDocument();
   });
 
   // ...and a dangling reference — a syntactically well-formed FormKey string that isn't in the

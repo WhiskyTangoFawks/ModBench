@@ -67,9 +67,13 @@ function useCtrlHeld(): boolean {
 // reference of the wrong type). This mirrors xEdit's vstViewCheckHotTrack, which gates
 // hot-tracking on `Allow := Assigned(lLinksTo)`: a link you cannot follow must not look like one.
 //
-// Issue #157: the button's label is the resolved EditorID when the reference resolves, falling
-// back to the raw FormKey string when it doesn't (or when the caller has no resolution to offer
-// yet — VMAD/pending wiring land in #158/#159).
+// Issue #157/#218: the button's label is "EditorID [FormKey]" when the reference resolves, falling
+// back to the bare FormKey string when it doesn't (or when the caller has no resolution to offer
+// yet — VMAD/pending wiring land in #158/#159). The composite supersedes #157's bare EditorID: a
+// FormKey is the identity and the EditorID is decoration, so labelling with the decoration alone
+// left the cell unable to hand the user its own value — which under ADR-0033's cursor contract is
+// the whole of copy. It is also the format the picker's own items have always used
+// (`toFormKeyQuickPickItem`), so a reference now reads back exactly as it was chosen.
 export function FormKeyLink({ value, onOpen, onPlainClick, resolution = UNRESOLVED }: Readonly<{
   value: string;
   onOpen: (fk: string) => void;
@@ -80,7 +84,7 @@ export function FormKeyLink({ value, onOpen, onPlainClick, resolution = UNRESOLV
   const [hovered, setHovered] = useState(false);
   const linksTo = resolution.state !== 'Unresolved';
   const hot = ctrl && hovered && linksTo;
-  const label = resolution.editorId ?? value;
+  const label = resolution.editorId ? `${resolution.editorId} [${value}]` : value;
 
   return (
     <button
@@ -94,12 +98,34 @@ export function FormKeyLink({ value, onOpen, onPlainClick, resolution = UNRESOLV
         background: 'none',
         border: 'none',
         color: 'var(--vscode-textLink-foreground, #3794ff)',
-        cursor: hot ? 'pointer' : 'default',
+        // Issue #218 / ADR-0033 (and #204's rule, applied to the leaf it missed): no resting
+        // cursor override — the parent DiskCell's `grab` is this cell's resting affordance, since
+        // it is a drag source the whole time. `pointer` is asserted only while the reference is
+        // hot-tracked, where it is the navigation gesture's own affordance, not a mask.
+        cursor: hot ? 'pointer' : undefined,
         fontFamily: mono,
         fontSize: '12px',
         padding: 0,
         textDecoration: hot ? 'underline' : 'none',
         textAlign: 'left',
+        // Issue #218: the composite is wider than the bare EditorID it replaces, so the link
+        // truncates itself. gridStyles' baseCell already ellipsises the <td>, but text-overflow
+        // clips at the boundary of an atomic inline box — it never reaches inside a <button>'s
+        // own text — so relying on the cell would hard-clip mid-character instead. Truncating
+        // rather than shortening keeps the full reference in the DOM, so a selection copies the
+        // untruncated text.
+        //
+        // minWidth: 0 is load-bearing, not tidying: FormKeyCell and VmadSection both wrap this in
+        // a `display: inline-flex` span, which makes the button a flex item, and a flex item's
+        // default `min-width: auto` refuses to shrink below its content — silently defeating the
+        // overflow/ellipsis above and letting a long composite blow the column out instead.
+        display: 'inline-block',
+        minWidth: 0,
+        maxWidth: '100%',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        verticalAlign: 'bottom',
       }}
     >
       {label}

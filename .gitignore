@@ -43,3 +43,6 @@ Mutagen/
 TES5Edit/
 SFRecordCompareEngine/
 modorganizer/
+
+# Local grep-only reference clones (CLAUDE.md: never modify, never tracked)
+references/

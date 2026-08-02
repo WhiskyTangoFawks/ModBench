@@ -1,9 +1,12 @@
 # mEdit Record editor panel — Surface Specification
 
 **Status: Implemented, with the interaction model below (ADR-0033) partway shipped.** Left-click-
-edits-everywhere and column-header consolidation are tracked in #198–#203; compound-field drag and
-right-click Copy are decided but not yet ticketed. One known gap is called out where it bites:
-FormKey resolution (#141).
+edits-everywhere and column-header consolidation are tracked in #198–#203. The cursor contract
+(ADR-0033's amendment — at rest a cell is a drag source, clicked it is a text surface) is decided
+and partly shipped: the FormKey label is the `EditorID [FormKey]` composite and the picker accepts
+it back (#218), but an immutable cell still has no click affordance, so there is no surface to
+select that text from yet (#201). One known gap is called out where it bites: FormKey resolution
+(#141).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
@@ -77,9 +80,10 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
     override, so that common override operations are one action.
 12. As a user, I want to drag a value — scalar or whole compound field alike — from one plugin's
     column into another to copy it as a pending change, so that reconciling a conflict is direct
-    manipulation; and to copy/paste a single field via right-click when the target isn't
-    conveniently reachable by drag, so that I control exactly what gets written and where without
-    leaving the record I am working on.
+    manipulation.
+13. As a user, I want to click any cell — including one in a read-only plugin — and select and copy
+    its text the way I would in any other text field, so that I can lift a value out of the grid to
+    use in a script, a patch, or another tool without retyping it.
 13. As a user, I want to save or revert a pending value from here — acting on that change's
     whole ChangeGroup, never on part of one — or copy a specific plugin's version of the whole
     record into another plugin, so that I control exactly what gets written and where without
@@ -104,14 +108,21 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
 One gesture, one meaning, everywhere a value lives in this panel — the compare grid, VMAD, and
 Condition sections alike ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md)):
 
-- **Left-click** — edit in place. The only thing plain click ever does, on any mutable cell (disk
-  or pending alike). Never navigation, never reveal, never a menu.
+- **Left-click** — activate this cell's text surface. The only thing plain click ever does, on any
+  cell. Never navigation, never reveal, never a menu. On a mutable column (disk or pending alike)
+  that surface is an editor and commits on blur; on an immutable column it is the same surface,
+  read-only, committing nothing. **The cursor states the difference between resting and activated,
+  not between the column kinds**: at rest every value cell shows `grab` and is a drag source with
+  no selectable text; clicked, it shows a caret, and selection, `Ctrl+C` and `Ctrl+V` behave
+  natively (ADR-0033's cursor-contract amendment). Struct and array *summary* rows are the one
+  exception — they render a placeholder (`{…}`, `[3]`), not a value, so they stay pure drag
+  sources with no click affordance; expand the row and each leaf is an ordinary cell.
 - **Click-and-hold, drag, drop** — copy this value's content directly into wherever it's dropped.
   Available from any cell regardless of the *source* column's mutability (only the drop target's
   mutability gates the drop); applies to compound (struct/array) fields via their header/summary
   row exactly as it applies to a scalar leaf's value.
-- **Right-click** — the only place a named, discrete action lives: **Copy** / **Paste** on a
-  field, **Reveal in Pending Changes Tree** / **Save Group** / **Revert Group** on a pending cell,
+- **Right-click** — the only place a named, discrete action lives:
+  **Reveal in Pending Changes Tree** / **Save Group** / **Revert Group** on a pending cell,
   **Copy All to Pending** / **Copy as New Record** / **Copy as Override…** / **Remove** / **Add
   Master…** on a column header (the last only on the header record's own column, and only when
   mutable — ADR-0033: no standalone control once an action is right-click-reachable, same rule
@@ -121,8 +132,10 @@ Condition sections alike ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-
   column-header menu (#209) are VS Code's own native context menu
   (`contributes.menus["webview/context"]`, gated on a `data-vscode-context` attribute the cell/
   header carries — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s
-  native-first precedent applied inside the webview) rather than a rendered overlay; only Copy/
-  Paste on a field is still hand-drawn, pending its own migration. Column-header actions that need
+  native-first precedent applied inside the webview) rather than a rendered overlay. **There is no
+  Copy or Paste item on a field cell, and there never will be**: getting a value out of a cell is
+  not a named action but the ordinary behaviour of the text surface left-click activates
+  (ADR-0033's cursor-contract amendment). Column-header actions that need
   a target plugin (all but Remove) open a `showQuickPick` listing the mutable plugins minus the
   right-clicked column, with a "New Plugin…" entry — the same QuickPick `modbench.copyAsOverrideInto`
   already opens from the plugins tree, extended to accept the column header's record identity
@@ -168,16 +181,23 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
 ### Editing
 
 - **There is no edit mode.** Editability is a property of the **column**, not of a state the
-  user enters: a cell in a non-immutable column renders as text and swaps to its input **on
-  click**, reverting to text on commit or blur — only the clicked cell, never the whole grid,
-  since reading conflicts at a glance is the grid's primary job. This is xEdit's
-  `toEditOnClick`. Immutable columns never activate an input. Dragging (copy this value into
-  another column) is available on **every** cell regardless of that cell's own editability — only
-  the *drop target's* mutability gates the drop — so a cell's resting cursor reflects that: it
-  shows the drag affordance at rest and only takes on a text-input look once actually clicked into
-  its editing state, never before ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md), #204).
+  user enters: a cell renders as text and swaps to its input **on click**, reverting to text on
+  commit or blur — only the clicked cell, never the whole grid, since reading conflicts at a
+  glance is the grid's primary job. This is xEdit's `toEditOnClick`. An **immutable** column
+  activates the same surface, `readOnly` and visibly inert (no input border or background), so it
+  reads as "you may select this" rather than "you may edit this" — it exists so a value can be
+  selected and copied, not edited. Both surfaces **select their whole text on focus**: on a
+  mutable cell that makes `Ctrl+V` replace rather than append and gives type-to-replace, and on a
+  read-only one it hands the user the whole value pre-selected, so `Ctrl+C` is immediate.
+  Dragging (copy this value into another column) is available on **every** cell regardless of that
+  cell's own editability — only the *drop target's* mutability gates the drop — so a cell's
+  resting cursor reflects that: it shows the drag affordance at rest and only takes on a caret
+  once actually clicked into its activated state, never before
+  ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md), #204).
   Dragging is suppressed only while that cell's own input is currently active (a draggable
-  ancestor would otherwise swallow text selection inside the input).
+  ancestor would otherwise swallow text selection inside the input) — which is precisely what
+  makes selection possible once the surface is up, and is why the read-only surface is a real
+  `<input readOnly>` rather than a styled span.
 - **Cells render by field schema type**: strings/numbers/bools as text/number/toggle inputs;
   enums as their name via a `<select>`; flags as active flag names via a per-flag multi-select;
   FormKeys as a link — `Ctrl+click` follows it, plain click on a mutable column opens a native
@@ -185,7 +205,14 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
   round-trips through the extension host), seeded with the current reference and filtered by
   `validFormKeyTypes`. Typing searches records as you type (200ms debounce), matching EditorID or
   — since #210 — a FormKey-shaped query directly, with the same "EditorID [FormKey]" item labels
-  the picker always used; Escape leaves the field unchanged. "Seeded ... and pre-selected" means
+  the picker always used; Escape leaves the field unchanged. **This QuickPick is also the paste
+  target for a FormKey cell** — it is a native input, so `Ctrl+V` into it needs nothing built. A
+  query carrying a bracketed segment (i.e. a whole `EditorID [FormKey]` label pasted from a cell or
+  from another picker item) is normalized to the bracket's contents before searching; if the label
+  and the FormKey disagree — a stale copy, a hand-edited string — **the FormKey wins**, since it is
+  the identity. A query with no bracket is searched as typed, so bare FormKeys and bare EditorIDs
+  behave exactly as they do today. Autocomplete is what makes paste safe here: a pasted reference
+  is not committed until it has resolved to a real record in the list. "Seeded ... and pre-selected" means
   the matching record is the active/highlighted item in the QuickPick's results list — VS Code's
   `QuickPick` has no `InputBox`-style `valueSelection`, so the seeded *text* itself is visible but
   not selectable the way an `<input>`'s select-on-focus would be; `Ctrl+A` clears it to search
@@ -211,8 +238,14 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
   There is no single "active editable plugin" for a panel-level control to assume. A single
   field's value can instead be **dragged between plugin columns** to copy just that field as a
   pending change into the target (which must be editable; the source need not be) — or **copied
-  and pasted via right-click** (Copy on the source field, Paste on the target) when the target
-  isn't conveniently reachable by drag, or lives outside mEdit entirely.
+  and pasted as text** when the target isn't conveniently reachable by drag, or lives outside
+  mEdit entirely. That path uses no mEdit command: click the source cell to activate its text
+  surface, `Ctrl+C`, click the target, `Ctrl+V`. It is therefore available exactly where a text
+  surface is — every cell for copy (including immutable columns), and for paste the `string`,
+  `int`, `float` and `formKey` types on a mutable column. `bool`, `enum` and `flags` cells
+  activate a control rather than a text field when mutable, so they take no paste; a value is
+  moved into them by drag or by their own editor. This is deliberate and not a gap to close: those
+  types are chosen from a bounded list, which is the case clipboard transfer exists to avoid.
 
 ### Pending column
 
@@ -239,7 +272,9 @@ plugin:
   group's only three actions, all in one menu, and the only way to trigger any of them
   ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md): no standalone revert
   icon on the cell now that Revert Group lives in the menu). VS Code's built-in Cut/Copy/Paste
-  entries are suppressed on this menu. Reveal resolves entirely in the extension host (no webview
+  entries are suppressed on this menu (`preventDefaultContextMenuItems`), which costs nothing: a
+  pending value is directly editable (#203), so its text is reached by clicking it — the same
+  cursor contract every other cell follows — not from a menu. Reveal resolves entirely in the extension host (no webview
   round trip); Save Group and Revert Group's work (the HTTP calls, the confirmation below, the
   partial-save/stale-reindex banner) only exists in the webview, so the command broadcasts to
   every open record panel and each one silently ignores a change id it doesn't hold — a change id
@@ -412,8 +447,14 @@ These apply everywhere a field value is rendered (the compare grid, pending cell
 section, and any future surface):
 
 1. **Never display raw integers for enums or flags** — always resolve to name(s).
-2. **FormKeys render as links**, labelled with the referenced record's EditorID when the
-   reference resolves, falling back to the FormKey string when it doesn't. The **link
+2. **FormKeys render as links**, labelled `EditorID [FormKey]` when the reference resolves and the
+   bare FormKey when it doesn't — the same composite the picker's own items have always used, so
+   the format a reference is *chosen* in and the format it is *read back* in are identical.
+   Labelling with the EditorID alone (as #157 shipped) is superseded: a FormKey is the identity and
+   the EditorID is decoration, and a cell that does not display its own identity cannot hand it to
+   the user by any mechanism — which under ADR-0033's cursor contract is the whole of copy. Where
+   the composite is too wide for its column it is truncated with an ellipsis, which does not
+   truncate what a selection copies. The **link
    affordance** (underline, pointer) appears only while `Ctrl` is held and the pointer is over
    the cell, and only when the reference resolves (valid type *or* wrong type — xEdit allows
    following either); `Ctrl+click` follows it, and a link that does not look followable is not
