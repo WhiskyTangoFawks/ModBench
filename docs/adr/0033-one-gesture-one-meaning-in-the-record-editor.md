@@ -76,6 +76,18 @@ read from without knowing a menu exists.
   On a mutable column that surface commits on blur; on an immutable column it is read-only and
   commits nothing. That is the *only* difference between the two column kinds.
 
+  **Except for values chosen from a bounded list.** On a *mutable* column `bool`, `enum` and
+  `flags` activate a control — checkbox, `<select>`, checkbox group — and `formKey` activates the
+  native QuickPick. A control is not a text surface, so there is nothing to select and no caret.
+  Copy is therefore available on those four types in an **immutable** column only, where they
+  activate the read-only surface like everything else. This is a limit, not a defect: left-click on
+  a mutable cell is spent on the editor, and for a value chosen from a bounded list the editor is
+  not text — the same reason those types take no paste. Closing it would need a second gesture on
+  those cells and there is none free. Such a value is moved by drag, or read from the same field in
+  an immutable column. The full availability table lives in
+  `docs/specs/medit-record-editor.md` § Gesture matrix, derived from the drag/selection interlock
+  rather than enumerated.
+
 Consequences:
 
 - **Copy needs no command, no menu contribution, and no clipboard code**, in either process. It is
