@@ -7,6 +7,10 @@ description: Post-implementation review-and-ship workflow. Run at the end of any
 
 Run after any implementation task.
 
+`/validate` runs both steps. `/validate gates` runs Step 1 and stops — for when a
+separate reviewer follows (`/orchestrate` step 5). Review is never skipped, only
+relocated.
+
 ## Step 1 — Gates
 
 ```bash
@@ -22,7 +26,7 @@ Classify changed files → run matching gate (never review non-compiling code):
 | both | `… --backend --frontend` |
 | config/docs only | skip |
 
-Fix all failures, rerun. Core CS (`MEditService/MEditService.Core/**/*.cs`) = mutation-eligible → Step 4.
+Fix all failures, rerun. Core CS (`MEditService/MEditService.Core/**/*.cs`) = mutation-eligible → `/mutation-test`.
 
 ## Step 2 — Review
 

@@ -23,15 +23,15 @@ npm run generate-api      # regen typed API client — needs fresh backend; see 
 npm run package           # build alpha .vsix — pinned local @vscode/vsce, no npx/global install
 ```
 
-- `/validate` — run at end of every task; wraps gates above.
+- `/validate` — end of every coding task: gates, then self-review; wraps gates above.
+  `/validate gates` runs gates alone, for when an independent reviewer follows (`/orchestrate`).
 - `/mutation-test` — mutation testing, `MEditService.Core` only.
 - `/manual-test` — e2e test against real MO2 instance.
 
 ## Rules that matter
 
 - Generalize across Bethesda games, don't lock to FO4 — FO4-concrete repo
-  path/tests are a fixture choice, not a platform lock; each bounded context enforces
-  this independently.
+  path/tests are a fixture choice, not a platform lock; each bounded context enforces this independently.
 - Vocabulary boundary is enforced, not stylistic: "mod" forbidden in Editing;
   "record"/"FormKey" absent from Mod Management. Check `CONTEXT-MAP.md` / relevant
   `CONTEXT.md` before naming anything.
@@ -54,7 +54,6 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   [modbench/CLAUDE.md](modbench/CLAUDE.md) § Invariants; ADR-0027 is the precedent.
 - Read `/tdd` before planning any implementation breakdown — always, even if it
   won't end up as literal red/green slices.
-- Solving pre-existing problems found along the way is in scope — not scope creep.
 - If a change contradicts an ADR (`docs/adr/`), say so — don't silently override.
 - Numbered milestone titles = priority-ordered epics; unnumbered = speculative,
   sorts last. No `ROADMAP.md` — milestones are it; no due-date/release semantics.
