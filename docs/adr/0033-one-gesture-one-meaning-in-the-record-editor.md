@@ -1,8 +1,15 @@
 ---
-status: accepted
+status: superseded by ADR-0034
 ---
 
 # One gesture, one meaning, everywhere a value lives in the record editor
+
+> **Superseded by [ADR-0034](0034-xedit-is-the-ux-reference-for-the-record-editor.md).** The goal
+> below — one meaning per gesture — stands. The anchor was wrong: this ADR put **edit** on
+> left-click, which leaves no gesture for selection, forces copy to come from native text selection,
+> and collides with drag consuming the mousedown. xEdit puts **focus** on left-click and reaches
+> editing by F2, a second click, or double click, which is why it has none of the conflicts the
+> amendment below was written to resolve. Retained for the reasoning, not as current behaviour.
 
 Each record-editor interaction shipped independently over several phases (#3, #111, #140, #142,
 #176, #177…), and each one made its own local call about which gesture triggers it. That produced
