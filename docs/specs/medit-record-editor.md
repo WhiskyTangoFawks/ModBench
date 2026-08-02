@@ -1,14 +1,15 @@
 # mEdit Record editor panel — Surface Specification
 
-**Status: Implemented, with the interaction model below (ADR-0033) partway shipped.** Left-click-
-edits-everywhere and column-header consolidation are tracked in #198–#203. The cursor contract
-(ADR-0033's amendment — at rest a cell is a drag source, clicked it is a text surface) is shipped
-for the field grid: the FormKey label is the `EditorID [FormKey]` composite and the picker accepts
-it back (#218), and every value-bearing cell in an immutable column now activates a read-only
-surface to select and copy from, with both surfaces selecting on focus (#201). The VMAD section is
-the remaining gap — its cells are not drag sources at all and an immutable VMAD leaf still has no
-surface, so ADR-0033's "the compare grid, VMAD, and Condition sections alike" is not yet true of
-VMAD. One further known gap is called out where it bites: FormKey resolution (#141).
+**Status: Implemented, but the interaction model below is newly specified and NOT yet built.**
+The grid, conflict colouring, type-appropriate editors, pending changes, drag-to-copy and the
+column-header menu all ship and work. What does not yet match this document is the **gesture
+model**: [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md) replaced
+ADR-0033 after [an audit of xEdit](../research/xedit-ux-audit.md) showed mEdit had specified
+single-click-to-edit, which xEdit does not do. Today a single click still activates an editor,
+there is no cell focus, no keyboard, and no clipboard commands; cells still show a `grab` cursor
+and immutable cells still activate a read-only surface. Everything in *Interaction model* below
+describes the target, not the build. Known gaps beyond that: VMAD is architecturally outside the
+shared cell entirely (#219) and FormKey resolution (#141).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
@@ -61,15 +62,16 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
    read values without a lookup table.
 5. As a user, I want a FormKey field to render as a link to the referenced record, and
    `Ctrl+click` to open that record, so that I can follow references without copying IDs
-   around — the same gesture xEdit uses, leaving plain click free to edit. *(The link is
+   around — the same gesture xEdit uses. *(The link is
    labelled with the FormKey; labelling it with the referenced record's EditorID needs
    resolution the compare response does not carry — #141.)*
 6. As a user, I want structs and arrays shown collapsed with a summary and expandable to their
    sub-fields/elements, so that a complex record stays readable.
-7. As a user, I want to click a field and change it with the right input for its type (text,
-   number, toggle, dropdown, flag multi-select, FormKey picker), so that editing is
-   type-appropriate and I can't enter a nonsensical value — with no mode to enter first, and
-   only the cell I clicked becoming an input, so the grid stays readable.
+7. As a user, I want to focus a field with a click and open its editor the way xEdit does — a
+   second click, `F2`, or a double click — getting the right input for its type (text, number,
+   toggle, dropdown, flag multi-select, FormKey picker), so that editing is type-appropriate, I
+   can't enter a nonsensical value, there is no mode to enter first, and only one cell is ever an
+   input so the grid stays readable.
 8. As a user, I want my edits shown as pending changes (highlighted, revertable via right-click)
    rather than written immediately, so that I can review a batch before committing and back out
    an edit I regret.
@@ -83,18 +85,18 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
 12. As a user, I want to drag a value — scalar or whole compound field alike — from one plugin's
     column into another to copy it as a pending change, so that reconciling a conflict is direct
     manipulation.
-13. As a user, I want to click any cell — including one in a read-only plugin — and select and copy
-    its text the way I would in any other text field, so that I can lift a value out of the grid to
-    use in a script, a patch, or another tool without retyping it. (Met in full on an immutable
-    column; on a mutable one the bounded-choice types activate a control rather than text — see the
-    gesture matrix, which states the limit and why it stands.)
+13. As a user, I want to click any cell — including one in a read-only plugin — and press `Ctrl+C`
+    to put its value on the clipboard, so that I can lift a value out of the grid to use in a
+    script, a patch, or another tool without retyping it. Copy takes the cell's value, not
+    whatever text I could select, so it works the same on a flag list, a dropdown and a reference
+    as it does on a string.
 13. As a user, I want to save or revert a pending value from here — acting on that change's
     whole ChangeGroup, never on part of one — or copy a specific plugin's version of the whole
     record into another plugin, so that I control exactly what gets written and where without
     leaving the record I am working on.
 14. As a user, I want to right-click a pending value to reveal that change in the Pending Changes
     tree, so that I can get from "what did I change here" to "what else does this drag along"
-    without hunting — while plain click still edits it directly, the same as any other cell.
+    without hunting — while it stays directly editable, on the same terms as any other cell.
 15. As a user, I want to rename a mutable record's FormID, with validation that the new id is
     free and that immutable references don't block it, so that renumbering is safe and the
     errors are explained rather than silent.
@@ -109,26 +111,41 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
 
 ### Interaction model
 
-One gesture, one meaning, everywhere a value lives in this panel — the compare grid, VMAD, and
-Condition sections alike ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md)):
+**xEdit's model, ported** — the compare grid, VMAD and Condition sections alike
+([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md), which supersedes
+ADR-0033; the behaviour being matched is catalogued in
+[the xEdit UX audit](../research/xedit-ux-audit.md)). Every user of this panel arrives fluent in
+xEdit, so it is the reference, and divergence needs a platform limitation to justify it — not a
+better idea.
 
-- **Left-click** — activate this cell's editing surface. The only thing plain click ever does, on
-  any cell. Never navigation, never reveal, never a menu. On a mutable column (disk or pending
-  alike) that surface is an editor and commits on blur; on an immutable column it is the same
-  surface, read-only, committing nothing. It is a *text* surface in every case except the
-  bounded-choice types on a mutable column, which activate a control instead — see the gesture
-  matrix below, which is where that distinction stops being cosmetic. **The cursor states the difference between resting and activated,
-  not between the column kinds**: at rest every value cell shows `grab` and is a drag source with
-  no selectable text; clicked, it shows a caret, and selection, `Ctrl+C` and `Ctrl+V` behave
-  natively (ADR-0033's cursor-contract amendment). Struct and array *summary* rows are the one
-  exception — they render a placeholder (`{…}`, `[3]`), not a value, so they stay pure drag
-  sources with no click affordance; expand the row and each leaf is an ordinary cell.
+- **Left-click** — **focus this cell.** The row highlights; one cell within it carries focus. That
+  is all a single click does: never edit, never navigate, never reveal, never a menu. Selection is
+  single-cell, single-row — no ranges. The focused cell is what the keyboard then acts on, which is
+  the whole reason click is spent on focus rather than on editing.
+- **Left-click on the already-focused cell** — open its inline editor. The Explorer
+  "click, then click again to rename" pattern, and xEdit's `toEditOnClick`.
+- **Double-click a value cell** — open the fullest editor that type has: the inline editor for
+  numeric and flag types, the extended editor for text and references. **Double-click the label
+  column** — expand/collapse that node.
+- **The keyboard acts on the focused cell** — `F2` edit · `Ctrl+C` copy · `Ctrl+X` cut ·
+  `Ctrl+V` paste · `Insert` add a list entry · `Delete` remove the entry or clear the value ·
+  `Ctrl+↑`/`Ctrl+↓` reorder within an unsorted list. **Clipboard operations carry the cell's model
+  value, not selected text**, so they work identically whether the cell renders a text box, a
+  dropdown, a checkbox or a link, and in both column kinds. Copy needs no text surface and no
+  selection, which is why neither exists here.
 - **Click-and-hold, drag, drop** — copy this value's content directly into wherever it's dropped.
   Available from any cell regardless of the *source* column's mutability (only the drop target's
   mutability gates the drop); applies to compound (struct/array) fields via their header/summary
-  row exactly as it applies to a scalar leaf's value.
-- **Right-click** — the only place a named, discrete action lives:
-  **Reveal in Pending Changes Tree** / **Save Group** / **Revert Group** on a pending cell,
+  row exactly as it applies to a scalar leaf's value. **The cursor does not advertise it** — a
+  resting cell shows the default arrow, as in xEdit. `grab` on every value cell was ADR-0033's
+  attempt to make one cursor state two gestures at once; with click meaning focus there is nothing
+  for the cursor to disambiguate.
+- **Right-click** — the only place a named, discrete action lives. On a **value cell** that is the
+  list structure ops (**Add** / **Remove** / **Clear** / **Move Up** / **Move Down**), which are
+  also the `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` accelerators above — the menu is the canonical
+  definition and the keys are shortcuts onto it, exactly as in xEdit, and there are **no inline
+  ▲▼✕ controls**, per the no-second-route rule below. On a pending cell:
+  **Reveal in Pending Changes Tree** / **Save Group** / **Revert Group**,
   **Copy All to Pending** / **Copy as New Record** / **Copy as Override…** / **Remove** / **Add
   Master…** on a column header (the last only on the header record's own column, and only when
   mutable — ADR-0033: no standalone control once an action is right-click-reachable, same rule
@@ -138,10 +155,7 @@ Condition sections alike ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-
   column-header menu (#209) are VS Code's own native context menu
   (`contributes.menus["webview/context"]`, gated on a `data-vscode-context` attribute the cell/
   header carries — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s
-  native-first precedent applied inside the webview) rather than a rendered overlay. **There is no
-  Copy or Paste item on a field cell, and there never will be**: getting a value out of a cell is
-  not a named action but the ordinary behaviour of the text surface left-click activates
-  (ADR-0033's cursor-contract amendment). Column-header actions that need
+  native-first precedent applied inside the webview) rather than a rendered overlay. Column-header actions that need
   a target plugin (all but Remove) open a `showQuickPick` listing the mutable plugins minus the
   right-clicked column, with a "New Plugin…" entry — the same QuickPick `modbench.copyAsOverrideInto`
   already opens from the plugins tree, extended to accept the column header's record identity
@@ -154,83 +168,51 @@ Condition sections alike ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-
   reference to its record). Whether it survives once a right-click "Go to Record" exists is still
   undecided — see Further Notes.
 
-No cell shows an affordance for an action it cannot perform — a cell's resting cursor reflects
-every gesture actually available on it (drag is possible regardless of mutability, so its cursor
-shows that at rest), not just whichever leaf renderer happens to own the pixel under the pointer.
+No cell shows an affordance for an action it cannot perform. With click meaning focus, that is a
+much smaller claim than it was under ADR-0033: the cursor is the default arrow everywhere, drag is
+unadvertised (as in xEdit), and the only resting affordance is the Ctrl-hover link underline on a
+reference that actually resolves.
 
 ### Gesture matrix
 
-The rules above say what each gesture *means*. This says where each one is actually *available*,
-which is not uniform and cannot be guessed from the rules — the gaps below are consequences of one
-mechanism, not a list of decisions, so read the chain first and the table will predict itself.
+Where each gesture is available. Under
+[ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md) this is nearly uniform,
+which is the point — the previous model's availability holes were consequences of routing copy
+through DOM text selection, and they close when the clipboard carries the model value instead.
 
-#### Why click-to-edit is what makes a value copyable
+#### Uniform across every value cell, both column kinds
 
-Copy is not a feature of this panel. It is a side effect of click-to-edit, and it exists only where
-click-to-edit produces a *text* surface. The chain:
+Focus on click · drag out · `Ctrl+C` copy · right-click menu · default arrow cursor.
+Drop in and all mutating operations (`Ctrl+V`, `Ctrl+X`, `F2`, `Insert`, `Delete`, `Ctrl+↑`/`↓`,
+editing of any kind) are **mutable columns only** — an immutable cell simply refuses, showing no
+distinct affordance beforehand, exactly as xEdit does.
 
-1. A value cell is `draggable` at rest, so drag-to-copy works from every column, mutable or not.
-2. **`draggable` consumes the mousedown that would begin a selection.** So no text on a resting
-   cell can ever be highlighted, and `user-select: text` on one is dead letter. These are not two
-   design choices — they are the same fact, and it is why a Copy *command* looked necessary before
-   ADR-0033's amendment.
-3. Left-click activates a surface. That surface is a real `<input>` **specifically so** the cell's
-   own focus watcher sees it and sets `draggable={false}`.
-4. Only now is there anything to highlight — because the drag stood down.
+#### By cell
 
-So: drag suppresses selection → click stands the drag down → selection becomes possible → `Ctrl+C`
-and `Ctrl+V` are the platform's, with no extension code in either process.
-
-The corollary is the whole of what "immutable" means here: **an immutable column gets an edit it
-cannot edit, purely so there is something to copy from** — a `readOnly` input, editor-shaped,
-visibly inert, committing nothing. ADR-0033's "that is the only difference between the two column
-kinds" is meant literally.
-
-#### The two states
-
-| | At rest | Activated |
+| Cell | Second click / `F2` opens | Double-click opens |
 | --- | --- | --- |
-| Cursor | `grab` | caret, when the surface is text |
-| Drag out | ✔ both column kinds | ✘ suppressed |
-| Drop in | ✔ mutable only | ✘ |
-| Highlight text | ✘ **never** | ✔ if the surface is a text input |
-| Edit | ✘ | ✔ mutable only |
+| `string` | text editor | extended editor |
+| `int`, `float` | number editor | number editor (inline — matches xEdit's `dtInteger`/`dtFloat`) |
+| `bool` | checkbox | checkbox |
+| `enum` | dropdown | dropdown |
+| `flags` | multi-select checklist | multi-select checklist (xEdit's `dtFlag` is inline) |
+| `formKey` | native QuickPick | native QuickPick |
+| empty (`—`) | the type's editor (mutable only) | as second click |
+| struct / array summary | nothing | expand/collapse |
+| label column | — | expand/collapse |
 
-#### Availability by cell
+The only cells that open *nothing* are struct and array summary rows, which render a placeholder
+(`{…}`, `[3]`) rather than a value. They remain focusable, copyable and draggable — dragging one
+copies the whole structure, as xEdit does when you drag by the header.
 
-| Cell | Drag at rest | Click activates — mutable / immutable | Highlightable once active |
-| --- | --- | --- | --- |
-| `string`, `int`, `float` | ✔ | text input / read-only input | ✔ both |
-| `bool` | ✔ | checkbox / read-only input | immutable only |
-| `enum` | ✔ | `<select>` / read-only input | immutable only |
-| `flags` | ✔ | checkbox group / read-only input | immutable only |
-| `formKey` | ✔ | QuickPick / read-only input | immutable; mutable unverified (#218) |
-| empty (`—`) | ✔ | editor / **nothing** | — |
-| struct / array summary | ✔ | **nothing** / **nothing** | — |
-| VMAD leaf | ✘ (#219) | editor / **nothing** (#219) | mutable only |
-| field-name column | ✘ | — | ✔ **always** |
+#### Why copy is uniform now
 
-Two rows are worth reading twice. The **field-name column** is the only cell where text can be
-highlighted at rest, and the only reason is that it is not a drag source — nothing eats the
-mousedown. And **VMAD** is the one section where the chain does not hold at all: its cells carry no
-`draggable`, so step 1 never happens, and an immutable VMAD leaf never activates anything, so step 3
-never happens either. ADR-0033's claim to govern "the compare grid, VMAD, and Condition sections
-alike" is therefore not yet true of VMAD (#219). The Condition section renders the same cell
-components as the compare grid and inherits all of this.
-
-#### The one rule that predicts the table
-
-> **Copy is available wherever click-to-edit produces a text surface.** On an immutable column that
-> is always. On a mutable column it is `string`/`int`/`float` only, because `bool`, `enum` and
-> `flags` activate a control instead — the same reason those types take no paste.
-
-So the read-only column can hand you its value and the editable one cannot, for the four
-bounded-choice types. That is the inverse of the obvious expectation and it is **a documented
-limit, not a defect**: on a mutable column left-click is spent on the editor, and for a value chosen
-from a bounded list the editor is not text. Closing it would need a second gesture on those cells,
-and there is none free — plain click is the editor, `Ctrl+click` is navigation, right-click is the
-group/header menu. Such a value is moved by drag, or read from the same field in an immutable
-column.
+`Ctrl+C` copies the focused cell's **model value**, the same string its editor would show — xEdit's
+`Element.EditValue`. It never reads DOM text and never needs a selection, so it does not care which
+widget the cell renders. That removes the old model's two holes at once: `bool`/`enum`/`flags` on a
+mutable column had no copy path because their editor was a control rather than text, which produced
+the inversion where a read-only column could hand over its value and an editable one could not.
+Neither survives.
 
 ### The panel
 
@@ -260,33 +242,29 @@ column.
 
 ### Editing
 
-- **There is no edit mode.** Editability is a property of the **column**, not of a state the
-  user enters: a cell renders as text and swaps to its input **on click**, reverting to text on
-  commit or blur — only the clicked cell, never the whole grid, since reading conflicts at a
-  glance is the grid's primary job. This is xEdit's `toEditOnClick`. An **immutable** column
-  activates the same surface, `readOnly` and visibly inert (no input border or background), so it
-  reads as "you may select this" rather than "you may edit this" — it exists so a value can be
-  selected and copied, not edited. Both surfaces **select their whole text on focus**: on a
-  mutable cell that makes `Ctrl+V` replace rather than append and gives type-to-replace, and on a
-  read-only one it hands the user the whole value pre-selected, so `Ctrl+C` is immediate.
+- **There is no edit mode.** Editability is a property of the **column**, not of a state the user
+  enters. A cell renders as text and swaps to its input when *opened* — by a second click on the
+  already-focused cell, by `F2`, or by a double click — reverting to text on commit or blur. Only
+  the opened cell is ever an input, never the whole grid, since reading conflicts at a glance is
+  the grid's primary job. This is xEdit's `toEditOnClick`, which means "a click on the focused
+  cell", not "any click".
+  An **immutable** column simply refuses: no editor opens, and **no distinct affordance says so
+  beforehand** — matching xEdit, whose `vstViewEditing` sets `Allowed := False` and shows nothing
+  in advance. There is no read-only surface, because there is nothing for it to do: `Ctrl+C` on a
+  focused cell copies its value without needing anything selectable on screen.
+  The editor **selects its whole text on focus**, so `Ctrl+V` replaces rather than appends and
+  typing replaces.
   Dragging (copy this value into another column) is available on **every** cell regardless of that
-  cell's own editability — only the *drop target's* mutability gates the drop — so a cell's
-  resting cursor reflects that: it shows the drag affordance at rest and only takes on a caret
-  once actually clicked into its activated state, never before
-  ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md), #204).
-  Dragging is suppressed only while that cell's own input is currently active (a draggable
-  ancestor would otherwise swallow text selection inside the input) — which is precisely what
-  makes selection possible once the surface is up, and is why the read-only surface is a real
-  `<input readOnly>` rather than a styled span.
-  **A cell rendering a placeholder activates nothing**, extending ADR-0033's struct/array
-  exception to every case where the cell displays something that is not its value: an empty
-  immutable cell (`—`, whether the value is null or a bitmask with no bits set) and an immutable
-  FormKey cell with no reference. A surface there would offer an empty selection that reads as a
-  successful copy. The exception is one-sided — a **mutable** empty cell keeps its click
-  affordance, or the field could never be given a value in the first place.
+  cell's own editability — only the *drop target's* mutability gates the drop — and is suppressed
+  while that cell's own input is open.
+  **A cell rendering a placeholder opens nothing**: struct and array summary rows (`{…}`, `[3]`)
+  and an empty cell (`—`) on an immutable column. They remain focusable, copyable and draggable —
+  dragging a summary copies the whole structure. A **mutable** empty cell does open its editor, or
+  the field could never be given a value in the first place.
 - **Cells render by field schema type**: strings/numbers/bools as text/number/toggle inputs;
   enums as their name via a `<select>`; flags as active flag names via a per-flag multi-select;
-  FormKeys as a link — `Ctrl+click` follows it, plain click on a mutable column opens a native
+  FormKeys as a link — `Ctrl+click` follows it, and opening the cell on a mutable column (second
+  click / `F2` / double click) opens a native
   **QuickPick** (#210; the webview cannot call `vscode.window.createQuickPick` itself, so this
   round-trips through the extension host), seeded with the current reference — as the same
   `EditorID [FormKey]` composite the cell displays and the picker's own items use (#218), not the
@@ -316,12 +294,15 @@ column.
   scalar leaf, collapsed or expanded alike (#204). Pending-change cells show the new value on a
   yellow background and are directly editable on the same terms as disk cells (see Pending
   column for how they're reverted).
-- **Unsorted array fields have arity and order controls in the field grid** — each element row
-  carries move-up / move-down (swap with the neighbour, disabled at the first/last position) and
-  a remove control, and the parent array row carries an add control that appends a default-valued
-  element (#142). Sorted (`wbArrayS`) arrays show none of these — order is derived from the sort
-  key, so the controls are absent, not merely disabled. All three ops restage the **whole array**
-  as a single field edit (same path as an element-value edit; ADR-0017), and render only on
+- **Unsorted array fields have arity and order operations** — **Move Up** / **Move Down** (swap
+  with the neighbour) and **Remove** on an element row, and **Add** on the parent array row,
+  appending a default-valued element (#142). They live in the **right-click menu**, with
+  `Ctrl+↑` / `Ctrl+↓` / `Delete` / `Insert` as accelerators onto the same menu items — xEdit's
+  arrangement exactly, and required by the no-second-route rule: **there are no inline ▲▼✕
+  buttons.** (They shipped as inline buttons in #142, before ADR-0034; converting them is part of
+  adopting the model.) Sorted (`wbArrayS`) arrays offer none of these — order is derived from the
+  sort key, so the entries are absent, not merely disabled. All three ops restage the **whole
+  array** as a single field edit (same path as an element-value edit; ADR-0017), and only on
   non-immutable columns. There is no free drag-reorder and no auto-sort. The VMAD section keeps
   its own separate element/struct add/remove.
 - **Editing stages pending changes** rather than writing immediately. Copying a whole record
@@ -331,17 +312,14 @@ column.
   There is no single "active editable plugin" for a panel-level control to assume. A single
   field's value can instead be **dragged between plugin columns** to copy just that field as a
   pending change into the target (which must be editable; the source need not be) — or **copied
-  and pasted as text** when the target isn't conveniently reachable by drag, or lives outside
-  mEdit entirely. That path uses no mEdit command: click the source cell to activate its text
-  surface, `Ctrl+C`, click the target, `Ctrl+V`. It is therefore available exactly where a text
-  surface is — **every cell in an immutable column** for copy, and on a mutable column the
-  `string`, `int` and `float` types for both copy and paste, plus `formKey` for paste (into its
-  picker). `bool`, `enum` and `flags` cells activate a control rather than a text field when
-  mutable, so on that column they take **neither** copy nor paste; a value is moved into them by
-  drag or by their own editor, and read out of them from the same field in an immutable column.
-  This is deliberate and not a gap to close: those types are chosen from a bounded list, which is
-  the case clipboard transfer exists to avoid. See the gesture matrix under Interaction model for
-  the full availability table and the mechanism that produces it.
+  and pasted** when the target isn't conveniently reachable by drag, or lives outside mEdit
+  entirely: click the source cell, `Ctrl+C`, click the target, `Ctrl+V`. **Copy works on every
+  cell of every type in both column kinds**, and paste on every cell of a mutable column, because
+  the clipboard carries the cell's model value rather than selected text — there is no widget for
+  it to be incompatible with. This is what `Ctrl+C`/`Ctrl+X`/`Ctrl+V` do in xEdit
+  (`Element.EditValue`), and adopting it removes the previous model's two availability holes:
+  `bool`/`enum`/`flags` having no copy path on a mutable column, and the resulting inversion where
+  a read-only column could hand over its value and an editable one could not.
 
 ### Pending column
 

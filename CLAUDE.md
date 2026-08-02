@@ -48,6 +48,17 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   `/regenerate-api` → frontend (`PluginRepository`/`SessionController`) →
   `package.json` commands/menus + `extension.ts` registration → `EXPECTED_COMMANDS` in
   integration test.
+- **xEdit decides plugin-editing UX; VS Code decides the vehicle.** Before designing
+  any record-editing interaction, read how xEdit does it — `docs/research/xedit-ux-audit.md`
+  first, then `references/TES5Edit/xEdit/xeMainForm.pas` (`vstView*` handlers),
+  `xeMainForm.dfm` (tree options) and `xEdit/EditTips.txt` (its own user-facing UX
+  doc). Adopt its answer. Diverge **only** for a genuine platform limitation, never
+  because an alternative seems nicer — 25 years of refinement against this exact domain,
+  and every user arrives already fluent in it, so familiarity outranks local improvement
+  ([ADR-0034](docs/adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md),
+  [ADR-0019](docs/adr/0019-xedit-unified-tree-model-for-compare-grid.md)). Specifying from
+  memory of xEdit instead of from xEdit is what cost #201/#204/#218 — click focuses a cell
+  there, it does not edit. Does not apply to Mod Management, which follows MO2.
 - Native-first, webviews included: before designing any interaction, ask "which VS
   Code surface already does this?" and copy its answer — menus, pickers, confirms,
   prompts, trees and clipboard all have one. A webview is justified by what it
