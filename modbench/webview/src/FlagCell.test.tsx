@@ -52,6 +52,39 @@ describe('FlagCell — read-only column', () => {
   });
 });
 
+// Issue #201 / ADR-0033 (cursor contract), AC 5: an immutable flag cell activates a read-only
+// surface showing its *rendered names*, not the bitmask integer behind them — a cell hands over
+// what it displays, or it is handing over something the user never saw.
+describe('FlagCell — immutable column activates a read-only text surface', () => {
+  it('activates a readOnly input containing the flag names when clicked', () => {
+    render(<FlagCell value={0b0101} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('A, C'));
+    expect(screen.getByDisplayValue('A, C')).toHaveAttribute('readonly');
+  });
+
+  it('returns to text on blur', () => {
+    render(<FlagCell value={0b0101} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('A, C'));
+    fireEvent.blur(screen.getByDisplayValue('A, C'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.getByText('A, C')).toBeInTheDocument();
+  });
+
+  // Same placeholder rule as ScalarCell's null: no flags set renders `—`, which is not a value.
+  // Note this is a *different* input from null — the bitmask is present and simply zero.
+  it('activates nothing when no flags are set — "—" is a placeholder', () => {
+    render(<FlagCell value={0} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('—'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('activates nothing on a null value', () => {
+    render(<FlagCell value={null} meta={flagMeta} editable={false} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('—'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+});
+
 // Issue #111: like every other cell, a flag cell reads as text until clicked — a grid of
 // always-live flag multi-selects would bury the values it exists to show.
 describe('FlagCell — editable column renders text until clicked', () => {
@@ -59,6 +92,17 @@ describe('FlagCell — editable column renders text until clicked', () => {
     render(<FlagCell value={0b0101} meta={flagMeta} editable={true} onCommit={vi.fn()} />);
     expect(screen.getByText('A, C')).toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  // Issue #201 / #204 / ADR-0033: the same defect #204 fixed in ScalarCell and #218 fixed in
+  // FormKeyLink, in the leaf both of them missed. A flag cell sits inside DiskCell and is a drag
+  // source the whole time it is at rest; an inline `cursor: 'pointer'` here paints over the
+  // parent's `grab` and so advertises only the click. The test DOM has no cascade, so this proves
+  // the mask is gone, not which cursor paints.
+  it('does not mask the parent drag cursor with its own cursor style before being clicked', () => {
+    render(<FlagCell value={0b0101} meta={flagMeta} editable={true} onCommit={vi.fn()} />);
+    const restingCell = screen.getByText('A, C').parentElement!;
+    expect(restingCell.style.cursor).not.toBe('pointer');
   });
 
   it('swaps to a per-flag multi-select when clicked', () => {

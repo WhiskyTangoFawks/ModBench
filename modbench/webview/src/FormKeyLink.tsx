@@ -52,6 +52,14 @@ function useCtrlHeld(): boolean {
   return useSyncExternalStore(subscribe, getCtrlHeld, getCtrlHeld);
 }
 
+// Issue #157/#218/#201: the text a FormKey reads as — "EditorID [FormKey]" when the reference
+// resolves, the bare FormKey when it doesn't. Exported because FormKeyCell's read-only surface
+// (#201) must contain exactly what the link displays: a cell that showed one string and handed
+// over another would be #218's defect in the other direction.
+export function formKeyLabel(value: string, resolution?: FormKeyResolution): string {
+  return resolution?.editorId ? `${resolution.editorId} [${value}]` : value;
+}
+
 // A FormKey rendered as its link affordance. Shared by FormKeyCell (generic fields) and
 // VmadSection (VMAD object properties).
 //
@@ -84,7 +92,7 @@ export function FormKeyLink({ value, onOpen, onPlainClick, resolution = UNRESOLV
   const [hovered, setHovered] = useState(false);
   const linksTo = resolution.state !== 'Unresolved';
   const hot = ctrl && hovered && linksTo;
-  const label = resolution.editorId ? `${resolution.editorId} [${value}]` : value;
+  const label = formKeyLabel(value, resolution);
 
   return (
     <button

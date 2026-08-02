@@ -44,12 +44,89 @@ describe('FormKeyCell — read-only column', () => {
     expect(onOpen).toHaveBeenCalledWith('000019:Fallout4.esm');
   });
 
-  it('plain click does nothing — no navigation, no picker', () => {
+  // Issue #201: plain click used to do nothing at all here — that was the gap. It now activates
+  // the read-only surface (see the describe below); what it must still never do is navigate or
+  // open the picker, which is what this asserts.
+  it('plain click neither navigates nor opens the picker', () => {
     const onOpen = vi.fn();
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={onOpen} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('000019:Fallout4.esm'));
     expect(onOpen).not.toHaveBeenCalled();
     expect(pickFormKey).not.toHaveBeenCalled();
+  });
+});
+
+// Issue #201 / ADR-0033, AC 6. This is the case that needed thought rather than a copied early
+// return. On a *mutable* column nothing is owed: plain click opens the QuickPick, which is a
+// native input, so selection and Ctrl+V are already the platform's there. The gap was the
+// immutable column, where plain click did nothing at all — so #218's composite label was correct
+// and still unreachable. #218's AC 3 ("the label's text can be selected") lands here rather than
+// in FormKeyLink, because a resting cell is a drag source and `draggable` eats the mousedown that
+// would start a selection; a second state is the only answer.
+describe('FormKeyCell — immutable column activates a read-only text surface', () => {
+  afterEach(() => { pickFormKey.mockClear(); });
+
+  const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
+
+  it('plain click activates a readOnly input containing the full composite', () => {
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
+    fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
+    expect(screen.getByDisplayValue('DogmeatRace [000019:Fallout4.esm]')).toHaveAttribute('readonly');
+  });
+
+  // The surface shows what the link shows — including the fallback. A cell that displayed the
+  // bare FormKey but handed over a composite (or vice versa) would be the #218 defect again in
+  // the other direction.
+  it('falls back to the bare FormKey when the reference does not resolve', () => {
+    render(<FormKeyCell value="FFFFFF:Dangling.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('FFFFFF:Dangling.esm'));
+    expect(screen.getByDisplayValue('FFFFFF:Dangling.esm')).toHaveAttribute('readonly');
+  });
+
+  it('returns to the link on blur, so the Ctrl+click affordance comes back', () => {
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
+    fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
+    fireEvent.blur(screen.getByDisplayValue('DogmeatRace [000019:Fallout4.esm]'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'DogmeatRace [000019:Fallout4.esm]' })).toBeInTheDocument();
+  });
+
+  // Ctrl+click and plain click share the same DOM click event, so the two must not both fire —
+  // otherwise following a reference would leave a surface open behind the record just opened,
+  // the same collision VmadSection's ClickToEdit already guards against.
+  it('Ctrl+click follows the reference without activating the surface', () => {
+    const onOpen = vi.fn();
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} onOpen={onOpen} onCommit={vi.fn()} resolution={validType} />);
+    fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'), { ctrlKey: true });
+    expect(onOpen).toHaveBeenCalledWith('000019:Fallout4.esm');
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  // Issue #201 / #204: the empty cell asserted `cursor: 'pointer'` on a mutable column, painting
+  // over the parent DiskCell's `grab` — the same mask #204 removed from ScalarCell. An empty cell
+  // is still a drag *target*, and on a mutable column still opens the picker; neither is a reason
+  // for the leaf to claim the cursor.
+  it('does not mask the parent drag cursor on an empty cell', () => {
+    render(<FormKeyCell value={null} meta={fkMeta} editable={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    expect(screen.getByText('—').style.cursor).not.toBe('pointer');
+  });
+
+  it('activates nothing on a null value — the em-dash is a placeholder', () => {
+    render(<FormKeyCell value={null} meta={fkMeta} editable={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('—'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  // The warning icon is the cell's, not the link's — activating the surface must not hide it.
+  it('keeps the checkError icon visible while the surface is active', () => {
+    render(
+      <FormKeyCell
+        value="000019:Fallout4.esm" meta={fkMeta} editable={false}
+        onOpen={vi.fn()} onCommit={vi.fn()} checkError="dangling reference" resolution={validType}
+      />,
+    );
+    fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
+    expect(screen.getByText('⚠')).toHaveAttribute('title', 'dangling reference');
   });
 });
 

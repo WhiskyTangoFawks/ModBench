@@ -822,6 +822,20 @@ describe('VmadSection leaf cells edit in place on click', () => {
 
     expect(container.querySelector('input[type="checkbox"]')).toBeInTheDocument();
   });
+
+  // Issue #201 / ADR-0033 (cursor contract): a resting leaf asserted `cursor: 'text'` — a literal
+  // caret, which is the exact false promise the ADR opens by naming, since at rest there is no
+  // selectable text to take. Unlike FlagCell's `pointer`, this one masks nothing: VmadSection's
+  // cells carry no `draggable` and no `grab` at all, which is its own unshipped piece of ADR-0033
+  // ("the compare grid, VMAD, and Condition sections alike") and not this ticket's to close. The
+  // caret is wrong on its own terms regardless.
+  it('does not assert a text caret on a resting cell', () => {
+    renderSection(boolVmad(), ['A.esm'], { onEdit: vi.fn() });
+    toggle('MyScript');
+
+    const restingCell = screen.getByText('false').parentElement!;
+    expect(restingCell.style.cursor).not.toBe('text');
+  });
 });
 
 describe('VmadSection editing', () => {

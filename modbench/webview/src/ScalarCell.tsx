@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { toStr } from './recordUtils';
 import { mono, fg } from './gridStyles';
+import { ReadOnlyValueSurface } from './ReadOnlyValueSurface';
 import type { FieldMetadata } from './types';
 
 interface ScalarCellProps {
@@ -30,9 +31,14 @@ export function ScalarCell({ value, meta, editable, onCommit }: ScalarCellProps)
     setDraft(toStr(value));
   }
 
-  if (!editable) return <ScalarText value={value} />;
-
+  // Issue #201 / ADR-0033: the resting state is the same in both column kinds — text, no cursor
+  // of its own, clickable. Editability shows up only in *what* the click activates, below.
   if (!active) {
+    // Issue #201 / ADR-0033: on an immutable column `—` is a placeholder, not a value — the same
+    // argument the ADR makes for `{…}` and `[3]`. A surface here would offer an empty selection
+    // that looks like a successful copy. One-sided: a *mutable* null cell keeps its affordance,
+    // or the field could never be given a value.
+    if (!editable && value == null) return <ScalarText value={value} />;
     // Issue #204 / ADR-0033: no cursor override here — the parent DiskCell's `grab` cursor is
     // this cell's resting affordance (it's a drag source the whole time); a text-caret would
     // falsely imply only editing is possible until the cell is actually clicked into edit.
@@ -42,6 +48,11 @@ export function ScalarCell({ value, meta, editable, onCommit }: ScalarCellProps)
       </span>
     );
   }
+
+  // Issue #201: an immutable column activates a read-only surface instead of an editor, before
+  // any type branching below — so string/int/float/bool/enum are all covered by this one line
+  // and nothing here is type-aware.
+  if (!editable) return <ReadOnlyValueSurface value={toStr(value)} onBlur={() => setActive(false)} />;
 
   const inputBase: React.CSSProperties = {
     fontFamily: mono,
@@ -101,6 +112,11 @@ export function ScalarCell({ value, meta, editable, onCommit }: ScalarCellProps)
       type={meta.type === 'int' || meta.type === 'float' ? 'number' : 'text'}
       value={draft}
       onChange={e => setDraft(e.target.value)}
+      // Issue #201: autoFocus alone leaves the caret at the end, so Ctrl+V into a cell showing
+      // `100` appends rather than replaces. Selecting on focus makes paste replace, and gives
+      // type-to-replace for free. (A no-op on type="number" per spec, which is why the paired
+      // test uses a text input.)
+      onFocus={e => e.currentTarget.select()}
       onBlur={() => { commitIfChanged(coerce()); setActive(false); }}
       onKeyDown={e => { if (e.key === 'Enter') { commitIfChanged(coerce()); (e.target as HTMLInputElement).blur(); } }}
       style={inputBase}
