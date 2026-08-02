@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { executeCommand, showWarningMessage, showErrorMessage, showTextDocument, openExternal, fsDelete } = vi.hoisted(() => ({
+const { executeCommand, registerCommand, showWarningMessage, showErrorMessage, showTextDocument, openExternal, fsDelete } = vi.hoisted(() => ({
   executeCommand: vi.fn(),
+  registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
   showWarningMessage: vi.fn(),
   showErrorMessage: vi.fn(),
   showTextDocument: vi.fn(),
@@ -10,7 +11,7 @@ const { executeCommand, showWarningMessage, showErrorMessage, showTextDocument, 
 }));
 
 vi.mock('vscode', () => ({
-  commands: { executeCommand },
+  commands: { executeCommand, registerCommand },
   window: { showWarningMessage, showErrorMessage, showTextDocument },
   env: { openExternal },
   workspace: { fs: { delete: fsDelete } },
@@ -24,7 +25,7 @@ vi.mock('vscode', () => ({
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildMessageHandlers, dispatchWebviewMessage } from './DownloadsPanel';
+import { buildMessageHandlers, buildRowActionHandlers, dispatchWebviewMessage, registerDownloadsRowCommands } from './DownloadsPanel';
 import { WEBVIEW_TO_EXTENSION } from './downloadsMessages';
 
 // tmpdirs created via makeInstanceRoot() this test, cleaned up in afterEach even
@@ -67,15 +68,15 @@ function calledFsPath(mockFn: { mock: { calls: unknown[][] } }): string {
 }
 
 describe('dispatchWebviewMessage', () => {
-  it('routes a known message type to the matching handler with the name arg', () => {
+  it('routes a known message type to the matching handler', () => {
     const handlers = { foo: vi.fn() };
-    dispatchWebviewMessage({ type: 'foo', name: 'x' }, handlers);
-    expect(handlers.foo).toHaveBeenCalledWith('x');
+    dispatchWebviewMessage({ type: 'foo' }, handlers);
+    expect(handlers.foo).toHaveBeenCalledTimes(1);
   });
 
   it('does nothing for an unknown message type', () => {
     const handlers = { foo: vi.fn() };
-    dispatchWebviewMessage({ type: 'bar', name: 'x' }, handlers);
+    dispatchWebviewMessage({ type: 'bar' }, handlers);
     expect(handlers.foo).not.toHaveBeenCalled();
   });
 
@@ -88,30 +89,30 @@ describe('dispatchWebviewMessage', () => {
   });
 });
 
-// ── buildMessageHandlers, dispatched through dispatchWebviewMessage ────────────
-// Each suite below exercises a real row-action message end-to-end: raw message
-// object -> dispatchWebviewMessage -> buildMessageHandlers's real handler body
-// -> real orchestration function, with only `vscode` itself stubbed (matching
-// ModListProvider.test.ts / PluginListProvider.test.ts) and real fs for the
-// .meta round-trip. This is the seam #54/#55/#56 reuse for their own handlers.
-
 describe('buildMessageHandlers — READY / REFRESH', () => {
   it('READY triggers a refresh', () => {
     const refresh = vi.fn(() => Promise.resolve());
-    const handlers = buildMessageHandlers('/instance', vi.fn(), refresh);
+    const handlers = buildMessageHandlers(refresh);
     dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.READY }, handlers);
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('REFRESH triggers a refresh', () => {
     const refresh = vi.fn(() => Promise.resolve());
-    const handlers = buildMessageHandlers('/instance', vi.fn(), refresh);
+    const handlers = buildMessageHandlers(refresh);
     dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.REFRESH }, handlers);
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('buildMessageHandlers — INSTALL', () => {
+// ── buildRowActionHandlers ──────────────────────────────────────────────────
+// Issue #214: these used to be reached only via buildMessageHandlers + a webview
+// postMessage (the hand-drawn row menu's sole trigger). That trigger is native
+// commands now (registerDownloadsRowCommands, tested further down) — the handler
+// bodies themselves are unchanged, so these suites are the same real
+// fixture-in/behavior-out exercises as before, just invoked directly.
+
+describe('buildRowActionHandlers — install', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('on success, writes installed=true back to the .meta sidecar', async () => {
@@ -120,8 +121,8 @@ describe('buildMessageHandlers — INSTALL', () => {
     const meta = await writeMeta(root, 'foo.7z');
     executeCommand.mockResolvedValueOnce(true);
 
-    const handlers = buildMessageHandlers(root, vi.fn(), vi.fn());
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.INSTALL, name: 'foo.7z' }, handlers);
+    const handlers = buildRowActionHandlers(root, vi.fn());
+    handlers.install('foo.7z');
 
     await vi.waitFor(async () => {
       expect(await readFile(meta, 'utf8')).toContain('installed=true');
@@ -135,8 +136,8 @@ describe('buildMessageHandlers — INSTALL', () => {
     const meta = await writeMeta(root, 'foo.7z');
     executeCommand.mockResolvedValueOnce(false);
 
-    const handlers = buildMessageHandlers(root, vi.fn(), vi.fn());
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.INSTALL, name: 'foo.7z' }, handlers);
+    const handlers = buildRowActionHandlers(root, vi.fn());
+    handlers.install('foo.7z');
 
     await vi.waitFor(() => expect(executeCommand).toHaveBeenCalled());
     // give any (incorrect) writeback a chance to land before asserting its absence
@@ -151,8 +152,8 @@ describe('buildMessageHandlers — INSTALL', () => {
     executeCommand.mockRejectedValueOnce(new Error('boom'));
     const log = vi.fn();
 
-    const handlers = buildMessageHandlers(root, log, vi.fn());
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.INSTALL, name: 'foo.7z' }, handlers);
+    const handlers = buildRowActionHandlers(root, log);
+    handlers.install('foo.7z');
 
     await vi.waitFor(() => expect(showErrorMessage).toHaveBeenCalled());
     expect(showErrorMessage).toHaveBeenCalledWith('Modbench: Failed to install "foo.7z".');
@@ -161,7 +162,7 @@ describe('buildMessageHandlers — INSTALL', () => {
   });
 });
 
-describe('buildMessageHandlers — DELETE', () => {
+describe('buildRowActionHandlers — delete', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('on confirm-cancel, does not trash anything', async () => {
@@ -169,8 +170,8 @@ describe('buildMessageHandlers — DELETE', () => {
     await writeArchive(root, 'foo.7z');
     showWarningMessage.mockResolvedValueOnce(undefined); // user dismissed, not "Delete"
 
-    const handlers = buildMessageHandlers(root, vi.fn(), vi.fn());
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.DELETE, name: 'foo.7z' }, handlers);
+    const handlers = buildRowActionHandlers(root, vi.fn());
+    handlers.delete('foo.7z');
 
     await vi.waitFor(() => expect(showWarningMessage).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 50));
@@ -183,8 +184,8 @@ describe('buildMessageHandlers — DELETE', () => {
     const meta = await writeMeta(root, 'foo.7z');
     showWarningMessage.mockResolvedValueOnce('Delete');
 
-    const handlers = buildMessageHandlers(root, vi.fn(), vi.fn());
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.DELETE, name: 'foo.7z' }, handlers);
+    const handlers = buildRowActionHandlers(root, vi.fn());
+    handlers.delete('foo.7z');
 
     await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(2));
     const trashedPaths = fsDelete.mock.calls.map((c) => (c[0] as { fsPath: string }).fsPath);
@@ -192,27 +193,27 @@ describe('buildMessageHandlers — DELETE', () => {
   });
 });
 
-describe('buildMessageHandlers — HIDE / UNHIDE', () => {
+describe('buildRowActionHandlers — hide / unhide', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('HIDE sets removed=true on the .meta sidecar', async () => {
+  it('hide sets removed=true on the .meta sidecar', async () => {
     const root = await makeInstanceRoot();
     const meta = await writeMeta(root, 'foo.7z');
 
-    const handlers = buildMessageHandlers(root, vi.fn(), vi.fn());
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.HIDE, name: 'foo.7z' }, handlers);
+    const handlers = buildRowActionHandlers(root, vi.fn());
+    handlers.hide('foo.7z');
 
     await vi.waitFor(async () => {
       expect(await readFile(meta, 'utf8')).toContain('removed=true');
     });
   });
 
-  it('UNHIDE clears removed to false on the .meta sidecar', async () => {
+  it('unhide clears removed to false on the .meta sidecar', async () => {
     const root = await makeInstanceRoot();
     const meta = await writeMeta(root, 'foo.7z', '[General]\r\nremoved=true\r\n');
 
-    const handlers = buildMessageHandlers(root, vi.fn(), vi.fn());
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.UNHIDE, name: 'foo.7z' }, handlers);
+    const handlers = buildRowActionHandlers(root, vi.fn());
+    handlers.unhide('foo.7z');
 
     await vi.waitFor(async () => {
       expect(await readFile(meta, 'utf8')).toContain('removed=false');
@@ -220,7 +221,7 @@ describe('buildMessageHandlers — HIDE / UNHIDE', () => {
   });
 });
 
-describe('buildMessageHandlers — VISIT_NEXUS', () => {
+describe('buildRowActionHandlers — visitNexus', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('opens the Nexus mod page when the .meta has a modID', async () => {
@@ -228,8 +229,8 @@ describe('buildMessageHandlers — VISIT_NEXUS', () => {
     await writeMeta(root, 'foo.7z', '[General]\r\nmodID=123\r\n');
     await writeFile(join(root, 'ModOrganizer.ini'), '[General]\r\ngameName=Fallout4\r\n');
 
-    const handlers = buildMessageHandlers(root, vi.fn(), vi.fn());
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.VISIT_NEXUS, name: 'foo.7z' }, handlers);
+    const handlers = buildRowActionHandlers(root, vi.fn());
+    handlers.visitNexus('foo.7z');
 
     await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
     const url = (openExternal.mock.calls[0][0] as { toString(): string }).toString();
@@ -240,52 +241,52 @@ describe('buildMessageHandlers — VISIT_NEXUS', () => {
     const root = await makeInstanceRoot();
     await writeMeta(root, 'foo.7z');
 
-    const handlers = buildMessageHandlers(root, vi.fn(), vi.fn());
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.VISIT_NEXUS, name: 'foo.7z' }, handlers);
+    const handlers = buildRowActionHandlers(root, vi.fn());
+    handlers.visitNexus('foo.7z');
 
     await new Promise((r) => setTimeout(r, 50));
     expect(openExternal).not.toHaveBeenCalled();
   });
 });
 
-describe('buildMessageHandlers — nav actions (OPEN_FILE / OPEN_META / REVEAL)', () => {
+describe('buildRowActionHandlers — nav actions (openFile / openMeta / reveal)', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('OPEN_FILE OS-opens the archive', async () => {
+  it('openFile OS-opens the archive', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
 
-    const handlers = buildMessageHandlers(root, vi.fn(), vi.fn());
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_FILE, name: 'foo.7z' }, handlers);
+    const handlers = buildRowActionHandlers(root, vi.fn());
+    handlers.openFile('foo.7z');
 
     await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
     expect(calledFsPath(openExternal)).toBe(archive);
   });
 
-  it('OPEN_META opens the .meta sidecar in the editor', async () => {
+  it('openMeta opens the .meta sidecar in the editor', async () => {
     const root = await makeInstanceRoot();
     const meta = await writeMeta(root, 'foo.7z');
 
-    const handlers = buildMessageHandlers(root, vi.fn(), vi.fn());
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_META, name: 'foo.7z' }, handlers);
+    const handlers = buildRowActionHandlers(root, vi.fn());
+    handlers.openMeta('foo.7z');
 
     await vi.waitFor(() => expect(showTextDocument).toHaveBeenCalled());
     expect(calledFsPath(showTextDocument)).toBe(meta);
   });
 
-  it('REVEAL reveals the archive in the OS file manager', async () => {
+  it('reveal reveals the archive in the OS file manager', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
 
-    const handlers = buildMessageHandlers(root, vi.fn(), vi.fn());
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.REVEAL, name: 'foo.7z' }, handlers);
+    const handlers = buildRowActionHandlers(root, vi.fn());
+    handlers.reveal('foo.7z');
 
     await vi.waitFor(() => expect(executeCommand).toHaveBeenCalled());
     expect(executeCommand).toHaveBeenCalledWith('revealFileInOS', expect.objectContaining({ fsPath: archive }));
   });
 
   // runRowAction's catch -> log + error-notification path is shared by all four
-  // nav actions (VISIT_NEXUS/OPEN_FILE/OPEN_META/REVEAL) — proving it once here
+  // nav actions (visitNexus/openFile/openMeta/reveal) — proving it once here
   // covers all of them; no need to duplicate per action.
   it('on failure, logs and surfaces an error notification naming the action and row', async () => {
     const root = await makeInstanceRoot();
@@ -293,11 +294,62 @@ describe('buildMessageHandlers — nav actions (OPEN_FILE / OPEN_META / REVEAL)'
     openExternal.mockRejectedValueOnce(new Error('no handler for this file type'));
     const log = vi.fn();
 
-    const handlers = buildMessageHandlers(root, log, vi.fn());
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_FILE, name: 'foo.7z' }, handlers);
+    const handlers = buildRowActionHandlers(root, log);
+    handlers.openFile('foo.7z');
 
     await vi.waitFor(() => expect(showErrorMessage).toHaveBeenCalled());
     expect(showErrorMessage).toHaveBeenCalledWith('Modbench: Open File for "foo.7z" failed.');
     expect(log).toHaveBeenCalledWith(expect.stringContaining('Open File for "foo.7z" failed'));
+  });
+});
+
+// ── registerDownloadsRowCommands ────────────────────────────────────────────
+// Issue #214: the adapter from a native `webview/context` command invocation (its sole
+// argument is the row's merged data-vscode-context, DownloadRowContext) to the
+// buildRowActionHandlers handler for that action. Registration itself (that all 8 ids get
+// wired to vscode.commands.registerCommand) is covered by the EXPECTED_COMMANDS integration
+// test; this is the dispatch/gating behavior.
+describe('registerDownloadsRowCommands', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function invoke(commandId: string, ctx?: unknown): void {
+    const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
+    if (!call) throw new Error(`command not registered: ${commandId}`);
+    call[1](ctx);
+  }
+
+  it('registers all eight row commands', () => {
+    registerDownloadsRowCommands('/instance', vi.fn());
+    const ids = registerCommand.mock.calls.map((c) => c[0]);
+    expect(ids).toEqual(expect.arrayContaining([
+      'modbench.downloads.install',
+      'modbench.downloads.visitNexus',
+      'modbench.downloads.openFile',
+      'modbench.downloads.openMeta',
+      'modbench.downloads.reveal',
+      'modbench.downloads.delete',
+      'modbench.downloads.hide',
+      'modbench.downloads.unhide',
+    ]));
+  });
+
+  it('invoking modbench.downloads.install with a DownloadRowContext installs that row\'s archive', async () => {
+    const root = await makeInstanceRoot();
+    const archive = await writeArchive(root, 'foo.7z');
+    await writeMeta(root, 'foo.7z');
+    executeCommand.mockResolvedValueOnce(true);
+
+    registerDownloadsRowCommands(root, vi.fn());
+    invoke('modbench.downloads.install', { webviewSection: 'downloadRow', name: 'foo.7z' });
+
+    await vi.waitFor(() => {
+      expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive);
+    });
+  });
+
+  it('is a no-op when invoked with no context (no row name to act on)', () => {
+    registerDownloadsRowCommands('/instance', vi.fn());
+    expect(() => invoke('modbench.downloads.install', undefined)).not.toThrow();
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 });

@@ -7,6 +7,7 @@
 // MO2's `removed` means HIDDEN, never the "Removed" Status (`uninstalled=true`).
 
 import { lineRanges } from './lineScan';
+import type { DownloadRowContext } from '../downloadsMessages';
 
 export type DownloadStatus = 'Installed' | 'Removed' | 'Downloaded';
 
@@ -120,6 +121,27 @@ export function filterHiddenRows(rows: DownloadRow[], showHidden: boolean): Down
 export function filterRowsByName(rows: DownloadRow[], query: string): DownloadRow[] {
   const q = query.trim().toLowerCase();
   return q === '' ? rows : rows.filter((r) => r.name.toLowerCase().includes(q));
+}
+
+// Issue #214: the row's right-click menu (Install / Visit on Nexus / Open File / Open Meta
+// File / Reveal in Explorer / Delete / Hide|Unhide) is VS Code's own
+// `contributes.menus["webview/context"]` now, not a hand-drawn `<ul role="menu">`.
+// `webviewSection` is the gating key every menu entry's `when` clause checks (alongside VS
+// Code's own `webviewId`, equal to the view type passed to `createWebviewPanel` —
+// 'modbench.downloads'); `name` is forwarded to the invoked command as part of the merged
+// context object, exactly like DiffRow's pendingCellContext (#208) carries `changeId`.
+// `hasMeta`/`hasModID`/`hidden` are booleans (not the raw optional `modID`) for symmetry with
+// #209's ColumnHeaderContext gating keys. `preventDefaultContextMenuItems` suppresses the
+// built-in Cut/Copy/Paste entries.
+export function downloadRowContext(row: DownloadRow): string {
+  return JSON.stringify({
+    webviewSection: 'downloadRow',
+    name: row.name,
+    hasMeta: row.hasMeta,
+    hasModID: row.modID !== undefined,
+    hidden: row.hidden,
+    preventDefaultContextMenuItems: true,
+  } satisfies DownloadRowContext);
 }
 
 /** Build render-ready rows: suppresses `.meta` sidecars as their own rows,

@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 import { readdir, stat, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildDownloadRows, parseDownloadMeta, setHiddenInText, setInstalledInText, type DownloadEntry } from './mo2/downloads';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type WebviewToExtension } from './downloadsMessages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type DownloadRowContext, type WebviewToExtension } from './downloadsMessages';
 import { createDownloadsWatcher } from './downloadsWatcher';
 import { deleteDownload } from './deleteDownload';
 import { readGameName } from './mo2/modOrganizerIni';
@@ -144,7 +144,8 @@ async function deleteArchive(instanceRoot: string, name: string, log: (msg: stri
 
 /** Row Visit-on-Nexus action: read the archive's `.meta` for the Nexus mod id
  *  and the instance's game for the slug, then open the mod's Nexus page. No-op
- *  when there's no mod id (the webview also gates the action off). */
+ *  when there's no mod id (the native menu's `when` clause, gated on `hasModID`
+ *  in the row's data-vscode-context, also keeps the command off the menu). */
 async function visitOnNexus(instanceRoot: string, name: string): Promise<void> {
   const metaText = await readMetaText(join(instanceRoot, 'downloads', `${name}.meta`));
   const modID = metaText ? parseDownloadMeta(metaText).modID : undefined;
@@ -168,55 +169,89 @@ async function setArchiveHidden(instanceRoot: string, name: string, hidden: bool
 /** Map each webview message type to its handler. READY fires the first scan:
  *  the extension waits for the webview's own message listener to be live rather
  *  than posting immediately after `webview.html` is set, which would race the
- *  page still loading. REFRESH is the manual re-scan. The rest are per-row
- *  actions carrying the row `name`. */
-export function buildMessageHandlers(
-  instanceRoot: string,
-  log: (msg: string) => void,
-  refresh: () => Promise<void>,
-): Record<string, (name: string) => void> {
+ *  page still loading. REFRESH is the manual re-scan. (Per-row actions used to
+ *  live here too — see #214: they're native `webview/context` commands now,
+ *  built by buildRowActionHandlers below, no webview round trip needed.) */
+export function buildMessageHandlers(refresh: () => Promise<void>): Record<string, () => void> {
   return {
     [WEBVIEW_TO_EXTENSION.READY]: () => void refresh(),
     [WEBVIEW_TO_EXTENSION.REFRESH]: () => void refresh(),
-    [WEBVIEW_TO_EXTENSION.INSTALL]: (name) => void installArchive(instanceRoot, name, log),
-    [WEBVIEW_TO_EXTENSION.VISIT_NEXUS]: (name) =>
+  };
+}
+
+// #214: the row's right-click actions (Install/Visit on Nexus/Open File/Open Meta File/
+// Reveal in Explorer/Delete/Hide/Unhide) as directly-callable handlers, keyed the same way
+// buildMessageHandlers used to key them before their sole trigger — the hand-drawn row menu —
+// moved to a native `webview/context` menu. All the real work already lived here in the
+// extension host (never in the webview), so the native commands below call these directly;
+// no message round trip needed. Exported/testable the same fixture-in/behavior-out way
+// buildMessageHandlers was (DownloadsPanel.test.ts).
+export function buildRowActionHandlers(instanceRoot: string, log: (msg: string) => void): Record<string, (name: string) => void> {
+  return {
+    install: (name) => void installArchive(instanceRoot, name, log),
+    visitNexus: (name) =>
       void runRowAction('Visit on Nexus', name, log, () => visitOnNexus(instanceRoot, name)),
     // OS-open the archive in the system's associated application.
-    [WEBVIEW_TO_EXTENSION.OPEN_FILE]: (name) =>
+    openFile: (name) =>
       void runRowAction('Open File', name, log, async () => {
         await vscode.env.openExternal(vscode.Uri.file(join(instanceRoot, 'downloads', name)));
       }),
-    // Open the `.meta` sidecar in the editor (webview gates this off when absent).
-    [WEBVIEW_TO_EXTENSION.OPEN_META]: (name) =>
+    // Open the `.meta` sidecar in the editor (gated off in the native menu when absent).
+    openMeta: (name) =>
       void runRowAction('Open Meta File', name, log, async () => {
         await vscode.window.showTextDocument(vscode.Uri.file(join(instanceRoot, 'downloads', `${name}.meta`)));
       }),
     // Reveal the archive in the OS file manager.
-    [WEBVIEW_TO_EXTENSION.REVEAL]: (name) =>
+    reveal: (name) =>
       void runRowAction('Reveal in Explorer', name, log, async () => {
         await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(join(instanceRoot, 'downloads', name)));
       }),
-    [WEBVIEW_TO_EXTENSION.DELETE]: (name) => void deleteArchive(instanceRoot, name, log),
-    [WEBVIEW_TO_EXTENSION.HIDE]: (name) =>
-      void runRowAction('Hide', name, log, () => setArchiveHidden(instanceRoot, name, true)),
-    [WEBVIEW_TO_EXTENSION.UNHIDE]: (name) =>
-      void runRowAction('Unhide', name, log, () => setArchiveHidden(instanceRoot, name, false)),
+    delete: (name) => void deleteArchive(instanceRoot, name, log),
+    hide: (name) => void runRowAction('Hide', name, log, () => setArchiveHidden(instanceRoot, name, true)),
+    unhide: (name) => void runRowAction('Unhide', name, log, () => setArchiveHidden(instanceRoot, name, false)),
   };
 }
 
-/** Route a raw inbound webview message to its handler by `type`, carrying the
- *  row `name` when present. Extracted as its own seam (#71) so message dispatch
- *  is directly testable without a real `vscode.WebviewPanel` — new message types
- *  (#54/#55/#56) only need a new entry in `buildMessageHandlers`'s returned
- *  table; this routing never changes. Malformed/unrecognized messages are
- *  silently ignored, matching prior inline behavior. */
+// #214: one command id per native `webview/context` menu entry (package.json's
+// contributes.commands/menus), mapped to its buildRowActionHandlers key. `keyof
+// ReturnType<typeof buildRowActionHandlers>` (not a bare `string`) so a typo'd or renamed key on
+// either side of this table is a compile error, not a silent no-op at that one command. Hide/
+// Unhide are two separate commands rather than one toggle, gated by the row's `hidden` in
+// package.json's `when` clauses — same shape as #209's isHeaderRecord/!immutable gating.
+const DOWNLOAD_ROW_COMMANDS: Record<string, keyof ReturnType<typeof buildRowActionHandlers>> = {
+  'modbench.downloads.install': 'install',
+  'modbench.downloads.visitNexus': 'visitNexus',
+  'modbench.downloads.openFile': 'openFile',
+  'modbench.downloads.openMeta': 'openMeta',
+  'modbench.downloads.reveal': 'reveal',
+  'modbench.downloads.delete': 'delete',
+  'modbench.downloads.hide': 'hide',
+  'modbench.downloads.unhide': 'unhide',
+};
+
+/** Register the Downloads row's native context-menu commands. Each receives the row's merged
+ *  `data-vscode-context` (DownloadRowContext) as its sole argument — see downloadRowContext in
+ *  mo2/downloads.ts, which builds the attribute these commands are invoked from. */
+export function registerDownloadsRowCommands(instanceRoot: string, log: (msg: string) => void): vscode.Disposable[] {
+  const handlers = buildRowActionHandlers(instanceRoot, log);
+  return Object.entries(DOWNLOAD_ROW_COMMANDS).map(([commandId, key]) =>
+    vscode.commands.registerCommand(commandId, (ctx?: DownloadRowContext) => {
+      if (ctx?.name) handlers[key](ctx.name);
+    }),
+  );
+}
+
+/** Route a raw inbound webview message to its handler by `type`. Extracted as its own seam
+ *  (#71) so message dispatch is directly testable without a real `vscode.WebviewPanel`.
+ *  Malformed/unrecognized messages are silently ignored, matching prior inline behavior.
+ *  Only READY/REFRESH flow through here now — see buildMessageHandlers (#214). */
 export function dispatchWebviewMessage(
   msg: unknown,
-  handlers: Record<string, (name: string) => void>,
+  handlers: Record<string, () => void>,
 ): void {
   if (typeof msg === 'object' && msg !== null && 'type' in msg) {
     const m = msg as WebviewToExtension;
-    handlers[m.type]?.('name' in m ? m.name : '');
+    handlers[m.type]?.();
   }
 }
 
@@ -257,7 +292,7 @@ export function openDownloadsPanel(
     }
   };
 
-  const handlers = buildMessageHandlers(instanceRoot, log, refresh);
+  const handlers = buildMessageHandlers(refresh);
   panel.webview.onDidReceiveMessage((msg: unknown) => dispatchWebviewMessage(msg, handlers));
 
   const watcher = createDownloadsWatcher(instanceRoot, () => void refresh());

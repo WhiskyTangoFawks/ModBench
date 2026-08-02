@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildDownloadRows,
+  downloadRowContext,
   filterHiddenRows,
   filterRowsByName,
   parseDownloadMeta,
@@ -160,6 +161,28 @@ describe('setInstalledInText', () => {
   it('is a no-op when installed=true is already present', () => {
     const text = '[General]\r\ninstalled=true\r\nmodid=12345\r\n';
     expect(setInstalledInText(text)).toBe(text);
+  });
+});
+
+// Issue #214: the row's right-click menu is VS Code's own `webview/context` contribution now,
+// gated by this `data-vscode-context` JSON — same pattern as recordUtils.ts' pendingCellContext.
+describe('downloadRowContext', () => {
+  it('carries the gating keys the native menu needs, all false/undefined for a plain row', () => {
+    const plain: DownloadRow = { name: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, hidden: false };
+    expect(JSON.parse(downloadRowContext(plain))).toEqual({
+      webviewSection: 'downloadRow', name: 'foo.zip', hasMeta: false, hasModID: false, hidden: false,
+      preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('flags hasMeta, hasModID, and hidden true when the row has them', () => {
+    const row: DownloadRow = {
+      name: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: true, hidden: true, modID: '12345',
+    };
+    expect(JSON.parse(downloadRowContext(row))).toEqual({
+      webviewSection: 'downloadRow', name: 'foo.zip', hasMeta: true, hasModID: true, hidden: true,
+      preventDefaultContextMenuItems: true,
+    });
   });
 });
 

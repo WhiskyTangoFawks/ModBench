@@ -36,7 +36,9 @@ file view**: a file-watcher keeps it in sync as archives appear or change on dis
 (dropped in via the OS file manager today; delivered by the `nxm://` download handler
 later). It mirrors MO2's Downloads tab closely enough that a user can alternate between
 MO2 and Modbench on the same instance, while fixing MO2's one UX wart — batch cleanup
-actions are kept out of the per-row context menu.
+actions are kept out of the per-row context menu. The row's right-click menu is VS
+Code's own native context menu (#214 — see [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)),
+not a rendered overlay.
 
 The tab reads the per-archive `.meta` sidecar MO2 already writes: it derives each row's
 Status from that file and, on a successful Install, writes the install state back to it —
@@ -183,6 +185,21 @@ so the loadout and the Downloads view stay consistent with MO2's own bookkeeping
 Kept scoped to the clicked row — batch/category actions are deliberately **not** here
 (MO2's conflation of the two in one dropdown is the UX wart being fixed).
 
+**The menu is VS Code's own native context menu (#214), not a hand-drawn one.** The row
+carries a `data-vscode-context` attribute (`downloadRowContext` in `mo2/downloads.ts`) —
+`{ webviewSection: 'downloadRow', name, hasMeta, hasModID, hidden,
+preventDefaultContextMenuItems: true }` — and each action is a `modbench.downloads.*`
+command contributed via `contributes.menus["webview/context"]` in `package.json`, gated
+by `webviewId == 'modbench.downloads' && webviewSection == 'downloadRow'` plus the
+per-action key below. `preventDefaultContextMenuItems` suppresses VS Code's built-in
+Cut/Copy/Paste entries on the row. All eight actions' real work already lives in the
+extension host (`DownloadsPanel.ts`'s `buildRowActionHandlers`), so the native commands
+(`registerDownloadsRowCommands`) call it directly — no webview round trip, unlike the
+record editor's Save/Revert Group (#208), whose mutation logic lives in the webview and
+so must broadcast. This follows the same `data-vscode-context` +
+`webview/context` shape #208/#209 established for the record editor's pending-cell and
+column-header menus.
+
 - **Install** — reuse the existing `modbench.modList.installFromArchive` flow
   (extract → detect root → install into the loadout, stamping `installationFile` into the
   new mod's `meta.ini`), pre-supplied with this row's archive path (skipping the
@@ -191,17 +208,19 @@ Kept scoped to the clicked row — batch/category actions are deliberately **not
   `uninstalled=true` write belongs to the Mods-tab uninstall path — out of scope here.)
 - **Visit on Nexus** — open `https://www.nexusmods.com/{gameSlug}/mods/{modID}`, where
   `gameSlug` derives from the instance's game (the existing MO2 game-name → Nexus-slug
-  mapping) and `modID` from the `.meta`. **Gated off** when there's no `modID`.
+  mapping) and `modID` from the `.meta`. **Gated off** when there's no `modID` (the
+  menu's `when` clause checks the context's `hasModID`).
 - **Open File** — OS-open the archive in the system's associated application.
 - **Open Meta File** — open the `.meta` sidecar in the editor. **Gated off** when there's
-  no sidecar.
+  no sidecar (`when` checks `hasMeta`).
 - **Reveal in Explorer** — reveal the archive in the OS file manager.
 - **Delete** — move **both** the archive and its `.meta` sidecar to the **system trash**
   (recoverable), behind a **confirmation** dialog. Removes files only; never uninstalls
   the mod that was installed from the archive.
-- **Hide / Unhide** — Hide sets `removed=true` in the `.meta` (filtering the row out
-  unless *Show hidden* is on); the action reads **Unhide** on an already-hidden row and
-  clears the flag.
+- **Hide / Unhide** — two separate commands (`modbench.downloads.hide` /
+  `.unhide`), mutually exclusive via `when: !hidden` / `when: hidden` so only one ever
+  shows for a given row. Hide sets `removed=true` in the `.meta` (filtering the row out
+  unless *Show hidden* is on); Unhide clears it.
 
 ### Placement & entry point
 
@@ -225,6 +244,14 @@ Kept scoped to the clicked row — batch/category actions are deliberately **not
   model to the webview and performs the unavoidable VS Code calls (trash-delete,
   OS-open, reveal, and the Install hand-off). Install **delegates to the already-tested
   `installFromArchive`**; the other calls stay too thin to hold logic.
+- **Row actions are native `webview/context` commands (#214), not webview messages.**
+  `DownloadsPanel.ts`'s `buildRowActionHandlers(instanceRoot, log)` returns the eight
+  action functions keyed by name; `registerDownloadsRowCommands` wires each to a
+  `modbench.downloads.*` command whose sole argument is the row's `data-vscode-context`
+  object. Only `READY`/`REFRESH` remain on the original webview→extension `postMessage`
+  path (`buildMessageHandlers`/`dispatchWebviewMessage`) — the webview still triggers
+  those itself (mount, the Refresh button); the row actions don't need a webview round
+  trip at all, since their real work already lives entirely in the extension host.
 
 ## Testing Decisions
 
@@ -242,21 +269,31 @@ Kept scoped to the clicked row — batch/category actions are deliberately **not
     show-hidden.
   - name filter: case-insensitive substring match against Name; empty filter shows all rows.
   - default sort Filetime descending; header re-sort by each column.
-  - action gating: no `modID` → Visit-on-Nexus disabled; no `.meta` → Open-Meta disabled.
+  - action gating: no `modID` → `hasModID: false` in the row's `data-vscode-context`; no
+    `.meta` → `hasMeta: false`.
   - mutations: Install writeback sets `installed=true`; Hide sets and Unhide clears
     `removed=true`, byte-faithfully.
+  - `downloadRowContext`: given a row, produces the exact `data-vscode-context` JSON the
+    row carries (`webviewSection`, `name`, `hasMeta`, `hasModID`, `hidden`,
+    `preventDefaultContextMenuItems`).
 - **Prior art:** `metaIni.test.ts`, `modlistText.test.ts`, `statusChecker.test.ts`,
   `modOrganizerIni.test.ts` — same fixture-in / value-out style; instance fixtures live
   under `modbench/src/modmanager/test/fixtures/`.
 - **Reused integration seam** (`npm run test:integration`, real VS Code process) for
-  opening the tab and the file-watcher reflecting a folder change. Row-action message
-  dispatch is unit-tested instead (`DownloadsPanel.test.ts`, `npm run test:unit`) — no
-  API exists to inject an inbound webview message into a real `WebviewPanel` from the
-  integration harness, so `dispatchWebviewMessage`/`buildMessageHandlers` are extracted
-  and exported as a directly-testable seam, `vscode` stubbed the way `ModListProvider.test.ts`
-  does (see #71). The Install hand-off needs no new logic tests beyond that dispatch
-  wiring — it delegates to the already-tested `installFromArchive`. Trash/open/reveal
-  stay thin.
+  opening the tab and the file-watcher reflecting a folder change, plus asserting the
+  eight `modbench.downloads.*` row commands register (`EXPECTED_COMMANDS`).
+- **Row-action command bodies are unit-tested** (`DownloadsPanel.test.ts`,
+  `npm run test:unit`), `vscode` stubbed the way `ModListProvider.test.ts` does (see #71):
+  `buildRowActionHandlers` is exercised directly (fixture-in / real-fs-out, same style as
+  before #214 — only the call site moved from a dispatched webview message to a direct
+  call), and `registerDownloadsRowCommands` is exercised by capturing the mocked
+  `vscode.commands.registerCommand` calls and invoking the captured handler with a
+  `DownloadRowContext`-shaped argument. The Install hand-off needs no new logic tests
+  beyond that — it delegates to the already-tested `installFromArchive`. Trash/open/reveal
+  stay thin. The webview-side assertion is that each row carries the right
+  `data-vscode-context` (`DownloadsApp.test.tsx`) — menu *availability*, previously
+  asserted via rendered `menuitem`s, is asserted there instead; the `when`-clause gating
+  in `package.json` itself isn't exercised by any test (declarative, verified manually).
 - Add the new command id(s) to `EXPECTED_COMMANDS` (per `modbench/CLAUDE.md`).
 
 ## Out of Scope

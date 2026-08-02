@@ -8,6 +8,7 @@ vi.mock('./downloadsVscode', () => ({ vscode: { postMessage: vi.fn() } }));
 import { DownloadsApp } from './DownloadsApp';
 import { vscode } from './downloadsVscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './downloadsMessages';
+import { downloadRowContext, type DownloadRow } from './downloadsModel';
 
 function postFromExtension(data: unknown) {
   fireEvent(window, new MessageEvent('message', { data }));
@@ -138,12 +139,15 @@ describe('DownloadsApp — row selection', () => {
     expect(selectedCell.style.color).toContain('activeSelectionForeground');
   });
 
-  it('still opens the row context menu (selection onClick does not swallow onContextMenu)', () => {
+  // Issue #214: the row's right-click menu is VS Code's own `webview/context` menu now,
+  // gated by data-vscode-context rather than a hand-drawn overlay a click could swallow —
+  // this asserts selecting a row leaves that attribute (and so the native menu) intact.
+  it('selecting a row leaves its data-vscode-context attribute intact', () => {
     render(<DownloadsApp />);
     postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
     fireEvent.click(screen.getByText('new.zip'));
-    fireEvent.contextMenu(screen.getByText('new.zip'));
-    expect(screen.getByRole('menuitem', { name: 'Install' })).toBeInTheDocument();
+    const context = JSON.parse(rowFor('new.zip').getAttribute('data-vscode-context')!);
+    expect(context).toMatchObject({ webviewSection: 'downloadRow', name: 'new.zip' });
   });
 });
 
@@ -179,44 +183,8 @@ describe('DownloadsApp — refresh', () => {
   });
 });
 
-describe('DownloadsApp — row context menu', () => {
+describe('DownloadsApp — table styling', () => {
   const rows = [{ name: 'foo.zip', status: 'Downloaded', size: 100, mtimeMs: 200 }];
-
-  it('right-clicking a row shows an Install menu item', () => {
-    render(<DownloadsApp />);
-    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
-    fireEvent.contextMenu(screen.getByText('foo.zip'));
-    expect(screen.getByRole('menuitem', { name: 'Install' })).toBeInTheDocument();
-  });
-
-  it('clicking Install posts an INSTALL message with the row name', () => {
-    render(<DownloadsApp />);
-    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
-    fireEvent.contextMenu(screen.getByText('foo.zip'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Install' }));
-    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.INSTALL, name: 'foo.zip' });
-  });
-
-  it('closes the menu after Install is clicked', () => {
-    render(<DownloadsApp />);
-    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
-    fireEvent.contextMenu(screen.getByText('foo.zip'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Install' }));
-    expect(screen.queryByRole('menuitem', { name: 'Install' })).not.toBeInTheDocument();
-  });
-});
-
-describe('DownloadsApp — theming', () => {
-  const rows = [{ name: 'foo.zip', status: 'Downloaded', size: 100, mtimeMs: 200 }];
-
-  it('the row context menu has an opaque, theme-aware background above the table', () => {
-    render(<DownloadsApp />);
-    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
-    fireEvent.contextMenu(screen.getByText('foo.zip'));
-    const menu = screen.getByRole('menu');
-    expect(menu.style.backgroundColor).not.toBe('');
-    expect(menu).toHaveStyle({ zIndex: 1000 });
-  });
 
   it('table cells have a visible border', () => {
     render(<DownloadsApp />);
@@ -225,137 +193,64 @@ describe('DownloadsApp — theming', () => {
     expect(cell.style.borderStyle).not.toBe('');
     expect(cell.style.borderStyle).not.toBe('none');
   });
-
-  it('hovering a menu item highlights it, and unhovering clears the highlight', () => {
-    render(<DownloadsApp />);
-    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
-    fireEvent.contextMenu(screen.getByText('foo.zip'));
-    const item = screen.getByRole('menuitem', { name: 'Install' });
-    expect(item.style.background).toBe('');
-    fireEvent.mouseEnter(item);
-    expect(item.style.background).not.toBe('');
-    fireEvent.mouseLeave(item);
-    expect(item.style.background).toBe('');
-  });
 });
 
-describe('DownloadsApp — navigational row actions', () => {
-  const openMenu = (row: object) => {
+// Issue #214: the row's right-click menu (Install/Visit on Nexus/Open File/Open Meta
+// File/Reveal in Explorer/Delete/Hide|Unhide) is VS Code's own `webview/context` menu now,
+// contributed in package.json and gated by `when` clauses on this attribute — so menu
+// availability, previously asserted via rendered `menuitem`s, is asserted here via the
+// row's data-vscode-context instead (the row-action *behavior* itself is unit-tested at the
+// extension-host command layer in DownloadsPanel.test.ts).
+describe('DownloadsApp — row context', () => {
+  const rowFor = (text: string) => screen.getByText(text).closest('tr') as HTMLTableRowElement;
+  const context = (text: string) => JSON.parse(rowFor(text).getAttribute('data-vscode-context')!);
+
+  it('every row carries a data-vscode-context matching downloadRowContext for that row', () => {
+    const row: DownloadRow = { name: 'foo.zip', status: 'Downloaded', size: 100, mtimeMs: 200, hasMeta: true, hidden: false, modID: '12345' };
     render(<DownloadsApp />);
     postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows: [row] });
-    fireEvent.contextMenu(screen.getByText('foo.zip'));
-  };
-  const row = (over: object = {}) => ({
-    name: 'foo.zip',
-    status: 'Downloaded',
-    size: 100,
-    mtimeMs: 200,
-    hasMeta: true,
-    modID: '12345',
-    ...over,
+    expect(rowFor('foo.zip').getAttribute('data-vscode-context')).toBe(downloadRowContext(row));
   });
 
-  it('shows the four navigational actions in the menu', () => {
-    openMenu(row());
-    for (const name of ['Visit on Nexus', 'Open File', 'Open Meta File', 'Reveal in Explorer']) {
-      expect(screen.getByRole('menuitem', { name })).toBeInTheDocument();
-    }
-  });
-
-  it('Open File / Reveal in Explorer post their message with the row name', () => {
-    openMenu(row());
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Open File' }));
-    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.OPEN_FILE, name: 'foo.zip' });
-    fireEvent.contextMenu(screen.getByText('foo.zip'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Reveal in Explorer' }));
-    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.REVEAL, name: 'foo.zip' });
-  });
-
-  it('Visit on Nexus is enabled with a modID and posts VISIT_NEXUS', () => {
-    openMenu(row({ modID: '12345' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Visit on Nexus' }));
-    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.VISIT_NEXUS, name: 'foo.zip' });
-  });
-
-  it('Visit on Nexus is disabled and inert when the row has no modID', () => {
-    openMenu(row({ modID: undefined }));
-    const item = screen.getByRole('menuitem', { name: 'Visit on Nexus' });
-    expect(item).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.click(item);
-    expect(vscode.postMessage).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.VISIT_NEXUS }),
-    );
-  });
-
-  it('Open Meta File is enabled with a sidecar and posts OPEN_META', () => {
-    openMenu(row({ hasMeta: true }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Open Meta File' }));
-    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.OPEN_META, name: 'foo.zip' });
-  });
-
-  it('Open Meta File is disabled and inert when the row has no sidecar', () => {
-    openMenu(row({ hasMeta: false }));
-    const item = screen.getByRole('menuitem', { name: 'Open Meta File' });
-    expect(item).toHaveAttribute('aria-disabled', 'true');
-    fireEvent.click(item);
-    expect(vscode.postMessage).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.OPEN_META }),
-    );
-  });
-});
-
-describe('DownloadsApp — delete row action', () => {
-  const rows = [{ name: 'foo.zip', status: 'Downloaded', size: 100, mtimeMs: 200 }];
-
-  it('right-clicking a row shows a Delete menu item', () => {
-    render(<DownloadsApp />);
-    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
-    fireEvent.contextMenu(screen.getByText('foo.zip'));
-    expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument();
-  });
-
-  it('clicking Delete posts a DELETE message with the row name', () => {
-    render(<DownloadsApp />);
-    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
-    fireEvent.contextMenu(screen.getByText('foo.zip'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
-    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.DELETE, name: 'foo.zip' });
-  });
-
-  it('closes the menu after Delete is clicked', () => {
-    render(<DownloadsApp />);
-    postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows });
-    fireEvent.contextMenu(screen.getByText('foo.zip'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
-    expect(screen.queryByRole('menuitem', { name: 'Delete' })).not.toBeInTheDocument();
-  });
-});
-
-describe('DownloadsApp — hide / unhide row action', () => {
-  it('a visible row shows "Hide" and posts HIDE with the row name', () => {
+  it('gates Visit on Nexus via hasModID, reflecting the row\'s modID', () => {
     render(<DownloadsApp />);
     postFromExtension({
       type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED,
-      rows: [{ name: 'foo.zip', status: 'Downloaded', size: 100, mtimeMs: 200, hidden: false }],
+      rows: [
+        { name: 'has-id.zip', status: 'Downloaded', size: 1, mtimeMs: 1, modID: '12345' },
+        { name: 'no-id.zip', status: 'Downloaded', size: 1, mtimeMs: 2 },
+      ],
     });
-    fireEvent.contextMenu(screen.getByText('foo.zip'));
-    expect(screen.queryByRole('menuitem', { name: 'Unhide' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Hide' }));
-    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.HIDE, name: 'foo.zip' });
+    expect(context('has-id.zip')).toMatchObject({ hasModID: true });
+    expect(context('no-id.zip')).toMatchObject({ hasModID: false });
   });
 
-  it('a hidden row shows "Unhide" and posts UNHIDE with the row name', () => {
+  it('gates Open Meta File via hasMeta, reflecting the row\'s sidecar presence', () => {
     render(<DownloadsApp />);
-    // A hidden row is only present in the table when Show hidden is on.
     postFromExtension({
       type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED,
-      rows: [{ name: 'foo.zip', status: 'Downloaded', size: 100, mtimeMs: 200, hidden: true }],
+      rows: [
+        { name: 'with-meta.zip', status: 'Downloaded', size: 1, mtimeMs: 2, hasMeta: true },
+        { name: 'no-meta.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false },
+      ],
     });
+    expect(context('with-meta.zip')).toMatchObject({ hasMeta: true });
+    expect(context('no-meta.zip')).toMatchObject({ hasMeta: false });
+  });
+
+  it('reflects the hidden flag, selecting Hide vs Unhide in the native menu', () => {
+    render(<DownloadsApp />);
+    postFromExtension({
+      type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED,
+      rows: [
+        { name: 'visible.zip', status: 'Downloaded', size: 100, mtimeMs: 200, hidden: false },
+        { name: 'hidden.zip', status: 'Downloaded', size: 50, mtimeMs: 100, hidden: true },
+      ],
+    });
+    // The hidden row is only present in the table once Show hidden is on.
     fireEvent.click(screen.getByRole('checkbox', { name: /show hidden/i }));
-    fireEvent.contextMenu(screen.getByText('foo.zip'));
-    expect(screen.queryByRole('menuitem', { name: 'Hide' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Unhide' }));
-    expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.UNHIDE, name: 'foo.zip' });
+    expect(context('visible.zip')).toMatchObject({ hidden: false });
+    expect(context('hidden.zip')).toMatchObject({ hidden: true });
   });
 });
 
