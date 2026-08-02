@@ -274,12 +274,13 @@ describe('DiffRow — pending companion column', () => {
       });
     }
 
-    it('renders the resolved EditorID as the pending cell label', () => {
+    // Issue #218: the pending cell's label is the same composite the disk cells use — the staged
+    // value is a reference like any other, so it reads back in the format it was chosen in.
+    it('renders the resolved EditorID [FormKey] composite as the pending cell label', () => {
       render(<table><tbody>{React.createElement(DiffRow, fkPendingProps({
         '': { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'SomeOtherNpc' },
       }))}</tbody></table>);
-      expect(screen.getByText('SomeOtherNpc')).toBeInTheDocument();
-      expect(screen.queryByText('000020:Fallout4.esm')).not.toBeInTheDocument();
+      expect(screen.getByText('SomeOtherNpc [000020:Fallout4.esm]')).toBeInTheDocument();
     });
 
     it('falls back to the raw FormKey when unresolved', () => {
@@ -320,7 +321,7 @@ describe('DiffRow — pending companion column', () => {
         }) },
         context: { kind: 'struct-child', overrideMeta: fkMeta, parentFieldName: 'LinkedRef' },
       }))}</tbody></table>);
-      expect(screen.getByText('StructTarget')).toBeInTheDocument();
+      expect(screen.getByText('StructTarget [000030:Fallout4.esm]')).toBeInTheDocument();
     });
 
     it('a positional array-element pending FormKey cell resolves via its "[idx]" path', () => {
@@ -335,7 +336,7 @@ describe('DiffRow — pending companion column', () => {
         }) },
         context: { kind: 'array-element', overrideMeta: fkMeta, parentFieldName: 'Items' },
       }))}</tbody></table>);
-      expect(screen.getByText('PositionalTarget')).toBeInTheDocument();
+      expect(screen.getByText('PositionalTarget [000030:Fallout4.esm]')).toBeInTheDocument();
     });
 
     it('a sortable (pure FormLink) array-element pending FormKey cell resolves by its position in the pending array', () => {
@@ -350,7 +351,7 @@ describe('DiffRow — pending companion column', () => {
         }) },
         context: { kind: 'array-element', overrideMeta: fkMeta, parentFieldName: 'Items' },
       }))}</tbody></table>);
-      expect(screen.getByText('SortedTarget')).toBeInTheDocument();
+      expect(screen.getByText('SortedTarget [000099:Fallout4.esm]')).toBeInTheDocument();
     });
 
     it('a grandchild pending FormKey cell resolves via its "[idx].member" path', () => {
@@ -365,7 +366,7 @@ describe('DiffRow — pending companion column', () => {
         }) },
         context: { kind: 'grandchild', overrideMeta: fkMeta, parentFieldName: 'Items', parentFieldIndex: 2 },
       }))}</tbody></table>);
-      expect(screen.getByText('GrandchildTarget')).toBeInTheDocument();
+      expect(screen.getByText('GrandchildTarget [000077:Fallout4.esm]')).toBeInTheDocument();
     });
   });
 
@@ -447,7 +448,7 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
 
   it('an array-element resolved-valid-type leaf still shows the affordance despite the parent field checkError', () => {
     renderRow(leafProps('array-element', validType));
-    const link = screen.getByText('SomeKeyword');
+    const link = screen.getByText('SomeKeyword [000019:Fallout4.esm]');
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
     expect(link.style.textDecoration).toBe('underline');
@@ -455,7 +456,7 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
 
   it('an array-element resolved-wrong-type leaf still shows the affordance despite the parent field checkError', () => {
     renderRow(leafProps('array-element', wrongType, '00001A:Fallout4.esm'));
-    const link = screen.getByText('SomeNpc');
+    const link = screen.getByText('SomeNpc [00001A:Fallout4.esm]');
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
     expect(link.style.textDecoration).toBe('underline');
@@ -463,7 +464,7 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
 
   it('a struct-child resolved-valid-type leaf still shows the affordance despite the parent field checkError', () => {
     renderRow(leafProps('struct-child', validType));
-    const link = screen.getByText('SomeKeyword');
+    const link = screen.getByText('SomeKeyword [000019:Fallout4.esm]');
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
     expect(link.style.textDecoration).toBe('underline');
@@ -487,7 +488,7 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
 
   it('a struct-child resolved-wrong-type leaf still shows the affordance despite the parent field checkError', () => {
     renderRow(leafProps('struct-child', wrongType, '00001A:Fallout4.esm'));
-    const link = screen.getByText('SomeNpc');
+    const link = screen.getByText('SomeNpc [00001A:Fallout4.esm]');
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
     expect(link.style.textDecoration).toBe('underline');

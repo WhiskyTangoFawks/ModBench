@@ -396,9 +396,10 @@ describe('RecordPanel — postMessage wiring', () => {
 
   it('calls vscode.postMessage with type openRecord when a FormKey link is Ctrl+clicked', async () => {
     renderPanel(fkCompareResult, { plugins: fkPlugins });
-    // Resolved per fkCompareResult's diff.resolutions — labeled with the EditorID, not the raw FormKey.
-    await waitFor(() => screen.getByText('HumanRace'));
-    fireEvent.click(screen.getByText('HumanRace'), { ctrlKey: true });
+    // Resolved per fkCompareResult's diff.resolutions — labeled with the #218 composite, so the
+    // reference is identifiable from the cell alone rather than only by its EditorID.
+    await waitFor(() => screen.getByText('HumanRace [00013918:Fallout4.esm]'));
+    fireEvent.click(screen.getByText('HumanRace [00013918:Fallout4.esm]'), { ctrlKey: true });
     expect(vscode.postMessage).toHaveBeenCalledWith({
       type: WEBVIEW_TO_EXTENSION.OPEN_RECORD,
       formKey: '00013918:Fallout4.esm',
@@ -1446,9 +1447,9 @@ describe('RecordPanel — pending cells render type-aware (issue #137)', () => {
     });
     await waitFor(() => screen.getByText('Race'));
 
-    // The staged FormKey resolves, so it renders as its EditorID and is a link (a button), so
+    // The staged FormKey resolves, so it renders as the #218 composite and is a link (a button), so
     // Ctrl+click follows the reference — a plain <span> could not.
-    const link = screen.getByText('SomeRace');
+    const link = screen.getByText('SomeRace [0001F4:Fallout4.esm]');
     expect(link.tagName).toBe('BUTTON');
     fireEvent.click(link, { ctrlKey: true });
     expect(vscode.postMessage).toHaveBeenCalledWith(
@@ -1723,9 +1724,9 @@ describe('RecordPanel — Pending column right-click reveal (issue #203, moved f
 
   it('Ctrl+click on a pending FormKey value still posts openRecord', async () => {
     renderPanel(pendingFkResult, { changes: soloChangeFk });
-    await waitFor(() => screen.getByText('SomeRace'));
+    await waitFor(() => screen.getByText('SomeRace [00099999:MyMod.esp]'));
 
-    fireEvent.click(screen.getByText('SomeRace'), { ctrlKey: true });
+    fireEvent.click(screen.getByText('SomeRace [00099999:MyMod.esp]'), { ctrlKey: true });
 
     expect(vscode.postMessage).toHaveBeenCalledWith({
       type: WEBVIEW_TO_EXTENSION.OPEN_RECORD,

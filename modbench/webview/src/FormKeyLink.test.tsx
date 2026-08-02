@@ -10,13 +10,37 @@ const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: '
 const wrongType: FormKeyResolution = { state: 'ResolvedWrongType', recordType: 'npc_', editorId: 'SomeNpc' };
 const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-// Issue #157 / ADR-0031: the link now labels itself from the resolution signal instead of always
+// Issue #157 / ADR-0031: the link labels itself from the resolution signal instead of always
 // echoing the raw FormKey — a resolved reference reads as the record it points to.
+//
+// Issue #218: #157's label choice (the EditorID *instead of* the FormKey) is superseded. It
+// dropped the identity and kept the decoration, so the format a reference is chosen in (the
+// picker's own items, "EditorID [FormKey]") and the format it is read back in disagreed — and
+// under ADR-0033's cursor contract, where copying a value is selecting the text a cell displays,
+// a cell that does not display its own identity cannot hand it to the user at all.
 describe('FormKeyLink — label', () => {
-  it('renders the EditorID as its label when resolved (valid type)', () => {
+  it('renders the composite EditorID [FormKey] as its label when resolved (valid type)', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onOpen={vi.fn()} />);
-    expect(screen.getByText('DogmeatRace')).toBeInTheDocument();
-    expect(screen.queryByText('000019:Fallout4.esm')).not.toBeInTheDocument();
+    expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]')).toBeInTheDocument();
+  });
+
+  // Issue #218: the composite is long and the grid has one column per plugin, so width is managed
+  // by truncation rather than by shortening the label — a truncated element still copies its full
+  // text, so the visual cost is paid without a correctness cost. gridStyles' baseCell already sets
+  // maxWidth/ellipsis on the <td>, but that clips at the boundary of an atomic inline box and never
+  // inside a <button>'s own text, so the link has to carry the ellipsis itself. jsdom has no
+  // layout, so this proves only that the declaration is present, not that it paints.
+  it('declares its own ellipsis truncation rather than relying on the cell to clip it', () => {
+    render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onOpen={vi.fn()} />);
+    const link = screen.getByText('DogmeatRace [000019:Fallout4.esm]');
+    expect(link.style.overflow).toBe('hidden');
+    expect(link.style.textOverflow).toBe('ellipsis');
+    expect(link.style.whiteSpace).toBe('nowrap');
+    expect(link.style.maxWidth).toBe('100%');
+    // Load-bearing: FormKeyCell and VmadSection wrap this in a `display: inline-flex` span, so the
+    // link is a flex item, and a flex item's default `min-width: auto` refuses to shrink below its
+    // content — which silently cancels the ellipsis above.
+    expect(link.style.minWidth).toBe('0');
   });
 
   it('renders the plain FormKey string when unresolved', () => {
@@ -37,7 +61,7 @@ describe('FormKeyLink — Ctrl-hover affordance from resolution', () => {
 
   it('shows the affordance for a resolved-valid-type reference', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onOpen={vi.fn()} />);
-    const link = screen.getByText('DogmeatRace');
+    const link = screen.getByText('DogmeatRace [000019:Fallout4.esm]');
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
     expect(link.style.textDecoration).toBe('underline');
@@ -46,11 +70,22 @@ describe('FormKeyLink — Ctrl-hover affordance from resolution', () => {
 
   it('shows the affordance for a resolved-wrong-type reference', () => {
     render(<FormKeyLink value="00001A:Fallout4.esm" resolution={wrongType} onOpen={vi.fn()} />);
-    const link = screen.getByText('SomeNpc');
+    const link = screen.getByText('SomeNpc [00001A:Fallout4.esm]');
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
     expect(link.style.textDecoration).toBe('underline');
     expect(link.style.cursor).toBe('pointer');
+  });
+
+  // Issue #218 / ADR-0033: same defect #204 fixed in ScalarCell, in the leaf it missed — the link
+  // must not assert a resting cursor, because DiskCell sets `grab` on the parent <td> and the cell
+  // is a drag source the whole time. An inline `cursor: 'default'` here painted an arrow over that,
+  // so the one gesture always available on the cell was the one it never advertised. jsdom can't
+  // prove which cursor paints (no cascade), so this only proves the mask itself is gone; the `hot`
+  // override above is unaffected and still asserted.
+  it('does not mask the parent drag cursor with its own cursor style at rest', () => {
+    render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onOpen={vi.fn()} />);
+    expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]').style.cursor).toBe('');
   });
 
   it('suppresses the affordance for an unresolved reference', () => {
@@ -64,7 +99,7 @@ describe('FormKeyLink — Ctrl-hover affordance from resolution', () => {
   it('Ctrl+click follows a resolved-wrong-type reference', () => {
     const onOpen = vi.fn();
     render(<FormKeyLink value="00001A:Fallout4.esm" resolution={wrongType} onOpen={onOpen} />);
-    fireEvent.click(screen.getByText('SomeNpc'), { ctrlKey: true });
+    fireEvent.click(screen.getByText('SomeNpc [00001A:Fallout4.esm]'), { ctrlKey: true });
     expect(onOpen).toHaveBeenCalledWith('00001A:Fallout4.esm');
   });
 

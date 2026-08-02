@@ -17,7 +17,7 @@ vi.mock('vscode', () => ({
 
 import {
   routeRecordPanelMessage, revealPendingChange, pickFormKeyViaQuickPick, pickConditionFunctionViaQuickPick,
-  confirmRevertGroupViaNativeDialog, pickScriptNameViaInputBox,
+  confirmRevertGroupViaNativeDialog, pickScriptNameViaInputBox, normalizeFormKeyQuery,
   type RevealDeps, type FormKeyPickerDeps, type ConditionFunctionPickerDeps,
 } from './recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
@@ -217,6 +217,50 @@ describe('revealPendingChange (issue #208)', () => {
   });
 });
 
+// Issue #218: FormKey cells now display "EditorID [FormKey]" (the same composite the picker's own
+// items have always used), so copying a cell and pasting it into another FormKey cell's picker
+// puts a whole label into the query. Searching for the literal would find nothing. The normalizer
+// is the whole fix, and it lives here rather than in the backend: it is format knowledge about a
+// label this frontend invented, and it serves typed and pasted input identically.
+describe('normalizeFormKeyQuery (issue #218)', () => {
+  it('searches on the bracketed FormKey when a whole composite label is pasted', () => {
+    expect(normalizeFormKeyQuery('DogmeatRace [000019:Fallout4.esm]')).toBe('000019:Fallout4.esm');
+  });
+
+  // The identity is the FormKey; the EditorID is decoration. A stale copy (the record was renamed
+  // since) or a hand-edited string must resolve to the reference it names, not the name it carries.
+  it('lets the FormKey win when the label and the bracketed FormKey disagree', () => {
+    expect(normalizeFormKeyQuery('WrongName [000019:Fallout4.esm]')).toBe('000019:Fallout4.esm');
+  });
+
+  // A VMAD object reference reads "SomeNPC [000123:Foo.esp] [2]" — the alias suffix is a second
+  // bracketed segment. Taking the first match is what makes a copy of that whole cell resolve.
+  it('takes the first bracketed segment, so a VMAD alias suffix does not win over the FormKey', () => {
+    expect(normalizeFormKeyQuery('SomeNPC [000123:Foo.esp] [2]')).toBe('000123:Foo.esp');
+  });
+
+  it('trims whitespace inside the brackets', () => {
+    expect(normalizeFormKeyQuery('DogmeatRace [ 000019:Fallout4.esm ]')).toBe('000019:Fallout4.esm');
+  });
+
+  // #210's behaviour, unchanged: a bare EditorID and a bare FormKey are both searched as typed.
+  it('passes an unbracketed query through untouched', () => {
+    expect(normalizeFormKeyQuery('Dogmeat')).toBe('Dogmeat');
+    expect(normalizeFormKeyQuery('000019:Fallout4.esm')).toBe('000019:Fallout4.esm');
+  });
+
+  // Falling back to the query as typed rather than to the empty string: an empty capture would
+  // blank the results list, which reads as "no matches" for something the user did type.
+  it('falls back to the query as typed when the brackets are empty', () => {
+    expect(normalizeFormKeyQuery('Foo []')).toBe('Foo []');
+    expect(normalizeFormKeyQuery('Foo [  ]')).toBe('Foo [  ]');
+  });
+
+  it('passes an unclosed bracket through as typed', () => {
+    expect(normalizeFormKeyQuery('Foo [000019')).toBe('Foo [000019');
+  });
+});
+
 // Issue #210: the FormKey picker as a native QuickPick — the extension-host half of the bridge
 // pickFormKey (webview/src/nativeBridge.ts) talks to. Exercised directly here (like
 // revealPendingChange above), separately from routeRecordPanelMessage's dispatch.
@@ -258,6 +302,26 @@ describe('pickFormKeyViaQuickPick (issue #210)', () => {
 
     expect(searchRecords).not.toHaveBeenCalled();
     expect(qp.items).toEqual([]);
+
+    qp.hide();
+    await resultPromise;
+  });
+
+  // Issue #218: pasting a whole "EditorID [FormKey]" label copied from a cell searches on the
+  // FormKey, not on the literal — the normalizer's one wiring point. The unbracketed case is
+  // covered by the debounce test below, which is #210's behaviour and must not regress.
+  it('normalizes a pasted composite label to its FormKey before searching', async () => {
+    vi.useFakeTimers();
+    const { deps, searchRecords } = fakeDeps();
+    const { qp, typeValue } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const resultPromise = pickFormKeyViaQuickPick(deps, '', []);
+    searchRecords.mockClear();
+
+    typeValue('DogmeatRace [000019:Fallout4.esm]');
+    await vi.advanceTimersByTimeAsync(200);
+    expect(searchRecords).toHaveBeenCalledWith('000019:Fallout4.esm', []);
 
     qp.hide();
     await resultPromise;
