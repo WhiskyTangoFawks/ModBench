@@ -83,7 +83,11 @@ public static class ChangeEndpoints
     // Pending-change and change-group management: list, revert, save.
     private static void MapChangeManagementEndpoints(IEndpointRouteBuilder app)
     {
-        app.MapGet("/change-groups", (IPendingChangeService changes) => Results.Ok(changes.GetChangeGroups()))
+        app.MapGet("/change-groups", (IPendingChangeService changes, ILoggerFactory loggerFactory) =>
+        {
+            loggerFactory.CreateLogger(nameof(ChangeEndpoints)).LogInformation("Received GetChangeGroups");
+            return Results.Ok(changes.GetChangeGroups());
+        })
             .WithName("GetChangeGroups")
             .WithTags(Tag)
             .Produces<IReadOnlyList<ChangeGroup>>();
@@ -122,12 +126,14 @@ public static class ChangeEndpoints
             .ProducesProblem(500);
     }
 
-    private static IResult PatchRecord(
+    internal static IResult PatchRecord(
         [FromRoute] string formKey,
         [FromBody] PatchRecordRequest req,
         ISessionManager session,
-        IEditOrchestrator orchestrator)
+        IEditOrchestrator orchestrator,
+        ILoggerFactory loggerFactory)
     {
+        loggerFactory.CreateLogger(nameof(ChangeEndpoints)).LogInformation("Received PatchRecord for {FormKey}", formKey);
         var s = session.Session;
         if (s == null) return Results.Problem(NoSessionMessage);
 
@@ -139,8 +145,11 @@ public static class ChangeEndpoints
         [FromRoute] string formKey,
         [FromRoute] string targetPlugin,
         [FromBody] CopyRecordRequest req,
-        IEditOrchestrator orchestrator)
+        IEditOrchestrator orchestrator,
+        ILoggerFactory loggerFactory)
     {
+        loggerFactory.CreateLogger(nameof(ChangeEndpoints))
+            .LogInformation("Received CopyRecordTo for {FormKey} to {TargetPlugin}", formKey, targetPlugin);
         var decodedFormKey = Uri.UnescapeDataString(formKey);
         var decodedTarget = Uri.UnescapeDataString(targetPlugin);
         return orchestrator.CopyRecordTo(decodedFormKey, decodedTarget, req.Source ?? "user").ToHttpResult();
@@ -148,8 +157,11 @@ public static class ChangeEndpoints
 
     private static IResult DeleteRecords(
         [FromBody] DeleteRecordsRequest req,
-        IEditOrchestrator orchestrator)
+        IEditOrchestrator orchestrator,
+        ILoggerFactory loggerFactory)
     {
+        loggerFactory.CreateLogger(nameof(ChangeEndpoints))
+            .LogInformation("Received DeleteRecords for {Count} record(s)", req.Records?.Count ?? 0);
         var targets = (req.Records ?? []).Select(r => (r.FormKey, r.Plugin)).ToList();
         return targets.Count == 0
             ? Results.Problem("At least one record must be specified.", statusCode: 400)
@@ -160,18 +172,26 @@ public static class ChangeEndpoints
         [FromQuery] string? plugin,
         [FromQuery] string? formKey,
         [FromQuery] Guid? groupId,
-        IRecordQueryService query)
+        IRecordQueryService query,
+        ILoggerFactory loggerFactory)
     {
+        loggerFactory.CreateLogger(nameof(ChangeEndpoints))
+            .LogInformation("Received GetChanges for {Plugin} {FormKey} {GroupId}", plugin, formKey, groupId);
         var decodedPlugin = plugin != null ? Uri.UnescapeDataString(plugin) : null;
         var decodedFormKey = formKey != null ? Uri.UnescapeDataString(formKey) : null;
         return Results.Ok(query.GetChanges(decodedPlugin, decodedFormKey, groupId));
     }
 
-    private static IResult DeleteChangeGroup(Guid groupId, IPendingChangeService changes) =>
-        changes.RevertGroup(groupId) ? Results.NoContent() : Results.NotFound();
+    private static IResult DeleteChangeGroup(Guid groupId, IPendingChangeService changes, ILoggerFactory loggerFactory)
+    {
+        loggerFactory.CreateLogger(nameof(ChangeEndpoints)).LogInformation("Received DeleteChangeGroup for {GroupId}", groupId);
+        return changes.RevertGroup(groupId) ? Results.NoContent() : Results.NotFound();
+    }
 
-    private static IResult DeleteChange(Guid changeId, IPendingChangeService changes) =>
-        changes.Revert(changeId) switch
+    private static IResult DeleteChange(Guid changeId, IPendingChangeService changes, ILoggerFactory loggerFactory)
+    {
+        loggerFactory.CreateLogger(nameof(ChangeEndpoints)).LogInformation("Received DeleteChange for {ChangeId}", changeId);
+        return changes.Revert(changeId) switch
         {
             RevertChangeResult.Reverted => Results.NoContent(),
             RevertChangeResult.NotFound => Results.NotFound(),
@@ -179,12 +199,16 @@ public static class ChangeEndpoints
                 $"Change belongs to group {g.GroupId} — revert the group first.", statusCode: 409),
             var r => throw new InvalidOperationException($"Unhandled RevertChangeResult: {r.GetType().Name}")
         };
+    }
 
     private static IResult BulkDeleteChanges(
         [FromQuery] string? plugin,
         [FromQuery] string? formKey,
-        IPendingChangeService changes)
+        IPendingChangeService changes,
+        ILoggerFactory loggerFactory)
     {
+        loggerFactory.CreateLogger(nameof(ChangeEndpoints))
+            .LogInformation("Received BulkDeleteChanges for {Plugin} {FormKey}", plugin, formKey);
         if (plugin == null && formKey == null)
             return Results.Problem("At least one of 'plugin' or 'formKey' must be specified.", statusCode: 400);
         var decodedPlugin = plugin != null ? Uri.UnescapeDataString(plugin) : null;
@@ -199,6 +223,8 @@ public static class ChangeEndpoints
         IEditOrchestrator orchestrator,
         ILoggerFactory loggerFactory)
     {
+        loggerFactory.CreateLogger(nameof(ChangeEndpoints))
+            .LogInformation("Received CreateRecord for {Plugin} {RecordType}", plugin, req.RecordType);
         var s = session.Session;
         if (s == null) return Results.Problem(NoSessionMessage);
 
@@ -236,6 +262,8 @@ public static class ChangeEndpoints
         IEditOrchestrator orchestrator,
         ILoggerFactory loggerFactory)
     {
+        loggerFactory.CreateLogger(nameof(ChangeEndpoints))
+            .LogInformation("Received CreatePlacedRecord for {Plugin} {CellFormKey} {RecordType}", plugin, cellFormKey, req.RecordType);
         var s = session.Session;
         if (s == null) return Results.Problem(NoSessionMessage);
 
@@ -272,9 +300,10 @@ public static class ChangeEndpoints
         ISessionManager session,
         ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger(nameof(ChangeEndpoints));
+        logger.LogInformation("Received SaveChangeGroup for {GroupId}", groupId);
         if (session.Session == null) return Results.Problem(NoSessionMessage, statusCode: 400);
 
-        var logger = loggerFactory.CreateLogger(nameof(ChangeEndpoints));
         try
         {
             return await saver.Save(groupId) switch
@@ -296,8 +325,11 @@ public static class ChangeEndpoints
     private static IResult RenumberRecord(
         [FromRoute] string formKey,
         [FromBody] RenumberRecordRequest req,
-        IEditOrchestrator orchestrator)
+        IEditOrchestrator orchestrator,
+        ILoggerFactory loggerFactory)
     {
+        loggerFactory.CreateLogger(nameof(ChangeEndpoints))
+            .LogInformation("Received RenumberRecord for {FormKey} to {NewFormId}", formKey, req.NewFormId);
         var decoded = Uri.UnescapeDataString(formKey);
         return orchestrator.Renumber(decoded, req.NewFormId, req.Plugin, req.Source ?? "user") switch
         {

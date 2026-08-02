@@ -16,6 +16,7 @@ public static class RecordEndpoints
             int limit = 50,
             int offset = 0) =>
         {
+            logger.LogInformation("Received GetRecords for {Plugin} {Type} {Search}", plugin, type, search);
             var result = svc.GetRecords(type, plugin, search, limit, offset);
             return Results.Ok(result);
         })
@@ -25,6 +26,7 @@ public static class RecordEndpoints
 
         app.MapGet("/records/{formKey}", (string formKey, IRecordQueryService svc) =>
         {
+            logger.LogInformation("Received GetRecord for {FormKey}", formKey);
             var decoded = Uri.UnescapeDataString(formKey);
             var detail = svc.GetRecord(decoded);
             return detail is null ? Results.NotFound() : Results.Ok(detail);
@@ -36,6 +38,7 @@ public static class RecordEndpoints
 
         app.MapGet("/records/{formKey}/compare", (string formKey, IRecordQueryService svc) =>
         {
+            logger.LogInformation("Received CompareRecord for {FormKey}", formKey);
             var decoded = Uri.UnescapeDataString(formKey);
             var result = svc.GetCompare(decoded);
             return result is null ? Results.NotFound() : Results.Ok(result);
@@ -46,24 +49,28 @@ public static class RecordEndpoints
         .ProducesProblem(404);
 
         app.MapGet("/records/{formKey}/references", (string formKey, IRecordQueryService svc) =>
-        {
-            var decoded = Uri.UnescapeDataString(formKey);
-            try
-            {
-                var results = svc.GetReferences(decoded);
-                return Results.Ok(results);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to get references for {FormKey}", decoded);
-                return Results.Problem(ex.Message);
-            }
-        })
+            GetReferences(formKey, svc, logger))
         .WithName("GetReferences")
         .WithTags("Records")
         .Produces<IReadOnlyList<ReferenceResult>>()
         .ProducesProblem(500);
 
         return app;
+    }
+
+    internal static IResult GetReferences(string formKey, IRecordQueryService svc, ILogger logger)
+    {
+        logger.LogInformation("Received GetReferences for {FormKey}", formKey);
+        var decoded = Uri.UnescapeDataString(formKey);
+        try
+        {
+            var results = svc.GetReferences(decoded);
+            return Results.Ok(results);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to get references for {FormKey}", decoded);
+            return Results.Problem(ex.Message);
+        }
     }
 }

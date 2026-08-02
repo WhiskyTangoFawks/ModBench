@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Queries;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 
 namespace MEditService.Tests.Query;
@@ -113,9 +114,9 @@ public class ArrayChildDiffTests
     [Fact]
     public void Array_ExceedingMaxArrayChildCount_ReturnsNullChildren_LogsWarning()
     {
-        var logLines = new List<string>();
+        var logEntries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b =>
-            b.AddProvider(new CollectingLoggerProvider(logLines)));
+            b.AddProvider(new CollectingLoggerProvider(logEntries)));
         var classifier = new ConflictClassifier(
             loggerFactory.CreateLogger<ConflictClassifier>());
 
@@ -131,7 +132,7 @@ public class ArrayChildDiffTests
 
         var kwdDiff = result.Diffs.First(d => d.FieldName == "Items");
         Assert.Null(kwdDiff.Children);
-        Assert.Contains(logLines, l => l.Contains("MaxArrayChildCount"));
+        Assert.Contains(logEntries, e => e.Message.Contains("MaxArrayChildCount"));
     }
 
     // ── Struct-typed element test ─────────────────────────────────────────────
@@ -247,9 +248,9 @@ public class ArrayChildDiffTests
     [Fact]
     public void SortedArray_ExceedingMaxArrayChildCount_ReturnsNullChildren_LogsWarning()
     {
-        var logLines = new List<string>();
+        var logEntries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b =>
-            b.AddProvider(new CollectingLoggerProvider(logLines)));
+            b.AddProvider(new CollectingLoggerProvider(logEntries)));
         var classifier = new ConflictClassifier(
             loggerFactory.CreateLogger<ConflictClassifier>());
 
@@ -262,7 +263,7 @@ public class ArrayChildDiffTests
         var result = Classify([master], classifier);
 
         Assert.Null(result.Diffs.First(d => d.FieldName == "Keywords").Children);
-        Assert.Contains(logLines, l => l.Contains("MaxArrayChildCount"));
+        Assert.Contains(logEntries, e => e.Message.Contains("MaxArrayChildCount"));
     }
 
     [Fact]
@@ -292,20 +293,4 @@ public class ArrayChildDiffTests
 
         Assert.Equal(500, result.Diffs.First(d => d.FieldName == "Items").Children!.Count);
     }
-}
-
-// Minimal logger provider for the overflow test
-file sealed class CollectingLoggerProvider(List<string> lines) : ILoggerProvider
-{
-    public ILogger CreateLogger(string categoryName) => new CollectingLogger(lines);
-    public void Dispose() { }
-}
-
-file sealed class CollectingLogger(List<string> lines) : ILogger
-{
-    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-    public bool IsEnabled(LogLevel logLevel) => true;
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
-        Exception? exception, Func<TState, Exception?, string> formatter)
-        => lines.Add(formatter(state, exception));
 }

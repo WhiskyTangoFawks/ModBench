@@ -55,9 +55,10 @@ public static class SessionEndpoints
             : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
     }
 
-    private static IResult LoadSession(SessionLoadRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    internal static IResult LoadSession(SessionLoadRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(SessionEndpoints));
+        logger.LogInformation("Received LoadSession for {DataFolder}", req.DataFolderPath);
         if (!Directory.Exists(req.DataFolderPath))
             return Results.Problem($"Data folder not found: {req.DataFolderPath}", statusCode: 400);
         if (!File.Exists(req.PluginsTxtPath))
@@ -80,6 +81,7 @@ public static class SessionEndpoints
     private static IResult LoadExplicitSession(SessionLoadExplicitRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(SessionEndpoints));
+        logger.LogInformation("Received LoadExplicitSession for {GameDirectory}", req.GameDirectory);
         if (!Directory.Exists(req.GameDirectory))
             return Results.Problem($"Game directory not found: {req.GameDirectory}", statusCode: 400);
 
@@ -108,6 +110,7 @@ public static class SessionEndpoints
     private static IResult SetFilter(SessionFilterRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(SessionEndpoints));
+        logger.LogInformation("Received SetFilter with {Sql}", req.Sql);
         if (req.Sql is null)
             return Results.Problem("SQL is required.", statusCode: 400);
         try
@@ -135,6 +138,7 @@ public static class SessionEndpoints
     private static IResult ClearFilter(ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(SessionEndpoints));
+        logger.LogInformation("Received ClearFilter");
         try
         {
             sessionManager.ClearFilter();
@@ -152,8 +156,9 @@ public static class SessionEndpoints
         }
     }
 
-    private static IResult GetFilter(ISessionManager sessionManager)
+    private static IResult GetFilter(ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
+        loggerFactory.CreateLogger(nameof(SessionEndpoints)).LogInformation("Received GetFilter");
         return sessionManager.Session is null
             ? Results.Problem("No session loaded.", statusCode: 503)
             : Results.Ok(new SessionFilterResponse(sessionManager.Session.FilterSql));
