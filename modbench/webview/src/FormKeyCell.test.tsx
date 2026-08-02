@@ -7,7 +7,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 // cell now calls pickFormKey (the native-QuickPick bridge) instead. Mocked here so these tests
 // assert the call (seed/validTypes), not any rendered picker DOM.
 const pickFormKey = vi.fn().mockResolvedValue(null);
-vi.mock('./formKeyPickerBridge', () => ({ pickFormKey: (...args: unknown[]) => pickFormKey(...args) }));
+vi.mock('./nativeBridge', () => ({ pickFormKey: (...args: unknown[]) => pickFormKey(...args) }));
 
 import { FormKeyCell } from './FormKeyCell';
 import type { FieldMetadata, FormKeyResolution } from './types';

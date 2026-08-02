@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { fg, mono } from './gridStyles';
-import { pickFormKey } from './formKeyPickerBridge';
+import { pickFormKey } from './nativeBridge';
 import { ModalShell } from './ModalShell';
 import { ADDABLE_TYPES, PROP_FLAGS, defaultOpValue, opScalarKind, type OnStructOp } from './vmadOps';
 

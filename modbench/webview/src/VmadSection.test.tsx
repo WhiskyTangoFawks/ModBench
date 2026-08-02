@@ -1,13 +1,22 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 // Issue #210: VmadObjectEditor now imports the pickFormKey bridge, which touches vscode.ts's
 // acquireVsCodeApi() at module load — stubbed here since these tests don't exercise the picker
 // itself (see VmadObjectEditor.test.tsx for that).
-vi.mock('./formKeyPickerBridge', () => ({ pickFormKey: vi.fn().mockResolvedValue(null) }));
+//
+// Issue #212: same reasoning, for AddScriptButton's pickScriptName bridge (see
+// VmadScriptOps.test.tsx for coverage of the bridge itself) — both bridges now live in the
+// single nativeBridge.ts module (refactor), so they're mocked in one vi.mock call rather than
+// two, which would just overwrite each other.
+vi.mock('./nativeBridge', () => ({
+  pickFormKey: vi.fn().mockResolvedValue(null),
+  pickScriptName: vi.fn().mockResolvedValue(null),
+}));
 
+import { pickScriptName } from './nativeBridge';
 import { VmadSection } from './VmadSection';
 import type { Column } from './recordUtils';
 import { pendingCellContext } from './recordUtils';
@@ -1058,20 +1067,21 @@ describe('VmadSection editing', () => {
 
   // ── add/remove script (13.8.2) ─────────────────────────────────────────────
 
-  it('add-script control stages an add_script op even when the record has no VMAD', () => {
+  // Issue #212: "Add script" is now a native input box (pickScriptName) — see
+  // VmadScriptOps.test.tsx for the bridge coverage itself; this just confirms the control still
+  // wires through with no VMAD present.
+  it('add-script control stages an add_script op even when the record has no VMAD', async () => {
     const onStructOp = vi.fn();
+    vi.mocked(pickScriptName).mockResolvedValueOnce('MyScript');
     renderSection(null, ['A.esm'], { onStructOp });
 
     fireEvent.click(screen.getByTitle('Add script'));
-    fireEvent.change(screen.getByLabelText('New script name'), { target: { value: 'MyScript' } });
-    fireEvent.change(screen.getByLabelText('New script flags'), { target: { value: 'Local' } });
-    fireEvent.click(screen.getByText('Add'));
 
-    expect(onStructOp).toHaveBeenCalledWith(
+    await waitFor(() => expect(onStructOp).toHaveBeenCalledWith(
       'A.esm',
       String.raw`VMAD\MyScript`,
       { op: 'add_script', name: 'MyScript', flags: 'Local', properties: [] },
-    );
+    ));
   });
 
   it('remove-script control stages a remove_script op', () => {

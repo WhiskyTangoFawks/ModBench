@@ -55,6 +55,9 @@ export interface RouteRecordPanelMessageDeps {
   // Issue #211: same per-message reconstruction as formKeyPicker above, for the same reason —
   // the reply must go back to the one panel that asked.
   conditionFunctionPicker: ConditionFunctionPickerDeps | undefined;
+  // Issue #212: same per-message reconstruction as formKeyPicker/conditionFunctionPicker above.
+  revertGroupConfirm: RevertGroupConfirmDeps | undefined;
+  addScriptName: AddScriptNameDeps | undefined;
 }
 
 export interface FormKeyPickerDeps {
@@ -64,6 +67,16 @@ export interface FormKeyPickerDeps {
 
 export interface ConditionFunctionPickerDeps {
   repository: Pick<PluginRepository, 'getConditionFunctions'>;
+  reply: (msg: ExtensionToWebview) => void;
+}
+
+// Issue #212: unlike FormKeyPickerDeps/ConditionFunctionPickerDeps above, neither of these needs
+// a PluginRepository — the native prompt itself is all the work, so `reply` is the whole bundle.
+export interface RevertGroupConfirmDeps {
+  reply: (msg: ExtensionToWebview) => void;
+}
+
+export interface AddScriptNameDeps {
   reply: (msg: ExtensionToWebview) => void;
 }
 
@@ -153,6 +166,40 @@ export async function pickConditionFunctionViaQuickPick(
   return picked ?? null;
 }
 
+// Issue #212: the revert-group confirmation as a native modal warning — the webview can't call
+// vscode.window.showWarningMessage itself, only the extension host can. Takes no deps (unlike
+// the two QuickPick bridges above): RevertGroupConfirmDeps carries only `reply`, which belongs
+// to the wrapper below, not this native call. `detail` is already composed by the caller (the
+// webview, which holds the PendingChange[] members — see OPEN_REVERT_GROUP_CONFIRM's doc comment
+// in messages.ts for why the formatting lives there instead of here). Modal dialogs have no
+// Cancel button unless one is added explicitly; omitting one gives the dialog's own close
+// (Escape/outside click) as the dismiss path, resolving `undefined` the same as an explicit
+// Cancel would — so there is no separate "dismissed" branch to distinguish, matching the deleted
+// RevertGroupConfirm's onCancel not distinguishing the two either.
+export async function confirmRevertGroupViaNativeDialog(detail: string): Promise<boolean> {
+  const picked = await vscode.window.showWarningMessage(
+    'Revert this group? All linked edits are reverted together.', { modal: true, detail }, 'Revert',
+  );
+  return picked === 'Revert';
+}
+
+// Issue #212: the add-script dialog's name field as a native input box — same "webview can't
+// call the native API itself" reasoning as every bridge above, and the same no-deps shape as
+// confirmRevertGroupViaNativeDialog (AddScriptNameDeps carries only `reply`, used by the wrapper
+// below). `validateInput` enforces the empty/whitespace rejection natively (VS Code disables its
+// OK action and shows the message inline) — the same rule the deleted AddScriptDialog's
+// `confirmDisabled` enforced client-side, so a blank name can never reach the
+// ADD_SCRIPT_NAME_PICKED reply. Resolves null when the box is dismissed (Escape/blur,
+// showInputBox resolves undefined) — the caller adds nothing, same as the deleted dialog's
+// onCancel.
+export async function pickScriptNameViaInputBox(): Promise<string | null> {
+  const name = await vscode.window.showInputBox({
+    prompt: 'Script name',
+    validateInput: v => (v.trim() === '' ? 'Name is required' : null),
+  });
+  return name ?? null;
+}
+
 // Issue #211: extracted so routeRecordPanelMessage's own branch stays a single statement,
 // matching the shape of every other branch below it — the "deps present?" guard (a no-op when
 // this panel wasn't wired for the picker) and the QuickPick-then-reply sequence both live here
@@ -175,6 +222,41 @@ async function replyConditionFunctionPicked(
   deps.reply({ type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId: m.requestId, functionName });
 }
 
+// Issue #212: same shape as replyFormKeyPicked/replyConditionFunctionPicked above, for the
+// revert-group confirmation's native modal.
+async function replyRevertGroupConfirmed(
+  deps: RevertGroupConfirmDeps | undefined, m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM }>,
+): Promise<void> {
+  if (!deps) return;
+  const confirmed = await confirmRevertGroupViaNativeDialog(m.detail);
+  deps.reply({ type: EXTENSION_TO_WEBVIEW.REVERT_GROUP_CONFIRMED, requestId: m.requestId, confirmed });
+}
+
+// Issue #212: same shape again, for the add-script name's native input box.
+async function replyAddScriptNamePicked(
+  deps: AddScriptNameDeps | undefined, m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME }>,
+): Promise<void> {
+  if (!deps) return;
+  const name = await pickScriptNameViaInputBox();
+  deps.reply({ type: EXTENSION_TO_WEBVIEW.ADD_SCRIPT_NAME_PICKED, requestId: m.requestId, name });
+}
+
+// Issue #212: split out of routeRecordPanelMessage below so its own complexity doesn't grow
+// every time another *Picker/*Confirm/*Name bridge is added — these four all share the same
+// "deps optional → run the native prompt → reply" shape (see replyFormKeyPicked et al. above),
+// so they're grouped here rather than adding a fifth/sixth branch to the main dispatcher.
+async function routePromptMessage(m: WebviewToExtension, deps: RouteRecordPanelMessageDeps): Promise<void> {
+  if (m.type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER) {
+    await replyFormKeyPicked(deps.formKeyPicker, m);
+  } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER) {
+    await replyConditionFunctionPicked(deps.conditionFunctionPicker, m);
+  } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM) {
+    await replyRevertGroupConfirmed(deps.revertGroupConfirm, m);
+  } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME) {
+    await replyAddScriptNamePicked(deps.addScriptName, m);
+  }
+}
+
 // Issue #174: the record editor webview and the extension host are different processes,
 // bridged only by `postMessage` — this is the single dispatch point for every message the
 // webview sends up. Kept as a plain function (not a class/registered-handler pattern) so it's
@@ -189,9 +271,7 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
     deps.reveal?.provider.refresh();
   } else if (m.type === WEBVIEW_TO_EXTENSION.LOG) {
     deps.channel[m.level](m.message);
-  } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER) {
-    await replyFormKeyPicked(deps.formKeyPicker, m);
-  } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER) {
-    await replyConditionFunctionPicked(deps.conditionFunctionPicker, m);
+  } else {
+    await routePromptMessage(m, deps);
   }
 }

@@ -95,6 +95,16 @@ function postColumnHeaderAction(msg: ExtensionToWebview) {
   window.dispatchEvent(new MessageEvent('message', { data: msg }));
 }
 
+// Issue #212: simulates the extension host's REVERT_GROUP_CONFIRMED reply to whichever
+// OPEN_REVERT_GROUP_CONFIRM was posted most recently — same requestId-correlation shape
+// nativeBridge.test.ts exercises for every bridge it covers.
+function replyRevertGroupConfirmed(confirmed: boolean) {
+  const call = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as { requestId: string };
+  window.dispatchEvent(new MessageEvent('message', {
+    data: { type: EXTENSION_TO_WEBVIEW.REVERT_GROUP_CONFIRMED, requestId: call.requestId, confirmed },
+  }));
+}
+
 interface FakeOpts {
   changes?: unknown[];
   plugins?: unknown[];
@@ -1511,7 +1521,12 @@ const twoMemberGroup = [
 const okSave = (byPlugin: unknown, reindexFailure: unknown = null) => resp(200, { byPlugin, reindexFailure });
 
 describe('RecordPanel — Pending column save/revert (issue #139)', () => {
-  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    // Issue #212: cleared so each test's own assertions about OPEN_REVERT_GROUP_CONFIRM
+    // (posted/not-posted) aren't polluted by another test's earlier calls on this shared mock.
+    vi.mocked(vscode.postMessage).mockClear();
+  });
   afterEach(() => vi.unstubAllGlobals());
 
   // Issue #208: the pending cell's right-click menu is now VS Code's own `webview/context`
@@ -1588,6 +1603,10 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
     expect(saveGroup).not.toHaveBeenCalled();
   });
 
+  // Issue #212: the multi-member confirmation is now a native modal warning — the webview posts
+  // OPEN_REVERT_GROUP_CONFIRM (asserted via vscode.postMessage, same as every other
+  // extension-host bridge) and awaits a REVERT_GROUP_CONFIRMED reply correlated by requestId,
+  // simulated here the same way nativeBridge.test.ts simulates it for every other bridge.
   it('reverting the whole group on confirm calls revertGroup, not the single-change endpoint', async () => {
     const revertGroup = vi.fn().mockResolvedValue(resp(204));
     const groupMembers = vi.fn().mockResolvedValue(twoMemberGroup);
@@ -1595,27 +1614,32 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
     await waitFor(() => screen.getByText('Staged Name'));
 
     postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP, 'chg-1');
-    await waitFor(() => screen.getByRole('button', { name: 'Revert' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Revert' }));
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM }),
+    ));
+    replyRevertGroupConfirmed(true);
 
     await waitFor(() => expect(revertGroup).toHaveBeenCalledWith('chg-1'));
     expect(client.revert).not.toHaveBeenCalled();
   });
 
-  it('cancelling the confirmation reverts nothing', async () => {
+  it('a dismissed/cancelled confirmation reverts nothing', async () => {
     const revertGroup = vi.fn().mockResolvedValue(resp(204));
     const groupMembers = vi.fn().mockResolvedValue(twoMemberGroup);
     renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
     await waitFor(() => screen.getByText('Staged Name'));
 
     postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP, 'chg-1');
-    await waitFor(() => screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM }),
+    ));
+    replyRevertGroupConfirmed(false);
 
+    await Promise.resolve();
     expect(revertGroup).not.toHaveBeenCalled();
   });
 
-  it('Revert Group confirms for a multi-member group', async () => {
+  it('Revert Group on a multi-member group opens the native confirmation listing every linked edit, and does not revert until confirmed', async () => {
     const revertGroup = vi.fn().mockResolvedValue(resp(204));
     const groupMembers = vi.fn().mockResolvedValue(twoMemberGroup);
     renderPanel(pendingNameResult, { changes: soloChange, revertGroup, groupMembers });
@@ -1623,7 +1647,10 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
 
     postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP, 'chg-1');
 
-    await waitFor(() => expect(screen.getByText(/BoundWeapon/)).toBeInTheDocument());
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM,
+      detail: expect.stringContaining('BoundWeapon'),
+    })));
     expect(revertGroup).not.toHaveBeenCalled();
   });
 
@@ -1636,7 +1663,9 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
     postPendingCellAction(EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP, 'chg-1');
 
     await waitFor(() => expect(revertGroup).toHaveBeenCalledWith('chg-1'));
-    expect(screen.queryByRole('button', { name: 'Revert' })).not.toBeInTheDocument();
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM }),
+    );
   });
 
   // Issue #208: same self-filter guarantee as Save Group above.

@@ -1,5 +1,5 @@
 import React from 'react';
-import { pickFormKey } from './formKeyPickerBridge';
+import { pickFormKey } from './nativeBridge';
 import { FormKeyLink } from './FormKeyLink';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import type { FieldMetadata, FormKeyResolution } from './types';

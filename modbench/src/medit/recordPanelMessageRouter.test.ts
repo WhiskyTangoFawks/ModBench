@@ -3,16 +3,21 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const executeCommand = vi.fn();
 const createQuickPick = vi.fn();
 const showQuickPick = vi.fn();
+const showWarningMessage = vi.fn();
+const showInputBox = vi.fn();
 vi.mock('vscode', () => ({
   commands: { executeCommand: (...args: unknown[]) => executeCommand(...args) },
   window: {
     createQuickPick: (...args: unknown[]) => createQuickPick(...args),
     showQuickPick: (...args: unknown[]) => showQuickPick(...args),
+    showWarningMessage: (...args: unknown[]) => showWarningMessage(...args),
+    showInputBox: (...args: unknown[]) => showInputBox(...args),
   },
 }));
 
 import {
   routeRecordPanelMessage, revealPendingChange, pickFormKeyViaQuickPick, pickConditionFunctionViaQuickPick,
+  confirmRevertGroupViaNativeDialog, pickScriptNameViaInputBox,
   type RevealDeps, type FormKeyPickerDeps, type ConditionFunctionPickerDeps,
 } from './recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
@@ -28,7 +33,7 @@ import type { RecordSummary } from './ApiClient';
 // command calling the exported `revealPendingChange` directly (see the describe block below),
 // since resolving a changeId to a tree node never needed the webview in the first place.
 
-beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); });
+beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); showWarningMessage.mockClear(); showInputBox.mockClear(); });
 
 // #200: fake of the leveled 'Modbench' channel Pick the router forwards LOG messages to.
 function fakeChannel() {
@@ -97,7 +102,7 @@ describe('routeRecordPanelMessage', () => {
 
   it('OPEN_RECORD executes modbench.openEditor with formKey and label', async () => {
     const { reveal } = fakeReveal();
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: '000001:Fallout4.esm' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: '000001:Fallout4.esm' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined });
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.openEditor', { formKey: '000001:Fallout4.esm', label: '000001:Fallout4.esm' });
   });
@@ -105,7 +110,7 @@ describe('routeRecordPanelMessage', () => {
   it('an unrecognized message type is a no-op', async () => {
     const { reveal, refresh, revealFn } = fakeReveal();
 
-    await routeRecordPanelMessage({ type: 'somethingElse' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined });
+    await routeRecordPanelMessage({ type: 'somethingElse' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined });
 
     expect(executeCommand).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
@@ -113,8 +118,8 @@ describe('routeRecordPanelMessage', () => {
   });
 
   it('a non-object message is a no-op', async () => {
-    await expect(routeRecordPanelMessage('not an object', { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined })).resolves.toBeUndefined();
-    await expect(routeRecordPanelMessage(null, { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined })).resolves.toBeUndefined();
+    await expect(routeRecordPanelMessage('not an object', { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined })).resolves.toBeUndefined();
+    await expect(routeRecordPanelMessage(null, { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined })).resolves.toBeUndefined();
   });
 
   // Issue #174: the new branch — every successful pending-change mutation in the webview
@@ -122,13 +127,13 @@ describe('routeRecordPanelMessage', () => {
   it('PENDING_CHANGED refreshes the pending changes tree provider', async () => {
     const { reveal, refresh } = fakeReveal();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined });
 
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('PENDING_CHANGED with reveal deps undefined is a no-op, not a throw', async () => {
-    await expect(routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined })).resolves.toBeUndefined();
+    await expect(routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined })).resolves.toBeUndefined();
   });
 
   // Issue #200: the webview has no route to the 'Modbench' channel of its own — LOG is the
@@ -137,7 +142,7 @@ describe('routeRecordPanelMessage', () => {
     const { reveal } = fakeReveal();
     const channel = fakeChannel();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'staged edit' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'staged edit' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined });
 
     expect(channel.debug).toHaveBeenCalledWith('staged edit');
     expect(channel.info).not.toHaveBeenCalled();
@@ -148,7 +153,7 @@ describe('routeRecordPanelMessage', () => {
     const { reveal } = fakeReveal();
     const channel = fakeChannel();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'info', message: 'saved group' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'info', message: 'saved group' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined });
 
     expect(channel.info).toHaveBeenCalledWith('saved group');
     expect(channel.debug).not.toHaveBeenCalled();
@@ -159,7 +164,7 @@ describe('routeRecordPanelMessage', () => {
     const { reveal } = fakeReveal();
     const channel = fakeChannel();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'warn', message: 'rejected drop' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'warn', message: 'rejected drop' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined });
 
     expect(channel.warn).toHaveBeenCalledWith('rejected drop');
     expect(channel.debug).not.toHaveBeenCalled();
@@ -169,7 +174,7 @@ describe('routeRecordPanelMessage', () => {
   it('LOG with reveal deps undefined still forwards to the channel', async () => {
     const channel = fakeChannel();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'x' }, { reveal: undefined, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'x' }, { reveal: undefined, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined });
 
     expect(channel.debug).toHaveBeenCalledWith('x');
   });
@@ -213,7 +218,7 @@ describe('revealPendingChange (issue #208)', () => {
 });
 
 // Issue #210: the FormKey picker as a native QuickPick — the extension-host half of the bridge
-// pickFormKey (webview/src/formKeyPickerBridge.ts) talks to. Exercised directly here (like
+// pickFormKey (webview/src/nativeBridge.ts) talks to. Exercised directly here (like
 // revealPendingChange above), separately from routeRecordPanelMessage's dispatch.
 describe('pickFormKeyViaQuickPick (issue #210)', () => {
   function fakeDeps(searchRecords = vi.fn().mockResolvedValue({ items: [], total: 0 })): { deps: FormKeyPickerDeps; searchRecords: typeof searchRecords; reply: ReturnType<typeof vi.fn> } {
@@ -361,7 +366,7 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER (issue #210)', () => 
     const { reveal } = fakeReveal();
     await expect(routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: [] },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined },
     )).resolves.toBeUndefined();
     expect(createQuickPick).not.toHaveBeenCalled();
   });
@@ -375,7 +380,7 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER (issue #210)', () => 
 
     const dispatchPromise = routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: ['npc_'] },
-      { reveal, channel: fakeChannel(), formKeyPicker: { repository: { searchRecords }, reply }, conditionFunctionPicker: undefined },
+      { reveal, channel: fakeChannel(), formKeyPicker: { repository: { searchRecords }, reply }, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined },
     );
     qp.selectedItems = [{ label: 'Picked [X]', formKey: 'X' }];
     accept();
@@ -393,7 +398,7 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER (issue #210)', () => 
 
     const dispatchPromise = routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r2', seed: '', validTypes: [] },
-      { reveal, channel: fakeChannel(), formKeyPicker: { repository: { searchRecords }, reply }, conditionFunctionPicker: undefined },
+      { reveal, channel: fakeChannel(), formKeyPicker: { repository: { searchRecords }, reply }, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined },
     );
     hideWithoutAccept();
     await dispatchPromise;
@@ -460,7 +465,7 @@ describe('routeRecordPanelMessage — OPEN_CONDITION_FUNCTION_PICKER (issue #211
     const { reveal } = fakeReveal();
     await expect(routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER, requestId: 'r1', seed: '' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined },
     )).resolves.toBeUndefined();
     expect(showQuickPick).not.toHaveBeenCalled();
   });
@@ -473,7 +478,7 @@ describe('routeRecordPanelMessage — OPEN_CONDITION_FUNCTION_PICKER (issue #211
 
     await routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER, requestId: 'r1', seed: 'GetIsID' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: { repository: { getConditionFunctions }, reply } },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: { repository: { getConditionFunctions }, reply }, revertGroupConfirm: undefined, addScriptName: undefined },
     );
 
     expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId: 'r1', functionName: 'GetDistance' });
@@ -487,9 +492,148 @@ describe('routeRecordPanelMessage — OPEN_CONDITION_FUNCTION_PICKER (issue #211
 
     await routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER, requestId: 'r2', seed: '' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: { repository: { getConditionFunctions }, reply } },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: { repository: { getConditionFunctions }, reply }, revertGroupConfirm: undefined, addScriptName: undefined },
     );
 
     expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId: 'r2', functionName: null });
+  });
+});
+
+// Issue #212: the revert-group confirmation as a native modal warning — the extension-host half
+// of the bridge confirmRevertGroup (webview/src/nativeBridge.ts) talks to. Exercised
+// directly here, like pickFormKeyViaQuickPick/pickConditionFunctionViaQuickPick above. Takes no
+// deps (RevertGroupConfirmDeps carries only `reply`, exercised via routeRecordPanelMessage below).
+describe('confirmRevertGroupViaNativeDialog (issue #212)', () => {
+  it('shows a modal warning with a Revert action and the given detail text', async () => {
+    showWarningMessage.mockResolvedValue(undefined);
+
+    await confirmRevertGroupViaNativeDialog('Npc / 000001:Fallout4.esm · Name');
+
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ modal: true, detail: 'Npc / 000001:Fallout4.esm · Name' }),
+      'Revert',
+    );
+  });
+
+  it('resolves true when Revert is picked', async () => {
+    showWarningMessage.mockResolvedValue('Revert');
+
+    expect(await confirmRevertGroupViaNativeDialog('detail')).toBe(true);
+  });
+
+  it('resolves false when the modal is dismissed (Cancel or Escape/outside click)', async () => {
+    showWarningMessage.mockResolvedValue(undefined);
+
+    expect(await confirmRevertGroupViaNativeDialog('detail')).toBe(false);
+  });
+});
+
+describe('routeRecordPanelMessage — OPEN_REVERT_GROUP_CONFIRM (issue #212)', () => {
+  it('with revertGroupConfirm deps undefined is a no-op', async () => {
+    const { reveal } = fakeReveal();
+    await expect(routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM, requestId: 'r1', detail: 'x' },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined },
+    )).resolves.toBeUndefined();
+    expect(showWarningMessage).not.toHaveBeenCalled();
+  });
+
+  it('shows the modal with the given detail and replies with confirmed: true, correlated by requestId', async () => {
+    const { reveal } = fakeReveal();
+    const reply = vi.fn();
+    showWarningMessage.mockResolvedValue('Revert');
+
+    await routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM, requestId: 'r1', detail: 'Npc / X · Name' },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: { reply }, addScriptName: undefined },
+    );
+
+    expect(showWarningMessage).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ modal: true, detail: 'Npc / X · Name' }), 'Revert');
+    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.REVERT_GROUP_CONFIRMED, requestId: 'r1', confirmed: true });
+  });
+
+  it('replies with confirmed: false when the modal is dismissed', async () => {
+    const { reveal } = fakeReveal();
+    const reply = vi.fn();
+    showWarningMessage.mockResolvedValue(undefined);
+
+    await routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM, requestId: 'r2', detail: 'x' },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: { reply }, addScriptName: undefined },
+    );
+
+    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.REVERT_GROUP_CONFIRMED, requestId: 'r2', confirmed: false });
+  });
+});
+
+// Issue #212: the add-script dialog's name field as a native input box — the extension-host half
+// of the bridge pickScriptName (webview/src/nativeBridge.ts) talks to.
+describe('pickScriptNameViaInputBox (issue #212)', () => {
+  it('shows an input box with a prompt', async () => {
+    showInputBox.mockResolvedValue('MyScript');
+
+    await pickScriptNameViaInputBox();
+
+    expect(showInputBox).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.any(String) }));
+  });
+
+  it('resolves with the entered name when accepted', async () => {
+    showInputBox.mockResolvedValue('MyScript');
+
+    expect(await pickScriptNameViaInputBox()).toBe('MyScript');
+  });
+
+  it('resolves null when dismissed (Escape/blur)', async () => {
+    showInputBox.mockResolvedValue(undefined);
+
+    expect(await pickScriptNameViaInputBox()).toBeNull();
+  });
+
+  it('validateInput rejects an empty or whitespace-only name, accepts a real one', async () => {
+    showInputBox.mockResolvedValue('X');
+    await pickScriptNameViaInputBox();
+
+    const validateInput = showInputBox.mock.calls.at(-1)?.[0]?.validateInput as (v: string) => string | null | undefined;
+    expect(validateInput('')).toEqual(expect.any(String));
+    expect(validateInput('   ')).toEqual(expect.any(String));
+    expect(validateInput('MyScript')).toBeFalsy();
+  });
+});
+
+describe('routeRecordPanelMessage — OPEN_ADD_SCRIPT_NAME (issue #212)', () => {
+  it('with addScriptName deps undefined is a no-op', async () => {
+    const { reveal } = fakeReveal();
+    await expect(routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME, requestId: 'r1' },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined },
+    )).resolves.toBeUndefined();
+    expect(showInputBox).not.toHaveBeenCalled();
+  });
+
+  it('shows the input box and replies with the entered name, correlated by requestId', async () => {
+    const { reveal } = fakeReveal();
+    const reply = vi.fn();
+    showInputBox.mockResolvedValue('MyScript');
+
+    await routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME, requestId: 'r1' },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: { reply } },
+    );
+
+    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.ADD_SCRIPT_NAME_PICKED, requestId: 'r1', name: 'MyScript' });
+  });
+
+  it('replies with name: null when the input box is dismissed', async () => {
+    const { reveal } = fakeReveal();
+    const reply = vi.fn();
+    showInputBox.mockResolvedValue(undefined);
+
+    await routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME, requestId: 'r2' },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: { reply } },
+    );
+
+    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.ADD_SCRIPT_NAME_PICKED, requestId: 'r2', name: null });
   });
 });

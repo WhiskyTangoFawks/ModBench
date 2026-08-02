@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { PluginHeader } from './PluginHeader';
-import { RevertGroupConfirm } from './RevertGroupConfirm';
+import { confirmRevertGroup } from './nativeBridge';
 import { DiffRow } from './DiffRow';
 import { partialSaveMessage, staleIndexMessage } from '../../src/medit/saveClassification';
 import type { ReindexFailure, SaveResult } from '../../src/medit/saveClassification';
@@ -61,10 +61,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // without it, handleCellDrop has no way to tell a drop back onto the same cell it came from
   // apart from a real cross-column copy.
   const dragPayloadRef = useRef<{ fieldName: string; value: unknown; sourcePlugin: string } | null>(null);
-  // Issue #139: the multi-member revert confirmation Revert Group raises before dropping a
-  // whole component (#208: the menu that opens it is now native — see the LOAD_RECORD-sibling
-  // message branches below for Save Group / Revert Group's own dispatch).
-  const [revertConfirm, setRevertConfirm] = useState<{ changeId: string; members: PendingChange[] } | null>(null);
 
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
@@ -238,12 +234,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // rather than firing the backend's 409 for a partial group revert (ADR-0028). The member
   // count comes from GET /changes for this change's component; a failed read yields [] and
   // takes the no-confirmation path, never a raw 409.
+  // Issue #212: the confirmation itself is now a native modal warning (confirmRevertGroup) —
+  // the deleted RevertGroupConfirm's per-member "recordType / formKey · fieldPath" listing is
+  // composed here into the modal's detail text, since the webview already holds these members
+  // from groupMembers() above (no extension-host fetch needed, unlike the FormKey/condition-
+  // function QuickPick bridges).
   async function handleRevertGroup(changeId: string) {
     setActionError(null);
     const members = await client.groupMembers(changeId);
     if (members.length > 1) {
-      setRevertConfirm({ changeId, members });
-      return;
+      const detail = members.map(m => `${m.recordType ?? ''} / ${m.formKey ?? ''} · ${m.fieldPath ?? ''}`).join('\n');
+      const confirmed = await confirmRevertGroup(detail);
+      if (!confirmed) return;
     }
     await revertGroup(changeId);
   }
@@ -728,13 +730,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
           </tbody>
         </table>
       </div>
-      {revertConfirm && (
-        <RevertGroupConfirm
-          members={revertConfirm.members}
-          onCancel={() => setRevertConfirm(null)}
-          onConfirm={() => { const id = revertConfirm.changeId; setRevertConfirm(null); void revertGroup(id); }}
-        />
-      )}
     </div>
   );
 }

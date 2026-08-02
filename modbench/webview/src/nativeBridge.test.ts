@@ -1,0 +1,195 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
+
+import { vscode } from './vscode';
+import { pickFormKey, pickConditionFunction, confirmRevertGroup, pickScriptName } from './nativeBridge';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
+
+// Issue #212 (refactor): formKeyPickerBridge.ts (#210), conditionFunctionPickerBridge.ts (#211),
+// and revertGroupConfirmBridge.ts/addScriptBridge.ts (#212) collapsed into nativeBridge.ts — all
+// four shared the same request/reply-correlated-by-requestId mechanism, differing only in which
+// message types they used and which field the reply's payload lived under. The shared mechanism
+// (resolve-on-match, ignore-a-mismatched-requestId, ignore-unrelated-message-types) is exercised
+// once below via pickFormKey as the exemplar — every function goes through the same
+// `requestReply` — so each function's own suite only needs to prove its own request shape and
+// its own reply's payload field, not the plumbing again.
+
+function postedRequestId(): string {
+  const call = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+  return call.requestId;
+}
+
+beforeEach(() => {
+  vi.mocked(vscode.postMessage).mockClear();
+});
+
+describe('nativeBridge shared request/reply mechanism (exercised via pickFormKey)', () => {
+  it('resolves from the matching reply, correlated by requestId — a concurrent call is untouched', async () => {
+    const firstPromise = pickFormKey('', []);
+    const firstRequestId = postedRequestId();
+    const secondPromise = pickFormKey('', []);
+    const secondRequestId = postedRequestId();
+    expect(firstRequestId).not.toBe(secondRequestId);
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: secondRequestId, formKey: 'second' },
+    }));
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: firstRequestId, formKey: 'first' },
+    }));
+
+    expect(await firstPromise).toBe('first');
+    expect(await secondPromise).toBe('second');
+  });
+
+  it('ignores unrelated message types', async () => {
+    const resultPromise = pickFormKey('', []);
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'somethingElse' } }));
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId, formKey: 'X' },
+    }));
+
+    expect(await resultPromise).toBe('X');
+  });
+
+  it('ignores a reply for the right requestId but the wrong reply type', async () => {
+    // Guards the replyType check inside the shared listener — a requestId collision across two
+    // different bridges should never happen in practice (the counter is global to the module),
+    // but this proves the listener doesn't resolve on requestId alone.
+    const resultPromise = pickFormKey('', []);
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId, functionName: 'wrong-bridge' },
+    }));
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId, formKey: 'right-bridge' },
+    }));
+
+    expect(await resultPromise).toBe('right-bridge');
+  });
+});
+
+describe('pickFormKey', () => {
+  it('posts OPEN_FORM_KEY_PICKER with the seed and validTypes', () => {
+    void pickFormKey('000019:Fallout4.esm', ['race']);
+
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER,
+      seed: '000019:Fallout4.esm',
+      validTypes: ['race'],
+    }));
+  });
+
+  it('resolves null when the reply carries formKey: null (Escape/blur)', async () => {
+    const resultPromise = pickFormKey('', []);
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId, formKey: null },
+    }));
+
+    expect(await resultPromise).toBeNull();
+  });
+});
+
+describe('pickConditionFunction', () => {
+  it('posts OPEN_CONDITION_FUNCTION_PICKER with the seed', () => {
+    void pickConditionFunction('GetIsID');
+
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER,
+      seed: 'GetIsID',
+    }));
+  });
+
+  it('resolves the function name from the matching reply', async () => {
+    const resultPromise = pickConditionFunction('');
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId, functionName: 'GetDistance' },
+    }));
+
+    expect(await resultPromise).toBe('GetDistance');
+  });
+
+  it('resolves null when the reply carries functionName: null (Escape/blur)', async () => {
+    const resultPromise = pickConditionFunction('');
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId, functionName: null },
+    }));
+
+    expect(await resultPromise).toBeNull();
+  });
+});
+
+describe('confirmRevertGroup', () => {
+  it('posts OPEN_REVERT_GROUP_CONFIRM with the given detail text', () => {
+    void confirmRevertGroup('Npc / 000001:Fallout4.esm · Name');
+
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM,
+      detail: 'Npc / 000001:Fallout4.esm · Name',
+    }));
+  });
+
+  it('resolves true when the reply carries confirmed: true', async () => {
+    const resultPromise = confirmRevertGroup('detail');
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.REVERT_GROUP_CONFIRMED, requestId, confirmed: true },
+    }));
+
+    expect(await resultPromise).toBe(true);
+  });
+
+  it('resolves false when the reply carries confirmed: false (Cancel or Escape/outside click)', async () => {
+    const resultPromise = confirmRevertGroup('detail');
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.REVERT_GROUP_CONFIRMED, requestId, confirmed: false },
+    }));
+
+    expect(await resultPromise).toBe(false);
+  });
+});
+
+describe('pickScriptName', () => {
+  it('posts OPEN_ADD_SCRIPT_NAME', () => {
+    void pickScriptName();
+
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME,
+    }));
+  });
+
+  it('resolves the name from the matching reply', async () => {
+    const resultPromise = pickScriptName();
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.ADD_SCRIPT_NAME_PICKED, requestId, name: 'MyScript' },
+    }));
+
+    expect(await resultPromise).toBe('MyScript');
+  });
+
+  it('resolves null when the reply carries name: null (Escape/blur)', async () => {
+    const resultPromise = pickScriptName();
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.ADD_SCRIPT_NAME_PICKED, requestId, name: null },
+    }));
+
+    expect(await resultPromise).toBeNull();
+  });
+});
