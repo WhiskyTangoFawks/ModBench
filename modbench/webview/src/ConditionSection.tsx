@@ -9,7 +9,7 @@ import { baseCell, headerCell, toggleBtnStyle, getCellStyle, mono, fg } from './
 import { FormKeyLink } from './FormKeyLink';
 import { FormKeyCell } from './FormKeyCell';
 import { ScalarCell } from './ScalarCell';
-import { pickConditionFunction } from './conditionFunctionPickerBridge';
+import { pickConditionFunction } from './nativeBridge';
 import { CONDITION_SUBFIELD_WIRE, conditionFieldPath, conditionParamPath } from './conditionPath';
 import { applyConditionListOp, currentConditionList, overlayPendingEdits } from './conditionOps';
 
@@ -104,8 +104,8 @@ function rowHasConflict(cellStates: Record<string, ConflictThis>): boolean {
 
 // Bound to one field's own wire path — editors just call onCommit(value) like any ScalarCell/
 // FormKeyCell in the rest of the grid. Issue #211: no longer carries `client` — the function
-// field's editor (the only past consumer) now goes through the conditionFunctionPickerBridge
-// instead of RecordSessionClient.conditionFunctions().
+// field's editor (the only past consumer) now goes through nativeBridge.ts's
+// pickConditionFunction instead of RecordSessionClient.conditionFunctions().
 interface FieldEditCtx {
   onOpen: (fk: string) => void;
   onCommit: (value: unknown) => void;

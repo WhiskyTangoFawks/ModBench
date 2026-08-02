@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { mono, fg } from './gridStyles';
-import { pickFormKey } from './formKeyPickerBridge';
+import { pickFormKey } from './nativeBridge';
 
 const OBJ_RE = /^(.+?)\s*\[(-?\d+)\]\s*$/;
 

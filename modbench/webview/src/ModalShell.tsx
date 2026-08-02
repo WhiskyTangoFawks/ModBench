@@ -7,7 +7,7 @@ import { mono } from './gridStyles';
 //
 // Issue #212: the revert-group confirmation and the add-script dialog were both converted to
 // native VS Code prompts (a modal showWarningMessage and a showInputBox respectively — see
-// revertGroupConfirmBridge.ts/addScriptBridge.ts) and deleted from here. AddPropertyDialog
+// nativeBridge.ts's confirmRevertGroup/pickScriptName) and deleted from here. AddPropertyDialog
 // (VmadPropertyOps.tsx) is this shell's one remaining, deliberate user: it collects three fields
 // at once (name, type, value — the value control itself varying by type, including a FormKey
 // picker for Object-typed properties), and a multi-step QuickPick chain to gather them one at a

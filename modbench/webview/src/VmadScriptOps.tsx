@@ -1,6 +1,6 @@
 import React from 'react';
 import { fg, mono } from './gridStyles';
-import { pickScriptName } from './addScriptBridge';
+import { pickScriptName } from './nativeBridge';
 import { SCRIPT_FLAGS, type OnStructOp } from './vmadOps';
 
 // ── structural ops (13.8.2): add / remove script ───────────────────────────────

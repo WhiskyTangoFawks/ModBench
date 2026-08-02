@@ -7,7 +7,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 // instead of rendering an inline picker. Mocked here so these tests assert the call, not any
 // rendered picker DOM.
 const pickFormKey = vi.fn().mockResolvedValue(null);
-vi.mock('./formKeyPickerBridge', () => ({ pickFormKey: (...args: unknown[]) => pickFormKey(...args) }));
+vi.mock('./nativeBridge', () => ({ pickFormKey: (...args: unknown[]) => pickFormKey(...args) }));
 
 import { AddPropertyButton, AddPropertyDialog, RemovePropertyButton, SetTypeControl, PropertyFlagsControl } from './VmadPropertyOps';
 

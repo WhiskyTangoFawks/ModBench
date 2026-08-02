@@ -218,7 +218,7 @@ describe('revealPendingChange (issue #208)', () => {
 });
 
 // Issue #210: the FormKey picker as a native QuickPick — the extension-host half of the bridge
-// pickFormKey (webview/src/formKeyPickerBridge.ts) talks to. Exercised directly here (like
+// pickFormKey (webview/src/nativeBridge.ts) talks to. Exercised directly here (like
 // revealPendingChange above), separately from routeRecordPanelMessage's dispatch.
 describe('pickFormKeyViaQuickPick (issue #210)', () => {
   function fakeDeps(searchRecords = vi.fn().mockResolvedValue({ items: [], total: 0 })): { deps: FormKeyPickerDeps; searchRecords: typeof searchRecords; reply: ReturnType<typeof vi.fn> } {
@@ -500,7 +500,7 @@ describe('routeRecordPanelMessage — OPEN_CONDITION_FUNCTION_PICKER (issue #211
 });
 
 // Issue #212: the revert-group confirmation as a native modal warning — the extension-host half
-// of the bridge confirmRevertGroup (webview/src/revertGroupConfirmBridge.ts) talks to. Exercised
+// of the bridge confirmRevertGroup (webview/src/nativeBridge.ts) talks to. Exercised
 // directly here, like pickFormKeyViaQuickPick/pickConditionFunctionViaQuickPick above. Takes no
 // deps (RevertGroupConfirmDeps carries only `reply`, exercised via routeRecordPanelMessage below).
 describe('confirmRevertGroupViaNativeDialog (issue #212)', () => {
@@ -568,7 +568,7 @@ describe('routeRecordPanelMessage — OPEN_REVERT_GROUP_CONFIRM (issue #212)', (
 });
 
 // Issue #212: the add-script dialog's name field as a native input box — the extension-host half
-// of the bridge pickScriptName (webview/src/addScriptBridge.ts) talks to.
+// of the bridge pickScriptName (webview/src/nativeBridge.ts) talks to.
 describe('pickScriptNameViaInputBox (issue #212)', () => {
   it('shows an input box with a prompt', async () => {
     showInputBox.mockResolvedValue('MyScript');

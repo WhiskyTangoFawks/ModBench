@@ -3,13 +3,13 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('./addScriptBridge', () => ({ pickScriptName: vi.fn() }));
+vi.mock('./nativeBridge', () => ({ pickScriptName: vi.fn() }));
 
 import { AddScriptButton, RemoveScriptButton, ScriptFlagsControl } from './VmadScriptOps';
-import { pickScriptName } from './addScriptBridge';
+import { pickScriptName } from './nativeBridge';
 
 // Issue #212: the add-script dialog (ModalShell + name/flags fields) was deleted — "Add script"
-// is now a native input box (pickScriptName, webview/src/addScriptBridge.ts) collecting one
+// is now a native input box (pickScriptName, webview/src/nativeBridge.ts) collecting one
 // field, a name. Flags are no longer chosen at creation time (new scripts always start 'Local',
 // per the issue's explicit "one field, a name"); ScriptFlagsControl below remains the only way
 // to change a script's flags, same as it already was for every script after its first add.

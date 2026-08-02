@@ -6,7 +6,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 // Issue #210: FormKeyCell (rendered for formKey-typed fields) now imports the pickFormKey
 // bridge, which touches vscode.ts's acquireVsCodeApi() at module load — stubbed here since
 // these tests don't exercise the picker itself (see FormKeyCell.test.tsx for that).
-vi.mock('./formKeyPickerBridge', () => ({ pickFormKey: vi.fn().mockResolvedValue(null) }));
+vi.mock('./nativeBridge', () => ({ pickFormKey: vi.fn().mockResolvedValue(null) }));
 
 import { DiffRow } from './DiffRow';
 import type { Column } from './recordUtils';

@@ -97,7 +97,7 @@ function postColumnHeaderAction(msg: ExtensionToWebview) {
 
 // Issue #212: simulates the extension host's REVERT_GROUP_CONFIRMED reply to whichever
 // OPEN_REVERT_GROUP_CONFIRM was posted most recently — same requestId-correlation shape
-// formKeyPickerBridge/conditionFunctionPickerBridge tests exercise for their own bridges.
+// nativeBridge.test.ts exercises for every bridge it covers.
 function replyRevertGroupConfirmed(confirmed: boolean) {
   const call = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as { requestId: string };
   window.dispatchEvent(new MessageEvent('message', {
@@ -1606,7 +1606,7 @@ describe('RecordPanel — Pending column save/revert (issue #139)', () => {
   // Issue #212: the multi-member confirmation is now a native modal warning — the webview posts
   // OPEN_REVERT_GROUP_CONFIRM (asserted via vscode.postMessage, same as every other
   // extension-host bridge) and awaits a REVERT_GROUP_CONFIRMED reply correlated by requestId,
-  // simulated here the same way formKeyPickerBridge/conditionFunctionPickerBridge tests do.
+  // simulated here the same way nativeBridge.test.ts simulates it for every other bridge.
   it('reverting the whole group on confirm calls revertGroup, not the single-change endpoint', async () => {
     const revertGroup = vi.fn().mockResolvedValue(resp(204));
     const groupMembers = vi.fn().mockResolvedValue(twoMemberGroup);

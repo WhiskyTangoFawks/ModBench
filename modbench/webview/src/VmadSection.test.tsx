@@ -6,12 +6,17 @@ import { describe, it, expect, vi } from 'vitest';
 // Issue #210: VmadObjectEditor now imports the pickFormKey bridge, which touches vscode.ts's
 // acquireVsCodeApi() at module load — stubbed here since these tests don't exercise the picker
 // itself (see VmadObjectEditor.test.tsx for that).
-vi.mock('./formKeyPickerBridge', () => ({ pickFormKey: vi.fn().mockResolvedValue(null) }));
+//
 // Issue #212: same reasoning, for AddScriptButton's pickScriptName bridge (see
-// VmadScriptOps.test.tsx for coverage of the bridge itself).
-vi.mock('./addScriptBridge', () => ({ pickScriptName: vi.fn().mockResolvedValue(null) }));
+// VmadScriptOps.test.tsx for coverage of the bridge itself) — both bridges now live in the
+// single nativeBridge.ts module (refactor), so they're mocked in one vi.mock call rather than
+// two, which would just overwrite each other.
+vi.mock('./nativeBridge', () => ({
+  pickFormKey: vi.fn().mockResolvedValue(null),
+  pickScriptName: vi.fn().mockResolvedValue(null),
+}));
 
-import { pickScriptName } from './addScriptBridge';
+import { pickScriptName } from './nativeBridge';
 import { VmadSection } from './VmadSection';
 import type { Column } from './recordUtils';
 import { pendingCellContext } from './recordUtils';

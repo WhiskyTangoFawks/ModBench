@@ -6,14 +6,18 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 // Issue #210: FormKeyCell (rendered for formKey-typed fields) now imports the pickFormKey
 // bridge, which touches vscode.ts's acquireVsCodeApi() at module load — stubbed here since
 // these tests don't exercise the picker itself (see FormKeyCell.test.tsx for that).
-vi.mock('./formKeyPickerBridge', () => ({ pickFormKey: vi.fn().mockResolvedValue(null) }));
-
+//
 // Issue #211: the function field's editor now calls pickConditionFunction (the native-QuickPick
 // bridge) instead of rendering the deleted ConditionFunctionPicker inline dropdown — mocked here
-// so these tests assert the call/resolution, not any picker DOM (the picker itself is unit-tested
-// in conditionFunctionPickerBridge.test.ts and recordPanelMessageRouter.test.ts).
+// so these tests assert the call/resolution, not any picker DOM (the picker itself is
+// unit-tested in nativeBridge.test.ts and recordPanelMessageRouter.test.ts).
+//
+// Issue #212 (refactor): both bridges now live in the single nativeBridge.ts module, so they're
+// mocked in one vi.mock call rather than two — a second vi.mock('./nativeBridge', ...) here
+// would just overwrite the first.
 const pickConditionFunction = vi.fn().mockResolvedValue(null);
-vi.mock('./conditionFunctionPickerBridge', () => ({
+vi.mock('./nativeBridge', () => ({
+  pickFormKey: vi.fn().mockResolvedValue(null),
   pickConditionFunction: (...args: unknown[]) => pickConditionFunction(...args),
 }));
 
