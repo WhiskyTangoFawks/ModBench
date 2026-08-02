@@ -85,7 +85,9 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
     manipulation.
 13. As a user, I want to click any cell — including one in a read-only plugin — and select and copy
     its text the way I would in any other text field, so that I can lift a value out of the grid to
-    use in a script, a patch, or another tool without retyping it.
+    use in a script, a patch, or another tool without retyping it. (Met in full on an immutable
+    column; on a mutable one the bounded-choice types activate a control rather than text — see the
+    gesture matrix, which states the limit and why it stands.)
 13. As a user, I want to save or revert a pending value from here — acting on that change's
     whole ChangeGroup, never on part of one — or copy a specific plugin's version of the whole
     record into another plugin, so that I control exactly what gets written and where without
@@ -110,10 +112,12 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
 One gesture, one meaning, everywhere a value lives in this panel — the compare grid, VMAD, and
 Condition sections alike ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md)):
 
-- **Left-click** — activate this cell's text surface. The only thing plain click ever does, on any
-  cell. Never navigation, never reveal, never a menu. On a mutable column (disk or pending alike)
-  that surface is an editor and commits on blur; on an immutable column it is the same surface,
-  read-only, committing nothing. **The cursor states the difference between resting and activated,
+- **Left-click** — activate this cell's editing surface. The only thing plain click ever does, on
+  any cell. Never navigation, never reveal, never a menu. On a mutable column (disk or pending
+  alike) that surface is an editor and commits on blur; on an immutable column it is the same
+  surface, read-only, committing nothing. It is a *text* surface in every case except the
+  bounded-choice types on a mutable column, which activate a control instead — see the gesture
+  matrix below, which is where that distinction stops being cosmetic. **The cursor states the difference between resting and activated,
   not between the column kinds**: at rest every value cell shows `grab` and is a drag source with
   no selectable text; clicked, it shows a caret, and selection, `Ctrl+C` and `Ctrl+V` behave
   natively (ADR-0033's cursor-contract amendment). Struct and array *summary* rows are the one
@@ -153,6 +157,80 @@ Condition sections alike ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-
 No cell shows an affordance for an action it cannot perform — a cell's resting cursor reflects
 every gesture actually available on it (drag is possible regardless of mutability, so its cursor
 shows that at rest), not just whichever leaf renderer happens to own the pixel under the pointer.
+
+### Gesture matrix
+
+The rules above say what each gesture *means*. This says where each one is actually *available*,
+which is not uniform and cannot be guessed from the rules — the gaps below are consequences of one
+mechanism, not a list of decisions, so read the chain first and the table will predict itself.
+
+#### Why click-to-edit is what makes a value copyable
+
+Copy is not a feature of this panel. It is a side effect of click-to-edit, and it exists only where
+click-to-edit produces a *text* surface. The chain:
+
+1. A value cell is `draggable` at rest, so drag-to-copy works from every column, mutable or not.
+2. **`draggable` consumes the mousedown that would begin a selection.** So no text on a resting
+   cell can ever be highlighted, and `user-select: text` on one is dead letter. These are not two
+   design choices — they are the same fact, and it is why a Copy *command* looked necessary before
+   ADR-0033's amendment.
+3. Left-click activates a surface. That surface is a real `<input>` **specifically so** the cell's
+   own focus watcher sees it and sets `draggable={false}`.
+4. Only now is there anything to highlight — because the drag stood down.
+
+So: drag suppresses selection → click stands the drag down → selection becomes possible → `Ctrl+C`
+and `Ctrl+V` are the platform's, with no extension code in either process.
+
+The corollary is the whole of what "immutable" means here: **an immutable column gets an edit it
+cannot edit, purely so there is something to copy from** — a `readOnly` input, editor-shaped,
+visibly inert, committing nothing. ADR-0033's "that is the only difference between the two column
+kinds" is meant literally.
+
+#### The two states
+
+| | At rest | Activated |
+| --- | --- | --- |
+| Cursor | `grab` | caret, when the surface is text |
+| Drag out | ✔ both column kinds | ✘ suppressed |
+| Drop in | ✔ mutable only | ✘ |
+| Highlight text | ✘ **never** | ✔ if the surface is a text input |
+| Edit | ✘ | ✔ mutable only |
+
+#### Availability by cell
+
+| Cell | Drag at rest | Click activates — mutable / immutable | Highlightable once active |
+| --- | --- | --- | --- |
+| `string`, `int`, `float` | ✔ | text input / read-only input | ✔ both |
+| `bool` | ✔ | checkbox / read-only input | immutable only |
+| `enum` | ✔ | `<select>` / read-only input | immutable only |
+| `flags` | ✔ | checkbox group / read-only input | immutable only |
+| `formKey` | ✔ | QuickPick / read-only input | immutable; mutable unverified (#218) |
+| empty (`—`) | ✔ | editor / **nothing** | — |
+| struct / array summary | ✔ | **nothing** / **nothing** | — |
+| VMAD leaf | ✘ (#219) | editor / **nothing** (#219) | mutable only |
+| field-name column | ✘ | — | ✔ **always** |
+
+Two rows are worth reading twice. The **field-name column** is the only cell where text can be
+highlighted at rest, and the only reason is that it is not a drag source — nothing eats the
+mousedown. And **VMAD** is the one section where the chain does not hold at all: its cells carry no
+`draggable`, so step 1 never happens, and an immutable VMAD leaf never activates anything, so step 3
+never happens either. ADR-0033's claim to govern "the compare grid, VMAD, and Condition sections
+alike" is therefore not yet true of VMAD (#219). The Condition section renders the same cell
+components as the compare grid and inherits all of this.
+
+#### The one rule that predicts the table
+
+> **Copy is available wherever click-to-edit produces a text surface.** On an immutable column that
+> is always. On a mutable column it is `string`/`int`/`float` only, because `bool`, `enum` and
+> `flags` activate a control instead — the same reason those types take no paste.
+
+So the read-only column can hand you its value and the editable one cannot, for the four
+bounded-choice types. That is the inverse of the obvious expectation and it is **a documented
+limit, not a defect**: on a mutable column left-click is spent on the editor, and for a value chosen
+from a bounded list the editor is not text. Closing it would need a second gesture on those cells,
+and there is none free — plain click is the editor, `Ctrl+click` is navigation, right-click is the
+group/header menu. Such a value is moved by drag, or read from the same field in an immutable
+column.
 
 ### The panel
 
@@ -256,11 +334,14 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
   and pasted as text** when the target isn't conveniently reachable by drag, or lives outside
   mEdit entirely. That path uses no mEdit command: click the source cell to activate its text
   surface, `Ctrl+C`, click the target, `Ctrl+V`. It is therefore available exactly where a text
-  surface is — every cell for copy (including immutable columns), and for paste the `string`,
-  `int`, `float` and `formKey` types on a mutable column. `bool`, `enum` and `flags` cells
-  activate a control rather than a text field when mutable, so they take no paste; a value is
-  moved into them by drag or by their own editor. This is deliberate and not a gap to close: those
-  types are chosen from a bounded list, which is the case clipboard transfer exists to avoid.
+  surface is — **every cell in an immutable column** for copy, and on a mutable column the
+  `string`, `int` and `float` types for both copy and paste, plus `formKey` for paste (into its
+  picker). `bool`, `enum` and `flags` cells activate a control rather than a text field when
+  mutable, so on that column they take **neither** copy nor paste; a value is moved into them by
+  drag or by their own editor, and read out of them from the same field in an immutable column.
+  This is deliberate and not a gap to close: those types are chosen from a bounded list, which is
+  the case clipboard transfer exists to avoid. See the gesture matrix under Interaction model for
+  the full availability table and the mechanism that produces it.
 
 ### Pending column
 
