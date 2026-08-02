@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ReadOnlyValueSurface } from './ReadOnlyValueSurface';
 import type { FieldMetadata } from './types';
 
 interface FlagCellProps {
@@ -33,14 +34,28 @@ export function FlagCell({ value, meta, editable, onCommit }: FlagCellProps) {
   const num = toBigInt(value);
   const bits = meta.enumBitValues.map(BigInt);
 
-  if (!editable || !active) {
-    const text = value == null
+  // Issue #201: the active flag *names* are what this cell displays, so they are what it has to
+  // be able to hand over — the bitmask integer behind them is not something the user ever saw.
+  // Null and "no bits set" both render `—`, a placeholder rather than a value, and collapse to
+  // the same null here so neither offers a surface (ADR-0033's struct/array exception).
+  const names = value == null
+    ? null
+    : meta.enumValues.filter((_, i) => (num & bits[i]) !== 0n).join(', ') || null;
+
+  if (!active) {
+    const text = names === null
       ? <span style={{ opacity: 0.35 }}>—</span>
-      : <span>{meta.enumValues.filter((_, i) => (num & bits[i]) !== 0n).join(', ') || '—'}</span>;
-    return editable
-      ? <span onClick={() => setActive(true)} style={{ cursor: 'pointer' }}>{text}</span>
-      : text;
+      : <span>{names}</span>;
+    if (!editable && names === null) return text;
+    // Issue #201 / #204 / ADR-0033: no cursor override — the parent DiskCell's `grab` is this
+    // cell's resting affordance, since it is a drag source the whole time. The `pointer` that
+    // used to be here advertised the click and painted over the drag, which is the same false
+    // promise #204 removed from ScalarCell and #218 removed from FormKeyLink.
+    return <span onClick={() => setActive(true)}>{text}</span>;
   }
+
+  // Issue #201: an immutable column activates a read-only surface instead of the multi-select.
+  if (!editable) return <ReadOnlyValueSurface value={names ?? ''} onBlur={() => setActive(false)} />;
 
   return (
     // The multi-select is a group, so it closes when focus leaves the group as a whole — not

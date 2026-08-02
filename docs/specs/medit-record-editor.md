@@ -2,11 +2,13 @@
 
 **Status: Implemented, with the interaction model below (ADR-0033) partway shipped.** Left-click-
 edits-everywhere and column-header consolidation are tracked in #198–#203. The cursor contract
-(ADR-0033's amendment — at rest a cell is a drag source, clicked it is a text surface) is decided
-and partly shipped: the FormKey label is the `EditorID [FormKey]` composite and the picker accepts
-it back (#218), but an immutable cell still has no click affordance, so there is no surface to
-select that text from yet (#201). One known gap is called out where it bites: FormKey resolution
-(#141).
+(ADR-0033's amendment — at rest a cell is a drag source, clicked it is a text surface) is shipped
+for the field grid: the FormKey label is the `EditorID [FormKey]` composite and the picker accepts
+it back (#218), and every value-bearing cell in an immutable column now activates a read-only
+surface to select and copy from, with both surfaces selecting on focus (#201). The VMAD section is
+the remaining gap — its cells are not drag sources at all and an immutable VMAD leaf still has no
+surface, so ADR-0033's "the compare grid, VMAD, and Condition sections alike" is not yet true of
+VMAD. One further known gap is called out where it bites: FormKey resolution (#141).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
@@ -198,6 +200,12 @@ shows that at rest), not just whichever leaf renderer happens to own the pixel u
   ancestor would otherwise swallow text selection inside the input) — which is precisely what
   makes selection possible once the surface is up, and is why the read-only surface is a real
   `<input readOnly>` rather than a styled span.
+  **A cell rendering a placeholder activates nothing**, extending ADR-0033's struct/array
+  exception to every case where the cell displays something that is not its value: an empty
+  immutable cell (`—`, whether the value is null or a bitmask with no bits set) and an immutable
+  FormKey cell with no reference. A surface there would offer an empty selection that reads as a
+  successful copy. The exception is one-sided — a **mutable** empty cell keeps its click
+  affordance, or the field could never be given a value in the first place.
 - **Cells render by field schema type**: strings/numbers/bools as text/number/toggle inputs;
   enums as their name via a `<select>`; flags as active flag names via a per-flag multi-select;
   FormKeys as a link — `Ctrl+click` follows it, plain click on a mutable column opens a native

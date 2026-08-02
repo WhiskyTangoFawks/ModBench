@@ -317,11 +317,11 @@ interface LeafCellCtx {
 function ClickToEdit({ read, children }: Readonly<{ read: React.ReactNode; children: React.ReactNode }>) {
   const [active, setActive] = useState(false);
   if (!active) {
+    // Issue #201 / ADR-0033: no resting cursor. `cursor: 'text'` here was a caret on a cell with
+    // nothing selectable on it — a caret promises "text you select", and there is none until the
+    // click has swapped in the editor below.
     return (
-      <span
-        onClick={e => { if (!e.ctrlKey && !e.metaKey) setActive(true); }}
-        style={{ cursor: 'text' }}
-      >{read}</span>
+      <span onClick={e => { if (!e.ctrlKey && !e.metaKey) setActive(true); }}>{read}</span>
     );
   }
   return (

@@ -99,12 +99,21 @@ describe('DiffRow — top-level scalar row', () => {
 });
 
 describe('DiffRow — editability follows immutableSet', () => {
-  it('an immutable column renders read-only text, not an input', () => {
-    renderRow();
-    // Fallout4.esm is immutable per baseProps — clicking its cell must not produce an input.
-    const cells = screen.getAllByText('disk-value');
-    fireEvent.click(cells[0]);
-    expect(screen.queryByDisplayValue('disk-value')).not.toBeInTheDocument();
+  // Issue #201 / ADR-0033: this test's mechanism is superseded, its intent is not. An immutable
+  // column used to produce no input at all — that absence *was* the gap, since it left the value
+  // with no way out of the cell. It now activates a surface like any other cell; what makes the
+  // column immutable is `readOnly` and that nothing stages, not the lack of an input.
+  it('an immutable column activates a read-only surface, never an editable one', () => {
+    const onEdit = vi.fn();
+    renderRow({ onEdit });
+    // Fallout4.esm is immutable per baseProps.
+    fireEvent.click(screen.getAllByText('disk-value')[0]);
+
+    const surface = screen.getByDisplayValue('disk-value');
+    expect(surface).toHaveAttribute('readonly');
+    fireEvent.change(surface, { target: { value: 'new-value' } });
+    fireEvent.blur(surface);
+    expect(onEdit).not.toHaveBeenCalled();
   });
 
   it('a mutable column click activates an editable input', () => {
@@ -143,6 +152,28 @@ describe('DiffRow — drag affordance on leaf cells', () => {
     fireEvent.drop(cell);
     expect(onCellDrop).toHaveBeenCalledWith('Name', 'MyMod.esp', expect.any(Function));
   });
+
+  // Issue #201 / ADR-0033 — the whole cursor contract in one test, at the seam where the two
+  // halves meet. An immutable cell used to be a drag source for its entire lifetime, which is
+  // exactly why `userSelect: 'text'` on it was dead letter: `draggable` consumes the mousedown
+  // that would start a selection. The read-only surface is a real <input> precisely so that
+  // DiskCell's existing focus watcher sees it and stands the drag down — no new wiring, and the
+  // cursor flips from `grab` to a caret for free. Blur hands the cell back.
+  it('stands the drag down while an immutable cell has its read-only surface active', () => {
+    renderRow();
+    const cell = screen.getAllByText('disk-value')[0].closest('td')!;
+    expect(cell).toHaveAttribute('draggable', 'true');
+    expect(cell.style.cursor).toBe('grab');
+
+    fireEvent.click(screen.getAllByText('disk-value')[0]);
+    const surface = screen.getByDisplayValue('disk-value');
+    expect(cell).toHaveAttribute('draggable', 'false');
+    expect(cell.style.cursor).not.toBe('grab');
+
+    fireEvent.blur(surface);
+    expect(cell).toHaveAttribute('draggable', 'true');
+    expect(cell.style.cursor).toBe('grab');
+  });
 });
 
 // Issue #204 / ADR-0033: a struct/array field's collapsed summary row is a drag source too —
@@ -174,6 +205,20 @@ describe('DiffRow — drag affordance on compound (hasChildren) cells', () => {
     const cell = screen.getAllByText('[2]')[1].closest('td')!;
     fireEvent.drop(cell);
     expect(onCellDrop).toHaveBeenCalledWith('Items', 'MyMod.esp', expect.any(Function));
+  });
+
+  // Issue #201 / ADR-0033, AC 8 — the one exception to the cursor contract. `[2]` and `{…}` are
+  // placeholders, not values: a surface here would hand over the literal string `[2]`, which is
+  // worse than nothing because it looks like a successful copy. They stay pure drag sources, and
+  // the leaves are reachable by expanding the row.
+  it('a collapsed summary activates no surface and stays a drag source', () => {
+    renderCompoundRow();
+    const cell = screen.getAllByText('[2]')[0].closest('td')!;
+    fireEvent.click(screen.getAllByText('[2]')[0]);
+
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(cell).toHaveAttribute('draggable', 'true');
+    expect(cell.style.cursor).toBe('grab');
   });
 });
 

@@ -196,16 +196,20 @@ describe('RecordPanel', () => {
     expect(screen.queryByText('Save')).not.toBeInTheDocument();
   });
 
-  // Issue #111: a cell in an immutable column never activates an input, however it is clicked
-  // (spec: field-type rendering rule 6, story 17). Before this, editMode reached the cells with
-  // no per-column mutability check, so a read-only column rendered inputs whose PATCH the
-  // backend then rejected with a 409 "Plugin is read-only".
-  it('a cell in an immutable column renders no input when clicked', async () => {
+  // Issue #111: a cell in an immutable column never activates an *editable* input, however it is
+  // clicked (spec: field-type rendering rule 6, story 17). Before this, editMode reached the
+  // cells with no per-column mutability check, so a read-only column rendered inputs whose PATCH
+  // the backend then rejected with a 409 "Plugin is read-only".
+  //
+  // Issue #201 / ADR-0033: it does now activate an input — a `readOnly` one, which stages nothing
+  // and so cannot reach that PATCH. The 409 this test was written to prevent stays prevented; the
+  // absence of any input at all was never the point, and was what left an immutable value with no
+  // way out of its cell.
+  it('a cell in an immutable column activates a read-only input, never an editable one', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Original Name'));
     fireEvent.click(screen.getByText('Original Name'));
-    expect(screen.queryByDisplayValue('Original Name')).not.toBeInTheDocument();
-    expect(screen.getByText('Original Name')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Original Name')).toHaveAttribute('readonly');
   });
 
   it('a cell in a mutable column does activate an input when clicked', async () => {
