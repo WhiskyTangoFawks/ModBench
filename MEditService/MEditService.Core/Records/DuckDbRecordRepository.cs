@@ -167,6 +167,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 row.EndRow();
                 CollectFormRefs(refs, record, tableName, schema);
                 lookupRows.Add((record.FormKey.ToString(), tableName, record.EditorID));
+                _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
+                    tableName, record.FormKey, record.EditorID, plugin);
             }
             catch (Exception ex)
             {
@@ -791,6 +793,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             {
                 indexer.IndexRecord(record.FormKey.ToString(), plugin, recordType, vmad);
                 vmadCount++;
+                _logger.LogTrace("Indexed VMAD for {FormKey} ({RecordType}) in {Plugin}",
+                    record.FormKey, recordType, plugin);
             }
             catch (NotImplementedException ex)
             {
@@ -799,7 +803,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                     record.FormKey);
             }
         }
-        _logger.LogInformation("Indexed VMAD for {Count} records in {Plugin}", vmadCount, plugin);
+        _logger.LogDebug("Indexed VMAD for {Count} records in {Plugin}", vmadCount, plugin);
     }
 
     // Phase 16: populate the worldspace-tree side tables from the GRUP hierarchy that
@@ -889,11 +893,14 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         {
             var owners = codec.Extract(record);
             if (!owners.Any()) continue;
-            indexer.IndexRecord(record.FormKey.ToString(), plugin, ResolveRecordType(record), owners);
+            var recordType = ResolveRecordType(record);
+            indexer.IndexRecord(record.FormKey.ToString(), plugin, recordType, owners);
             count++;
+            _logger.LogTrace("Indexed conditions for {FormKey} ({RecordType}) in {Plugin}",
+                record.FormKey, recordType, plugin);
         }
 
-        _logger.LogInformation("Indexed conditions for {Count} records in {Plugin}", count, plugin);
+        _logger.LogDebug("Indexed conditions for {Count} records in {Plugin}", count, plugin);
     }
 
     private string ResolveRecordType(IMajorRecordGetter record)
