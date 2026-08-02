@@ -38,7 +38,7 @@ public sealed class SessionManager(
 
     public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease)
     {
-        _logger.LogInformation("Session load starting. DataFolder={DataFolder} PluginsTxt={PluginsTxt} Game={Game}",
+        _logger.LogDebug("Session load starting. DataFolder={DataFolder} PluginsTxt={PluginsTxt} Game={Game}",
             dataFolderPath, pluginsTxtPath, gameRelease);
 
         try
@@ -47,11 +47,11 @@ public sealed class SessionManager(
             {
                 DisposeCurrentSession();
 
-                _logger.LogInformation("Creating game session (reading plugins list and opening binary overlays)");
+                _logger.LogDebug("Creating game session (reading plugins list and opening binary overlays)");
                 var session = new GameSession(dataFolderPath, pluginsTxtPath, gameRelease, _logger);
                 try { IndexAndStore(session, gameRelease, dataFolderPath, pluginsTxtPath); }
                 catch { session.Dispose(); throw; }
-                _logger.LogInformation("Session load complete");
+                _logger.LogDebug("Session load complete");
             }
         }
         catch (Exception ex)
@@ -63,7 +63,7 @@ public sealed class SessionManager(
 
     public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path)> plugins, GameRelease gameRelease)
     {
-        _logger.LogInformation("Explicit session load starting. GameDir={GameDir} Plugins={Count} Game={Game}",
+        _logger.LogDebug("Explicit session load starting. GameDir={GameDir} Plugins={Count} Game={Game}",
             gameDirectory, plugins.Count, gameRelease);
 
         try
@@ -72,12 +72,12 @@ public sealed class SessionManager(
             {
                 DisposeCurrentSession();
 
-                _logger.LogInformation("Creating explicit game session from scattered paths");
+                _logger.LogDebug("Creating explicit game session from scattered paths");
                 var session = GameSession.LoadExplicit(gameDirectory, plugins, gameRelease, _logger);
                 // No plugins.txt for an explicit session; the game directory is the implicit-master root.
                 try { IndexAndStore(session, gameRelease, gameDirectory, pluginsTxtPath: null); }
                 catch { session.Dispose(); throw; }
-                _logger.LogInformation("Explicit session load complete");
+                _logger.LogDebug("Explicit session load complete");
             }
         }
         catch (Exception ex)
@@ -91,10 +91,10 @@ public sealed class SessionManager(
     // single active session (ADR-0015). Must be called under _lock after DisposeCurrentSession.
     private void IndexAndStore(GameSession session, GameRelease gameRelease, string dataFolderPath, string? pluginsTxtPath)
     {
-        _logger.LogInformation("Game session created. {Count} plugin(s) loaded: {Names}",
+        _logger.LogDebug("Game session created. {Count} plugin(s) loaded: {Names}",
             session.Plugins.Count, string.Join(", ", session.Plugins.Select(p => p.Name)));
 
-        _logger.LogInformation("Initializing DuckDB record repository");
+        _logger.LogDebug("Initializing DuckDB record repository");
         var repository = _repositoryFactory.Create(gameRelease);
 
         _nextFormIds.Clear();
@@ -122,7 +122,7 @@ public sealed class SessionManager(
                 _nextFormIds[plugin.Name] = SafeNextFormId(mod);
         }
 
-        _logger.LogInformation("Computing winners");
+        _logger.LogDebug("Computing winners");
         repository.UpdateWinners();
 
         _changeLifecycle?.OnSessionLoaded(repository.Connection);

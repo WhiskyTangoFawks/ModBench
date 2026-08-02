@@ -90,7 +90,7 @@ public sealed class GameSession : IGameSession
         DataFolderPath = dataFolderPath;
         GameRelease = gameRelease;
 
-        logger.LogInformation("Load order: {Count} plugin(s) ({Implicit} immutable)",
+        logger.LogDebug("Load order: {Count} plugin(s) ({Implicit} immutable)",
             ordered.Count, ordered.Count(p => p.IsImmutable));
 
         var modListings = new List<IModListing<IModGetter>>(ordered.Count);
@@ -136,10 +136,10 @@ public sealed class GameSession : IGameSession
             }
         }
 
-        logger.LogInformation("Building load order and link cache for {Count} plugin(s)", modListings.Count);
+        logger.LogDebug("Building load order and link cache for {Count} plugin(s)", modListings.Count);
         var loadOrder = new LoadOrder<IModListing<IModGetter>>(modListings);
         LinkCache = loadOrder.ToUntypedImmutableLinkCache(gameRelease.ToCategory());
-        logger.LogInformation("GameSession ready");
+        logger.LogDebug("GameSession ready");
     }
 
     public PluginMetadata AddPlugin(string filePath)
