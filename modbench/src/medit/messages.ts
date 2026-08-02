@@ -41,6 +41,19 @@ export const EXTENSION_TO_WEBVIEW = {
   // that opened it. `functionName: null` means the user dismissed the picker (Escape/blur) — the
   // caller leaves the condition's function unchanged, same convention as FORM_KEY_PICKED.
   CONDITION_FUNCTION_PICKED: 'conditionFunctionPicked',
+  // #212: same direct-reply shape as FORM_KEY_PICKED/CONDITION_FUNCTION_PICKED above (keyed by
+  // requestId, never a broadcast) — the native modal warning only ever exists for the one
+  // revert-group confirmation that opened it. `confirmed: false` covers both an explicit Cancel
+  // and dismissing the modal (Escape/clicking outside) — VS Code's modal `showWarningMessage`
+  // resolves `undefined` either way, so there is no distinct "dismissed" state to preserve, same
+  // as the deleted RevertGroupConfirm's onCancel not distinguishing the two.
+  REVERT_GROUP_CONFIRMED: 'revertGroupConfirmed',
+  // #212: same shape again, for the native input box that replaced the add-script dialog.
+  // `name: null` means the box was dismissed (Escape/blur) — the caller adds nothing, same as
+  // the deleted AddScriptDialog's onCancel. An empty/whitespace name never reaches here: the
+  // extension host's `validateInput` blocks accepting one, the same rule the deleted dialog's
+  // `confirmDisabled` enforced client-side.
+  ADD_SCRIPT_NAME_PICKED: 'addScriptNamePicked',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -71,6 +84,18 @@ export const WEBVIEW_TO_EXTENSION = {
   // only way to pre-highlight an item) instead of pre-selecting via `.activeItems` the way the
   // FormKey QuickPick does.
   OPEN_CONDITION_FUNCTION_PICKER: 'openConditionFunctionPicker',
+  // #212: the multi-member revert-group confirmation moved off the webview's own ModalShell
+  // (which cannot call vscode.window.showWarningMessage itself — only the extension host can)
+  // onto a native modal warning. `detail` is the already-composed "recordType / formKey ·
+  // fieldPath" listing of every linked edit — built here, not on the extension-host side, since
+  // the webview already holds the PendingChange[] members from `client.groupMembers()` and
+  // nothing needs fetching (unlike OPEN_FORM_KEY_PICKER/OPEN_CONDITION_FUNCTION_PICKER above,
+  // where the extension host owns the PluginRepository fetch that shapes their picker items).
+  OPEN_REVERT_GROUP_CONFIRM: 'openRevertGroupConfirm',
+  // #212: the add-script dialog moved off the webview's ModalShell onto a native input box —
+  // same "webview can't call the native API itself" reasoning as every bridge above. No seed:
+  // the deleted AddScriptDialog always started from an empty name.
+  OPEN_ADD_SCRIPT_NAME: 'openAddScriptName',
 } as const;
 
 export type LogLevel = 'debug' | 'info' | 'warn';
@@ -81,7 +106,9 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.PENDING_CHANGED }
   | { type: typeof WEBVIEW_TO_EXTENSION.LOG; level: LogLevel; message: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
-  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER; requestId: string; seed: string };
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER; requestId: string; seed: string }
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM; requestId: string; detail: string }
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME; requestId: string };
 
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
@@ -93,7 +120,9 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE; formKey: string; plugin: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER; formKey: string; plugin: string; newMaster: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
-  | { type: typeof EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED; requestId: string; functionName: string | null };
+  | { type: typeof EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED; requestId: string; functionName: string | null }
+  | { type: typeof EXTENSION_TO_WEBVIEW.REVERT_GROUP_CONFIRMED; requestId: string; confirmed: boolean }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ADD_SCRIPT_NAME_PICKED; requestId: string; name: string | null };
 
 // #208: the merged `data-vscode-context` object VS Code's webview preload forwards as a
 // `webview/context` command's sole argument — shared shape between the cell (recordUtils.ts'

@@ -246,9 +246,13 @@ plugin:
   is never shared across two different records, so at most one panel ever acts. Revert's
   confirmation keys on member count, not on which control fired it: a group of one — the common
   case — is exactly "revert this field" and fires straight away; an entangled change confirms
-  first, listing the members, rather than firing the 409 the backend would return for a partial
-  group revert (ADR-0028). The member count is read from `GET /changes` for the change's
-  component; the panel never surfaces a raw 409.
+  first, via a **native modal warning** (#212 — `vscode.window.showWarningMessage(..., { modal:
+  true })`, reached through the same webview↔extension-host bridge shape as the FormKey/
+  condition-function QuickPicks: the webview posts the already-composed detail text — one line
+  per linked edit, `recordType / formKey · fieldPath` — and awaits the extension host's reply,
+  since showWarningMessage is extension-host-only), rather than firing the 409 the backend would
+  return for a partial group revert (ADR-0028). The member count is read from `GET /changes` for
+  the change's component; the panel never surfaces a raw 409.
 - A **partial save** is surfaced, never silent (ADR-0026): the banner names which plugins wrote,
   partially wrote, and could not write, and states the unwritten changes stay queued. A save that
   reached disk but whose post-commit reindex failed reads instead as a completed-save warning to
@@ -297,6 +301,15 @@ classification.
   editor on click, gated on the column's mutability, never on a mode. Beyond leaf values it also
   offers structural ops: add/remove script, add/remove/set-type property, script and property
   flags, and array/struct element ops.
+- **Add script** is a **native input box** (#212 — `vscode.window.showInputBox`, same
+  webview↔extension-host bridge shape as the modal warning above) collecting the one field it
+  needs, a name; an empty/whitespace name is rejected by the box's own `validateInput` before it
+  can be accepted. A new script always starts with `Local` flags — there is no flags field at
+  creation any more, only the per-script flags control afterward. **Add property** stays a
+  webview-rendered dialog (`ModalShell`/`AddPropertyDialog`) — the one deliberate exception, since
+  it collects three fields (name, type, value) at once and a multi-step QuickPick chain would be
+  worse UX than the dialog it would replace (see the comment on `ModalShell` for why this one
+  wasn't converted).
 - Two expandable levels: **script rows** (bold script name; per-plugin script flag; blank for
   plugins lacking the script; collapsed by default) and indented **property rows** (per-plugin
   value; hidden while the parent script is collapsed).

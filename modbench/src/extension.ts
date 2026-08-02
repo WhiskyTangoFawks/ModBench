@@ -221,12 +221,13 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     provider: changeGroupTreeProvider, view: changeGroupTreeView, log,
     reporter: makeReporter(outputChannel, 'revealPendingChange'),
   };
-  // #210/#211: formKeyPicker/conditionFunctionPicker are left undefined here — each `reply` must
-  // post back to the one panel that asked (never a broadcast), so openRecordPanel rebuilds these
-  // bundles per panel at the onDidReceiveMessage call site rather than sharing one instance the
-  // way reveal/channel are.
+  // #210/#211/#212: formKeyPicker/conditionFunctionPicker/revertGroupConfirm/addScriptName are
+  // left undefined here — each `reply` must post back to the one panel that asked (never a
+  // broadcast), so openRecordPanel rebuilds these bundles per panel at the onDidReceiveMessage
+  // call site rather than sharing one instance the way reveal/channel are.
   const routerDeps: RouteRecordPanelMessageDeps = {
     reveal, channel: outputChannel, formKeyPicker: undefined, conditionFunctionPicker: undefined,
+    revertGroupConfirm: undefined, addScriptName: undefined,
   };
   return [
     vscode.commands.registerCommand('modbench.refreshTree', () => treeProvider.refresh()),
@@ -1324,14 +1325,16 @@ function openRecordPanel(
   recordPanels.add(panel);
   panel.onDidDispose(() => recordPanels.delete(panel));
 
-  // #210/#211: formKeyPicker/conditionFunctionPicker .reply is bound to this specific panel — the
-  // QuickPick a request opens only ever exists for the one click that asked, so the reply is
+  // #210/#211/#212: every *Picker/*Confirm/*Name .reply is bound to this specific panel — the
+  // native prompt a request opens only ever exists for the one click that asked, so the reply is
   // never broadcast to recordPanels the way #208/#209's commands are.
   panel.webview.onDidReceiveMessage((msg: unknown) => {
     void routeRecordPanelMessage(msg, {
       ...routerDeps,
       formKeyPicker: { repository, reply: (m) => void panel.webview.postMessage(m) },
       conditionFunctionPicker: { repository, reply: (m) => void panel.webview.postMessage(m) },
+      revertGroupConfirm: { reply: (m) => void panel.webview.postMessage(m) },
+      addScriptName: { reply: (m) => void panel.webview.postMessage(m) },
     });
   });
 

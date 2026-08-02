@@ -1,56 +1,49 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { AddScriptButton, AddScriptDialog, RemoveScriptButton, ScriptFlagsControl } from './VmadScriptOps';
+vi.mock('./addScriptBridge', () => ({ pickScriptName: vi.fn() }));
 
+import { AddScriptButton, RemoveScriptButton, ScriptFlagsControl } from './VmadScriptOps';
+import { pickScriptName } from './addScriptBridge';
+
+// Issue #212: the add-script dialog (ModalShell + name/flags fields) was deleted — "Add script"
+// is now a native input box (pickScriptName, webview/src/addScriptBridge.ts) collecting one
+// field, a name. Flags are no longer chosen at creation time (new scripts always start 'Local',
+// per the issue's explicit "one field, a name"); ScriptFlagsControl below remains the only way
+// to change a script's flags, same as it already was for every script after its first add.
 describe('AddScriptButton', () => {
-  it('opens the Add script dialog on click', () => {
+  beforeEach(() => { vi.mocked(pickScriptName).mockReset(); });
+
+  it('clicking + script opens the native input box via pickScriptName', () => {
+    vi.mocked(pickScriptName).mockResolvedValue(null);
     render(<AddScriptButton plugin="A.esm" onStructOp={vi.fn()} />);
     fireEvent.click(screen.getByTitle('Add script'));
-    expect(screen.getByText('Add script')).toBeInTheDocument();
+    expect(pickScriptName).toHaveBeenCalled();
   });
 
-  it('confirming stages an add_script op scoped to the plugin', () => {
+  it('a picked name stages an add_script op scoped to the plugin, defaulting flags to Local', async () => {
     const onStructOp = vi.fn();
+    vi.mocked(pickScriptName).mockResolvedValue('MyScript');
     render(<AddScriptButton plugin="A.esm" onStructOp={onStructOp} />);
     fireEvent.click(screen.getByTitle('Add script'));
 
-    fireEvent.change(screen.getByLabelText('New script name'), { target: { value: 'MyScript' } });
-    fireEvent.change(screen.getByLabelText('New script flags'), { target: { value: 'Local' } });
-    fireEvent.click(screen.getByText('Add'));
-
-    expect(onStructOp).toHaveBeenCalledWith(
+    await waitFor(() => expect(onStructOp).toHaveBeenCalledWith(
       'A.esm',
       String.raw`VMAD\MyScript`,
       { op: 'add_script', name: 'MyScript', flags: 'Local', properties: [] },
-    );
-  });
-});
-
-describe('AddScriptDialog', () => {
-  it('disables Add until a name is entered', () => {
-    render(<AddScriptDialog onConfirm={vi.fn()} onCancel={vi.fn()} />);
-    expect(screen.getByText('Add')).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('New script name'), { target: { value: 'X' } });
-    expect(screen.getByText('Add')).not.toBeDisabled();
+    ));
   });
 
-  it('offers all script flags in the dropdown', () => {
-    render(<AddScriptDialog onConfirm={vi.fn()} onCancel={vi.fn()} />);
-    const select = screen.getByLabelText('New script flags');
-    expect(select).toHaveValue('Local');
-    for (const f of ['Local', 'Inherited', 'Removed', 'InheritedAndRemoved']) {
-      expect(screen.getByRole('option', { name: f })).toBeInTheDocument();
-    }
-  });
+  it('a dismissed pick (null, empty/whitespace already rejected natively) stages nothing', async () => {
+    const onStructOp = vi.fn();
+    vi.mocked(pickScriptName).mockResolvedValue(null);
+    render(<AddScriptButton plugin="A.esm" onStructOp={onStructOp} />);
+    fireEvent.click(screen.getByTitle('Add script'));
 
-  it('calls onCancel on Cancel', () => {
-    const onCancel = vi.fn();
-    render(<AddScriptDialog onConfirm={vi.fn()} onCancel={onCancel} />);
-    fireEvent.click(screen.getByText('Cancel'));
-    expect(onCancel).toHaveBeenCalled();
+    await waitFor(() => expect(pickScriptName).toHaveBeenCalled());
+    expect(onStructOp).not.toHaveBeenCalled();
   });
 });
 
