@@ -146,6 +146,39 @@ describe('BackendManager.start', () => {
     expect(spawn).not.toHaveBeenCalled();
     expect(mgr.isHealthy).toBe(true);
   });
+
+  // #205: the Output channel's level, translated by the caller into Serilog
+  // spawn args, rides along on the same argv as --urls.
+  it('appends the injected Serilog level args when spawning', async () => {
+    const state = { healthy: false };
+    makeToggleableHttpGet(state);
+    const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
+
+    const mgr = new BackendManager({
+      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x/backend',
+      serilogLevelArgs: () => ['--Serilog:MinimumLevel:Default', 'Debug'],
+    });
+    await mgr.start();
+
+    expect(spawn).toHaveBeenCalledWith(
+      '/x/backend',
+      ['--urls', 'http://localhost:5172', '--Serilog:MinimumLevel:Default', 'Debug'],
+    );
+  });
+
+  it('spawns with just --urls when serilogLevelArgs yields no override (e.g. channel at Off)', async () => {
+    const state = { healthy: false };
+    makeToggleableHttpGet(state);
+    const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
+
+    const mgr = new BackendManager({
+      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x/backend',
+      serilogLevelArgs: () => [],
+    });
+    await mgr.start();
+
+    expect(spawn).toHaveBeenCalledWith('/x/backend', ['--urls', 'http://localhost:5172']);
+  });
 });
 
 /** Backend output arrives asynchronously (readline); poll until `n` lines land. */

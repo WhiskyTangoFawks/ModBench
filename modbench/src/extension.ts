@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as cp from 'child_process';
 import { BackendManager } from './medit/BackendManager';
-import { makeBackendLogForwarder } from './medit/backendLog';
+import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { createApiClient } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController } from './medit/SessionController';
@@ -1144,6 +1144,12 @@ function createBackendManager(port: number, channel: vscode.LogOutputChannel, st
     // at its own level. Only applies to a backend we spawn — an attached
     // dev-launched one still logs to its own terminal.
     onOutput: makeBackendLogForwarder(channel),
+    // #205: make the backend's Serilog minimum level follow the channel's
+    // level at spawn time, so raising the channel to Debug/Trace actually
+    // surfaces backend lines at that level instead of just louder frontend
+    // ones. Read fresh per spawn (crash-restart picks up any level change);
+    // never applied when attaching to an already-running backend.
+    serilogLevelArgs: () => backendLogLevelArgs(channel.logLevel),
     executablePath: path.join(__dirname, '..', 'backend', backendExe),
     spawn: (exe, args) => cp.spawn(exe, args, { detached: false, stdio: ['ignore', 'pipe', 'pipe'] }),
     statusBar: {

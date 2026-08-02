@@ -37,6 +37,11 @@ export interface BackendManagerOptions {
   spawn?: SpawnFn;
   /** Path to the bundled backend executable. */
   executablePath?: string;
+  /** Extra spawn argv (e.g. `['--Serilog:MinimumLevel:Default', 'Debug']`) built
+   *  fresh at each spawn from the Output channel's current level (#205), so a
+   *  crash-restart picks up any level change. Only ever applied on the spawn
+   *  path — an attached backend never sees it. */
+  serilogLevelArgs?: () => string[];
 }
 
 export class BackendManager extends EventEmitter {
@@ -48,6 +53,7 @@ export class BackendManager extends EventEmitter {
   private readonly onOutput: (line: string, source: BackendStream) => void;
   private readonly spawnFn?: SpawnFn;
   private readonly executablePath?: string;
+  private readonly serilogLevelArgs?: () => string[];
 
   private _isHealthy = false;
   private child?: BackendProcess;
@@ -71,6 +77,7 @@ export class BackendManager extends EventEmitter {
     this.onOutput = opts.onOutput ?? (() => {});
     this.spawnFn = opts.spawn;
     this.executablePath = opts.executablePath;
+    this.serilogLevelArgs = opts.serilogLevelArgs;
 
     this.statusBar.setText('$(loading~spin) mEdit: Connecting…');
     this.statusBar.show();
@@ -101,7 +108,10 @@ export class BackendManager extends EventEmitter {
 
     if (this.spawnFn && this.executablePath && !this.child) {
       this.emitStatus('starting');
-      const child = this.spawnFn(this.executablePath, ['--urls', `http://localhost:${this.port}`]);
+      const child = this.spawnFn(this.executablePath, [
+        '--urls', `http://localhost:${this.port}`,
+        ...(this.serilogLevelArgs?.() ?? []),
+      ]);
       this.child = child;
       child.on('error', (err) => this.log(`[BackendManager] spawn error: ${err.message}`));
       child.on('exit', (code) => this.handleExit(code));

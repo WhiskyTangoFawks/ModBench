@@ -25,7 +25,7 @@ TypeScript VS Code extension. Root [CLAUDE.md](../CLAUDE.md) for project-wide in
 | `webviewHtml` | HTML shell for record editor webview | No VS Code types except `Uri` string |
 | `recordPanelMessageRouter` | Webview→extension message dispatch for the record panel | Pure function, no VS Code types in signature except injected deps — testable without a harness |
 | `reporter` | ADR-0026 surfacing reporter (`makeReporter`): logs at the level matching severity, toasts on warning/error | Takes the leveled channel directly (`.warn`/`.error`), not the flat `log` shim — testable without a harness (`vi.mock('vscode')`) |
-| `backendLog` | `makeBackendLogForwarder`: one line of backend console output → the matching leveled channel call | Sole owner of Serilog-console-format knowledge; parse is tolerant — an untagged line is still forwarded, never dropped. Carried level is per stream (untagged stdout = continuation, untagged stderr = runtime crash → `error`) |
+| `backendLog` | `makeBackendLogForwarder`: one line of backend console output → the matching leveled channel call. `backendLogLevelArgs`: the channel's level → the backend's Serilog spawn-arg override | Sole owner of Serilog-console-format knowledge, both directions — read (console template parsing) and write (`--Serilog:MinimumLevel:Default` argv, #205). Parse is tolerant — an untagged line is still forwarded, never dropped. Carried level is per stream (untagged stdout = continuation, untagged stderr = runtime crash → `error`) |
 
 Placement:
 
