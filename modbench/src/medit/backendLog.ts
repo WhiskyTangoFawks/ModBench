@@ -40,3 +40,25 @@ export function makeBackendLogForwarder(channel: LeveledChannel): (line: string,
     channel[level[source]](`[backend] ${line}`);
   };
 }
+
+/** `vscode.LogLevel`'s numeric ordinals (Off=0, Trace=1 .. Error=5), mapped to
+ *  Serilog's level names. Untyped as `number` rather than `vscode.LogLevel` so
+ *  this stays a plain value mapping — no runtime `vscode` import, so no VS Code
+ *  test harness needed here (#205). */
+const SERILOG_LEVEL_NAMES: Record<number, string> = {
+  1: 'Verbose', 2: 'Debug', 3: 'Information', 4: 'Warning', 5: 'Error',
+};
+
+/** Backend spawn-argv fragment (issue #205) that makes Serilog's minimum level
+ *  follow the Output channel's level for that process's lifetime — so raising
+ *  the channel to Debug/Trace actually produces backend lines at that level for
+ *  the console forwarder above to relay, not just louder frontend lines.
+ *
+ *  Total: an Off level (0) or anything unrecognized returns `[]` — no override,
+ *  so the backend falls back to its own `appsettings.json` default. Only
+ *  meaningful for a backend we spawn; an attached one never sees this (the
+ *  caller only builds spawn argv when it's actually spawning). */
+export function backendLogLevelArgs(level: number): string[] {
+  const name = SERILOG_LEVEL_NAMES[level];
+  return name ? ['--Serilog:MinimumLevel:Default', name] : [];
+}

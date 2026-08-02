@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-import { makeBackendLogForwarder } from '../backendLog';
+import { backendLogLevelArgs, makeBackendLogForwarder } from '../backendLog';
 
 function fakeChannel() {
   return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -87,5 +87,28 @@ describe('makeBackendLogForwarder', () => {
     expect(channel.info).not.toHaveBeenCalled();
     expect(channel.warn).not.toHaveBeenCalled();
     expect(channel.error).not.toHaveBeenCalled();
+  });
+});
+
+// #205: backendLogLevelArgs maps the Output channel's level (vscode.LogLevel's
+// numeric ordinals — Off=0, Trace=1, Debug=2, Info=3, Warning=4, Error=5) to a
+// Serilog minimum-level override for the backend's spawn argv.
+describe('backendLogLevelArgs', () => {
+  it.each([
+    [1, 'Verbose'],
+    [2, 'Debug'],
+    [3, 'Information'],
+    [4, 'Warning'],
+    [5, 'Error'],
+  ])('maps channel level %i to Serilog level %s', (level, serilogLevel) => {
+    expect(backendLogLevelArgs(level)).toEqual(['--Serilog:MinimumLevel:Default', serilogLevel]);
+  });
+
+  it('omits the override for Off (0) — no Serilog level means "no override"', () => {
+    expect(backendLogLevelArgs(0)).toEqual([]);
+  });
+
+  it('omits the override for an unrecognized level — total fallback, never throws', () => {
+    expect(backendLogLevelArgs(99)).toEqual([]);
   });
 });
