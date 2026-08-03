@@ -47,6 +47,11 @@ export function DiskCell({ style, isFocused, onFocusCell, onDragStart, onDrop, c
   const isFormControl = (t: EventTarget | null) =>
     t instanceof HTMLElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(t.tagName);
 
+  // `editing` is a trigger-only dependency — the check body never reads it, but its flip to false
+  // (the editor closing on blur) is exactly the moment focus needs to move from the now-unmounted
+  // input back to the `<td>`, and only a dependency change re-runs a layout effect. Without it
+  // here, the effect would stay silent from the render where the editor closes until something
+  // else happened to touch `isFocused`.
   useLayoutEffect(() => {
     if (isFocused && !cellAlreadyHasFocus(ref.current)) ref.current?.focus();
   }, [isFocused, editing]);
