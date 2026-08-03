@@ -228,6 +228,9 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
   const routerDeps: RouteRecordPanelMessageDeps = {
     reveal, channel: outputChannel, formKeyPicker: undefined, conditionFunctionPicker: undefined,
     revertGroupConfirm: undefined, addScriptName: undefined,
+    // Issue #224: COPY_TO_CLIPBOARD's ADR-0026 surfacing on a failed clipboard write — shared
+    // like `channel` above, not rebuilt per panel, since there's no per-panel reply to route.
+    reporter: makeReporter(outputChannel, 'copyToClipboard'),
   };
   return [
     vscode.commands.registerCommand('modbench.refreshTree', () => treeProvider.refresh()),
