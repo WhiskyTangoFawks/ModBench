@@ -330,11 +330,13 @@ not implement and will not, so it was deleted (#136); the actions below replace 
 Every action is scoped to a **ChangeGroup**, never to part of one and never to a record or a
 plugin:
 
-- **Plain click** on a pending value edits it directly, on the same terms as a disk cell
-  ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md), #203) — there is no
-  lock on the corresponding disk cell in response; both stay editable simultaneously for now
-  (revisit later if that proves confusing in practice). This holds in the main field grid, the
-  VMAD section, and the Condition section alike — three independent render paths, one rule.
+- **Plain click** on a pending value focuses it, exactly like a disk cell — it renders through the
+  same shared value-cell container, not a separate one (#232). A second click, `F2`, or a double
+  click opens its editor; `Ctrl+C`/`Ctrl+X`/`Ctrl+V` act on it the same way a disk cell's clipboard
+  commands do. There is no lock on the corresponding disk cell in response to editing; both stay
+  editable simultaneously for now (revisit later if that proves confusing in practice). This holds
+  in the main field grid, the VMAD section, and the Condition section alike — three independent
+  render paths, one rule. Supersedes ADR-0033/#203's plain-click-edits-directly behaviour.
 - **Right-click** on a pending value opens VS Code's own native context menu (#208 —
   `contributes.menus["webview/context"]`, gated by a `data-vscode-context` attribute the cell
   carries; the cell must not call `preventDefault()` on the contextmenu event, or VS Code's
@@ -347,8 +349,8 @@ plugin:
   ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md): no standalone revert
   icon on the cell now that Revert Group lives in the menu). VS Code's built-in Cut/Copy/Paste
   entries are suppressed on this menu (`preventDefaultContextMenuItems`), which costs nothing: a
-  pending value is directly editable (#203), so its text is reached by clicking it — the same
-  cursor contract every other cell follows — not from a menu. Reveal resolves entirely in the extension host (no webview
+  pending value's model value is reached with `Ctrl+C` on the focused cell — the same clipboard
+  contract every other cell follows — not from a menu. Reveal resolves entirely in the extension host (no webview
   round trip); Save Group and Revert Group's work (the HTTP calls, the confirmation below, the
   partial-save/stale-reindex banner) only exists in the webview, so the command broadcasts to
   every open record panel and each one silently ignores a change id it doesn't hold — a change id
