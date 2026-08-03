@@ -9,13 +9,13 @@ specified single-click-to-edit, which xEdit does not do. In the field grid, a si
 the cell — the row highlights, the focused cell is outlined, focus survives a re-render, and no
 cell shows a `grab` cursor (#222). Editing is off single click: a second click on the focused
 cell, `F2`, or a double click opens a mutable cell's editor; double-clicking the label column
-expands/collapses that node; the editor selects its whole text on focus (#223). There is no
-keyboard clipboard support yet (`Ctrl+C`/`Ctrl+X`/`Ctrl+V`) — that's #224/#225. Immutable cells
-still activate a read-only surface on plain click, unconditionally — unchanged from before this
-milestone, and deliberately left that way until #224 ships a replacement copy path and #226
-retires the surface. Everything in *Interaction model* below describes the target, not the build.
-Known gaps beyond that: VMAD and Condition sections don't have the focus model at all yet (#229,
-#231) and FormKey resolution (#141).
+expands/collapses that node; the editor selects its whole text on focus (#223). `Ctrl+C` copies
+the focused cell's model value in both column kinds (#224); `Ctrl+X`/`Ctrl+V` are still unbuilt
+(#225). Immutable cells still activate a read-only surface on plain click, unconditionally —
+unchanged from before this milestone, and deliberately left that way until #226 retires the
+surface now that #224 has shipped Ctrl+C as its replacement copy path. Everything in *Interaction
+model* below describes the target, not the build. Known gaps beyond that: VMAD and Condition
+sections don't have the focus model at all yet (#229, #231) and FormKey resolution (#141).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
@@ -218,7 +218,24 @@ copies the whole structure, as xEdit does when you drag by the header.
 widget the cell renders. That removes the old model's two holes at once: `bool`/`enum`/`flags` on a
 mutable column had no copy path because their editor was a control rather than text, which produced
 the inversion where a read-only column could hand over its value and an editable one could not.
-Neither survives.
+Neither survives. One function, `modelValue` (webview `modelValue.ts`), defines this string per
+field type and is the only place either the copy path or a leaf's own display/editor reads it from
+— string/int/float/bool/enum pass through unchanged from what the editor already showed; flags
+render their active names, comma-separated, never the bitmask; a FormKey renders the same
+`EditorID [FormKey]` composite the picker and `FormKeyLink` already use (#218).
+
+**Struct and array summary rows are the one exception to "the same string the editor shows"** —
+they have no editor to match, since a compound field is edited through its child rows, not as a
+unit. Their model value is a **JSON serialization of the field's current value**, not an xEdit-style
+`Element.Summary` human-readable string, even though xEdit's own model has one. A faithful
+`Element.Summary` equivalent needs per-record-type domain knowledge this codebase doesn't have
+anywhere yet — how to render a REFR's position, a condition's function call, an arbitrary nested
+struct — and would be its own open-ended design effort, not a sub-decision inside a copy-command
+ticket (#224). JSON needs no per-type knowledge, is honest about what a struct/array actually is
+rather than a lossy gloss of it, and is genuinely round-trippable (`JSON.parse` recovers the same
+value) — a prose summary is neither. This is a deliberate, bounded divergence from xEdit's exact
+behavior for a content-generation question a UX-parity ticket shouldn't have to answer, not "an
+alternative that seems nicer" for a gesture ADR-0034 would otherwise forbid diverging on.
 
 ### The panel
 

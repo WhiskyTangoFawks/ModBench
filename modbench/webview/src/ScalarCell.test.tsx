@@ -18,10 +18,13 @@ const enumMeta: FieldMetadata = {
 };
 
 // Issue #201 / ADR-0033 (cursor contract): an immutable cell is no longer inert text. Clicking it
-// activates a read-only text surface, and that surface is the whole of copy — selection and
-// Ctrl+C are the platform's once an input is focused, so no Copy command and no clipboard code
-// exist anywhere in this feature. The surface commits nothing; that is the *only* difference
-// between an immutable column and a mutable one.
+// activates a read-only text surface, and (until #224) that surface was the whole of copy —
+// selection and Ctrl+C are the platform's once an input is focused. #224 added a second copy path
+// (Ctrl+C directly on the focused, unopened cell, via DiskCell/DiffRow) so a value is copyable
+// even before this surface is clicked open, but this component itself still has no clipboard code
+// — it only ever hands modelValue's string to the surface below; the write lives one layer up.
+// The surface commits nothing; that is the *only* difference between an immutable column and a
+// mutable one.
 describe('ScalarCell — immutable column activates a read-only text surface', () => {
   it('activates a readOnly input containing the value when clicked', () => {
     render(<ScalarCell value="Dogmeat" meta={strMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);

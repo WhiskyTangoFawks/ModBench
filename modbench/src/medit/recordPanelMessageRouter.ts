@@ -298,6 +298,14 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
     deps.reveal?.provider.refresh();
   } else if (m.type === WEBVIEW_TO_EXTENSION.LOG) {
     deps.channel[m.level](m.message);
+  } else if (m.type === WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD) {
+    // Issue #224: Ctrl+C's clipboard write. `vscode.env.clipboard.writeText` is extension-host-
+    // only (webview clipboard access isn't guaranteed) — the webview has already computed the
+    // model value (modelValue.ts) by the time this arrives, so there's nothing to inject; this
+    // is a direct call, same as OPEN_RECORD's `vscode.commands.executeCommand` above, not routed
+    // through a deps bundle like the *Picker/*Confirm/*Name bridges (which need a per-panel reply
+    // target this fire-and-forget message has no use for).
+    await vscode.env.clipboard.writeText(m.value);
   } else {
     await routePromptMessage(m, deps);
   }

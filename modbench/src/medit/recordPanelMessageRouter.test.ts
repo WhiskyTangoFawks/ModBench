@@ -5,6 +5,7 @@ const createQuickPick = vi.fn();
 const showQuickPick = vi.fn();
 const showWarningMessage = vi.fn();
 const showInputBox = vi.fn();
+const writeText = vi.fn();
 vi.mock('vscode', () => ({
   commands: { executeCommand: (...args: unknown[]) => executeCommand(...args) },
   window: {
@@ -13,6 +14,7 @@ vi.mock('vscode', () => ({
     showWarningMessage: (...args: unknown[]) => showWarningMessage(...args),
     showInputBox: (...args: unknown[]) => showInputBox(...args),
   },
+  env: { clipboard: { writeText: (...args: unknown[]) => writeText(...args) } },
 }));
 
 import {
@@ -177,6 +179,18 @@ describe('routeRecordPanelMessage', () => {
     await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'x' }, { reveal: undefined, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined });
 
     expect(channel.debug).toHaveBeenCalledWith('x');
+  });
+
+  // Issue #224: Ctrl+C's clipboard write. `vscode.env.clipboard.writeText` is extension-host-only,
+  // so DiffRow posts the already-computed model value up here — fire-and-forget, no reply, no
+  // deps bundle (unlike the *Picker/*Confirm/*Name bridges, nothing needs to come back).
+  it('COPY_TO_CLIPBOARD writes the message value to the system clipboard', async () => {
+    const { reveal } = fakeReveal();
+    writeText.mockClear();
+
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value: 'Dogmeat [000001:Fallout4.esm]' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined });
+
+    expect(writeText).toHaveBeenCalledWith('Dogmeat [000001:Fallout4.esm]');
   });
 });
 

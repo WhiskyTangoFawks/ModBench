@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ReadOnlyValueSurface } from './ReadOnlyValueSurface';
+import { modelValue, toBigInt } from './modelValue';
 import type { FieldMetadata } from './types';
 
 interface FlagCellProps {
@@ -15,19 +16,6 @@ interface FlagCellProps {
   onCommit: (v: unknown) => void;
 }
 
-// Bitmask values arrive as decimal strings (the backend's contract — see Models.cs) so combined
-// flags above 2^53 survive JSON without IEEE 754 loss. Numbers are still accepted for small values.
-// Anything else (or a malformed string) yields 0n rather than throwing on BigInt(NaN).
-function toBigInt(value: unknown): bigint {
-  try {
-    if (typeof value === 'string') return BigInt(value);
-    if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.trunc(value));
-  } catch {
-    /* malformed numeric string — fall through to 0n */
-  }
-  return 0n;
-}
-
 export function FlagCell({ value, meta, editable, isFocused = true, onCommit }: FlagCellProps) {
   // Issue #111: only the clicked cell becomes a multi-select; the rest of the grid stays text.
   const [active, setActive] = useState(false);
@@ -40,13 +28,14 @@ export function FlagCell({ value, meta, editable, isFocused = true, onCommit }: 
   const num = toBigInt(value);
   const bits = meta.enumBitValues.map(BigInt);
 
-  // Issue #201: the active flag *names* are what this cell displays, so they are what it has to
-  // be able to hand over — the bitmask integer behind them is not something the user ever saw.
-  // Null and "no bits set" both render `—`, a placeholder rather than a value, and collapse to
-  // the same null here so neither offers a surface (ADR-0033's struct/array exception).
-  const names = value == null
-    ? null
-    : meta.enumValues.filter((_, i) => (num & bits[i]) !== 0n).join(', ') || null;
+  // Issue #201 / #224: the active flag *names* are what this cell displays, so they are what it
+  // has to be able to hand over — the bitmask integer behind them is not something the user ever
+  // saw. Sourced from modelValue (the same string Ctrl+C copies, AC6) rather than computed again
+  // here. Null and "no bits set" both render `—`, a placeholder rather than a value, and collapse
+  // to the same null here so neither offers a surface (ADR-0033's struct/array exception) —
+  // modelValue already collapses both to '', so only the empty-string check is needed here.
+  const namesStr = modelValue(value, meta);
+  const names = namesStr === '' ? null : namesStr;
 
   if (!active) {
     const text = names === null

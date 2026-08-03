@@ -33,12 +33,16 @@ import { focusedCellStyle } from './gridStyles';
 // whatever the browser most recently, actually focused.
 const cellAlreadyHasFocus = (cell: HTMLTableCellElement | null): boolean =>
   cell !== null && (document.activeElement === cell || cell.contains(document.activeElement));
-export function DiskCell({ style, isFocused, onFocusCell, onDragStart, onDrop, children }: Readonly<{
+export function DiskCell({ style, isFocused, onFocusCell, onDragStart, onDrop, onCopy, children }: Readonly<{
   style: React.CSSProperties;
   isFocused: boolean;
   onFocusCell: () => void;
   onDragStart: () => void;
   onDrop: () => void;
+  // Issue #224 / ADR-0034: Ctrl+C on the focused cell — DiffRow already knows this column's own
+  // model value (modelValue.ts) by the time it builds this prop, so this is a plain thunk, not a
+  // value: the cell doesn't need to know *what* it copies, only *when* (see onKeyDown below).
+  onCopy: () => void;
   children: React.ReactNode;
 }>) {
   const [editing, setEditing] = useState(false);
@@ -73,8 +77,22 @@ export function DiskCell({ style, isFocused, onFocusCell, onDragStart, onDrop, c
       // here by construction: F2 only ever fires on the focused `<td>`). An immutable cell or a
       // struct/array summary row carries no such element, so this is a harmless no-op there —
       // matching "F2 opens nothing" for both, with no separate check needed.
+      // Issue #224 / ADR-0034: Ctrl+C copies the focused cell's model value — gated on `!editing`
+      // (the same state that already suppresses `draggable` above) rather than on `isFocused`,
+      // for the same reason F2 needs no `isFocused` check of its own: only the DOM-focused `<td>`
+      // ever receives a real keydown in the first place. The gate matters here in a way it
+      // doesn't for F2, though — while a form control inside this cell has real focus (an open
+      // editor, or an immutable cell's read-only surface, #201), Ctrl+C must stay the browser's
+      // native "copy the selected text" instead: intercepting it here would clobber a user's
+      // in-progress partial-text selection with the whole model value. `editing` is exactly "a
+      // form control inside me has focus", so gating on it is what keeps that native behavior
+      // intact — the spec's "no focused form control" condition for this handler to apply.
       onKeyDown={e => {
         if (e.key === 'F2') ref.current?.querySelector<HTMLElement>('[data-open-trigger]')?.click();
+        else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && !editing) {
+          e.preventDefault();
+          onCopy();
+        }
       }}
       onFocus={e => { if (isFormControl(e.target)) setEditing(true); }}
       onBlur={e => { if (isFormControl(e.target)) setEditing(false); }}

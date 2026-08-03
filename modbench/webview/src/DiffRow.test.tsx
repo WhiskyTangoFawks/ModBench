@@ -1,12 +1,18 @@
 import '@testing-library/jest-dom';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 
 // Issue #210: FormKeyCell (rendered for formKey-typed fields) now imports the pickFormKey
 // bridge, which touches vscode.ts's acquireVsCodeApi() at module load — stubbed here since
 // these tests don't exercise the picker itself (see FormKeyCell.test.tsx for that).
-vi.mock('./nativeBridge', () => ({ pickFormKey: vi.fn().mockResolvedValue(null) }));
+// Issue #224: copyToClipboard is DiffRow's own import now (Ctrl+C's clipboard write) — mocked
+// here too so the #224 describe block below can assert on it directly.
+const copyToClipboard = vi.fn();
+vi.mock('./nativeBridge', () => ({
+  pickFormKey: vi.fn().mockResolvedValue(null),
+  copyToClipboard: (...args: unknown[]) => copyToClipboard(...args),
+}));
 
 import { DiffRow } from './DiffRow';
 import type { Column } from './recordUtils';
@@ -254,6 +260,64 @@ describe('DiffRow — drag affordance on leaf cells', () => {
     renderRow();
     const cell = screen.getAllByText('disk-value')[0].closest('td')!;
     expect(cell.style.cursor).not.toBe('grab');
+  });
+});
+
+// Issue #224 / ADR-0034: Ctrl+C copies the focused cell's model value — a real keydown dispatched
+// on the cell's own DOM node (not a mocked call), confirming the AC1 premise that the webview
+// receives Ctrl+C via the cell's own DOM focus (#222), with no dependency on text selection or
+// VS Code forwarding anything.
+describe('DiffRow — Ctrl+C copies the focused cell (#224)', () => {
+  beforeEach(() => { copyToClipboard.mockClear(); });
+
+  it('Ctrl+C on a focused mutable disk cell copies its model value', () => {
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    const cell = screen.getAllByText('disk-value')[1].closest('td')!;
+    fireEvent.keyDown(cell, { key: 'c', ctrlKey: true });
+    expect(copyToClipboard).toHaveBeenCalledWith('disk-value');
+  });
+
+  // AC3: works on an immutable column too, without the read-only surface ever being opened —
+  // the replacement copy path #201's "click activates a read-only surface" doesn't cover until
+  // this cell is clicked.
+  it('Ctrl+C on a focused, unopened immutable disk cell also copies (AC3)', () => {
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'Fallout4.esm' } });
+    const cell = screen.getAllByText('disk-value')[0].closest('td')!;
+    fireEvent.keyDown(cell, { key: 'c', ctrlKey: true });
+    expect(copyToClipboard).toHaveBeenCalledWith('disk-value');
+  });
+
+  // Per the issue's "Decided" section: Ctrl+C must reach the webview only when there is no
+  // focused form control — DiskCell gates its own handler on `!editing` for exactly this reason.
+  // Once a form control inside the cell has real focus (an open editor here), the browser's own
+  // "copy the current selection" must win instead — proven by actually opening the editor and
+  // dispatching the keydown on the resulting <input>, not by asserting the gate exists.
+  it('Ctrl+C is suppressed while the cell has an open editor — native selection copy applies instead', () => {
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    fireEvent.click(screen.getAllByText('disk-value')[1]); // second click on the focused cell opens it
+    const input = screen.getByDisplayValue('disk-value');
+    fireEvent.keyDown(input, { key: 'c', ctrlKey: true });
+    expect(copyToClipboard).not.toHaveBeenCalled();
+  });
+
+  // AC5: a struct/array summary row copies its whole value as JSON, not the "{…}"/"[3]"
+  // placeholder its collapsed cell renders.
+  it('Ctrl+C on a collapsed array summary row copies the whole value as JSON, not "[3]"', () => {
+    const arrayMeta: FieldMetadata = {
+      name: 'Factions', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
+      elementType: { name: 'Factions', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    };
+    renderRow({
+      diff: diff({ fieldName: 'Factions', values: { 'Fallout4.esm': [1, 2, 3], 'MyMod.esp': [1, 2, 3] } }),
+      fieldMetaMap: { Factions: arrayMeta },
+      rowKey: 'Factions',
+      hasChildren: true,
+      isExpanded: false,
+      focusedCell: { rowKey: 'Factions', plugin: 'MyMod.esp' },
+    });
+    const cell = screen.getAllByText('[3]')[1].closest('td')!; // MyMod.esp — the focused column
+    fireEvent.keyDown(cell, { key: 'c', ctrlKey: true });
+    expect(copyToClipboard).toHaveBeenCalledWith('[1,2,3]');
   });
 });
 
