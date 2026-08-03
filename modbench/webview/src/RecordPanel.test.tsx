@@ -934,20 +934,21 @@ describe('RecordPanel — drag affordance on field cells', () => {
 
   // Issue #111: drag-to-copy is always on — there is no mode to enter. A read-only source
   // column is draggable too: dragging is a copy, so only the drop target's mutability matters.
-  it('a field cell in a read-only column is draggable with a grab cursor, with no mode to enter', async () => {
+  // Issue #222 / ADR-0034: no cursor advertises it any more — the grid rests on the default arrow.
+  it('a field cell in a read-only column is draggable, with no mode to enter and no grab cursor', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Original Name'));
     const cell = screen.getByText('Original Name').closest('td')!;
     expect(cell.getAttribute('draggable')).toBe('true');
-    expect(cell.style.cursor).toBe('grab');
+    expect(cell.style.cursor).not.toBe('grab');
   });
 
-  it('a field cell in an editable column is draggable with a grab cursor, with no mode to enter', async () => {
+  it('a field cell in an editable column is draggable, with no mode to enter and no grab cursor', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
     const cell = screen.getByText('Override Name').closest('td')!;
     expect(cell.getAttribute('draggable')).toBe('true');
-    expect(cell.style.cursor).toBe('grab');
+    expect(cell.style.cursor).not.toBe('grab');
   });
 
   // Issue #111: a draggable ancestor swallows text selection inside an input — the browser
@@ -981,6 +982,113 @@ describe('RecordPanel — drag affordance on field cells', () => {
     fireEvent.click(screen.getByText('Override Name'));
 
     expect(sibling.getAttribute('draggable')).toBe('true');
+  });
+});
+
+// ── Cell focus (issue #222 / ADR-0034) ────────────────────────────────────────
+//
+// DiffRow.test.tsx already covers the per-cell mechanics (tabIndex, real DOM focus, the row/cell
+// paint) with a single row in isolation. What only RecordPanel can prove — it is the one
+// component that sees every row — is the panel-wide invariant: exactly one cell focused at a
+// time, and that focus outlives the re-renders staging/refresh cause.
+const secondFieldMeta: FieldMetadata = { name: 'Description', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
+
+const twoFieldResult = {
+  conflictAll: 'NoConflict',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: strMeta, value: 'Name A' }, { metadata: secondFieldMeta, value: 'Desc A' }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: strMeta, value: 'Name B' }, { metadata: secondFieldMeta, value: 'Desc B' }],
+      pendingFields: {}, conflictThis: 'ConflictWins',
+    },
+  ],
+  diffs: [
+    { fieldName: 'Name', values: { 'Fallout4.esm': 'Name A', 'MyMod.esp': 'Name B' }, winnerPlugin: 'MyMod.esp', winnerValue: 'Name B', cellStates: {} },
+    { fieldName: 'Description', values: { 'Fallout4.esm': 'Desc A', 'MyMod.esp': 'Desc B' }, winnerPlugin: 'MyMod.esp', winnerValue: 'Desc B', cellStates: {} },
+  ],
+};
+
+describe('RecordPanel — cell focus (issue #222 / ADR-0034)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('clicking a cell in a different row moves focus there, leaving the previous row unhighlighted', async () => {
+    renderPanel(twoFieldResult);
+    await waitFor(() => screen.getByText('Name B'));
+
+    fireEvent.click(screen.getByText('Name B'));
+    const nameRow = screen.getByText('Name').closest('tr')!;
+    expect(nameRow.style.boxShadow).toContain('var(--vscode-focusBorder');
+
+    fireEvent.click(screen.getByText('Desc B'));
+    const descRow = screen.getByText('Description').closest('tr')!;
+    expect(descRow.style.boxShadow).toContain('var(--vscode-focusBorder');
+    // Exactly one cell/row focused across the panel — the previous row lost it.
+    expect(nameRow.style.boxShadow).toBe('');
+  });
+
+  it('clicking a cell in a different column of the same row moves focus there, leaving the previous cell unmarked', async () => {
+    renderPanel(twoFieldResult);
+    await waitFor(() => screen.getByText('Name A'));
+    // Captured before the click — clicking Fallout4.esm's (immutable) cell replaces its text
+    // node with a read-only input showing the same value, so `getByText('Name A')` would no
+    // longer resolve afterward. Same underlying <td>, so the reference stays valid.
+    const fo4Cell = screen.getByText('Name A').closest('td')!;
+
+    fireEvent.click(screen.getByText('Name A')); // Fallout4.esm — immutable, still focusable
+    expect(fo4Cell.style.boxShadow).toContain('var(--vscode-focusBorder');
+
+    const myModCell = screen.getByText('Name B').closest('td')!; // captured before the click, same reason as fo4Cell above
+    fireEvent.click(screen.getByText('Name B')); // MyMod.esp, same row
+    expect(myModCell.style.boxShadow).toContain('var(--vscode-focusBorder');
+    expect(fo4Cell.style.boxShadow).toBe('');
+  });
+
+  it('focus on a cell survives the refresh a staged edit through it triggers', async () => {
+    const { client } = renderPanel(twoFieldResult);
+    await waitFor(() => screen.getByText('Name B'));
+    const loadCallsBefore = (client.load as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    // Clicking still opens the editor too, unchanged — this ticket is purely additive.
+    fireEvent.click(screen.getByText('Name B'));
+    const input = screen.getByDisplayValue('Name B');
+    fireEvent.change(input, { target: { value: 'Changed Name' } });
+    fireEvent.blur(input);
+
+    await waitFor(() => expect(client.save).toHaveBeenCalled());
+    await waitFor(() => expect((client.load as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(loadCallsBefore));
+    // The fake client's load() always returns the original fixture, so the text reverts —
+    // that's fine, the point is the focused cell/row survive the refresh that just happened.
+    await waitFor(() => screen.getByText('Name B'));
+
+    const nameRow = screen.getByText('Name').closest('tr')!;
+    expect(nameRow.style.boxShadow).toContain('var(--vscode-focusBorder');
+    const myModCell = screen.getByText('Name B').closest('td')!;
+    expect(myModCell.style.boxShadow).toContain('var(--vscode-focusBorder');
+    expect(myModCell).toHaveFocus();
+  });
+
+  it('focus resets when LOAD_RECORD navigates to a different record', async () => {
+    renderPanel(twoFieldResult);
+    await waitFor(() => screen.getByText('Name B'));
+    fireEvent.click(screen.getByText('Name B'));
+    expect(screen.getByText('Name').closest('tr')!.style.boxShadow).toContain('var(--vscode-focusBorder');
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000002:Fallout4.esm' },
+      }));
+    });
+
+    await waitFor(() => screen.getByText('Name B'));
+    expect(screen.getByText('Name').closest('tr')!.style.boxShadow).toBe('');
   });
 });
 

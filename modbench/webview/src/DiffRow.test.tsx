@@ -58,6 +58,11 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     onCellDragStart: vi.fn(),
     onCellDrop: vi.fn(),
     context: { kind: 'top-level' },
+    // Issue #222: rowKey matches diff().fieldName below — the same identity RecordPanel derives
+    // for its own `key=` at each nesting level (top-level/array-element/struct-child/grandchild).
+    rowKey: 'Name',
+    focusedCell: null,
+    onFocusCell: vi.fn(),
     ...overrides,
   };
 }
@@ -153,26 +158,84 @@ describe('DiffRow — drag affordance on leaf cells', () => {
     expect(onCellDrop).toHaveBeenCalledWith('Name', 'MyMod.esp', expect.any(Function));
   });
 
-  // Issue #201 / ADR-0033 — the whole cursor contract in one test, at the seam where the two
-  // halves meet. An immutable cell used to be a drag source for its entire lifetime, which is
-  // exactly why `userSelect: 'text'` on it was dead letter: `draggable` consumes the mousedown
-  // that would start a selection. The read-only surface is a real <input> precisely so that
-  // DiskCell's existing focus watcher sees it and stands the drag down — no new wiring, and the
-  // cursor flips from `grab` to a caret for free. Blur hands the cell back.
+  // Issue #201, revised by #222 / ADR-0034: the cursor contract (`grab` at rest, caret once
+  // active) is gone — the grid rests on the default arrow everywhere, so there is no cursor state
+  // left to "stand down." What survives is the drag suppression itself: DiskCell's existing focus
+  // watcher still stands `draggable` down while a real <input> (the read-only surface, here) is
+  // active inside the cell, and hands it back on blur — unrelated to which cursor is showing.
   it('stands the drag down while an immutable cell has its read-only surface active', () => {
     renderRow();
     const cell = screen.getAllByText('disk-value')[0].closest('td')!;
     expect(cell).toHaveAttribute('draggable', 'true');
-    expect(cell.style.cursor).toBe('grab');
 
     fireEvent.click(screen.getAllByText('disk-value')[0]);
     const surface = screen.getByDisplayValue('disk-value');
     expect(cell).toHaveAttribute('draggable', 'false');
-    expect(cell.style.cursor).not.toBe('grab');
 
     fireEvent.blur(surface);
     expect(cell).toHaveAttribute('draggable', 'true');
-    expect(cell.style.cursor).toBe('grab');
+  });
+
+  // Issue #222 / ADR-0034: `grab` is removed from every value cell — the grid rests on the
+  // default arrow, and drag is simply unadvertised (as in xEdit) rather than shown by the cursor.
+  it('shows no grab cursor at rest on a leaf cell', () => {
+    renderRow();
+    const cell = screen.getAllByText('disk-value')[0].closest('td')!;
+    expect(cell.style.cursor).not.toBe('grab');
+  });
+});
+
+// Issue #222 / ADR-0034: click focuses a cell — the row highlights, one cell carries real DOM
+// focus. Focus identity lives above DiffRow (RecordPanel); DiffRow just reports which row/plugin
+// was clicked and reflects back whether its own cells match the `focusedCell` it was given.
+describe('DiffRow — cell focus', () => {
+  it('clicking a value cell reports its row and plugin to onFocusCell', () => {
+    const onFocusCell = vi.fn();
+    renderRow({ onFocusCell });
+    fireEvent.click(screen.getAllByText('disk-value')[1]);
+    expect(onFocusCell).toHaveBeenCalledWith('Name', 'MyMod.esp');
+  });
+
+  it('a disk cell matching focusedCell is tabbable and carries real DOM focus', () => {
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    const cell = screen.getAllByText('disk-value')[1].closest('td')!;
+    expect(cell).toHaveAttribute('tabindex', '0');
+    expect(cell).toHaveFocus();
+  });
+
+  it('a cell not matching focusedCell does not carry DOM focus', () => {
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    const cell = screen.getAllByText('disk-value')[0].closest('td')!; // Fallout4.esm, not the match
+    expect(cell).not.toHaveFocus();
+  });
+
+  it('the row containing the focused cell is highlighted', () => {
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    const row = screen.getAllByText('disk-value')[1].closest('tr')!;
+    expect(row.style.boxShadow).toContain('var(--vscode-focusBorder');
+  });
+
+  it('a row with no focused cell in it is not highlighted', () => {
+    renderRow({ focusedCell: null });
+    const row = screen.getAllByText('disk-value')[0].closest('tr')!;
+    expect(row.style.boxShadow).toBe('');
+  });
+
+  it('the focused cell itself is visibly distinguished from the rest of its row', () => {
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    const focusedTd = screen.getAllByText('disk-value')[1].closest('td')!;
+    const otherTd = screen.getAllByText('disk-value')[0].closest('td')!;
+    expect(focusedTd.style.boxShadow).toContain('var(--vscode-focusBorder');
+    // Different from the row's own highlight, not merely present — the cell's own ring must
+    // stand out from the row ring around it, not be indistinguishable from it.
+    const row = focusedTd.closest('tr')!;
+    expect(focusedTd.style.boxShadow).not.toBe(row.style.boxShadow);
+    expect(otherTd.style.boxShadow).toBe('');
+  });
+
+  it('no cell carries DOM focus when focusedCell is null', () => {
+    renderRow({ focusedCell: null });
+    expect(document.body).toHaveFocus();
   });
 });
 
@@ -207,10 +270,10 @@ describe('DiffRow — drag affordance on compound (hasChildren) cells', () => {
     expect(onCellDrop).toHaveBeenCalledWith('Items', 'MyMod.esp', expect.any(Function));
   });
 
-  // Issue #201 / ADR-0033, AC 8 — the one exception to the cursor contract. `[2]` and `{…}` are
-  // placeholders, not values: a surface here would hand over the literal string `[2]`, which is
-  // worse than nothing because it looks like a successful copy. They stay pure drag sources, and
-  // the leaves are reachable by expanding the row.
+  // Issue #201, revised by #222 / ADR-0034 — `[2]` and `{…}` are placeholders, not values: a
+  // surface here would hand over the literal string `[2]`, which is worse than nothing because it
+  // looks like a successful copy. They stay pure drag sources (no cursor advertises it any more,
+  // per #222), and the leaves are reachable by expanding the row.
   it('a collapsed summary activates no surface and stays a drag source', () => {
     renderCompoundRow();
     const cell = screen.getAllByText('[2]')[0].closest('td')!;
@@ -218,7 +281,7 @@ describe('DiffRow — drag affordance on compound (hasChildren) cells', () => {
 
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(cell).toHaveAttribute('draggable', 'true');
-    expect(cell.style.cursor).toBe('grab');
+    expect(cell.style.cursor).not.toBe('grab');
   });
 });
 

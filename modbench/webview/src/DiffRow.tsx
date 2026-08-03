@@ -4,7 +4,7 @@ import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
-import { baseCell, toggleBtnStyle, getCellStyle } from './gridStyles';
+import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle } from './gridStyles';
 import { pendingIfChanged, extractPendingElementValue, pendingCellContext } from './recordUtils';
 import type { Column } from './recordUtils';
 import type { CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
@@ -136,6 +136,18 @@ export type RowContext =
   | { kind: 'struct-child';  overrideMeta: FieldMetadata; parentFieldName: string }
   | { kind: 'grandchild';    overrideMeta: FieldMetadata; parentFieldName: string; parentFieldIndex: number };
 
+// Issue #222 / ADR-0034: identifies one disk-column cell, panel-wide — the state RecordPanel
+// (the only component that sees every row) holds to enforce "exactly one cell focused at a time,
+// across the whole panel." `rowKey` matches the string RecordPanel already computes for this
+// row's own React `key=` at every nesting level (top-level/array-element/struct-child/
+// grandchild), so no new identity scheme is invented. Scoped to disk columns only — the pending
+// column is its own unwrapped cell with a different gesture (#203/ADR-0033) and is out of scope
+// here; it adopts this model in #232.
+export interface FocusedCell {
+  rowKey: string;
+  plugin: string;
+}
+
 interface DiffRowProps {
   diff: FieldDiff;
   conflictAll: ConflictAll;
@@ -163,6 +175,13 @@ interface DiffRowProps {
   // default-valued element to that plugin's array. Absent (not disabled) for sortable arrays,
   // same rule as arrayEdit above.
   onArrayAdd?: (plugin: string) => void;
+  // Issue #222: this row's own identity (see FocusedCell above), the panel's current focused
+  // cell (or none), and the callback that reports a click up to RecordPanel's single source of
+  // truth. onFocusCell takes rowKey explicitly (rather than closing over it here) so RecordPanel
+  // stays the one place that knows how a click turns into a FocusedCell.
+  rowKey: string;
+  focusedCell: FocusedCell | null;
+  onFocusCell: (rowKey: string, plugin: string) => void;
 }
 
 export function DiffRow({
@@ -170,15 +189,17 @@ export function DiffRow({
   pendingChangeMap, collapsedColumns, onOpen, onEdit,
   onCellDragStart, onCellDrop,
   context, hasChildren, isExpanded, onToggle, arrayEdit, onArrayAdd,
-}: DiffRowProps) {
+  rowKey, focusedCell, onFocusCell,
+}: Readonly<DiffRowProps>) {
   const meta = context.kind === 'top-level' ? fieldMetaMap[diff.fieldName] : context.overrideMeta;
   if (!meta) return null;
 
   const pendingLookupField = context.kind === 'top-level' ? diff.fieldName : context.parentFieldName;
   const showActions = context.kind === 'top-level' || context.kind === 'struct-child';
+  const isRowFocused = focusedCell?.rowKey === rowKey;
 
   return (
-    <tr style={{ backgroundColor: getRowBg(conflictAll) }}>
+    <tr style={{ backgroundColor: getRowBg(conflictAll), ...(isRowFocused ? focusedRowStyle : undefined) }}>
       <td style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.kind !== 'top-level' ? 24 : undefined }}>
         {hasChildren && (
           <button style={toggleBtnStyle} onClick={onToggle}>{isExpanded ? '▼' : '▶'}</button>
@@ -213,6 +234,8 @@ export function DiffRow({
               <DiskCell
                 key={`disk:${o.plugin}`}
                 style={cellStyle}
+                isFocused={focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin}
+                onFocusCell={() => onFocusCell(rowKey, o.plugin)}
                 onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
                 onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
               >
@@ -236,6 +259,8 @@ export function DiffRow({
             <DiskCell
               key={`disk:${o.plugin}`}
               style={cellStyle}
+              isFocused={focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin}
+              onFocusCell={() => onFocusCell(rowKey, o.plugin)}
               onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
               onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
             >
