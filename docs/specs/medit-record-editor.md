@@ -1,15 +1,18 @@
 # mEdit Record editor panel — Surface Specification
 
-**Status: Implemented, but the interaction model below is newly specified and NOT yet built.**
+**Status: Implemented, but the interaction model below is newly specified and only partly built.**
 The grid, conflict colouring, type-appropriate editors, pending changes, drag-to-copy and the
-column-header menu all ship and work. What does not yet match this document is the **gesture
-model**: [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md) replaced
-ADR-0033 after [an audit of xEdit](../research/xedit-ux-audit.md) showed mEdit had specified
-single-click-to-edit, which xEdit does not do. Today a single click still activates an editor,
-there is no cell focus, no keyboard, and no clipboard commands; cells still show a `grab` cursor
-and immutable cells still activate a read-only surface. Everything in *Interaction model* below
-describes the target, not the build. Known gaps beyond that: VMAD is architecturally outside the
-shared cell entirely (#219) and FormKey resolution (#141).
+column-header menu all ship and work. What does not yet fully match this document is the
+**gesture model**: [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)
+replaced ADR-0033 after [an audit of xEdit](../research/xedit-ux-audit.md) showed mEdit had
+specified single-click-to-edit, which xEdit does not do. In the field grid (#222), a single click
+now focuses the cell — the row highlights, the focused cell is outlined, focus survives a
+re-render, and no cell shows a `grab` cursor — but click **also still** opens the editor rather
+than requiring a second click/`F2`/double-click, and there is no keyboard or clipboard support
+yet; that split lands in #223/#224. Immutable cells still activate a read-only surface. Everything
+in *Interaction model* below describes the target, not the build. Known gaps beyond that: VMAD and
+Condition sections don't have the focus model at all yet (#229, #231) and FormKey resolution
+(#141).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not

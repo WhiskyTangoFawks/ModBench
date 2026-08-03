@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { PluginHeader } from './PluginHeader';
 import { confirmRevertGroup } from './nativeBridge';
-import { DiffRow } from './DiffRow';
+import { DiffRow, type FocusedCell } from './DiffRow';
 import { partialSaveMessage, staleIndexMessage } from '../../src/medit/saveClassification';
 import type { ReindexFailure, SaveResult } from '../../src/medit/saveClassification';
 import { buildColumns, columnHeaderContext, currentMasters, defaultElementValue, parseElementIndex, updateArrayAtKey } from './recordUtils';
@@ -52,6 +52,17 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
+  // Issue #222 / ADR-0034: the single source of truth for "which disk-column cell is focused,"
+  // shared by every DiffRow instance so at most one cell across the field grid is ever focused at
+  // once — DiffRow itself only knows about its own row. `rowKey` matches the string this
+  // component already computes for each DiffRow's own `key=` below. Deliberately reset on
+  // LOAD_RECORD (a different record has no "same cell" to keep focused — mirrors the
+  // result/allChanges resets there) but left untouched by refresh() (same-record reload from
+  // staging or a background refresh, where the focused cell should survive — AC3).
+  const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
+  function handleFocusCell(rowKey: string, plugin: string) {
+    setFocusedCell({ rowKey, plugin });
+  }
   // Issue #3: collapsed plugin columns, keyed by plugin name. Deliberately NOT reset by the
   // LOAD_RECORD handler below — collapse state is meant to persist across record-to-record
   // navigation within the same panel session.
@@ -150,6 +161,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         setAllChanges([]);
         setError(null);
         setActionError(null);
+        setFocusedCell(null);
         void refreshRef.current(msg.formKey);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP) {
         const { allChanges: changes, saveGroup } = pendingCellActionsRef.current;
@@ -587,6 +599,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                   onOpen={handleOpen}
                   onEdit={(plugin, fieldName, value) => { void handleEdit(plugin, fieldName, value); }}
                   context={{ kind: 'top-level' }}
+                  rowKey={diff.fieldName}
+                  focusedCell={focusedCell}
+                  onFocusCell={handleFocusCell}
                   hasChildren={hasChildren}
                   isExpanded={isExpanded}
                   onToggle={() => setExpandedStructs(prev => {
@@ -627,6 +642,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                           void handleEdit(plugin, diff.fieldName, updateArrayAtKey(resolveCurrentArr(plugin), elemKey, newValue, elementMeta.isSortable ?? false));
                         }}
                         context={{ kind: 'array-element', overrideMeta: elementMeta, parentFieldName: diff.fieldName }}
+                        rowKey={childKey}
+                        focusedCell={focusedCell}
+                        onFocusCell={handleFocusCell}
                         hasChildren={(child.children?.length ?? 0) > 0}
                         isExpanded={elemExpanded}
                         // Issue #142: move-up/move-down/remove — absent (not disabled) for
@@ -671,6 +689,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                               void handleEdit(plugin, diff.fieldName, updatedArr);
                             }}
                             context={{ kind: 'grandchild', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName, parentFieldIndex: elemIdx }}
+                            rowKey={`${childKey}.${grandchild.fieldName}`}
+                            focusedCell={focusedCell}
+                            onFocusCell={handleFocusCell}
                           />,
                         );
                       }
@@ -699,6 +720,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                           void handleEdit(plugin, diff.fieldName, { ...cur, [subField]: subValue });
                         }}
                         context={{ kind: 'struct-child', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName }}
+                        rowKey={`${diff.fieldName}.${child.fieldName}`}
+                        focusedCell={focusedCell}
+                        onFocusCell={handleFocusCell}
                       />,
                     );
                   }

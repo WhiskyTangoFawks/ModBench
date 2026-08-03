@@ -54,3 +54,21 @@ export function getCellStyle(cellState: ConflictThis | undefined): React.CSSProp
   if (cellState === 'ConflictLoses') return { backgroundColor: bg, color: 'rgba(244,67,54,1)' };
   return { backgroundColor: bg };
 }
+
+// Issue #222 / ADR-0034: the focus model's two paints. `focusedRowStyle` marks the row a focused
+// cell lives in (xEdit's `toFullRowSelect`) and `focusedCellStyle` marks the one cell within it
+// that carries focus (xEdit's `toExtendedFocus`), thicker so it reads as distinct from the row
+// ring around it. Both are inset box-shadows, not `outline` — `outline` would also work in a real
+// browser, but happy-dom (this project's webview test environment) silently drops an
+// `outline-color: var(...)` declaration while accepting the identical `var()` inside `box-shadow`,
+// and a style that can't be asserted in tests isn't one this codebase can keep honest. Both key
+// off `--vscode-focusBorder` to match native VS Code focus theming, and both are state-driven off
+// `isFocused`/`isRowFocused` rather than the browser's native `:focus` ring alone, so the paint and
+// the real DOM focus this ticket establishes (issue #222 comment thread) can never disagree.
+export const focusedRowStyle: React.CSSProperties = {
+  boxShadow: 'inset 0 0 0 1px var(--vscode-focusBorder, #007fd4)',
+};
+
+export const focusedCellStyle: React.CSSProperties = {
+  boxShadow: 'inset 0 0 0 2px var(--vscode-focusBorder, #007fd4)',
+};
