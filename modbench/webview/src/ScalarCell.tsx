@@ -10,6 +10,16 @@ interface ScalarCellProps {
   // Issue #111: whether this cell's column is editable (its plugin is mutable). There is no
   // edit mode — editability is a property of the column, not of a state the user toggles.
   editable: boolean;
+  // Issue #223 / ADR-0034: whether this is the panel's single focused cell (DiffRow/DiskCell's
+  // `focusedCell`) — gates the mutable branch's plain click (second click on an already-focused
+  // cell opens; a first click on an unfocused cell only focuses, via DiskCell's onFocusCell,
+  // which fires *after* this click handler in the bubble order, so a first click never opens
+  // here). Unused by the immutable branch below — see the note there. Optional, defaulting to
+  // `true` (open-on-any-click, the pre-#223 behavior): ConditionSection renders this cell
+  // directly, outside the field grid's focus model, and doesn't pass it — #223 is explicitly
+  // scoped to the field grid only (ConditionSection/VmadSection adopt this model in #229/#231),
+  // so a caller that has no focus concept must keep opening unconditionally, not go silently inert.
+  isFocused?: boolean;
   onCommit: (v: unknown) => void;
 }
 
@@ -21,7 +31,7 @@ function ScalarText({ value }: { value: unknown }) {
     : <span>{toStr(value)}</span>;
 }
 
-export function ScalarCell({ value, meta, editable, onCommit }: ScalarCellProps) {
+export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }: ScalarCellProps) {
   const [draft, setDraft] = useState(() => toStr(value));
   const [prevValue, setPrevValue] = useState(value);
   // Issue #111: only the clicked cell is an input; everything else stays text.
@@ -34,16 +44,39 @@ export function ScalarCell({ value, meta, editable, onCommit }: ScalarCellProps)
   // Issue #201 / ADR-0033: the resting state is the same in both column kinds — text, no cursor
   // of its own, clickable. Editability shows up only in *what* the click activates, below.
   if (!active) {
-    // Issue #201 / ADR-0033: on an immutable column `—` is a placeholder, not a value — the same
-    // argument the ADR makes for `{…}` and `[3]`. A surface here would offer an empty selection
-    // that looks like a successful copy. One-sided: a *mutable* null cell keeps its affordance,
-    // or the field could never be given a value.
-    if (!editable && value == null) return <ScalarText value={value} />;
+    if (!editable) {
+      // Issue #201 / ADR-0033: on an immutable column `—` is a placeholder, not a value — the
+      // same argument the ADR makes for `{…}` and `[3]`. A surface here would offer an empty
+      // selection that looks like a successful copy.
+      if (value == null) return <ScalarText value={value} />;
+      // Issue #223: deliberately untouched by this ticket's open-gate — plain click keeps
+      // activating the read-only surface unconditionally, exactly as it did before #223. #226
+      // ("Retire the read-only value surface") is what gates/removes this, and only once #224
+      // (Ctrl+C copies the focused cell's model value) ships its replacement copy path — gating
+      // it here first would make an immutable cell's value briefly uncopyable. No
+      // `data-open-trigger` here either, so F2 correctly does nothing on this branch (it never
+      // did before this ticket).
+      return (
+        <span onClick={() => setActive(true)} style={{ display: 'block', minHeight: '1em' }}>
+          <ScalarText value={value} />
+        </span>
+      );
+    }
+    // Issue #223 / ADR-0034: mutable columns gate opening behind xEdit's three triggers — a
+    // second click on the already-focused cell (isFocused is still the *pre-click* value on a
+    // first click, since this handler fires before DiskCell's ancestor onFocusCell in the bubble
+    // order, so a first click on an unfocused cell never opens), F2 (DiskCell's own
+    // `querySelector('[data-open-trigger]')?.click()`), or an unconditional double click.
     // Issue #204 / ADR-0033: no cursor override here — the parent DiskCell's `grab` cursor is
     // this cell's resting affordance (it's a drag source the whole time); a text-caret would
     // falsely imply only editing is possible until the cell is actually clicked into edit.
     return (
-      <span onClick={() => setActive(true)} style={{ display: 'block', minHeight: '1em' }}>
+      <span
+        data-open-trigger
+        onClick={() => { if (isFocused) setActive(true); }}
+        onDoubleClick={() => setActive(true)}
+        style={{ display: 'block', minHeight: '1em' }}
+      >
         <ScalarText value={value} />
       </span>
     );

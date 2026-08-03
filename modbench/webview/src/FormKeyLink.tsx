@@ -82,10 +82,17 @@ export function formKeyLabel(value: string, resolution?: FormKeyResolution): str
 // left the cell unable to hand the user its own value — which under ADR-0033's cursor contract is
 // the whole of copy. It is also the format the picker's own items have always used
 // (`toFormKeyQuickPickItem`), so a reference now reads back exactly as it was chosen.
-export function FormKeyLink({ value, onOpen, onPlainClick, resolution = UNRESOLVED }: Readonly<{
+export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTrigger, resolution = UNRESOLVED }: Readonly<{
   value: string;
   onOpen: (fk: string) => void;
   onPlainClick?: () => void;
+  // Issue #223 / ADR-0034: both optional, and both used by exactly one caller — FormKeyCell's
+  // mutable branch, which wires them to the same `openPicker` gated the way ScalarCell/FlagCell
+  // gate their own mutable open triggers. VmadSection (out of scope for #223) doesn't pass
+  // either, so its rendering is unaffected — no `data-open-trigger` attribute, no double-click
+  // behavior, exactly as before this ticket.
+  onDoubleClick?: () => void;
+  openTrigger?: boolean;
   resolution?: FormKeyResolution;
 }>) {
   const ctrl = useCtrlHeld();
@@ -96,10 +103,12 @@ export function FormKeyLink({ value, onOpen, onPlainClick, resolution = UNRESOLV
 
   return (
     <button
+      data-open-trigger={openTrigger || undefined}
       onClick={e => {
         if (e.ctrlKey || e.metaKey) { if (linksTo) onOpen(value); }
         else onPlainClick?.();
       }}
+      onDoubleClick={onDoubleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{

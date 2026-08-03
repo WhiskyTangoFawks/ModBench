@@ -121,21 +121,93 @@ describe('DiffRow — editability follows immutableSet', () => {
     expect(onEdit).not.toHaveBeenCalled();
   });
 
-  it('a mutable column click activates an editable input', () => {
-    renderRow();
+  // Issue #223 / ADR-0034: a mutable column no longer opens on a bare click — only a *second*
+  // click on the already-focused cell does, so this test pre-seeds `focusedCell` to simulate the
+  // cell already carrying focus (the state a first click would have produced).
+  it('a click on the already-focused mutable column activates an editable input', () => {
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
     const cells = screen.getAllByText('disk-value');
-    fireEvent.click(cells[1]); // MyMod.esp — mutable
+    fireEvent.click(cells[1]); // MyMod.esp — mutable, already focused
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
+  });
+
+  // Issue #223 AC1: a first click on an unfocused cell only focuses it — the editor stays shut.
+  it('a click on an unfocused mutable column only focuses it, opening nothing', () => {
+    renderRow({ focusedCell: null });
+    fireEvent.click(screen.getAllByText('disk-value')[1]); // MyMod.esp — mutable, not focused
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('editing a mutable cell calls onEdit with plugin/fieldName/value', () => {
     const onEdit = vi.fn();
-    renderRow({ onEdit });
+    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
     fireEvent.click(screen.getAllByText('disk-value')[1]);
     const input = screen.getByDisplayValue('disk-value');
     fireEvent.change(input, { target: { value: 'new-value' } });
     fireEvent.blur(input);
     expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Name', 'new-value');
+  });
+});
+
+// Issue #223 / ADR-0034: F2 opens the focused cell's editor by dispatching a click at whichever
+// element the currently-rendered leaf marked `data-open-trigger` — DiskCell's own mechanism, so
+// it's exercised here rather than at the leaf seam (the leaf tests already cover the trigger
+// element/gate itself).
+describe('DiffRow — F2 opens the focused cell (#223)', () => {
+  it('F2 on the focused mutable disk cell opens its editor', () => {
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    const cell = screen.getAllByText('disk-value')[1].closest('td')!;
+    fireEvent.keyDown(cell, { key: 'F2' });
+    expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
+  });
+
+  // Untouched by this ticket — F2 never opened anything on an immutable cell before #223, and
+  // the immutable branch carries no `data-open-trigger`, so it still doesn't.
+  it('F2 on the focused immutable disk cell opens nothing', () => {
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'Fallout4.esm' } });
+    const cell = screen.getAllByText('disk-value')[0].closest('td')!;
+    fireEvent.keyDown(cell, { key: 'F2' });
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('F2 does nothing when the cell is not the focused one', () => {
+    renderRow({ focusedCell: null });
+    const cell = screen.getAllByText('disk-value')[1].closest('td')!;
+    fireEvent.keyDown(cell, { key: 'F2' });
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+});
+
+// Issue #223 / ADR-0034: a double click on a value cell opens its editor unconditionally,
+// independent of the click-focus gate above.
+describe('DiffRow — double click opens a value cell (#223)', () => {
+  it('double click on a mutable disk cell opens its editor even when not previously focused', () => {
+    renderRow({ focusedCell: null });
+    fireEvent.doubleClick(screen.getAllByText('disk-value')[1]); // MyMod.esp — mutable
+    expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
+  });
+
+  // Untouched by this ticket — see the F2 case above for the same rationale.
+  it('double click on an immutable disk cell opens nothing', () => {
+    renderRow({ focusedCell: null });
+    fireEvent.doubleClick(screen.getAllByText('disk-value')[0]); // Fallout4.esm — immutable
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('double click on the label column toggles expand/collapse without breaking the existing button', () => {
+    const onToggle = vi.fn();
+    renderRow({ hasChildren: true, isExpanded: false, onToggle });
+    const labelCell = screen.getByText('▶').closest('td')!;
+    fireEvent.doubleClick(labelCell);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText('▶'));
+    expect(onToggle).toHaveBeenCalledTimes(2);
+  });
+
+  it('double click on the label column does nothing for a leaf row with no children', () => {
+    renderRow();
+    const labelCell = screen.getByText('Name').closest('td')!;
+    expect(() => fireEvent.doubleClick(labelCell)).not.toThrow();
   });
 });
 
@@ -334,7 +406,11 @@ describe('DiffRow — pending companion column', () => {
   // Issue #203 AC: "the disk cell for that same field remains editable too (no lock)" — editing
   // the pending cell must not disable the disk cell for the same row/plugin.
   it('the disk cell for the same field stays editable while the pending cell is also editable', () => {
-    render(<table><tbody>{React.createElement(DiffRow, pendingProps())}</tbody></table>);
+    // Issue #223: pre-seeded as already focused — see the top-level "already-focused mutable
+    // column" test above for why a bare click no longer suffices.
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({
+      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' },
+    }))}</tbody></table>);
     // Both plugin columns render 'disk-value' (see override() default fixture); MyMod.esp's disk
     // cell is the second occurrence, same as the "editability follows immutableSet" tests above.
     const diskCells = screen.getAllByText('disk-value');
