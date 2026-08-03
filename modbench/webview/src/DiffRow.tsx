@@ -207,8 +207,12 @@ export function DiffRow({
   return (
     <tr style={{ backgroundColor: getRowBg(conflictAll), ...(isRowFocused ? focusedRowStyle : undefined) }}>
       {/* Issue #223 / ADR-0034: double-clicking the label column expands/collapses the node,
-          the same action the toggle button already performs — onToggle is undefined when
-          hasChildren is false, so this is a no-op on a leaf row's label. */}
+          the same action the toggle button already performs. RecordPanel always supplies a
+          defined onToggle for top-level and array-element rows, even when hasChildren is
+          false — there, double-click harmlessly flips this row's key in expandedStructs, an
+          entry nothing ever reads for a row with no children to expand. onToggle is genuinely
+          undefined only for struct-child/grandchild rows, which RecordPanel never wires with
+          one (no expand button there either), so this is a true no-op only for those. */}
       <td
         style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.kind !== 'top-level' ? 24 : undefined }}
         onDoubleClick={onToggle}
