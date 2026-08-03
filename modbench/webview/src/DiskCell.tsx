@@ -63,6 +63,19 @@ export function DiskCell({ style, isFocused, onFocusCell, onDragStart, onDrop, c
       style={{ ...style, ...(isFocused ? focusedCellStyle : undefined) }}
       draggable={!editing}
       onClick={onFocusCell}
+      // Issue #223 / ADR-0034: F2 opens the focused cell's editor. This `<td>` is the one real
+      // focused DOM element (see the class comment above), so it's where the keydown has to
+      // land — but which control to open is the leaf's own business (it varies per type and its
+      // "is open" state is local to the leaf), so this doesn't reach in and flip any state
+      // itself. Instead it dispatches a real click at whichever element inside its own subtree
+      // the currently-rendered leaf marked `data-open-trigger` — the exact element that leaf's
+      // own click-to-open handler already lives on (gated there on `isFocused`, which is true
+      // here by construction: F2 only ever fires on the focused `<td>`). An immutable cell or a
+      // struct/array summary row carries no such element, so this is a harmless no-op there —
+      // matching "F2 opens nothing" for both, with no separate check needed.
+      onKeyDown={e => {
+        if (e.key === 'F2') ref.current?.querySelector<HTMLElement>('[data-open-trigger]')?.click();
+      }}
       onFocus={e => { if (isFormControl(e.target)) setEditing(true); }}
       onBlur={e => { if (isFormControl(e.target)) setEditing(false); }}
       onDragStart={onDragStart}

@@ -96,6 +96,12 @@ function renderCell(
   value: unknown,
   meta: FieldMetadata,
   editable: boolean,
+  // Issue #223 / ADR-0034: whether this is the panel's single focused cell — threaded down to
+  // whichever leaf renders, so its own click handler can gate opening on it. The pending-column
+  // caller below passes a constant `true` rather than a real computed value: pending cells don't
+  // have a focus model yet (that's #232), and this ticket must not regress their existing
+  // click-always-opens behavior while it's out of scope.
+  isFocused: boolean,
   onOpen: (fk: string) => void,
   onCommit: (v: unknown) => void,
   checkError?: string | null,
@@ -104,7 +110,7 @@ function renderCell(
   if (meta.type === 'formKey') {
     return (
       <FormKeyCell
-        value={value} meta={meta} editable={editable}
+        value={value} meta={meta} editable={editable} isFocused={isFocused}
         onOpen={onOpen} onCommit={fk => onCommit(fk)} checkError={checkError} resolution={resolution}
       />
     );
@@ -125,9 +131,9 @@ function renderCell(
     );
   }
   if (meta.type === 'enum' && meta.isBitmask) {
-    return <FlagCell value={value} meta={meta} editable={editable} onCommit={onCommit} />;
+    return <FlagCell value={value} meta={meta} editable={editable} isFocused={isFocused} onCommit={onCommit} />;
   }
-  return <ScalarCell value={value} meta={meta} editable={editable} onCommit={onCommit} />;
+  return <ScalarCell value={value} meta={meta} editable={editable} isFocused={isFocused} onCommit={onCommit} />;
 }
 
 export type RowContext =
@@ -200,7 +206,13 @@ export function DiffRow({
 
   return (
     <tr style={{ backgroundColor: getRowBg(conflictAll), ...(isRowFocused ? focusedRowStyle : undefined) }}>
-      <td style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.kind !== 'top-level' ? 24 : undefined }}>
+      {/* Issue #223 / ADR-0034: double-clicking the label column expands/collapses the node,
+          the same action the toggle button already performs — onToggle is undefined when
+          hasChildren is false, so this is a no-op on a leaf row's label. */}
+      <td
+        style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.kind !== 'top-level' ? 24 : undefined }}
+        onDoubleClick={onToggle}
+      >
         {hasChildren && (
           <button style={toggleBtnStyle} onClick={onToggle}>{isExpanded ? '▼' : '▶'}</button>
         )}
@@ -264,7 +276,8 @@ export function DiffRow({
               onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
               onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
             >
-              {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin), onOpen,
+              {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin),
+                focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin, onOpen,
                 v => onEdit(o.plugin, diff.fieldName, v), checkError, diff.resolutions?.[o.plugin])}
               {arrayEdit && !immutableSet.has(o.plugin) && <ArrayElementControls plugin={o.plugin} controls={arrayEdit} />}
             </DiskCell>
@@ -323,8 +336,12 @@ export function DiffRow({
                 reveal moved to the right-click menu above). Issue #159: the FormKey
                 resolution comes from the staged change's own `resolutions`, keyed by this
                 row's sub-path within the change's NewValue (pendingResolutionPath) — the
-                same tri-state signal disk columns use, not a stand-in. */}
-            {hasPending && renderCell(pendingValue, meta, true, onOpen,
+                same tri-state signal disk columns use, not a stand-in.
+                Issue #223: `isFocused` is hardcoded `true` here, not derived from
+                `focusedCell` — the pending column isn't wrapped in DiskCell and has no focus
+                model yet (#232 builds it). Passing `true` preserves this cell's existing
+                click-always-opens behavior unchanged, rather than silently gating it shut. */}
+            {hasPending && renderCell(pendingValue, meta, true, true, onOpen,
               v => onEdit(col.plugin, diff.fieldName, v), undefined,
               meta.type === 'formKey' ? pendingResolution : undefined)}
           </td>

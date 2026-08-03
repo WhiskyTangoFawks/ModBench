@@ -556,7 +556,9 @@ describe('RecordPanel — array element edit', () => {
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('[1]'));
 
-    // MyMod.esp's [1] element is 'gamma' — click it to activate its input, then edit it
+    // MyMod.esp's [1] element is 'gamma'. Issue #223: the first click only focuses it; a
+    // second click on the now-focused cell activates its input, which is then edited.
+    fireEvent.click(screen.getByText('gamma'));
     fireEvent.click(screen.getByText('gamma'));
     const gammaInput = screen.getByDisplayValue('gamma');
     fireEvent.change(gammaInput, { target: { value: 'epsilon' } });
@@ -628,7 +630,9 @@ describe('RecordPanel — struct sub-field edit', () => {
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('5'));
 
-    // Click X1's cell in the MyMod.esp column to activate its input.
+    // Click X1's cell in the MyMod.esp column to activate its input. Issue #223: the first
+    // click only focuses it; a second click on the now-focused cell opens it.
+    fireEvent.click(screen.getByText('5'));
     fireEvent.click(screen.getByText('5'));
     const x1Input = screen.getByDisplayValue('5');
     fireEvent.change(x1Input, { target: { value: '10' } });
@@ -652,7 +656,9 @@ describe('RecordPanel — struct sub-field edit', () => {
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('5'));
 
-    // Click X1's cell in the MyMod.esp column to activate its input.
+    // Click X1's cell in the MyMod.esp column to activate its input. Issue #223: the first
+    // click only focuses it; a second click on the now-focused cell opens it.
+    fireEvent.click(screen.getByText('5'));
     fireEvent.click(screen.getByText('5'));
     const x1Input = screen.getByDisplayValue('5');
     fireEvent.change(x1Input, { target: { value: '10' } });

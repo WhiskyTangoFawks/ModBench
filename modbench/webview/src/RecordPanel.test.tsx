@@ -212,9 +212,12 @@ describe('RecordPanel', () => {
     expect(screen.getByDisplayValue('Original Name')).toHaveAttribute('readonly');
   });
 
-  it('a cell in a mutable column does activate an input when clicked', async () => {
+  // Issue #223 / ADR-0034: a mutable cell no longer opens on the first click — that click only
+  // focuses it (xEdit's model). A second click on the now-focused cell opens the editor.
+  it('a cell in a mutable column does activate an input when clicked a second time', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('Override Name'));
     fireEvent.click(screen.getByText('Override Name'));
     expect(screen.getByDisplayValue('Override Name')).toBeInTheDocument();
   });
@@ -546,7 +549,9 @@ describe('RecordPanel — struct sub-rows', () => {
     await waitFor(() => screen.getByText('X'));
 
     // The X sub-field in the MyMod.esp column (value 15) — Fallout4.esm is immutable, so its
-    // cells never activate. Click the cell to activate its input, then edit it.
+    // cells never activate. Issue #223: the first click only focuses it (xEdit's model); a
+    // second click on the now-focused cell activates its input, which is then edited.
+    fireEvent.click(screen.getByText('15'));
     fireEvent.click(screen.getByText('15'));
     const inputFor15 = screen.getByDisplayValue('15');
     fireEvent.change(inputFor15, { target: { value: '99' } });
@@ -579,7 +584,8 @@ describe('RecordPanel — 422 ProblemDetails detail is surfaced', () => {
     }));
     renderPanel(compareResult, { save });
     await waitFor(() => screen.getByText('Override Name'));
-    fireEvent.click(screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('Override Name')); // #223: first click only focuses
+    fireEvent.click(screen.getByText('Override Name')); // second click opens the editor
 
     const input = screen.getByDisplayValue('Override Name');
     fireEvent.change(input, { target: { value: 'Changed Name' } });
@@ -954,10 +960,12 @@ describe('RecordPanel — drag affordance on field cells', () => {
   // Issue #111: a draggable ancestor swallows text selection inside an input — the browser
   // starts a drag instead of selecting. So a cell stops being draggable exactly while its own
   // input is active, and becomes draggable again when the input closes.
+  // Issue #223: the first click only focuses the cell; the second opens its input.
   it('a cell is not draggable while its own input is active', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
     const cell = screen.getByText('Override Name').closest('td')!;
+    fireEvent.click(screen.getByText('Override Name'));
     fireEvent.click(screen.getByText('Override Name'));
 
     expect(screen.getByDisplayValue('Override Name')).toBeInTheDocument();
@@ -969,6 +977,7 @@ describe('RecordPanel — drag affordance on field cells', () => {
     await waitFor(() => screen.getByText('Override Name'));
     const cell = screen.getByText('Override Name').closest('td')!;
     fireEvent.click(screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('Override Name'));
     fireEvent.blur(screen.getByDisplayValue('Override Name'));
 
     expect(cell.getAttribute('draggable')).toBe('true');
@@ -979,6 +988,7 @@ describe('RecordPanel — drag affordance on field cells', () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
     const sibling = screen.getByText('Original Name').closest('td')!;
+    fireEvent.click(screen.getByText('Override Name'));
     fireEvent.click(screen.getByText('Override Name'));
 
     expect(sibling.getAttribute('draggable')).toBe('true');
@@ -1056,7 +1066,9 @@ describe('RecordPanel — cell focus (issue #222 / ADR-0034)', () => {
     await waitFor(() => screen.getByText('Name B'));
     const loadCallsBefore = (client.load as ReturnType<typeof vi.fn>).mock.calls.length;
 
-    // Clicking still opens the editor too, unchanged — this ticket is purely additive.
+    // Issue #223: the first click focuses (already true per #222); the second, on the
+    // now-focused cell, opens the editor.
+    fireEvent.click(screen.getByText('Name B'));
     fireEvent.click(screen.getByText('Name B'));
     const input = screen.getByDisplayValue('Name B');
     fireEvent.change(input, { target: { value: 'Changed Name' } });
@@ -1912,7 +1924,8 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
   it('an ordinary field edit posts pendingChanged once staged', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
-    fireEvent.click(screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('Override Name')); // #223: first click only focuses
+    fireEvent.click(screen.getByText('Override Name')); // second click opens the editor
     const input = screen.getByDisplayValue('Override Name');
     fireEvent.change(input, { target: { value: 'Changed Name' } });
     fireEvent.blur(input);
@@ -1926,7 +1939,8 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
     const save = vi.fn().mockResolvedValue(resp(409, {}));
     renderPanel(compareResult, { save });
     await waitFor(() => screen.getByText('Override Name'));
-    fireEvent.click(screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('Override Name')); // #223: first click only focuses
+    fireEvent.click(screen.getByText('Override Name')); // second click opens the editor
     const input = screen.getByDisplayValue('Override Name');
     fireEvent.change(input, { target: { value: 'Changed Name' } });
     fireEvent.blur(input);
@@ -2085,7 +2099,8 @@ describe('RecordPanel — action logging (issue #200)', () => {
   it('a disk-cell field edit logs a DEBUG line naming the plugin, field, and record', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
-    fireEvent.click(screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('Override Name')); // #223: first click only focuses
+    fireEvent.click(screen.getByText('Override Name')); // second click opens the editor
     const input = screen.getByDisplayValue('Override Name');
     fireEvent.change(input, { target: { value: 'Changed Name' } });
     fireEvent.blur(input);
@@ -2105,7 +2120,8 @@ describe('RecordPanel — action logging (issue #200)', () => {
     const save = vi.fn().mockResolvedValue(resp(409, {}));
     renderPanel(compareResult, { save });
     await waitFor(() => screen.getByText('Override Name'));
-    fireEvent.click(screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('Override Name')); // #223: first click only focuses
+    fireEvent.click(screen.getByText('Override Name')); // second click opens the editor
     const input = screen.getByDisplayValue('Override Name');
     fireEvent.change(input, { target: { value: 'Changed Name' } });
     fireEvent.blur(input);
