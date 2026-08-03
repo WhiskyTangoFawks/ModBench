@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { toStr } from './recordUtils';
+import { modelValue } from './modelValue';
 import { mono, fg } from './gridStyles';
 import { ReadOnlyValueSurface } from './ReadOnlyValueSurface';
 import type { FieldMetadata } from './types';
@@ -24,21 +24,23 @@ interface ScalarCellProps {
 }
 
 // The text a cell shows when it is not being edited. Null/missing renders as an empty-looking
-// em-dash, never "null"/"undefined" (spec: field type rendering rule 5).
-function ScalarText({ value }: { value: unknown }) {
+// em-dash, never "null"/"undefined" (spec: field type rendering rule 5). Issue #224: sources the
+// non-null text from modelValue rather than its own toStr call, so this is provably the same
+// string Ctrl+C copies (AC6) — not a second formatter that merely happens to agree with it today.
+function ScalarText({ value, meta }: { value: unknown; meta: FieldMetadata }) {
   return value == null
     ? <span style={{ opacity: 0.35 }}>—</span>
-    : <span>{toStr(value)}</span>;
+    : <span>{modelValue(value, meta)}</span>;
 }
 
 export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }: ScalarCellProps) {
-  const [draft, setDraft] = useState(() => toStr(value));
+  const [draft, setDraft] = useState(() => modelValue(value, meta));
   const [prevValue, setPrevValue] = useState(value);
   // Issue #111: only the clicked cell is an input; everything else stays text.
   const [active, setActive] = useState(false);
   if (prevValue !== value) {
     setPrevValue(value);
-    setDraft(toStr(value));
+    setDraft(modelValue(value, meta));
   }
 
   // Issue #201 / ADR-0033: the resting state is the same in both column kinds — text, no cursor
@@ -48,7 +50,7 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }
       // Issue #201 / ADR-0033: on an immutable column `—` is a placeholder, not a value — the
       // same argument the ADR makes for `{…}` and `[3]`. A surface here would offer an empty
       // selection that looks like a successful copy.
-      if (value == null) return <ScalarText value={value} />;
+      if (value == null) return <ScalarText value={value} meta={meta} />;
       // Issue #223: deliberately untouched by this ticket's open-gate — plain click keeps
       // activating the read-only surface unconditionally, exactly as it did before #223. #226
       // ("Retire the read-only value surface") is what gates/removes this, and only once #224
@@ -58,7 +60,7 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }
       // did before this ticket).
       return (
         <span onClick={() => setActive(true)} style={{ display: 'block', minHeight: '1em' }}>
-          <ScalarText value={value} />
+          <ScalarText value={value} meta={meta} />
         </span>
       );
     }
@@ -77,7 +79,7 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }
         onDoubleClick={() => setActive(true)}
         style={{ display: 'block', minHeight: '1em' }}
       >
-        <ScalarText value={value} />
+        <ScalarText value={value} meta={meta} />
       </span>
     );
   }
@@ -85,7 +87,7 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }
   // Issue #201: an immutable column activates a read-only surface instead of an editor, before
   // any type branching below — so string/int/float/bool/enum are all covered by this one line
   // and nothing here is type-aware.
-  if (!editable) return <ReadOnlyValueSurface value={toStr(value)} onBlur={() => setActive(false)} />;
+  if (!editable) return <ReadOnlyValueSurface value={modelValue(value, meta)} onBlur={() => setActive(false)} />;
 
   const inputBase: React.CSSProperties = {
     fontFamily: mono,
@@ -104,7 +106,7 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }
   // ChangeGroup's dependency closure with it (ADR-0028). Comparing the rendered strings keeps
   // this in the same terms the draft is held in, so 5 typed over 5 is a no-op like any other.
   function commitIfChanged(next: unknown) {
-    if (toStr(next) !== toStr(value)) onCommit(next);
+    if (modelValue(next, meta) !== modelValue(value, meta)) onCommit(next);
   }
 
   if (meta.type === 'bool') {

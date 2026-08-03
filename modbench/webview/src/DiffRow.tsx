@@ -4,6 +4,8 @@ import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell } from './DiskCell';
+import { modelValue } from './modelValue';
+import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle } from './gridStyles';
 import { pendingIfChanged, extractPendingElementValue, pendingCellContext } from './recordUtils';
 import type { Column } from './recordUtils';
@@ -237,6 +239,14 @@ export function DiffRow({
           const checkError = showActions
             ? overrideMap[o.plugin]?.fields.find(f => f.metadata.name === pendingLookupField)?.checkError
             : undefined;
+          // Issue #224 / ADR-0034: the string Ctrl+C copies for this cell — the same value used
+          // for display below (diff.values[o.plugin]), run through the one shared modelValue
+          // function (AC6), computed once here so both the struct/array-summary branch and the
+          // leaf branch below hand DiskCell the identical value a scalar/flag/formKey cell would
+          // display and a struct/array cell would otherwise only show as "{…}"/"[3]" (AC5). Plain
+          // disk value, no pending merge — a disk column's own display never merges pending (only
+          // the separate Pending column does, out of scope here per #232).
+          const copyText = modelValue(diff.values[o.plugin], meta, diff.resolutions?.[o.plugin]);
           if (hasChildren) {
             const len = meta.type === 'array' && Array.isArray(diff.values[o.plugin])
               ? (diff.values[o.plugin] as unknown[]).length
@@ -254,6 +264,7 @@ export function DiffRow({
                 onFocusCell={() => onFocusCell(rowKey, o.plugin)}
                 onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
                 onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
+                onCopy={() => copyToClipboard(copyText)}
               >
                 {!isExpanded && (
                   <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
@@ -279,6 +290,7 @@ export function DiffRow({
               onFocusCell={() => onFocusCell(rowKey, o.plugin)}
               onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
               onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
+              onCopy={() => copyToClipboard(copyText)}
             >
               {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin),
                 focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin, onOpen,

@@ -58,6 +58,13 @@ export interface RouteRecordPanelMessageDeps {
   // Issue #212: same per-message reconstruction as formKeyPicker/conditionFunctionPicker above.
   revertGroupConfirm: RevertGroupConfirmDeps | undefined;
   addScriptName: AddScriptNameDeps | undefined;
+  // Issue #224: ADR-0026 surfacing for COPY_TO_CLIPBOARD's failure path — a rejected
+  // `vscode.env.clipboard.writeText` (headless/remote sessions, missing Linux clipboard tooling,
+  // Wayland permissions) is an "explicit action failed" per the severity table (the user pressed
+  // Ctrl+C), so it needs an error notification + log, not a silent swallow. Shared like
+  // `channel` above, not rebuilt per panel like the *Picker/*Confirm/*Name bundles — there's no
+  // per-panel reply to route, just a log/toast.
+  reporter: Reporter;
 }
 
 export interface FormKeyPickerDeps {
@@ -284,6 +291,27 @@ async function routePromptMessage(m: WebviewToExtension, deps: RouteRecordPanelM
   }
 }
 
+// Issue #224: Ctrl+C's clipboard write. `vscode.env.clipboard.writeText` is extension-host-only
+// (webview clipboard access isn't guaranteed) — the webview has already computed the model value
+// (modelValue.ts) by the time this arrives, so there's nothing to inject; this is a direct call,
+// same as OPEN_RECORD's `vscode.commands.executeCommand` in routeRecordPanelMessage below, not
+// routed through a deps bundle like the *Picker/*Confirm/*Name bridges (which need a per-panel
+// reply target this fire-and-forget message has no use for). Split out of
+// routeRecordPanelMessage's own dispatch (like routePromptMessage above) partly to keep that
+// function's complexity down, and partly because the try/catch reads better as its own named
+// step: this message is itself called fire-and-forget (`void routeRecordPanelMessage(...)` at the
+// onDidReceiveMessage call site), so an unhandled rejection here would surface as nothing at all,
+// not even a silent swallow — a real failure mode for a clipboard write (headless/remote sessions,
+// missing Linux clipboard tooling, Wayland permissions), so it gets the same catch-log-surface
+// treatment every other catch in this codebase uses (modbench/CLAUDE.md: "no silent catch {}").
+async function copyToClipboard(reporter: Reporter, value: string): Promise<void> {
+  try {
+    await vscode.env.clipboard.writeText(value);
+  } catch (err) {
+    reporter.report('error', 'Could not copy to the clipboard.', err instanceof Error ? err.message : String(err));
+  }
+}
+
 // Issue #174: the record editor webview and the extension host are different processes,
 // bridged only by `postMessage` — this is the single dispatch point for every message the
 // webview sends up. Kept as a plain function (not a class/registered-handler pattern) so it's
@@ -298,6 +326,8 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
     deps.reveal?.provider.refresh();
   } else if (m.type === WEBVIEW_TO_EXTENSION.LOG) {
     deps.channel[m.level](m.message);
+  } else if (m.type === WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD) {
+    await copyToClipboard(deps.reporter, m.value);
   } else {
     await routePromptMessage(m, deps);
   }

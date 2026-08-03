@@ -97,3 +97,12 @@ export function pickScriptName(): Promise<string | null> {
     requestId => ({ type: WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME, requestId }),
   );
 }
+
+// Issue #224: Ctrl+C's clipboard write — `vscode.env.clipboard.writeText` is extension-host-only
+// (webview clipboard access isn't guaranteed), so DiskCell/DiffRow post the already-computed
+// model value (modelValue.ts) up here instead. Unlike every bridge above, this is fire-and-forget
+// rather than requestReply: nothing needs to come back, since the caller already has the string
+// it copied — there's no answer to wait for, only a write to hand off.
+export function copyToClipboard(value: string): void {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value });
+}

@@ -96,6 +96,13 @@ export const WEBVIEW_TO_EXTENSION = {
   // same "webview can't call the native API itself" reasoning as every bridge above. No seed:
   // the deleted AddScriptDialog always started from an empty name.
   OPEN_ADD_SCRIPT_NAME: 'openAddScriptName',
+  // #224: Ctrl+C's clipboard write — `vscode.env.clipboard.writeText` is extension-host-only
+  // (webview clipboard access isn't guaranteed), so DiffRow posts the already-computed model
+  // value (modelValue.ts) up here. Unlike every *Picker/*Confirm/*Name bridge above, this is
+  // fire-and-forget: nothing needs to come back, so there is no requestId and no matching
+  // EXTENSION_TO_WEBVIEW reply type — the webview never learns whether the write succeeded, the
+  // same shape PENDING_CHANGED/LOG already use below.
+  COPY_TO_CLIPBOARD: 'copyToClipboard',
 } as const;
 
 export type LogLevel = 'debug' | 'info' | 'warn';
@@ -108,7 +115,8 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER; requestId: string; seed: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM; requestId: string; detail: string }
-  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME; requestId: string };
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME; requestId: string }
+  | { type: typeof WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD; value: string };
 
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
