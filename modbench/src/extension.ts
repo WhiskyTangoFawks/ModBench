@@ -225,13 +225,13 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     provider: changeGroupTreeProvider, view: changeGroupTreeView, log,
     reporter: makeReporter(outputChannel, 'revealPendingChange'),
   };
-  // #210/#211/#212: formKeyPicker/conditionFunctionPicker/revertGroupConfirm/addScriptName are
-  // left undefined here — each `reply` must post back to the one panel that asked (never a
-  // broadcast), so openRecordPanel rebuilds these bundles per panel at the onDidReceiveMessage
-  // call site rather than sharing one instance the way reveal/channel are.
+  // #210/#211/#212/#225: formKeyPicker/conditionFunctionPicker/revertGroupConfirm/addScriptName/
+  // clipboardRead are left undefined here — each `reply` must post back to the one panel that
+  // asked (never a broadcast), so openRecordPanel rebuilds these bundles per panel at the
+  // onDidReceiveMessage call site rather than sharing one instance the way reveal/channel are.
   const routerDeps: RouteRecordPanelMessageDeps = {
     reveal, channel: outputChannel, formKeyPicker: undefined, conditionFunctionPicker: undefined,
-    revertGroupConfirm: undefined, addScriptName: undefined,
+    revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined,
     // Issue #224: COPY_TO_CLIPBOARD's ADR-0026 surfacing on a failed clipboard write — shared
     // like `channel` above, not rebuilt per panel, since there's no per-panel reply to route.
     reporter: makeReporter(outputChannel, 'copyToClipboard'),
@@ -1391,6 +1391,7 @@ function openRecordPanel(
       conditionFunctionPicker: { repository, reply: (m) => void panel.webview.postMessage(m) },
       revertGroupConfirm: { reply: (m) => void panel.webview.postMessage(m) },
       addScriptName: { reply: (m) => void panel.webview.postMessage(m) },
+      clipboardRead: { reply: (m) => void panel.webview.postMessage(m) },
     });
   });
 

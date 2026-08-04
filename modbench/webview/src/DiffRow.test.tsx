@@ -8,10 +8,14 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 // these tests don't exercise the picker itself (see FormKeyCell.test.tsx for that).
 // Issue #224: copyToClipboard is DiffRow's own import now (Ctrl+C's clipboard write) — mocked
 // here too so the #224 describe block below can assert on it directly.
+// Issue #225: readClipboardText is DiffRow's own import too (Ctrl+V's clipboard read) — mocked so
+// the #225 describe block below can control what it resolves to per test.
 const copyToClipboard = vi.fn();
+const readClipboardText = vi.fn();
 vi.mock('./nativeBridge', () => ({
   pickFormKey: vi.fn().mockResolvedValue(null),
   copyToClipboard: (...args: unknown[]) => copyToClipboard(...args),
+  readClipboardText: (...args: unknown[]) => readClipboardText(...args),
 }));
 
 import { DiffRow } from './DiffRow';
@@ -319,6 +323,202 @@ describe('DiffRow — Ctrl+C copies the focused cell (#224)', () => {
     const cell = screen.getAllByText('[3]')[1].closest('td')!; // MyMod.esp — the focused column
     fireEvent.keyDown(cell, { key: 'c', ctrlKey: true });
     expect(copyToClipboard).toHaveBeenCalledWith('[1,2,3]');
+  });
+});
+
+// Issue #225 / ADR-0034: Ctrl+X/Ctrl+V — the mutating half of the same clipboard contract #224
+// built the copy half of. Both act on the focused, unopened cell (DiskCell's !editing gate,
+// unchanged from #224) and commit through the ordinary onEdit path, exactly as a typed edit does.
+describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', () => {
+  const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
+  const flagMeta: FieldMetadata = {
+    name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
+    enumValues: ['A', 'B', 'C', 'D'], enumBitValues: ['1', '2', '4', '8'], isBitmask: true,
+  };
+  const fkMeta: FieldMetadata = { name: 'Owner', type: 'formKey', isArray: false, validFormKeyTypes: [], enumValues: [] };
+
+  beforeEach(() => {
+    copyToClipboard.mockClear();
+    readClipboardText.mockClear();
+  });
+
+  it('Ctrl+V on a focused mutable cell sets its value from the clipboard and stages it (AC1)', async () => {
+    const onEdit = vi.fn();
+    readClipboardText.mockResolvedValue('pasted-value');
+    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    const cell = screen.getAllByText('disk-value')[1].closest('td')!;
+
+    fireEvent.keyDown(cell, { key: 'v', ctrlKey: true });
+    await vi.waitFor(() => expect(onEdit).toHaveBeenCalled());
+
+    expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Name', 'pasted-value');
+  });
+
+  it('Ctrl+X on a focused mutable cell copies the value and clears the field, staged the same way (AC2)', () => {
+    const onEdit = vi.fn();
+    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    const cell = screen.getAllByText('disk-value')[1].closest('td')!;
+
+    fireEvent.keyDown(cell, { key: 'x', ctrlKey: true });
+
+    expect(copyToClipboard).toHaveBeenCalledWith('disk-value');
+    expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Name', '');
+  });
+
+  it('Ctrl+V does nothing on an immutable column — no clipboard read is even attempted (AC3)', () => {
+    const onEdit = vi.fn();
+    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: 'Fallout4.esm' } }); // immutable
+    const cell = screen.getAllByText('disk-value')[0].closest('td')!;
+
+    fireEvent.keyDown(cell, { key: 'v', ctrlKey: true });
+
+    expect(readClipboardText).not.toHaveBeenCalled();
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it('Ctrl+X does nothing on an immutable column — no copy, no clear (AC3)', () => {
+    const onEdit = vi.fn();
+    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: 'Fallout4.esm' } }); // immutable
+    const cell = screen.getAllByText('disk-value')[0].closest('td')!;
+
+    fireEvent.keyDown(cell, { key: 'x', ctrlKey: true });
+
+    expect(copyToClipboard).not.toHaveBeenCalled();
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it('pasting a value identical to the current one stages nothing (AC4)', async () => {
+    const onEdit = vi.fn();
+    readClipboardText.mockResolvedValue('disk-value');
+    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    const cell = screen.getAllByText('disk-value')[1].closest('td')!;
+
+    fireEvent.keyDown(cell, { key: 'v', ctrlKey: true });
+    await vi.waitFor(() => expect(readClipboardText).toHaveBeenCalled());
+    await new Promise(r => setTimeout(r, 0)); // flush the paste handler's coercion/comparison continuation
+
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it('a clipboard string that cannot be coerced to the field type leaves the field unchanged (AC5)', async () => {
+    const onEdit = vi.fn();
+    readClipboardText.mockResolvedValue('not-a-number');
+    renderRow({
+      onEdit, focusedCell: { rowKey: 'Level', plugin: 'MyMod.esp' },
+      diff: diff({ fieldName: 'Level', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }),
+      fieldMetaMap: { Level: intMeta }, rowKey: 'Level',
+    });
+    const cell = screen.getAllByText('5')[1].closest('td')!;
+
+    fireEvent.keyDown(cell, { key: 'v', ctrlKey: true });
+    await vi.waitFor(() => expect(readClipboardText).toHaveBeenCalled());
+    await Promise.resolve();
+
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  // Seam 1 (blessed): Cut commits the coercion pipeline's own answer for '' rather than a bespoke
+  // per-type default — '' does not coerce to an int, so an int field only copies; it is not
+  // visibly cleared.
+  it("Ctrl+X on an int cell copies but leaves the value unchanged — '' does not coerce to an int (seam 1)", () => {
+    const onEdit = vi.fn();
+    renderRow({
+      onEdit, focusedCell: { rowKey: 'Level', plugin: 'MyMod.esp' },
+      diff: diff({ fieldName: 'Level', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }),
+      fieldMetaMap: { Level: intMeta }, rowKey: 'Level',
+    });
+    const cell = screen.getAllByText('5')[1].closest('td')!;
+
+    fireEvent.keyDown(cell, { key: 'x', ctrlKey: true });
+
+    expect(copyToClipboard).toHaveBeenCalledWith('5');
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it('Ctrl+X on a flags cell copies the active names and clears every flag', () => {
+    const onEdit = vi.fn();
+    renderRow({
+      onEdit, focusedCell: { rowKey: 'Flags', plugin: 'MyMod.esp' },
+      diff: diff({ fieldName: 'Flags', values: { 'Fallout4.esm': 0b0101, 'MyMod.esp': 0b0101 } }),
+      fieldMetaMap: { Flags: flagMeta }, rowKey: 'Flags',
+    });
+    const cell = screen.getAllByText('A, C')[1].closest('td')!;
+
+    fireEvent.keyDown(cell, { key: 'x', ctrlKey: true });
+
+    expect(copyToClipboard).toHaveBeenCalledWith('A, C');
+    expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Flags', '0');
+  });
+
+  // Seam 2 (blessed): FormKey's own QuickPick editor is already a native Ctrl+V paste target once
+  // opened (#210/#218) — a second, closed-cell paste path is deliberately not built here.
+  it('Ctrl+V does nothing on a focused, unopened formKey cell (seam 2 — the QuickPick is the paste target)', () => {
+    const onEdit = vi.fn();
+    renderRow({
+      onEdit, focusedCell: { rowKey: 'Owner', plugin: 'MyMod.esp' },
+      diff: diff({ fieldName: 'Owner', values: { 'Fallout4.esm': '000001:Fallout4.esm', 'MyMod.esp': '000001:Fallout4.esm' } }),
+      fieldMetaMap: { Owner: fkMeta }, rowKey: 'Owner',
+    });
+    const cell = screen.getAllByText('000001:Fallout4.esm')[1].closest('td')!;
+
+    fireEvent.keyDown(cell, { key: 'v', ctrlKey: true });
+
+    expect(readClipboardText).not.toHaveBeenCalled();
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  // FormKey's Ctrl+X is unaffected by seam 2 — clearing a reference to '' needs no resolution.
+  it('Ctrl+X on a focused formKey cell copies the label and clears the reference', () => {
+    const onEdit = vi.fn();
+    renderRow({
+      onEdit, focusedCell: { rowKey: 'Owner', plugin: 'MyMod.esp' },
+      diff: diff({ fieldName: 'Owner', values: { 'Fallout4.esm': '000001:Fallout4.esm', 'MyMod.esp': '000001:Fallout4.esm' } }),
+      fieldMetaMap: { Owner: fkMeta }, rowKey: 'Owner',
+    });
+    const cell = screen.getAllByText('000001:Fallout4.esm')[1].closest('td')!;
+
+    fireEvent.keyDown(cell, { key: 'x', ctrlKey: true });
+
+    expect(copyToClipboard).toHaveBeenCalledWith('000001:Fallout4.esm');
+    expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Owner', '');
+  });
+
+  // AC6: a value copied from one cell round-trips through paste into another cell of the same
+  // type. Exercised for both a scalar (int) and a flags field — the two leaf types whose editor
+  // isn't plain text, historically #224's own "copy has no path" gap.
+  it('a value copied from one cell pastes into another of the same type and round-trips exactly (AC6, int)', async () => {
+    const onEdit = vi.fn();
+    renderRow({
+      onEdit, focusedCell: { rowKey: 'Level', plugin: 'Fallout4.esm' },
+      diff: diff({ fieldName: 'Level', values: { 'Fallout4.esm': 42, 'MyMod.esp': 5 } }),
+      fieldMetaMap: { Level: intMeta }, rowKey: 'Level',
+    });
+    // Copy from the immutable (winner) cell — Ctrl+C works on any cell regardless of mutability.
+    fireEvent.keyDown(screen.getByText('42').closest('td')!, { key: 'c', ctrlKey: true });
+    const copied = copyToClipboard.mock.calls.at(-1)?.[0] as string;
+    readClipboardText.mockResolvedValue(copied);
+
+    fireEvent.keyDown(screen.getByText('5').closest('td')!, { key: 'v', ctrlKey: true });
+    await vi.waitFor(() => expect(onEdit).toHaveBeenCalled());
+
+    expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Level', 42);
+  });
+
+  it('a value copied from one cell pastes into another of the same type and round-trips exactly (AC6, flags)', async () => {
+    const onEdit = vi.fn();
+    renderRow({
+      onEdit, focusedCell: { rowKey: 'Flags', plugin: 'Fallout4.esm' },
+      diff: diff({ fieldName: 'Flags', values: { 'Fallout4.esm': 0b0101, 'MyMod.esp': 0b0010 } }),
+      fieldMetaMap: { Flags: flagMeta }, rowKey: 'Flags',
+    });
+    fireEvent.keyDown(screen.getByText('A, C').closest('td')!, { key: 'c', ctrlKey: true });
+    const copied = copyToClipboard.mock.calls.at(-1)?.[0] as string;
+    readClipboardText.mockResolvedValue(copied);
+
+    fireEvent.keyDown(screen.getByText('B').closest('td')!, { key: 'v', ctrlKey: true });
+    await vi.waitFor(() => expect(onEdit).toHaveBeenCalled());
+
+    expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Flags', String(0b0101));
   });
 });
 

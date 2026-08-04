@@ -58,6 +58,10 @@ export interface RouteRecordPanelMessageDeps {
   // Issue #212: same per-message reconstruction as formKeyPicker/conditionFunctionPicker above.
   revertGroupConfirm: RevertGroupConfirmDeps | undefined;
   addScriptName: AddScriptNameDeps | undefined;
+  // Issue #225: same per-message reconstruction as formKeyPicker/conditionFunctionPicker/
+  // revertGroupConfirm/addScriptName above — Ctrl+V's clipboard read is a direct reply to the one
+  // panel that asked, never a broadcast.
+  clipboardRead: ClipboardReadDeps | undefined;
   // Issue #224: ADR-0026 surfacing for COPY_TO_CLIPBOARD's failure path — a rejected
   // `vscode.env.clipboard.writeText` (headless/remote sessions, missing Linux clipboard tooling,
   // Wayland permissions) is an "explicit action failed" per the severity table (the user pressed
@@ -84,6 +88,12 @@ export interface RevertGroupConfirmDeps {
 }
 
 export interface AddScriptNameDeps {
+  reply: (msg: ExtensionToWebview) => void;
+}
+
+// Issue #225: same no-repository shape as RevertGroupConfirmDeps/AddScriptNameDeps above — the
+// native clipboard read is all the work, so `reply` is the whole bundle.
+export interface ClipboardReadDeps {
   reply: (msg: ExtensionToWebview) => void;
 }
 
@@ -234,6 +244,33 @@ export async function pickScriptNameViaInputBox(): Promise<string | null> {
   return name ?? null;
 }
 
+// Issue #225: Ctrl+V's clipboard read as the extension-host half of the bridge —
+// `vscode.env.clipboard.readText()` is extension-host-only, same reasoning as #224's
+// copyToClipboard write below. A failed read (headless/remote sessions, missing Linux clipboard
+// tooling, Wayland permissions) is an explicit action failed per ADR-0026 (the user pressed
+// Ctrl+V) — reported through the shared `reporter`, the same catch-log-surface treatment
+// copyToClipboard's own catch uses — and resolves null, same as an empty clipboard: either way
+// DiffRow's paste handler has nothing to coerce and leaves the field unchanged.
+async function readClipboardViaHost(reporter: Reporter): Promise<string | null> {
+  try {
+    return await vscode.env.clipboard.readText();
+  } catch (err) {
+    reporter.report('error', 'Could not read the clipboard.', err instanceof Error ? err.message : String(err));
+    return null;
+  }
+}
+
+// Issue #225: same shape as replyFormKeyPicked et al. below — the "deps present?" guard and the
+// read-then-reply sequence live here so routePromptMessage's own branch stays a single statement.
+async function replyClipboardRead(
+  deps: ClipboardReadDeps | undefined, reporter: Reporter,
+  m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.READ_CLIPBOARD }>,
+): Promise<void> {
+  if (!deps) return;
+  const value = await readClipboardViaHost(reporter);
+  deps.reply({ type: EXTENSION_TO_WEBVIEW.CLIPBOARD_READ, requestId: m.requestId, value });
+}
+
 // Issue #211: extracted so routeRecordPanelMessage's own branch stays a single statement,
 // matching the shape of every other branch below it — the "deps present?" guard (a no-op when
 // this panel wasn't wired for the picker) and the QuickPick-then-reply sequence both live here
@@ -288,6 +325,8 @@ async function routePromptMessage(m: WebviewToExtension, deps: RouteRecordPanelM
     await replyRevertGroupConfirmed(deps.revertGroupConfirm, m);
   } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME) {
     await replyAddScriptNamePicked(deps.addScriptName, m);
+  } else if (m.type === WEBVIEW_TO_EXTENSION.READ_CLIPBOARD) {
+    await replyClipboardRead(deps.clipboardRead, deps.reporter, m);
   }
 }
 

@@ -46,7 +46,7 @@ export interface ArrayOpHandlers {
 }
 
 export function DiskCell({
-  style, isFocused, onFocusCell, onDragStart, onDrop, onCopy, arrayOp, dataVscodeContext, children,
+  style, isFocused, onFocusCell, onDragStart, onDrop, onCopy, onCut, onPaste, arrayOp, dataVscodeContext, children,
 }: Readonly<{
   style: React.CSSProperties;
   isFocused: boolean;
@@ -57,6 +57,16 @@ export function DiskCell({
   // model value (modelValue.ts) by the time it builds this prop, so this is a plain thunk, not a
   // value: the cell doesn't need to know *what* it copies, only *when* (see onKeyDown below).
   onCopy: () => void;
+  // Issue #225 / ADR-0034: Ctrl+X/Ctrl+V on the focused cell — same "plain thunk, not a value"
+  // shape as onCopy above (DiffRow already knows how to read/coerce/commit this column's value by
+  // the time it builds these props). Both optional and absent (not merely a no-op) wherever the
+  // gesture doesn't apply — undefined on an immutable column (refuse silently, no clipboard round
+  // trip even attempted), and onPaste additionally undefined for a formKey column (its own
+  // QuickPick editor is already the paste target once opened, #210/#218 — see DiffRow's
+  // computeClipboardOps). DiskCell itself doesn't know or care why either is absent, only that it
+  // is — same convention arrayOp's individual members already use.
+  onCut?: () => void;
+  onPaste?: () => void;
   // Issue #227: Insert/Delete/Ctrl+↑/Ctrl+↓ on the focused cell — same "plain thunk, not a
   // value" shape as onCopy above. Absent entirely (not just individually undefined members) on
   // any cell that isn't an array parent/element row.
@@ -110,6 +120,13 @@ export function DiskCell({
       // in-progress partial-text selection with the whole model value. `editing` is exactly "a
       // form control inside me has focus", so gating on it is what keeps that native behavior
       // intact — the spec's "no focused form control" condition for this handler to apply.
+      // Issue #225 / ADR-0034: Ctrl+X/Ctrl+V are the mutating half of the same clipboard contract
+      // Ctrl+C belongs to — gated on `!editing` for the identical reason (an open editor's own
+      // native cut/paste, already working via #223's select-on-focus, must stay untouched), and
+      // additionally on the corresponding prop being defined, the same "arrayOp member present or
+      // absent" convention below: absent on an immutable column (refuse silently — no clipboard
+      // round trip is even attempted) and, for onPaste only, absent on a formKey column too (see
+      // the prop's own doc comment above and DiffRow's computeClipboardOps).
       // Issue #227 / ADR-0034: Insert/Delete/Ctrl+↑/Ctrl+↓ are accelerators onto the array-op
       // right-click menu, not a separate feature — same "menu is canonical, key is a shortcut"
       // relationship F2 already has to click-to-open. Gated on `!editing` like Ctrl+C above (an
@@ -122,6 +139,12 @@ export function DiskCell({
         else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && !editing) {
           e.preventDefault();
           onCopy();
+        } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x' && !editing && onCut) {
+          e.preventDefault();
+          onCut();
+        } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && !editing && onPaste) {
+          e.preventDefault();
+          onPaste();
         } else if (e.key === 'Insert' && !editing && arrayOp?.add) {
           e.preventDefault();
           arrayOp.add();

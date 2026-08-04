@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { vscode } from './vscode';
-import { pickFormKey, pickConditionFunction, confirmRevertGroup, pickScriptName } from './nativeBridge';
+import { pickFormKey, pickConditionFunction, confirmRevertGroup, pickScriptName, readClipboardText } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 
 // Issue #212 (refactor): formKeyPickerBridge.ts (#210), conditionFunctionPickerBridge.ts (#211),
@@ -188,6 +188,41 @@ describe('pickScriptName', () => {
 
     window.dispatchEvent(new MessageEvent('message', {
       data: { type: EXTENSION_TO_WEBVIEW.ADD_SCRIPT_NAME_PICKED, requestId, name: null },
+    }));
+
+    expect(await resultPromise).toBeNull();
+  });
+});
+
+// Issue #225: Ctrl+V's clipboard read — unlike copyToClipboard (fire-and-forget, no reply),
+// readClipboardText needs the text back, so it goes through the same requestReply shape as the
+// bridges above rather than copyToClipboard's own direct-postMessage shape.
+describe('readClipboardText', () => {
+  it('posts READ_CLIPBOARD', () => {
+    void readClipboardText();
+
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.READ_CLIPBOARD,
+    }));
+  });
+
+  it('resolves the clipboard text from the matching reply', async () => {
+    const resultPromise = readClipboardText();
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.CLIPBOARD_READ, requestId, value: 'Dogmeat' },
+    }));
+
+    expect(await resultPromise).toBe('Dogmeat');
+  });
+
+  it('resolves null when the reply carries value: null (empty clipboard or a failed read)', async () => {
+    const resultPromise = readClipboardText();
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.CLIPBOARD_READ, requestId, value: null },
     }));
 
     expect(await resultPromise).toBeNull();

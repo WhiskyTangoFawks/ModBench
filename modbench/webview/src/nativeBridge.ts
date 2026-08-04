@@ -106,3 +106,17 @@ export function pickScriptName(): Promise<string | null> {
 export function copyToClipboard(value: string): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value });
 }
+
+// Issue #225: Ctrl+V's clipboard read — the counterpart to copyToClipboard above, but unlike that
+// fire-and-forget write, DiffRow's paste handler needs the text back to coerce (coerceModelValue)
+// and commit itself, so this follows the requestReply shape every *Picker/*Confirm/*Name bridge
+// above uses instead. Resolves null both when the clipboard held nothing worth pasting and when
+// the host-side read itself failed (reported there, per ADR-0026) — the caller treats both the
+// same way it treats any other uncoercible paste: leave the field unchanged.
+export function readClipboardText(): Promise<string | null> {
+  return requestReply(
+    EXTENSION_TO_WEBVIEW.CLIPBOARD_READ,
+    msg => (msg.type === EXTENSION_TO_WEBVIEW.CLIPBOARD_READ ? msg.value : null),
+    requestId => ({ type: WEBVIEW_TO_EXTENSION.READ_CLIPBOARD, requestId }),
+  );
+}

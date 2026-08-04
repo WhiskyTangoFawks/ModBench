@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { modelValue, toBigInt } from './modelValue';
+import { modelValue, toBigInt, coerceModelValue } from './modelValue';
 import type { FieldMetadata, FormKeyResolution } from './types';
 
 // Issue #224 / ADR-0034: modelValue is the single definition of "the string a cell's editor
@@ -135,6 +135,94 @@ describe('modelValue — struct/array summary rows (#224 decision: JSON, not a p
   it('null struct/array: empty string, not "null"', () => {
     expect(modelValue(null, structMeta)).toBe('');
     expect(modelValue(null, arrayMeta)).toBe('');
+  });
+});
+
+// Issue #225 / ADR-0034: coerceModelValue is modelValue's inverse — the single place Ctrl+V's
+// pasted string (and Ctrl+X's own '' clear) is turned back into a value, so paste/cut commit
+// through the exact rule the typed-editor path already uses instead of a second implementation
+// that merely happens to agree. `{ ok: false }` is "cannot coerce" — DiffRow's handlers don't
+// commit on it, leaving the field unchanged, never a guessed fallback.
+describe('coerceModelValue — scalar types', () => {
+  it('string: any text coerces, unchanged', () => {
+    expect(coerceModelValue('Dogmeat', strMeta)).toEqual({ ok: true, value: 'Dogmeat' });
+    expect(coerceModelValue('', strMeta)).toEqual({ ok: true, value: '' });
+  });
+
+  it('int: a numeric string coerces to a number', () => {
+    expect(coerceModelValue('5', intMeta)).toEqual({ ok: true, value: 5 });
+  });
+
+  it('int: non-numeric text does not coerce', () => {
+    expect(coerceModelValue('abc', intMeta)).toEqual({ ok: false });
+  });
+
+  it("int: '' (Ctrl+X's clear) does not coerce — no zero default is invented", () => {
+    expect(coerceModelValue('', intMeta)).toEqual({ ok: false });
+  });
+
+  it('float: a numeric string coerces to a number', () => {
+    expect(coerceModelValue('1.5', floatMeta)).toEqual({ ok: true, value: 1.5 });
+  });
+
+  it('float: non-numeric text does not coerce', () => {
+    expect(coerceModelValue('abc', floatMeta)).toEqual({ ok: false });
+  });
+
+  it('bool: "true"/"false" coerce to the boolean, nothing else does', () => {
+    expect(coerceModelValue('true', boolMeta)).toEqual({ ok: true, value: true });
+    expect(coerceModelValue('false', boolMeta)).toEqual({ ok: true, value: false });
+    expect(coerceModelValue('', boolMeta)).toEqual({ ok: false });
+    expect(coerceModelValue('yes', boolMeta)).toEqual({ ok: false });
+  });
+
+  it('enum: a listed name coerces; an unlisted one does not', () => {
+    expect(coerceModelValue('Female', enumMeta)).toEqual({ ok: true, value: 'Female' });
+    expect(coerceModelValue('Nonbinary', enumMeta)).toEqual({ ok: false });
+  });
+
+  it('a round trip through modelValue then coerceModelValue recovers the same value', () => {
+    expect(coerceModelValue(modelValue(5, intMeta), intMeta)).toEqual({ ok: true, value: 5 });
+    expect(coerceModelValue(modelValue(1.5, floatMeta), floatMeta)).toEqual({ ok: true, value: 1.5 });
+    expect(coerceModelValue(modelValue(true, boolMeta), boolMeta)).toEqual({ ok: true, value: true });
+    expect(coerceModelValue(modelValue('Female', enumMeta), enumMeta)).toEqual({ ok: true, value: 'Female' });
+    expect(coerceModelValue(modelValue('Dogmeat', strMeta), strMeta)).toEqual({ ok: true, value: 'Dogmeat' });
+  });
+});
+
+describe('coerceModelValue — flags', () => {
+  it('active flag names, comma-separated, coerce back to the decimal bitmask string', () => {
+    expect(coerceModelValue('A, C', flagMeta)).toEqual({ ok: true, value: String(0b0101) });
+  });
+
+  it("'' (no active flags — also Ctrl+X's clear) coerces to the zero bitmask", () => {
+    expect(coerceModelValue('', flagMeta)).toEqual({ ok: true, value: '0' });
+  });
+
+  it('an unlisted flag name does not coerce', () => {
+    expect(coerceModelValue('A, Z', flagMeta)).toEqual({ ok: false });
+  });
+
+  it('round-trips through modelValue', () => {
+    expect(coerceModelValue(modelValue(0b0101, flagMeta), flagMeta)).toEqual({ ok: true, value: String(0b0101) });
+  });
+});
+
+describe('coerceModelValue — formKey', () => {
+  it("'' (Ctrl+X's clear) coerces to no reference — clearing needs no resolution", () => {
+    expect(coerceModelValue('', fkMeta)).toEqual({ ok: true, value: '' });
+  });
+
+  it('any non-empty text does not coerce — paste is never wired for formKey (#225 seam 2)', () => {
+    expect(coerceModelValue('000001:Fallout4.esm', fkMeta)).toEqual({ ok: false });
+    expect(coerceModelValue('Dogmeat [000001:Fallout4.esm]', fkMeta)).toEqual({ ok: false });
+  });
+});
+
+describe('coerceModelValue — struct/array (no direct commit path, never actually reached)', () => {
+  it('never coerces, for any text', () => {
+    expect(coerceModelValue('', structMeta)).toEqual({ ok: false });
+    expect(coerceModelValue('[1,2,3]', arrayMeta)).toEqual({ ok: false });
   });
 });
 
