@@ -7,10 +7,10 @@ interface FlagCellProps {
   meta: FieldMetadata;
   editable: boolean;
   // Issue #223 / ADR-0034: see ScalarCell's identical prop for the full rationale — gates the
-  // mutable branch's plain click; unused by the immutable branch (untouched by this ticket).
-  // Optional, defaulting to `true`, for the same reason ScalarCell's does: a caller outside the
-  // field grid's focus model (none render FlagCell today, but keeping the contract identical
-  // across the three leaves avoids a silent trap for the next one that does).
+  // mutable branch's plain click. Unused by the immutable branch: post-#226 that branch opens
+  // nothing regardless of focus. Optional, defaulting to `true`, for the same reason ScalarCell's
+  // does: a caller outside the field grid's focus model (none render FlagCell today, but keeping
+  // the contract identical across the three leaves avoids a silent trap for the next one that does).
   isFocused?: boolean;
   onCommit: (v: unknown) => void;
 }

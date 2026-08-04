@@ -52,9 +52,9 @@ function useCtrlHeld(): boolean {
   return useSyncExternalStore(subscribe, getCtrlHeld, getCtrlHeld);
 }
 
-// Issue #157/#218/#201: the text a FormKey reads as — "EditorID [FormKey]" when the reference
-// resolves, the bare FormKey when it doesn't. Exported because FormKeyCell's read-only surface
-// (#201) must contain exactly what the link displays: a cell that showed one string and handed
+// Issue #157/#218: the text a FormKey reads as — "EditorID [FormKey]" when the reference
+// resolves, the bare FormKey when it doesn't. Exported because FormKeyCell's Ctrl+C copy path
+// (#224) must produce exactly what the link displays: a cell that showed one string and handed
 // over another would be #218's defect in the other direction.
 export function formKeyLabel(value: string, resolution?: FormKeyResolution): string {
   return resolution?.editorId ? `${resolution.editorId} [${value}]` : value;
@@ -66,8 +66,8 @@ export function formKeyLabel(value: string, resolution?: FormKeyResolution): str
 // Issue #111: the click gesture is split here so it stays uniform across every cell in the
 // grid — Ctrl+click follows the reference (xEdit's vstViewClick likewise requires VK_CONTROL),
 // which leaves plain click free to mean "edit this cell". Plain click is the caller's to
-// define: FormKeyCell opens the picker with it; a read-only cell passes nothing, and plain
-// click there does nothing.
+// define: FormKeyCell opens the picker with it on a mutable column; on an immutable column
+// (#226) `onPlainClick` is a no-op, so plain click there does nothing.
 //
 // The link *affordance* — underline and pointer — appears only while Ctrl is held and the
 // pointer is over the cell, and only when the reference resolves (ADR-0031: Unresolved withholds

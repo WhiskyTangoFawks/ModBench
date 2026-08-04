@@ -277,9 +277,8 @@ describe('DiffRow — Ctrl+C copies the focused cell (#224)', () => {
     expect(copyToClipboard).toHaveBeenCalledWith('disk-value');
   });
 
-  // AC3: works on an immutable column too, without the read-only surface ever being opened —
-  // the replacement copy path #201's "click activates a read-only surface" doesn't cover until
-  // this cell is clicked.
+  // AC3: works on an immutable column too, and without opening anything first — post-#226 there
+  // is nothing left to open on that column at all, so this is the only copy path it has.
   it('Ctrl+C on a focused, unopened immutable disk cell also copies (AC3)', () => {
     renderRow({ focusedCell: { rowKey: 'Name', plugin: 'Fallout4.esm' } });
     const cell = screen.getAllByText('disk-value')[0].closest('td')!;

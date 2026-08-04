@@ -326,11 +326,13 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   the matching record is the active/highlighted item in the QuickPick's results list — VS Code's
   `QuickPick` has no `InputBox`-style `valueSelection`, so the seeded *text* itself is visible but
   not selectable the way an `<input>`'s select-on-focus would be; `Ctrl+A` clears it to search
-  fresh. **A consequence, and the one asymmetry left in the cursor contract:** a *mutable* FormKey
-  cell has no read-only surface — plain click is spent on the picker — so if the QuickPick's input
-  cannot be selected and copied, that cell cannot hand over its own displayed value the way every
-  other cell can. Seeding with the composite makes the reference at least fully *visible* there;
-  whether it is also copyable is unverified (#218). The same picker backs the VMAD add-property dialog's Object-typed value and the VMAD
+  fresh. A *mutable* FormKey cell's plain click is spent on the picker rather than an editor of its
+  own, but that costs it nothing: `Ctrl+C` on the focused cell (#224) copies its model value the
+  same as every other cell, independent of whether the picker is open. Seeding the picker with the
+  composite makes the reference fully *visible* there too; whether the QuickPick's own seeded
+  *text* is separately selectable from inside the picker UI itself is unverified (#218) — VS
+  Code's `QuickPick` has no `InputBox`-style `valueSelection`, so the seeded text is visible but
+  not proven selectable the way an `<input>`'s select-on-focus would be. The same picker backs the VMAD add-property dialog's Object-typed value and the VMAD
   table's Object-property cells. The link affordance appears on `Ctrl`-hover only when the
   reference resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows,
   and are themselves drag sources for their whole value via that summary row, the same as a
