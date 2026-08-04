@@ -114,12 +114,13 @@ export function DiskCell({
       // (the same state that already suppresses `draggable` above) rather than on `isFocused`,
       // for the same reason F2 needs no `isFocused` check of its own: only the DOM-focused `<td>`
       // ever receives a real keydown in the first place. The gate matters here in a way it
-      // doesn't for F2, though — while a form control inside this cell has real focus (an open
-      // editor, or an immutable cell's read-only surface, #201), Ctrl+C must stay the browser's
-      // native "copy the selected text" instead: intercepting it here would clobber a user's
-      // in-progress partial-text selection with the whole model value. `editing` is exactly "a
-      // form control inside me has focus", so gating on it is what keeps that native behavior
-      // intact — the spec's "no focused form control" condition for this handler to apply.
+      // doesn't for F2, though — while a form control inside this cell has real focus (a mutable
+      // column's open editor — an immutable column has no form control to ever focus, #226),
+      // Ctrl+C must stay the browser's native "copy the selected text" instead: intercepting it
+      // here would clobber a user's in-progress partial-text selection with the whole model
+      // value. `editing` is exactly "a form control inside me has focus", so gating on it is what
+      // keeps that native behavior intact — the spec's "no focused form control" condition for
+      // this handler to apply.
       // Issue #225 / ADR-0034: Ctrl+X/Ctrl+V are the mutating half of the same clipboard contract
       // Ctrl+C belongs to — gated on `!editing` for the identical reason (an open editor's own
       // native cut/paste, already working via #223's select-on-focus, must stay untouched), and

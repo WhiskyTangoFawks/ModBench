@@ -201,15 +201,15 @@ describe('RecordPanel', () => {
   // cells with no per-column mutability check, so a read-only column rendered inputs whose PATCH
   // the backend then rejected with a 409 "Plugin is read-only".
   //
-  // Issue #201 / ADR-0033: it does now activate an input — a `readOnly` one, which stages nothing
-  // and so cannot reach that PATCH. The 409 this test was written to prevent stays prevented; the
-  // absence of any input at all was never the point, and was what left an immutable value with no
-  // way out of its cell.
-  it('a cell in an immutable column activates a read-only input, never an editable one', async () => {
+  // Issue #226 / ADR-0034: the read-only value surface is retired, so the cell now opens no input
+  // at all — the 409 this test was written to prevent stays prevented for the more direct reason
+  // that nothing ever reaches a PATCH from here.
+  it('a cell in an immutable column opens nothing when clicked', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Original Name'));
     fireEvent.click(screen.getByText('Original Name'));
-    expect(screen.getByDisplayValue('Original Name')).toHaveAttribute('readonly');
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.getByText('Original Name')).toBeInTheDocument();
   });
 
   // Issue #223 / ADR-0034: a mutable cell no longer opens on the first click — that click only
@@ -1047,9 +1047,11 @@ describe('RecordPanel — cell focus (issue #222 / ADR-0034)', () => {
   it('clicking a cell in a different column of the same row moves focus there, leaving the previous cell unmarked', async () => {
     renderPanel(twoFieldResult);
     await waitFor(() => screen.getByText('Name A'));
-    // Captured before the click — clicking Fallout4.esm's (immutable) cell replaces its text
-    // node with a read-only input showing the same value, so `getByText('Name A')` would no
-    // longer resolve afterward. Same underlying <td>, so the reference stays valid.
+    // Issue #226: a click no longer replaces either cell's text node (Fallout4.esm's is
+    // immutable and opens nothing; MyMod.esp's is mutable but a single click only focuses,
+    // ADR-0034), so capturing the <td> reference before the click is no longer load-bearing —
+    // kept anyway since it costs nothing and stays correct regardless of what a future click
+    // handler does to the text node.
     const fo4Cell = screen.getByText('Name A').closest('td')!;
 
     fireEvent.click(screen.getByText('Name A')); // Fallout4.esm — immutable, still focusable

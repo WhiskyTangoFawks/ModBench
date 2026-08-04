@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { ReadOnlyValueSurface } from './ReadOnlyValueSurface';
 import { modelValue, toBigInt } from './modelValue';
 import type { FieldMetadata } from './types';
 
@@ -8,10 +7,10 @@ interface FlagCellProps {
   meta: FieldMetadata;
   editable: boolean;
   // Issue #223 / ADR-0034: see ScalarCell's identical prop for the full rationale — gates the
-  // mutable branch's plain click; unused by the immutable branch (untouched by this ticket).
-  // Optional, defaulting to `true`, for the same reason ScalarCell's does: a caller outside the
-  // field grid's focus model (none render FlagCell today, but keeping the contract identical
-  // across the three leaves avoids a silent trap for the next one that does).
+  // mutable branch's plain click. Unused by the immutable branch: post-#226 that branch opens
+  // nothing regardless of focus. Optional, defaulting to `true`, for the same reason ScalarCell's
+  // does: a caller outside the field grid's focus model (none render FlagCell today, but keeping
+  // the contract identical across the three leaves avoids a silent trap for the next one that does).
   isFocused?: boolean;
   onCommit: (v: unknown) => void;
 }
@@ -37,18 +36,17 @@ export function FlagCell({ value, meta, editable, isFocused = true, onCommit }: 
   const namesStr = modelValue(value, meta);
   const names = namesStr === '' ? null : namesStr;
 
+  const text = names === null
+    ? <span style={{ opacity: 0.35 }}>—</span>
+    : <span>{names}</span>;
+
+  // Issue #226 / ADR-0034: an immutable column simply refuses — no multi-select, no distinct
+  // affordance beforehand. Checked ahead of `active` since there is no state to gate: click,
+  // second click, F2 and double click all land here and do nothing. Copy is Ctrl+C on the
+  // focused, unopened cell (#224), sourced from the same modelValue string as `names` above.
+  if (!editable) return text;
+
   if (!active) {
-    const text = names === null
-      ? <span style={{ opacity: 0.35 }}>—</span>
-      : <span>{names}</span>;
-    if (!editable) {
-      if (names === null) return text;
-      // Issue #223: untouched by this ticket, same as ScalarCell's immutable branch — plain
-      // click keeps activating the read-only surface unconditionally until #226 (which depends
-      // on #224 shipping Ctrl+C as the replacement copy path first). No `data-open-trigger`
-      // here, so F2 correctly does nothing on this branch, as it always has.
-      return <span onClick={() => setActive(true)}>{text}</span>;
-    }
     // Issue #201 / #204 / ADR-0033: no cursor override — the parent DiskCell's `grab` is this
     // cell's resting affordance, since it is a drag source the whole time. The `pointer` that
     // used to be here advertised the click and painted over the drag, which is the same false
@@ -63,9 +61,6 @@ export function FlagCell({ value, meta, editable, isFocused = true, onCommit }: 
       >{text}</span>
     );
   }
-
-  // Issue #201: an immutable column activates a read-only surface instead of the multi-select.
-  if (!editable) return <ReadOnlyValueSurface value={names ?? ''} onBlur={() => setActive(false)} />;
 
   return (
     // The multi-select is a group, so it closes when focus leaves the group as a whole — not

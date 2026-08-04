@@ -300,11 +300,10 @@ export function DiffRow({
       {columns.map(col => {
         if (col.kind === 'disk') {
           const { override: o } = col;
-          // Issue #201 / ADR-0033: no `userSelect: 'text'` here. It was always dead letter — the
-          // cell is `draggable` at rest and `draggable` consumes the mousedown that would start a
-          // selection — and under the cursor contract it is now dead *and* contradictory: at rest
-          // no text is selectable, and once the cell's own surface is up that input owns the
-          // selection. Leaving it would tell the next reader selection already works here.
+          // Issue #201 / #226 / ADR-0034: no `userSelect: 'text'` here. It was always dead letter
+          // — the cell is `draggable` at rest and `draggable` consumes the mousedown that would
+          // start a selection — and post-#226 there is no in-cell surface left to ever own a
+          // selection either. Leaving it would tell the next reader selection works here.
           const cellStyle = { ...baseCell, ...getCellStyle(diff.cellStates?.[o.plugin]) };
           if (collapsedColumns.has(o.plugin)) {
             return <td key={`disk:${o.plugin}`} style={cellStyle} />;

@@ -115,20 +115,17 @@ describe('DiffRow — top-level scalar row', () => {
 });
 
 describe('DiffRow — editability follows immutableSet', () => {
-  // Issue #201 / ADR-0033: this test's mechanism is superseded, its intent is not. An immutable
-  // column used to produce no input at all — that absence *was* the gap, since it left the value
-  // with no way out of the cell. It now activates a surface like any other cell; what makes the
-  // column immutable is `readOnly` and that nothing stages, not the lack of an input.
-  it('an immutable column activates a read-only surface, never an editable one', () => {
+  // Issue #226 / ADR-0034: the read-only value surface is retired — an immutable column opens
+  // nothing at all now, matching xEdit's refusal. Copy lives at Ctrl+C on the focused, unopened
+  // cell (#224), so there is no longer anything for a click to activate here.
+  it('an immutable column opens nothing by click, and stages nothing', () => {
     const onEdit = vi.fn();
     renderRow({ onEdit });
     // Fallout4.esm is immutable per baseProps.
     fireEvent.click(screen.getAllByText('disk-value')[0]);
 
-    const surface = screen.getByDisplayValue('disk-value');
-    expect(surface).toHaveAttribute('readonly');
-    fireEvent.change(surface, { target: { value: 'new-value' } });
-    fireEvent.blur(surface);
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.getAllByText('disk-value')[0]).toBeInTheDocument();
     expect(onEdit).not.toHaveBeenCalled();
   });
 
@@ -172,8 +169,9 @@ describe('DiffRow — F2 opens the focused cell (#223)', () => {
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
   });
 
-  // Untouched by this ticket — F2 never opened anything on an immutable cell before #223, and
-  // the immutable branch carries no `data-open-trigger`, so it still doesn't.
+  // F2 never opened anything on an immutable cell before #223, and post-#226 the immutable
+  // branch carries no `data-open-trigger` (there is no editor left to dispatch a click at), so
+  // it still doesn't.
   it('F2 on the focused immutable disk cell opens nothing', () => {
     renderRow({ focusedCell: { rowKey: 'Name', plugin: 'Fallout4.esm' } });
     const cell = screen.getAllByText('disk-value')[0].closest('td')!;
@@ -198,7 +196,8 @@ describe('DiffRow — double click opens a value cell (#223)', () => {
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
   });
 
-  // Untouched by this ticket — see the F2 case above for the same rationale.
+  // See the F2 case above for the same rationale — post-#226 there is no `onDoubleClick` on the
+  // immutable branch either.
   it('double click on an immutable disk cell opens nothing', () => {
     renderRow({ focusedCell: null });
     fireEvent.doubleClick(screen.getAllByText('disk-value')[0]); // Fallout4.esm — immutable
@@ -241,21 +240,17 @@ describe('DiffRow — drag affordance on leaf cells', () => {
     expect(onCellDrop).toHaveBeenCalledWith('Name', 'MyMod.esp', expect.any(Function));
   });
 
-  // Issue #201, revised by #222 / ADR-0034: the cursor contract (`grab` at rest, caret once
-  // active) is gone — the grid rests on the default arrow everywhere, so there is no cursor state
-  // left to "stand down." What survives is the drag suppression itself: DiskCell's existing focus
-  // watcher still stands `draggable` down while a real <input> (the read-only surface, here) is
-  // active inside the cell, and hands it back on blur — unrelated to which cursor is showing.
-  it('stands the drag down while an immutable cell has its read-only surface active', () => {
+  // Issue #226 / ADR-0034: with the read-only surface retired, an immutable cell never focuses a
+  // form control of its own — DiskCell's drag-suppression watcher (`editing`, derived from
+  // `document.activeElement`) therefore never fires for it, so draggable stays true straight
+  // through a click. This is the flip side of the pre-#226 test this replaces: nothing ever
+  // stands the drag down here any more, because nothing ever opens.
+  it('an immutable cell stays draggable through a click, since nothing opens', () => {
     renderRow();
     const cell = screen.getAllByText('disk-value')[0].closest('td')!;
     expect(cell).toHaveAttribute('draggable', 'true');
 
     fireEvent.click(screen.getAllByText('disk-value')[0]);
-    const surface = screen.getByDisplayValue('disk-value');
-    expect(cell).toHaveAttribute('draggable', 'false');
-
-    fireEvent.blur(surface);
     expect(cell).toHaveAttribute('draggable', 'true');
   });
 
@@ -282,9 +277,8 @@ describe('DiffRow — Ctrl+C copies the focused cell (#224)', () => {
     expect(copyToClipboard).toHaveBeenCalledWith('disk-value');
   });
 
-  // AC3: works on an immutable column too, without the read-only surface ever being opened —
-  // the replacement copy path #201's "click activates a read-only surface" doesn't cover until
-  // this cell is clicked.
+  // AC3: works on an immutable column too, and without opening anything first — post-#226 there
+  // is nothing left to open on that column at all, so this is the only copy path it has.
   it('Ctrl+C on a focused, unopened immutable disk cell also copies (AC3)', () => {
     renderRow({ focusedCell: { rowKey: 'Name', plugin: 'Fallout4.esm' } });
     const cell = screen.getAllByText('disk-value')[0].closest('td')!;

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { modelValue } from './modelValue';
 import { mono, fg } from './gridStyles';
-import { ReadOnlyValueSurface } from './ReadOnlyValueSurface';
 import type { FieldMetadata } from './types';
 
 interface ScalarCellProps {
@@ -36,34 +35,26 @@ function ScalarText({ value, meta }: { value: unknown; meta: FieldMetadata }) {
 export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }: ScalarCellProps) {
   const [draft, setDraft] = useState(() => modelValue(value, meta));
   const [prevValue, setPrevValue] = useState(value);
-  // Issue #111: only the clicked cell is an input; everything else stays text.
+  // Issue #111: only the clicked cell is an input; everything else stays text. Meaningless on an
+  // immutable column post-#226 — the branch below returns before this ever flips true there — so
+  // this state only ever describes the mutable editor now.
   const [active, setActive] = useState(false);
   if (prevValue !== value) {
     setPrevValue(value);
     setDraft(modelValue(value, meta));
   }
 
-  // Issue #201 / ADR-0033: the resting state is the same in both column kinds — text, no cursor
-  // of its own, clickable. Editability shows up only in *what* the click activates, below.
+  // Issue #226 / ADR-0034: an immutable column simply refuses. No editor opens and no distinct
+  // affordance says so beforehand — matching xEdit's `vstViewEditing`, which sets
+  // `Allowed := False` and shows nothing in advance. Checked ahead of `active`/`isFocused` since
+  // there is no state to gate: a plain click, a second click, F2 and a double click all land here
+  // and do nothing (this is the only branch, so none of those four gestures needs its own check).
+  // Copy is Ctrl+C on the focused, unopened cell (#224, DiskCell/DiffRow) — this component has no
+  // clipboard code of its own to give up.
+  if (!editable) return <ScalarText value={value} meta={meta} />;
+
+  // Issue #201 / ADR-0033: the resting state is text, no cursor of its own, clickable.
   if (!active) {
-    if (!editable) {
-      // Issue #201 / ADR-0033: on an immutable column `—` is a placeholder, not a value — the
-      // same argument the ADR makes for `{…}` and `[3]`. A surface here would offer an empty
-      // selection that looks like a successful copy.
-      if (value == null) return <ScalarText value={value} meta={meta} />;
-      // Issue #223: deliberately untouched by this ticket's open-gate — plain click keeps
-      // activating the read-only surface unconditionally, exactly as it did before #223. #226
-      // ("Retire the read-only value surface") is what gates/removes this, and only once #224
-      // (Ctrl+C copies the focused cell's model value) ships its replacement copy path — gating
-      // it here first would make an immutable cell's value briefly uncopyable. No
-      // `data-open-trigger` here either, so F2 correctly does nothing on this branch (it never
-      // did before this ticket).
-      return (
-        <span onClick={() => setActive(true)} style={{ display: 'block', minHeight: '1em' }}>
-          <ScalarText value={value} meta={meta} />
-        </span>
-      );
-    }
     // Issue #223 / ADR-0034: mutable columns gate opening behind xEdit's three triggers — a
     // second click on the already-focused cell (isFocused is still the *pre-click* value on a
     // first click, since this handler fires before DiskCell's ancestor onFocusCell in the bubble
@@ -83,11 +74,6 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }
       </span>
     );
   }
-
-  // Issue #201: an immutable column activates a read-only surface instead of an editor, before
-  // any type branching below — so string/int/float/bool/enum are all covered by this one line
-  // and nothing here is type-aware.
-  if (!editable) return <ReadOnlyValueSurface value={modelValue(value, meta)} onBlur={() => setActive(false)} />;
 
   const inputBase: React.CSSProperties = {
     fontFamily: mono,

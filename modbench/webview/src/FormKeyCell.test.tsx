@@ -44,9 +44,9 @@ describe('FormKeyCell — read-only column', () => {
     expect(onOpen).toHaveBeenCalledWith('000019:Fallout4.esm');
   });
 
-  // Issue #201: plain click used to do nothing at all here — that was the gap. It now activates
-  // the read-only surface (see the describe below); what it must still never do is navigate or
-  // open the picker, which is what this asserts.
+  // Issue #226: plain click opens nothing on an immutable column — see the describe below for
+  // the full "opens nothing" coverage; what this asserts is narrower, that it also never
+  // navigates or opens the picker.
   it('plain click neither navigates nor opens the picker', () => {
     const onOpen = vi.fn();
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={onOpen} onCommit={vi.fn()} />);
@@ -56,45 +56,37 @@ describe('FormKeyCell — read-only column', () => {
   });
 });
 
-// Issue #201 / ADR-0033, AC 6. This is the case that needed thought rather than a copied early
-// return. On a *mutable* column nothing is owed: plain click opens the QuickPick, which is a
-// native input, so selection and Ctrl+V are already the platform's there. The gap was the
-// immutable column, where plain click did nothing at all — so #218's composite label was correct
-// and still unreachable. #218's AC 3 ("the label's text can be selected") lands here rather than
-// in FormKeyLink, because a resting cell is a drag source and `draggable` eats the mousedown that
-// would start a selection; a second state is the only answer.
-describe('FormKeyCell — immutable column activates a read-only text surface', () => {
+// Issue #226 / ADR-0034: the read-only value surface is retired. On a mutable column nothing was
+// owed to begin with — plain click opens the native QuickPick, a real input, so selection and
+// Ctrl+V are already the platform's there. On an immutable column, click, second click, and
+// double click now all open nothing at all; copy is Ctrl+C on the focused, unopened cell (#224),
+// reading the same `EditorID [FormKey]` composite this cell displays (#218) via modelValue.
+describe('FormKeyCell — immutable column opens nothing', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
   const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
 
-  it('plain click activates a readOnly input containing the full composite', () => {
+  it('a plain click opens no input', () => {
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
     fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
-    expect(screen.getByDisplayValue('DogmeatRace [000019:Fallout4.esm]')).toHaveAttribute('readonly');
-  });
-
-  // The surface shows what the link shows — including the fallback. A cell that displayed the
-  // bare FormKey but handed over a composite (or vice versa) would be the #218 defect again in
-  // the other direction.
-  it('falls back to the bare FormKey when the reference does not resolve', () => {
-    render(<FormKeyCell value="FFFFFF:Dangling.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
-    fireEvent.click(screen.getByText('FFFFFF:Dangling.esm'));
-    expect(screen.getByDisplayValue('FFFFFF:Dangling.esm')).toHaveAttribute('readonly');
-  });
-
-  it('returns to the link on blur, so the Ctrl+click affordance comes back', () => {
-    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
-    fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
-    fireEvent.blur(screen.getByDisplayValue('DogmeatRace [000019:Fallout4.esm]'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'DogmeatRace [000019:Fallout4.esm]' })).toBeInTheDocument();
   });
 
-  // Ctrl+click and plain click share the same DOM click event, so the two must not both fire —
-  // otherwise following a reference would leave a surface open behind the record just opened,
-  // the same collision VmadSection's ClickToEdit already guards against.
-  it('Ctrl+click follows the reference without activating the surface', () => {
+  it('a double click opens no input either', () => {
+    render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);
+    fireEvent.doubleClick(screen.getByText('DogmeatRace [000019:Fallout4.esm]'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('opens no input for a reference that does not resolve either', () => {
+    render(<FormKeyCell value="FFFFFF:Dangling.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('FFFFFF:Dangling.esm'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  // Ctrl+click and plain click share the same DOM click event, so the two must not both fire.
+  it('Ctrl+click follows the reference without opening anything', () => {
     const onOpen = vi.fn();
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={onOpen} onCommit={vi.fn()} resolution={validType} />);
     fireEvent.click(screen.getByText('DogmeatRace [000019:Fallout4.esm]'), { ctrlKey: true });
@@ -111,14 +103,14 @@ describe('FormKeyCell — immutable column activates a read-only text surface', 
     expect(screen.getByText('—').style.cursor).not.toBe('pointer');
   });
 
-  it('activates nothing on a null value — the em-dash is a placeholder', () => {
+  it('opens nothing on a null value — the em-dash is a placeholder', () => {
     render(<FormKeyCell value={null} meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('—'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
-  // The warning icon is the cell's, not the link's — activating the surface must not hide it.
-  it('keeps the checkError icon visible while the surface is active', () => {
+  // The warning icon is the cell's, not the link's — clicking must not hide it.
+  it('keeps the checkError icon visible', () => {
     render(
       <FormKeyCell
         value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false}
@@ -240,7 +232,7 @@ describe('FormKeyCell — mutable column gates opening on the focus check (#223)
     expect(screen.getByText('000019:Fallout4.esm').closest('[data-open-trigger]')).not.toBeNull();
   });
 
-  it('does not mark the immutable read-only-surface link as an open trigger', () => {
+  it('does not mark the immutable link as an open trigger', () => {
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
     expect(screen.getByText('000019:Fallout4.esm').closest('[data-open-trigger]')).toBeNull();
   });
