@@ -6,6 +6,11 @@ import {
   pendingIfChanged,
   extractPendingElementValue,
   updateArrayAtKey,
+  moveArrayElement,
+  removeArrayElement,
+  appendArrayElement,
+  arrayElementContext,
+  arrayParentContext,
 } from './recordUtils';
 import type { RecordDetail } from './types';
 
@@ -127,5 +132,81 @@ describe('updateArrayAtKey', () => {
 
   it('leaves other elements untouched', () => {
     expect(updateArrayAtKey(['a', 'b', 'c'], '[0]', 'z', false)).toEqual(['z', 'b', 'c']);
+  });
+});
+
+// Issue #227: the pure mutations behind Move Up/Move Down/Remove/Add — extracted out of #142's
+// DiffRow-local ArrayElementControls/ArrayAddButton so both the keyboard accelerator (DiskCell,
+// in-webview only) and the right-click menu's broadcast handler (RecordPanel, arriving via the
+// extension host) restage identically without sharing a runtime call path.
+describe('moveArrayElement', () => {
+  it('swaps the element at index with its neighbour one position up', () => {
+    expect(moveArrayElement(['a', 'b', 'c'], 1, -1)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('swaps the element at index with its neighbour one position down', () => {
+    expect(moveArrayElement(['a', 'b', 'c'], 0, 1)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('returns the array unchanged when the move would go out of bounds', () => {
+    expect(moveArrayElement(['a', 'b', 'c'], 0, -1)).toEqual(['a', 'b', 'c']);
+    expect(moveArrayElement(['a', 'b', 'c'], 2, 1)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('removeArrayElement', () => {
+  it('drops the element at the given index, leaving the others in order', () => {
+    expect(removeArrayElement(['a', 'b', 'c'], 1)).toEqual(['a', 'c']);
+  });
+});
+
+describe('appendArrayElement', () => {
+  it('appends the given value to the end of the array', () => {
+    expect(appendArrayElement(['a', 'b'], 'c')).toEqual(['a', 'b', 'c']);
+  });
+
+  it('does not mutate the source array', () => {
+    const source = ['a', 'b'];
+    appendArrayElement(source, 'c');
+    expect(source).toEqual(['a', 'b']);
+  });
+});
+
+describe('arrayElementContext', () => {
+  it('produces the data-vscode-context JSON for a middle element (can move either way)', () => {
+    expect(JSON.parse(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'Items', 1, 3))).toEqual({
+      webviewSection: 'arrayElement',
+      formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp',
+      fieldName: 'Items',
+      index: 1,
+      canMoveUp: true,
+      canMoveDown: true,
+      preventDefaultContextMenuItems: true,
+    });
+  });
+
+  // Issue #227 review: package.json's `when` clause gates Move Up/Move Down on these two flags
+  // the same way it gates columnHeader.removeOverride on `!immutable` — a boundary element has
+  // nothing to move onto, so the menu item must be absent there, not merely a no-op when clicked
+  // (matching the AC's "absent, not disabled" principle for sorted arrays).
+  it('canMoveUp is false for the first element', () => {
+    expect(JSON.parse(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'Items', 0, 3)).canMoveUp).toBe(false);
+  });
+
+  it('canMoveDown is false for the last element', () => {
+    expect(JSON.parse(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'Items', 2, 3)).canMoveDown).toBe(false);
+  });
+});
+
+describe('arrayParentContext', () => {
+  it('produces the data-vscode-context JSON for an array-parent cell', () => {
+    expect(JSON.parse(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'Items'))).toEqual({
+      webviewSection: 'arrayParent',
+      formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp',
+      fieldName: 'Items',
+      preventDefaultContextMenuItems: true,
+    });
   });
 });

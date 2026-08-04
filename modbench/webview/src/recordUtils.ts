@@ -1,5 +1,5 @@
 import type { CompareOverride, FieldMetadata, RecordDetail } from './types';
-import type { ColumnHeaderContext, PendingCellContext } from './messages';
+import type { ArrayElementContext, ArrayParentContext, ColumnHeaderContext, PendingCellContext } from './messages';
 
 export function toStr(v: unknown): string {
   if (v == null) return '';
@@ -49,6 +49,27 @@ export function columnHeaderContext(
     webviewSection: 'columnHeader', formKey, plugin, immutable, isHeaderRecord, masters,
     preventDefaultContextMenuItems: true,
   } satisfies ColumnHeaderContext);
+}
+
+// Issue #227: the array-element/array-parent right-click menu's data-vscode-context, same
+// mechanism as pendingCellContext/columnHeaderContext above. DiffRow only attaches this on a
+// mutable column's unsorted-array cell (mirroring #142's arrayEdit/onArrayAdd gate) — its mere
+// presence is the gate, so no separate immutable/isSortable flag travels in the payload the way
+// ColumnHeaderContext's `immutable` does. `arrayLength` only exists to derive canMoveUp/canMoveDown
+// (package.json's `when`-clause gate for Move Up/Move Down, mirroring `immutable`'s role for
+// columnHeader.removeOverride) — Remove has no boundary condition, so `index` alone still gates it.
+export function arrayElementContext(formKey: string, plugin: string, fieldName: string, index: number, arrayLength: number): string {
+  return JSON.stringify({
+    webviewSection: 'arrayElement', formKey, plugin, fieldName, index,
+    canMoveUp: index > 0, canMoveDown: index < arrayLength - 1,
+    preventDefaultContextMenuItems: true,
+  } satisfies ArrayElementContext);
+}
+
+export function arrayParentContext(formKey: string, plugin: string, fieldName: string): string {
+  return JSON.stringify({
+    webviewSection: 'arrayParent', formKey, plugin, fieldName, preventDefaultContextMenuItems: true,
+  } satisfies ArrayParentContext);
 }
 
 export type Column =
@@ -109,6 +130,30 @@ export function updateArrayAtKey(
   }
   const idx = parseElementIndex(elementKey);
   return array.map((e, i) => (i === idx ? newValue : e));
+}
+
+// Issue #227: the three pure array-arity/order mutations behind Move Up/Move Down/Remove/Add —
+// extracted out of #142's DiffRow-local ArrayElementControls/ArrayAddButton (deleted by this
+// ticket) so the keyboard accelerator (DiskCell's onKeyDown, a pure in-webview call) and the
+// right-click menu's broadcast handler (RecordPanel, arriving asynchronously from the extension
+// host) restage the array identically without needing to share one runtime call path — they
+// structurally can't, since one runs inside a row's render closure and the other inside a
+// mount-effect message listener. Each returns a new array; callers restage the whole thing via
+// onArrayEdit/handleEdit, unchanged from #142's single-field-edit behavior.
+export function moveArrayElement(array: unknown[], index: number, direction: -1 | 1): unknown[] {
+  const j = index + direction;
+  if (j < 0 || j >= array.length) return array;
+  const next = [...array];
+  [next[index], next[j]] = [next[j], next[index]];
+  return next;
+}
+
+export function removeArrayElement(array: unknown[], index: number): unknown[] {
+  return array.filter((_, i) => i !== index);
+}
+
+export function appendArrayElement(array: unknown[], value: unknown): unknown[] {
+  return [...array, value];
 }
 
 // Issue #142: the value a freshly-appended array element starts with, derived from the

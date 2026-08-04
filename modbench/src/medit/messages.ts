@@ -54,6 +54,23 @@ export const EXTENSION_TO_WEBVIEW = {
   // extension host's `validateInput` blocks accepting one, the same rule the deleted dialog's
   // `confirmDisabled` enforced client-side.
   ADD_SCRIPT_NAME_PICKED: 'addScriptNamePicked',
+  // #227: the array element/parent right-click menu (Add / Remove / Move Up / Move Down) is a
+  // native `webview/context` contribution, same shape as #208/#209 above — the command runs in
+  // the extension host, which has no live reference to the webview's React state, so it
+  // broadcasts to every open record panel and each self-filters on `formKey` (there is no
+  // changeId here, same reasoning as the column-header messages). Unlike every broadcast above,
+  // there is no async work at all on the extension-host side (no HTTP, no picker, no confirm) —
+  // the handler just repackages data-vscode-context's payload and posts it. One message type per
+  // action (not a shared type + direction flag), matching this file's existing convention of a
+  // discriminated member per action rather than a parameterized one. The keyboard accelerators
+  // (Insert/Delete/Ctrl+↑/Ctrl+↓) never go through this bridge — they call the same
+  // recordUtils.ts mutation functions directly from DiskCell's onKeyDown, since onArrayEdit/
+  // onArrayAdd are pure in-webview state with no platform boundary to cross (unlike Ctrl+C's
+  // clipboard write, which genuinely needs the extension host).
+  ARRAY_ADD: 'arrayAdd',
+  ARRAY_REMOVE: 'arrayRemove',
+  ARRAY_MOVE_UP: 'arrayMoveUp',
+  ARRAY_MOVE_DOWN: 'arrayMoveDown',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -118,6 +135,40 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME; requestId: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD; value: string };
 
+// #227: same broadcast-and-self-filter shape as PendingCellContext/ColumnHeaderContext above,
+// carried by an array's parent-row cell (arrayParent, Add only) or an array-element cell
+// (arrayElement, Remove/Move Up/Move Down). `fieldName` is the array's own top-level field name
+// (arrays never nest inside structs in this codebase's model, so no parent-path is needed);
+// `index` locates the element within it. No `immutable`/`isSortable` flag here — unlike
+// ColumnHeaderContext's `when`-clause gating, DiffRow only emits this attribute at all when the
+// column is mutable and the array is unsorted (mirroring the #142 arrayEdit/onArrayAdd gate), so
+// the attribute's mere presence is the only gate needed, matching PendingCellContext's precedent.
+// `canMoveUp`/`canMoveDown` are the one exception: package.json's `when` clause for those two
+// commands gates on them the same way it gates columnHeader.removeOverride on `!immutable` — a
+// boundary element (first/last) has nothing to move onto, and the AC's "absent, not disabled"
+// principle for a sorted array applies just as much to a boundary move (xEdit itself greys the
+// item out instead — `mniViewMoveUp.Enabled := ... Element.CanMoveUp`, xeMainForm.pas — but a
+// declarative `webview/context` menu has no disabled state to render, so omitting is the nearest
+// native equivalent, same reasoning ADR-0034 already accepts for the sorted-array case).
+export interface ArrayElementContext {
+  webviewSection: 'arrayElement';
+  formKey: string;
+  plugin: string;
+  fieldName: string;
+  index: number;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  preventDefaultContextMenuItems: true;
+}
+
+export interface ArrayParentContext {
+  webviewSection: 'arrayParent';
+  formKey: string;
+  plugin: string;
+  fieldName: string;
+  preventDefaultContextMenuItems: true;
+}
+
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP; changeId: string }
@@ -130,7 +181,11 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
   | { type: typeof EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED; requestId: string; functionName: string | null }
   | { type: typeof EXTENSION_TO_WEBVIEW.REVERT_GROUP_CONFIRMED; requestId: string; confirmed: boolean }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ADD_SCRIPT_NAME_PICKED; requestId: string; name: string | null };
+  | { type: typeof EXTENSION_TO_WEBVIEW.ADD_SCRIPT_NAME_PICKED; requestId: string; name: string | null }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_ADD; formKey: string; plugin: string; fieldName: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_REMOVE; formKey: string; plugin: string; fieldName: string; index: number }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP; formKey: string; plugin: string; fieldName: string; index: number }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; fieldName: string; index: number };
 
 // #208: the merged `data-vscode-context` object VS Code's webview preload forwards as a
 // `webview/context` command's sole argument — shared shape between the cell (recordUtils.ts'

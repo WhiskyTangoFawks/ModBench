@@ -33,7 +33,21 @@ import { focusedCellStyle } from './gridStyles';
 // whatever the browser most recently, actually focused.
 const cellAlreadyHasFocus = (cell: HTMLTableCellElement | null): boolean =>
   cell !== null && (document.activeElement === cell || cell.contains(document.activeElement));
-export function DiskCell({ style, isFocused, onFocusCell, onDragStart, onDrop, onCopy, children }: Readonly<{
+// Issue #227: the array-op keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓) — undefined
+// members are the "not applicable to this cell" case (sorted array, immutable column, or a
+// boundary element with no further move), same convention onCopy's absence-of-callers-through-
+// DiffRow already relies on; DiskCell just no-ops via optional chaining rather than checking
+// anything itself, keeping the "which ops apply here" decision entirely on DiffRow's side.
+export interface ArrayOpHandlers {
+  add?: () => void;
+  remove?: () => void;
+  moveUp?: () => void;
+  moveDown?: () => void;
+}
+
+export function DiskCell({
+  style, isFocused, onFocusCell, onDragStart, onDrop, onCopy, arrayOp, dataVscodeContext, children,
+}: Readonly<{
   style: React.CSSProperties;
   isFocused: boolean;
   onFocusCell: () => void;
@@ -43,6 +57,15 @@ export function DiskCell({ style, isFocused, onFocusCell, onDragStart, onDrop, o
   // model value (modelValue.ts) by the time it builds this prop, so this is a plain thunk, not a
   // value: the cell doesn't need to know *what* it copies, only *when* (see onKeyDown below).
   onCopy: () => void;
+  // Issue #227: Insert/Delete/Ctrl+↑/Ctrl+↓ on the focused cell — same "plain thunk, not a
+  // value" shape as onCopy above. Absent entirely (not just individually undefined members) on
+  // any cell that isn't an array parent/element row.
+  arrayOp?: ArrayOpHandlers;
+  // Issue #227: the array-element/array-parent right-click menu's gating attribute — same
+  // mechanism the pending cell and column header already use (data-vscode-context + VS Code's
+  // native webview/context contribution), just carried here instead of hand-built per call site
+  // since DiskCell is the one element both array cell shapes (summary and leaf) render through.
+  dataVscodeContext?: string;
   children: React.ReactNode;
 }>) {
   const [editing, setEditing] = useState(false);
@@ -87,11 +110,30 @@ export function DiskCell({ style, isFocused, onFocusCell, onDragStart, onDrop, o
       // in-progress partial-text selection with the whole model value. `editing` is exactly "a
       // form control inside me has focus", so gating on it is what keeps that native behavior
       // intact — the spec's "no focused form control" condition for this handler to apply.
+      // Issue #227 / ADR-0034: Insert/Delete/Ctrl+↑/Ctrl+↓ are accelerators onto the array-op
+      // right-click menu, not a separate feature — same "menu is canonical, key is a shortcut"
+      // relationship F2 already has to click-to-open. Gated on `!editing` like Ctrl+C above (an
+      // open editor's own Delete/Insert keystrokes must reach the input, not restage the array),
+      // and on the corresponding `arrayOp` member being defined, which is DiffRow's decision
+      // (absent for a sorted array, an immutable column, or — for move — an array boundary) —
+      // this handler never re-derives that gate, only dispatches to whatever it's handed.
       onKeyDown={e => {
         if (e.key === 'F2') ref.current?.querySelector<HTMLElement>('[data-open-trigger]')?.click();
         else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && !editing) {
           e.preventDefault();
           onCopy();
+        } else if (e.key === 'Insert' && !editing && arrayOp?.add) {
+          e.preventDefault();
+          arrayOp.add();
+        } else if (e.key === 'Delete' && !editing && arrayOp?.remove) {
+          e.preventDefault();
+          arrayOp.remove();
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowUp' && !editing && arrayOp?.moveUp) {
+          e.preventDefault();
+          arrayOp.moveUp();
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowDown' && !editing && arrayOp?.moveDown) {
+          e.preventDefault();
+          arrayOp.moveDown();
         }
       }}
       onFocus={e => { if (isFormControl(e.target)) setEditing(true); }}
@@ -99,6 +141,7 @@ export function DiskCell({ style, isFocused, onFocusCell, onDragStart, onDrop, o
       onDragStart={onDragStart}
       onDragOver={e => e.preventDefault()}
       onDrop={onDrop}
+      data-vscode-context={dataVscodeContext}
     >
       {children}
     </td>

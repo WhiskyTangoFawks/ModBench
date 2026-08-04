@@ -4,7 +4,10 @@ import { confirmRevertGroup } from './nativeBridge';
 import { DiffRow, type FocusedCell } from './DiffRow';
 import { partialSaveMessage, staleIndexMessage } from '../../src/medit/saveClassification';
 import type { ReindexFailure, SaveResult } from '../../src/medit/saveClassification';
-import { buildColumns, columnHeaderContext, currentMasters, defaultElementValue, parseElementIndex, updateArrayAtKey } from './recordUtils';
+import {
+  buildColumns, columnHeaderContext, currentMasters, defaultElementValue, parseElementIndex, updateArrayAtKey,
+  appendArrayElement, removeArrayElement, moveArrayElement,
+} from './recordUtils';
 import { mono, fg, baseCell, headerCell, getConflictBg } from './gridStyles';
 import { VmadSection } from './VmadSection';
 import { ConditionSection } from './ConditionSection';
@@ -123,6 +126,20 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     removeOverride: () => {}, addMaster: () => {},
   });
 
+  // Issue #227: same staleness problem as pendingCellActionsRef/columnHeaderActionsRef above, for
+  // the array-element/array-parent menu's four native commands. Self-filtered on `formKey` like
+  // columnHeaderActionsRef (there's no changeId concept for an array op) rather than forced
+  // through the changeId pattern where it doesn't fit.
+  const arrayOpActionsRef = useRef<{
+    formKey: string;
+    add: (plugin: string, fieldName: string) => void;
+    remove: (plugin: string, fieldName: string, index: number) => void;
+    moveUp: (plugin: string, fieldName: string, index: number) => void;
+    moveDown: (plugin: string, fieldName: string, index: number) => void;
+  }>({
+    formKey: '', add: () => {}, remove: () => {}, moveUp: () => {}, moveDown: () => {},
+  });
+
   // When the handler drives a new-formKey navigation it calls refresh directly,
   // so the [formKey] effect must skip to avoid a double request.
   const prevFormKeyRef = useRef(formKey);
@@ -149,6 +166,27 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         actions.addMaster(msg.plugin, msg.newMaster);
       }
     };
+    // Issue #227: the array-element/array-parent menu's four broadcasts — same self-filter
+    // shape as handleColumnHeaderMessage above (formKey, no changeId), split into its own
+    // function for the same "don't balloon one branching function" reason.
+    const isArrayOpMessage = (msg: ExtensionToWebview) => (
+      msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_REMOVE
+      || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN
+    );
+    const handleArrayOpMessage = (msg: ExtensionToWebview) => {
+      if (!isArrayOpMessage(msg)) { handleColumnHeaderMessage(msg); return; }
+      const actions = arrayOpActionsRef.current;
+      if (msg.formKey !== actions.formKey) return;
+      if (msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD) {
+        actions.add(msg.plugin, msg.fieldName);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.ARRAY_REMOVE) {
+        actions.remove(msg.plugin, msg.fieldName, msg.index);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP) {
+        actions.moveUp(msg.plugin, msg.fieldName, msg.index);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN) {
+        actions.moveDown(msg.plugin, msg.fieldName, msg.index);
+      }
+    };
     const handler = (event: MessageEvent) => {
       const msg = event.data as ExtensionToWebview;
       if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) {
@@ -170,7 +208,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         const { allChanges: changes, revertGroup } = pendingCellActionsRef.current;
         if (changes.some(c => c.id === msg.changeId)) revertGroup(msg.changeId);
       } else {
-        handleColumnHeaderMessage(msg);
+        handleArrayOpMessage(msg);
       }
     };
     window.addEventListener('message', handler);
@@ -471,6 +509,55 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     };
   });
 
+  // Issue #227: the array-element/array-parent menu's broadcast target — a generic version of
+  // the per-row `resolveCurrentArr` closure DiffRow's render loop already builds (pending-over-
+  // disk merge for one plugin's array), needed here because the broadcast arrives asynchronously
+  // in a mount-effect message handler, not inside a row's render, so there is no row closure to
+  // reuse. Same pending-aware merge either way — an in-flight pending array wins over disk.
+  function resolveCurrentArrayFor(plugin: string, fieldName: string): unknown[] {
+    const disk = overrideMap[plugin]?.fields.find(f => f.metadata.name === fieldName)?.value as unknown[] | undefined;
+    const pending = overrideMap[plugin]?.pendingFields?.[fieldName] as unknown[] | undefined;
+    return pending ?? disk ?? [];
+  }
+
+  // Issue #227: Add — appends a default-valued element derived from the array's own elementType
+  // (defaultElementValue), same as #142's inline "＋" button used to. A no-op if the field isn't
+  // a known array (defends against a stale broadcast racing a record navigation).
+  function handleArrayAdd(plugin: string, fieldName: string) {
+    const meta = fieldMetaMap[fieldName];
+    const elementType = meta?.type === 'array' ? meta.elementType : undefined;
+    if (!elementType) return;
+    void handleEdit(plugin, fieldName, appendArrayElement(resolveCurrentArrayFor(plugin, fieldName), defaultElementValue(elementType)));
+  }
+
+  function handleArrayRemove(plugin: string, fieldName: string, index: number) {
+    void handleEdit(plugin, fieldName, removeArrayElement(resolveCurrentArrayFor(plugin, fieldName), index));
+  }
+
+  // Issue #227: shared by Move Up/Move Down — moveArrayElement itself already no-ops (returns
+  // the same array reference) at a boundary, so restaging is skipped rather than firing a no-op
+  // save when a stale broadcast (or a race with a concurrent edit shrinking the array) lands on
+  // an element that can no longer move that direction.
+  function handleArrayMove(plugin: string, fieldName: string, index: number, direction: -1 | 1) {
+    const current = resolveCurrentArrayFor(plugin, fieldName);
+    const next = moveArrayElement(current, index, direction);
+    if (next !== current) void handleEdit(plugin, fieldName, next);
+  }
+
+  // Issue #227: keeps arrayOpActionsRef current every render, mirroring columnHeaderActionsRef
+  // just above — the mount-only message listener's array-op branch always needs this render's
+  // formKey/overrideMap/fieldMetaMap-derived handlers, not whatever closed over the ref when the
+  // listener was first attached.
+  useLayoutEffect(() => {
+    arrayOpActionsRef.current = {
+      formKey,
+      add: handleArrayAdd,
+      remove: handleArrayRemove,
+      moveUp: (plugin, fieldName, index) => handleArrayMove(plugin, fieldName, index, -1),
+      moveDown: (plugin, fieldName, index) => handleArrayMove(plugin, fieldName, index, 1),
+    };
+  });
+
   const columns = useMemo(
     () => result ? buildColumns(result.overrides, immutableSet) : [],
     [result, immutableSet],
@@ -586,6 +673,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
               const rows: React.ReactNode[] = [
                 <DiffRow
                   key={diff.fieldName}
+                  formKey={formKey}
                   diff={diff}
                   conflictAll={conflictAll}
                   columns={columns}
@@ -627,6 +715,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                     rows.push(
                       <DiffRow
                         key={childKey}
+                        formKey={formKey}
                         diff={child}
                         conflictAll={conflictAll}
                         columns={columns}
@@ -670,6 +759,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         rows.push(
                           <DiffRow
                             key={`${childKey}.${grandchild.fieldName}`}
+                            formKey={formKey}
                             diff={grandchild}
                             conflictAll={conflictAll}
                             columns={columns}
@@ -702,6 +792,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                     rows.push(
                       <DiffRow
                         key={`${diff.fieldName}.${child.fieldName}`}
+                        formKey={formKey}
                         diff={child}
                         conflictAll={conflictAll}
                         columns={columns}

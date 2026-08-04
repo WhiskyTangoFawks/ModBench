@@ -225,6 +225,26 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.array.add",
+        "title": "Add",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.array.remove",
+        "title": "Remove",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.array.moveUp",
+        "title": "Move Up",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.array.moveDown",
+        "title": "Move Down",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.modList.filter",
         "title": "Modbench: Filter Mods…",
         "icon": "$(search)"
@@ -664,6 +684,26 @@
           "command": "modbench.columnHeader.removeOverride",
           "when": "webviewId == 'modbench' && webviewSection == 'columnHeader' && !immutable",
           "group": "modbench@8"
+        },
+        {
+          "command": "modbench.array.add",
+          "when": "webviewId == 'modbench' && webviewSection == 'arrayParent'",
+          "group": "modbench@9"
+        },
+        {
+          "command": "modbench.array.remove",
+          "when": "webviewId == 'modbench' && webviewSection == 'arrayElement'",
+          "group": "modbench@10"
+        },
+        {
+          "command": "modbench.array.moveUp",
+          "when": "webviewId == 'modbench' && webviewSection == 'arrayElement' && canMoveUp",
+          "group": "modbench@11"
+        },
+        {
+          "command": "modbench.array.moveDown",
+          "when": "webviewId == 'modbench' && webviewSection == 'arrayElement' && canMoveDown",
+          "group": "modbench@12"
         },
         {
           "command": "modbench.downloads.install",

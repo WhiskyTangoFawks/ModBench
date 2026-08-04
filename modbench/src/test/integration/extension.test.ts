@@ -155,6 +155,14 @@ describe('modbench command registration', () => {
     'modbench.columnHeader.copyAsNewRecord',
     'modbench.columnHeader.removeOverride',
     'modbench.columnHeader.addMaster',
+    // #227: the array-element/array-parent native `webview/context` menu commands — same shape
+    // as #208/#209 above (package.json's contributes.menus["webview/context"], gated on
+    // webviewId/webviewSection, not testable from this harness; and DiffRow's data-vscode-context
+    // wiring, unit-tested in DiffRow.test.tsx/ArrayDiffRows.test.tsx).
+    'modbench.array.add',
+    'modbench.array.remove',
+    'modbench.array.moveUp',
+    'modbench.array.moveDown',
     'modbench.createPlaced',
     'modbench.modList.filter',
     'modbench.modList.switchProfile',

@@ -3,60 +3,29 @@ import { FlagCell } from './FlagCell';
 import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
-import { DiskCell } from './DiskCell';
+import { DiskCell, type ArrayOpHandlers } from './DiskCell';
 import { modelValue } from './modelValue';
 import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle } from './gridStyles';
-import { pendingIfChanged, extractPendingElementValue, pendingCellContext } from './recordUtils';
+import {
+  pendingIfChanged, extractPendingElementValue, pendingCellContext,
+  arrayElementContext, arrayParentContext, moveArrayElement, removeArrayElement,
+} from './recordUtils';
 import type { Column } from './recordUtils';
 import type { CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
 
-// Issue #142: per-element move-up/move-down/remove controls for unsorted array rows. Only
-// created by the caller (RecordPanel) when the element's metadata reports `isSortable !== true`
-// — DiffRow itself does no sortedness branching, so "sorted arrays get no controls" stays
-// enforced in exactly one place. `currentArray` mirrors the pending-aware merge RecordPanel
-// already performs for element value edits (pending overrides disk) so move/remove build off
-// the same array a concurrent value edit would.
+// Issue #227 / ADR-0034: move-up/move-down/remove/add moved off #142's inline ▲▼✕/＋ buttons
+// onto xEdit's right-click menu + keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓) — the
+// no-second-route rule means there is no longer a rendered control here at all. `ArrayEditControls`
+// still carries what a row needs to build its own thunks (`currentArray` mirrors the pending-aware
+// merge RecordPanel already performs for element value edits, so move/remove build off the same
+// array a concurrent value edit would); only created by the caller (RecordPanel) when the
+// element's metadata reports `isSortable !== true` — DiffRow itself does no sortedness branching,
+// so "sorted arrays get neither the menu nor the keys" stays enforced in exactly one place.
 export interface ArrayEditControls {
   currentArray: (plugin: string) => unknown[];
   index: number;
   onArrayEdit: (plugin: string, value: unknown[]) => void;
-}
-
-const arrayCtrlBtnStyle: React.CSSProperties = {
-  background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: 0, lineHeight: 1,
-};
-
-// Swap-based move (matches VmadSection's ArrayElementCell) — no free drag, no auto-sort.
-function ArrayElementControls({ plugin, controls }: Readonly<{ plugin: string; controls: ArrayEditControls }>) {
-  const { currentArray, index, onArrayEdit } = controls;
-  const arr = currentArray(plugin);
-  const swap = (j: number) => {
-    const next = [...arr];
-    [next[index], next[j]] = [next[j], next[index]];
-    onArrayEdit(plugin, next);
-  };
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-      <button title="Move up" disabled={index === 0} onClick={() => swap(index - 1)} style={arrayCtrlBtnStyle}>▲</button>
-      <button title="Move down" disabled={index === arr.length - 1} onClick={() => swap(index + 1)} style={arrayCtrlBtnStyle}>▼</button>
-      <button
-        title="Remove element"
-        onClick={() => onArrayEdit(plugin, arr.filter((_, j) => j !== index))}
-        style={{ ...arrayCtrlBtnStyle, color: 'var(--vscode-errorForeground, #f88)' }}
-      >×</button>
-    </span>
-  );
-}
-
-// Issue #142: "＋" control on an unsorted array's parent row — appends a default-valued element
-// (RecordPanel supplies the default, derived from the element's own FieldMetadata via
-// `defaultElementValue`). Matches VmadSection's `ArrayAddButton`: visible only while the array is
-// expanded, occupying the same slot the collapsed "[n]" summary would otherwise show.
-function ArrayAddButton({ onClick }: Readonly<{ onClick: () => void }>) {
-  return (
-    <button title="Add element" onClick={onClick} style={{ ...arrayCtrlBtnStyle, fontSize: '14px' }}>+</button>
-  );
 }
 
 const ROW_BG: Partial<Record<ConflictAll, string>> = {
@@ -90,6 +59,44 @@ function pendingResolutionPath(context: RowContext, fieldName: string, rawPendin
       return idx >= 0 ? `[${idx}]` : undefined;
     }
   }
+}
+
+// Issue #227: computes the array-op menu/keyboard wiring for one disk cell — pulled out of the
+// column render loop below (rather than inlined as nested ternaries) purely to keep that
+// function's own cognitive-complexity budget from tipping over; the branching itself is exactly
+// #142's original gate (mutable column, unsorted array), just producing a data-vscode-context
+// string + ArrayOpHandlers instead of a rendered button. A row is either the array's own parent
+// (onArrayAdd only) or one of its elements (arrayEdit only), never both. Available regardless of
+// expand state — right-clicking or keying Insert on a collapsed "[3]" summary still offers Add,
+// matching xEdit (the old "+" button's isExpanded gate was that button's own rendering choice,
+// not a functional rule). moveUp/moveDown are omitted (not disabled) at an array boundary, same
+// "absent, not disabled" convention as the sorted-array/immutable-column gates — enforced on both
+// paths: the handler is `undefined` for the keyboard, and arrayElementContext's canMoveUp/
+// canMoveDown drive package.json's `when` clause for the menu, so a boundary element's dead
+// direction is absent from both, not merely a no-op behind a still-visible item.
+function computeArrayOps(
+  context: RowContext, diffFieldName: string, plugin: string, formKey: string, immutable: boolean,
+  arrayEdit: ArrayEditControls | undefined, onArrayAdd: ((plugin: string) => void) | undefined,
+): { arrayOp: ArrayOpHandlers | undefined; arrayVscodeContext: string | undefined } {
+  if (onArrayAdd && !immutable) {
+    return {
+      arrayOp: { add: () => onArrayAdd(plugin) },
+      arrayVscodeContext: arrayParentContext(formKey, plugin, diffFieldName),
+    };
+  }
+  if (arrayEdit && !immutable && context.kind === 'array-element') {
+    const arr = arrayEdit.currentArray(plugin);
+    const { index, onArrayEdit } = arrayEdit;
+    return {
+      arrayOp: {
+        remove: () => onArrayEdit(plugin, removeArrayElement(arr, index)),
+        moveUp: index > 0 ? () => onArrayEdit(plugin, moveArrayElement(arr, index, -1)) : undefined,
+        moveDown: index < arr.length - 1 ? () => onArrayEdit(plugin, moveArrayElement(arr, index, 1)) : undefined,
+      },
+      arrayVscodeContext: arrayElementContext(formKey, plugin, context.parentFieldName, index, arr.length),
+    };
+  }
+  return { arrayOp: undefined, arrayVscodeContext: undefined };
 }
 
 // ── Cell renderer ─────────────────────────────────────────────────────────────
@@ -190,6 +197,13 @@ interface DiffRowProps {
   rowKey: string;
   focusedCell: FocusedCell | null;
   onFocusCell: (rowKey: string, plugin: string) => void;
+  // Issue #227: the record's own FormKey — needed to build the array-element/array-parent
+  // data-vscode-context (RecordPanel's broadcast self-filter key, same role `formKey` plays in
+  // ColumnHeaderContext). Threaded uniformly to every DiffRow instance (top-level/array-element/
+  // struct-child/grandchild) even though only the first two ever use it, matching how
+  // immutableSet/pendingChangeMap are already passed uniformly rather than only to the rows that
+  // need them.
+  formKey: string;
 }
 
 export function DiffRow({
@@ -197,7 +211,7 @@ export function DiffRow({
   pendingChangeMap, collapsedColumns, onOpen, onEdit,
   onCellDragStart, onCellDrop,
   context, hasChildren, isExpanded, onToggle, arrayEdit, onArrayAdd,
-  rowKey, focusedCell, onFocusCell,
+  rowKey, focusedCell, onFocusCell, formKey,
 }: Readonly<DiffRowProps>) {
   const meta = context.kind === 'top-level' ? fieldMetaMap[diff.fieldName] : context.overrideMeta;
   if (!meta) return null;
@@ -247,12 +261,14 @@ export function DiffRow({
           // disk value, no pending merge — a disk column's own display never merges pending (only
           // the separate Pending column does, out of scope here per #232).
           const copyText = modelValue(diff.values[o.plugin], meta, diff.resolutions?.[o.plugin]);
+          const { arrayOp, arrayVscodeContext } = computeArrayOps(
+            context, diff.fieldName, o.plugin, formKey, immutableSet.has(o.plugin), arrayEdit, onArrayAdd,
+          );
           if (hasChildren) {
             const len = meta.type === 'array' && Array.isArray(diff.values[o.plugin])
               ? (diff.values[o.plugin] as unknown[]).length
               : '…';
             const collapsedLabel = meta.type === 'array' ? `[${len}]` : '{…}';
-            const showAdd = isExpanded && onArrayAdd && !immutableSet.has(o.plugin);
             // Issue #204 / ADR-0033: a compound (struct/array) field's summary row is a drag
             // source for its whole value, exactly like a scalar leaf — every value-bearing cell,
             // expanded or collapsed, wired uniformly rather than branching on isExpanded.
@@ -265,14 +281,14 @@ export function DiffRow({
                 onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
                 onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
                 onCopy={() => copyToClipboard(copyText)}
+                arrayOp={arrayOp}
+                dataVscodeContext={arrayVscodeContext}
               >
                 {!isExpanded && (
                   <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
                     {collapsedLabel}<CheckErrorIcon checkError={checkError} />
                   </span>
                 )}
-                {showAdd && <ArrayAddButton onClick={() => onArrayAdd(o.plugin)} />}
-                {arrayEdit && !immutableSet.has(o.plugin) && <ArrayElementControls plugin={o.plugin} controls={arrayEdit} />}
               </DiskCell>
             );
           }
@@ -291,11 +307,12 @@ export function DiffRow({
               onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
               onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
               onCopy={() => copyToClipboard(copyText)}
+              arrayOp={arrayOp}
+              dataVscodeContext={arrayVscodeContext}
             >
               {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin),
                 focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin, onOpen,
                 v => onEdit(o.plugin, diff.fieldName, v), checkError, diff.resolutions?.[o.plugin])}
-              {arrayEdit && !immutableSet.has(o.plugin) && <ArrayElementControls plugin={o.plugin} controls={arrayEdit} />}
             </DiskCell>
           );
         }

@@ -51,6 +51,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
   const master = override('Fallout4.esm');
   const mod = override('MyMod.esp');
   return {
+    formKey: '000001:Fallout4.esm',
     diff: diff(),
     conflictAll: 'NoConflict',
     columns: [diskColumn(master), diskColumn(mod)],
@@ -740,5 +741,191 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
     expect(link.style.textDecoration).toBe('underline');
+  });
+});
+
+// Issue #227 / ADR-0034: array structure ops (Add/Remove/Move Up/Move Down) move off #142's
+// inline ▲▼✕/＋ buttons onto xEdit's right-click menu + keyboard accelerators. This block covers
+// the two seams DiffRow itself owns: the data-vscode-context attribute the native
+// `webview/context` menu gates on, and the Insert/Delete/Ctrl+↑/Ctrl+↓ keydown handling that
+// mirrors #224's Ctrl+C precedent (a real keydown dispatched on the cell's own DOM node, not a
+// mocked call). The broadcast handler that receives the menu's commands lives in RecordPanel
+// (tested there, in ArrayDiffRows.test.tsx); the pure mutations live in recordUtils.test.ts.
+describe('DiffRow — array-parent row (Add, #227)', () => {
+  const arrayMeta: FieldMetadata = {
+    name: 'Items', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
+    elementType: { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
+  };
+
+  function arrayParentProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
+    const master = override('Fallout4.esm', { fields: [{ metadata: arrayMeta, value: ['a', 'b'] }] });
+    const mod = override('MyMod.esp', { fields: [{ metadata: arrayMeta, value: ['a', 'b', 'c'] }] });
+    return baseProps({
+      diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': ['a', 'b'], 'MyMod.esp': ['a', 'b', 'c'] } }),
+      fieldMetaMap: { Items: arrayMeta },
+      columns: [diskColumn(master), diskColumn(mod)],
+      overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+      context: { kind: 'top-level' },
+      rowKey: 'Items',
+      hasChildren: true,
+      isExpanded: false,
+      onArrayAdd: vi.fn(),
+      ...overrides,
+    });
+  }
+
+  it('the mutable column carries the arrayParent data-vscode-context', () => {
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayParentProps())}</tbody></table>);
+    const mutableCell = container.querySelectorAll('td')[2]; // 0 = label, 1 = Fallout4.esm, 2 = MyMod.esp
+    expect(JSON.parse(mutableCell.getAttribute('data-vscode-context')!)).toEqual({
+      webviewSection: 'arrayParent', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fieldName: 'Items',
+      preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('the immutable column carries no data-vscode-context', () => {
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayParentProps())}</tbody></table>);
+    const immutableCell = container.querySelectorAll('td')[1];
+    expect(immutableCell.getAttribute('data-vscode-context')).toBeNull();
+  });
+
+  it('is present regardless of expand state — collapsed rows still carry it', () => {
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayParentProps({ isExpanded: false }))}</tbody></table>);
+    const mutableCell = container.querySelectorAll('td')[2];
+    expect(mutableCell.getAttribute('data-vscode-context')).not.toBeNull();
+  });
+
+  it('Insert on the mutable column calls onArrayAdd for that plugin', () => {
+    const onArrayAdd = vi.fn();
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayParentProps({ onArrayAdd }))}</tbody></table>);
+    const mutableCell = container.querySelectorAll('td')[2];
+    fireEvent.keyDown(mutableCell, { key: 'Insert' });
+    expect(onArrayAdd).toHaveBeenCalledWith('MyMod.esp');
+  });
+
+  it('Insert on the immutable column does nothing (no onArrayAdd call, no attribute)', () => {
+    const onArrayAdd = vi.fn();
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayParentProps({ onArrayAdd }))}</tbody></table>);
+    const immutableCell = container.querySelectorAll('td')[1];
+    fireEvent.keyDown(immutableCell, { key: 'Insert' });
+    expect(onArrayAdd).not.toHaveBeenCalled();
+  });
+
+  // AC: "Sorted arrays offer none of these, in the menu or from the keyboard" — RecordPanel
+  // enforces this by simply never handing down onArrayAdd for a sortable array; DiffRow does no
+  // sortedness branching of its own, so the absent-prop case is the whole contract.
+  it('a sorted array (no onArrayAdd prop) carries no data-vscode-context and Insert does nothing', () => {
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayParentProps({ onArrayAdd: undefined }))}</tbody></table>);
+    const mutableCell = container.querySelectorAll('td')[2];
+    expect(mutableCell.getAttribute('data-vscode-context')).toBeNull();
+    fireEvent.keyDown(mutableCell, { key: 'Insert' }); // must not throw
+  });
+});
+
+describe('DiffRow — array-element row (Remove/Move Up/Move Down, #227)', () => {
+  const elemMeta: FieldMetadata = { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [], isSortable: false };
+
+  function arrayElementProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
+    const master = override('Fallout4.esm', { fields: [{ metadata: elemMeta, value: 'a' }] });
+    const mod = override('MyMod.esp', { fields: [{ metadata: elemMeta, value: 'y' }] });
+    const onArrayEdit = vi.fn();
+    return baseProps({
+      diff: diff({ fieldName: '[1]', values: { 'Fallout4.esm': 'a', 'MyMod.esp': 'y' } }),
+      fieldMetaMap: { Items: elemMeta },
+      columns: [diskColumn(master), diskColumn(mod)],
+      overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+      context: { kind: 'array-element', overrideMeta: elemMeta, parentFieldName: 'Items' },
+      rowKey: 'Items.[1]',
+      arrayEdit: { currentArray: plugin => (plugin === 'MyMod.esp' ? ['x', 'y', 'z'] : ['a']), index: 1, onArrayEdit },
+      ...overrides,
+    });
+  }
+
+  it('the mutable column carries the arrayElement data-vscode-context', () => {
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayElementProps())}</tbody></table>);
+    const mutableCell = container.querySelectorAll('td')[2];
+    expect(JSON.parse(mutableCell.getAttribute('data-vscode-context')!)).toEqual({
+      webviewSection: 'arrayElement', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      fieldName: 'Items', index: 1, canMoveUp: true, canMoveDown: true, preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('the immutable column carries no data-vscode-context', () => {
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayElementProps())}</tbody></table>);
+    const immutableCell = container.querySelectorAll('td')[1];
+    expect(immutableCell.getAttribute('data-vscode-context')).toBeNull();
+  });
+
+  it('Delete on the mutable column restages the whole array with that element dropped', () => {
+    const onArrayEdit = vi.fn();
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayElementProps({
+      arrayEdit: { currentArray: () => ['x', 'y', 'z'], index: 1, onArrayEdit },
+    }))}</tbody></table>);
+    const mutableCell = container.querySelectorAll('td')[2];
+    fireEvent.keyDown(mutableCell, { key: 'Delete' });
+    expect(onArrayEdit).toHaveBeenCalledWith('MyMod.esp', ['x', 'z']);
+  });
+
+  it('Ctrl+↑ on the mutable column swaps the element up and restages the whole array', () => {
+    const onArrayEdit = vi.fn();
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayElementProps({
+      arrayEdit: { currentArray: () => ['x', 'y', 'z'], index: 1, onArrayEdit },
+    }))}</tbody></table>);
+    const mutableCell = container.querySelectorAll('td')[2];
+    fireEvent.keyDown(mutableCell, { key: 'ArrowUp', ctrlKey: true });
+    expect(onArrayEdit).toHaveBeenCalledWith('MyMod.esp', ['y', 'x', 'z']);
+  });
+
+  it('Ctrl+↓ on the mutable column swaps the element down and restages the whole array', () => {
+    const onArrayEdit = vi.fn();
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayElementProps({
+      arrayEdit: { currentArray: () => ['x', 'y', 'z'], index: 1, onArrayEdit },
+    }))}</tbody></table>);
+    const mutableCell = container.querySelectorAll('td')[2];
+    fireEvent.keyDown(mutableCell, { key: 'ArrowDown', ctrlKey: true });
+    expect(onArrayEdit).toHaveBeenCalledWith('MyMod.esp', ['x', 'z', 'y']);
+  });
+
+  it('Ctrl+↑ on the first element does nothing (absent, not disabled)', () => {
+    const onArrayEdit = vi.fn();
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayElementProps({
+      arrayEdit: { currentArray: () => ['x', 'y', 'z'], index: 0, onArrayEdit },
+    }))}</tbody></table>);
+    const mutableCell = container.querySelectorAll('td')[2];
+    fireEvent.keyDown(mutableCell, { key: 'ArrowUp', ctrlKey: true });
+    expect(onArrayEdit).not.toHaveBeenCalled();
+    // The right-click menu's when-clause gate must agree with the keyboard's no-op above —
+    // canMoveUp false is what makes package.json omit the Move Up item at this boundary.
+    expect(JSON.parse(mutableCell.getAttribute('data-vscode-context')!).canMoveUp).toBe(false);
+  });
+
+  it('Ctrl+↓ on the last element does nothing (absent, not disabled)', () => {
+    const onArrayEdit = vi.fn();
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayElementProps({
+      arrayEdit: { currentArray: () => ['x', 'y', 'z'], index: 2, onArrayEdit },
+    }))}</tbody></table>);
+    const mutableCell = container.querySelectorAll('td')[2];
+    fireEvent.keyDown(mutableCell, { key: 'ArrowDown', ctrlKey: true });
+    expect(onArrayEdit).not.toHaveBeenCalled();
+    expect(JSON.parse(mutableCell.getAttribute('data-vscode-context')!).canMoveDown).toBe(false);
+  });
+
+  it('Delete on the immutable column does nothing', () => {
+    const onArrayEdit = vi.fn();
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayElementProps({ arrayEdit: { currentArray: () => ['a'], index: 0, onArrayEdit } }))}</tbody></table>);
+    const immutableCell = container.querySelectorAll('td')[1];
+    fireEvent.keyDown(immutableCell, { key: 'Delete' });
+    expect(onArrayEdit).not.toHaveBeenCalled();
+  });
+
+  // AC: sorted arrays offer none of these, in the menu or from the keyboard — RecordPanel never
+  // hands down arrayEdit for a sortable element; DiffRow's contract is simply "no prop, no op."
+  it('a sorted array element (no arrayEdit prop) carries no data-vscode-context and keys do nothing', () => {
+    const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayElementProps({ arrayEdit: undefined }))}</tbody></table>);
+    const mutableCell = container.querySelectorAll('td')[2];
+    expect(mutableCell.getAttribute('data-vscode-context')).toBeNull();
+    fireEvent.keyDown(mutableCell, { key: 'Delete' });
+    fireEvent.keyDown(mutableCell, { key: 'ArrowUp', ctrlKey: true });
+    fireEvent.keyDown(mutableCell, { key: 'ArrowDown', ctrlKey: true }); // must not throw
   });
 });
