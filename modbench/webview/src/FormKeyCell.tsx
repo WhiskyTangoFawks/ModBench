@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { pickFormKey } from './nativeBridge';
 import { FormKeyLink, formKeyLabel } from './FormKeyLink';
-import { ReadOnlyValueSurface } from './ReadOnlyValueSurface';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import type { FieldMetadata, FormKeyResolution } from './types';
 
@@ -10,8 +9,8 @@ interface FormKeyCellProps {
   meta: FieldMetadata;
   editable: boolean;
   // Issue #223 / ADR-0034: see ScalarCell's identical prop for the full rationale — gates the
-  // mutable branch's plain-click open of the QuickPick; unused by the immutable branch, which
-  // this ticket leaves untouched (see onPlainClick below). Optional, defaulting to `true`:
+  // mutable branch's plain-click open of the QuickPick. Unused by the immutable branch: post-#226
+  // that branch opens nothing regardless of focus. Optional, defaulting to `true`:
   // ConditionSection renders this cell directly (its Object-typed parameter/Run-On/comparison
   // FormKey cells), outside the field grid's focus model, and doesn't pass it — same reasoning
   // as ScalarCell's identical default.
@@ -27,19 +26,15 @@ interface FormKeyCellProps {
 
 export function FormKeyCell({ value, meta, editable, isFocused = true, onOpen, onCommit, checkError, resolution }: FormKeyCellProps) {
   const fk = typeof value === 'string' && value ? value : null;
-  // Issue #201: only ever true on an immutable column — a mutable one hands plain click to the
-  // QuickPick, which is itself a native input and so already the text surface this state exists
-  // to provide.
-  const [active, setActive] = useState(false);
 
   // Issue #223: the picker call itself, split out so both the gated plain-click path and the
   // unconditional double-click path share it.
   function openPicker() {
-    // Issue #218: seeded with the composite this cell displays, not the bare FormKey. A mutable
-    // column has no read-only surface, so the picker's native input is where its value is
-    // selected and copied — seeding it with something the cell never showed left the one column
-    // kind that can edit a reference unable to hand it over. The picker normalizes a composite
-    // back to its reference before searching, so this costs the search nothing.
+    // Issue #218: seeded with the composite this cell displays, not the bare FormKey — the
+    // picker's native input is where a mutable cell's value is selected and copied, so seeding it
+    // with something the cell never showed would leave the one column kind that can edit a
+    // reference unable to hand it over. The picker normalizes a composite back to its reference
+    // before searching, so this costs the search nothing.
     void pickFormKey(fk ? formKeyLabel(fk, resolution) : '', meta.validFormKeyTypes)
       .then(picked => { if (picked) onCommit(picked); });
   }
@@ -47,25 +42,19 @@ export function FormKeyCell({ value, meta, editable, isFocused = true, onOpen, o
   // Issue #111: the cell reads the same whether or not its column is editable — a FormKey is a
   // link, not a form control. Editability shows up in the gesture, not the paint: plain click
   // opens the picker only where the column is mutable, and Ctrl+click follows the reference
-  // everywhere (including read-only columns).
+  // everywhere (including immutable columns).
   // Issue #210: the picker itself is a native QuickPick (only the extension host can call
   // vscode.window.createQuickPick), seeded with the current reference — pickFormKey resolves to
   // the picked FormKey, or null on Escape/blur, in which case the field is left unchanged.
-  // Issue #223 / ADR-0034: the mutable branch now gates on isFocused — a second click on the
+  // Issue #223 / ADR-0034: the mutable branch gates on isFocused — a second click on the
   // already-focused cell opens the picker; a first click on an unfocused cell only focuses (via
-  // DiskCell's onFocusCell, which fires after this handler in the bubble order). The immutable
-  // branch is deliberately untouched by this ticket: plain click keeps activating the read-only
-  // surface unconditionally, exactly as it did before #223 — see ScalarCell's identical note for
-  // why (#226 depends on #224 shipping first). Ctrl+click is unaffected either way: FormKeyLink
-  // routes that to onOpen and never calls onPlainClick, so following a reference cannot leave a
-  // surface open behind the record opened. A null reference offers nothing to select, so it
-  // activates nothing (the `—` placeholder rule).
+  // DiskCell's onFocusCell, which fires after this handler in the bubble order).
+  // Issue #226 / ADR-0034: on an immutable column this is a no-op — there is no read-only surface
+  // left to activate, so plain click does nothing there, matching every other leaf's refusal.
+  // Ctrl+click is unaffected either way: FormKeyLink routes that to onOpen and never calls
+  // onPlainClick, so following a reference is unreachable from here regardless of editability.
   function onPlainClick() {
-    if (editable) {
-      if (isFocused) openPicker();
-      return;
-    }
-    if (fk !== null) setActive(true);
+    if (editable && isFocused) openPicker();
   }
 
   function renderValue() {
@@ -85,7 +74,8 @@ export function FormKeyCell({ value, meta, editable, isFocused = true, onOpen, o
         >—</span>
       );
     }
-    if (active) return <ReadOnlyValueSurface value={formKeyLabel(fk, resolution)} onBlur={() => setActive(false)} />;
+    // Issue #226: no more `active` branch — an immutable column's link renders unconditionally,
+    // and onPlainClick (above) is a no-op there, so plain click opens nothing.
     return (
       <FormKeyLink
         value={fk}
