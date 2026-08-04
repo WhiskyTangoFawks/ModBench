@@ -17,82 +17,45 @@ const enumMeta: FieldMetadata = {
   enumValues: ['Male', 'Female', 'None'],
 };
 
-// Issue #201 / ADR-0033 (cursor contract): an immutable cell is no longer inert text. Clicking it
-// activates a read-only text surface, and (until #224) that surface was the whole of copy —
-// selection and Ctrl+C are the platform's once an input is focused. #224 added a second copy path
-// (Ctrl+C directly on the focused, unopened cell, via DiskCell/DiffRow) so a value is copyable
-// even before this surface is clicked open, but this component itself still has no clipboard code
-// — it only ever hands modelValue's string to the surface below; the write lives one layer up.
-// The surface commits nothing; that is the *only* difference between an immutable column and a
-// mutable one.
-describe('ScalarCell — immutable column activates a read-only text surface', () => {
-  it('activates a readOnly input containing the value when clicked', () => {
+// Issue #226 / ADR-0034: the read-only value surface is retired. An immutable cell simply
+// refuses to open anything — no distinct affordance beforehand, matching xEdit. Copy is already
+// covered by Ctrl+C on the focused, unopened cell (#224, exercised at the DiskCell/DiffRow seam);
+// this component itself never had clipboard code of its own, only a value to open a surface with,
+// and that job is gone.
+describe('ScalarCell — immutable column opens nothing', () => {
+  it('a plain click opens no input for a string value', () => {
     render(<ScalarCell value="Dogmeat" meta={strMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('Dogmeat'));
-    expect(screen.getByDisplayValue('Dogmeat')).toHaveAttribute('readonly');
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Dogmeat')).not.toBeInTheDocument();
+    expect(screen.getByText('Dogmeat')).toBeInTheDocument();
   });
 
-  it('returns to text on blur', () => {
+  it('a double click opens no input for a string value either', () => {
     render(<ScalarCell value="Dogmeat" meta={strMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);
-    fireEvent.click(screen.getByText('Dogmeat'));
-    fireEvent.blur(screen.getByDisplayValue('Dogmeat'));
+    fireEvent.doubleClick(screen.getByText('Dogmeat'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.getByText('Dogmeat')).toBeInTheDocument();
   });
 
-  // Issue #201: the whole value arrives pre-selected, so Ctrl+C is immediate and the highlight
-  // itself is what signals "this is selectable". It also matters for a value wider than its
-  // column: the input shows only part of a truncated composite, but select-on-focus means the
-  // copy takes all of it.
-  it('selects the whole value on focus, so Ctrl+C is immediate', () => {
-    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);
-    fireEvent.click(screen.getByText('Dogmeat'));
-    const input = screen.getByDisplayValue('Dogmeat');
-    expect(input.selectionStart).toBe(0);
-    expect(input.selectionEnd).toBe('Dogmeat'.length);
-  });
-
-  // Issue #201 / ADR-0033: it must read as "you may select this", not "you may edit this" — an
-  // input border and background would promise an edit the column cannot accept. The test DOM has
-  // no cascade, so this proves only that the declarations are there, not which pixels paint.
-  //
-  // minWidth is load-bearing, not tidying, and is asserted here because this is where the style
-  // lives: FormKeyCell wraps its content in `display: inline-flex`, which makes this input a flex
-  // item, and a flex item's default `min-width: auto` refuses to shrink below its content — so
-  // `width: 100%` would blow the column out instead of fitting it. Same trap #218 hit.
-  it('is visibly inert — no input border or background', () => {
-    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);
-    fireEvent.click(screen.getByText('Dogmeat'));
-    const input = screen.getByDisplayValue('Dogmeat');
-    // Longhands, because happy-dom expands both shorthands to `'none none'` — and it echoes the
-    // keyword into the longhand rather than resolving it (backgroundColor is `'none'`, not
-    // `'transparent'`). Asserting the shorthand would read as a typo to the next person.
-    expect(input.style.borderStyle).toBe('none');
-    expect(input.style.backgroundColor).toBe('none');
-    expect(input.style.minWidth).toBe('0');
-  });
-
-  // Issue #201, AC 5: `bool` and `enum` get the surface too — not because they were designed for,
-  // but because the immutable branch sits *above* the type branches, so excluding them would take
-  // extra code. These fence that ordering: if a type check ever creeps in above them, these fail
-  // and the "not type-aware" claim in the ticket stops being true quietly.
-  it('activates the same surface for a bool value', () => {
+  // Issue #226, carrying forward #201 AC5's point: `bool` and `enum` open nothing too — not
+  // because they were designed for, but because the immutable branch sits *above* the type
+  // branches, so excluding them would take extra code. These fence that ordering.
+  it('opens nothing for a bool value', () => {
     render(<ScalarCell value={false} meta={boolMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('false'));
-    expect(screen.getByDisplayValue('false')).toHaveAttribute('readonly');
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
-  it('activates the same surface for an enum, showing the rendered name', () => {
+  it('opens nothing for an enum value', () => {
     render(<ScalarCell value="Male" meta={enumMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('Male'));
-    expect(screen.getByDisplayValue('Male')).toHaveAttribute('readonly');
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 
-  // Issue #201 / ADR-0033: the em-dash is a placeholder, not a value — the same argument the ADR
-  // already makes for `{…}` and `[3]` on struct/array summary rows. Activating a surface here
-  // would hand over an empty selection that looks like a successful copy, which is worse than no
-  // affordance at all.
-  it('activates nothing on a null value — the em-dash is a placeholder', () => {
+  // The em-dash is a placeholder, not a value — same rule as `{…}`/`[3]` on struct/array summary
+  // rows. Already opened nothing before this ticket; still true now, by the same code path.
+  it('opens nothing on a null value — the em-dash is a placeholder', () => {
     render(<ScalarCell value={null} meta={strMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('—'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
@@ -106,17 +69,11 @@ describe('ScalarCell — immutable column activates a read-only text surface', (
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  // The surface exists so a value can be *read out*, never written. `readOnly` is what enforces
-  // that in the browser; this is the fence around it, so a later refactor that swaps in a
-  // controlled input with an onChange can't quietly make an immutable column stage edits.
-  it('stages nothing when typed into and blurred', () => {
+  it('never calls onCommit, however it is clicked', () => {
     const onCommit = vi.fn();
     render(<ScalarCell value="Dogmeat" meta={strMeta} editable={false} isFocused={false} onCommit={onCommit} />);
     fireEvent.click(screen.getByText('Dogmeat'));
-    const input = screen.getByDisplayValue('Dogmeat');
-    fireEvent.change(input, { target: { value: 'Tampered' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    fireEvent.blur(input);
+    fireEvent.doubleClick(screen.getByText('Dogmeat'));
     expect(onCommit).not.toHaveBeenCalled();
   });
 });
