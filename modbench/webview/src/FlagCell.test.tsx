@@ -52,33 +52,35 @@ describe('FlagCell — read-only column', () => {
   });
 });
 
-// Issue #201 / ADR-0033 (cursor contract), AC 5: an immutable flag cell activates a read-only
-// surface showing its *rendered names*, not the bitmask integer behind them — a cell hands over
-// what it displays, or it is handing over something the user never saw.
-describe('FlagCell — immutable column activates a read-only text surface', () => {
-  it('activates a readOnly input containing the flag names when clicked', () => {
+// Issue #226 / ADR-0034: the read-only value surface is retired. An immutable flag cell opens
+// nothing, however it is clicked — copy is Ctrl+C on the focused, unopened cell (#224), reading
+// the rendered names (not the bitmask) via modelValue, so there is nothing left for a click here
+// to activate.
+describe('FlagCell — immutable column opens nothing', () => {
+  it('a plain click opens no checkboxes or input', () => {
     render(<FlagCell value={0b0101} meta={flagMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('A, C'));
-    expect(screen.getByDisplayValue('A, C')).toHaveAttribute('readonly');
-  });
-
-  it('returns to text on blur', () => {
-    render(<FlagCell value={0b0101} meta={flagMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);
-    fireEvent.click(screen.getByText('A, C'));
-    fireEvent.blur(screen.getByDisplayValue('A, C'));
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.getByText('A, C')).toBeInTheDocument();
   });
 
+  it('a double click opens nothing either', () => {
+    render(<FlagCell value={0b0101} meta={flagMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);
+    fireEvent.doubleClick(screen.getByText('A, C'));
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
   // Same placeholder rule as ScalarCell's null: no flags set renders `—`, which is not a value.
   // Note this is a *different* input from null — the bitmask is present and simply zero.
-  it('activates nothing when no flags are set — "—" is a placeholder', () => {
+  it('opens nothing when no flags are set — "—" is a placeholder', () => {
     render(<FlagCell value={0} meta={flagMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('—'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
-  it('activates nothing on a null value', () => {
+  it('opens nothing on a null value', () => {
     render(<FlagCell value={null} meta={flagMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('—'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
