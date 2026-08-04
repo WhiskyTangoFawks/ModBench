@@ -4,8 +4,8 @@ import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell, type ArrayOpHandlers } from './DiskCell';
-import { modelValue } from './modelValue';
-import { copyToClipboard } from './nativeBridge';
+import { modelValue, coerceModelValue } from './modelValue';
+import { copyToClipboard, readClipboardText } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle } from './gridStyles';
 import {
   pendingIfChanged, extractPendingElementValue, pendingCellContext,
@@ -97,6 +97,65 @@ function computeArrayOps(
     };
   }
   return { arrayOp: undefined, arrayVscodeContext: undefined };
+}
+
+// Issue #225 / ADR-0034: Ctrl+X/Ctrl+V on a leaf value cell — computed once per column here (like
+// computeArrayOps above) so the render loop below doesn't grow a nest of inline closures. Both are
+// undefined outright on an immutable column, the same "absent, not disabled" convention arrayOp
+// already uses — "both refuse silently on an immutable column" (issue #225) falls out of the prop
+// simply not existing, not a check inside DiskCell's own handler. onPaste is additionally absent
+// on a formKey column: the QuickPick its editor already opens is a native input Ctrl+V already
+// works into once open (#210/#218 — pasting a whole "EditorID [FormKey]" composite there
+// normalizes and resolves it before commit), so a second, headless resolve-from-clipboard path
+// here would be a second route to the same outcome, not a new capability (#225 seam 2). A
+// formKey's onCut is unaffected — clearing a reference to '' needs no resolution, so it commits
+// through the same coerceModelValue('') path every other type uses.
+//
+// Both share the same no-op-suppression comparison ScalarCell's own commitIfChanged uses
+// (`modelValue(coerced) !== copyText`) — paste/cut bypass ScalarCell/FlagCell's local draft state
+// entirely, committing straight through the `onCommit` closure DiffRow already builds for typing,
+// so this is the one place that comparison needs to exist for the clipboard path, covering every
+// leaf type (including flags, which never needed its own no-op guard before this).
+function computeClipboardOps(
+  meta: FieldMetadata, mutable: boolean, copyText: string,
+  resolution: FormKeyResolution | undefined, onCommit: (v: unknown) => void,
+): { onCut: (() => void) | undefined; onPaste: (() => void) | undefined } {
+  if (!mutable) return { onCut: undefined, onPaste: undefined };
+
+  // Issue #225 (review): both Ctrl+X and Ctrl+V commit by running a clipboard string through the
+  // same coerce → no-op-suppression → onCommit shape, differing only in *which* string — cut
+  // always feeds '' (its own clear), paste feeds whatever the clipboard held. Sharing this one
+  // function is what makes that "same shape" true in the code, not just in the comment.
+  const tryCommit = (text: string) => {
+    const coerced = coerceModelValue(text, meta);
+    if (coerced.ok && modelValue(coerced.value, meta, resolution) !== copyText) onCommit(coerced.value);
+  };
+
+  // Issue #225 (seam 1): cut commits the coercion pipeline's own answer for '' — the same
+  // "cannot coerce, leave unchanged" rule paste uses, not a bespoke per-type default. That means
+  // Cut visibly clears string/bitmask-enum/formKey (all of which accept '') and, for
+  // bool/int/float/plain-enum (none of which do), only copies — the field is left exactly as a
+  // paste of an uncoercible clipboard string would leave it.
+  //
+  // Issue #225 (review): xEdit's own Ctrl+X guards on `Element.EditValue` being non-empty before
+  // doing anything at all (docs/research/xedit-ux-audit.md:111) — an already-empty cell has
+  // nothing to cut, so this skips both the clipboard write and the (always a no-op here anyway)
+  // clear attempt, rather than writing '' to the clipboard for no reason.
+  const onCut = () => {
+    if (!copyText) return;
+    copyToClipboard(copyText);
+    tryCommit('');
+  };
+
+  const onPaste = meta.type === 'formKey' ? undefined : () => {
+    void (async () => {
+      const text = await readClipboardText();
+      if (!text) return; // AC: an empty or failed clipboard read leaves the field unchanged
+      tryCommit(text);
+    })();
+  };
+
+  return { onCut, onPaste };
 }
 
 // ── Cell renderer ─────────────────────────────────────────────────────────────
@@ -298,23 +357,34 @@ export function DiffRow({
           // onCellDrop). onDrop's applyValue re-uses this row's own onEdit closure, which
           // already carries the right merge semantics for this row's context (top-level/
           // array-element/struct-child/grandchild).
-          return (
-            <DiskCell
-              key={`disk:${o.plugin}`}
-              style={cellStyle}
-              isFocused={focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin}
-              onFocusCell={() => onFocusCell(rowKey, o.plugin)}
-              onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
-              onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
-              onCopy={() => copyToClipboard(copyText)}
-              arrayOp={arrayOp}
-              dataVscodeContext={arrayVscodeContext}
-            >
-              {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin),
-                focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin, onOpen,
-                v => onEdit(o.plugin, diff.fieldName, v), checkError, diff.resolutions?.[o.plugin])}
-            </DiskCell>
-          );
+          {
+            const onCommit = (v: unknown) => onEdit(o.plugin, diff.fieldName, v);
+            // Issue #225: Ctrl+X/Ctrl+V only ever apply to this leaf branch — the hasChildren
+            // (struct/array summary) branch above has no onCommit at all today, since a compound
+            // field is edited through its child rows, never as a unit.
+            const { onCut, onPaste } = computeClipboardOps(
+              meta, !immutableSet.has(o.plugin), copyText, diff.resolutions?.[o.plugin], onCommit,
+            );
+            return (
+              <DiskCell
+                key={`disk:${o.plugin}`}
+                style={cellStyle}
+                isFocused={focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin}
+                onFocusCell={() => onFocusCell(rowKey, o.plugin)}
+                onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
+                onDrop={() => onCellDrop(diff.fieldName, o.plugin, onCommit)}
+                onCopy={() => copyToClipboard(copyText)}
+                onCut={onCut}
+                onPaste={onPaste}
+                arrayOp={arrayOp}
+                dataVscodeContext={arrayVscodeContext}
+              >
+                {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin),
+                  focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin, onOpen,
+                  onCommit, checkError, diff.resolutions?.[o.plugin])}
+              </DiskCell>
+            );
+          }
         }
 
         // pending companion column

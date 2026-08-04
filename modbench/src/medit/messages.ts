@@ -71,6 +71,12 @@ export const EXTENSION_TO_WEBVIEW = {
   ARRAY_REMOVE: 'arrayRemove',
   ARRAY_MOVE_UP: 'arrayMoveUp',
   ARRAY_MOVE_DOWN: 'arrayMoveDown',
+  // #225: Ctrl+V's clipboard read — `vscode.env.clipboard.readText()` is extension-host-only, the
+  // same reasoning as #224's COPY_TO_CLIPBOARD write. Unlike that fire-and-forget message, the
+  // webview needs the text back to coerce and commit itself, so this is a direct reply keyed by
+  // `requestId` (never a broadcast), the same shape as FORM_KEY_PICKED/REVERT_GROUP_CONFIRMED
+  // above — the read only ever exists for the one Ctrl+V that asked.
+  CLIPBOARD_READ: 'clipboardRead',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -120,6 +126,11 @@ export const WEBVIEW_TO_EXTENSION = {
   // EXTENSION_TO_WEBVIEW reply type — the webview never learns whether the write succeeded, the
   // same shape PENDING_CHANGED/LOG already use below.
   COPY_TO_CLIPBOARD: 'copyToClipboard',
+  // #225: Ctrl+V's clipboard read — the counterpart to COPY_TO_CLIPBOARD, but unlike that
+  // fire-and-forget write, the webview needs the text back to coerce and commit itself. Follows
+  // the *Picker/*Confirm/*Name request/reply shape above (`requestId`, matched by CLIPBOARD_READ)
+  // rather than COPY_TO_CLIPBOARD's shape, for exactly that reason.
+  READ_CLIPBOARD: 'readClipboard',
 } as const;
 
 export type LogLevel = 'debug' | 'info' | 'warn';
@@ -133,7 +144,8 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER; requestId: string; seed: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM; requestId: string; detail: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME; requestId: string }
-  | { type: typeof WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD; value: string };
+  | { type: typeof WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD; value: string }
+  | { type: typeof WEBVIEW_TO_EXTENSION.READ_CLIPBOARD; requestId: string };
 
 // #227: same broadcast-and-self-filter shape as PendingCellContext/ColumnHeaderContext above,
 // carried by an array's parent-row cell (arrayParent, Add only) or an array-element cell
@@ -185,7 +197,8 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_ADD; formKey: string; plugin: string; fieldName: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_REMOVE; formKey: string; plugin: string; fieldName: string; index: number }
   | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP; formKey: string; plugin: string; fieldName: string; index: number }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; fieldName: string; index: number };
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; fieldName: string; index: number }
+  | { type: typeof EXTENSION_TO_WEBVIEW.CLIPBOARD_READ; requestId: string; value: string | null };
 
 // #208: the merged `data-vscode-context` object VS Code's webview preload forwards as a
 // `webview/context` command's sole argument — shared shape between the cell (recordUtils.ts'
