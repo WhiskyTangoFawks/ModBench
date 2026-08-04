@@ -244,6 +244,20 @@ value) — a prose summary is neither. This is a deliberate, bounded divergence 
 behavior for a content-generation question a UX-parity ticket shouldn't have to answer, not "an
 alternative that seems nicer" for a gesture ADR-0034 would otherwise forbid diverging on.
 
+#### Ctrl+X only actually clears some types (#225)
+
+`Ctrl+X` copies the focused cell's model value, then attempts to clear it by running `''` through
+the same coercion `Ctrl+V` uses for a pasted string — there is no separate, per-type "default
+value" table. `''` coerces cleanly for `string` (the empty string itself), bitmask `flags` (no
+active bits), and `formKey` (no reference), so those three types are the ones Ctrl+X visibly
+clears. It does **not** coerce for `bool`, `int`, `float`, or a plain (non-bitmask) `enum` — none
+of those has an empty representation — so on those types Ctrl+X only copies; the value on screen is
+left exactly as it would be by pasting a clipboard string that fails to coerce (the general
+"cannot coerce, leave the field unchanged" rule above, applied to Cut's own internal `''` paste).
+This is also why Ctrl+X does nothing at all — not even a clipboard write — on a cell that is
+already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty before Cut acts,
+[xEdit UX audit](../research/xedit-ux-audit.md)), there is nothing to cut.
+
 ### The panel
 
 - A webview panel opened by `modbench.openEditor`; **one panel at a time**, reused when

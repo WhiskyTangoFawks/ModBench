@@ -365,6 +365,24 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
     expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Name', '');
   });
 
+  // xEdit's own Ctrl+X guards on `Element.EditValue` being non-empty before doing anything at all
+  // (docs/research/xedit-ux-audit.md:111: "Copies EditValue, then sets it to ''. Only when
+  // EditValue is non-empty.") — an already-empty cell has nothing to cut, so this must not write
+  // '' to the clipboard for no reason.
+  it('Ctrl+X on an already-empty mutable cell does nothing — no clipboard write (xEdit parity)', () => {
+    const onEdit = vi.fn();
+    renderRow({
+      onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' },
+      diff: diff({ values: { 'Fallout4.esm': 'disk-value', 'MyMod.esp': null } }),
+    });
+    const cell = screen.getByText('—').closest('td')!;
+
+    fireEvent.keyDown(cell, { key: 'x', ctrlKey: true });
+
+    expect(copyToClipboard).not.toHaveBeenCalled();
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
   it('Ctrl+V does nothing on an immutable column — no clipboard read is even attempted (AC3)', () => {
     const onEdit = vi.fn();
     renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: 'Fallout4.esm' } }); // immutable

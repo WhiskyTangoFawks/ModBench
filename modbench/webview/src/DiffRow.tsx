@@ -122,23 +122,36 @@ function computeClipboardOps(
 ): { onCut: (() => void) | undefined; onPaste: (() => void) | undefined } {
   if (!mutable) return { onCut: undefined, onPaste: undefined };
 
+  // Issue #225 (review): both Ctrl+X and Ctrl+V commit by running a clipboard string through the
+  // same coerce → no-op-suppression → onCommit shape, differing only in *which* string — cut
+  // always feeds '' (its own clear), paste feeds whatever the clipboard held. Sharing this one
+  // function is what makes that "same shape" true in the code, not just in the comment.
+  const tryCommit = (text: string) => {
+    const coerced = coerceModelValue(text, meta);
+    if (coerced.ok && modelValue(coerced.value, meta, resolution) !== copyText) onCommit(coerced.value);
+  };
+
   // Issue #225 (seam 1): cut commits the coercion pipeline's own answer for '' — the same
   // "cannot coerce, leave unchanged" rule paste uses, not a bespoke per-type default. That means
   // Cut visibly clears string/bitmask-enum/formKey (all of which accept '') and, for
   // bool/int/float/plain-enum (none of which do), only copies — the field is left exactly as a
   // paste of an uncoercible clipboard string would leave it.
+  //
+  // Issue #225 (review): xEdit's own Ctrl+X guards on `Element.EditValue` being non-empty before
+  // doing anything at all (docs/research/xedit-ux-audit.md:111) — an already-empty cell has
+  // nothing to cut, so this skips both the clipboard write and the (always a no-op here anyway)
+  // clear attempt, rather than writing '' to the clipboard for no reason.
   const onCut = () => {
+    if (!copyText) return;
     copyToClipboard(copyText);
-    const coerced = coerceModelValue('', meta);
-    if (coerced.ok && modelValue(coerced.value, meta, resolution) !== copyText) onCommit(coerced.value);
+    tryCommit('');
   };
 
   const onPaste = meta.type === 'formKey' ? undefined : () => {
     void (async () => {
       const text = await readClipboardText();
       if (!text) return; // AC: an empty or failed clipboard read leaves the field unchanged
-      const coerced = coerceModelValue(text, meta);
-      if (coerced.ok && modelValue(coerced.value, meta, resolution) !== copyText) onCommit(coerced.value);
+      tryCommit(text);
     })();
   };
 
