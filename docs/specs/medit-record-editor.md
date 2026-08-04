@@ -17,12 +17,11 @@ path does (#225). A pasted reference into a FormKey cell still goes through its 
 not a closed-cell paste of its own — see the FormKey paste note below. Unsorted-array arity/order
 ops (Add/Remove/Move Up/Move Down) live on the right-click
 menu with `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` as accelerators, and the inline ▲▼✕/＋ buttons #142
-shipped before ADR-0034 are gone (#227). Immutable cells still activate a read-only surface on
-plain click, unconditionally — unchanged from before this milestone, and deliberately left that
-way until #226 retires the surface now that #224 has shipped Ctrl+C as its replacement copy path.
-Everything in *Interaction model* below describes the target, not the build. Known gaps beyond
-that: VMAD and Condition sections don't have the focus model at all yet (#229, #231) and FormKey
-resolution (#141).
+shipped before ADR-0034 are gone (#227). The read-only value surface ADR-0033 introduced is gone
+too (#226): an immutable cell opens nothing on plain click, second click, `F2`, or double click,
+with Ctrl+C on the focused cell (#224) as its copy path. Everything in *Interaction model* below
+describes the target, not the build. Known gaps beyond that: VMAD and Condition sections don't
+have the focus model at all yet (#229, #231) and FormKey resolution (#141).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
