@@ -11,11 +11,14 @@ cell shows a `grab` cursor (#222). Editing is off single click: a second click o
 cell, `F2`, or a double click opens a mutable cell's editor; double-clicking the label column
 expands/collapses that node; the editor selects its whole text on focus (#223). `Ctrl+C` copies
 the focused cell's model value in both column kinds (#224); `Ctrl+X`/`Ctrl+V` are still unbuilt
-(#225). Immutable cells still activate a read-only surface on plain click, unconditionally —
-unchanged from before this milestone, and deliberately left that way until #226 retires the
-surface now that #224 has shipped Ctrl+C as its replacement copy path. Everything in *Interaction
-model* below describes the target, not the build. Known gaps beyond that: VMAD and Condition
-sections don't have the focus model at all yet (#229, #231) and FormKey resolution (#141).
+(#225). Unsorted-array arity/order ops (Add/Remove/Move Up/Move Down) live on the right-click
+menu with `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` as accelerators, and the inline ▲▼✕/＋ buttons #142
+shipped before ADR-0034 are gone (#227). Immutable cells still activate a read-only surface on
+plain click, unconditionally — unchanged from before this milestone, and deliberately left that
+way until #226 retires the surface now that #224 has shipped Ctrl+C as its replacement copy path.
+Everything in *Interaction model* below describes the target, not the build. Known gaps beyond
+that: VMAD and Condition sections don't have the focus model at all yet (#229, #231) and FormKey
+resolution (#141).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
@@ -322,8 +325,12 @@ alternative that seems nicer" for a gesture ADR-0034 would otherwise forbid dive
   appending a default-valued element (#142). They live in the **right-click menu**, with
   `Ctrl+↑` / `Ctrl+↓` / `Delete` / `Insert` as accelerators onto the same menu items — xEdit's
   arrangement exactly, and required by the no-second-route rule: **there are no inline ▲▼✕
-  buttons.** (They shipped as inline buttons in #142, before ADR-0034; converting them is part of
-  adopting the model.) Sorted (`wbArrayS`) arrays offer none of these — order is derived from the
+  buttons.** (They shipped as inline buttons in #142, before ADR-0034; #227 converted them —
+  a native `webview/context` menu on the element/parent cell, `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓`
+  as DOM keydown accelerators on the focused cell, no extension-host round trip needed for the
+  keys since `onArrayEdit`/`onArrayAdd` are pure in-webview state.) Add is available regardless of
+  the array's expand state, matching xEdit — the retired "+" button's expanded-only visibility was
+  that button's own rendering choice, not a functional rule. Sorted (`wbArrayS`) arrays offer none of these — order is derived from the
   sort key, so the entries are absent, not merely disabled. All three ops restage the **whole
   array** as a single field edit (same path as an element-value edit; ADR-0017), and only on
   non-immutable columns. There is no free drag-reorder and no auto-sort. The VMAD section keeps

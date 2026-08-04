@@ -13,7 +13,10 @@ import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type Pen
 import { ApiPluginRepository } from './medit/PluginRepository';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
-import { EXTENSION_TO_WEBVIEW, type ColumnHeaderContext, type ExtensionToWebview, type PendingCellContext } from './medit/messages';
+import {
+  EXTENSION_TO_WEBVIEW, type ArrayElementContext, type ArrayParentContext,
+  type ColumnHeaderContext, type ExtensionToWebview, type PendingCellContext,
+} from './medit/messages';
 import { routeRecordPanelMessage, revealPendingChange, type RevealDeps, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
 import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
@@ -208,6 +211,7 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
     ...registerChangeGroupCommands(deps),
     ...registerCopyCreateCommands(deps),
     ...registerColumnHeaderCommands(deps),
+    ...registerArrayOpCommands(deps),
   ];
 }
 
@@ -585,6 +589,46 @@ function registerColumnHeaderCommands(deps: EditorCommandDeps): vscode.Disposabl
       if (!newMaster) return;
       broadcastToRecordPanels(recordPanels, {
         type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER, formKey: ctx.formKey, plugin: ctx.plugin, newMaster,
+      });
+    }),
+  ];
+}
+
+// #227: Add/Remove/Move Up/Move Down's native `webview/context` menu commands — same
+// broadcast-and-self-filter shape as #208's pendingCell.*/#209's columnHeader.* above (see
+// messages.ts' ARRAY_* doc comment for why), but simpler than either: there is no async
+// extension-host-side work at all (no HTTP, no QuickPick, no confirm dialog) — the whole
+// mutation lives in the webview's own React state (onArrayEdit/onArrayAdd, pure since #142), so
+// each handler just repackages data-vscode-context's payload and broadcasts it. `data-vscode-
+// context`'s presence is the only gate (DiffRow never emits it for a sorted array or an
+// immutable column, mirroring #142's original arrayEdit/onArrayAdd gate), so unlike
+// columnHeader.removeOverride's `when`-clause-only immutable gate, there's nothing extra to
+// check here either.
+function registerArrayOpCommands(deps: EditorCommandDeps): vscode.Disposable[] {
+  const { recordPanels } = deps;
+  return [
+    vscode.commands.registerCommand('modbench.array.add', (ctx?: ArrayParentContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.ARRAY_ADD, formKey: ctx.formKey, plugin: ctx.plugin, fieldName: ctx.fieldName,
+      });
+    }),
+    vscode.commands.registerCommand('modbench.array.remove', (ctx?: ArrayElementContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: ctx.formKey, plugin: ctx.plugin, fieldName: ctx.fieldName, index: ctx.index,
+      });
+    }),
+    vscode.commands.registerCommand('modbench.array.moveUp', (ctx?: ArrayElementContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP, formKey: ctx.formKey, plugin: ctx.plugin, fieldName: ctx.fieldName, index: ctx.index,
+      });
+    }),
+    vscode.commands.registerCommand('modbench.array.moveDown', (ctx?: ArrayElementContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN, formKey: ctx.formKey, plugin: ctx.plugin, fieldName: ctx.fieldName, index: ctx.index,
       });
     }),
   ];

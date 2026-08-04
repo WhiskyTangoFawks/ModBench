@@ -7,7 +7,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
-import { WEBVIEW_TO_EXTENSION } from './messages';
+import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW } from './messages';
 import type { FieldMetadata } from './types';
 import type { LoadResult, RecordSessionClient } from './RecordSessionClient';
 
@@ -721,9 +721,17 @@ describe('RecordPanel — grandchild rows (struct sub-fields inside array elemen
 
 });
 
-// ── #142: array arity/order controls (unsorted arrays only) ───────────────────
+// ── #227: array arity/order ops on the right-click menu + keyboard accelerators ────────────────
+// (unsorted arrays only) — #142's inline ▲▼✕/＋ buttons are gone (ADR-0034's no-second-route
+// rule); Add/Remove/Move Up/Move Down are now a native `webview/context` menu entry (broadcast to
+// this panel, asserted here via the same `window.dispatchEvent(new MessageEvent(...))` harness
+// #208/#209's column-header/pending-cell broadcasts already use) with Insert/Delete/Ctrl+↑/Ctrl+↓
+// as keyboard accelerators (asserted via `fireEvent.keyDown` on the cell, the same DOM-level
+// precedent #224's Ctrl+C tests use). The pure mutations themselves are recordUtils.test.ts's
+// job; DiffRow.test.tsx covers the data-vscode-context/keydown wiring in isolation — this suite
+// is the through-RecordPanel integration slice: does the whole stack restage the right array.
 
-describe('RecordPanel — array arity/order controls (unsorted)', () => {
+describe('RecordPanel — array arity/order ops via keyboard (unsorted)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     currentCompare = unsortedArrayControlsResult;
@@ -746,124 +754,108 @@ describe('RecordPanel — array arity/order controls (unsorted)', () => {
     return td.closest('tr')!;
   }
 
-  it('move-up is disabled on the first element, move-down disabled on the last (mutable column)', async () => {
-    renderPanel();
-    await expandItems();
+  // MyMod.esp is the mutable column (index 2 of 0=label/1=Fallout4.esm/2=MyMod.esp).
+  function mutableCellOf(row: HTMLTableRowElement): HTMLTableCellElement {
+    return row.querySelectorAll('td')[2];
+  }
+  function immutableCellOf(row: HTMLTableRowElement): HTMLTableCellElement {
+    return row.querySelectorAll('td')[1];
+  }
 
-    const row0 = rowByLabel('[0]');
-    const row2 = rowByLabel('[2]');
-    const upBtn0 = row0.querySelector<HTMLButtonElement>('button[title="Move up"]')!;
-    const downBtn0 = row0.querySelector<HTMLButtonElement>('button[title="Move down"]')!;
-    const upBtn2 = row2.querySelector<HTMLButtonElement>('button[title="Move up"]')!;
-    const downBtn2 = row2.querySelector<HTMLButtonElement>('button[title="Move down"]')!;
-
-    expect(upBtn0.disabled).toBe(true);
-    expect(downBtn0.disabled).toBe(false);
-    expect(upBtn2.disabled).toBe(false);
-    expect(downBtn2.disabled).toBe(true);
-  });
-
-  it('move-down on element [0] swaps it with [1] and saves the whole array', async () => {
+  it('Ctrl+↓ on element [0] swaps it with [1] and saves the whole array', async () => {
     const { client } = renderPanel();
     await expandItems();
 
-    const row0 = rowByLabel('[0]');
-    const downBtn0 = row0.querySelector<HTMLButtonElement>('button[title="Move down"]')!;
-    fireEvent.click(downBtn0);
+    fireEvent.keyDown(mutableCellOf(rowByLabel('[0]')), { key: 'ArrowDown', ctrlKey: true });
 
     await waitFor(() =>
       expect(client.save).toHaveBeenCalledWith(
-        '000001:Fallout4.esm',
-        'MyMod.esp',
-        { Items: ['beta', 'alpha', 'gamma'] },
-        undefined,
+        '000001:Fallout4.esm', 'MyMod.esp', { Items: ['beta', 'alpha', 'gamma'] }, undefined,
       ),
     );
   });
 
-  it('remove on element [1] saves the array with that element dropped', async () => {
+  it('Ctrl+↑ on the first element does nothing (absent, not disabled)', async () => {
     const { client } = renderPanel();
     await expandItems();
 
-    const row1 = rowByLabel('[1]');
-    const removeBtn = row1.querySelector<HTMLButtonElement>('button[title="Remove element"]')!;
-    fireEvent.click(removeBtn);
+    fireEvent.keyDown(mutableCellOf(rowByLabel('[0]')), { key: 'ArrowUp', ctrlKey: true });
+    expect(client.save).not.toHaveBeenCalled();
+  });
+
+  it('Delete on element [1] saves the array with that element dropped', async () => {
+    const { client } = renderPanel();
+    await expandItems();
+
+    fireEvent.keyDown(mutableCellOf(rowByLabel('[1]')), { key: 'Delete' });
 
     await waitFor(() =>
       expect(client.save).toHaveBeenCalledWith(
-        '000001:Fallout4.esm',
-        'MyMod.esp',
-        { Items: ['alpha', 'gamma'] },
-        undefined,
+        '000001:Fallout4.esm', 'MyMod.esp', { Items: ['alpha', 'gamma'] }, undefined,
       ),
     );
   });
 
-  it('move/remove controls are absent on the immutable Fallout4.esm column', async () => {
-    renderPanel();
+  it('move/remove keys do nothing on the immutable Fallout4.esm column', async () => {
+    const { client } = renderPanel();
     await expandItems();
 
     const row0 = rowByLabel('[0]');
-    // Two disk columns render as adjacent <td>s in column order: Fallout4.esm (immutable) then
-    // MyMod.esp (mutable). The immutable column's cell must carry none of the three controls.
-    const cells = row0.querySelectorAll('td');
-    const immutableCell = cells[1]; // 0 = row label, 1 = Fallout4.esm, 2 = MyMod.esp
-    expect(immutableCell.querySelector('button[title="Move up"]')).toBeNull();
-    expect(immutableCell.querySelector('button[title="Move down"]')).toBeNull();
-    expect(immutableCell.querySelector('button[title="Remove element"]')).toBeNull();
-
-    const mutableCell = cells[2];
-    expect(mutableCell.querySelector('button[title="Move up"]')).not.toBeNull();
+    fireEvent.keyDown(immutableCellOf(row0), { key: 'Delete' });
+    fireEvent.keyDown(immutableCellOf(row0), { key: 'ArrowDown', ctrlKey: true });
+    expect(client.save).not.toHaveBeenCalled();
   });
 
-  it('add element on the parent Items row (expanded) appends a default-valued scalar element', async () => {
+  it('Insert on the parent Items row appends a default-valued scalar element', async () => {
     const { client } = renderPanel();
     await expandItems();
 
     const parentRow = screen.getByText('Items').closest('tr')!;
-    const mutableCell = parentRow.querySelectorAll('td')[2]; // Fallout4.esm immutable, MyMod.esp mutable
-    const addBtn = mutableCell.querySelector<HTMLButtonElement>('button[title="Add element"]')!;
-    fireEvent.click(addBtn);
+    fireEvent.keyDown(mutableCellOf(parentRow), { key: 'Insert' });
 
     await waitFor(() =>
       expect(client.save).toHaveBeenCalledWith(
-        '000001:Fallout4.esm',
-        'MyMod.esp',
-        { Items: ['alpha', 'beta', 'gamma', ''] },
-        undefined,
+        '000001:Fallout4.esm', 'MyMod.esp', { Items: ['alpha', 'beta', 'gamma', ''] }, undefined,
       ),
     );
   });
 
-  it('add element control is absent on the immutable Fallout4.esm column', async () => {
-    renderPanel();
-    await expandItems();
-
-    const parentRow = screen.getByText('Items').closest('tr')!;
-    const immutableCell = parentRow.querySelectorAll('td')[1];
-    expect(immutableCell.querySelector('button[title="Add element"]')).toBeNull();
-  });
-
-  it('add element control is absent while the Items row is collapsed', async () => {
-    renderPanel();
+  it('Insert on the parent Items row works even while the row is collapsed', async () => {
+    // Issue #227: Add is available regardless of expand state, matching xEdit — the old "+"
+    // button's isExpanded gate was that button's own rendering choice, not a functional rule.
+    const { client } = renderPanel();
     await waitFor(() => screen.getByText('▶'));
 
     const parentRow = screen.getByText('Items').closest('tr')!;
-    expect(parentRow.querySelector('button[title="Add element"]')).toBeNull();
+    fireEvent.keyDown(mutableCellOf(parentRow), { key: 'Insert' });
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm', 'MyMod.esp', { Items: ['alpha', 'beta', 'gamma', ''] }, undefined,
+      ),
+    );
+  });
+
+  it('Insert does nothing on the immutable Fallout4.esm column', async () => {
+    const { client } = renderPanel();
+    await expandItems();
+
+    const parentRow = screen.getByText('Items').closest('tr')!;
+    fireEvent.keyDown(immutableCellOf(parentRow), { key: 'Insert' });
+    expect(client.save).not.toHaveBeenCalled();
   });
 
   // Issue #200: array add/remove/move-up/move-down all converge on the same handleEdit→
   // stageChange path a plain field edit uses — tested explicitly here anyway (representative
   // callers for a bullet the issue names on its own), not assumed from the field-edit case.
-  // Move-up/down is the identical onArrayEdit call as remove, so not separately tested.
-  it('add element logs a DEBUG line naming the plugin, field, and record', async () => {
+  // Move-up/down is the identical handleArrayMove call as remove, so not separately tested.
+  it('Insert (add) logs a DEBUG line naming the plugin, field, and record', async () => {
     renderPanel();
     await expandItems();
     vi.mocked(vscode.postMessage).mockClear();
 
     const parentRow = screen.getByText('Items').closest('tr')!;
-    const mutableCell = parentRow.querySelectorAll('td')[2];
-    fireEvent.click(mutableCell.querySelector<HTMLButtonElement>('button[title="Add element"]')!);
+    fireEvent.keyDown(mutableCellOf(parentRow), { key: 'Insert' });
 
     await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
       type: WEBVIEW_TO_EXTENSION.LOG,
@@ -872,13 +864,12 @@ describe('RecordPanel — array arity/order controls (unsorted)', () => {
     }));
   });
 
-  it('remove element logs a DEBUG line naming the plugin, field, and record', async () => {
+  it('Delete (remove) logs a DEBUG line naming the plugin, field, and record', async () => {
     renderPanel();
     await expandItems();
     vi.mocked(vscode.postMessage).mockClear();
 
-    const row1 = rowByLabel('[1]');
-    fireEvent.click(row1.querySelector<HTMLButtonElement>('button[title="Remove element"]')!);
+    fireEvent.keyDown(mutableCellOf(rowByLabel('[1]')), { key: 'Delete' });
 
     await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
       type: WEBVIEW_TO_EXTENSION.LOG,
@@ -888,7 +879,102 @@ describe('RecordPanel — array arity/order controls (unsorted)', () => {
   });
 });
 
-describe('RecordPanel — array add control (struct elements)', () => {
+// Issue #227: the right-click menu's broadcast path — the extension host has no live reference
+// into this webview's React state (same reasoning as #208/#209), so its native commands
+// broadcast ARRAY_ADD/ARRAY_REMOVE/ARRAY_MOVE_UP/ARRAY_MOVE_DOWN to every open record panel and
+// each self-filters on formKey. Simulated the same way #208/#209's broadcasts already are in
+// RecordPanel.test.tsx: dispatching a raw `message` MessageEvent, not driving it through a real
+// command execution (that's package.json/extension.ts's job, covered by the integration test's
+// EXPECTED_COMMANDS list and manual verification).
+describe('RecordPanel — array ops via the right-click menu broadcast (#227)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    currentCompare = unsortedArrayControlsResult;
+    currentChanges = [];
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function postArrayOp(type: string, extra: Record<string, unknown>) {
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fieldName: 'Items', ...extra },
+    }));
+  }
+
+  it('ARRAY_ADD appends a default-valued element and saves the whole array', async () => {
+    const { client } = renderPanel();
+    await waitFor(() => screen.getByText('Items'));
+
+    postArrayOp(EXTENSION_TO_WEBVIEW.ARRAY_ADD, {});
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm', 'MyMod.esp', { Items: ['alpha', 'beta', 'gamma', ''] }, undefined,
+      ),
+    );
+  });
+
+  it('ARRAY_REMOVE drops the element at the given index and saves the whole array', async () => {
+    const { client } = renderPanel();
+    await waitFor(() => screen.getByText('Items'));
+
+    postArrayOp(EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, { index: 1 });
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm', 'MyMod.esp', { Items: ['alpha', 'gamma'] }, undefined,
+      ),
+    );
+  });
+
+  it('ARRAY_MOVE_UP swaps the element with its predecessor and saves the whole array', async () => {
+    const { client } = renderPanel();
+    await waitFor(() => screen.getByText('Items'));
+
+    postArrayOp(EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP, { index: 1 });
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm', 'MyMod.esp', { Items: ['beta', 'alpha', 'gamma'] }, undefined,
+      ),
+    );
+  });
+
+  it('ARRAY_MOVE_DOWN swaps the element with its successor and saves the whole array', async () => {
+    const { client } = renderPanel();
+    await waitFor(() => screen.getByText('Items'));
+
+    postArrayOp(EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN, { index: 1 });
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm', 'MyMod.esp', { Items: ['alpha', 'gamma', 'beta'] }, undefined,
+      ),
+    );
+  });
+
+  it('a move at the array boundary does nothing (no save call)', async () => {
+    const { client } = renderPanel();
+    await waitFor(() => screen.getByText('Items'));
+
+    postArrayOp(EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP, { index: 0 });
+    expect(client.save).not.toHaveBeenCalled();
+  });
+
+  // Self-filter: a changeId is global in the pending-cell broadcasts, but array ops have no
+  // changeId — formKey is what stops a broadcast meant for a different open record from acting
+  // here (same reasoning as #209's column-header formKey self-filter).
+  it('a broadcast for a different formKey is ignored', async () => {
+    const { client } = renderPanel();
+    await waitFor(() => screen.getByText('Items'));
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: '000099:Other.esm', plugin: 'MyMod.esp', fieldName: 'Items', index: 1 },
+    }));
+    expect(client.save).not.toHaveBeenCalled();
+  });
+});
+
+describe('RecordPanel — array add via the menu broadcast (struct elements)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     currentCompare = structInArrayResult;
@@ -896,16 +982,13 @@ describe('RecordPanel — array add control (struct elements)', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('add element on the parent Packages row appends a metadata-derived default struct', async () => {
+  it('ARRAY_ADD on the parent Packages row appends a metadata-derived default struct', async () => {
     const { client } = renderPanel();
-    await waitFor(() => screen.getByText('▶'));
-    fireEvent.click(screen.getByText('▶'));
-    await waitFor(() => screen.getByText('Packages').closest('tr'));
+    await waitFor(() => screen.getByText('Packages'));
 
-    const parentRow = screen.getByText('Packages').closest('tr')!;
-    const mutableCell = parentRow.querySelectorAll('td')[2]; // Fallout4.esm immutable, MyMod.esp mutable
-    const addBtn = mutableCell.querySelector<HTMLButtonElement>('button[title="Add element"]')!;
-    fireEvent.click(addBtn);
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.ARRAY_ADD, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fieldName: 'Packages' },
+    }));
 
     await waitFor(() =>
       expect(client.save).toHaveBeenCalledWith(
@@ -920,7 +1003,7 @@ describe('RecordPanel — array add control (struct elements)', () => {
   });
 });
 
-describe('RecordPanel — array arity/order controls absent for sorted arrays', () => {
+describe('RecordPanel — array arity/order ops absent for sorted arrays', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     currentCompare = sortedArrayCompareResult;
@@ -928,14 +1011,22 @@ describe('RecordPanel — array arity/order controls absent for sorted arrays', 
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('no move/remove controls render on a sorted array\'s element rows', async () => {
-    renderPanel();
+  it('no element row carries an arrayElement data-vscode-context, and keys do nothing', async () => {
+    const { client } = renderPanel();
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getAllByText('KwdA').length > 0);
 
-    expect(screen.queryByTitle('Move up')).toBeNull();
-    expect(screen.queryByTitle('Move down')).toBeNull();
-    expect(screen.queryByTitle('Remove element')).toBeNull();
+    const cells = Array.from(document.querySelectorAll('td[data-vscode-context]'));
+    const arrayCells = cells.filter(c => {
+      const ctx = JSON.parse(c.getAttribute('data-vscode-context')!);
+      return ctx.webviewSection === 'arrayElement' || ctx.webviewSection === 'arrayParent';
+    });
+    expect(arrayCells).toHaveLength(0);
+
+    const kwdACell = screen.getAllByText('KwdA').find(el => el.tagName === 'TD')!.closest('td')!;
+    fireEvent.keyDown(kwdACell, { key: 'Delete' });
+    fireEvent.keyDown(kwdACell, { key: 'ArrowUp', ctrlKey: true });
+    expect(client.save).not.toHaveBeenCalled();
   });
 });
