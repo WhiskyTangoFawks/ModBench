@@ -518,25 +518,81 @@ public static class VmadCodec
         ValueFormKeysWithPaths(value).Select(p => p.FormKey);
 
     // Same FormKeys as ValueFormKeys, paired with a sub-path within value ("" for a scalar Object,
-    // "[i]" for an ArrayOfObject element) so callers can key a per-leaf signal independently
-    // (ADR-0031's PendingChangeResolver). Struct/ArrayOfStruct-shaped values still yield nothing —
-    // pre-existing scope, same as ValueFormKeys.
+    // "[i]" for an ArrayOfObject element, "\Member"/"[i]\Member" for a Struct/ArrayOfStruct member)
+    // so callers can key a per-leaf signal independently (ADR-0031's PendingChangeResolver). #160:
+    // there's no type/kind parameter here — Object vs ArrayOfObject vs Struct vs ArrayOfStruct is
+    // told apart purely by JSON shape, same trick the original Object/ArrayOfObject split already
+    // used (scalar vs array). A Struct's NewValue is a bare array of member-node objects (no
+    // wrapping "members" key — that shape lives one level up, on the read side's struct_json); an
+    // ArrayOfStruct's NewValue is an array of such member-node arrays, one per instance.
     public static IEnumerable<(string Path, string FormKey)> ValueFormKeysWithPaths(JsonElement value)
     {
-        if (value.ValueKind == JsonValueKind.Array)
+        if (value.ValueKind != JsonValueKind.Array)
+            return FormKeyOf(value) is { } fk ? [("", fk)] : [];
+
+        if (value.GetArrayLength() == 0) return [];
+
+        var first = value.EnumerateArray().First();
+        if (first.ValueKind == JsonValueKind.Array) return WalkInstances(value);
+        if (IsMemberNode(first)) return WalkMembers(value, "");
+        return WalkObjectList(value);
+    }
+
+    private static IEnumerable<(string Path, string FormKey)> WalkObjectList(JsonElement array)
+    {
+        var idx = 0;
+        foreach (var el in array.EnumerateArray())
         {
-            var idx = 0;
-            foreach (var el in value.EnumerateArray())
-            {
-                if (FormKeyOf(el) is { } elFk) yield return ($"[{idx}]", elFk);
-                idx++;
-            }
-        }
-        else if (FormKeyOf(value) is { } fk)
-        {
-            yield return ("", fk);
+            if (FormKeyOf(el) is { } fk) yield return ($"[{idx}]", fk);
+            idx++;
         }
     }
+
+    // ArrayOfStruct: each element is one instance's flat member-node array (VmadCodec.ApplyStructListProperty's
+    // "instances" shape) — walked with an "[i]" prefix so its members land at "[i]\Member".
+    private static IEnumerable<(string Path, string FormKey)> WalkInstances(JsonElement instances)
+    {
+        var idx = 0;
+        foreach (var inst in instances.EnumerateArray())
+        {
+            if (inst.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var r in WalkMembers(inst, $"[{idx}]")) yield return r;
+            }
+            idx++;
+        }
+    }
+
+    // Recurses into Struct member nodes (mirrors VmadConflictClassifier.CollectMemberRefs' read-side
+    // walk and its "\Member" path convention). Only Object and Struct member types carry FormKeys —
+    // scalars don't, and an ArrayOfObject-typed struct member has no wire shape here at all: the
+    // apply side (TryBuildMemberProperty) only ever builds Object/Struct/scalar members.
+    private static IEnumerable<(string Path, string FormKey)> WalkMembers(JsonElement members, string prefix)
+    {
+        foreach (var m in members.EnumerateArray())
+        {
+            if (!TryGetStringProperty(m, "name", out var name)) continue;
+            var type = m.TryGetProperty("type", out var typeEl) ? typeEl.GetString() : null;
+            var path = $@"{prefix}\{name}";
+
+            if (type == "Object" && m.TryGetProperty("formKeyValue", out var fkEl)
+                && fkEl.ValueKind == JsonValueKind.String)
+            {
+                yield return (path, fkEl.GetString()!);
+            }
+            else if (type == "Struct" && m.TryGetProperty("members", out var nested))
+            {
+                foreach (var r in WalkMembers(nested, path)) yield return r;
+            }
+        }
+    }
+
+    // A Struct member node: { name, type, ... } — distinct from an ArrayOfObject element's
+    // { formKey, alias } shape (TryParseScriptObject), so the two never collide.
+    private static bool IsMemberNode(JsonElement el) =>
+        el.ValueKind == JsonValueKind.Object
+        && el.TryGetProperty("name", out _)
+        && el.TryGetProperty("type", out _);
 
     private static string? FormKeyOf(JsonElement el) =>
         el.ValueKind == JsonValueKind.Object && el.TryGetProperty("formKey", out var fkEl)

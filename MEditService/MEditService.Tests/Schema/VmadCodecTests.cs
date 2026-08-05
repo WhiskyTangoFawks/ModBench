@@ -627,6 +627,54 @@ public class VmadCodecTests
     public void ValueFormKeys_ValueWithoutFormKeys_ReturnsNone(string json) =>
         Assert.Empty(VmadCodec.ValueFormKeys(J(json)));
 
+    // #160: a Struct's staged NewValue is a bare array of member-node objects (the same shape
+    // ApplyStructProperty/TryBuildMemberProperty consume), not a { "members": [...] } wrapper.
+    [Fact]
+    public void ValueFormKeys_StructValue_ReturnsMemberFormKey() =>
+        Assert.Equal(
+            [Target.ToString()],
+            VmadCodec.ValueFormKeys(J($$"""[{"name":"Target","type":"Object","flags":"","formKeyValue":"{{Target}}","aliasValue":0}]""")));
+
+    [Fact]
+    public void ValueFormKeysWithPaths_StructValue_PathIsBackslashMemberName() =>
+        Assert.Equal(
+            [(@"\Target", Target.ToString())],
+            VmadCodec.ValueFormKeysWithPaths(J($$"""[{"name":"Target","type":"Object","flags":"","formKeyValue":"{{Target}}","aliasValue":0}]""")));
+
+    [Fact]
+    public void ValueFormKeysWithPaths_StructValueWithNullObjectMember_ReturnsNone() =>
+        Assert.Empty(VmadCodec.ValueFormKeysWithPaths(
+            J("""[{"name":"Target","type":"Object","flags":"","formKeyValue":null,"aliasValue":-1}]""")));
+
+    [Fact]
+    public void ValueFormKeysWithPaths_StructValueWithOnlyScalarMembers_ReturnsNone() =>
+        Assert.Empty(VmadCodec.ValueFormKeysWithPaths(
+            J("""[{"name":"Count","type":"Int","flags":"","intValue":3}]""")));
+
+    // Nested Struct member (a Struct member that is itself a Struct) recurses arbitrarily deep,
+    // mirroring VmadConflictClassifier.CollectMemberRefs' read-side walk.
+    [Fact]
+    public void ValueFormKeysWithPaths_NestedStructMember_PathIsNestedBackslashPath() =>
+        Assert.Equal(
+            [(@"\Outer\Inner", Target.ToString())],
+            VmadCodec.ValueFormKeysWithPaths(J($$"""
+                [{"name":"Outer","type":"Struct","flags":"","members":
+                    [{"name":"Inner","type":"Object","flags":"","formKeyValue":"{{Target}}","aliasValue":0}]}]
+                """)));
+
+    // ArrayOfStruct: each instance is its own member-node array, walked with an "[i]" prefix so
+    // instances resolve independently — no aggregation across sibling instances.
+    [Fact]
+    public void ValueFormKeysWithPaths_ArrayOfStructValue_PathIsIndexBackslashMemberNamePerInstance() =>
+        Assert.Equal(
+            [(@"[0]\Target", Target.ToString()), (@"[1]\Target", "000900:Test.esp")],
+            VmadCodec.ValueFormKeysWithPaths(J($$"""
+                [
+                    [{"name":"Target","type":"Object","flags":"","formKeyValue":"{{Target}}","aliasValue":0}],
+                    [{"name":"Target","type":"Object","flags":"","formKeyValue":"000900:Test.esp","aliasValue":1}]
+                ]
+                """)));
+
     // ---- Helpers ----
 
     // The API serializes per-plugin subtrees camelCase, which is the shape apply reads back.

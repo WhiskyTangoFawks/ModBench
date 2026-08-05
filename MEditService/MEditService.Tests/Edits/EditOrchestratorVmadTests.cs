@@ -527,6 +527,87 @@ public sealed class EditOrchestratorVmadTests
         }
     }
 
+    // #160: a Struct property's Object-kind member FormKey must be tracked in form_references too
+    // (ExtractVmadValueRefs's gap — VmadCodec.ValueFormKeys now walks into Struct-shaped values).
+    [Fact]
+    public void StageEdit_VmadAddStructProperty_AddsFormReferenceForNestedObjectMember()
+    {
+        FormKey npcFk = default, targetFk = default, altFk = default;
+        using var data = new PluginFixtureBuilder("eo-vmad-addstruct")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var target = mod.Npcs.AddNew("Target"); targetFk = target.FormKey;
+                var alt = mod.Npcs.AddNew("AltTarget"); altFk = alt.FormKey;
+                var npc = mod.Npcs.AddNew("ScriptedNpc");
+                npcFk = npc.FormKey;
+                npc.VirtualMachineAdapter = BuildVmad(target.FormKey);
+            })
+            .Build();
+
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var op = $$$"""
+                {"op":"add_property","type":"Struct","name":"Config","flags":"Edited","value":
+                    [{"name":"Target","type":"Object","flags":"","formKeyValue":"{{{altFk}}}","aliasValue":0}]}
+                """;
+            var fields = new Dictionary<string, JsonElement> { [@"VMAD\DefaultScript\Config"] = J(op) };
+
+            var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null, "vmad_struct_op");
+
+            Assert.IsType<StageEditResult.Staged>(result);
+            var drained = changes.DrainForPlugin("TestPlugin.esp");
+            var vmadRef = drained.FormRefsByFormKey[npcFk.ToString()]
+                .FirstOrDefault(r => r.FieldPath.Equals(@"VMAD\DefaultScript\Config", StringComparison.Ordinal));
+            Assert.NotNull(vmadRef);
+            Assert.Equal(altFk.ToString(), vmadRef.TargetFormKey);
+        }
+    }
+
+    // #160: same gap, ArrayOfStruct shape — each instance's member is tracked independently.
+    [Fact]
+    public void StageEdit_VmadAddArrayOfStructProperty_AddsFormReferencesPerInstance()
+    {
+        FormKey npcFk = default, targetFk = default, altFk1 = default, altFk2 = default;
+        using var data = new PluginFixtureBuilder("eo-vmad-addarraystruct")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var target = mod.Npcs.AddNew("Target"); targetFk = target.FormKey;
+                var alt1 = mod.Npcs.AddNew("AltTarget1"); altFk1 = alt1.FormKey;
+                var alt2 = mod.Npcs.AddNew("AltTarget2"); altFk2 = alt2.FormKey;
+                var npc = mod.Npcs.AddNew("ScriptedNpc");
+                npcFk = npc.FormKey;
+                npc.VirtualMachineAdapter = BuildVmad(target.FormKey);
+            })
+            .Build();
+
+        var (orchestrator, manager, changes) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var op = $$$"""
+                {"op":"add_property","type":"ArrayOfStruct","name":"Configs","flags":"Edited","value":
+                    [
+                        [{"name":"Target","type":"Object","flags":"","formKeyValue":"{{{altFk1}}}","aliasValue":0}],
+                        [{"name":"Target","type":"Object","flags":"","formKeyValue":"{{{altFk2}}}","aliasValue":1}]
+                    ]}
+                """;
+            var fields = new Dictionary<string, JsonElement> { [@"VMAD\DefaultScript\Configs"] = J(op) };
+
+            var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null, "vmad_struct_op");
+
+            Assert.IsType<StageEditResult.Staged>(result);
+            var drained = changes.DrainForPlugin("TestPlugin.esp");
+            var refs = drained.FormRefsByFormKey[npcFk.ToString()]
+                .Where(r => r.FieldPath.Equals(@"VMAD\DefaultScript\Configs", StringComparison.Ordinal))
+                .Select(r => r.TargetFormKey)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            Assert.Contains(altFk1.ToString(), refs);
+            Assert.Contains(altFk2.ToString(), refs);
+        }
+    }
+
     [Fact]
     public void StageEdit_VmadAddProperty_ScriptAmongOthers_Staged()
     {

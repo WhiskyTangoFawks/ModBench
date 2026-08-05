@@ -122,20 +122,47 @@ public class PendingChangeResolverTests
         Assert.Equal(FormKeyResolutionState.Unresolved, resolved.Resolutions["[1]"].State);
     }
 
+    // #160: a Struct's staged NewValue is a bare array of member-node objects using formKeyValue
+    // (the shape ApplyStructProperty/TryBuildMemberProperty actually consume) — not the
+    // { "members": [...] } / "formKey" shape this test used to assert stayed unresolved.
     [Fact]
-    public void Resolve_VmadStructProperty_PassesThroughUnresolved()
+    public void Resolve_VmadStructProperty_MemberFormKeyResolvesAtNestedPath()
     {
-        // Pre-existing scope cut: VmadCodec.ValueFormKeysWithPaths doesn't walk into Struct-shaped
-        // values (same gap ExtractVmadValueRefs/form_references already has), so a Struct property's
-        // FormKey members aren't reachable here. Tracked separately, not a regression of this change.
         var change = MakeChange(
             VmadPath.Build("MyScript", "MyProperty"), "npc_",
-            J("""{"members":[{"name":"Target","type":"Object","formKey":"000AAA:Test.esp"}]}"""));
+            J("""[{"name":"Target","type":"Object","flags":"","formKeyValue":"000AAA:Test.esp","aliasValue":0}]"""));
         var schemas = Schemas("npc_", FormKeyColumn("race", "race"));
 
-        var resolved = PendingChangeResolver.Resolve(change, schemas, _ => new RecordLookupEntry("race", "X"));
+        static RecordLookupEntry? Resolve(string fk) =>
+            fk == "000AAA:Test.esp" ? new RecordLookupEntry("race", "GoodRace") : null;
 
-        Assert.Null(resolved.Resolutions);
+        var resolved = PendingChangeResolver.Resolve(change, schemas, Resolve);
+
+        Assert.NotNull(resolved.Resolutions);
+        Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolved.Resolutions![@"\Target"].State);
+        Assert.Equal("GoodRace", resolved.Resolutions[@"\Target"].EditorId);
+    }
+
+    [Fact]
+    public void Resolve_VmadArrayOfStructProperty_InstancesResolveIndependently()
+    {
+        var change = MakeChange(
+            VmadPath.Build("MyScript", "MyProperty"), "npc_",
+            J("""
+                [
+                    [{"name":"Target","type":"Object","flags":"","formKeyValue":"000AAA:Test.esp","aliasValue":0}],
+                    [{"name":"Target","type":"Object","flags":"","formKeyValue":"000FFF:Test.esp","aliasValue":1}]
+                ]
+                """));
+        var schemas = Schemas("npc_", FormKeyColumn("race", "race"));
+
+        static RecordLookupEntry? Resolve(string fk) =>
+            fk == "000AAA:Test.esp" ? new RecordLookupEntry("race", "Good") : null;
+
+        var resolved = PendingChangeResolver.Resolve(change, schemas, Resolve);
+
+        Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolved.Resolutions![@"[0]\Target"].State);
+        Assert.Equal(FormKeyResolutionState.Unresolved, resolved.Resolutions[@"[1]\Target"].State);
     }
 
     [Fact]
