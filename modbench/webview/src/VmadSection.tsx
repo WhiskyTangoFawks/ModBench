@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import type { Column } from './recordUtils';
-import type { ConflictThis, PendingChange, VmadCompare, VmadKind, VmadPropertyDiff } from './types';
+import type { ConflictThis, FieldMetadata, PendingChange, VmadCompare, VmadKind, VmadPropertyDiff } from './types';
 import { toStr, pendingCellContext } from './recordUtils';
 import { baseCell, headerCell, toggleBtnStyle, getCellStyle, fg } from './gridStyles';
 import { FormKeyLink } from './FormKeyLink';
-import { VmadScalarEditor } from './VmadScalarEditor';
+import { ScalarCell } from './ScalarCell';
 import { VmadObjectEditor } from './VmadObjectEditor';
 import { AddPropertyButton, RemovePropertyButton, SetTypeControl, PropertyFlagsControl } from './VmadPropertyOps';
 import { AddScriptButton, RemoveScriptButton, ScriptFlagsControl } from './VmadScriptOps';
@@ -307,26 +307,36 @@ interface LeafCellCtx {
   onOpen: (fk: string) => void;
 }
 
-// Issue #111: a leaf cell reads as text and swaps to its editor only when clicked — the same
-// rule as the field grid above it, and for the same reason: a wall of inputs would bury the
-// values. Closes again when focus leaves the editor.
+// Issue #229: VMAD's scalar leaves render the shared field-grid ScalarCell directly — the same
+// component ConditionSection already renders for its own scalar fields — rather than a VMAD-only
+// duplicate of it. ScalarCell owns its whole read/click-to-edit lifecycle itself (Issue #111's
+// "reads as text, swaps to its editor only when clicked" rule lives inside it now, not in a
+// wrapper here), so nothing in this file has to reimplement that any more. Object leaves keep
+// VmadObjectEditor (see that file): a `(formKey, alias)` pair the shared FormKeyCell alone can't
+// represent, so it's VMAD's one remaining exception, and it owns its own read/edit toggle for the
+// same reason ScalarCell owns its own.
 //
 // Ctrl+click is not an edit anywhere in the grid: on an object leaf the FormKeyLink inside the
-// read view follows the reference on that same event, so activating here as well would open an
-// editor behind the record we just navigated to.
-function ClickToEdit({ read, children }: Readonly<{ read: React.ReactNode; children: React.ReactNode }>) {
-  const [active, setActive] = useState(false);
-  if (!active) {
-    // Issue #201 / ADR-0033: no resting cursor. `cursor: 'text'` here was a caret on a cell with
-    // nothing selectable on it — a caret promises "text you select", and there is none until the
-    // click has swapped in the editor below.
-    return (
-      <span onClick={e => { if (!e.ctrlKey && !e.metaKey) setActive(true); }}>{read}</span>
-    );
-  }
+// read view follows the reference on that same event (both here, in VmadObjectEditor's inactive
+// state, and in VmadObjectEditor's active state via the composed FormKeyCell), so activating the
+// editor as well would open it behind the record just navigated to.
+
+function vmadScalarMeta(type: 'bool' | 'int' | 'float' | 'string'): FieldMetadata {
+  return { name: '', type, isArray: false, validFormKeyTypes: [], enumValues: [] };
+}
+
+// Issue #229: the only reason this exists rather than a bare ScalarCell — the per-plugin
+// type-divergence cue (`typeCue`, e.g. "(Int)") is a VMAD concept ScalarCell has no notion of.
+// Preserves the pre-#229 timing (cue visible at rest, hidden while the editor is open) via
+// ScalarCell's onActiveChange, rather than dropping the cue or leaving it up regardless of state.
+function ScalarLeafCell({ value, meta, onCommit, typeCue }: Readonly<{
+  value: unknown; meta: FieldMetadata; onCommit: (v: unknown) => void; typeCue: string;
+}>) {
+  const [editing, setEditing] = useState(false);
   return (
-    <span onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setActive(false); }}>
-      {children}
+    <span style={inlineCell}>
+      <ScalarCell value={value} meta={meta} editable onCommit={onCommit} onActiveChange={setEditing} />
+      {!editing && <span style={{ opacity: 0.6 }}>&nbsp;{typeCue}</span>}
     </span>
   );
 }
@@ -361,20 +371,47 @@ function renderLeafCell(
   }
 
   if (p.kind === 'scalar') {
-    return (
-      <ClickToEdit read={read}>
-        <VmadScalarEditor value={p.values[plugin]} type={scalarType(p)} onCommit={commit} />
-      </ClickToEdit>
-    );
+    const meta = vmadScalarMeta(scalarType(p));
+    return typeCue
+      ? <ScalarLeafCell value={p.values[plugin]} meta={meta} onCommit={commit} typeCue={typeCue} />
+      : <ScalarCell value={p.values[plugin]} meta={meta} editable onCommit={commit} />;
   }
   if (p.kind === 'object') {
     return (
-      <ClickToEdit read={read}>
-        <VmadObjectEditor value={p.values[plugin]} onCommit={commit} />
-      </ClickToEdit>
+      <VmadObjectEditor
+        value={p.values[plugin]}
+        read={read}
+        onCommit={commit}
+        onOpen={onOpen}
+        resolution={p.resolutions?.[plugin]}
+      />
     );
   }
   return read;
+}
+
+// Issue #229: the pending-column twin of renderLeafCell's scalar/object branches above, factored
+// out so the pending <td> builder in valueCells (below) stays a plain lookup rather than growing
+// its own copy of this branching.
+function pendingLeafEditor(
+  leafProp: VmadPropertyDiff,
+  value: unknown,
+  plugin: string,
+  vmadPath: string,
+  onEdit: OnEdit,
+  onOpen: (fk: string) => void,
+): React.ReactNode {
+  if (leafProp.kind === 'scalar') {
+    return (
+      <ScalarCell value={value} meta={vmadScalarMeta(scalarType(leafProp))} editable
+        onCommit={v => onEdit(plugin, vmadPath, v)} />
+    );
+  }
+  return (
+    <VmadObjectEditor value={value} read={pendingOpLabel(value)}
+      onCommit={v => onEdit(plugin, vmadPath, v)} onOpen={onOpen}
+      resolution={leafProp.resolutions?.[plugin]} />
+  );
 }
 
 function hasPluginData(p: VmadPropertyDiff, plugin: string): boolean {
@@ -444,6 +481,11 @@ function pendingOpLabel(v: unknown): React.ReactNode {
 
 // Renders a pending add_property in the pending column: an inline editor (scalar) in edit mode that
 // re-issues the same add op with the new value, else a read-only value.
+//
+// Issue #229: this is now a ScalarCell like every other scalar leaf, which means it also gains a
+// click-to-activate step it didn't have as VmadScalarEditor (that component rendered its input
+// unconditionally, no gate at all) — a deliberate consequence of deleting VmadScalarEditor outright
+// rather than leaving one caller still depending on its bespoke, unconditional-commit behavior.
 function AddedPendingCell({ change, editable, onStructOp }: Readonly<{
   change: PendingChange; editable?: boolean; onStructOp?: OnStructOp;
 }>) {
@@ -452,8 +494,7 @@ function AddedPendingCell({ change, editable, onStructOp }: Readonly<{
   const reissue = (v: unknown) => onStructOp?.(change.plugin, change.fieldPath, { ...op, value: v });
   // Issue #203: this cell can itself be editable (a not-yet-saved add_property can be re-issued
   // with a new value) — unlike every other structural-op pending cell (remove_property, set_type),
-  // which stays read-only since there's no scalar to edit. Plain click never reveals here or
-  // anywhere else in the pending column any more — reveal lives on the right-click menu only.
+  // which stays read-only since there's no scalar to edit.
   const editing = editable && onStructOp && kind;
   // Issue #208: this cell always has a change (it's the caller's job to only render
   // AddedPendingCell when one exists — see pushAddedRow below), so the native menu's gating
@@ -461,7 +502,8 @@ function AddedPendingCell({ change, editable, onStructOp }: Readonly<{
   return (
     <span data-vscode-context={pendingCellContext(change.id)}>
       {editing
-        ? <VmadScalarEditor value={op.value} type={kind} onCommit={reissue} ariaLabel={`Added value for ${op.name}`} />
+        ? <ScalarCell value={op.value} meta={vmadScalarMeta(kind)} editable
+            onCommit={reissue} ariaLabel={`Added value for ${op.name}`} />
         : <span>{toStr(op.value)}</span>}
     </span>
   );
@@ -506,15 +548,15 @@ export function VmadSection({
 
   const totalCols = columns.length + 1;
 
-  // Issue #203: a pending scalar/object leaf value is directly editable, on the same terms as a
-  // disk cell — `leafProp` (present only for a depth-1 property row, never for a script row or a
-  // container's own root) identifies which VmadPropertyDiff owns this column so the pending cell
-  // can pick the same ClickToEdit + VmadScalarEditor/VmadObjectEditor pair the disk cell uses,
-  // fed the staged value instead of the disk one. A pending value that is itself a structural op
-  // (add_property/remove_property/set_type — isStructOp) has nothing scalar to edit in place and
-  // stays read-only, same as before. Editable is unconditional (no immutableSet re-check): a
-  // 'pending' column only ever exists for a plugin buildColumns (recordUtils.ts) already found
-  // non-immutable, so the plugin here is always mutable.
+  // Issue #203 / #229: a pending scalar/object leaf value is directly editable, on the same terms
+  // as a disk cell — `leafProp` (present only for a depth-1 property row, never for a script row
+  // or a container's own root) identifies which VmadPropertyDiff owns this column so the pending
+  // cell can pick the same ScalarCell/VmadObjectEditor pair the disk cell uses (renderLeafCell,
+  // above), fed the staged value instead of the disk one. A pending value that is itself a
+  // structural op (add_property/remove_property/set_type — isStructOp) has nothing scalar to edit
+  // in place and stays read-only, same as before. Editable is unconditional (no immutableSet
+  // re-check): a 'pending' column only ever exists for a plugin buildColumns (recordUtils.ts)
+  // already found non-immutable, so the plugin here is always mutable.
   const valueCells = (
     rowKey: string,
     cellStates: Record<string, ConflictThis | undefined>,
@@ -529,6 +571,12 @@ export function VmadSection({
         const editableLeaf = hasPending && onEdit && vmadPath && leafProp
           && (leafProp.kind === 'scalar' || leafProp.kind === 'object')
           && !isStructOp(change.newValue);
+        let content: React.ReactNode = null;
+        if (hasPending) {
+          content = editableLeaf
+            ? pendingLeafEditor(leafProp, change.newValue, col.plugin, vmadPath, onEdit, onOpen)
+            : pendingOpLabel(change.newValue);
+        }
         return (
           <td
             key={`${rowKey}:p${i}`}
@@ -540,17 +588,7 @@ export function VmadSection({
             }}
             data-vscode-context={hasPending ? pendingCellContext(change.id) : undefined}
           >
-            {hasPending && (editableLeaf
-              ? (
-                <ClickToEdit read={pendingOpLabel(change.newValue)}>
-                  {leafProp.kind === 'scalar'
-                    ? <VmadScalarEditor value={change.newValue} type={scalarType(leafProp)}
-                        onCommit={v => onEdit(col.plugin, vmadPath, v)} />
-                    : <VmadObjectEditor value={change.newValue}
-                        onCommit={v => onEdit(col.plugin, vmadPath, v)} />}
-                </ClickToEdit>
-              )
-              : pendingOpLabel(change.newValue))}
+            {content}
           </td>
         );
       }

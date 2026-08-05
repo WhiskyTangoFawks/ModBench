@@ -16,10 +16,20 @@ interface ScalarCellProps {
   // here). Unused by the immutable branch below — see the note there. Optional, defaulting to
   // `true` (open-on-any-click, the pre-#223 behavior): ConditionSection renders this cell
   // directly, outside the field grid's focus model, and doesn't pass it — #223 is explicitly
-  // scoped to the field grid only (ConditionSection/VmadSection adopt this model in #229/#231),
-  // so a caller that has no focus concept must keep opening unconditionally, not go silently inert.
+  // scoped to the field grid only (ConditionSection/VmadSection adopt this model in #231), so a
+  // caller that has no focus concept must keep opening unconditionally, not go silently inert.
   isFocused?: boolean;
   onCommit: (v: unknown) => void;
+  // Issue #229: an optional aria-label for the rendered editor input, unused by the field grid
+  // (a row has no need to distinguish its own cells this way) but needed by VMAD's pending
+  // add-property reissue cell, where more than one identically-shaped editor can be on the page
+  // at once and has to be findable by assistive tech / `getByLabelText` alike.
+  ariaLabel?: string;
+  // Issue #229: notified whenever this cell's own active/inactive state flips — VmadSection uses
+  // it to hide its per-plugin type-divergence cue (a VMAD concept this cell has no notion of)
+  // while the editor is open, matching the pre-#229 VmadScalarEditor/ClickToEdit behavior, without
+  // this cell losing ownership of when it is actually open.
+  onActiveChange?: (active: boolean) => void;
 }
 
 // The text a cell shows when it is not being edited. Null/missing renders as an empty-looking
@@ -32,7 +42,7 @@ function ScalarText({ value, meta }: { value: unknown; meta: FieldMetadata }) {
     : <span>{modelValue(value, meta)}</span>;
 }
 
-export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }: ScalarCellProps) {
+export function ScalarCell({ value, meta, editable, isFocused = true, onCommit, ariaLabel, onActiveChange }: ScalarCellProps) {
   const [draft, setDraft] = useState(() => modelValue(value, meta));
   const [prevValue, setPrevValue] = useState(value);
   // Issue #111: only the clicked cell is an input; everything else stays text. Meaningless on an
@@ -42,6 +52,14 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }
   if (prevValue !== value) {
     setPrevValue(value);
     setDraft(modelValue(value, meta));
+  }
+
+  // Issue #229: setActive plus its own notification, so onActiveChange can never drift from what
+  // this cell actually renders — one call site sets both, rather than a caller re-deriving "is it
+  // open" from its own separate tracking.
+  function setActiveNotified(next: boolean) {
+    setActive(next);
+    onActiveChange?.(next);
   }
 
   // Issue #226 / ADR-0034: an immutable column simply refuses. No editor opens and no distinct
@@ -66,8 +84,8 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }
     return (
       <span
         data-open-trigger
-        onClick={() => { if (isFocused) setActive(true); }}
-        onDoubleClick={() => setActive(true)}
+        onClick={() => { if (isFocused) setActiveNotified(true); }}
+        onDoubleClick={() => setActiveNotified(true)}
         style={{ display: 'block', minHeight: '1em' }}
       >
         <ScalarText value={value} meta={meta} />
@@ -99,10 +117,11 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }
     return (
       <input
         type="checkbox"
+        aria-label={ariaLabel}
         autoFocus
         checked={draft === 'true'}
         onChange={e => { setDraft(String(e.target.checked)); commitIfChanged(e.target.checked); }}
-        onBlur={() => setActive(false)}
+        onBlur={() => setActiveNotified(false)}
       />
     );
   }
@@ -110,10 +129,11 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }
   if (meta.type === 'enum' && meta.enumValues.length > 0) {
     return (
       <select
+        aria-label={ariaLabel}
         autoFocus
         value={draft}
         onChange={e => setDraft(e.target.value)}
-        onBlur={() => { commitIfChanged(draft); setActive(false); }}
+        onBlur={() => { commitIfChanged(draft); setActiveNotified(false); }}
         style={inputBase}
       >
         {meta.enumValues.map(ev => <option key={ev}>{ev}</option>)}
@@ -129,6 +149,7 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }
 
   return (
     <input
+      aria-label={ariaLabel}
       autoFocus
       type={meta.type === 'int' || meta.type === 'float' ? 'number' : 'text'}
       value={draft}
@@ -138,7 +159,7 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit }
       // type-to-replace for free. (A no-op on type="number" per spec, which is why the paired
       // test uses a text input.)
       onFocus={e => e.currentTarget.select()}
-      onBlur={() => { commitIfChanged(coerce()); setActive(false); }}
+      onBlur={() => { commitIfChanged(coerce()); setActiveNotified(false); }}
       onKeyDown={e => { if (e.key === 'Enter') { commitIfChanged(coerce()); (e.target as HTMLInputElement).blur(); } }}
       style={inputBase}
     />

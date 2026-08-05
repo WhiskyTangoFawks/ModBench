@@ -849,6 +849,33 @@ describe('VmadSection editing', () => {
     expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\MyScript\Enabled`, true);
   });
 
+  // Issue #229: the bespoke VmadScalarEditor committed unconditionally on blur — activating a
+  // scalar cell and blurring away with no change staged a no-op pending edit. The shared
+  // ScalarCell's own commitIfChanged guard (issue #111) closes this once VMAD renders it directly
+  // instead of its own duplicate.
+  it('does not stage a change when a scalar edit is committed with the same value (no-op guard)', () => {
+    const onEdit = vi.fn();
+    const vmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [prop({
+          name: 'Count',
+          kind: 'scalar',
+          values: { 'A.esm': 5 },
+          types: { 'A.esm': 'Int' },
+          winnerPlugin: 'A.esm',
+        })],
+      })],
+    };
+    renderSection(vmad, ['A.esm'], { onEdit });
+    toggle('S');
+    fireEvent.click(screen.getByText('5'));
+
+    fireEvent.blur(screen.getByRole('spinbutton'));
+
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
   it('Int property edit stages VMAD path with numeric value', () => {
     const onEdit = vi.fn();
     const vmad: VmadCompare = {
@@ -924,9 +951,35 @@ describe('VmadSection editing', () => {
     expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\S\Target`, { formKey: '000123:Foo.esp', alias: 5 });
   });
 
-  // Issue #203: a pending scalar/object leaf value is directly editable, on the same terms as a
-  // disk cell — same ClickToEdit + VmadScalarEditor/VmadObjectEditor pair, fed the staged value
-  // instead of the disk value.
+  // Issue #229: the alias input is the one leaf VMAD still hand-rolls after this refactor (the
+  // shared FormKeyCell has no concept of it) — it gets the same no-op guard as every scalar leaf,
+  // rather than being left as the one path that still stages a no-op edit.
+  it('does not stage a change when the alias is blurred with the same value (no-op guard)', () => {
+    const onEdit = vi.fn();
+    const vmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [prop({
+          name: 'Target',
+          kind: 'object',
+          values: { 'A.esm': '000123:Foo.esp [2]' },
+          types: { 'A.esm': 'Object' },
+          winnerPlugin: 'A.esm',
+        })],
+      })],
+    };
+    renderSection(vmad, ['A.esm'], { onEdit });
+    toggle('S');
+    fireEvent.click(screen.getByText('000123:Foo.esp'));
+
+    fireEvent.blur(screen.getByRole('spinbutton', { name: 'Alias' }));
+
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  // Issue #203 / #229: a pending scalar/object leaf value is directly editable, on the same terms
+  // as a disk cell — same ScalarCell/VmadObjectEditor pair the disk cell uses, fed the staged
+  // value instead of the disk value.
   it('clicking a pending scalar VMAD value activates its editor, not a reveal', () => {
     const chg = pendingChange('A.esm', String.raw`VMAD\MyScript\Enabled`, true);
     const { container } = renderSection(boolVmad(), ['A.esm'], {
@@ -955,6 +1008,36 @@ describe('VmadSection editing', () => {
     fireEvent.click(screen.getByRole('checkbox'));
 
     expect(onEdit).toHaveBeenCalledWith('A.esm', String.raw`VMAD\MyScript\Enabled`, false);
+  });
+
+  // Issue #229: the pending leaf's ScalarCell gets the same no-op guard as the disk leaf's — both
+  // are the same component now, so there is only one guard to have gotten right.
+  it('does not stage a change when a pending scalar edit is blurred with the same value (no-op guard)', () => {
+    const onEdit = vi.fn();
+    const vmad: VmadCompare = {
+      scripts: [script({
+        name: 'S',
+        properties: [prop({
+          name: 'Count',
+          kind: 'scalar',
+          values: { 'A.esm': 5 },
+          types: { 'A.esm': 'Int' },
+          winnerPlugin: 'A.esm',
+        })],
+      })],
+    };
+    const chg = pendingChange('A.esm', String.raw`VMAD\S\Count`, 7);
+    renderSection(vmad, ['A.esm'], {
+      onEdit,
+      withPendingCol: 'A.esm',
+      pendingChangeMap: { [String.raw`A.esm:VMAD\S\Count`]: chg },
+    });
+    toggle('S');
+
+    fireEvent.click(screen.getByText('7'));
+    fireEvent.blur(screen.getByRole('spinbutton'));
+
+    expect(onEdit).not.toHaveBeenCalled();
   });
 
   it('Variable, array, and struct properties show no edit widget in edit mode', () => {
@@ -1061,7 +1144,12 @@ describe('VmadSection editing', () => {
       .toBe(pendingCellContext(chg.id));
   });
 
-  it('editing a pending-added property re-issues add_property with the new value', () => {
+  // Issue #229: AddedPendingCell now renders a ScalarCell like every other scalar leaf, which
+  // means editing it requires the same click-then-edit sequence as everywhere else — a deliberate
+  // change from the deleted VmadScalarEditor's unconditional, always-open input. Asserted
+  // explicitly (not just that the value round-trips): the labeled input must not exist before the
+  // click, and must exist after it.
+  it('requires a click before its input appears, then re-issues add_property with the new value', () => {
     const onStructOp = vi.fn();
     const chg = pendingChange('A.esm', String.raw`VMAD\S\NewProp`, {
       op: 'add_property', type: 'Int', name: 'NewProp', flags: 'Edited', value: 42,
@@ -1074,6 +1162,9 @@ describe('VmadSection editing', () => {
     });
     toggle('S');
 
+    expect(screen.queryByLabelText('Added value for NewProp')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('42'));
     const input = screen.getByLabelText('Added value for NewProp');
     fireEvent.change(input, { target: { value: '99' } });
     fireEvent.blur(input);
@@ -1083,6 +1174,28 @@ describe('VmadSection editing', () => {
       String.raw`VMAD\S\NewProp`,
       { op: 'add_property', type: 'Int', name: 'NewProp', flags: 'Edited', value: 99 },
     );
+  });
+
+  // Issue #229: the same no-op guard AC1 introduces for scalar leaves — ScalarCell's own
+  // commitIfChanged now covers this reissue cell too, since #229 deletes the unconditionally-
+  // committing VmadScalarEditor it used to render.
+  it('does not re-issue add_property when the value is blurred unchanged', () => {
+    const onStructOp = vi.fn();
+    const chg = pendingChange('A.esm', String.raw`VMAD\S\NewProp`, {
+      op: 'add_property', type: 'Int', name: 'NewProp', flags: 'Edited', value: 42,
+    });
+    const vmad: VmadCompare = { scripts: [script({ name: 'S', flags: { 'A.esm': 'Local' } })] };
+    renderSection(vmad, ['A.esm'], {
+      withPendingCol: 'A.esm',
+      pendingChangeMap: { [`A.esm:${chg.fieldPath}`]: chg },
+      onStructOp,
+    });
+    toggle('S');
+
+    fireEvent.click(screen.getByText('42'));
+    fireEvent.blur(screen.getByLabelText('Added value for NewProp'));
+
+    expect(onStructOp).not.toHaveBeenCalled();
   });
 
   // ── add/remove script (13.8.2) ─────────────────────────────────────────────
