@@ -1030,3 +1030,251 @@ describe('RecordPanel — array arity/order ops absent for sorted arrays', () =>
     expect(client.save).not.toHaveBeenCalled();
   });
 });
+
+// Issue #231: a struct member that is itself an array of structs — a fourth level of nesting
+// (struct → array member → array element → element's own struct member) the old RowContext union
+// (top-level/array-element/struct-child/grandchild) had no way to express at all; RecordPanel's
+// row-builder generalizes to genuine recursion for exactly this reason (VMAD's own struct data
+// already needs unbounded depth — Schema/VmadCodec.cs). This is the regression-proof slice 0
+// promised: something the old model could never render, now working end to end through the same
+// mechanism every other depth uses.
+const nestedStructArrayMeta: FieldMetadata = {
+  name: 'Container',
+  type: 'struct',
+  isArray: false,
+  validFormKeyTypes: [],
+  enumValues: [],
+  fields: [
+    {
+      name: 'Entries',
+      type: 'array',
+      isArray: true,
+      validFormKeyTypes: [],
+      enumValues: [],
+      elementType: {
+        name: '',
+        type: 'struct',
+        isArray: false,
+        validFormKeyTypes: [],
+        enumValues: [],
+        fields: [
+          { name: 'Id', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
+          { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+        ],
+      },
+    },
+  ],
+};
+
+// Disk: both plugins have Container.Entries = [{ Id: 'A', Weight: 1 }]. No pending.
+const nestedStructArrayResult = {
+  conflictAll: 'NoConflict',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: nestedStructArrayMeta, value: { Entries: [{ Id: 'A', Weight: 1 }] } }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: nestedStructArrayMeta, value: { Entries: [{ Id: 'A', Weight: 1 }] } }],
+      pendingFields: {}, conflictThis: 'IdenticalToMaster',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Container',
+    values: {
+      'Fallout4.esm': { Entries: [{ Id: 'A', Weight: 1 }] },
+      'MyMod.esp': { Entries: [{ Id: 'A', Weight: 1 }] },
+    },
+    winnerPlugin: 'Fallout4.esm', winnerValue: { Entries: [{ Id: 'A', Weight: 1 }] },
+    cellStates: {},
+    children: [{
+      fieldName: 'Entries',
+      values: { 'Fallout4.esm': [{ Id: 'A', Weight: 1 }], 'MyMod.esp': [{ Id: 'A', Weight: 1 }] },
+      winnerPlugin: 'Fallout4.esm', winnerValue: [{ Id: 'A', Weight: 1 }],
+      cellStates: {},
+      children: [{
+        fieldName: '[0]',
+        values: { 'Fallout4.esm': { Id: 'A', Weight: 1 }, 'MyMod.esp': { Id: 'A', Weight: 1 } },
+        winnerPlugin: 'Fallout4.esm', winnerValue: { Id: 'A', Weight: 1 },
+        cellStates: {},
+        children: [
+          {
+            fieldName: 'Id',
+            values: { 'Fallout4.esm': 'A', 'MyMod.esp': 'A' },
+            winnerPlugin: 'Fallout4.esm', winnerValue: 'A',
+            cellStates: {},
+          },
+          {
+            fieldName: 'Weight',
+            values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 },
+            winnerPlugin: 'Fallout4.esm', winnerValue: 1,
+            cellStates: {},
+          },
+        ],
+      }],
+    }],
+  }],
+};
+
+describe('RecordPanel — a struct member that is itself an array of structs (issue #231)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    currentCompare = nestedStructArrayResult;
+    currentChanges = [];
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function expandToDepth4() {
+    await waitFor(() => screen.getByText('Container'));
+    fireEvent.click(screen.getAllByText('▶')[0]); // expand Container -> Entries
+    await waitFor(() => screen.getByText('Entries'));
+    fireEvent.click(screen.getAllByText('▶')[0]); // expand Entries -> [0]
+    await waitFor(() => {
+      const td = screen.getAllByText('[0]').find(el => el.tagName === 'TD');
+      if (!td) throw new Error('[0] TD not found yet');
+    });
+    fireEvent.click(screen.getAllByText('▶')[0]); // expand [0] -> Id/Weight
+    await waitFor(() => screen.getByText('Weight'));
+  }
+
+  it('renders all four levels: Container, Entries, [0], and its Id/Weight members', async () => {
+    renderPanel();
+    await expandToDepth4();
+    expect(screen.getByText('Container')).toBeInTheDocument();
+    expect(screen.getByText('Entries')).toBeInTheDocument();
+    expect(screen.getByText('Weight')).toBeInTheDocument();
+    expect(screen.getByText('Id')).toBeInTheDocument();
+  });
+
+  it('editing the deepest (4th-level) member restages the whole Container struct, preserving Id and the array shape', async () => {
+    const { client } = renderPanel();
+    await expandToDepth4();
+
+    // MyMod.esp is the mutable column; Fallout4.esm (immutable) never activates.
+    fireEvent.click(screen.getAllByText('1')[1]); // focus
+    fireEvent.click(screen.getAllByText('1')[1]); // activate
+    const input = screen.getByDisplayValue('1');
+    fireEvent.change(input, { target: { value: '5' } });
+    fireEvent.blur(input);
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm',
+        'MyMod.esp',
+        { Container: { Entries: [{ Id: 'A', Weight: 5 }] } },
+        undefined,
+      ),
+    );
+  });
+});
+
+// Issue #231: FieldDiff.wirePath — a synthesized row (a VMAD property under its script container,
+// a Condition field under its condition element) restages independently of its own parent, rather
+// than folding into the whole-subtree restage every ordinary struct/array field uses. Exercised
+// here with a plain struct fixture (the adapters that will actually set `wirePath` land in
+// slices 2/3) so this mechanism is proven at the RecordPanel/DiffRow seam on its own.
+const wirePathStructMeta: FieldMetadata = {
+  name: 'Container',
+  type: 'struct',
+  isArray: false,
+  validFormKeyTypes: [],
+  enumValues: [],
+  fields: [
+    { name: 'Ordinary', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    { name: 'Independent', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
+  ],
+};
+
+const wirePathResult = {
+  conflictAll: 'NoConflict',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: wirePathStructMeta, value: { Ordinary: 'a', Independent: 'b' } }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: wirePathStructMeta, value: { Ordinary: 'a', Independent: 'b' } }],
+      pendingFields: {}, conflictThis: 'IdenticalToMaster',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Container',
+    values: { 'Fallout4.esm': { Ordinary: 'a', Independent: 'b' }, 'MyMod.esp': { Ordinary: 'a', Independent: 'b' } },
+    winnerPlugin: 'Fallout4.esm', winnerValue: { Ordinary: 'a', Independent: 'b' },
+    cellStates: {},
+    children: [
+      {
+        fieldName: 'Ordinary',
+        values: { 'Fallout4.esm': 'a', 'MyMod.esp': 'a' },
+        winnerPlugin: 'Fallout4.esm', winnerValue: 'a',
+        cellStates: {},
+      },
+      {
+        fieldName: 'Independent',
+        // Issue #231: this member carries its own wirePath, distinct from "Container.Independent"
+        // — RecordPanel must restage it there directly, not merged into Container's own value.
+        wirePath: 'VMAD\\ScriptA\\Independent',
+        values: { 'Fallout4.esm': 'b', 'MyMod.esp': 'b' },
+        winnerPlugin: 'Fallout4.esm', winnerValue: 'b',
+        cellStates: {},
+      },
+    ],
+  }],
+};
+
+describe('RecordPanel — FieldDiff.wirePath restages a synthesized row independently (issue #231)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    currentCompare = wirePathResult;
+    currentChanges = [];
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function expandContainer() {
+    await waitFor(() => screen.getByText('Container'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => screen.getByText('Independent'));
+  }
+
+  it('editing the ordinary member restages the whole Container struct, merging its sibling', async () => {
+    const { client } = renderPanel();
+    await expandContainer();
+
+    fireEvent.click(screen.getAllByText('a')[1]); // focus (MyMod.esp column)
+    fireEvent.click(screen.getAllByText('a')[1]); // activate
+    const input = screen.getByDisplayValue('a');
+    fireEvent.change(input, { target: { value: 'A2' } });
+    fireEvent.blur(input);
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm', 'MyMod.esp', { Container: { Ordinary: 'A2', Independent: 'b' } }, undefined,
+      ),
+    );
+  });
+
+  it('editing the wirePath-bearing member restages only its own wire path, not Container', async () => {
+    const { client } = renderPanel();
+    await expandContainer();
+
+    fireEvent.click(screen.getAllByText('b')[1]); // focus (MyMod.esp column)
+    fireEvent.click(screen.getAllByText('b')[1]); // activate
+    const input = screen.getByDisplayValue('b');
+    fireEvent.change(input, { target: { value: 'B2' } });
+    fireEvent.blur(input);
+
+    await waitFor(() =>
+      expect(client.save).toHaveBeenCalledWith(
+        '000001:Fallout4.esm', 'MyMod.esp', { 'VMAD\\ScriptA\\Independent': 'B2' }, undefined,
+      ),
+    );
+  });
+});

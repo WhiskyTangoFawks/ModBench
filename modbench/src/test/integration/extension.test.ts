@@ -163,6 +163,16 @@ describe('modbench command registration', () => {
     'modbench.array.remove',
     'modbench.array.moveUp',
     'modbench.array.moveDown',
+    // #231: VMAD's own structural-op native `webview/context` menu commands — same shape as
+    // #227's array.* above (package.json gating, RecordPanel.test.tsx's own unit coverage).
+    'modbench.vmad.addScript',
+    'modbench.vmad.removeScript',
+    'modbench.vmad.addProperty',
+    'modbench.vmad.removeProperty',
+    // #231 (review): Set Script Flags/Set Property Flags — restores capability lost when
+    // VmadSection's always-visible flag `<select>`s were deleted (AC7 regression).
+    'modbench.vmad.setScriptFlags',
+    'modbench.vmad.setPropertyFlags',
     'modbench.createPlaced',
     'modbench.modList.filter',
     'modbench.modList.switchProfile',

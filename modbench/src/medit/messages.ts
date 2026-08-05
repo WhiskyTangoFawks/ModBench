@@ -91,6 +91,31 @@ export const EXTENSION_TO_WEBVIEW = {
   // opened. Carries no value: closing commits nothing beyond whatever EXTENDED_EDITOR_COMMITTED
   // messages already arrived before it.
   EXTENDED_EDITOR_CLOSED: 'extendedEditorClosed',
+  // Issue #231: VMAD's own structural (named-op) commands — Add/Remove Script, Remove Property —
+  // reached the same broadcast-and-self-filter way as #227's ARRAY_* above (the extension host
+  // has no live reference into this webview's React state, so it broadcasts and each panel
+  // self-filters on `formKey`). Add Script's own name-collection (`pickScriptNameViaInputBox`,
+  // recordPanelMessageRouter.ts) runs entirely in the extension host before this ever fires — the
+  // broadcast only carries the already-picked name, mirroring how COLUMN_HEADER_ADD_MASTER
+  // carries an already-resolved `newMaster` rather than asking the webview to resolve it.
+  VMAD_ADD_SCRIPT: 'vmadAddScript',
+  VMAD_REMOVE_SCRIPT: 'vmadRemoveScript',
+  VMAD_REMOVE_PROPERTY: 'vmadRemoveProperty',
+  // Issue #231: Add Property collects three fields at once (name, type, value) — #229's own
+  // "one deliberate exception", a webview-rendered `AddPropertyDialog` rather than a QuickPick
+  // chain. The native command has nothing to collect itself, so it only broadcasts "open the
+  // dialog for this script/plugin" — the dialog's own confirm still stages through the ordinary
+  // `handleVmadStructOp` call already wired for the pre-#231 button.
+  VMAD_OPEN_ADD_PROPERTY: 'vmadOpenAddProperty',
+  // Issue #231 (review): Set Script Flags / Set Property Flags — restored as right-click commands
+  // after being dropped by this same ticket's own section deletion (they worked on `main` as
+  // always-visible `<select>`s; ADR-0034's no-second-route rule says they belong on this menu now,
+  // the same move #227 already made for the old inline array ▲▼✕ buttons). The QuickPick itself
+  // (a small, static, non-record-dependent enum — SCRIPT_FLAGS/PROP_FLAGS, vmadOps.ts) runs
+  // entirely in the extension host, same shape as Add Script's own native input box — the
+  // broadcast only carries the already-picked value.
+  VMAD_SET_SCRIPT_FLAGS: 'vmadSetScriptFlags',
+  VMAD_SET_PROPERTY_FLAGS: 'vmadSetPropertyFlags',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -207,6 +232,44 @@ export interface ArrayParentContext {
   preventDefaultContextMenuItems: true;
 }
 
+// Issue #231: same broadcast-and-self-filter mechanism as ArrayElementContext/ArrayParentContext
+// above, carried by VMAD's own row kinds — the "Scripts (VMAD)" wrapper row (Add Script only), a
+// script row (Remove Script, Add Property, Set Script Flags), and a property row (Remove
+// Property, Set Property Flags). RecordPanel builds each of these directly from the row it
+// belongs to: the wrapper/a script row's own identity is that row's own `diff.fieldName` (a
+// script's name, or nothing at all for the wrapper); a property row's is parsed from its own
+// wirePath (`parseVmadPath`, vmadOps.ts — always `VMAD\Script\Prop`) — neither needs a shared
+// parsing helper, since each row already knows which one it is when it builds its own context.
+export interface VmadScriptsContext {
+  webviewSection: 'vmadScripts';
+  formKey: string;
+  plugin: string;
+  preventDefaultContextMenuItems: true;
+}
+
+export interface VmadScriptContext {
+  webviewSection: 'vmadScript';
+  formKey: string;
+  plugin: string;
+  scriptName: string;
+  // Issue #231 (review): Set Script Flags' own QuickPick seed — the script's current per-plugin
+  // flag (`VmadScriptDiff.flags[plugin]`, already carried on the script row's own `diff.values`),
+  // sorted to the front of the QuickPick's item array the same way the condition-function
+  // picker's own "seeded with the current value" already works (`showQuickPick` has no
+  // `activeItem` option). `null` when the script has no flag for this plugin (absent there).
+  currentFlags: string | null;
+  preventDefaultContextMenuItems: true;
+}
+
+export interface VmadPropertyContext {
+  webviewSection: 'vmadProperty';
+  formKey: string;
+  plugin: string;
+  scriptName: string;
+  propName: string;
+  preventDefaultContextMenuItems: true;
+}
+
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP; changeId: string }
@@ -226,7 +289,13 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; fieldName: string; index: number }
   | { type: typeof EXTENSION_TO_WEBVIEW.CLIPBOARD_READ; requestId: string; value: string | null }
   | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED; requestId: string; value: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED; requestId: string };
+  | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED; requestId: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_ADD_SCRIPT; formKey: string; plugin: string; name: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT; formKey: string; plugin: string; scriptName: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_REMOVE_PROPERTY; formKey: string; plugin: string; scriptName: string; propName: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY; formKey: string; plugin: string; scriptName: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_SET_SCRIPT_FLAGS; formKey: string; plugin: string; scriptName: string; flags: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS; formKey: string; plugin: string; scriptName: string; propName: string; flags: string };
 
 // #208: the merged `data-vscode-context` object VS Code's webview preload forwards as a
 // `webview/context` command's sole argument — shared shape between the cell (recordUtils.ts'

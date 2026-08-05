@@ -25,7 +25,7 @@ vi.mock('./nativeBridge', () => ({
 }));
 
 import { DiffRow } from './DiffRow';
-import type { Column } from './recordUtils';
+import type { Column, PathSegment } from './recordUtils';
 import { pendingCellContext } from './recordUtils';
 import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
 
@@ -61,10 +61,16 @@ function diff(partial: Partial<FieldDiff> = {}): FieldDiff {
 function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}): React.ComponentProps<typeof DiffRow> {
   const master = override('Fallout4.esm');
   const mod = override('MyMod.esp');
+  // Issue #231: a top-level row's own rootField is always its diff's own fieldName by
+  // construction (RecordPanel sets it that way) — derived from whichever `diff` this call ends up
+  // using (an override or the default) so a test overriding only `diff` still gets a consistent
+  // default `context` without also having to override it, the same auto-tracking the old
+  // `context: { kind: 'top-level' }` gave for free.
+  const effectiveDiff = overrides.diff ?? diff();
   return {
     formKey: '000001:Fallout4.esm',
     recordLabel: 'TestNPC [000001:Fallout4.esm]',
-    diff: diff(),
+    diff: effectiveDiff,
     conflictAll: 'NoConflict',
     columns: [diskColumn(master), diskColumn(mod)],
     overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
@@ -76,7 +82,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     onEdit: vi.fn(),
     onCellDragStart: vi.fn(),
     onCellDrop: vi.fn(),
-    context: { kind: 'top-level' },
+    context: { path: [], rootField: effectiveDiff.fieldName },
     // Issue #222: rowKey matches diff().fieldName below — the same identity RecordPanel derives
     // for its own `key=` at each nesting level (top-level/array-element/struct-child/grandchild).
     rowKey: 'Name',
@@ -162,6 +168,39 @@ describe('DiffRow — editability follows immutableSet', () => {
     fireEvent.change(input, { target: { value: 'new-value' } });
     fireEvent.blur(input);
     expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Name', 'new-value');
+  });
+});
+
+// Issue #231: `FieldMetadata.readOnly` — a per-row override that refuses editing regardless of
+// the column's own mutability (immutableSet). The Condition section's AND/OR gate is the one row
+// that needs this (no renderEdit at all under the pre-#231 model); every other field's
+// editability still comes purely from the column, unchanged.
+describe('DiffRow — readOnly field metadata (issue #231)', () => {
+  const readOnlyMeta: FieldMetadata = { ...strMeta, readOnly: true };
+
+  it('a second click on the already-focused mutable column opens nothing when the field is readOnly', () => {
+    renderRow({
+      fieldMetaMap: { Name: readOnlyMeta },
+      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' },
+    });
+    fireEvent.click(screen.getAllByText('disk-value')[1]); // MyMod.esp — mutable column, readOnly field
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('F2 on the focused mutable column opens nothing when the field is readOnly', () => {
+    renderRow({
+      fieldMetaMap: { Name: readOnlyMeta },
+      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' },
+    });
+    const cell = screen.getAllByText('disk-value')[1].closest('td')!;
+    fireEvent.keyDown(cell, { key: 'F2' });
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('a non-readOnly field on the same mutable column is unaffected (control case)', () => {
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    fireEvent.click(screen.getAllByText('disk-value')[1]);
+    expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
   });
 });
 
@@ -839,7 +878,7 @@ describe('DiffRow — pending companion column', () => {
         pendingChangeMap: { 'MyMod.esp:LinkedRef': nestedChange('LinkedRef', {
           Target: { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'StructTarget' },
         }) },
-        context: { kind: 'struct-child', overrideMeta: fkMeta, parentFieldName: 'LinkedRef' },
+        context: { path: [{ kind: 'member', name: 'Target' }], overrideMeta: fkMeta, rootField: 'LinkedRef' },
       }))}</tbody></table>);
       expect(screen.getByText('StructTarget [000030:Fallout4.esm]')).toBeInTheDocument();
     });
@@ -854,7 +893,7 @@ describe('DiffRow — pending companion column', () => {
         pendingChangeMap: { 'MyMod.esp:Items': nestedChange('Items', {
           '[0]': { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'PositionalTarget' },
         }) },
-        context: { kind: 'array-element', overrideMeta: fkMeta, parentFieldName: 'Items' },
+        context: { path: [{ kind: 'index', index: 0 }], overrideMeta: fkMeta, rootField: 'Items' },
       }))}</tbody></table>);
       expect(screen.getByText('PositionalTarget [000030:Fallout4.esm]')).toBeInTheDocument();
     });
@@ -869,7 +908,7 @@ describe('DiffRow — pending companion column', () => {
         pendingChangeMap: { 'MyMod.esp:Items': nestedChange('Items', {
           '[1]': { state: 'ResolvedValidType', recordType: 'kywd', editorId: 'SortedTarget' },
         }) },
-        context: { kind: 'array-element', overrideMeta: fkMeta, parentFieldName: 'Items' },
+        context: { path: [{ kind: 'sortKey', key: '000099:Fallout4.esm' }], overrideMeta: fkMeta, rootField: 'Items' },
       }))}</tbody></table>);
       expect(screen.getByText('SortedTarget [000099:Fallout4.esm]')).toBeInTheDocument();
     });
@@ -884,7 +923,7 @@ describe('DiffRow — pending companion column', () => {
         pendingChangeMap: { 'MyMod.esp:Items': nestedChange('Items', {
           '[2].Target': { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'GrandchildTarget' },
         }) },
-        context: { kind: 'grandchild', overrideMeta: fkMeta, parentFieldName: 'Items', parentFieldIndex: 2 },
+        context: { path: [{ kind: 'index', index: 2 }, { kind: 'member', name: 'Target' }], overrideMeta: fkMeta, rootField: 'Items' },
       }))}</tbody></table>);
       expect(screen.getByText('GrandchildTarget [000077:Fallout4.esm]')).toBeInTheDocument();
     });
@@ -917,7 +956,7 @@ describe('DiffRow — non-top-level contexts', () => {
       columns: [diskColumn(master), diskColumn(mod), pendingColumn('MyMod.esp')],
       overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
       pendingChangeMap: { 'MyMod.esp:Items': change },
-      context: { kind: 'array-element', overrideMeta: elementMeta, parentFieldName: 'Items' },
+      context: { path: [{ kind: 'index', index: 1 }], overrideMeta: elementMeta, rootField: 'Items' },
     }))}</tbody></table>);
     const fieldCell = screen.getByText('[1]').closest('td')!;
     expect(fieldCell.style.paddingLeft).toBe('24px');
@@ -954,13 +993,16 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
     const master = override('Fallout4.esm', {
       fields: [{ metadata: { name: parentFieldName, type: parentType, isArray: kind === 'array-element', validFormKeyTypes: [], enumValues: [] }, value: kind === 'array-element' ? [] : {}, checkError: 'aggregate: one sibling is dangling' }],
     });
+    const path: PathSegment[] = kind === 'array-element'
+      ? [{ kind: 'index', index: 1 }]
+      : [{ kind: 'member', name: 'Reference' }];
     return baseProps({
       diff: diff({ fieldName: kind === 'array-element' ? '[1]' : 'Reference', values: { 'Fallout4.esm': value }, resolutions: { 'Fallout4.esm': resolution } }),
       columns: [diskColumn(master)],
       overrideMap: { 'Fallout4.esm': master },
       fieldMetaMap: { [parentFieldName]: fkMeta },
       immutableSet: new Set(),
-      context: { kind, overrideMeta: fkMeta, parentFieldName },
+      context: { path, overrideMeta: fkMeta, rootField: parentFieldName },
     });
   }
 
@@ -1036,7 +1078,7 @@ describe('DiffRow — array-parent row (Add, #227)', () => {
       fieldMetaMap: { Items: arrayMeta },
       columns: [diskColumn(master), diskColumn(mod)],
       overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
-      context: { kind: 'top-level' },
+      context: { path: [], rootField: 'Items' },
       rowKey: 'Items',
       hasChildren: true,
       isExpanded: false,
@@ -1105,7 +1147,7 @@ describe('DiffRow — array-element row (Remove/Move Up/Move Down, #227)', () =>
       fieldMetaMap: { Items: elemMeta },
       columns: [diskColumn(master), diskColumn(mod)],
       overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
-      context: { kind: 'array-element', overrideMeta: elemMeta, parentFieldName: 'Items' },
+      context: { path: [{ kind: 'index', index: 1 }], overrideMeta: elemMeta, rootField: 'Items' },
       rowKey: 'Items.[1]',
       arrayEdit: { currentArray: plugin => (plugin === 'MyMod.esp' ? ['x', 'y', 'z'] : ['a']), index: 1, onArrayEdit },
       ...overrides,

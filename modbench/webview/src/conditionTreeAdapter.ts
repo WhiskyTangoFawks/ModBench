@@ -1,0 +1,246 @@
+// Issue #231: maps Conditions (CTDA) into the same node shape the compare grid's ordinary fields
+// already use (FieldDiff + FieldMetadata), so ConditionSection's bespoke row/cell renderers can
+// be deleted and condition rows become ordinary rows in the one tree.
+//
+// Shape: one top-level synthesized FieldDiff per condition-owning field (`ConditionGroupDiff`) —
+// a genuine `type: 'array'` row, not a struct-like container the way a VMAD script is. A
+// condition list's add/remove/move already restages the whole list at one field path (the
+// deleted ConditionSection's own `conditionRowControls`/`addConditionRow`, `conditionOps.ts`), the
+// same shape an ordinary unsorted array already restages in — so representing it as one lets the
+// *existing* array-op machinery (right-click Add/Remove/Move Up/Move Down, Insert/Delete/Ctrl+↑/↓)
+// apply with zero new commands, exactly the ticket's "consistent with array operations" AC.
+//
+// Each condition is an array element (a struct: its typed fields as members, exactly like an
+// ordinary struct). Its *collapsed* label is the one deliberate exception to "a struct shows
+// {…}": DiffRow.tsx renders `diff.collapsedSummary[plugin]` in place of the generic placeholder
+// when present — an xEdit-style one-line prose summary (`wbConditionToStr`,
+// references/TES5Edit/Core/wbDefinitionsCommon.pas), matching what a modder already recognizes
+// from xEdit itself rather than the generic JSON/`{…}` every other struct row is content with
+// (ADR-0034). Unlike an ordinary struct member, each condition field carries its own `wirePath`
+// (`CTDA\FieldPath\Index\SubField`, conditionPath.ts) — a field commits independently (no stable
+// per-element identity to restage atomically the way VMAD's structs do), which is exactly what a
+// `wirePath`-bearing child triggers in RecordPanel's row-builder (subtreeFor).
+//
+// Three fields are composite (their own widget depends on their own per-plugin value's shape, the
+// same pattern #229's VmadObjectEditor established): Function opens a QuickPick, never a text
+// editor; Run On is a target enum plus a conditional FormKey; Comparison and a parameter each pick
+// FormKey vs plain scalar from their own current value. The AND/OR gate is `readOnly` — it was
+// never editable under the pre-#231 model either.
+import type { FieldDiff, FieldMetadata, ConditionCompare, ConditionDiff, ConditionGroupDiff, ParsedCondition, PathSegment } from './types';
+import { conditionFieldPath, conditionParamPath } from './conditionPath';
+import { defaultCondition } from './conditionOps';
+
+const OPERATOR_VALUES = ['EqualTo', 'NotEqualTo', 'GreaterThan', 'GreaterThanOrEqualTo', 'LessThan', 'LessThanOrEqualTo'];
+
+// xEdit's own comparison symbols (wbConditionToStr's `case Typ and $E0 of` — $00/$20/$40/$60/$80/
+// $A0), reused verbatim so the collapsed summary reads exactly as it would in xEdit itself.
+const OP_SYMBOL: Record<ParsedCondition['operator'], string> = {
+  EqualTo: '=', NotEqualTo: '<>', GreaterThan: '>', GreaterThanOrEqualTo: '>=', LessThan: '<', LessThanOrEqualTo: '<=',
+};
+
+// A condition parameter's own display text within the summary's `(param1, param2)` — Form/Text/
+// Number pick their own representation from the parameter's own category, same discrimination
+// ConditionParamCell already makes for its own widget. A Form parameter shows its raw FormKey
+// (never an EditorID): conditionTreeAdapter never receives FormKey resolutions for a condition's
+// own parameters (unlike a top-level formKey leaf's `resolutions`, ADR-0031) — a raw FormKey here
+// is the same "unresolved, not wrong" state ConditionParamCell's own FormKeyCell shows today.
+function paramSummary(p: ParsedCondition['parameters'][number]): string {
+  if (p.category === 'Form') return p.formKey ?? 'NULL';
+  if (p.category === 'Text') return p.text ?? '';
+  return String(p.number ?? 0);
+}
+
+// Issue #231 (review, design call): the exact shape of xEdit's `wbConditionToStr`
+// (references/TES5Edit/Core/wbDefinitionsCommon.pas) — "RunOn.Function(param1, param2) Op
+// Comparison[ AND/OR]", the trailing conjunction omitted only for the last condition *this
+// plugin itself* has in the list (xEdit's own `Container.Equals(Conditions.Elements[Pred(l)])`
+// check, generalized here to "this plugin's own last non-null row" since plugins can disagree on
+// how many conditions a list has, ADR-0016/#178's per-plugin sparse alignment).
+function formatConditionSummary(c: ParsedCondition, isLastForPlugin: boolean): string {
+  const runOn = c.runOnTarget === 'Reference' ? `(${c.runOnReference ?? 'NULL'})` : c.runOnTarget;
+  const call = c.parameters.length > 0 ? `${c.function}(${c.parameters.map(paramSummary).join(', ')})` : c.function;
+  const comparison = c.useGlobal ? (c.comparisonGlobal ?? 'NULL') : String(c.comparisonFloat ?? 0);
+  let suffix = '';
+  if (!isLastForPlugin) suffix = c.or ? ' OR' : ' AND';
+  return `${runOn}.${call} ${OP_SYMBOL[c.operator]} ${comparison}${suffix}`;
+}
+
+// This plugin's own last non-null condition index in the group — conditions are listed in
+// ascending index order (ADR-0016), so the last write for a plugin as we scan is its own highest.
+function lastIndexByPlugin(conditions: ConditionDiff[]): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const condition of conditions) {
+    for (const plugin of Object.keys(condition.perPlugin)) {
+      if (condition.perPlugin[plugin] != null) result[plugin] = condition.index;
+    }
+  }
+  return result;
+}
+
+function scalarMeta(type: 'string' | 'int' | 'float' | 'bool'): FieldMetadata {
+  return { name: '', type, isArray: false, validFormKeyTypes: [], enumValues: [] };
+}
+function enumMeta(values: string[]): FieldMetadata {
+  return { name: '', type: 'enum', isArray: false, validFormKeyTypes: [], enumValues: values };
+}
+const FUNCTION_META: FieldMetadata = { name: '', type: 'conditionFunction', isArray: false, validFormKeyTypes: [], enumValues: [] };
+const RUN_ON_META: FieldMetadata = { name: '', type: 'conditionRunOn', isArray: false, validFormKeyTypes: [], enumValues: [] };
+const COMPARISON_META: FieldMetadata = { name: '', type: 'conditionComparison', isArray: false, validFormKeyTypes: [], enumValues: [] };
+const PARAM_META: FieldMetadata = { name: '', type: 'conditionParam', isArray: false, validFormKeyTypes: [], enumValues: [] };
+const GATE_META: FieldMetadata = { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [], readOnly: true };
+
+// Per-plugin values for one condition field, skipping a plugin this condition is absent from
+// (matching FieldDiff's own "absent field renders as an empty cell" convention).
+function fieldValues<T>(perPlugin: Record<string, ParsedCondition | null>, extract: (c: ParsedCondition) => T): Record<string, T> {
+  const out: Record<string, T> = {};
+  for (const [plugin, c] of Object.entries(perPlugin)) if (c) out[plugin] = extract(c);
+  return out;
+}
+
+interface FieldSpec { name: string; key: string; meta: FieldMetadata; wire: string | null; values: Record<string, unknown> }
+
+function envelopeFields(condition: ConditionDiff, groupFieldPath: string): FieldSpec[] {
+  const idx = condition.index;
+  const wire = (subField: string) => conditionFieldPath(groupFieldPath, idx, subField);
+  return [
+    { name: 'Function', key: 'function', meta: FUNCTION_META, wire: wire('Function'), values: fieldValues(condition.perPlugin, c => c.function) },
+    { name: 'Run On', key: 'runOn', meta: RUN_ON_META, wire: wire('RunOn'), values: fieldValues(condition.perPlugin, c => ({ target: c.runOnTarget, reference: c.runOnReference ?? null })) },
+    { name: 'Operator', key: 'operator', meta: enumMeta(OPERATOR_VALUES), wire: wire('Operator'), values: fieldValues(condition.perPlugin, c => c.operator) },
+    { name: 'Use Global', key: 'useGlobal', meta: scalarMeta('bool'), wire: wire('UseGlobal'), values: fieldValues(condition.perPlugin, c => c.useGlobal) },
+    // A bare scalar, matching the existing wire format exactly (no backend change): the composite
+    // cell (slice 4) infers FormKey-vs-float from the value's own JS type, not a sibling flag.
+    { name: 'Comparison', key: 'comparison', meta: COMPARISON_META, wire: wire('Comparison'), values: fieldValues(condition.perPlugin, c => (c.useGlobal ? (c.comparisonGlobal ?? null) : (c.comparisonFloat ?? null))) },
+    // No wirePath — the AND/OR gate has never been editable (readOnly, not merely unwired).
+    { name: 'Type', key: 'gate', meta: GATE_META, wire: null, values: fieldValues(condition.perPlugin, c => (c.or ? 'OR' : 'AND')) },
+  ];
+}
+
+function paramFields(condition: ConditionDiff, groupFieldPath: string): FieldSpec[] {
+  const maxParams = Math.max(0, ...Object.values(condition.perPlugin).map(c => c?.parameters.length ?? 0));
+  return Array.from({ length: maxParams }, (_, i) => ({
+    name: `Parameter ${i + 1}`,
+    key: `param:${i}`,
+    meta: PARAM_META,
+    wire: conditionParamPath(groupFieldPath, condition.index, i),
+    values: fieldValues(condition.perPlugin, c => c.parameters[i] ?? null),
+  }));
+}
+
+// Function, Parameters…, then the rest of the envelope — matching the deleted ConditionSection's
+// own left-to-right summary order.
+function fieldsFor(condition: ConditionDiff, groupFieldPath: string): FieldSpec[] {
+  const envelope = envelopeFields(condition, groupFieldPath);
+  return [envelope[0], ...paramFields(condition, groupFieldPath), ...envelope.slice(1)];
+}
+
+function buildCondition(
+  condition: ConditionDiff, groupFieldPath: string, lastIndexForPlugin: Record<string, number>,
+): { diff: FieldDiff; meta: FieldMetadata } {
+  const specs = fieldsFor(condition, groupFieldPath);
+  const children: FieldDiff[] = specs.map(spec => ({
+    fieldName: spec.name,
+    values: spec.values,
+    winnerPlugin: condition.winnerPlugin,
+    winnerValue: spec.values[condition.winnerPlugin] ?? null,
+    cellStates: condition.fieldCellStates[spec.key] ?? {},
+    wirePath: spec.wire ?? undefined,
+  }));
+  const fields: FieldMetadata[] = specs.map(spec => ({ ...spec.meta, name: spec.name }));
+  // The struct row's own "value" is never shown as JSON (collapsed rows show collapsedSummary
+  // below instead), but Ctrl+C and drag on it still copy this — the whole condition, matching
+  // every other compound field's "copy the real value, not the placeholder" rule (AC5/AC6
+  // elsewhere in this grid; modelValue.ts's own struct branch is untouched by this design call).
+  const wholeValues = fieldValues(condition.perPlugin, c => c);
+  // Issue #231 (review, design call): per-plugin, not fieldValues' single-`winnerPlugin` shortcut
+  // above — whether *this plugin's own* condition list ends here differs per plugin whenever
+  // plugins disagree on how many conditions the list has (the same case wholeValues' own sparse
+  // alignment already handles).
+  const collapsedSummary: Record<string, string> = {};
+  for (const [plugin, c] of Object.entries(condition.perPlugin)) {
+    if (c) collapsedSummary[plugin] = formatConditionSummary(c, condition.index === lastIndexForPlugin[plugin]);
+  }
+  return {
+    diff: {
+      fieldName: `[${condition.index}]`,
+      values: wholeValues,
+      winnerPlugin: condition.winnerPlugin,
+      winnerValue: wholeValues[condition.winnerPlugin] ?? null,
+      cellStates: condition.cellStates,
+      children,
+      collapsedSummary,
+    },
+    meta: { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields },
+  };
+}
+
+// A condition list is positionally aligned across plugins by its own canonical index (ADR-0019's
+// unsorted-array rule, applied to conditions the same way VmadConflictClassifier already applies
+// it to VMAD arrays) — a sparse array, holes where a plugin lacks that condition, gives the
+// collapsed "[n]" summary and the generic array machinery's read side a real, correctly-shaped
+// value. `commitOverride` strips those holes back out before staging (add/remove/move all
+// restage the whole list as one plain `ParsedCondition[]`, which has no concept of a hole for "the
+// plugin didn't have this one") — a JS array hole would otherwise serialize as `null` into a list
+// the backend expects dense.
+function conditionsSparseByPlugin(conditions: ConditionDiff[]): Record<string, unknown[]> {
+  const result: Record<string, unknown[]> = {};
+  for (const condition of conditions) {
+    for (const [plugin, c] of Object.entries(condition.perPlugin)) {
+      if (c == null) continue;
+      if (!result[plugin]) result[plugin] = [];
+      result[plugin][condition.index] = c;
+    }
+  }
+  return result;
+}
+
+function compactCommitOverride(_currentRaw: unknown, _path: PathSegment[], value: unknown): unknown {
+  return Array.isArray(value) ? value.filter(v => v != null) : value;
+}
+
+function buildGroup(group: ConditionGroupDiff): { diff: FieldDiff; meta: FieldMetadata } {
+  const lastIndexForPlugin = lastIndexByPlugin(group.conditions);
+  const conditionBuilds = group.conditions.map(c => buildCondition(c, group.fieldPath, lastIndexForPlugin));
+  const values = conditionsSparseByPlugin(group.conditions);
+  const winnerPlugin = Object.keys(values)[0] ?? '';
+  const elementMeta = conditionBuilds[0]?.meta
+    ?? { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: [] };
+  return {
+    diff: {
+      fieldName: group.fieldPath,
+      wirePath: group.fieldPath,
+      values,
+      winnerPlugin,
+      winnerValue: values[winnerPlugin] ?? null,
+      cellStates: {},
+      children: conditionBuilds.map(b => b.diff),
+      commitOverride: compactCommitOverride,
+    },
+    meta: {
+      name: group.fieldPath, type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
+      // Issue #231: a fresh condition's wire shape is `ParsedCondition`, not a generic
+      // per-display-field-name struct default recordUtils.ts's own defaultElementValue would
+      // otherwise build — defaultCondition() (conditionOps.ts) is the same "sensible defaults,
+      // immediately editable" shape #153 always started a new condition with.
+      elementType: { ...elementMeta, defaultValue: defaultCondition() },
+    },
+  };
+}
+
+export interface ConditionTreeRows {
+  diffs: FieldDiff[];
+  metaMap: Record<string, FieldMetadata>;
+}
+
+// The one exported entry point — RecordPanel merges `diffs` into its own `diffs` array and
+// `metaMap` into its own `fieldMetaMap` (both additive; a condition-owning field is never also
+// reflected as a generic field row — SchemaReflector already excludes it, #178).
+export function buildConditionRows(conditions: ConditionCompare | null | undefined): ConditionTreeRows {
+  const diffs: FieldDiff[] = [];
+  const metaMap: Record<string, FieldMetadata> = {};
+  for (const group of conditions?.groups ?? []) {
+    const { diff, meta } = buildGroup(group);
+    diffs.push(diff);
+    metaMap[group.fieldPath] = meta;
+  }
+  return { diffs, metaMap };
+}
