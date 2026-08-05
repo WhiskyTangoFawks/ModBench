@@ -47,13 +47,13 @@ public static class PendingChangeResolver
         return resolutions.Count == 0 ? change : change with { Resolutions = resolutions };
     }
 
-    // VMAD Object/ArrayOfObject-kind staged values reference ordinary major records, resolved
-    // through the same lookup as slice 5's VmadConflictClassifier — no expected-type list exists at
-    // this layer (no Papyrus-declared type to compare against), so every resolved Object is
-    // ResolvedValidType, never ResolvedWrongType (mirrors VmadConflictClassifier.BuildResolutions).
-    // Struct/ArrayOfStruct-shaped VMAD values yield nothing here — VmadCodec.ValueFormKeysWithPaths
-    // doesn't walk into them today; that's a pre-existing gap (same one form_references/
-    // ExtractVmadValueRefs already has), not something this method regresses.
+    // VMAD Object/ArrayOfObject/Struct/ArrayOfStruct-kind staged values reference ordinary major
+    // records, resolved through the same lookup as slice 5's VmadConflictClassifier — no
+    // expected-type list exists at this layer (no Papyrus-declared type to compare against), so
+    // every resolved Object is ResolvedValidType, never ResolvedWrongType (mirrors
+    // VmadConflictClassifier.BuildResolutions). #160: VmadCodec.ValueFormKeysWithPaths recurses into
+    // Struct/ArrayOfStruct member nodes too, keyed by "\Member"/"[i]\Member" paths, so each member's
+    // FormKey resolves independently here without any change needed in this method.
     private static PendingChange ResolveVmad(PendingChange change, Func<string, RecordLookupEntry?> resolveFormKey)
     {
         var resolutions = VmadCodec.ValueFormKeysWithPaths(change.NewValue)
