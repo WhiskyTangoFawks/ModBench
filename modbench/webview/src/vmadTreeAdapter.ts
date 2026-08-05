@@ -28,6 +28,7 @@ import type {
   VmadCompare, VmadPropertyDiff, VmadScriptDiff,
 } from './types';
 import { opScalarKind, SCRIPT_FLAGS } from './vmadOps';
+import { sparseArrayByPlugin } from './recordUtils';
 
 type ScalarKind = 'bool' | 'int' | 'float' | 'string';
 
@@ -102,21 +103,16 @@ function buildVariable(p: VmadPropertyDiff): Built {
 // array-element machinery (Insert/Delete/Ctrl+↑/↓, the right-click menu, computeArrayOps) applies
 // to a VMAD array with no VMAD-specific code in DiffRow/RecordPanel at all — this is the "ordinary
 // rows" unification actually paying off, not merely a display convenience.
-function buildSiblingsByPlugin(children: VmadPropertyDiff[]): Record<string, unknown[]> {
-  const result: Record<string, unknown[]> = {};
-  for (const [i, c] of children.entries()) {
-    for (const [plugin, val] of Object.entries(c.values)) {
-      if (!result[plugin]) result[plugin] = [];
-      result[plugin][i] = val;
-    }
-  }
-  return result;
-}
-
+//
+// Issue #168: reconstructing each plugin's own array from its per-element `values` must skip a
+// position where this plugin is null (past its own real length — VmadConflictClassifier always
+// reports every plugin at every union-aligned position) rather than carry the null through as
+// filler; sparseArrayByPlugin (recordUtils.ts, shared with conditionTreeAdapter's own identical
+// need) is what does that.
 function buildArray(p: VmadPropertyDiff): Built {
   const children = p.children ?? [];
   const elementBuilds = children.map(c => buildScalarOrObject(c));
-  const values = buildSiblingsByPlugin(children);
+  const values = sparseArrayByPlugin(children.map(c => c.values));
   // Matches the deleted VmadSection's own default ('Int') when the array is currently empty.
   const elementType = elementBuilds[0]?.meta ?? scalarMeta('int');
   return {

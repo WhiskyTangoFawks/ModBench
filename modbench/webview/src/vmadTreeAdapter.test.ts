@@ -176,6 +176,33 @@ describe('buildVmadRows — array of scalars (ArrayOfInt)', () => {
   });
 });
 
+// Issue #168: when plugins disagree on how many elements a VMAD array has, the backend still
+// reports every plugin at every union-aligned position (null past that plugin's own real length —
+// VmadConflictClassifier.IndexedChildren, always trailing, never a genuine mid-list gap). The
+// per-plugin array reconstructed here must reflect *that plugin's own real length*, not the
+// union's — otherwise a Remove/Move on the shorter plugin's row restages an array still carrying
+// those trailing nulls (VmadCodec.RebuildList's `el.GetInt32()`/`GetBoolean()`/`GetSingle()` throw
+// on a JSON null element at save time for Bool/Int/Float arrays). Mirrors the same trailing-null
+// shape conditionTreeAdapter's own conditionsSparseByPlugin already handles correctly.
+describe('buildVmadRows — array of scalars, plugins with different real lengths (issue #168)', () => {
+  const arrProp: VmadPropertyDiff = {
+    name: 'Levels', kind: 'array',
+    values: {}, types: { 'Fallout4.esm': 'ArrayOfInt' }, winnerPlugin: 'Fallout4.esm', cellStates: {},
+    children: [
+      { name: '', kind: 'scalar', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
+      { name: '', kind: 'scalar', values: { 'Fallout4.esm': 2, 'MyMod.esp': null }, types: { 'Fallout4.esm': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
+      { name: '', kind: 'scalar', values: { 'Fallout4.esm': 3, 'MyMod.esp': null }, types: { 'Fallout4.esm': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
+    ],
+  };
+  const { diff: scriptDiff } = scriptRowFor([script({ properties: [arrProp] })]);
+  const child = scriptDiff?.children?.find(c => c.fieldName === 'Levels');
+
+  it("reconstructs each plugin's own real (trimmed) array length, not the union's", () => {
+    expect(child?.values['Fallout4.esm']).toEqual([1, 2, 3]);
+    expect(child?.values['MyMod.esp']).toEqual([1]);
+  });
+});
+
 describe('buildVmadRows — struct property (raw-node commitOverride)', () => {
   const structProp: VmadPropertyDiff = {
     name: 'Bounds', kind: 'struct',

@@ -176,11 +176,39 @@ describe('moveArrayElement', () => {
     expect(moveArrayElement(['a', 'b', 'c'], 0, -1)).toEqual(['a', 'b', 'c']);
     expect(moveArrayElement(['a', 'b', 'c'], 2, 1)).toEqual(['a', 'b', 'c']);
   });
+
+  // Issue #168: `index` itself, not just the swap target, must be bounds-checked. A row's index
+  // comes from the union-aligned tree (VMAD/Condition's own positional alignment, or an ordinary
+  // unsorted array with differing per-plugin lengths) and can equal or exceed *this specific
+  // plugin's* own array length even though the swap target alone looks in range — e.g. index ===
+  // array.length (one past this plugin's real last element) with direction -1 has j = index - 1,
+  // which passes the existing j-only guard. Without this, the destructuring swap extends the
+  // array by one slot and duplicates a value (`[next[index], next[j]] = [next[j], next[index]]`
+  // with next[index] undefined) instead of the same "return array unchanged" no-op every other
+  // boundary already gets.
+  it('returns the array unchanged when index itself is out of bounds, even if the swap target is in range', () => {
+    const arr = ['a', 'b'];
+    expect(moveArrayElement(arr, 2, -1)).toBe(arr);
+    expect(moveArrayElement(arr, 5, -1)).toBe(arr);
+    expect(moveArrayElement(arr, -1, 1)).toBe(arr);
+  });
 });
 
 describe('removeArrayElement', () => {
   it('drops the element at the given index, leaving the others in order', () => {
     expect(removeArrayElement(['a', 'b', 'c'], 1)).toEqual(['a', 'c']);
+  });
+
+  // Issue #168: same "index against this specific plugin's own array" concern as
+  // moveArrayElement above — `Array.prototype.filter` already leaves the array's *content*
+  // unchanged for an out-of-range index (no element has that index to drop), but it hands back a
+  // new array reference regardless, which defeats a caller's reference-equality no-op check (the
+  // same convention moveArrayElement's own boundary case already relies on, and
+  // RecordPanel.handleArrayMove/handleArrayRemove use to skip staging a no-op edit).
+  it('returns the same array reference, unchanged, when the index is out of bounds', () => {
+    const arr = ['a', 'b'];
+    expect(removeArrayElement(arr, 2)).toBe(arr);
+    expect(removeArrayElement(arr, -1)).toBe(arr);
   });
 });
 
@@ -251,6 +279,16 @@ describe('arrayElementContext', () => {
 
   it('canMoveDown is false for the last element', () => {
     expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'Items', 2, 3).canMoveDown).toBe(false);
+  });
+
+  // Issue #168: a row's index comes from the union-aligned tree across every plugin's column, not
+  // from this one plugin's own array — `arrayLength` is *this* plugin's real length (DiffRow
+  // passes arrayEdit.currentArray(plugin).length), so an index at or past it means this plugin
+  // doesn't have an element there at all. Move Up must be absent (not merely a no-op), same
+  // "absent, not disabled" convention the first/last-element cases above already enforce.
+  it('canMoveUp is false when index is at or past this plugin\'s own array length', () => {
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'Items', 1, 1).canMoveUp).toBe(false);
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'Items', 2, 1).canMoveUp).toBe(false);
   });
 });
 

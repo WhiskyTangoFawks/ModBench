@@ -12,6 +12,7 @@ import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle } from './gridS
 import {
   pendingIfChanged, pendingValueAtPath, pendingCellContext,
   arrayElementContext, arrayParentContext, combineVscodeContexts, moveArrayElement, removeArrayElement,
+  hasElementAt,
 } from './recordUtils';
 import type { Column, PathSegment } from './recordUtils';
 import type { ArrayElementContext, ArrayParentContext } from './messages';
@@ -115,10 +116,17 @@ function computeArrayOps(
   if (arrayEdit && !immutable && isArrayElementRow) {
     const arr = arrayEdit.currentArray(plugin);
     const { index, onArrayEdit } = arrayEdit;
+    // Issue #168: `index` is this row's position in the union-aligned tree across every plugin's
+    // column (an ordinary array with differing per-plugin lengths, or VMAD/Condition's own
+    // positional alignment) — it can be at or past *this specific* plugin's own `arr.length` even
+    // though the row itself exists (because some other plugin has more elements). `remove`/
+    // `moveUp` must be absent then, not merely a no-op, matching the "absent, not disabled"
+    // convention moveDown's own existing `index < arr.length - 1` check already follows.
+    const hasElement = hasElementAt(arr.length, index);
     return {
       arrayOp: {
-        remove: () => onArrayEdit(plugin, removeArrayElement(arr, index)),
-        moveUp: index > 0 ? () => onArrayEdit(plugin, moveArrayElement(arr, index, -1)) : undefined,
+        remove: hasElement ? () => onArrayEdit(plugin, removeArrayElement(arr, index)) : undefined,
+        moveUp: hasElement && index > 0 ? () => onArrayEdit(plugin, moveArrayElement(arr, index, -1)) : undefined,
         moveDown: index < arr.length - 1 ? () => onArrayEdit(plugin, moveArrayElement(arr, index, 1)) : undefined,
       },
       // Issue #231: keyed on the row's own rootField, same value the old parentFieldName always

@@ -707,8 +707,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     void handleEdit(plugin, fieldName, appendArrayElement(resolveCurrentArrayFor(plugin, fieldName), defaultElementValue(elementType)));
   }
 
+  // Issue #168 (review): mirrors handleArrayMove's own reference-equality skip below —
+  // removeArrayElement now returns the same array reference, unchanged, for an out-of-range index
+  // (this plugin doesn't have an element at that position at all, e.g. a stale broadcast or a row
+  // that only exists because a sibling plugin has more elements) — restaging is skipped rather
+  // than firing a no-op save.
   function handleArrayRemove(plugin: string, fieldName: string, index: number) {
-    void handleEdit(plugin, fieldName, removeArrayElement(resolveCurrentArrayFor(plugin, fieldName), index));
+    const current = resolveCurrentArrayFor(plugin, fieldName);
+    const next = removeArrayElement(current, index);
+    if (next !== current) void handleEdit(plugin, fieldName, next);
   }
 
   // Issue #227: shared by Move Up/Move Down — moveArrayElement itself already no-ops (returns

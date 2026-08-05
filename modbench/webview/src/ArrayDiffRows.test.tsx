@@ -197,6 +197,57 @@ const unsortedArrayControlsResult = {
   }],
 };
 
+// ── Unsorted array fixture with mismatched per-plugin lengths (issue #168) ────
+// Fallout4.esm (immutable) has 3 elements; MyMod.esp (mutable) has only 1 — the union-aligned
+// tree still produces rows [0]/[1]/[2] (positional alignment, ConflictClassifier.BuildPositional),
+// with MyMod.esp null past its own real length. Row [1]'s index (1) equals MyMod.esp's own real
+// array length (1) exactly — the boundary moveArrayElement/computeArrayOps must treat as "this
+// plugin doesn't have an element here" rather than an in-range swap target.
+
+const unsortedArrayMismatchedLengthResult = {
+  conflictAll: 'Conflict',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: unsortedArrayMeta, value: ['alpha', 'beta', 'gamma'] }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: unsortedArrayMeta, value: ['x'] }],
+      pendingFields: {}, conflictThis: 'Conflict',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Items',
+    values: { 'Fallout4.esm': ['alpha', 'beta', 'gamma'], 'MyMod.esp': ['x'] },
+    winnerPlugin: 'Fallout4.esm', winnerValue: ['alpha', 'beta', 'gamma'],
+    cellStates: { 'MyMod.esp': 'Conflict' },
+    children: [
+      {
+        fieldName: '[0]',
+        values: { 'Fallout4.esm': 'alpha', 'MyMod.esp': 'x' },
+        winnerPlugin: 'Fallout4.esm', winnerValue: 'alpha',
+        cellStates: { 'MyMod.esp': 'Conflict' },
+      },
+      {
+        fieldName: '[1]',
+        values: { 'Fallout4.esm': 'beta', 'MyMod.esp': null },
+        winnerPlugin: 'Fallout4.esm', winnerValue: 'beta',
+        cellStates: {},
+      },
+      {
+        fieldName: '[2]',
+        values: { 'Fallout4.esm': 'gamma', 'MyMod.esp': null },
+        winnerPlugin: 'Fallout4.esm', winnerValue: 'gamma',
+        cellStates: {},
+      },
+    ],
+  }],
+};
+
 // ── Struct sub-field fixtures ─────────────────────────────────────────────────
 
 const structMeta: FieldMetadata = {
@@ -881,6 +932,57 @@ describe('RecordPanel — array arity/order ops via keyboard (unsorted)', () => 
       level: 'debug',
       message: expect.stringContaining('Items'),
     }));
+  });
+});
+
+// Issue #168: a row's index comes from the union-aligned tree across every plugin's column
+// (ConflictClassifier.BuildPositional), not from one plugin's own array — a row can exist because
+// a *sibling* plugin has more elements, while this specific plugin's own array is shorter. Move
+// Up/Remove on that row for the shorter plugin must be absent/no-op, not corrupt that plugin's
+// array by extending it with an out-of-bounds swap (moveArrayElement's own j-only bounds check
+// doesn't catch index === array.length exactly).
+describe('RecordPanel — array move/remove is bounds-checked per plugin, not per row (issue #168)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    currentCompare = unsortedArrayMismatchedLengthResult;
+    currentChanges = [];
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function expandItems() {
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => rowByLabel('[2]'));
+  }
+
+  function rowByLabel(label: string): HTMLTableRowElement {
+    const td = Array.from(document.querySelectorAll('td')).find(el => el.textContent === label);
+    if (!td) throw new Error(`no row labeled ${label}`);
+    return td.closest('tr')!;
+  }
+
+  // MyMod.esp is the mutable column (index 2 of 0=label/1=Fallout4.esm/2=MyMod.esp); its own real
+  // array is ['x'] (length 1) — row [1] exists only because Fallout4.esm has a 'beta' there.
+  function mutableCellOf(row: HTMLTableRowElement): HTMLTableCellElement {
+    return row.querySelectorAll('td')[2];
+  }
+
+  it("Ctrl+↑ on MyMod.esp's row [1] (one past its own single real element) does not save — absent, not corrupting", async () => {
+    const { client } = renderPanel();
+    await expandItems();
+
+    fireEvent.keyDown(mutableCellOf(rowByLabel('[1]')), { key: 'ArrowUp', ctrlKey: true });
+
+    expect(client.save).not.toHaveBeenCalled();
+  });
+
+  it("Delete on MyMod.esp's row [1] (an element it doesn't have) does not save a spurious no-op", async () => {
+    const { client } = renderPanel();
+    await expandItems();
+
+    fireEvent.keyDown(mutableCellOf(rowByLabel('[1]')), { key: 'Delete' });
+
+    expect(client.save).not.toHaveBeenCalled();
   });
 });
 
