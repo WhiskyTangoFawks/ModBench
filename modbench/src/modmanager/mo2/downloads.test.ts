@@ -30,6 +30,30 @@ describe('parseDownloadMeta', () => {
     expect(parseDownloadMeta('[General]\r\nmodID=12345\r\n').modID).toBe('12345');
   });
 
+  it('reads name as the friendly display name', () => {
+    expect(parseDownloadMeta('[General]\r\nname=Sleep or Save\r\n').name).toBe('Sleep or Save');
+  });
+
+  it('reads version', () => {
+    expect(parseDownloadMeta('[General]\r\nversion=1.2.3\r\n').version).toBe('1.2.3');
+  });
+
+  it('reads the tooltip fields: modName, fileID, gameName, author', () => {
+    const meta = parseDownloadMeta(
+      '[General]\r\nmodName=Sleep or Save\r\nfileID=456\r\ngameName=Fallout4\r\nauthor=SomeAuthor\r\n',
+    );
+    expect(meta.modName).toBe('Sleep or Save');
+    expect(meta.fileID).toBe('456');
+    expect(meta.gameName).toBe('Fallout4');
+    expect(meta.author).toBe('SomeAuthor');
+  });
+
+  it('name and version are undefined when absent from .meta', () => {
+    const meta = parseDownloadMeta('[General]\r\ninstalled=true\r\n');
+    expect(meta.name).toBeUndefined();
+    expect(meta.version).toBeUndefined();
+  });
+
   it('treats modID=0 or an absent modID as no id (Visit-on-Nexus gated off)', () => {
     expect(parseDownloadMeta('[General]\r\nmodID=0\r\n').modID).toBeUndefined();
     expect(parseDownloadMeta('[General]\r\ninstalled=true\r\n').modID).toBeUndefined();
@@ -56,6 +80,7 @@ describe('parseDownloadMeta', () => {
 
 const row = (name: string, mtimeMs: number, hidden = false): DownloadRow => ({
   name,
+  displayName: name,
   status: 'Downloaded',
   size: 0,
   mtimeMs,
@@ -168,7 +193,7 @@ describe('setInstalledInText', () => {
 // gated by this `data-vscode-context` JSON — same pattern as recordUtils.ts' pendingCellContext.
 describe('downloadRowContext', () => {
   it('carries the gating keys the native menu needs, all false/undefined for a plain row', () => {
-    const plain: DownloadRow = { name: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, hidden: false };
+    const plain: DownloadRow = { name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, hidden: false };
     expect(JSON.parse(downloadRowContext(plain))).toEqual({
       webviewSection: 'downloadRow', name: 'foo.zip', hasMeta: false, hasModID: false, hidden: false,
       preventDefaultContextMenuItems: true,
@@ -177,7 +202,7 @@ describe('downloadRowContext', () => {
 
   it('flags hasMeta, hasModID, and hidden true when the row has them', () => {
     const row: DownloadRow = {
-      name: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: true, hidden: true, modID: '12345',
+      name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: true, hidden: true, modID: '12345',
     };
     expect(JSON.parse(downloadRowContext(row))).toEqual({
       webviewSection: 'downloadRow', name: 'foo.zip', hasMeta: true, hasModID: true, hidden: true,
@@ -197,7 +222,16 @@ describe('buildDownloadRows', () => {
   it('maps a plain archive with no .meta sidecar to a Downloaded row (gating off)', () => {
     const rows = buildDownloadRows([entry('foo.zip', 100)]);
     expect(rows).toEqual([
-      { name: 'foo.zip', status: 'Downloaded', size: 123, mtimeMs: 100, hasMeta: false, hidden: false, modID: undefined },
+      {
+        name: 'foo.zip',
+        displayName: 'foo.zip',
+        status: 'Downloaded',
+        size: 123,
+        mtimeMs: 100,
+        hasMeta: false,
+        hidden: false,
+        modID: undefined,
+      },
     ]);
   });
 
@@ -228,5 +262,31 @@ describe('buildDownloadRows', () => {
     const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nremoved=true\r\n')]);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ name: 'foo.zip', hidden: true });
+  });
+
+  it('uses the .meta name as displayName when present', () => {
+    const rows = buildDownloadRows([entry('foo_1_2_3.zip', 100, '[General]\r\nname=Sleep or Save\r\n')]);
+    expect(rows[0].displayName).toBe('Sleep or Save');
+  });
+
+  it('falls back to the filename for displayName when .meta has no name', () => {
+    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\ninstalled=true\r\n')]);
+    expect(rows[0].displayName).toBe('foo.zip');
+  });
+
+  it('falls back to the filename for displayName when .meta name is present but empty', () => {
+    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nname=\r\n')]);
+    expect(rows[0].displayName).toBe('foo.zip');
+  });
+
+  it('produces a complete row (displayName = filename, version absent) when there is no .meta at all', () => {
+    const rows = buildDownloadRows([entry('foo.zip', 100)]);
+    expect(rows[0].displayName).toBe('foo.zip');
+    expect(rows[0].version).toBeUndefined();
+  });
+
+  it('carries version through from .meta', () => {
+    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nversion=1.2.3\r\n')]);
+    expect(rows[0].version).toBe('1.2.3');
   });
 });

@@ -22,6 +22,9 @@ export interface DownloadEntry {
 
 export interface DownloadRow {
   name: string;
+  /** Friendly name for display: `.meta` `name` when present and non-empty,
+   *  else the raw filename — never blank, even with no `.meta` at all. */
+  displayName: string;
   status: DownloadStatus;
   size: number;
   mtimeMs: number;
@@ -32,6 +35,17 @@ export interface DownloadRow {
   hidden: boolean;
   /** Nexus mod id from the `.meta`; absent (or `0`) gates Visit on Nexus off. */
   modID?: string;
+  /** Version string from the `.meta`, absent when not recorded. */
+  version?: string;
+  /** Tooltip field from the `.meta`: the mod's name (distinct from the file's
+   *  own `displayName`), absent when not recorded. */
+  modName?: string;
+  /** Tooltip field from the `.meta`: the Nexus file id, absent when not recorded. */
+  fileID?: string;
+  /** Tooltip field from the `.meta`: the game this download is for, absent when not recorded. */
+  gameName?: string;
+  /** Tooltip field from the `.meta`: the mod's author, absent when not recorded. */
+  author?: string;
 }
 
 export type DownloadSortColumn = 'name' | 'status' | 'size' | 'mtimeMs';
@@ -53,7 +67,19 @@ export function sortDownloadRows(
   return descending ? sorted.reverse() : sorted;
 }
 
-export function parseDownloadMeta(text: string): { status: DownloadStatus; hidden: boolean; modID?: string } {
+export function parseDownloadMeta(
+  text: string,
+): {
+  status: DownloadStatus;
+  hidden: boolean;
+  modID?: string;
+  name?: string;
+  version?: string;
+  modName?: string;
+  fileID?: string;
+  gameName?: string;
+  author?: string;
+} {
   const values = new Map<string, string>();
   for (const raw of text.split(/\r\n|\r|\n/)) {
     const eq = raw.indexOf('=');
@@ -66,7 +92,17 @@ export function parseDownloadMeta(text: string): { status: DownloadStatus; hidde
   const modID = values.get('modID');
   // `removed` is HIDDEN — a separate key/axis from the `uninstalled` Status above.
   const hidden = values.get('removed') === 'true';
-  return { status, hidden, modID: modID && modID !== '0' ? modID : undefined };
+  return {
+    status,
+    hidden,
+    modID: modID && modID !== '0' ? modID : undefined,
+    name: values.get('name'),
+    version: values.get('version'),
+    modName: values.get('modName'),
+    fileID: values.get('fileID'),
+    gameName: values.get('gameName'),
+    author: values.get('author'),
+  };
 }
 
 /** Surgically set `key=value` in a `.meta` text — the shared byte-faithful
@@ -151,8 +187,28 @@ export function buildDownloadRows(entries: DownloadEntry[]): DownloadRow[] {
   const rows = entries
     .filter((e) => !e.name.endsWith('.meta'))
     .map((e) => {
-      const { status, hidden, modID } = parseDownloadMeta(e.metaText ?? '');
-      return { name: e.name, status, size: e.size, mtimeMs: e.mtimeMs, hasMeta: e.metaText !== undefined, hidden, modID };
+      const { status, hidden, modID, name, version, modName, fileID, gameName, author } = parseDownloadMeta(
+        e.metaText ?? '',
+      );
+      // Mirrors MO2's displayNameByInfo (downloadmanager.cpp:1410): `.meta` name
+      // when non-empty, else the raw filename — falsy `||` covers absent AND
+      // present-but-empty (`name=`) identically, so a row is never blank.
+      const displayName = name || e.name;
+      return {
+        name: e.name,
+        displayName,
+        status,
+        size: e.size,
+        mtimeMs: e.mtimeMs,
+        hasMeta: e.metaText !== undefined,
+        hidden,
+        modID,
+        version,
+        modName,
+        fileID,
+        gameName,
+        author,
+      };
     });
   return sortDownloadRows(rows, 'mtimeMs', true);
 }
