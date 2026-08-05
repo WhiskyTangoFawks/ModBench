@@ -7,6 +7,7 @@ import {
   parseDownloadMeta,
   setHiddenInText,
   setInstalledInText,
+  setUninstalledInText,
   sortDownloadRows,
   type DownloadEntry,
   type DownloadRow,
@@ -186,6 +187,40 @@ describe('setInstalledInText', () => {
   it('is a no-op when installed=true is already present', () => {
     const text = '[General]\r\ninstalled=true\r\nmodid=12345\r\n';
     expect(setInstalledInText(text)).toBe(text);
+  });
+});
+
+describe('setUninstalledInText', () => {
+  it('creates a fresh [General] section with uninstalled=true when there is no .meta text', () => {
+    expect(setUninstalledInText('')).toBe('[General]\r\nuninstalled=true\r\n');
+  });
+
+  it('inserts uninstalled=true after an existing [General] header, preserving other lines', () => {
+    const text = '[General]\r\ngameName=Fallout4\r\nmodid=12345\r\n';
+    expect(setUninstalledInText(text)).toBe(
+      '[General]\r\nuninstalled=true\r\ngameName=Fallout4\r\nmodid=12345\r\n',
+    );
+  });
+
+  it('flips an existing uninstalled=false to true in place, byte-faithful', () => {
+    const text = '[General]\r\ngameName=Fallout4\r\nuninstalled=false\r\nmodid=12345\r\n';
+    expect(setUninstalledInText(text)).toBe(
+      '[General]\r\ngameName=Fallout4\r\nuninstalled=true\r\nmodid=12345\r\n',
+    );
+  });
+
+  it('is a no-op when uninstalled=true is already present', () => {
+    const text = '[General]\r\nuninstalled=true\r\nmodid=12345\r\n';
+    expect(setUninstalledInText(text)).toBe(text);
+  });
+
+  // MO2 writes installed=true, uninstalled=false on install and uninstalled=true
+  // on uninstall WITHOUT clearing installed — both keys carry history.
+  it('leaves installed=true in place — it is a separate key, never cleared', () => {
+    const text = '[General]\r\ninstalled=true\r\nmodid=12345\r\n';
+    expect(setUninstalledInText(text)).toBe(
+      '[General]\r\nuninstalled=true\r\ninstalled=true\r\nmodid=12345\r\n',
+    );
   });
 });
 

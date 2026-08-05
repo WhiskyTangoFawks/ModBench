@@ -209,6 +209,85 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     await expect(readFile(join(dir, 'mods', 'Harder VATS', 'meta.ini'), 'utf8')).rejects.toThrow();
   });
 
+  // #240: the symmetric half of Install's writeback — uninstalling a mod
+  // whose meta.ini names an installationFile present in downloads/ marks
+  // that download uninstalled=true, without ever failing the uninstall itself.
+  describe('removeMod — Downloads writeback (#240)', () => {
+    const downloadMetaPath = () =>
+      join(dir, 'downloads', 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z.meta');
+
+    it('sets uninstalled=true on the matching download, preserving every other key byte-faithfully', async () => {
+      await src.removeMod('Unofficial Fallout 4 Patch');
+      const meta = await readFile(downloadMetaPath(), 'utf8');
+      expect(meta).toBe(
+        '[General]\r\nuninstalled=true\r\ngameName=Fallout4\r\nmodID=4598\r\ninstalled=true\r\n',
+      );
+      // installed=true is left in place — MO2 never clears it on uninstall.
+      expect(meta).toContain('installed=true');
+      // the mod itself is still fully removed, unaffected by the writeback.
+      const entries = await src.readModlist();
+      expect(entries.some((e) => e.name === 'Unofficial Fallout 4 Patch')).toBe(false);
+    });
+
+    it('is a no-op when the download already carries uninstalled=true', async () => {
+      const already = '[General]\r\nuninstalled=true\r\ngameName=Fallout4\r\n';
+      await writeFile(downloadMetaPath(), already);
+      await src.removeMod('Unofficial Fallout 4 Patch');
+      expect(await readFile(downloadMetaPath(), 'utf8')).toBe(already);
+    });
+
+    it('skips silently, with no log call, when installationFile is blank (mod predates the stamp)', async () => {
+      const log = vi.fn();
+      const flagged = new Mo2ModlistSource(dir, log);
+      await flagged.removeMod('Harder VATS'); // fixture: installationFile=
+      expect((await flagged.readModlist()).some((e) => e.name === 'Harder VATS')).toBe(false);
+      expect(log).not.toHaveBeenCalled();
+    });
+
+    it('skips silently, with no log call, when the mod has no meta.ini at all', async () => {
+      const log = vi.fn();
+      const flagged = new Mo2ModlistSource(dir, log);
+      await flagged.removeMod('[NODELETE] Radfall'); // fixture: no meta.ini on disk
+      expect((await flagged.readModlist()).some((e) => e.name === '[NODELETE] Radfall')).toBe(false);
+      expect(log).not.toHaveBeenCalled();
+    });
+
+    it('skips silently when installationFile names a file absent from downloads/', async () => {
+      await writeFile(
+        join(dir, 'mods', 'Harder VATS', 'meta.ini'),
+        '[General]\r\ninstallationFile=NoSuchArchive-1-0.7z\r\n',
+      );
+      const log = vi.fn();
+      const flagged = new Mo2ModlistSource(dir, log);
+      await flagged.removeMod('Harder VATS');
+      expect((await flagged.readModlist()).some((e) => e.name === 'Harder VATS')).toBe(false);
+      expect(log).not.toHaveBeenCalled();
+      await expect(
+        readFile(join(dir, 'downloads', 'NoSuchArchive-1-0.7z.meta'), 'utf8'),
+      ).rejects.toThrow();
+    });
+
+    it('logs and still completes the uninstall when the .meta write itself fails', async () => {
+      // Force the write to throw (EISDIR) without any new dependency injection:
+      // replace the download's .meta file with a directory of the same name.
+      await rm(downloadMetaPath(), { force: true });
+      await mkdir(downloadMetaPath());
+      const log = vi.fn();
+      const flagged = new Mo2ModlistSource(dir, log);
+
+      await expect(flagged.removeMod('Unofficial Fallout 4 Patch')).resolves.toBeUndefined();
+
+      expect(
+        (await flagged.readModlist()).some((e) => e.name === 'Unofficial Fallout 4 Patch'),
+      ).toBe(false);
+      await expect(
+        readFile(join(dir, 'mods', 'Unofficial Fallout 4 Patch', 'meta.ini'), 'utf8'),
+      ).rejects.toThrow();
+      expect(log).toHaveBeenCalledTimes(1);
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('Unofficial Fallout 4 Patch'));
+    });
+  });
+
   it('removeMod still de-lists the mod and reports a distinct warning when folder deletion fails', async () => {
     const report = vi.fn();
     const failingRm = vi.fn().mockRejectedValue(new Error('EBUSY: resource busy or locked'));

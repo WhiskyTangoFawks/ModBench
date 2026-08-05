@@ -17,6 +17,7 @@ import {
 } from './modlistText';
 import { movePluginsInText, setPluginEnabledInText } from './pluginsText';
 import { parseMetaIni, writeMetaIni } from './metaIni';
+import { setUninstalledInText } from './downloads';
 import { readGameName, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
 import { nexusSlugForGame } from './nexusSlug';
 
@@ -122,6 +123,9 @@ export class Mo2ModlistSource implements IModlistSource {
   }
 
   async removeMod(modName: string): Promise<void> {
+    // Read meta.ini's installationFile before anything else is touched: once
+    // the folder is deleted below, the link to the source download is gone.
+    await this.writebackUninstalledOnDownload(modName);
     // De-list before deleting the folder, not after: if the folder-delete step
     // fails, the worst case is an orphaned folder (MO2 surfaces it as an
     // unmanaged mod — recoverable). The reverse order risks a dangling modlist
@@ -138,6 +142,40 @@ export class Mo2ModlistSource implements IModlistSource {
         `"${modName}" was removed from the mod list, but its folder could not be deleted and is now orphaned: ${modDir}`,
         message,
       );
+    }
+  }
+
+  /** #240: the symmetric half of Install's `installed=true` writeback — set
+   *  `uninstalled=true` on the source download's `.meta` (never clearing
+   *  `installed`; `parseDownloadMeta` resolves the precedence). Uninstall must
+   *  never fail because of this bookkeeping: an absent/unreadable meta.ini, a
+   *  blank or non-matching installationFile, and an absent download are all
+   *  normal states and skipped silently; a genuine write failure is logged
+   *  (ADR-0026 background/recoverable — no toast) and otherwise swallowed. */
+  private async writebackUninstalledOnDownload(modName: string): Promise<void> {
+    let archiveFilename: string | undefined;
+    try {
+      const metaIniText = await readFile(join(this.instanceRoot, 'mods', modName, 'meta.ini'), 'utf8');
+      archiveFilename = parseMetaIni(metaIniText).archiveFilename;
+    } catch {
+      return; // no meta.ini, or unreadable — nothing to look up, not an error
+    }
+    if (!archiveFilename) return;
+    const downloadPath = join(this.instanceRoot, 'downloads', archiveFilename);
+    if (!(await exists(downloadPath))) return; // installationFile names a file not in downloads/ — normal
+    const metaPath = `${downloadPath}.meta`;
+    try {
+      let metaText: string;
+      try {
+        metaText = await readFile(metaPath, 'utf8');
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') metaText = '';
+        else throw err;
+      }
+      await writeFile(metaPath, setUninstalledInText(metaText));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log(`[Mo2ModlistSource] removeMod: could not mark download "${archiveFilename}" uninstalled: ${message}`);
     }
   }
 
