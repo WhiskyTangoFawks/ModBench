@@ -4,6 +4,7 @@ import type { PendingChangesTreeProvider, PendingTreeNode } from './PendingChang
 import type { Reporter } from '../modmanager/deployer';
 import type { RecordSummary } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
+import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
 
 // Issue #140: reveal deps bundled into one optional param so a record panel not wired for
 // reveal (there is exactly one, but keeping the seam explicit) still compiles — and so
@@ -69,6 +70,13 @@ export interface RouteRecordPanelMessageDeps {
   // `channel` above, not rebuilt per panel like the *Picker/*Confirm/*Name bundles — there's no
   // per-panel reply to route, just a log/toast.
   reporter: Reporter;
+  // Issue #230: same per-message reconstruction as formKeyPicker/conditionFunctionPicker/
+  // revertGroupConfirm/addScriptName/clipboardRead above (`reply` must go back to the one panel
+  // that asked) — but unlike those, this bundle also carries `tempRoot`/`log`, which are
+  // session-static and simply copied into every per-panel reconstruction rather than varying
+  // with it (see extendedFieldEditor.ts's own doc comment for why a real temp file is the
+  // vehicle).
+  extendedFieldEditor: ExtendedFieldEditorDeps | undefined;
 }
 
 export interface FormKeyPickerDeps {
@@ -312,6 +320,20 @@ async function replyAddScriptNamePicked(
   deps.reply({ type: EXTENSION_TO_WEBVIEW.ADD_SCRIPT_NAME_PICKED, requestId: m.requestId, name });
 }
 
+// Issue #230: same "deps optional → do the work → reply" shape as replyFormKeyPicked et al.
+// below, except openExtendedFieldEditor owns its own deps-undefined guard and posts its
+// reply(ies) itself (zero, one, or many — a save event per Ctrl+S, plus one on close), so this is
+// a thin pass-through rather than a reply-once wrapper.
+async function replyExtendedEditorOpened(
+  deps: ExtendedFieldEditorDeps | undefined, m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR }>,
+): Promise<void> {
+  if (!deps) return;
+  await openExtendedFieldEditor(
+    { requestId: m.requestId, value: m.value, recordLabel: m.recordLabel, fieldName: m.fieldName, plugin: m.plugin, readOnly: m.readOnly },
+    deps,
+  );
+}
+
 // Issue #212: split out of routeRecordPanelMessage below so its own complexity doesn't grow
 // every time another *Picker/*Confirm/*Name bridge is added — these four all share the same
 // "deps optional → run the native prompt → reply" shape (see replyFormKeyPicked et al. above),
@@ -327,6 +349,8 @@ async function routePromptMessage(m: WebviewToExtension, deps: RouteRecordPanelM
     await replyAddScriptNamePicked(deps.addScriptName, m);
   } else if (m.type === WEBVIEW_TO_EXTENSION.READ_CLIPBOARD) {
     await replyClipboardRead(deps.clipboardRead, deps.reporter, m);
+  } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR) {
+    await replyExtendedEditorOpened(deps.extendedFieldEditor, m);
   }
 }
 

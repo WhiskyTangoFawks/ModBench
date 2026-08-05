@@ -674,6 +674,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                 <DiffRow
                   key={diff.fieldName}
                   formKey={formKey}
+                  recordLabel={title}
                   diff={diff}
                   conflictAll={conflictAll}
                   columns={columns}
@@ -716,6 +717,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                       <DiffRow
                         key={childKey}
                         formKey={formKey}
+                        recordLabel={title}
                         diff={child}
                         conflictAll={conflictAll}
                         columns={columns}
@@ -760,6 +762,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                           <DiffRow
                             key={`${childKey}.${grandchild.fieldName}`}
                             formKey={formKey}
+                            recordLabel={title}
                             diff={grandchild}
                             conflictAll={conflictAll}
                             columns={columns}
@@ -793,6 +796,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                       <DiffRow
                         key={`${diff.fieldName}.${child.fieldName}`}
                         formKey={formKey}
+                        recordLabel={title}
                         diff={child}
                         conflictAll={conflictAll}
                         columns={columns}

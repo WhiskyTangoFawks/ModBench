@@ -77,6 +77,20 @@ export const EXTENSION_TO_WEBVIEW = {
   // `requestId` (never a broadcast), the same shape as FORM_KEY_PICKED/REVERT_GROUP_CONFIRMED
   // above — the read only ever exists for the one Ctrl+V that asked.
   CLIPBOARD_READ: 'clipboardRead',
+  // #230: the extended editor's commit — unlike every *_PICKED/*_CONFIRMED reply above (resolved
+  // once, then done), a real editor tab can be saved more than once while it stays open, so this
+  // is not a one-shot reply: the extension host posts one of these per `Ctrl+S` against the temp
+  // file it opened for `requestId`, and the webview's nativeBridge keeps that `requestId`'s
+  // callback registered (not deleted after the first message) until EXTENDED_EDITOR_CLOSED
+  // arrives. `value` is the file's full saved content — the same string a normal commit would
+  // carry through `onCommit`.
+  EXTENDED_EDITOR_COMMITTED: 'extendedEditorCommitted',
+  // #230: fired once, when the user closes the tab (`onDidCloseTextDocument`) — the signal
+  // nativeBridge needs to delete its `requestId -> onCommit` map entry so a session that opens
+  // many fields' extended editors over time doesn't accumulate one stale entry per tab ever
+  // opened. Carries no value: closing commits nothing beyond whatever EXTENDED_EDITOR_COMMITTED
+  // messages already arrived before it.
+  EXTENDED_EDITOR_CLOSED: 'extendedEditorClosed',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -131,6 +145,14 @@ export const WEBVIEW_TO_EXTENSION = {
   // the *Picker/*Confirm/*Name request/reply shape above (`requestId`, matched by CLIPBOARD_READ)
   // rather than COPY_TO_CLIPBOARD's shape, for exactly that reason.
   READ_CLIPBOARD: 'readClipboard',
+  // #230: a `string`-typed value cell's double click — the *only* type/gesture combination where
+  // double-click's target differs from second-click/F2's (see ScalarCell's own doc comment), so
+  // this is the one new open-trigger message this ticket adds. `value` seeds the tab; `readOnly`
+  // is decided by the webview (it already knows the column's own editability) rather than
+  // re-derived on the extension-host side. The extension host owns turning `recordLabel`/
+  // `fieldName`/`plugin` into a filesystem-safe path — a host-only concern (only it touches the
+  // filesystem), so the webview hands over identity, not a pre-built path.
+  OPEN_EXTENDED_EDITOR: 'openExtendedEditor',
 } as const;
 
 export type LogLevel = 'debug' | 'info' | 'warn';
@@ -145,7 +167,11 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM; requestId: string; detail: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME; requestId: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD; value: string }
-  | { type: typeof WEBVIEW_TO_EXTENSION.READ_CLIPBOARD; requestId: string };
+  | { type: typeof WEBVIEW_TO_EXTENSION.READ_CLIPBOARD; requestId: string }
+  | {
+      type: typeof WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR; requestId: string; value: string;
+      recordLabel: string; fieldName: string; plugin: string; readOnly: boolean;
+    };
 
 // #227: same broadcast-and-self-filter shape as PendingCellContext/ColumnHeaderContext above,
 // carried by an array's parent-row cell (arrayParent, Add only) or an array-element cell
@@ -198,7 +224,9 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_REMOVE; formKey: string; plugin: string; fieldName: string; index: number }
   | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP; formKey: string; plugin: string; fieldName: string; index: number }
   | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; fieldName: string; index: number }
-  | { type: typeof EXTENSION_TO_WEBVIEW.CLIPBOARD_READ; requestId: string; value: string | null };
+  | { type: typeof EXTENSION_TO_WEBVIEW.CLIPBOARD_READ; requestId: string; value: string | null }
+  | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED; requestId: string; value: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED; requestId: string };
 
 // #208: the merged `data-vscode-context` object VS Code's webview preload forwards as a
 // `webview/context` command's sole argument — shared shape between the cell (recordUtils.ts'

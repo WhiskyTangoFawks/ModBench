@@ -10,12 +10,18 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 // here too so the #224 describe block below can assert on it directly.
 // Issue #225: readClipboardText is DiffRow's own import too (Ctrl+V's clipboard read) — mocked so
 // the #225 describe block below can control what it resolves to per test.
+// Issue #230: openExtendedFieldEditor is DiffRow's own import too — a string leaf's double click
+// calls it instead of opening the inline editor, so it's mocked here the same way as the three
+// bridges above rather than exercising the real webview<->extension-host message round trip
+// (that's nativeBridge.test.ts's job).
 const copyToClipboard = vi.fn();
 const readClipboardText = vi.fn();
+const openExtendedFieldEditor = vi.fn();
 vi.mock('./nativeBridge', () => ({
   pickFormKey: vi.fn().mockResolvedValue(null),
   copyToClipboard: (...args: unknown[]) => copyToClipboard(...args),
   readClipboardText: (...args: unknown[]) => readClipboardText(...args),
+  openExtendedFieldEditor: (...args: unknown[]) => openExtendedFieldEditor(...args),
 }));
 
 import { DiffRow } from './DiffRow';
@@ -24,6 +30,7 @@ import { pendingCellContext } from './recordUtils';
 import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
 
 const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
+const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
 
 function override(plugin: string, partial: Partial<CompareOverride> = {}): CompareOverride {
   return {
@@ -56,6 +63,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
   const mod = override('MyMod.esp');
   return {
     formKey: '000001:Fallout4.esm',
+    recordLabel: 'TestNPC [000001:Fallout4.esm]',
     diff: diff(),
     conflictAll: 'NoConflict',
     columns: [diskColumn(master), diskColumn(mod)],
@@ -188,19 +196,23 @@ describe('DiffRow — F2 opens the focused cell (#223)', () => {
 });
 
 // Issue #223 / ADR-0034: a double click on a value cell opens its editor unconditionally,
-// independent of the click-focus gate above.
+// independent of the click-focus gate above. Issue #230 narrows this: `string` is the one type
+// whose double click opens the *extended* editor instead — see the dedicated describe block below
+// — so these two tests moved off the default string fixture onto an int field to keep asserting
+// the still-true general claim for every other type.
 describe('DiffRow — double click opens a value cell (#223)', () => {
   it('double click on a mutable disk cell opens its editor even when not previously focused', () => {
-    renderRow({ focusedCell: null });
-    fireEvent.doubleClick(screen.getAllByText('disk-value')[1]); // MyMod.esp — mutable
-    expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
+    renderRow({ focusedCell: null, fieldMetaMap: { Name: intMeta }, diff: diff({ values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }) });
+    fireEvent.doubleClick(screen.getAllByText('5')[1]); // MyMod.esp — mutable
+    expect(screen.getByDisplayValue('5')).toBeInTheDocument();
   });
 
   // See the F2 case above for the same rationale — post-#226 there is no `onDoubleClick` on the
-  // immutable branch either.
+  // immutable branch either (for a non-string type — #230 gives `string` alone a read-only
+  // extended editor on double click, covered separately below).
   it('double click on an immutable disk cell opens nothing', () => {
-    renderRow({ focusedCell: null });
-    fireEvent.doubleClick(screen.getAllByText('disk-value')[0]); // Fallout4.esm — immutable
+    renderRow({ focusedCell: null, fieldMetaMap: { Name: intMeta }, diff: diff({ values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }) });
+    fireEvent.doubleClick(screen.getAllByText('5')[0]); // Fallout4.esm — immutable
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
@@ -218,6 +230,53 @@ describe('DiffRow — double click opens a value cell (#223)', () => {
     renderRow();
     const labelCell = screen.getByText('Name').closest('td')!;
     expect(() => fireEvent.doubleClick(labelCell)).not.toThrow();
+  });
+});
+
+// Issue #230 / ADR-0034: a `string` cell's double click opens the extended editor (an editor tab)
+// instead of the inline text box — the one type where double-click's target differs from
+// second-click/F2's (spec, "By cell" gesture matrix). openExtendedFieldEditor itself is mocked
+// (see the top of this file); these tests only prove DiffRow builds and wires it correctly, not
+// the bridge's own request/reply mechanism (nativeBridge.test.ts).
+describe('DiffRow — string double click opens the extended editor (#230)', () => {
+  beforeEach(() => { openExtendedFieldEditor.mockClear(); });
+
+  it('a mutable string cell double click opens the extended editor, not the inline one', () => {
+    renderRow({ focusedCell: null });
+    fireEvent.doubleClick(screen.getAllByText('disk-value')[1]); // MyMod.esp — mutable
+
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(openExtendedFieldEditor).toHaveBeenCalledTimes(1);
+    expect(openExtendedFieldEditor).toHaveBeenCalledWith(
+      { value: 'disk-value', recordLabel: 'TestNPC [000001:Fallout4.esm]', fieldName: 'Name', plugin: 'MyMod.esp', readOnly: false },
+      expect.any(Function),
+    );
+  });
+
+  // AC5: unavailable-or-read-only on an immutable column is decided explicitly — read-only, not
+  // absent, so a long value in an immutable plugin still has somewhere to be read in full.
+  it('an immutable string cell double click still opens the extended editor, marked readOnly', () => {
+    renderRow({ focusedCell: null });
+    fireEvent.doubleClick(screen.getAllByText('disk-value')[0]); // Fallout4.esm — immutable
+
+    expect(openExtendedFieldEditor).toHaveBeenCalledTimes(1);
+    expect(openExtendedFieldEditor).toHaveBeenCalledWith(
+      expect.objectContaining({ readOnly: true, plugin: 'Fallout4.esm' }),
+      expect.any(Function),
+    );
+  });
+
+  // AC4: committing from it stages through the same path as any other edit — the callback
+  // openExtendedFieldEditor is handed is the row's own onEdit closure, not a second route.
+  it('the extended editor commit callback stages through the same onEdit path as any other edit', () => {
+    const onEdit = vi.fn();
+    renderRow({ focusedCell: null, onEdit });
+    fireEvent.doubleClick(screen.getAllByText('disk-value')[1]); // MyMod.esp — mutable
+
+    const onCommit = openExtendedFieldEditor.mock.calls[0][1] as (value: string) => void;
+    onCommit('a much longer description');
+
+    expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Name', 'a much longer description');
   });
 });
 
