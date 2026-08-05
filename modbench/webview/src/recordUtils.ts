@@ -72,7 +72,10 @@ export function columnHeaderContext(
 export function arrayElementContext(formKey: string, plugin: string, fieldName: string, index: number, arrayLength: number): ArrayElementContext {
   return {
     webviewSection: 'arrayElement', formKey, plugin, fieldName, index,
-    canMoveUp: index > 0, canMoveDown: index < arrayLength - 1,
+    // Issue #168: `canMoveUp` must also check hasElementAt (this plugin's own real length), or
+    // the menu offers Move Up on a row this plugin doesn't have an element in at all — canMoveDown
+    // doesn't need the same explicit check since index < arrayLength - 1 already implies it.
+    canMoveUp: index > 0 && hasElementAt(arrayLength, index), canMoveDown: index < arrayLength - 1,
     preventDefaultContextMenuItems: true,
   };
 }
@@ -162,6 +165,20 @@ export function pendingIfChanged(pending: unknown, disk: unknown): unknown {
   return pending;
 }
 
+// Issue #168 (review): the one definition of "does this plugin's own array actually have an
+// element at this index" — a row's index comes from the union-aligned tree across every plugin's
+// column (an ordinary array with differing per-plugin lengths, or VMAD/Condition's own positional
+// alignment), not from this one plugin's own array, so it can be at or past *this specific*
+// array's length even though the row itself exists (because a sibling plugin has more elements
+// there). Previously reimplemented ad hoc at four call sites (moveArrayElement, removeArrayElement,
+// arrayElementContext's canMoveUp, DiffRow's computeArrayOps) with slightly different shapes — two
+// checked `index < 0`, two didn't — the exact kind of independent drift that caused VMAD's original
+// bug relative to Condition's already-correct one. `length` rather than the array itself so
+// arrayElementContext (which only ever has `arrayLength`, no array) can share it too.
+export function hasElementAt(length: number, index: number): boolean {
+  return index >= 0 && index < length;
+}
+
 // Issue #227: the three pure array-arity/order mutations behind Move Up/Move Down/Remove/Add —
 // extracted out of #142's DiffRow-local ArrayElementControls/ArrayAddButton (deleted by this
 // ticket) so the keyboard accelerator (DiskCell's onKeyDown, a pure in-webview call) and the
@@ -170,20 +187,56 @@ export function pendingIfChanged(pending: unknown, disk: unknown): unknown {
 // structurally can't, since one runs inside a row's render closure and the other inside a
 // mount-effect message listener. Each returns a new array; callers restage the whole thing via
 // onArrayEdit/handleEdit, unchanged from #142's single-field-edit behavior.
+// Issue #168: `index` itself must be bounds-checked here, not just the swap target `j` (index
+// === array.length, direction -1 → j = index - 1, which passes a j-only guard) — without it, the
+// destructuring swap extends the array by one slot and duplicates a value (`next[index]` is
+// undefined, written into a slot one past the end) instead of the "return the array unchanged"
+// no-op every other boundary already gets.
 export function moveArrayElement(array: unknown[], index: number, direction: -1 | 1): unknown[] {
   const j = index + direction;
-  if (j < 0 || j >= array.length) return array;
+  if (!hasElementAt(array.length, index) || !hasElementAt(array.length, j)) return array;
   const next = [...array];
   [next[index], next[j]] = [next[j], next[index]];
   return next;
 }
 
+// Issue #168: bounds-checked the same way moveArrayElement is — `Array.prototype.filter` already
+// leaves the *content* unchanged for an out-of-range index (no element carries that index to
+// drop), but it still hands back a new array reference, which defeats a caller's
+// reference-equality no-op check (the same convention moveArrayElement's boundary case relies on,
+// and RecordPanel's handleArrayMove/handleArrayRemove use to skip staging a no-op edit).
 export function removeArrayElement(array: unknown[], index: number): unknown[] {
+  if (!hasElementAt(array.length, index)) return array;
   return array.filter((_, i) => i !== index);
 }
 
 export function appendArrayElement(array: unknown[], value: unknown): unknown[] {
   return [...array, value];
+}
+
+// Issue #168: shared by VMAD's and Condition's tree adapters (vmadTreeAdapter.ts/
+// conditionTreeAdapter.ts) — both align their own array elements positionally across plugins
+// (VmadConflictClassifier.IndexedChildren / ConditionConflictClassifier.BuildDiff), and both
+// backends report *every* plugin at *every* union-aligned position, null past that plugin's own
+// real length (always trailing — a plugin's own list is contiguous, so a null here only ever means
+// "this plugin's list ends before this position," never a genuine mid-list hole). Reconstructing
+// each plugin's own array must skip those nulls rather than carry them through as literal filler:
+// carrying them through was VMAD's actual bug (buildSiblingsByPlugin, pre-#168) — a shorter
+// plugin's "current array" ended up padded to the union's length, so a Remove/Move on it restaged
+// an array still containing the padding nulls (VmadCodec.RebuildList's `el.GetInt32()`/
+// `GetBoolean()`/`GetSingle()` throw on a JSON null element at save time). Condition's own
+// equivalent (conditionsSparseByPlugin) already skipped correctly; this is that same logic, shared
+// rather than duplicated, so the two can't drift.
+export function sparseArrayByPlugin<T>(perPositionValues: Record<string, T | null>[]): Record<string, T[]> {
+  const result: Record<string, T[]> = {};
+  for (const [i, values] of perPositionValues.entries()) {
+    for (const [plugin, value] of Object.entries(values)) {
+      if (value == null) continue;
+      if (!result[plugin]) result[plugin] = [];
+      result[plugin][i] = value;
+    }
+  }
+  return result;
 }
 
 // ── Generic path-based node access (issue #231) ───────────────────────────────
