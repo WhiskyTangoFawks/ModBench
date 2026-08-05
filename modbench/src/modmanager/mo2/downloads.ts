@@ -1,15 +1,15 @@
 // Pure model for the Downloads tab: turns a downloads/ directory listing plus
 // each archive's .meta sidecar text into render-ready rows.
 //
-// .meta is a QSettings::IniFormat file MO2 writes beside each archive
+// .meta is a QSettings::IniFormat file MO2 writes beside each download
 // (mirrors modorganizer/src/downloadmanager.cpp). Status is one of three MVP
 // values; the `removed=true` (hidden) flag is a SEPARATE axis from Status —
-// MO2's `removed` means HIDDEN, never the "Removed" Status (`uninstalled=true`).
+// MO2's `removed` means HIDDEN, never the Uninstalled Status (`uninstalled=true`).
 
 import { lineRanges } from './lineScan';
 import type { DownloadRowContext } from '../downloadsMessages';
 
-export type DownloadStatus = 'Installed' | 'Removed' | 'Downloaded';
+export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 
 /** A file in downloads/, pre-suppression: `.meta` sidecars still included so
  *  callers can pass a raw directory listing without filtering it themselves. */
@@ -61,7 +61,7 @@ export function parseDownloadMeta(text: string): { status: DownloadStatus; hidde
     values.set(raw.slice(0, eq).trim(), raw.slice(eq + 1).trim());
   }
   let status: DownloadStatus = 'Downloaded';
-  if (values.get('uninstalled') === 'true') status = 'Removed';
+  if (values.get('uninstalled') === 'true') status = 'Uninstalled';
   else if (values.get('installed') === 'true') status = 'Installed';
   const modID = values.get('modID');
   // `removed` is HIDDEN — a separate key/axis from the `uninstalled` Status above.
@@ -100,7 +100,7 @@ export function setInstalledInText(text: string): string {
 
 /** Set (`hidden=true`) or clear (`hidden=false`) the `.meta`'s `removed` flag —
  *  the Hide/Unhide mutation. `removed` (HIDDEN) is a SEPARATE axis from the
- *  `uninstalled` "Removed" Status. Unhide writes `removed=false`, not a key
+ *  `uninstalled` Uninstalled Status. Unhide writes `removed=false`, not a key
  *  deletion, matching MO2's `setValue("removed", false)`. */
 export function setHiddenInText(text: string, hidden: boolean): string {
   return setMetaFlag(text, 'removed', hidden);

@@ -8,6 +8,18 @@ The Modbench subsystem (Loadout view) that installs, orders, enables, and deploy
 A distributable package of files (plugins + loose assets + archives) occupying one `mods/<name>/` folder that mirrors the game's `Data/` layout.
 _Avoid_: plugin, package
 
+**Download**:
+A single distributable file sitting in the instance's shared `downloads/` folder (`.zip`/`.7z`/`.rar`), with an optional MO2-written `.meta` sidecar carrying its Nexus metadata. A download is the **uninstalled state of a mod**: installing one produces a `mods/<name>/` folder, and the two are linked only derivably, via the installed mod's `meta.ini` `installationFile` — never by stored state on the download. The relationship is many-to-many (one download can be installed into several mods; a merged mod can come from several downloads), so no download "belongs to" a mod.
+_Avoid_: archive (that is BA2/BSA — see **Mod**), package
+
+**Download status**:
+A download's install state, read from its `.meta`: **Downloaded** (neither flag), **Installed** (`installed=true`), **Uninstalled** (`uninstalled=true`). Strictly orthogonal to **Hidden** below — the two are derived from different keys and are never conflated.
+_Avoid_: Removed (MO2's `.meta` key `removed` means *hidden*, so "Removed" collides with the other axis; MO2 itself displays "Uninstalled")
+
+**Hidden**:
+A download the user has dismissed from view (`.meta` `removed=true`). A display axis only — it says nothing about whether the download was ever installed, and carries no Download status of its own. Hidden downloads are absent from the Downloads view unless *Show hidden* is on.
+_Avoid_: removed, deleted (the file is still on disk)
+
 **Modlist**:
 The ordered, enable-able set of mods mEdit manages for a game. Its ordering is the **Mod override order** (below).
 _Avoid_: load order (ambiguous — say "Mod override order")

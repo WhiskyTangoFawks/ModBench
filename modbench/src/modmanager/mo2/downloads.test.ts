@@ -17,8 +17,8 @@ describe('parseDownloadMeta', () => {
     expect(parseDownloadMeta('[General]\r\ninstalled=true\r\n').status).toBe('Installed');
   });
 
-  it('uninstalled=true -> Removed status', () => {
-    expect(parseDownloadMeta('[General]\r\nuninstalled=true\r\n').status).toBe('Removed');
+  it('uninstalled=true -> Uninstalled status', () => {
+    expect(parseDownloadMeta('[General]\r\nuninstalled=true\r\n').status).toBe('Uninstalled');
   });
 
   it('neither flag, or no .meta text at all -> Downloaded status', () => {
@@ -44,12 +44,12 @@ describe('parseDownloadMeta', () => {
     expect(parseDownloadMeta('[General]\r\ninstalled=true\r\n').hidden).toBe(false);
   });
 
-  // The load-bearing guard for the acceptance criterion: "Removed" Status
+  // The load-bearing guard for the acceptance criterion: the Uninstalled Status
   // (uninstalled=true) and hidden (removed=true) are never conflated — they are
   // orthogonal axes derived from different keys.
-  it('never conflates the Removed Status with hidden: both flags coexist', () => {
+  it('never conflates the Uninstalled Status with hidden: both flags coexist', () => {
     const meta = parseDownloadMeta('[General]\r\nuninstalled=true\r\nremoved=true\r\n');
-    expect(meta.status).toBe('Removed');
+    expect(meta.status).toBe('Uninstalled');
     expect(meta.hidden).toBe(true);
   });
 });

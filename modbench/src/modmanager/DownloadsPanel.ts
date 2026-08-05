@@ -155,8 +155,8 @@ async function visitOnNexus(instanceRoot: string, name: string): Promise<void> {
 }
 
 /** Row Hide/Unhide action: surgically set `.meta` `removed=true/false` and write
- *  it back byte-faithfully. `hidden` is the SEPARATE axis from the "Removed"
- *  Status (`uninstalled=true`) — this never touches Status. A metaless archive
+ *  it back byte-faithfully. `hidden` is the SEPARATE axis from the Uninstalled
+ *  Status (`uninstalled=true`) — this never touches Status. A metaless download
  *  gets a fresh minimal `.meta` (setHiddenInText('', true)), matching MO2's own
  *  QSettings auto-create. The file-watcher rescan makes the row disappear/appear;
  *  runRowAction gives ADR-0026 explicit-action-failed surfacing. */
