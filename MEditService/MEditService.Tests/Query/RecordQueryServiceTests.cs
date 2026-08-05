@@ -83,6 +83,23 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.True(functions.Count > 400);
     }
 
+    // --- GET /condition-run-on-targets ---
+
+    [Fact]
+    public void GetConditionRunOnTargets_Fallout4Session_ReturnsMutagenResolvedRunOnTypeNames()
+    {
+        // Filtered to what Mutagen actually resolves for the loaded session's game (#167) — not a
+        // hardcoded frontend array. PlayerShip is a Starfield-only RunOnType member; it must not
+        // appear for an FO4 session, proving this isn't a hand-maintained cross-game list.
+        var targets = _svc.GetConditionRunOnTargets();
+
+        Assert.Contains("Subject", targets);
+        Assert.Contains("Reference", targets);
+        Assert.Contains("CombatTarget", targets);
+        Assert.DoesNotContain("PlayerShip", targets);
+        Assert.Equal(11, targets.Count);
+    }
+
     // --- GET /records ---
 
     [Fact]

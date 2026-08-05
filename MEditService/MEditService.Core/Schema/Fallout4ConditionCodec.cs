@@ -349,6 +349,9 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
 
     public IEnumerable<string> AvailableFunctions() => Enum.GetNames<Condition.Function>();
 
+    // #167: the Run On target catalog, same rationale as AvailableFunctions above.
+    public IEnumerable<string> AvailableRunOnTargets() => Enum.GetNames<Condition.RunOnType>();
+
     // ---- ApplyFieldValue: write-back (#152) ----
 
     // Record-level entry point PluginWriter calls: finds the mutable condition list via the same

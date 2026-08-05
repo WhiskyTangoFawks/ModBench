@@ -138,6 +138,20 @@ describe('buildConditionRows — condition fields', () => {
     expect(gateMeta?.readOnly).toBe(true);
   });
 
+  // Issue #167: buildConditionRows' own `runOnTargets` param is the only source of Run On's
+  // dropdown options — no hardcoded FO4 member list left in this adapter either.
+  it('threads the runOnTargets argument into the Run On field\'s own enumValues, defaulting to empty', () => {
+    const { metaMap: withCatalog } = buildConditionRows(
+      { groups: [{ fieldPath: 'Conditions', conditions: [diff] }] }, ['Foo', 'Bar'],
+    );
+    const runOnMeta = withCatalog.Conditions.elementType!.fields?.find(f => f.name === 'Run On');
+    expect(runOnMeta?.enumValues).toEqual(['Foo', 'Bar']);
+
+    const { metaMap: withoutCatalog } = buildConditionRows({ groups: [{ fieldPath: 'Conditions', conditions: [diff] }] });
+    const runOnMetaDefault = withoutCatalog.Conditions.elementType!.fields?.find(f => f.name === 'Run On');
+    expect(runOnMetaDefault?.enumValues).toEqual([]);
+  });
+
   it('a field\'s cellStates come from the condition\'s own fieldCellStates, keyed per field', () => {
     const diffWithConflict = conditionDiff({
       perPlugin: { 'Fallout4.esm': c, 'MyMod.esp': c },

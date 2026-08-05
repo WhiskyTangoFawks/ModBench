@@ -13,11 +13,6 @@ import type { FieldMetadata, ParsedConditionParam } from './types';
 // click-to-open on `editable && isFocused`, matching FormKeyCell's identical gate, and carry
 // `data-open-trigger` so F2 (DiskCell) reaches them the same way it reaches every other leaf.
 
-const RUN_ON_TARGETS = [
-  'Subject', 'Target', 'Reference', 'CombatTarget', 'LinkedReference', 'QuestAlias',
-  'PackageData', 'EventData', 'CommandTarget', 'EventCameraRef', 'MyKiller',
-];
-
 function enumMeta(enumValues: string[]): FieldMetadata {
   return { name: '', type: 'enum', isArray: false, validFormKeyTypes: [], enumValues };
 }
@@ -62,12 +57,16 @@ export function ConditionFunctionCell({ value, editable, isFocused = true, onCom
 
 interface RunOnValue { target: string; reference: string | null }
 
-export function ConditionRunOnCell({ value, editable, isFocused, onCommit, onOpen }: Readonly<CompositeCellProps & { onOpen: (fk: string) => void }>) {
+// Issue #167: `meta.enumValues` is the server's Run On target catalog (GET
+// /condition-run-on-targets, threaded in by conditionTreeAdapter's `runOnMeta`) — no hardcoded
+// FO4 member list here anymore, so a future game's differently-shaped RunOnType enum offers
+// exactly what it resolves, never a name it can't parse or write.
+export function ConditionRunOnCell({ value, meta, editable, isFocused, onCommit, onOpen }: Readonly<CompositeCellProps & { meta: FieldMetadata; onOpen: (fk: string) => void }>) {
   const v = (value ?? { target: 'Subject', reference: null }) as RunOnValue;
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
       <ScalarCell
-        value={v.target} meta={enumMeta(RUN_ON_TARGETS)} editable={editable} isFocused={isFocused}
+        value={v.target} meta={enumMeta(meta.enumValues)} editable={editable} isFocused={isFocused}
         onCommit={target => onCommit({ target, reference: target === 'Reference' ? v.reference : null })}
       />
       {v.target === 'Reference' && (

@@ -62,6 +62,7 @@ public sealed class EditOrchestratorVmadTests
         public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin) =>
             inner.GetConditions(formKey, plugin);
         public IReadOnlyList<string> GetConditionFunctions() => inner.GetConditionFunctions();
+        public IReadOnlyList<string> GetConditionRunOnTargets() => inner.GetConditionRunOnTargets();
         public PlacementRow? GetPlacement(string formKey, string plugin) => inner.GetPlacement(formKey, plugin);
         public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
             inner.GetChanges(plugin, formKey, memberChangeId);
@@ -129,6 +130,7 @@ public sealed class EditOrchestratorVmadTests
         public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin) =>
             inner.GetConditions(formKey, plugin);
         public IReadOnlyList<string> GetConditionFunctions() => inner.GetConditionFunctions();
+        public IReadOnlyList<string> GetConditionRunOnTargets() => inner.GetConditionRunOnTargets();
         public PlacementRow? GetPlacement(string formKey, string plugin) => inner.GetPlacement(formKey, plugin);
         public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
             inner.GetChanges(plugin, formKey, memberChangeId);

@@ -577,7 +577,12 @@ QuickPick over the function catalogue, never a text/dropdown editor; Run On, Com
 parameter each pick their own widget from their own current value's shape (a `{target,
 reference}` pair; a plain number vs. a GLOB FormKey string, distinguished by JS type rather than a
 sibling Use-Global flag this row has no access to; a `{category, …}` tagged union) rather than a
-second per-plugin metadata branch `DiffRow` would otherwise need. The AND/OR gate between
+second per-plugin metadata branch `DiffRow` would otherwise need. Run On's own target enum is
+likewise a server catalog (#167: `GET /condition-run-on-targets`, `RecordSessionClient
+.conditionRunOnTargets()`), fetched once by `RecordPanel` and threaded through
+`buildConditionRows`/`conditionTreeAdapter.ts` into the field's own `enumValues` — not a hardcoded
+frontend list, so a future game's differently-shaped `RunOnType` enum (Skyrim/Starfield both differ
+from FO4's) is never silently offered a name it can't parse or write. The AND/OR gate between
 conditions is `FieldMetadata.readOnly` — unconditionally non-editable regardless of the column's
 own mutability, the one per-row override on top of the immutableSet-driven per-column rule
 everything else still uses unchanged.

@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// Issue #167 (review): conditionRunOnTargets() logs failures via the same vscode.postMessage
+// bridge RecordPanel's own logAction uses (vscode.ts's acquireVsCodeApi() at module load) —
+// stubbed here the same way RecordPanel.test.tsx already does, since most tests below don't care
+// about logging itself (see the dedicated describe block further down for that).
+vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
+
 import { createRecordSessionClient } from './RecordSessionClient';
+import { vscode } from './vscode';
 
 // The client is the record panel's single backend seam. `fetch` is the genuine external
 // boundary here, so these tests stub it — everything above the client injects a fake client
@@ -15,7 +23,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 describe('createRecordSessionClient', () => {
   it('exposes the record-session operations', () => {
     const client = createRecordSessionClient(5172);
-    for (const m of ['load', 'save', 'revert', 'copyTo', 'removeOverride', 'createRecord', 'groupMembers', 'saveGroup', 'revertGroup']) {
+    for (const m of ['load', 'save', 'revert', 'copyTo', 'removeOverride', 'createRecord', 'groupMembers', 'saveGroup', 'revertGroup', 'conditionRunOnTargets']) {
       expect(client).toHaveProperty(m);
     }
   });
@@ -190,5 +198,39 @@ describe('RecordSessionClient.groupMembers', () => {
   it('returns [] when the read fails, so the panel can fall back to a plain revert', async () => {
     fetchMock.mockResolvedValue(jsonResponse({}, 500));
     expect(await createRecordSessionClient(5172).groupMembers('c1')).toEqual([]);
+  });
+});
+
+describe('RecordSessionClient.conditionRunOnTargets', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    fetchMock = vi.fn(() => Promise.resolve(jsonResponse(['Subject', 'Reference'])));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.mocked(vscode.postMessage).mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('GETs the Run On target catalog', async () => {
+    const targets = await createRecordSessionClient(5172).conditionRunOnTargets();
+    const url = typeof fetchMock.mock.calls[0][0] === 'string' ? fetchMock.mock.calls[0][0] : fetchMock.mock.calls[0][0].url;
+    expect(url).toContain('/condition-run-on-targets');
+    expect(targets).toEqual(['Subject', 'Reference']);
+  });
+
+  // Issue #167 (review): a non-ok response degrades to [] (never rejects — the Run On dropdown
+  // simply has nothing to show, not a blocking error) but must log, mirroring
+  // PluginRepository.getConditionFunctions()'s own contract rather than swallowing silently.
+  it('returns [] and logs a warning when the response is not ok', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}, 500));
+    const targets = await createRecordSessionClient(5172).conditionRunOnTargets();
+    expect(targets).toEqual([]);
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({ level: 'warn' }));
+  });
+
+  it('returns [] and logs a warning when the fetch itself throws', async () => {
+    fetchMock.mockRejectedValue(new Error('network down'));
+    const targets = await createRecordSessionClient(5172).conditionRunOnTargets();
+    expect(targets).toEqual([]);
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({ level: 'warn' }));
   });
 });

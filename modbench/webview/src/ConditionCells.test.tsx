@@ -11,6 +11,18 @@ vi.mock('./nativeBridge', () => ({
 }));
 
 import { ConditionFunctionCell, ConditionRunOnCell, ConditionComparisonCell, ConditionParamCell } from './ConditionCells';
+import type { FieldMetadata } from './types';
+
+// Issue #167: ConditionRunOnCell's dropdown options come from `meta.enumValues` (the server's Run
+// On target catalog) rather than a hardcoded FO4 member list — this fixture stands in for whatever
+// GET /condition-run-on-targets resolved to.
+function runOnMeta(enumValues: string[]): FieldMetadata {
+  return { name: '', type: 'conditionRunOn', isArray: false, validFormKeyTypes: [], enumValues };
+}
+const FO4_RUN_ON_TARGETS = [
+  'Subject', 'Target', 'Reference', 'CombatTarget', 'LinkedReference', 'QuestAlias',
+  'PackageData', 'EventData', 'CommandTarget', 'EventCameraRef', 'MyKiller',
+];
 
 describe('ConditionFunctionCell', () => {
   afterEach(() => { pickConditionFunction.mockClear(); });
@@ -48,24 +60,36 @@ describe('ConditionRunOnCell', () => {
   // "open-on-any-click" contract for exactly this kind of standalone usage) — click first, then
   // assert on the opened editor, the same convention VmadObjectEditor.test.tsx already uses.
   it('shows only the target enum when the target is not Reference', () => {
-    render(<ConditionRunOnCell value={{ target: 'Subject', reference: null }} editable onCommit={vi.fn()} onOpen={vi.fn()} />);
+    render(<ConditionRunOnCell value={{ target: 'Subject', reference: null }} meta={runOnMeta(FO4_RUN_ON_TARGETS)} editable onCommit={vi.fn()} onOpen={vi.fn()} />);
     fireEvent.click(screen.getByText('Subject'));
     expect(screen.getByDisplayValue('Subject')).toBeInTheDocument();
   });
 
   it('also shows a FormKey cell when the target is Reference', () => {
-    render(<ConditionRunOnCell value={{ target: 'Reference', reference: '000010:Fallout4.esm' }} editable onCommit={vi.fn()} onOpen={vi.fn()} />);
+    render(<ConditionRunOnCell value={{ target: 'Reference', reference: '000010:Fallout4.esm' }} meta={runOnMeta(FO4_RUN_ON_TARGETS)} editable onCommit={vi.fn()} onOpen={vi.fn()} />);
     expect(screen.getByText('000010:Fallout4.esm')).toBeInTheDocument();
   });
 
   it('changing the target to Reference commits {target, reference: null}', () => {
     const onCommit = vi.fn();
-    render(<ConditionRunOnCell value={{ target: 'Subject', reference: null }} editable onCommit={onCommit} onOpen={vi.fn()} />);
+    render(<ConditionRunOnCell value={{ target: 'Subject', reference: null }} meta={runOnMeta(FO4_RUN_ON_TARGETS)} editable onCommit={onCommit} onOpen={vi.fn()} />);
     fireEvent.click(screen.getByText('Subject'));
     const select = screen.getByDisplayValue('Subject');
     fireEvent.change(select, { target: { value: 'Reference' } });
     fireEvent.blur(select);
     expect(onCommit).toHaveBeenCalledWith({ target: 'Reference', reference: null });
+  });
+
+  // Issue #167: the actual regression test — the dropdown's options are whatever `meta.enumValues`
+  // says, not a hardcoded FO4 member list. A list with names foreign to FO4's RunOnType (and
+  // missing several real FO4 members) still renders exactly as given, proving there's no fallback
+  // list baked into this component.
+  it('renders exactly the options meta.enumValues provides, not a hardcoded FO4 list', () => {
+    render(<ConditionRunOnCell value={{ target: 'Foo', reference: null }} meta={runOnMeta(['Foo', 'Bar'])} editable onCommit={vi.fn()} onOpen={vi.fn()} />);
+    fireEvent.click(screen.getByText('Foo'));
+    const select = screen.getByDisplayValue<HTMLSelectElement>('Foo');
+    const options = Array.from(select.options).map(o => o.value);
+    expect(options).toEqual(['Foo', 'Bar']);
   });
 });
 

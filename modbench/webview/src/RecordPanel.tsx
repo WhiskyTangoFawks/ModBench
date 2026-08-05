@@ -122,6 +122,15 @@ function findMetaByWirePath(
 export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }>) {
   const [formKey, setFormKey] = useState<string>(mEditWindow.mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
+  // Issue #167: the Run On target dropdown's catalog (GET /condition-run-on-targets) — a
+  // session-wide list, not per-record, so it's fetched once on mount rather than on every
+  // refresh()/load(fk). Starts empty (the Run On cell simply has nothing to show until this
+  // resolves) rather than falling back to any hardcoded list. No `.catch` needed here:
+  // client.conditionRunOnTargets() never rejects — it logs and degrades to [] on both a non-ok
+  // response and a thrown network error itself (RecordSessionClient.ts), the same contract
+  // PluginRepository.getConditionFunctions() gives its own callers.
+  const [runOnTargets, setRunOnTargets] = useState<string[]>([]);
+  useEffect(() => { void client.conditionRunOnTargets().then(setRunOnTargets); }, [client]);
   const [allChanges, setAllChanges] = useState<PendingChange[]>([]);
   const [immutableSet, setImmutableSet] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -566,8 +575,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     [result, isHeaderRecordForVmad],
   );
   const conditionTree = useMemo(
-    () => isHeaderRecordForVmad ? { diffs: [], metaMap: {} } : buildConditionRows(result?.conditions),
-    [result, isHeaderRecordForVmad],
+    () => isHeaderRecordForVmad ? { diffs: [], metaMap: {} } : buildConditionRows(result?.conditions, runOnTargets),
+    [result, isHeaderRecordForVmad, runOnTargets],
   );
 
   const fieldMetaMap = useMemo((): Record<string, FieldMetadata> => {

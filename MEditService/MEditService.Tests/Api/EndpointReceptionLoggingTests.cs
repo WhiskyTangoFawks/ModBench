@@ -194,6 +194,7 @@ public sealed class EndpointReceptionLoggingTests
         public VmadData? GetVmad(string formKey, string plugin) => throw new NotSupportedException();
         public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin) => throw new NotSupportedException();
         public IReadOnlyList<string> GetConditionFunctions() => throw new NotSupportedException();
+        public IReadOnlyList<string> GetConditionRunOnTargets() => throw new NotSupportedException();
         public PlacementRow? GetPlacement(string formKey, string plugin) => throw new NotSupportedException();
         public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
             throw new NotSupportedException();

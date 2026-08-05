@@ -56,6 +56,14 @@ public interface IConditionCodec
     // resolves — not a hand-maintained ~479-entry list, so a game with a different Function enum
     // never silently offers a name it can't actually parse or write.
     IEnumerable<string> AvailableFunctions();
+
+    // The Run On target list's catalog (#167): every RunOnType name this game's Mutagen package
+    // resolves — the frontend previously hardcoded FO4's own member names a second time
+    // (`ConditionCells.tsx`'s `RUN_ON_TARGETS`), with no compiler tie to this enum, so a future
+    // game's differently-shaped RunOnType (e.g. Skyrim/Starfield both omit or add members FO4
+    // doesn't have) would silently offer a name it can't actually parse or write. Same shape as
+    // AvailableFunctions above.
+    IEnumerable<string> AvailableRunOnTargets();
 }
 
 // Outcome of applying a value onto a Mutagen condition field. Mirrors VmadApplyResult's shape
