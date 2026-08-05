@@ -21,7 +21,7 @@ shipped before ADR-0034 are gone (#227). The read-only value surface ADR-0033 in
 too (#226): an immutable cell opens nothing on plain click, second click, `F2`, or double click,
 with Ctrl+C on the focused cell (#224) as its copy path. Everything in *Interaction model* below
 describes the target, not the build. Known gaps beyond that: VMAD and Condition sections don't
-have the focus model at all yet (#229, #231) and FormKey resolution (#141).
+have the focus model at all yet (#231) and FormKey resolution (#141).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not

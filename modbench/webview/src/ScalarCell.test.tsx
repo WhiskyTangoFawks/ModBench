@@ -309,3 +309,31 @@ describe('ScalarCell — a no-op edit stages nothing', () => {
     expect(onCommit).toHaveBeenCalledWith(10);
   });
 });
+
+// Issue #229: both additions exist for VMAD's pending add-property reissue cell (ariaLabel, since
+// several identically-shaped editors can be on the page at once) and for VmadSection's
+// type-divergence cue (onActiveChange, so it can hide while this cell's own editor is open without
+// duplicating this cell's active-state tracking).
+describe('ScalarCell — ariaLabel and onActiveChange', () => {
+  it('applies the given aria-label to a text editor', () => {
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} isFocused={true} onCommit={vi.fn()} ariaLabel="Added value for X" />);
+    fireEvent.click(screen.getByText('Dogmeat'));
+    expect(screen.getByLabelText('Added value for X')).toBeInTheDocument();
+  });
+
+  it('applies the given aria-label to a checkbox editor', () => {
+    render(<ScalarCell value={false} meta={boolMeta} editable={true} isFocused={true} onCommit={vi.fn()} ariaLabel="Added value for Flag" />);
+    fireEvent.click(screen.getByText('false'));
+    expect(screen.getByLabelText('Added value for Flag')).toBeInTheDocument();
+  });
+
+  it('notifies onActiveChange(true) when the editor opens and onActiveChange(false) when it closes', () => {
+    const onActiveChange = vi.fn();
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} isFocused={true} onCommit={vi.fn()} onActiveChange={onActiveChange} />);
+    fireEvent.click(screen.getByText('Dogmeat'));
+    expect(onActiveChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.blur(screen.getByDisplayValue('Dogmeat'));
+    expect(onActiveChange).toHaveBeenLastCalledWith(false);
+  });
+});
