@@ -197,9 +197,18 @@ function computeClipboardOps(
 // Issue #230: bundles the three optional, leaf-specific extras (previously three trailing
 // positional params) so renderCell stays under the repo's max-params lint budget now that a
 // fourth (onOpenExtended) is needed. `onOpenExtended` is only ever built (and only ever read,
-// inside ScalarCell) for `meta.type === 'string'` — every other leaf ignores it. Undefined for
-// the pending-column call site below, matching that call site's other #232-deferred gaps (no
-// real focus model either).
+// inside ScalarCell) for `meta.type === 'string'` — every other leaf ignores it.
+//
+// Issue #232 (review, deviation noted): still left undefined at the pending-column call site
+// below — not for lack of a focus model any more (it has a real one now), but because
+// `extendedFieldEditor.ts`'s own temp-file path is keyed by record+field+plugin only, with no
+// column-kind discriminant. Wiring this here would make a pending cell's extended editor silently
+// reuse — and reseed — the disk cell's own already-open tab for that same field, showing whichever
+// value opened it last rather than the one the user just double-clicked. Giving the tab its own
+// identity is a fix on #230's own side, not something to improvise here; a `string` pending cell's
+// double click therefore still opens the same inline editor a second click/F2 would, one narrower
+// than "identical to a disk cell of the same type" for this one type/gesture pair, for this
+// documented reason.
 interface RenderCellExtras {
   checkError?: string | null;
   resolution?: FormKeyResolution;
@@ -215,10 +224,9 @@ function renderCell(
   meta: FieldMetadata,
   editable: boolean,
   // Issue #223 / ADR-0034: whether this is the panel's single focused cell — threaded down to
-  // whichever leaf renders, so its own click handler can gate opening on it. The pending-column
-  // caller below passes a constant `true` rather than a real computed value: pending cells don't
-  // have a focus model yet (that's #232), and this ticket must not regress their existing
-  // click-always-opens behavior while it's out of scope.
+  // whichever leaf renders, so its own click handler can gate opening on it. Issue #232: the
+  // pending-column caller below now passes its own real, independently-tracked focus state
+  // (FocusedCell's `column: 'pending'` discriminant) rather than a hardcoded constant.
   isFocused: boolean,
   onOpen: (fk: string) => void,
   onCommit: (v: unknown) => void,
@@ -298,16 +306,30 @@ export interface RowContext {
   rootField: string;
 }
 
-// Issue #222 / ADR-0034: identifies one disk-column cell, panel-wide — the state RecordPanel
-// (the only component that sees every row) holds to enforce "exactly one cell focused at a time,
-// across the whole panel." `rowKey` matches the string RecordPanel already computes for this
-// row's own React `key=` at every nesting level (top-level/array-element/struct-child/
-// grandchild), so no new identity scheme is invented. Scoped to disk columns only — the pending
-// column is its own unwrapped cell with a different gesture (#203/ADR-0033) and is out of scope
-// here; it adopts this model in #232.
+// Issue #222 / ADR-0034: identifies one value cell, panel-wide — the state RecordPanel (the only
+// component that sees every row) holds to enforce "exactly one cell focused at a time, across the
+// whole panel." `rowKey` matches the string RecordPanel already computes for this row's own React
+// `key=` at every nesting level (top-level/array-element/struct-child/grandchild), so no new
+// identity scheme is invented.
+//
+// Issue #232: `plugin` alone can't tell a pending cell apart from its disk-column companion —
+// both share the exact same plugin name (buildColumns only ever adds a `'pending'` column for a
+// plugin whose `'disk'` column already exists). `column` is the discriminant: absent (or
+// `undefined`) means the disk cell, `'pending'` means that plugin's pending companion — so every
+// pre-#232 `{ rowKey, plugin }` literal still means "the disk cell," unchanged, while a pending
+// cell gets its own independent focus identity rather than aliasing its disk sibling's.
 export interface FocusedCell {
   rowKey: string;
   plugin: string;
+  column?: 'pending';
+}
+
+// Issue #232 (review): the one check both the disk-leaf and pending-column branches below need —
+// "is this exact row/plugin/column the panel's single focused cell" — pulled out so neither
+// re-derives FocusedCell's own three-field comparison inline. `column` defaults to `undefined`
+// (a disk cell), matching FocusedCell's own convention.
+function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: string, column?: 'pending'): boolean {
+  return focusedCell?.rowKey === rowKey && focusedCell.plugin === plugin && focusedCell.column === column;
 }
 
 interface DiffRowProps {
@@ -340,10 +362,12 @@ interface DiffRowProps {
   // Issue #222: this row's own identity (see FocusedCell above), the panel's current focused
   // cell (or none), and the callback that reports a click up to RecordPanel's single source of
   // truth. onFocusCell takes rowKey explicitly (rather than closing over it here) so RecordPanel
-  // stays the one place that knows how a click turns into a FocusedCell.
+  // stays the one place that knows how a click turns into a FocusedCell. Issue #232: the optional
+  // third parameter is FocusedCell's own `column` discriminant — omitted (disk cell) by every
+  // call site below except the pending column's own.
   rowKey: string;
   focusedCell: FocusedCell | null;
-  onFocusCell: (rowKey: string, plugin: string) => void;
+  onFocusCell: (rowKey: string, plugin: string, column?: 'pending') => void;
   // Issue #227: the record's own FormKey — needed to build the array-element/array-parent
   // data-vscode-context (RecordPanel's broadcast self-filter key, same role `formKey` plays in
   // ColumnHeaderContext). Threaded uniformly to every DiffRow instance (top-level/array-element/
@@ -435,6 +459,11 @@ export function DiffRow({
           // in wherever a column's mutability previously stood alone.
           const isReadOnlyRow = meta.readOnly === true;
           const isImmutableColumn = immutableSet.has(o.plugin) || isReadOnlyRow;
+          // Issue #232: `isCellFocused`'s default (no `column` arg, i.e. `undefined`) is the disk
+          // cell's own identity — never matches a same-row, same-plugin *pending* focus record,
+          // which carries `column: 'pending'` — see FocusedCell's own doc comment for why the two
+          // need separate identities despite sharing `plugin`.
+          const isFocused = isCellFocused(focusedCell, rowKey, o.plugin);
           // Issue #224 / ADR-0034: the string Ctrl+C copies for this cell — the same value used
           // for display below (diff.values[o.plugin]), run through the one shared modelValue
           // function (AC6), computed once here so both the struct/array-summary branch and the
@@ -469,7 +498,7 @@ export function DiffRow({
               <DiskCell
                 key={`disk:${o.plugin}`}
                 style={cellStyle}
-                isFocused={focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin}
+                isFocused={isFocused}
                 onFocusCell={() => onFocusCell(rowKey, o.plugin)}
                 onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
                 onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
@@ -515,7 +544,7 @@ export function DiffRow({
               <DiskCell
                 key={`disk:${o.plugin}`}
                 style={cellStyle}
-                isFocused={focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin}
+                isFocused={isFocused}
                 onFocusCell={() => onFocusCell(rowKey, o.plugin)}
                 onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
                 onDrop={() => onCellDrop(diff.fieldName, o.plugin, onCommit)}
@@ -526,7 +555,7 @@ export function DiffRow({
                 dataVscodeContext={combinedVscodeContext}
               >
                 {renderCell(diff.values[o.plugin], meta, !isImmutableColumn,
-                  focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin, onOpen,
+                  isFocused, onOpen,
                   onCommit, {
                     checkError, resolution: diff.resolutions?.[o.plugin], onOpenExtended,
                     summaryLabel: diff.collapsedSummary?.[o.plugin],
@@ -546,40 +575,62 @@ export function DiffRow({
         const hasPending = pendingValue !== undefined;
         const resolutionPath = pendingResolutionPath(context, rawPending);
         const pendingResolution = resolutionPath !== undefined ? change?.resolutions?.[resolutionPath] : undefined;
+        const pendingCellStyle = {
+          ...baseCell,
+          backgroundColor: hasPending ? 'rgba(255,200,50,0.10)' : undefined,
+          fontStyle: 'italic',
+          opacity: hasPending ? 1 : 0.3,
+        };
+        // Issue #139/#208: right-click a pending value → group-scoped Save/Revert/Reveal, VS
+        // Code's own `webview/context` menu (ADR-0033 makes right-click the only place Revert
+        // Group lives). Gated on showActions — top-level and struct-child rows carry a change
+        // id. No `onContextMenu`/`preventDefault()` here any more — that's what let the old
+        // hand-drawn menu suppress VS Code's native one.
+        const pendingVscodeContext = change && showActions ? pendingCellContext(change.id) : undefined;
+        // Issue #232: a field with no staged value for this plugin has nothing to focus, edit,
+        // or copy — same "nothing to show" shape as a collapsed disk column above, kept as a bare
+        // `<td>` rather than wrapping an empty cell in DiskCell's focus/drag machinery.
+        if (!hasPending) {
+          return <td key={`pending:${col.plugin}`} style={pendingCellStyle} data-vscode-context={pendingVscodeContext} />;
+        }
+        // Issue #232: a pending cell is always mutable (buildColumns only ever creates a
+        // 'pending' column for a plugin whose disk column already isn't immutable), so this
+        // passes `true` outright rather than re-checking immutableSet — the same reasoning the
+        // pre-#232 code's own comment gave for its unconditional `editable`.
+        const pendingOnCommit = (v: unknown) => onEdit(col.plugin, diff.fieldName, v);
+        // Issue #232 / #224: the string Ctrl+C copies for this cell — same modelValue function
+        // and shape the disk column's own copyText uses above, sourced from the pending value
+        // rather than the disk one.
+        const pendingCopyText = modelValue(pendingValue, meta, pendingResolution);
+        const { onCut: pendingOnCut, onPaste: pendingOnPaste } = computeClipboardOps(
+          meta, true, pendingCopyText, pendingResolution, pendingOnCommit,
+        );
+        // Issue #232: this cell's own focus identity — `column: 'pending'` is required here (not
+        // merely `plugin`) to stay distinct from the disk cell for the same plugin/row.
+        const isPendingFocused = isCellFocused(focusedCell, rowKey, col.plugin, 'pending');
         return (
-          <td
+          <DiskCell
             key={`pending:${col.plugin}`}
-            // Issue #139/#208: right-click a pending value → group-scoped Save/Revert/Reveal,
-            // now VS Code's own `webview/context` menu (ADR-0033 makes right-click the only
-            // place Revert Group lives). Gated on showActions — top-level and struct-child rows
-            // carry a change id. No `onContextMenu`/`preventDefault()` here any more — that's
-            // what let the old hand-drawn menu suppress VS Code's native one.
-            data-vscode-context={change && showActions ? pendingCellContext(change.id) : undefined}
-            style={{
-              ...baseCell,
-              backgroundColor: hasPending ? 'rgba(255,200,50,0.10)' : undefined,
-              fontStyle: 'italic',
-              opacity: hasPending ? 1 : 0.3,
-            }}
+            style={pendingCellStyle}
+            isFocused={isPendingFocused}
+            onFocusCell={() => onFocusCell(rowKey, col.plugin, 'pending')}
+            // Issue #232: drag-to-copy on a pending cell carries the staged value, exactly like a
+            // disk cell carries its disk value — same onCellDragStart/onCellDrop props DiffRow
+            // already threads for disk columns, no new plumbing.
+            onDragStart={() => onCellDragStart(diff.fieldName, pendingValue, col.plugin)}
+            onDrop={() => onCellDrop(diff.fieldName, col.plugin, pendingOnCommit)}
+            onCopy={() => copyToClipboard(pendingCopyText)}
+            onCut={pendingOnCut}
+            onPaste={pendingOnPaste}
+            dataVscodeContext={pendingVscodeContext}
           >
-            {/* Issue #203: a pending value is directly editable, on the same terms as a disk
-                cell — same renderCell the disk columns use, same onEdit call shape
-                (plugin, diff.fieldName, value). Editable is unconditional here rather than
-                re-checking immutableSet: buildColumns (recordUtils.ts) only ever creates a
-                'pending' column for a plugin that isn't immutable, so a pending column's own
-                plugin is always mutable — plain click now edits instead of revealing (#140's
-                reveal moved to the right-click menu above). Issue #159: the FormKey
-                resolution comes from the staged change's own `resolutions`, keyed by this
-                row's sub-path within the change's NewValue (pendingResolutionPath) — the
-                same tri-state signal disk columns use, not a stand-in.
-                Issue #223: `isFocused` is hardcoded `true` here, not derived from
-                `focusedCell` — the pending column isn't wrapped in DiskCell and has no focus
-                model yet (#232 builds it). Passing `true` preserves this cell's existing
-                click-always-opens behavior unchanged, rather than silently gating it shut. */}
-            {hasPending && renderCell(pendingValue, meta, true, true, onOpen,
-              v => onEdit(col.plugin, diff.fieldName, v),
+            {/* Issue #159: the FormKey resolution comes from the staged change's own
+                `resolutions`, keyed by this row's sub-path within the change's NewValue
+                (pendingResolutionPath) — the same tri-state signal disk columns use, not a
+                stand-in. */}
+            {renderCell(pendingValue, meta, true, isPendingFocused, onOpen, pendingOnCommit,
               { resolution: meta.type === 'formKey' ? pendingResolution : undefined })}
-          </td>
+          </DiskCell>
         );
       })}
     </tr>

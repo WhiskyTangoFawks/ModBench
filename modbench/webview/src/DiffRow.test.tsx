@@ -758,31 +758,67 @@ describe('DiffRow — pending companion column', () => {
     expect(screen.queryByTitle('Revert group')).not.toBeInTheDocument();
   });
 
-  // Issue #203: plain click on a pending value now edits it directly, on the same terms as a
-  // disk cell — reveal moved to the right-click menu (#208: now VS Code's native context menu).
-  // This replaces the #140 "plain click reveals" test above, which pinned exactly the behavior
-  // #203 reverses.
-  it('plain click on the pending cell activates an editable input, not a reveal', () => {
-    render(<table><tbody>{React.createElement(DiffRow, pendingProps())}</tbody></table>);
+  // Issue #232: the pending cell now adopts the exact same click-focuses/second-click-opens
+  // model as a disk cell (#222/#223) — supersedes the #203/ADR-0033 "plain click edits directly"
+  // behavior these two tests used to pin.
+  it('a plain click on an unfocused pending cell only focuses it, opening nothing', () => {
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ focusedCell: null }))}</tbody></table>);
     fireEvent.click(screen.getByText('pending-value'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('a click on the already-focused pending cell activates an editable input', () => {
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({
+      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+    }))}</tbody></table>);
+    fireEvent.click(screen.getByText('pending-value'));
+    expect(screen.getByDisplayValue('pending-value')).toBeInTheDocument();
+  });
+
+  it('F2 on the focused pending cell opens its editor', () => {
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({
+      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+    }))}</tbody></table>);
+    const cell = screen.getByText('pending-value').closest('td')!;
+    fireEvent.keyDown(cell, { key: 'F2' });
+    expect(screen.getByDisplayValue('pending-value')).toBeInTheDocument();
+  });
+
+  it('F2 does nothing when the pending cell is not the focused one', () => {
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ focusedCell: null }))}</tbody></table>);
+    const cell = screen.getByText('pending-value').closest('td')!;
+    fireEvent.keyDown(cell, { key: 'F2' });
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  // Issue #232 (documented deviation — see DiffRow.tsx's RenderCellExtras comment and the
+  // record-editor spec's extended-editor "Scope" note): a `string` pending cell's double click
+  // still opens the *inline* editor, not the extended one — the extended editor's temp-file
+  // identity (extendedFieldEditor.ts) isn't column-aware yet, so wiring it here would silently
+  // reuse/reseed the disk cell's own open tab for the same field.
+  it('double click on the pending cell opens the inline editor even when unfocused, not the extended editor', () => {
+    openExtendedFieldEditor.mockClear();
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ focusedCell: null }))}</tbody></table>);
+    fireEvent.doubleClick(screen.getByText('pending-value'));
+    expect(openExtendedFieldEditor).not.toHaveBeenCalled();
     expect(screen.getByDisplayValue('pending-value')).toBeInTheDocument();
   });
 
   it('committing an edit on the pending cell calls onEdit with plugin/fieldName/value, the same shape a disk-cell edit uses', () => {
     const onEdit = vi.fn();
     render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onEdit }))}</tbody></table>);
-    fireEvent.click(screen.getByText('pending-value'));
+    // Issue #232: double click opens unconditionally, so this doesn't need a pre-seeded focus.
+    fireEvent.doubleClick(screen.getByText('pending-value'));
     const input = screen.getByDisplayValue('pending-value');
     fireEvent.change(input, { target: { value: 'edited-again' } });
     fireEvent.blur(input);
     expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Name', 'edited-again');
   });
 
-  // Issue #203 AC: "the disk cell for that same field remains editable too (no lock)" — editing
-  // the pending cell must not disable the disk cell for the same row/plugin.
+  // Issue #232 AC: "A disk cell and its pending companion remain independently editable — no
+  // lock introduced" — editing the pending cell must not disable the disk cell for the same
+  // row/plugin, and vice versa.
   it('the disk cell for the same field stays editable while the pending cell is also editable', () => {
-    // Issue #223: pre-seeded as already focused — see the top-level "already-focused mutable
-    // column" test above for why a bare click no longer suffices.
     render(<table><tbody>{React.createElement(DiffRow, pendingProps({
       focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' },
     }))}</tbody></table>);
@@ -791,6 +827,96 @@ describe('DiffRow — pending companion column', () => {
     const diskCells = screen.getAllByText('disk-value');
     fireEvent.click(diskCells[1]);
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
+  });
+
+  // Issue #232 (Seam A): FocusedCell's `column` discriminant is what keeps a disk cell and its
+  // same-plugin pending companion from aliasing one another's focus — proven directly here rather
+  // than only inferred from the editability test above.
+  it('a disk cell and its pending companion carry independent focus, even though they share a plugin', () => {
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({
+      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' }, // disk cell — no `column`
+    }))}</tbody></table>);
+    const diskCell = screen.getAllByText('disk-value')[1].closest('td')!;
+    const pendingCell = screen.getByText('pending-value').closest('td')!;
+    expect(diskCell).toHaveFocus();
+    expect(pendingCell).not.toHaveFocus();
+  });
+
+  it('focusing the pending cell does not also focus its disk companion', () => {
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({
+      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+    }))}</tbody></table>);
+    const diskCell = screen.getAllByText('disk-value')[1].closest('td')!;
+    const pendingCell = screen.getByText('pending-value').closest('td')!;
+    expect(pendingCell).toHaveFocus();
+    expect(diskCell).not.toHaveFocus();
+  });
+
+  it('clicking the pending cell reports its row, plugin, and the pending discriminant to onFocusCell', () => {
+    const onFocusCell = vi.fn();
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onFocusCell }))}</tbody></table>);
+    fireEvent.click(screen.getByText('pending-value'));
+    expect(onFocusCell).toHaveBeenCalledWith('Name', 'MyMod.esp', 'pending');
+  });
+
+  describe('Ctrl+C/Ctrl+X/Ctrl+V on the focused pending cell (#232)', () => {
+    beforeEach(() => {
+      copyToClipboard.mockClear();
+      readClipboardText.mockClear();
+    });
+
+    it('Ctrl+C copies the pending cell\'s model value', () => {
+      render(<table><tbody>{React.createElement(DiffRow, pendingProps({
+        focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+      }))}</tbody></table>);
+      const cell = screen.getByText('pending-value').closest('td')!;
+      fireEvent.keyDown(cell, { key: 'c', ctrlKey: true });
+      expect(copyToClipboard).toHaveBeenCalledWith('pending-value');
+    });
+
+    it('Ctrl+X copies then clears the pending cell, staged through the same onEdit path', () => {
+      const onEdit = vi.fn();
+      render(<table><tbody>{React.createElement(DiffRow, pendingProps({
+        onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+      }))}</tbody></table>);
+      const cell = screen.getByText('pending-value').closest('td')!;
+      fireEvent.keyDown(cell, { key: 'x', ctrlKey: true });
+      expect(copyToClipboard).toHaveBeenCalledWith('pending-value');
+      expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Name', '');
+    });
+
+    it('Ctrl+V sets the pending cell\'s value from the clipboard, staged through the same onEdit path', async () => {
+      const onEdit = vi.fn();
+      readClipboardText.mockResolvedValue('pasted-value');
+      render(<table><tbody>{React.createElement(DiffRow, pendingProps({
+        onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+      }))}</tbody></table>);
+      const cell = screen.getByText('pending-value').closest('td')!;
+      fireEvent.keyDown(cell, { key: 'v', ctrlKey: true });
+      await vi.waitFor(() => expect(onEdit).toHaveBeenCalled());
+      expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Name', 'pasted-value');
+    });
+  });
+
+  // Issue #232 (Seam B): drag/drop on the pending cell reuses the exact same
+  // onCellDragStart/onCellDrop plumbing a disk cell uses — the staged (pending) value is what's
+  // carried, not the disk value.
+  describe('drag/drop on the pending cell (#232)', () => {
+    it('dragging the pending cell calls onCellDragStart with the field name, the pending value, and the plugin', () => {
+      const onCellDragStart = vi.fn();
+      render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onCellDragStart }))}</tbody></table>);
+      const cell = screen.getByText('pending-value').closest('td')!;
+      fireEvent.dragStart(cell);
+      expect(onCellDragStart).toHaveBeenCalledWith('Name', 'pending-value', 'MyMod.esp');
+    });
+
+    it('dropping on the pending cell calls onCellDrop with the field name and the plugin', () => {
+      const onCellDrop = vi.fn();
+      render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onCellDrop }))}</tbody></table>);
+      const cell = screen.getByText('pending-value').closest('td')!;
+      fireEvent.drop(cell);
+      expect(onCellDrop).toHaveBeenCalledWith('Name', 'MyMod.esp', expect.any(Function));
+    });
   });
 
   // Issue #208: the pending cell's right-click menu is now VS Code's own `webview/context`

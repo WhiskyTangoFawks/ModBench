@@ -1596,13 +1596,14 @@ describe('RecordPanel — pending cells render type-aware (issue #137)', () => {
 
   // Issue #203 (reverses #137's read-only guard): routing the pending value through renderCell
   // with editable=true means every field type's own editor is now reachable from the pending
-  // cell too, flags included — clicking "Fire, Ice" opens the same multi-select checkboxes a
-  // disk cell's flag field would.
+  // cell too, flags included. Issue #232: opening now takes a second click (or F2/double click)
+  // on the same terms as a disk cell — a bare double click here proves that without needing to
+  // reach into RecordPanel's own focus state.
   it('clicking a pending flags value opens its multi-select editor, the same as a disk cell', async () => {
     renderPanel(pendingFlagsResult);
     await waitFor(() => screen.getByText('Flags'));
 
-    fireEvent.click(screen.getByText('Fire, Ice'));
+    fireEvent.doubleClick(screen.getByText('Fire, Ice'));
     expect(screen.getAllByRole('checkbox')).toHaveLength(3); // Fire, Ice, Shock
   });
 });
@@ -1861,24 +1862,26 @@ describe('RecordPanel — Pending column right-click reveal (issue #203, moved f
   });
 });
 
-// ── Pending column direct editing (issue #203, reverses #140) ───────────────────
+// ── Pending column direct editing (issue #203, reverses #140; gesture updated by #232) ──────────
 //
-// A pending value's cell is now directly editable, on the same terms as a disk cell — plain
-// click no longer reveals the change in the Pending Changes tree; that gesture moved to the
-// right-click menu tested above.
+// A pending value's cell is directly editable, on the same terms as a disk cell — plain click no
+// longer reveals the change in the Pending Changes tree; that gesture moved to the right-click
+// menu tested above. Issue #232: opening it now takes a second click, F2, or a double click, the
+// same as a disk cell (a bare first click only focuses) — these use double click, which opens
+// unconditionally, so they don't need to reach into RecordPanel's own focus state.
 
-describe('RecordPanel — Pending column direct editing (issue #203)', () => {
+describe('RecordPanel — Pending column direct editing (issue #203/#232)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     vi.mocked(vscode.postMessage).mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('plain click on a pending value opens an editable input, on the same terms as a disk cell', async () => {
+  it('a double click on a pending value opens an editable input, on the same terms as a disk cell', async () => {
     renderPanel(pendingNameResult, { changes: soloChange });
     await waitFor(() => screen.getByText('Staged Name'));
 
-    fireEvent.click(screen.getByText('Staged Name'));
+    fireEvent.doubleClick(screen.getByText('Staged Name'));
 
     expect(screen.getByDisplayValue('Staged Name')).toBeInTheDocument();
   });
@@ -1891,7 +1894,7 @@ describe('RecordPanel — Pending column direct editing (issue #203)', () => {
     renderPanel(pendingNameResult, { changes: soloChange, save });
     await waitFor(() => screen.getByText('Staged Name'));
 
-    fireEvent.click(screen.getByText('Staged Name'));
+    fireEvent.doubleClick(screen.getByText('Staged Name'));
     const input = screen.getByDisplayValue('Staged Name');
     fireEvent.change(input, { target: { value: 'Re-edited Name' } });
     fireEvent.blur(input);
@@ -2181,6 +2184,9 @@ describe('RecordPanel — action logging (issue #200)', () => {
     await waitFor(() => screen.getByText('MyScript'));
     fireEvent.click(screen.getByText('MyScript').closest('tr')!.querySelector('button')!);
     await waitFor(() => screen.getByText('true'));
+    // Issue #232: same real focus model as every other value cell now — first click focuses,
+    // second click on the now-focused cell opens it.
+    fireEvent.click(screen.getByText('true'));
     fireEvent.click(screen.getByText('true'));
     fireEvent.click(screen.getByRole('checkbox'));
 
@@ -2241,6 +2247,9 @@ describe('RecordPanel — action logging (issue #200)', () => {
     await waitFor(() => screen.getByText('[0]'));
     fireEvent.click(screen.getByText('[0]').closest('tr')!.querySelector('button')!);
     const operatorRow = screen.getByText('Operator').closest('tr')!;
+    // Issue #232: same real focus model as every other value cell now — first click focuses,
+    // second click on the now-focused cell opens it.
+    fireEvent.click(within(operatorRow).getByText('GreaterThan'));
     fireEvent.click(within(operatorRow).getByText('GreaterThan'));
     const select = within(operatorRow).getByRole('combobox');
     fireEvent.change(select, { target: { value: 'LessThan' } });

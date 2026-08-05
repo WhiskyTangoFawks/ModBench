@@ -395,9 +395,15 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
     open via a real `element.click()` call (`DiskCell`), which the DOM spec gives `detail: 0`, and
     the debounce only ever applies to a real mouse click (`detail >= 1`).
   - **Scope**: the field grid's disk columns only (`ScalarCell`/`DiffRow`) — the Pending column
-    doesn't wire it (#232's own not-yet-built focus model), and a plain `string`-typed row reaches
-    it regardless of whether it's an ordinary field or a VMAD property (#231 folds both onto the
-    same `ScalarCell`). A composite leaf's own inner string widget (a condition parameter's Text
+    still doesn't wire it, post-#232. Not for lack of a focus model any more (#232 gave the
+    pending column its own real one); `extendedFieldEditor.ts`'s temp-file path is keyed by
+    record+field+plugin only, with no column-kind discriminant, so wiring a pending cell to it
+    today would silently reuse — and reseed — the disk cell's own already-open tab for that same
+    field. Giving the tab its own identity is this feature's own fix to make, not something #232
+    should improvise; a `string` pending cell's double click opens the same inline editor a second
+    click/F2 would, until then. A plain `string`-typed disk row reaches the extended editor
+    regardless of whether it's an ordinary field or a VMAD property (#231 folds both onto the same
+    `ScalarCell`). A composite leaf's own inner string widget (a condition parameter's Text
     category, `conditionParam`) doesn't yet — its outer `FieldMetadata.type` isn't `'string'`,
     which is what this gesture keys on (#231's own noted gap). A `string` cell that doesn't reach
     it keeps opening its inline editor on double click, unchanged.
@@ -446,12 +452,18 @@ plugin:
 - **Plain click** on a pending value focuses it, exactly like a disk cell — it renders through the
   same shared value-cell container, not a separate one (#232). A second click, `F2`, or a double
   click opens its editor; `Ctrl+C`/`Ctrl+X`/`Ctrl+V` act on it the same way a disk cell's clipboard
-  commands do. There is no lock on the corresponding disk cell in response to editing; both stay
-  editable simultaneously for now (revisit later if that proves confusing in practice). VMAD and
-  Condition pending cells go through this exact same code now, not a bespoke copy (#231) — a real
-  focus model for the pending column as a whole (`isFocused` is still a hardcoded `true` there) is
-  still #232's job, unchanged and un-regressed by that merge. Supersedes ADR-0033/#203's
-  plain-click-edits-directly behaviour.
+  commands do, and dragging it out (or dropping onto it) works the same way too — the same shared
+  container, wired the same way, for every one of those gestures. There is no lock on the
+  corresponding disk cell in response to editing; both stay editable simultaneously for now
+  (revisit later if that proves confusing in practice). VMAD and Condition pending cells go through
+  this exact same code now, not a bespoke copy (#231). The pending column's own focus is tracked
+  independently of its disk-column companion (`FocusedCell` carries a `column: 'pending'`
+  discriminant, since the two share the same plugin name) — focusing or editing one never affects
+  the other. One divergence from full disk-cell parity: a `string` pending cell's double click
+  still opens the inline editor, not the extended editor (see "By cell" gesture matrix and the
+  extended-editor section's own `Scope` note) — the extended editor's temp-file identity isn't
+  column-aware yet, and reaching it from a pending cell today would silently reuse and reseed the
+  disk cell's own open tab for that field.
 - **Right-click** on a pending value opens VS Code's own native context menu (#208 —
   `contributes.menus["webview/context"]`, gated by a `data-vscode-context` attribute the cell
   carries; the cell must not call `preventDefault()` on the contextmenu event, or VS Code's
