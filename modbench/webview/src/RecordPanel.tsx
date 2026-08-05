@@ -127,16 +127,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
-  // Issue #222 / ADR-0034: the single source of truth for "which disk-column cell is focused,"
-  // shared by every DiffRow instance so at most one cell across the field grid is ever focused at
-  // once — DiffRow itself only knows about its own row. `rowKey` matches the string this
-  // component already computes for each DiffRow's own `key=` below. Deliberately reset on
-  // LOAD_RECORD (a different record has no "same cell" to keep focused — mirrors the
-  // result/allChanges resets there) but left untouched by refresh() (same-record reload from
-  // staging or a background refresh, where the focused cell should survive — AC3).
+  // Issue #222 / ADR-0034: the single source of truth for "which value cell is focused," shared
+  // by every DiffRow instance so at most one cell across the field grid is ever focused at once —
+  // DiffRow itself only knows about its own row. `rowKey` matches the string this component
+  // already computes for each DiffRow's own `key=` below. Deliberately reset on LOAD_RECORD (a
+  // different record has no "same cell" to keep focused — mirrors the result/allChanges resets
+  // there) but left untouched by refresh() (same-record reload from staging or a background
+  // refresh, where the focused cell should survive — AC3). Issue #232: covers a pending-column
+  // cell too now, disambiguated from its same-plugin disk companion by FocusedCell's own
+  // `column` discriminant — handleFocusCell just forwards whatever DiffRow passes.
   const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
-  function handleFocusCell(rowKey: string, plugin: string) {
-    setFocusedCell({ rowKey, plugin });
+  function handleFocusCell(rowKey: string, plugin: string, column?: 'pending') {
+    setFocusedCell({ rowKey, plugin, column });
   }
   // Issue #3: collapsed plugin columns, keyed by plugin name. Deliberately NOT reset by the
   // LOAD_RECORD handler below — collapse state is meant to persist across record-to-record

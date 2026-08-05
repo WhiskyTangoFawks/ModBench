@@ -1,9 +1,10 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { focusedCellStyle } from './gridStyles';
 
-// A disk column's value cell. Issue #111: drag-to-copy is always on, but a draggable ancestor
-// swallows text selection inside an input — the browser starts a drag instead of selecting — so
-// the cell stops being draggable exactly while its own input is active.
+// A field grid's value cell — a disk column's, or (since #232) its pending companion column's.
+// Issue #111: drag-to-copy is always on, but a draggable ancestor swallows text selection inside
+// an input — the browser starts a drag instead of selecting — so the cell stops being draggable
+// exactly while its own input is active.
 //
 // The cell learns that from focus events bubbling out of its own subtree rather than from the
 // leaf renderers reporting it: which control a value renders as is the leaf's business (and
@@ -11,9 +12,10 @@ import { focusedCellStyle } from './gridStyles';
 // currently contain an active input" is the cell's own. Watching its subtree keeps that
 // knowledge on the right side of the boundary and costs the leaves no prop.
 //
-// Issue #221: extracted out of DiffRow.tsx (its sole caller until now) so it can be shared. The
-// field-grid row is still the only caller today — VMAD and Condition sections hand-roll their
-// own bare `<td>`s and pick this up in a later ticket.
+// Issue #221: extracted out of DiffRow.tsx (its sole caller until now) so it can be shared. Issue
+// #232: DiffRow's own pending-column branch became the second caller (the name predates that —
+// not renamed for this ticket, see the issue's own seam discussion). VMAD and Condition sections
+// still hand-roll their own bare `<td>`s and pick this up in a later ticket.
 //
 // Issue #222 / ADR-0034: this is also where "is this the focused cell" becomes real DOM focus,
 // not just painted state — `tabIndex` makes the cell itself a focusable element, and the effect
