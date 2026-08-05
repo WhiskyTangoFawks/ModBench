@@ -20,9 +20,28 @@ interface Pending {
 let counter = 0;
 const pending = new Map<string, Pending>();
 
+// Issue #230: the extended editor's commit callback doesn't fit `Pending` above — a real editor
+// tab can be saved more than once while it stays open, so EXTENDED_EDITOR_COMMITTED is not a
+// one-shot reply that resolves-then-deletes; the callback stays registered until
+// EXTENDED_EDITOR_CLOSED explicitly says the tab is gone. A second map (rather than stretching
+// `Pending`'s single-resolve shape to cover both lifecycles) keeps requestReply's own contract —
+// "resolves exactly once" — true for every caller that already depends on it.
+const extendedEditors = new Map<string, (value: string) => void>();
+
 window.addEventListener('message', (event: MessageEvent<unknown>) => {
   const msg = event.data as ExtensionToWebview | undefined;
   if (!msg || !('requestId' in msg)) return;
+  if (msg.type === EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED) {
+    extendedEditors.get(msg.requestId)?.(msg.value);
+    return;
+  }
+  if (msg.type === EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED) {
+    // Issue #230 (seam): deleted here, not left to accumulate — a session that opens many
+    // fields' extended editors over time would otherwise grow one stale map entry per tab ever
+    // opened, each one holding a closure over that tab's onCommit and everything it captured.
+    extendedEditors.delete(msg.requestId);
+    return;
+  }
   const entry = pending.get(msg.requestId);
   if (!entry || msg.type !== entry.replyType) return;
   pending.delete(msg.requestId);
@@ -119,4 +138,21 @@ export function readClipboardText(): Promise<string | null> {
     msg => (msg.type === EXTENSION_TO_WEBVIEW.CLIPBOARD_READ ? msg.value : null),
     requestId => ({ type: WEBVIEW_TO_EXTENSION.READ_CLIPBOARD, requestId }),
   );
+}
+
+// Issue #230: a `string` cell's double click opens the value in a real editor tab — the
+// extension host can't be reached any other way (only it can call
+// vscode.workspace.openTextDocument/showTextDocument). Unlike every bridge above, this doesn't
+// return a Promise: there's no single answer to await, since the tab can be saved any number of
+// times (each save re-stages, exactly like any other edit) before the user closes it, or never
+// saved at all if they abandon it. `onCommit` is called once per save with that save's full
+// content — DiffRow passes the same `onCommit` closure it already builds for the cell's inline
+// editor, so this is a second *trigger* onto the identical commit path, not a second path.
+export function openExtendedFieldEditor(
+  params: { value: string; recordLabel: string; fieldName: string; plugin: string; readOnly: boolean },
+  onCommit: (value: string) => void,
+): void {
+  const requestId = `nb-${++counter}`;
+  extendedEditors.set(requestId, onCommit);
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId, ...params });
 }

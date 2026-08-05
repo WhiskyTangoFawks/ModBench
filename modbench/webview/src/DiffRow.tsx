@@ -5,7 +5,7 @@ import { FormKeyCell } from './FormKeyCell';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell, type ArrayOpHandlers } from './DiskCell';
 import { modelValue, coerceModelValue } from './modelValue';
-import { copyToClipboard, readClipboardText } from './nativeBridge';
+import { copyToClipboard, readClipboardText, openExtendedFieldEditor } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle } from './gridStyles';
 import {
   pendingIfChanged, extractPendingElementValue, pendingCellContext,
@@ -160,6 +160,18 @@ function computeClipboardOps(
 
 // ── Cell renderer ─────────────────────────────────────────────────────────────
 
+// Issue #230: bundles the three optional, leaf-specific extras (previously three trailing
+// positional params) so renderCell stays under the repo's max-params lint budget now that a
+// fourth (onOpenExtended) is needed. `onOpenExtended` is only ever built (and only ever read,
+// inside ScalarCell) for `meta.type === 'string'` — every other leaf ignores it. Undefined for
+// the pending-column call site below, matching that call site's other #232-deferred gaps (no
+// real focus model either).
+interface RenderCellExtras {
+  checkError?: string | null;
+  resolution?: FormKeyResolution;
+  onOpenExtended?: () => void;
+}
+
 function renderCell(
   value: unknown,
   meta: FieldMetadata,
@@ -172,8 +184,7 @@ function renderCell(
   isFocused: boolean,
   onOpen: (fk: string) => void,
   onCommit: (v: unknown) => void,
-  checkError?: string | null,
-  resolution?: FormKeyResolution,
+  { checkError, resolution, onOpenExtended }: RenderCellExtras = {},
 ): React.ReactNode {
   if (meta.type === 'formKey') {
     return (
@@ -201,7 +212,12 @@ function renderCell(
   if (meta.type === 'enum' && meta.isBitmask) {
     return <FlagCell value={value} meta={meta} editable={editable} isFocused={isFocused} onCommit={onCommit} />;
   }
-  return <ScalarCell value={value} meta={meta} editable={editable} isFocused={isFocused} onCommit={onCommit} />;
+  return (
+    <ScalarCell
+      value={value} meta={meta} editable={editable} isFocused={isFocused} onCommit={onCommit}
+      onOpenExtended={onOpenExtended}
+    />
+  );
 }
 
 export type RowContext =
@@ -263,6 +279,11 @@ interface DiffRowProps {
   // immutableSet/pendingChangeMap are already passed uniformly rather than only to the rows that
   // need them.
   formKey: string;
+  // Issue #230: the record identity string the extended editor's temp-file path is keyed under
+  // (a `string` leaf's double click, ScalarCell) — the exact same label RecordPanel's own header
+  // already computes (`{EditorID} [{FormKey}]`, or bare FormKey), reused rather than re-derived
+  // here so there's one place that knows how to build it.
+  recordLabel: string;
 }
 
 export function DiffRow({
@@ -270,7 +291,7 @@ export function DiffRow({
   pendingChangeMap, collapsedColumns, onOpen, onEdit,
   onCellDragStart, onCellDrop,
   context, hasChildren, isExpanded, onToggle, arrayEdit, onArrayAdd,
-  rowKey, focusedCell, onFocusCell, formKey,
+  rowKey, focusedCell, onFocusCell, formKey, recordLabel,
 }: Readonly<DiffRowProps>) {
   const meta = context.kind === 'top-level' ? fieldMetaMap[diff.fieldName] : context.overrideMeta;
   if (!meta) return null;
@@ -364,6 +385,18 @@ export function DiffRow({
             const { onCut, onPaste } = computeClipboardOps(
               meta, !immutableSet.has(o.plugin), copyText, diff.resolutions?.[o.plugin], onCommit,
             );
+            // Issue #230: built only for `string` — every other type's double click already
+            // opens the same (inline) editor second-click/F2 does, so there's nothing to
+            // redirect (spec, "By cell" gesture matrix). `readOnly` follows this specific
+            // column's own mutability, independent of which column the cell that was
+            // double-clicked lives in — an immutable column's extended editor is still reachable
+            // (ScalarCell's own immutable branch), just read-only.
+            const onOpenExtended = meta.type === 'string'
+              ? () => openExtendedFieldEditor(
+                  { value: copyText, recordLabel, fieldName: diff.fieldName, plugin: o.plugin, readOnly: immutableSet.has(o.plugin) },
+                  next => onCommit(next),
+                )
+              : undefined;
             return (
               <DiskCell
                 key={`disk:${o.plugin}`}
@@ -380,7 +413,7 @@ export function DiffRow({
               >
                 {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin),
                   focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin, onOpen,
-                  onCommit, checkError, diff.resolutions?.[o.plugin])}
+                  onCommit, { checkError, resolution: diff.resolutions?.[o.plugin], onOpenExtended })}
               </DiskCell>
             );
           }
@@ -444,8 +477,8 @@ export function DiffRow({
                 model yet (#232 builds it). Passing `true` preserves this cell's existing
                 click-always-opens behavior unchanged, rather than silently gating it shut. */}
             {hasPending && renderCell(pendingValue, meta, true, true, onOpen,
-              v => onEdit(col.plugin, diff.fieldName, v), undefined,
-              meta.type === 'formKey' ? pendingResolution : undefined)}
+              v => onEdit(col.plugin, diff.fieldName, v),
+              { resolution: meta.type === 'formKey' ? pendingResolution : undefined })}
           </td>
         );
       })}

@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { ScalarCell } from './ScalarCell';
 import type { FieldMetadata } from './types';
@@ -224,10 +224,13 @@ describe('ScalarCell — mutable column gates opening on the focus check (#223)'
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
+  // Issue #230: kept on a non-string type deliberately — `string` is the one type whose second
+  // click is now debounced (see the dedicated describe block below), so this fixture moved off
+  // `strMeta` to keep asserting "opens synchronously" for the types that still do.
   it('a click while already the focused cell opens the editor', () => {
-    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} isFocused={true} onCommit={vi.fn()} />);
-    fireEvent.click(screen.getByText('Dogmeat'));
-    expect(screen.getByDisplayValue('Dogmeat')).toBeInTheDocument();
+    render(<ScalarCell value={5} meta={intMeta} editable={true} isFocused={true} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('5'));
+    expect(screen.getByDisplayValue('5')).toBeInTheDocument();
   });
 
   it('a double click opens the editor even when not the focused cell', () => {
@@ -335,5 +338,87 @@ describe('ScalarCell — ariaLabel and onActiveChange', () => {
 
     fireEvent.blur(screen.getByDisplayValue('Dogmeat'));
     expect(onActiveChange).toHaveBeenLastCalledWith(false);
+  });
+});
+
+// Issue #230 / ADR-0034: `string` is the one type where double-click's target (the extended
+// editor) differs from second-click/F2's (the inline editor) — so a genuine double click must
+// not be preempted by the second click's own "open inline editor" handler firing first. The
+// debounce only applies to a *real* mouse click (`detail >= 1` — what an actual click always
+// carries): F2 dispatches its open via a real `.click()` call (DiskCell), which per the DOM spec
+// carries `detail: 0`, and RTL's own `fireEvent.click` defaults to the same, which is why every
+// plain `fireEvent.click` elsewhere in this file (never asserting anything about a following
+// double click) keeps opening synchronously without needing changes here.
+describe('ScalarCell — string double click opens the extended editor, debounced against a second click (#230)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('a lone second click on an already-focused string cell still opens the inline editor, after the debounce', () => {
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} isFocused={true} onCommit={vi.fn()} />);
+    fireEvent.click(screen.getByText('Dogmeat'), { detail: 1 });
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    act(() => { vi.advanceTimersByTime(300); });
+    expect(screen.getByDisplayValue('Dogmeat')).toBeInTheDocument();
+  });
+
+  it('a genuine double click cancels the pending inline-open and calls onOpenExtended instead', () => {
+    const onOpenExtended = vi.fn();
+    render(
+      <ScalarCell value="Dogmeat" meta={strMeta} editable={true} isFocused={true} onCommit={vi.fn()} onOpenExtended={onOpenExtended} />,
+    );
+    fireEvent.click(screen.getByText('Dogmeat'), { detail: 1 });
+    fireEvent.doubleClick(screen.getByText('Dogmeat'));
+    act(() => { vi.advanceTimersByTime(300); });
+
+    expect(onOpenExtended).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('a double click without onOpenExtended wired falls back to the inline editor (VMAD/Condition, #231)', () => {
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} isFocused={true} onCommit={vi.fn()} />);
+    fireEvent.doubleClick(screen.getByText('Dogmeat'));
+    expect(screen.getByDisplayValue('Dogmeat')).toBeInTheDocument();
+  });
+
+  it('F2 (a real .click() call, detail 0) opens the inline editor immediately, with no debounce', () => {
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} isFocused={true} onCommit={vi.fn()} onOpenExtended={vi.fn()} />);
+    // F2's own dispatch mechanism (DiskCell): `element.click()`, which the DOM spec gives
+    // `detail: 0` — the same default fireEvent.click uses when no override is given.
+    fireEvent.click(screen.getByText('Dogmeat'));
+    expect(screen.getByDisplayValue('Dogmeat')).toBeInTheDocument();
+  });
+
+  it('a non-string mutable type never debounces — dblclick still opens the inline editor directly', () => {
+    render(<ScalarCell value={5} meta={intMeta} editable={true} isFocused={true} onCommit={vi.fn()} />);
+    fireEvent.doubleClick(screen.getByText('5'));
+    expect(screen.getByDisplayValue('5')).toBeInTheDocument();
+  });
+
+  it('an immutable string cell opens nothing on double click when onOpenExtended is not wired', () => {
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={false} isFocused={false} onCommit={vi.fn()} />);
+    fireEvent.doubleClick(screen.getByText('Dogmeat'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('an immutable string cell calls onOpenExtended on double click when it is wired (read-only tab, AC5)', () => {
+    const onOpenExtended = vi.fn();
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={false} isFocused={false} onCommit={vi.fn()} onOpenExtended={onOpenExtended} />);
+    fireEvent.doubleClick(screen.getByText('Dogmeat'));
+    expect(onOpenExtended).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('an immutable non-string cell is unaffected — still opens nothing on double click', () => {
+    render(<ScalarCell value={false} meta={boolMeta} editable={false} isFocused={false} onCommit={vi.fn()} onOpenExtended={vi.fn()} />);
+    fireEvent.doubleClick(screen.getByText('false'));
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  // The immutable string branch must not accidentally carry F2's own open-trigger marker — F2
+  // opens nothing on an immutable cell (only double click does, and only for string), same
+  // contract every other immutable cell already has.
+  it('an immutable string cell with onOpenExtended still carries no data-open-trigger', () => {
+    render(<ScalarCell value="Dogmeat" meta={strMeta} editable={false} isFocused={false} onCommit={vi.fn()} onOpenExtended={vi.fn()} />);
+    expect(screen.getByText('Dogmeat').closest('[data-open-trigger]')).toBeNull();
   });
 });

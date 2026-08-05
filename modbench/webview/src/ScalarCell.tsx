@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { modelValue } from './modelValue';
 import { mono, fg } from './gridStyles';
 import type { FieldMetadata } from './types';
@@ -30,7 +30,23 @@ interface ScalarCellProps {
   // while the editor is open, matching the pre-#229 VmadScalarEditor/ClickToEdit behavior, without
   // this cell losing ownership of when it is actually open.
   onActiveChange?: (active: boolean) => void;
+  // Issue #230 / ADR-0034: only meaningful for `meta.type === 'string'` — every other type's
+  // double click already opens the same (inline) editor second-click/F2 does, so there's nothing
+  // for this to redirect. Called instead of the inline editor on a genuine double click, mutable
+  // or immutable alike (a read-only tab is still the only way to read a long value in full).
+  // Optional and left undefined by callers outside the field grid (VMAD, Condition sections —
+  // #231), where a string cell's double click keeps opening the inline editor, same "not wired
+  // here yet" convention `isFocused`'s own default already uses.
+  onOpenExtended?: () => void;
 }
+
+// Issue #230: how long a second click on an already-focused string cell waits before opening the
+// inline editor, giving a following native `dblclick` event time to arrive and redirect it to the
+// extended editor instead. A standard debounce window (VS Code's own Explorer uses the same shape
+// for single-click-preview vs double-click-permanent-tab) — not tuned to any particular OS
+// double-click-speed setting, since the browser's own `dblclick` event (not a second `click`) is
+// what actually cancels this timer.
+const STRING_OPEN_DEBOUNCE_MS = 300;
 
 // The text a cell shows when it is not being edited. Null/missing renders as an empty-looking
 // em-dash, never "null"/"undefined" (spec: field type rendering rule 5). Issue #224: sources the
@@ -42,7 +58,7 @@ function ScalarText({ value, meta }: { value: unknown; meta: FieldMetadata }) {
     : <span>{modelValue(value, meta)}</span>;
 }
 
-export function ScalarCell({ value, meta, editable, isFocused = true, onCommit, ariaLabel, onActiveChange }: ScalarCellProps) {
+export function ScalarCell({ value, meta, editable, isFocused = true, onCommit, ariaLabel, onActiveChange, onOpenExtended }: ScalarCellProps) {
   const [draft, setDraft] = useState(() => modelValue(value, meta));
   const [prevValue, setPrevValue] = useState(value);
   // Issue #111: only the clicked cell is an input; everything else stays text. Meaningless on an
@@ -52,6 +68,16 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit, 
   if (prevValue !== value) {
     setPrevValue(value);
     setDraft(modelValue(value, meta));
+  }
+
+  // Issue #230: the pending "open the inline editor" timer a string cell's second click starts —
+  // cleared by a following genuine `dblclick` (redirects to onOpenExtended instead) and on
+  // unmount, so a cell that scrolls out of the grid mid-debounce never fires a state update after
+  // it's gone.
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (openTimerRef.current) clearTimeout(openTimerRef.current); }, []);
+  function clearOpenTimer() {
+    if (openTimerRef.current) { clearTimeout(openTimerRef.current); openTimerRef.current = null; }
   }
 
   // Issue #229: setActive plus its own notification, so onActiveChange can never drift from what
@@ -69,7 +95,18 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit, 
   // and do nothing (this is the only branch, so none of those four gestures needs its own check).
   // Copy is Ctrl+C on the focused, unopened cell (#224, DiskCell/DiffRow) — this component has no
   // clipboard code of its own to give up.
-  if (!editable) return <ScalarText value={value} meta={meta} />;
+  //
+  // Issue #230: the one exception — a `string` cell whose caller wired `onOpenExtended` gets a
+  // double click that opens the extended editor read-only, so an immutable column's long value
+  // still has somewhere to be read in full (the issue's own "read-only over absent" tie-break).
+  // No `data-open-trigger` here: F2 and a second click stay exactly as inert as every other
+  // immutable cell — only double click is being carved out, not the other two triggers.
+  if (!editable) {
+    if (meta.type === 'string' && onOpenExtended) {
+      return <span onDoubleClick={onOpenExtended}><ScalarText value={value} meta={meta} /></span>;
+    }
+    return <ScalarText value={value} meta={meta} />;
+  }
 
   // Issue #201 / ADR-0033: the resting state is text, no cursor of its own, clickable.
   if (!active) {
@@ -81,6 +118,39 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit, 
     // Issue #204 / ADR-0033: no cursor override here — the parent DiskCell's `grab` cursor is
     // this cell's resting affordance (it's a drag source the whole time); a text-caret would
     // falsely imply only editing is possible until the cell is actually clicked into edit.
+    //
+    // Issue #230: `string` is the one type whose double-click target (the extended editor)
+    // differs from second-click/F2's (the inline editor) — see the "By cell" gesture matrix, spec.
+    // The second click's own "open inline" action is debounced by STRING_OPEN_DEBOUNCE_MS so a
+    // genuine following `dblclick` can cancel it and open the extended editor instead. The
+    // debounce only applies to a *real* click: F2's own dispatch is a real `.click()` call, which
+    // the DOM spec gives `detail: 0` (a real user click always carries `detail >= 1`), so that
+    // path is excluded and F2 keeps opening the inline editor immediately, matching "F2 always
+    // means inline, for every type" (spec, gesture matrix). Every other type is unaffected: its
+    // second click and double click already agree, so neither needs a timer.
+    if (meta.type === 'string') {
+      return (
+        <span
+          data-open-trigger
+          onClick={e => {
+            if (!isFocused) return;
+            if (e.detail === 0) { setActiveNotified(true); return; }
+            clearOpenTimer();
+            openTimerRef.current = setTimeout(() => {
+              openTimerRef.current = null;
+              setActiveNotified(true);
+            }, STRING_OPEN_DEBOUNCE_MS);
+          }}
+          onDoubleClick={() => {
+            clearOpenTimer();
+            if (onOpenExtended) onOpenExtended(); else setActiveNotified(true);
+          }}
+          style={{ display: 'block', minHeight: '1em' }}
+        >
+          <ScalarText value={value} meta={meta} />
+        </span>
+      );
+    }
     return (
       <span
         data-open-trigger

@@ -18,6 +18,16 @@ vi.mock('vscode', () => ({
   env: { clipboard: { writeText: (...args: unknown[]) => writeText(...args), readText: (...args: unknown[]) => readText(...args) } },
 }));
 
+// Issue #230: openExtendedFieldEditor has its own deep test suite (extendedFieldEditor.test.ts,
+// which exercises the real temp-file/save/close mechanics) — this file only needs to prove the
+// router dispatches OPEN_EXTENDED_EDITOR to it with the right params, so the function itself is
+// mocked here rather than pulling its full vscode surface (openTextDocument/showTextDocument/
+// onDidSaveTextDocument/onDidCloseTextDocument) into this file's own vscode mock too.
+const openExtendedFieldEditorMock = vi.fn();
+vi.mock('./extendedFieldEditor', () => ({
+  openExtendedFieldEditor: (...args: unknown[]) => openExtendedFieldEditorMock(...args),
+}));
+
 import {
   routeRecordPanelMessage, revealPendingChange, pickFormKeyViaQuickPick, pickConditionFunctionViaQuickPick,
   confirmRevertGroupViaNativeDialog, pickScriptNameViaInputBox, normalizeFormKeyQuery,
@@ -115,7 +125,7 @@ describe('routeRecordPanelMessage', () => {
 
   it('OPEN_RECORD executes modbench.openEditor with formKey and label', async () => {
     const { reveal } = fakeReveal();
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: '000001:Fallout4.esm' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: '000001:Fallout4.esm' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined });
 
     expect(executeCommand).toHaveBeenCalledWith('modbench.openEditor', { formKey: '000001:Fallout4.esm', label: '000001:Fallout4.esm' });
   });
@@ -123,7 +133,7 @@ describe('routeRecordPanelMessage', () => {
   it('an unrecognized message type is a no-op', async () => {
     const { reveal, refresh, revealFn } = fakeReveal();
 
-    await routeRecordPanelMessage({ type: 'somethingElse' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter });
+    await routeRecordPanelMessage({ type: 'somethingElse' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined });
 
     expect(executeCommand).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
@@ -131,8 +141,8 @@ describe('routeRecordPanelMessage', () => {
   });
 
   it('a non-object message is a no-op', async () => {
-    await expect(routeRecordPanelMessage('not an object', { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter })).resolves.toBeUndefined();
-    await expect(routeRecordPanelMessage(null, { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter })).resolves.toBeUndefined();
+    await expect(routeRecordPanelMessage('not an object', { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined })).resolves.toBeUndefined();
+    await expect(routeRecordPanelMessage(null, { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined })).resolves.toBeUndefined();
   });
 
   // Issue #174: the new branch — every successful pending-change mutation in the webview
@@ -140,13 +150,13 @@ describe('routeRecordPanelMessage', () => {
   it('PENDING_CHANGED refreshes the pending changes tree provider', async () => {
     const { reveal, refresh } = fakeReveal();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined });
 
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('PENDING_CHANGED with reveal deps undefined is a no-op, not a throw', async () => {
-    await expect(routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter })).resolves.toBeUndefined();
+    await expect(routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, { reveal: undefined, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined })).resolves.toBeUndefined();
   });
 
   // Issue #200: the webview has no route to the 'Modbench' channel of its own — LOG is the
@@ -155,7 +165,7 @@ describe('routeRecordPanelMessage', () => {
     const { reveal } = fakeReveal();
     const channel = fakeChannel();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'staged edit' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'staged edit' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined });
 
     expect(channel.debug).toHaveBeenCalledWith('staged edit');
     expect(channel.info).not.toHaveBeenCalled();
@@ -166,7 +176,7 @@ describe('routeRecordPanelMessage', () => {
     const { reveal } = fakeReveal();
     const channel = fakeChannel();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'info', message: 'saved group' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'info', message: 'saved group' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined });
 
     expect(channel.info).toHaveBeenCalledWith('saved group');
     expect(channel.debug).not.toHaveBeenCalled();
@@ -177,7 +187,7 @@ describe('routeRecordPanelMessage', () => {
     const { reveal } = fakeReveal();
     const channel = fakeChannel();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'warn', message: 'rejected drop' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'warn', message: 'rejected drop' }, { reveal, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined });
 
     expect(channel.warn).toHaveBeenCalledWith('rejected drop');
     expect(channel.debug).not.toHaveBeenCalled();
@@ -187,7 +197,7 @@ describe('routeRecordPanelMessage', () => {
   it('LOG with reveal deps undefined still forwards to the channel', async () => {
     const channel = fakeChannel();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'x' }, { reveal: undefined, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level: 'debug', message: 'x' }, { reveal: undefined, channel, formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined });
 
     expect(channel.debug).toHaveBeenCalledWith('x');
   });
@@ -198,7 +208,7 @@ describe('routeRecordPanelMessage', () => {
   it('COPY_TO_CLIPBOARD writes the message value to the system clipboard', async () => {
     const { reveal } = fakeReveal();
 
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value: 'Dogmeat [000001:Fallout4.esm]' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter });
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value: 'Dogmeat [000001:Fallout4.esm]' }, { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined });
 
     expect(writeText).toHaveBeenCalledWith('Dogmeat [000001:Fallout4.esm]');
     expect(report).not.toHaveBeenCalled();
@@ -218,7 +228,7 @@ describe('routeRecordPanelMessage', () => {
 
     await expect(routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value: 'Dogmeat [000001:Fallout4.esm]' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     )).resolves.toBeUndefined();
 
     expect(report).toHaveBeenCalledWith('error', 'Could not copy to the clipboard.', 'clipboard unavailable');
@@ -498,7 +508,7 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER (issue #210)', () => 
     const { reveal } = fakeReveal();
     await expect(routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: [] },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     )).resolves.toBeUndefined();
     expect(createQuickPick).not.toHaveBeenCalled();
   });
@@ -512,7 +522,7 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER (issue #210)', () => 
 
     const dispatchPromise = routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: ['npc_'] },
-      { reveal, channel: fakeChannel(), formKeyPicker: { repository: { searchRecords }, reply }, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: { repository: { searchRecords }, reply }, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     );
     qp.selectedItems = [{ label: 'Picked [X]', formKey: 'X' }];
     accept();
@@ -530,7 +540,7 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER (issue #210)', () => 
 
     const dispatchPromise = routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r2', seed: '', validTypes: [] },
-      { reveal, channel: fakeChannel(), formKeyPicker: { repository: { searchRecords }, reply }, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: { repository: { searchRecords }, reply }, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     );
     hideWithoutAccept();
     await dispatchPromise;
@@ -597,7 +607,7 @@ describe('routeRecordPanelMessage — OPEN_CONDITION_FUNCTION_PICKER (issue #211
     const { reveal } = fakeReveal();
     await expect(routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER, requestId: 'r1', seed: '' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     )).resolves.toBeUndefined();
     expect(showQuickPick).not.toHaveBeenCalled();
   });
@@ -610,7 +620,7 @@ describe('routeRecordPanelMessage — OPEN_CONDITION_FUNCTION_PICKER (issue #211
 
     await routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER, requestId: 'r1', seed: 'GetIsID' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: { repository: { getConditionFunctions }, reply }, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: { repository: { getConditionFunctions }, reply }, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     );
 
     expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId: 'r1', functionName: 'GetDistance' });
@@ -624,7 +634,7 @@ describe('routeRecordPanelMessage — OPEN_CONDITION_FUNCTION_PICKER (issue #211
 
     await routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER, requestId: 'r2', seed: '' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: { repository: { getConditionFunctions }, reply }, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: { repository: { getConditionFunctions }, reply }, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     );
 
     expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId: 'r2', functionName: null });
@@ -666,7 +676,7 @@ describe('routeRecordPanelMessage — OPEN_REVERT_GROUP_CONFIRM (issue #212)', (
     const { reveal } = fakeReveal();
     await expect(routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM, requestId: 'r1', detail: 'x' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     )).resolves.toBeUndefined();
     expect(showWarningMessage).not.toHaveBeenCalled();
   });
@@ -678,7 +688,7 @@ describe('routeRecordPanelMessage — OPEN_REVERT_GROUP_CONFIRM (issue #212)', (
 
     await routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM, requestId: 'r1', detail: 'Npc / X · Name' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: { reply }, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: { reply }, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     );
 
     expect(showWarningMessage).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ modal: true, detail: 'Npc / X · Name' }), 'Revert');
@@ -692,7 +702,7 @@ describe('routeRecordPanelMessage — OPEN_REVERT_GROUP_CONFIRM (issue #212)', (
 
     await routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_REVERT_GROUP_CONFIRM, requestId: 'r2', detail: 'x' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: { reply }, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: { reply }, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     );
 
     expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.REVERT_GROUP_CONFIRMED, requestId: 'r2', confirmed: false });
@@ -738,7 +748,7 @@ describe('routeRecordPanelMessage — OPEN_ADD_SCRIPT_NAME (issue #212)', () => 
     const { reveal } = fakeReveal();
     await expect(routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME, requestId: 'r1' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     )).resolves.toBeUndefined();
     expect(showInputBox).not.toHaveBeenCalled();
   });
@@ -750,7 +760,7 @@ describe('routeRecordPanelMessage — OPEN_ADD_SCRIPT_NAME (issue #212)', () => 
 
     await routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME, requestId: 'r1' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: { reply }, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: { reply }, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     );
 
     expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.ADD_SCRIPT_NAME_PICKED, requestId: 'r1', name: 'MyScript' });
@@ -763,7 +773,7 @@ describe('routeRecordPanelMessage — OPEN_ADD_SCRIPT_NAME (issue #212)', () => 
 
     await routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.OPEN_ADD_SCRIPT_NAME, requestId: 'r2' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: { reply }, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: { reply }, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     );
 
     expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.ADD_SCRIPT_NAME_PICKED, requestId: 'r2', name: null });
@@ -785,7 +795,7 @@ describe('routeRecordPanelMessage — READ_CLIPBOARD (issue #225)', () => {
     const { reveal } = fakeReveal();
     await expect(routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.READ_CLIPBOARD, requestId: 'r1' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
     )).resolves.toBeUndefined();
     expect(readText).not.toHaveBeenCalled();
   });
@@ -797,7 +807,7 @@ describe('routeRecordPanelMessage — READ_CLIPBOARD (issue #225)', () => {
 
     await routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.READ_CLIPBOARD, requestId: 'r1' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: { reply }, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: { reply }, reporter: fakeReporter, extendedFieldEditor: undefined },
     );
 
     expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.CLIPBOARD_READ, requestId: 'r1', value: 'Dogmeat [000001:Fallout4.esm]' });
@@ -816,10 +826,43 @@ describe('routeRecordPanelMessage — READ_CLIPBOARD (issue #225)', () => {
 
     await expect(routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.READ_CLIPBOARD, requestId: 'r2' },
-      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: { reply }, reporter: fakeReporter },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: { reply }, reporter: fakeReporter, extendedFieldEditor: undefined },
     )).resolves.toBeUndefined();
 
     expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.CLIPBOARD_READ, requestId: 'r2', value: null });
     expect(report).toHaveBeenCalledWith('error', 'Could not read the clipboard.', 'clipboard unavailable');
+  });
+});
+
+// Issue #230: the OPEN_EXTENDED_EDITOR branch — see extendedFieldEditor.test.ts for the deep
+// (temp-file/save/close) behavior; this only proves routeRecordPanelMessage wires the message's
+// fields through to openExtendedFieldEditor's params, using the same deps-optional-is-a-no-op
+// convention as every other *Picker/*Confirm/*Name/clipboardRead branch above.
+describe('routeRecordPanelMessage — OPEN_EXTENDED_EDITOR (issue #230)', () => {
+  beforeEach(() => { openExtendedFieldEditorMock.mockClear(); });
+
+  it('with extendedFieldEditor deps undefined is a no-op', async () => {
+    const { reveal } = fakeReveal();
+    await expect(routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'MyMod.esp', readOnly: false },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: undefined },
+    )).resolves.toBeUndefined();
+    expect(openExtendedFieldEditorMock).not.toHaveBeenCalled();
+  });
+
+  it('forwards the message identity/value/readOnly and the deps bundle to openExtendedFieldEditor', async () => {
+    const { reveal } = fakeReveal();
+    const reply = vi.fn();
+    const extendedFieldEditorDeps = { tempRoot: '/tmp/x', reply, log: vi.fn(), reporter: fakeReporter };
+
+    await routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', readOnly: true },
+      { reveal, channel: fakeChannel(), formKeyPicker: undefined, conditionFunctionPicker: undefined, revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, reporter: fakeReporter, extendedFieldEditor: extendedFieldEditorDeps },
+    );
+
+    expect(openExtendedFieldEditorMock).toHaveBeenCalledWith(
+      { requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', readOnly: true },
+      extendedFieldEditorDeps,
+    );
   });
 });

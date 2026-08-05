@@ -9,7 +9,10 @@ specified single-click-to-edit, which xEdit does not do. In the field grid, a si
 the cell — the row highlights, the focused cell is outlined, focus survives a re-render, and no
 cell shows a `grab` cursor (#222). Editing is off single click: a second click on the focused
 cell, `F2`, or a double click opens a mutable cell's editor; double-clicking the label column
-expands/collapses that node; the editor selects its whole text on focus (#223). `Ctrl+C` copies
+expands/collapses that node; the editor selects its whole text on focus (#223). A `string` cell's
+double click diverges from its second-click/F2 target: it opens the extended editor, a real editor
+tab, rather than the inline text box (#230) — see *Editing* below for the vehicle, commit trigger,
+and immutable-column behaviour. `Ctrl+C` copies
 the focused cell's model value in both column kinds (#224); `Ctrl+X`/`Ctrl+V` are the mutating half
 of that same contract — clipboard read/write both round-trip through the extension host, and both
 commit through the ordinary onEdit path, coercing the pasted string the same way the typed-editor
@@ -18,8 +21,11 @@ not a closed-cell paste of its own — see the FormKey paste note below. Unsorte
 ops (Add/Remove/Move Up/Move Down) live on the right-click
 menu with `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` as accelerators, and the inline ▲▼✕/＋ buttons #142
 shipped before ADR-0034 are gone (#227). The read-only value surface ADR-0033 introduced is gone
-too (#226): an immutable cell opens nothing on plain click, second click, `F2`, or double click,
-with Ctrl+C on the focused cell (#224) as its copy path. Everything in *Interaction model* below
+too (#226): an immutable cell opens nothing on plain click, second click, `F2`, or double click —
+**except a `string` cell's double click**, which opens the extended editor read-only rather than
+opening nothing (#230; a read-only tab is still the only way to read a long value in full) — with
+Ctrl+C on the focused cell (#224) as every immutable cell's copy path regardless. Everything in
+*Interaction model* below
 describes the target, not the build. Known gaps beyond that: VMAD and Condition sections don't
 have the focus model at all yet (#231) and FormKey resolution (#141).
 
@@ -137,8 +143,11 @@ better idea.
 - **Left-click on the already-focused cell** — open its inline editor. The Explorer
   "click, then click again to rename" pattern, and xEdit's `toEditOnClick`.
 - **Double-click a value cell** — open the fullest editor that type has: the inline editor for
-  numeric and flag types, the extended editor for text and references. **Double-click the label
-  column** — expand/collapse that node.
+  numeric and flag types, the extended editor for `string` (#230). A FormKey's double click stays
+  on the native QuickPick, same as its second click/F2 — that QuickPick is already its richest
+  editor (ADR-0034's divergence #1), not a second surface layered on top of it (divergence #2, the
+  extended editor); the two divergences are independent, and only one of them applies per type.
+  **Double-click the label column** — expand/collapse that node.
 - **The keyboard acts on the focused cell** — `F2` edit · `Ctrl+C` copy · `Ctrl+X` cut ·
   `Ctrl+V` paste · `Insert` add a list entry · `Delete` remove the entry or clear the value ·
   `Ctrl+↑`/`Ctrl+↓` reorder within an unsorted list. **Clipboard operations carry the cell's model
@@ -339,6 +348,52 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   scalar leaf, collapsed or expanded alike (#204). Pending-change cells show the new value on a
   yellow background and are directly editable on the same terms as disk cells (see Pending
   column for how they're reverted).
+- **A `string` cell's double click opens the extended editor** (#230; ADR-0034 divergence #2) —
+  xEdit's own answer for this gesture is `TfrmViewElements`, a separate modeless window; a
+  modeless Delphi form has no analogue worth reproducing in a webview (reproducing one would be
+  exactly the chrome [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) forbids),
+  so the vehicle is substituted for a real **editor tab**, opened `ViewColumn.Beside` so the grid
+  stays visible, non-preview so it isn't silently replaced by the next single-click preview
+  elsewhere. xEdit's window also shows the value across every compared record; the grid already
+  does that (one row, one column per plugin), so that half of `TfrmViewElements` isn't ported —
+  the tab holds one plugin's value.
+  - **Vehicle**: a real OS temp file (`vscode.workspace.openTextDocument`/`showTextDocument`), not
+    a `FileSystemProvider` and not an `untitled:` document. A real file gets genuine dirty-tracking
+    and VS Code's own "Save changes to *X*? Save / Don't Save / Cancel" prompt on close-with-edits
+    for free, so **abandoning it (closing without saving) commits nothing** without any bespoke
+    code enforcing that; an **immutable** column's tab is `chmod`-ed non-writable before it opens,
+    so it's **read-only, not absent** — VS Code shows a locked, uneditable editor for a
+    non-writable local file natively, matching AC's "read-only over absent, if it's a coin toss": a
+    read-only tab is still the only way to read a long value in full. Path is deterministic (keyed
+    by record + field + plugin, not random), so re-double-clicking the same cell reveals the
+    already-open tab rather than opening a duplicate — VS Code's own per-URI reuse. The tab's own
+    filename is what its title shows: `⟨Field⟩ [⟨Plugin⟩].txt` inside a directory named for the
+    record (`⟨EditorID⟩ [⟨FormKey⟩]`, the same composite the header uses), so both which field and
+    which record a tab belongs to are legible without opening it.
+  - **Commit trigger**: on save. Each `Ctrl+S` re-stages the tab's full current content through the
+    same `onEdit`/pending-change path any other cell's commit uses — never on keystroke (would
+    restage on every character typed) and never only on close (a user who saves twice while still
+    editing expects both saves staged, the same as re-editing any other cell twice).
+  - **Trigger gesture**: kept as **double-click**, not moved to the right-click menu, for two
+    independent reasons that agree: xEdit already trains its users on exactly this gesture
+    (`EditTips`: *"Double click on text fields in the right pane to open multiline editor"*), and
+    it is simultaneously VS Code's own idiom — Explorer's single-click-preview vs.
+    double-click-permanent-tab is the same "double click commits you to a fuller, more permanent
+    view" shape. Because a second click on an already-focused `string` cell opens the *inline*
+    editor while double-click opens this *different* surface — the one type/gesture pair where
+    second-click/F2's target and double-click's target genuinely differ (every other type's second
+    click and double click already agree, so this doesn't apply to them) — a genuine double click
+    must not be preempted by the second click of the same two-click sequence already having opened
+    the inline editor first. Resolved with a short (~300ms) debounce on the second click's own
+    "open inline" action, cancelled by a following native `dblclick` event, which redirects to the
+    extended editor instead — a standard, well-established click/dblclick disambiguation pattern.
+    `F2` is unaffected and stays immediate for every type including `string`: it dispatches its
+    open via a real `element.click()` call (`DiskCell`), which the DOM spec gives `detail: 0`, and
+    the debounce only ever applies to a real mouse click (`detail >= 1`).
+  - **Scope**: the field grid's disk columns only (`ScalarCell`/`DiffRow`) — the Pending column,
+    VMAD section, and Condition section don't wire it, the same boundary #232/#231 already draw for
+    their own not-yet-built focus models; a `string` cell there keeps opening its inline editor on
+    double click, unchanged.
 - **Unsorted array fields have arity and order operations** — **Move Up** / **Move Down** (swap
   with the neighbour) and **Remove** on an element row, and **Add** on the parent array row,
   appending a default-valued element (#142). They live in the **right-click menu**, with

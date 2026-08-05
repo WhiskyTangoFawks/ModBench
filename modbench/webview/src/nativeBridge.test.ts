@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { vscode } from './vscode';
-import { pickFormKey, pickConditionFunction, confirmRevertGroup, pickScriptName, readClipboardText } from './nativeBridge';
+import { pickFormKey, pickConditionFunction, confirmRevertGroup, pickScriptName, readClipboardText, openExtendedFieldEditor } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 
 // Issue #212 (refactor): formKeyPickerBridge.ts (#210), conditionFunctionPickerBridge.ts (#211),
@@ -226,5 +226,77 @@ describe('readClipboardText', () => {
     }));
 
     expect(await resultPromise).toBeNull();
+  });
+});
+
+// Issue #230: unlike every bridge above, openExtendedFieldEditor doesn't return a Promise — the
+// editor tab it opens can be saved any number of times before it's closed, so its own map entry
+// isn't deleted on the first EXTENDED_EDITOR_COMMITTED the way `pending`'s entries are deleted on
+// their first (and only) reply.
+describe('openExtendedFieldEditor', () => {
+  it('posts OPEN_EXTENDED_EDITOR with the field identity and readOnly flag', () => {
+    openExtendedFieldEditor(
+      { value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: false },
+      vi.fn(),
+    );
+
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR,
+      value: 'a long description',
+      recordLabel: 'Deacon [000123:Fallout4.esm]',
+      fieldName: 'Description',
+      plugin: 'Fallout4.esm',
+      readOnly: false,
+    }));
+  });
+
+  it('calls onCommit with each EXTENDED_EDITOR_COMMITTED reply, not just the first', () => {
+    const onCommit = vi.fn();
+    openExtendedFieldEditor({ value: '', recordLabel: '', fieldName: '', plugin: '', readOnly: false }, onCommit);
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId, value: 'first save' },
+    }));
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId, value: 'second save' },
+    }));
+
+    expect(onCommit).toHaveBeenNthCalledWith(1, 'first save');
+    expect(onCommit).toHaveBeenNthCalledWith(2, 'second save');
+  });
+
+  it('stops calling onCommit once EXTENDED_EDITOR_CLOSED arrives for that requestId', () => {
+    const onCommit = vi.fn();
+    openExtendedFieldEditor({ value: '', recordLabel: '', fieldName: '', plugin: '', readOnly: false }, onCommit);
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED, requestId },
+    }));
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId, value: 'too late' },
+    }));
+
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it('a concurrent open for a different requestId is unaffected by one being closed', () => {
+    const firstCommit = vi.fn();
+    const secondCommit = vi.fn();
+    openExtendedFieldEditor({ value: '', recordLabel: '', fieldName: '', plugin: '', readOnly: false }, firstCommit);
+    const firstRequestId = postedRequestId();
+    openExtendedFieldEditor({ value: '', recordLabel: '', fieldName: '', plugin: '', readOnly: false }, secondCommit);
+    const secondRequestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED, requestId: firstRequestId },
+    }));
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId: secondRequestId, value: 'still open' },
+    }));
+
+    expect(firstCommit).not.toHaveBeenCalled();
+    expect(secondCommit).toHaveBeenCalledWith('still open');
   });
 });

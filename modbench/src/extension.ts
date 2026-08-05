@@ -225,13 +225,14 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     provider: changeGroupTreeProvider, view: changeGroupTreeView, log,
     reporter: makeReporter(outputChannel, 'revealPendingChange'),
   };
-  // #210/#211/#212/#225: formKeyPicker/conditionFunctionPicker/revertGroupConfirm/addScriptName/
-  // clipboardRead are left undefined here — each `reply` must post back to the one panel that
-  // asked (never a broadcast), so openRecordPanel rebuilds these bundles per panel at the
-  // onDidReceiveMessage call site rather than sharing one instance the way reveal/channel are.
+  // #210/#211/#212/#225/#230: formKeyPicker/conditionFunctionPicker/revertGroupConfirm/
+  // addScriptName/clipboardRead/extendedFieldEditor are left undefined here — each `reply` must
+  // post back to the one panel that asked (never a broadcast), so openRecordPanel rebuilds these
+  // bundles per panel at the onDidReceiveMessage call site rather than sharing one instance the
+  // way reveal/channel are.
   const routerDeps: RouteRecordPanelMessageDeps = {
     reveal, channel: outputChannel, formKeyPicker: undefined, conditionFunctionPicker: undefined,
-    revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined,
+    revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, extendedFieldEditor: undefined,
     // Issue #224: COPY_TO_CLIPBOARD's ADR-0026 surfacing on a failed clipboard write — shared
     // like `channel` above, not rebuilt per panel, since there's no per-panel reply to route.
     reporter: makeReporter(outputChannel, 'copyToClipboard'),
@@ -1332,6 +1333,11 @@ function promptPluginName(): Thenable<string | undefined> {
 
 const RECORD_PANEL_KEY = '__record_view__';
 
+// Issue #230: the extended editor's temp files live under here — one directory for the whole
+// session (extendedFieldEditor.ts keys the actual per-field path off it), computed once rather
+// than per panel/per open, since it never varies within a run.
+const extendedFieldEditorTempRoot = path.join(os.tmpdir(), 'modbench-medit-fields');
+
 // #200/#208: bundled as one trailing param (not two/three) — kept the parameter count under the
 // lint budget and there's no reason to unpack them only to repack below. recordPanels is every
 // open 'modbench'-viewType panel (main *and* any "Beside" one — see showReferencedBy's
@@ -1392,6 +1398,16 @@ function openRecordPanel(
       revertGroupConfirm: { reply: (m) => void panel.webview.postMessage(m) },
       addScriptName: { reply: (m) => void panel.webview.postMessage(m) },
       clipboardRead: { reply: (m) => void panel.webview.postMessage(m) },
+      // Issue #230: tempRoot/log/reporter are session-static (the same values every panel would
+      // get), only `reply` genuinely varies per panel — bundled here anyway, matching every other
+      // *Picker/*Confirm/*Name/clipboardRead reconstruction on this object, rather than splitting
+      // "static" fields onto routerDeps and "per-panel" fields onto a second bundle.
+      extendedFieldEditor: {
+        tempRoot: extendedFieldEditorTempRoot,
+        reply: (m) => void panel.webview.postMessage(m),
+        log: (msg) => routerDeps.channel.debug(msg),
+        reporter: routerDeps.reporter,
+      },
     });
   });
 
