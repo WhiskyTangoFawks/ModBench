@@ -198,6 +198,9 @@ public sealed class RecordQueryService(
     public IReadOnlyList<string> GetConditionFunctions() =>
         ConditionCodecRegistry.For(RequireSession().GameRelease.ToCategory())?.AvailableFunctions().ToList() ?? [];
 
+    public IReadOnlyList<string> GetConditionRunOnTargets() =>
+        ConditionCodecRegistry.For(RequireSession().GameRelease.ToCategory())?.AvailableRunOnTargets().ToList() ?? [];
+
     public PlacementRow? GetPlacement(string formKey, string plugin) =>
         RequireRepository().GetPlacement(formKey, plugin);
 

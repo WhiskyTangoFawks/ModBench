@@ -36,6 +36,23 @@ public static class PluginEndpoints
             .WithTags("Records")
             .Produces<IReadOnlyList<string>>();
 
+        // The Run On target dropdown's catalog (#167) — filtered to what the loaded session's
+        // game actually resolves (ConditionCodecRegistry), not a hardcoded frontend array.
+        app.MapGet("/condition-run-on-targets", (IRecordQueryService svc, ILoggerFactory loggerFactory) =>
+        {
+            loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogInformation("Received GetConditionRunOnTargets");
+            return Results.Ok(svc.GetConditionRunOnTargets());
+        })
+            .WithName("GetConditionRunOnTargets")
+            .WithTags("Records")
+            .Produces<IReadOnlyList<string>>()
+            // RequireSession() throws InvalidOperationException when no session is loaded — same
+            // "no session loaded" case CreatePlugin's own catch maps to 503 below. This endpoint
+            // doesn't yet catch it itself (#244 tracks fixing that uniformly across all three
+            // catalog endpoints in this file); the annotation documents the real failure mode so
+            // the generated client's type isn't a lie about what can come back.
+            .ProducesProblem(503);
+
         app.MapGet("/plugins/{plugin}/record-types", (string plugin, IRecordQueryService svc, ILoggerFactory loggerFactory) =>
         {
             loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogInformation("Received GetPluginRecordTypes for {Plugin}", plugin);

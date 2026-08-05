@@ -80,11 +80,14 @@ function lastIndexByPlugin(conditions: ConditionDiff[]): Record<string, number> 
 function scalarMeta(type: 'string' | 'int' | 'float' | 'bool'): FieldMetadata {
   return { name: '', type, isArray: false, validFormKeyTypes: [], enumValues: [] };
 }
-function enumMeta(values: string[]): FieldMetadata {
-  return { name: '', type: 'enum', isArray: false, validFormKeyTypes: [], enumValues: values };
+// One shape for any leaf whose enumValues carries its options — 'enum' (Operator, a plain
+// hand-listed set) and 'conditionRunOn' (Run On, #167: enumValues is the server's Run On target
+// catalog, GET /condition-run-on-targets, threaded in from buildConditionRows rather than a
+// hardcoded FO4 member list) differ only in which widget DiffRow dispatches to, not in shape.
+function enumTypedMeta(type: 'enum' | 'conditionRunOn', values: string[]): FieldMetadata {
+  return { name: '', type, isArray: false, validFormKeyTypes: [], enumValues: values };
 }
 const FUNCTION_META: FieldMetadata = { name: '', type: 'conditionFunction', isArray: false, validFormKeyTypes: [], enumValues: [] };
-const RUN_ON_META: FieldMetadata = { name: '', type: 'conditionRunOn', isArray: false, validFormKeyTypes: [], enumValues: [] };
 const COMPARISON_META: FieldMetadata = { name: '', type: 'conditionComparison', isArray: false, validFormKeyTypes: [], enumValues: [] };
 const PARAM_META: FieldMetadata = { name: '', type: 'conditionParam', isArray: false, validFormKeyTypes: [], enumValues: [] };
 const GATE_META: FieldMetadata = { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [], readOnly: true };
@@ -99,13 +102,13 @@ function fieldValues<T>(perPlugin: Record<string, ParsedCondition | null>, extra
 
 interface FieldSpec { name: string; key: string; meta: FieldMetadata; wire: string | null; values: Record<string, unknown> }
 
-function envelopeFields(condition: ConditionDiff, groupFieldPath: string): FieldSpec[] {
+function envelopeFields(condition: ConditionDiff, groupFieldPath: string, runOnTargets: string[]): FieldSpec[] {
   const idx = condition.index;
   const wire = (subField: string) => conditionFieldPath(groupFieldPath, idx, subField);
   return [
     { name: 'Function', key: 'function', meta: FUNCTION_META, wire: wire('Function'), values: fieldValues(condition.perPlugin, c => c.function) },
-    { name: 'Run On', key: 'runOn', meta: RUN_ON_META, wire: wire('RunOn'), values: fieldValues(condition.perPlugin, c => ({ target: c.runOnTarget, reference: c.runOnReference ?? null })) },
-    { name: 'Operator', key: 'operator', meta: enumMeta(OPERATOR_VALUES), wire: wire('Operator'), values: fieldValues(condition.perPlugin, c => c.operator) },
+    { name: 'Run On', key: 'runOn', meta: enumTypedMeta('conditionRunOn', runOnTargets), wire: wire('RunOn'), values: fieldValues(condition.perPlugin, c => ({ target: c.runOnTarget, reference: c.runOnReference ?? null })) },
+    { name: 'Operator', key: 'operator', meta: enumTypedMeta('enum', OPERATOR_VALUES), wire: wire('Operator'), values: fieldValues(condition.perPlugin, c => c.operator) },
     { name: 'Use Global', key: 'useGlobal', meta: scalarMeta('bool'), wire: wire('UseGlobal'), values: fieldValues(condition.perPlugin, c => c.useGlobal) },
     // A bare scalar, matching the existing wire format exactly (no backend change): the composite
     // cell (slice 4) infers FormKey-vs-float from the value's own JS type, not a sibling flag.
@@ -128,15 +131,15 @@ function paramFields(condition: ConditionDiff, groupFieldPath: string): FieldSpe
 
 // Function, Parameters…, then the rest of the envelope — matching the deleted ConditionSection's
 // own left-to-right summary order.
-function fieldsFor(condition: ConditionDiff, groupFieldPath: string): FieldSpec[] {
-  const envelope = envelopeFields(condition, groupFieldPath);
+function fieldsFor(condition: ConditionDiff, groupFieldPath: string, runOnTargets: string[]): FieldSpec[] {
+  const envelope = envelopeFields(condition, groupFieldPath, runOnTargets);
   return [envelope[0], ...paramFields(condition, groupFieldPath), ...envelope.slice(1)];
 }
 
 function buildCondition(
-  condition: ConditionDiff, groupFieldPath: string, lastIndexForPlugin: Record<string, number>,
+  condition: ConditionDiff, groupFieldPath: string, lastIndexForPlugin: Record<string, number>, runOnTargets: string[],
 ): { diff: FieldDiff; meta: FieldMetadata } {
-  const specs = fieldsFor(condition, groupFieldPath);
+  const specs = fieldsFor(condition, groupFieldPath, runOnTargets);
   const children: FieldDiff[] = specs.map(spec => ({
     fieldName: spec.name,
     values: spec.values,
@@ -197,9 +200,9 @@ function compactCommitOverride(_currentRaw: unknown, _path: PathSegment[], value
   return Array.isArray(value) ? value.filter(v => v != null) : value;
 }
 
-function buildGroup(group: ConditionGroupDiff): { diff: FieldDiff; meta: FieldMetadata } {
+function buildGroup(group: ConditionGroupDiff, runOnTargets: string[]): { diff: FieldDiff; meta: FieldMetadata } {
   const lastIndexForPlugin = lastIndexByPlugin(group.conditions);
-  const conditionBuilds = group.conditions.map(c => buildCondition(c, group.fieldPath, lastIndexForPlugin));
+  const conditionBuilds = group.conditions.map(c => buildCondition(c, group.fieldPath, lastIndexForPlugin, runOnTargets));
   const values = conditionsSparseByPlugin(group.conditions);
   const winnerPlugin = Object.keys(values)[0] ?? '';
   const elementMeta = conditionBuilds[0]?.meta
@@ -234,11 +237,19 @@ export interface ConditionTreeRows {
 // The one exported entry point — RecordPanel merges `diffs` into its own `diffs` array and
 // `metaMap` into its own `fieldMetaMap` (both additive; a condition-owning field is never also
 // reflected as a generic field row — SchemaReflector already excludes it, #178).
-export function buildConditionRows(conditions: ConditionCompare | null | undefined): ConditionTreeRows {
+//
+// Issue #167: `runOnTargets` is the server's Run On target catalog (RecordPanel's own
+// `client.conditionRunOnTargets()` fetch, GET /condition-run-on-targets) — defaulted to `[]` so
+// every existing call site that doesn't yet have it in hand keeps compiling (the Run On cell
+// simply has no options to show until the fetch resolves, the same transient-empty state any
+// other once-per-session catalog fetch has before it lands).
+export function buildConditionRows(
+  conditions: ConditionCompare | null | undefined, runOnTargets: string[] = [],
+): ConditionTreeRows {
   const diffs: FieldDiff[] = [];
   const metaMap: Record<string, FieldMetadata> = {};
   for (const group of conditions?.groups ?? []) {
-    const { diff, meta } = buildGroup(group);
+    const { diff, meta } = buildGroup(group, runOnTargets);
     diffs.push(diff);
     metaMap[group.fieldPath] = meta;
   }

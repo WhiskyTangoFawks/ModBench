@@ -1,5 +1,13 @@
 import { createApiClient } from '../../src/medit/ApiClient';
 import type { CompareResult, PendingChange } from './types';
+import { vscode } from './vscode';
+import { WEBVIEW_TO_EXTENSION, type LogLevel } from './messages';
+
+// Mirrors RecordPanel's own logAction — this module has no component instance to hang a callback
+// off of, but the bridge is the same one-line postMessage either way.
+function log(level: LogLevel, message: string) {
+  vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level, message });
+}
 
 // Issue #122: the record panel's plugin list — a structural subset of the backend's
 // PluginResponse, kept minimal because the panel only needs name / immutability / order.
@@ -50,6 +58,13 @@ export interface RecordSessionClient {
   // QuickPick now, fetched in the extension host via PluginRepository.getConditionFunctions()
   // instead of round-tripping through this webview, same as #210's searchRecords removal.
   revertGroup(changeId: string): Promise<Response>;
+  // Issue #167: the Run On target dropdown's catalog — unlike the function catalog above, this
+  // one *does* stay on this client: it feeds ConditionRunOnCell's own inline `<select>` rendered
+  // in this webview (not a native QuickPick), so this webview needs the list itself, the same way
+  // it already reads `/plugins`/`/changes` directly rather than round-tripping through the
+  // extension host. Session-wide, not per-record, so RecordPanel fetches it once rather than on
+  // every load().
+  conditionRunOnTargets(): Promise<string[]>;
 }
 
 export function createRecordSessionClient(port: number): RecordSessionClient {
@@ -152,6 +167,25 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
         parseAs: 'stream',
         fetch: fetchImpl,
       }));
+    },
+
+    // Issue #167 (review): mirrors PluginRepository.getConditionFunctions()'s own contract —
+    // never rejects, logs on both failure paths (a non-ok response and a thrown network error)
+    // rather than swallowing either silently, then degrades to [] (the Run On dropdown simply
+    // has no options to show, the same "background/recoverable" severity a tree-fetch blip gets,
+    // not a blocking notification — ADR-0026).
+    async conditionRunOnTargets() {
+      try {
+        const { data, response } = await client.GET('/condition-run-on-targets', {});
+        if (!response.ok) {
+          log('warn', `conditionRunOnTargets failed (${response.status})`);
+          return [];
+        }
+        return data ?? [];
+      } catch (e) {
+        log('warn', `conditionRunOnTargets failed: ${e instanceof Error ? e.message : String(e)}`);
+        return [];
+      }
     },
   };
 }

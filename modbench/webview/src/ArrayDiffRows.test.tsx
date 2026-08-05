@@ -451,6 +451,11 @@ function fakeClient(): RecordSessionClient {
     copyTo: vi.fn().mockResolvedValue(resp),
     removeOverride: vi.fn().mockResolvedValue(resp),
     createRecord: vi.fn().mockResolvedValue(resp),
+    saveGroup: vi.fn().mockResolvedValue(resp),
+    revertGroup: vi.fn().mockResolvedValue(resp),
+    groupMembers: vi.fn().mockResolvedValue([]),
+    // Issue #167: RecordPanel fetches this unconditionally on mount now.
+    conditionRunOnTargets: vi.fn().mockResolvedValue([]),
   };
 }
 

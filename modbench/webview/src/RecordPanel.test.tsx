@@ -115,6 +115,7 @@ interface FakeOpts {
   saveGroup?: RecordSessionClient['saveGroup'];
   revertGroup?: RecordSessionClient['revertGroup'];
   groupMembers?: RecordSessionClient['groupMembers'];
+  conditionRunOnTargets?: RecordSessionClient['conditionRunOnTargets'];
 }
 
 // Issue #122: a fake record-session client. `load` returns the composite view built from the
@@ -137,6 +138,8 @@ function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordSessionClient 
     saveGroup: opts.saveGroup ?? vi.fn().mockResolvedValue(resp(200, { byPlugin: {}, reindexFailure: null })),
     revertGroup: opts.revertGroup ?? vi.fn().mockResolvedValue(resp(204)),
     groupMembers: opts.groupMembers ?? vi.fn().mockResolvedValue(opts.changes ?? []),
+    // Issue #167: the Run On target dropdown's catalog — session-wide, fetched once on mount.
+    conditionRunOnTargets: opts.conditionRunOnTargets ?? vi.fn().mockResolvedValue([]),
   };
 }
 
