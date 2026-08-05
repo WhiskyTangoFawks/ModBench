@@ -134,6 +134,14 @@ export function setInstalledInText(text: string): string {
   return setMetaFlag(text, 'installed', true);
 }
 
+/** Set `uninstalled=true` in a `.meta` text (the Uninstall writeback — the
+ *  symmetric half of `setInstalledInText`). `installed` is left untouched:
+ *  both keys carry history, and `parseDownloadMeta` resolves the precedence
+ *  (`uninstalled` wins), matching MO2's own `installed`/`uninstalled` pair. */
+export function setUninstalledInText(text: string): string {
+  return setMetaFlag(text, 'uninstalled', true);
+}
+
 /** Set (`hidden=true`) or clear (`hidden=false`) the `.meta`'s `removed` flag —
  *  the Hide/Unhide mutation. `removed` (HIDDEN) is a SEPARATE axis from the
  *  `uninstalled` Uninstalled Status. Unhide writes `removed=false`, not a key
