@@ -16,8 +16,12 @@ import { buildWebviewHtml } from './medit/webviewHtml';
 import {
   EXTENSION_TO_WEBVIEW, type ArrayElementContext, type ArrayParentContext,
   type ColumnHeaderContext, type ExtensionToWebview, type PendingCellContext,
+  type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext,
 } from './medit/messages';
-import { routeRecordPanelMessage, revealPendingChange, type RevealDeps, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
+import {
+  routeRecordPanelMessage, revealPendingChange, pickScriptNameViaInputBox,
+  type RevealDeps, type RouteRecordPanelMessageDeps,
+} from './medit/recordPanelMessageRouter';
 import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
@@ -212,6 +216,7 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
     ...registerCopyCreateCommands(deps),
     ...registerColumnHeaderCommands(deps),
     ...registerArrayOpCommands(deps),
+    ...registerVmadOpCommands(deps),
   ];
 }
 
@@ -635,6 +640,86 @@ function registerArrayOpCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   ];
 }
 
+// Issue #231 (review): Set Script Flags/Set Property Flags' own QuickPick choices — VMAD's fixed,
+// stable flag vocabulary (the binary format's own enum). Mirrored here rather than imported from
+// `webview/src/vmadOps.ts` across the webview/extension-host process boundary (nothing else on
+// this side needs that module, and there is no existing precedent for `extension.ts` reaching
+// into `webview/src` — see vmadTreeAdapter.ts's own SCRIPT_FLAGS for the webview-side copy, used
+// to build a script's read-only Flags row).
+const VMAD_SCRIPT_FLAGS = ['Local', 'Inherited', 'Removed', 'InheritedAndRemoved'] as const;
+const VMAD_PROP_FLAGS = ['Edited', 'Removed'] as const;
+
+// Issue #231: VMAD's own structural-op commands — same broadcast-and-self-filter shape as
+// registerArrayOpCommands above, reached from the "Scripts (VMAD)" wrapper row (Add Script), a
+// script row (Remove Script, Add Property, Set Script Flags), or a property row (Remove
+// Property, Set Property Flags). Add Script is the one with extension-host-side async work of
+// its own (pickScriptNameViaInputBox, the same native input box the pre-#231 webview-triggered
+// "Add Script" already used) — a dismissed box (null) broadcasts nothing, same as every other
+// cancellable native picker in this file. Add Property collects three fields at once (#229's one
+// deliberate webview-modal exception), so its command has nothing to collect itself: it only
+// tells the webview which script/plugin to open the dialog for. Set Script/Property Flags each
+// run their own native QuickPick here too — a small, static, non-record-dependent enum, the same
+// shape Add Script's input box already is — and broadcast nothing at all when dismissed.
+function registerVmadOpCommands(deps: EditorCommandDeps): vscode.Disposable[] {
+  const { recordPanels } = deps;
+  return [
+    vscode.commands.registerCommand('modbench.vmad.addScript', async (ctx?: VmadScriptsContext) => {
+      if (!ctx) return;
+      const name = await pickScriptNameViaInputBox();
+      if (name == null) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.VMAD_ADD_SCRIPT, formKey: ctx.formKey, plugin: ctx.plugin, name,
+      });
+    }),
+    vscode.commands.registerCommand('modbench.vmad.removeScript', (ctx?: VmadScriptContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT, formKey: ctx.formKey, plugin: ctx.plugin, scriptName: ctx.scriptName,
+      });
+    }),
+    vscode.commands.registerCommand('modbench.vmad.addProperty', (ctx?: VmadScriptContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY, formKey: ctx.formKey, plugin: ctx.plugin, scriptName: ctx.scriptName,
+      });
+    }),
+    vscode.commands.registerCommand('modbench.vmad.removeProperty', (ctx?: VmadPropertyContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_PROPERTY, formKey: ctx.formKey, plugin: ctx.plugin,
+        scriptName: ctx.scriptName, propName: ctx.propName,
+      });
+    }),
+    // Issue #231 (review): "Seeded with the current value" means the script's own current flag is
+    // sorted to the front of the QuickPick's item array — the exact same convention the
+    // condition-function picker already uses (showQuickPick has no activeItem option the way
+    // QuickPick does), not a new pattern.
+    vscode.commands.registerCommand('modbench.vmad.setScriptFlags', async (ctx?: VmadScriptContext) => {
+      if (!ctx) return;
+      const items = ctx.currentFlags && (VMAD_SCRIPT_FLAGS as readonly string[]).includes(ctx.currentFlags)
+        ? [ctx.currentFlags, ...VMAD_SCRIPT_FLAGS.filter(f => f !== ctx.currentFlags)]
+        : [...VMAD_SCRIPT_FLAGS];
+      const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Script flags' });
+      if (!picked) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.VMAD_SET_SCRIPT_FLAGS, formKey: ctx.formKey, plugin: ctx.plugin,
+        scriptName: ctx.scriptName, flags: picked,
+      });
+    }),
+    // Issue #231 (review): no current-value seed — the read model never carried a real
+    // per-property flag even before this ticket (the deleted PropertyFlagsControl's own comment:
+    // "set-only, defaults to Edited"), so there is nothing to sort to the front here.
+    vscode.commands.registerCommand('modbench.vmad.setPropertyFlags', async (ctx?: VmadPropertyContext) => {
+      if (!ctx) return;
+      const picked = await vscode.window.showQuickPick([...VMAD_PROP_FLAGS], { placeHolder: 'Property flags' });
+      if (!picked) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS, formKey: ctx.formKey, plugin: ctx.plugin,
+        scriptName: ctx.scriptName, propName: ctx.propName, flags: picked,
+      });
+    }),
+  ];
+}
 
 interface ModListCoreDeps {
   modListProvider: ModListProvider;

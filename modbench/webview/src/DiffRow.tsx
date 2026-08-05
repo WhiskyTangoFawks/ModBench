@@ -2,16 +2,19 @@ import React from 'react';
 import { FlagCell } from './FlagCell';
 import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
+import { VmadObjectCell } from './VmadObjectCell';
+import { ConditionFunctionCell, ConditionRunOnCell, ConditionComparisonCell, ConditionParamCell } from './ConditionCells';
 import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell, type ArrayOpHandlers } from './DiskCell';
 import { modelValue, coerceModelValue } from './modelValue';
 import { copyToClipboard, readClipboardText, openExtendedFieldEditor } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle } from './gridStyles';
 import {
-  pendingIfChanged, extractPendingElementValue, pendingCellContext,
-  arrayElementContext, arrayParentContext, moveArrayElement, removeArrayElement,
+  pendingIfChanged, pendingValueAtPath, pendingCellContext,
+  arrayElementContext, arrayParentContext, combineVscodeContexts, moveArrayElement, removeArrayElement,
 } from './recordUtils';
-import type { Column } from './recordUtils';
+import type { Column, PathSegment } from './recordUtils';
+import type { ArrayElementContext, ArrayParentContext } from './messages';
 import type { CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
 
 // Issue #227 / ADR-0034: move-up/move-down/remove/add moved off #142's inline ▲▼✕/＋ buttons
@@ -36,29 +39,43 @@ const ROW_BG: Partial<Record<ConflictAll, string>> = {
 
 const getRowBg = (c: ConflictAll): string | undefined => ROW_BG[c];
 
-// Issue #159: maps a row's context + field name to the sub-path key PendingChangeResolver used
-// when building `change.resolutions` (FormRefPathBuilder convention: "" for the change's own
-// scalar value, a bare member name for a struct child, "[idx]" for a positional array element,
-// "[idx].member" for a grandchild). A positional (non-sortable) array element's `diff.fieldName`
-// is already "[idx]" (ConflictClassifier.BuildPositional) — the same format FormRefPathBuilder
-// produces — so it's used directly. A sortable (pure FormLink) array is keyed by element value,
-// not position (ConflictClassifier.BuildSorted, wbArrayS), which FormRefPathBuilder does not
-// know about — its position within the *pending* array (rawPending) is looked up instead.
-// Returns undefined when no path can be determined (e.g. a sortable element not present in the
-// pending array) — callers treat that the same as "no resolution available".
-function pendingResolutionPath(context: RowContext, fieldName: string, rawPending: unknown): string | undefined {
-  switch (context.kind) {
-    case 'top-level': return '';
-    case 'struct-child': return fieldName;
-    case 'grandchild': return `[${context.parentFieldIndex}].${fieldName}`;
-    case 'array-element': {
-      if (!context.overrideMeta.isSortable) return fieldName; // already "[idx]"
-      // indexOf takes the first match on a duplicate FormKey value — harmless here since
-      // duplicate values in the pending array would carry identical resolutions anyway.
-      const idx = Array.isArray(rawPending) ? (rawPending as unknown[]).indexOf(fieldName) : -1;
-      return idx >= 0 ? `[${idx}]` : undefined;
-    }
+// Issue #159 / #231: maps a row's own path (from the root value it restages, RowContext.path) to
+// the sub-path key PendingChangeResolver used when building `change.resolutions`
+// (FormRefPathBuilder convention: "" at the root, ".member" for each struct hop, "[idx]" for each
+// array hop — MEditService.Core/Records/FormRefPathBuilder.cs's own Walk/WalkStruct/WalkArray,
+// which this mirrors exactly so a nested resolution is found by the same string on both ends,
+// however deep). A struct/positional-array hop's segment already carries the exact name/index the
+// row renders under (ConflictClassifier.BuildPositional's fieldName is already "[idx]"), so those
+// are formatted directly with no existence check against `rawPending` — same as the pre-#231
+// switch never checked them either. A sortable (pure FormLink) array hop is keyed by element
+// value, not position (ConflictClassifier.BuildSorted, wbArrayS), which FormRefPathBuilder does
+// not know about — that hop's position within the *pending* array is looked up dynamically
+// instead (this is why the walk threads `cur`, the pending value at the path built so far, even
+// though only a sortKey hop ever reads it). Returns undefined when a sortKey hop's element isn't
+// found in the pending array — callers treat that the same as "no resolution available".
+// One hop of the walk pendingResolutionPath below performs — split out purely to keep that
+// function's own branching under the repo's cognitive-complexity budget. Returns undefined when
+// a sortKey hop's element isn't found in `cur` (see pendingResolutionPath's own doc comment).
+function pendingResolutionStep(out: string, cur: unknown, seg: PathSegment): { out: string; cur: unknown } | undefined {
+  if (seg.kind === 'member') {
+    return { out: out.length > 0 ? `${out}.${seg.name}` : seg.name, cur: (cur as Record<string, unknown> | undefined)?.[seg.name] };
   }
+  if (seg.kind === 'index') {
+    return { out: `${out}[${seg.index}]`, cur: Array.isArray(cur) ? (cur as unknown[])[seg.index] : undefined };
+  }
+  // sortKey — indexOf takes the first match on a duplicate FormKey value — harmless here since
+  // duplicate values in the pending array would carry identical resolutions anyway.
+  const idx = Array.isArray(cur) ? (cur as unknown[]).indexOf(seg.key) : -1;
+  return idx < 0 ? undefined : { out: `${out}[${idx}]`, cur: seg.key };
+}
+
+function pendingResolutionPath(context: RowContext, rawPending: unknown): string | undefined {
+  let state: { out: string; cur: unknown } | undefined = { out: '', cur: rawPending };
+  for (const seg of context.path) {
+    state = pendingResolutionStep(state.out, state.cur, seg);
+    if (!state) return undefined;
+  }
+  return state.out;
 }
 
 // Issue #227: computes the array-op menu/keyboard wiring for one disk cell — pulled out of the
@@ -75,16 +92,27 @@ function pendingResolutionPath(context: RowContext, fieldName: string, rawPendin
 // canMoveDown drive package.json's `when` clause for the menu, so a boundary element's dead
 // direction is absent from both, not merely a no-op behind a still-visible item.
 function computeArrayOps(
-  context: RowContext, diffFieldName: string, plugin: string, formKey: string, immutable: boolean,
+  context: RowContext, plugin: string, formKey: string, immutable: boolean,
   arrayEdit: ArrayEditControls | undefined, onArrayAdd: ((plugin: string) => void) | undefined,
-): { arrayOp: ArrayOpHandlers | undefined; arrayVscodeContext: string | undefined } {
+): { arrayOp: ArrayOpHandlers | undefined; arrayVscodeContext: ArrayParentContext | ArrayElementContext | undefined } {
   if (onArrayAdd && !immutable) {
     return {
       arrayOp: { add: () => onArrayAdd(plugin) },
-      arrayVscodeContext: arrayParentContext(formKey, plugin, diffFieldName),
+      // Issue #231 (review): keyed on the row's own rootField (wire identity), mirroring
+      // arrayElementContext below — was previously keyed on the display fieldName, which broke
+      // the broadcast round trip for any row whose displayed label differs from its wire identity
+      // (every VMAD array-of-scalars property, since those synthesize their own display name).
+      arrayVscodeContext: arrayParentContext(formKey, plugin, context.rootField),
     };
   }
-  if (arrayEdit && !immutable && context.kind === 'array-element') {
+  // Issue #231: "is this row itself an array element" now reads the last hop of its own path
+  // rather than a dedicated RowContext.kind — true for both an unsorted-array element (index) and
+  // a sorted one (sortKey), same as the old `'array-element'` check covered both (arrayEdit is
+  // only ever built by the caller for the unsorted case, so the isSortable exclusion still holds
+  // via arrayEdit's own absence, not a check here).
+  const lastSeg = context.path.at(-1);
+  const isArrayElementRow = lastSeg?.kind === 'index' || lastSeg?.kind === 'sortKey';
+  if (arrayEdit && !immutable && isArrayElementRow) {
     const arr = arrayEdit.currentArray(plugin);
     const { index, onArrayEdit } = arrayEdit;
     return {
@@ -93,7 +121,13 @@ function computeArrayOps(
         moveUp: index > 0 ? () => onArrayEdit(plugin, moveArrayElement(arr, index, -1)) : undefined,
         moveDown: index < arr.length - 1 ? () => onArrayEdit(plugin, moveArrayElement(arr, index, 1)) : undefined,
       },
-      arrayVscodeContext: arrayElementContext(formKey, plugin, context.parentFieldName, index, arr.length),
+      // Issue #231: keyed on the row's own rootField, same value the old parentFieldName always
+      // held for an array element (arrays previously only ever existed at depth 1, where the two
+      // coincide) — correct as far as the extension-host round trip goes today (a nested array
+      // more than one hop below its own root would need `path` threaded through
+      // ArrayElementContext too, which nothing in this codebase yet produces; noted, not solved
+      // speculatively here).
+      arrayVscodeContext: arrayElementContext(formKey, plugin, context.rootField, index, arr.length),
     };
   }
   return { arrayOp: undefined, arrayVscodeContext: undefined };
@@ -170,6 +204,10 @@ interface RenderCellExtras {
   checkError?: string | null;
   resolution?: FormKeyResolution;
   onOpenExtended?: () => void;
+  // Issue #231 (review, design call): this plugin's own xEdit-style prose summary
+  // (`diff.collapsedSummary`) for a struct row's collapsed label — set only for a Condition row;
+  // undefined for every other struct row, which fall back to the generic "{…}" below.
+  summaryLabel?: string;
 }
 
 function renderCell(
@@ -184,7 +222,7 @@ function renderCell(
   isFocused: boolean,
   onOpen: (fk: string) => void,
   onCommit: (v: unknown) => void,
-  { checkError, resolution, onOpenExtended }: RenderCellExtras = {},
+  { checkError, resolution, onOpenExtended, summaryLabel }: RenderCellExtras = {},
 ): React.ReactNode {
   if (meta.type === 'formKey') {
     return (
@@ -205,12 +243,32 @@ function renderCell(
   if (meta.type === 'struct') {
     return (
       <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
-        {'{…}'}<CheckErrorIcon checkError={checkError} />
+        {summaryLabel ?? '{…}'}<CheckErrorIcon checkError={checkError} />
       </span>
     );
   }
   if (meta.type === 'enum' && meta.isBitmask) {
     return <FlagCell value={value} meta={meta} editable={editable} isFocused={isFocused} onCommit={onCommit} />;
+  }
+  // Issue #231: VMAD/Condition's synthesized composite leaf types — each picks its own widget
+  // from its own value's shape (VmadObjectCell/ConditionRunOnCell/ConditionComparisonCell/
+  // ConditionParamCell) or opens a QuickPick (ConditionFunctionCell), the same "genuine exception
+  // to the plain type→widget mapping" #229's VmadObjectEditor already was, dispatched here
+  // alongside 'formKey' rather than adding a second cell-renderer switch elsewhere.
+  if (meta.type === 'vmadObject') {
+    return <VmadObjectCell value={value} onCommit={onCommit} onOpen={onOpen} resolution={resolution} />;
+  }
+  if (meta.type === 'conditionFunction') {
+    return <ConditionFunctionCell value={value} editable={editable} isFocused={isFocused} onCommit={onCommit} />;
+  }
+  if (meta.type === 'conditionRunOn') {
+    return <ConditionRunOnCell value={value} editable={editable} isFocused={isFocused} onCommit={onCommit} onOpen={onOpen} />;
+  }
+  if (meta.type === 'conditionComparison') {
+    return <ConditionComparisonCell value={value} editable={editable} isFocused={isFocused} onCommit={onCommit} onOpen={onOpen} />;
+  }
+  if (meta.type === 'conditionParam') {
+    return <ConditionParamCell value={value} editable={editable} isFocused={isFocused} onCommit={onCommit} onOpen={onOpen} />;
   }
   return (
     <ScalarCell
@@ -220,11 +278,25 @@ function renderCell(
   );
 }
 
-export type RowContext =
-  | { kind: 'top-level' }
-  | { kind: 'array-element'; overrideMeta: FieldMetadata; parentFieldName: string }
-  | { kind: 'struct-child';  overrideMeta: FieldMetadata; parentFieldName: string }
-  | { kind: 'grandchild';    overrideMeta: FieldMetadata; parentFieldName: string; parentFieldIndex: number };
+// Issue #231: replaces the old fixed four-member union (`top-level | array-element | struct-child
+// | grandchild`), which had no way to express a fifth level of nesting at all — VMAD's own struct
+// data (Schema/VmadCodec.cs: "the (de)serializer descends to arbitrary depth") genuinely needs
+// one, and folding it into this same tree without generalizing would either truncate real VMAD
+// editing capability at the old cap or force a parallel VMAD-only deep path bolted alongside this
+// one, both of which the unified-tree model rules out. `path` is the chain of hops from the root
+// value this row's edits ultimately restage (RecordPanel's own onEdit-per-row-context closures,
+// pre-#231, each hand-built one nesting level; see recordUtils.ts's getAtPath/setAtPath, the one
+// generic implementation every depth now shares) down to this row's own value — `[]` at the root.
+// `overrideMeta` is this row's own metadata, present at every depth except the root (which reads
+// from `fieldMetaMap` instead, keyed by the diff tree's own top-level field name). `rootField` is
+// the wire path staged as one atomic PendingChange for every row in this subtree — constant
+// across the whole chain, equal to `diff.fieldName` for an ordinary field, and (from #231 on) a
+// VMAD/Condition row's own synthesized wire path when the two differ from its display label.
+export interface RowContext {
+  path: PathSegment[];
+  overrideMeta?: FieldMetadata;
+  rootField: string;
+}
 
 // Issue #222 / ADR-0034: identifies one disk-column cell, panel-wide — the state RecordPanel
 // (the only component that sees every row) holds to enforce "exactly one cell focused at a time,
@@ -284,20 +356,45 @@ interface DiffRowProps {
   // already computes (`{EditorID} [{FormKey}]`, or bare FormKey), reused rather than re-derived
   // here so there's one place that knows how to build it.
   recordLabel: string;
+  // Issue #231: present only for a row `RecordPanel` recognizes as a VMAD structural-op target
+  // (the "Scripts (VMAD)" wrapper, a script row, or a property row — `FieldDiff.vmadOpKind`).
+  // RecordPanel is the one place that knows how to turn that marker plus this row's own
+  // fieldName/wirePath into a `vmadScriptsContext`/`vmadScriptContext`/`vmadPropertyContext`
+  // string (recordUtils.ts) — DiffRow only calls the function it's handed, gated on the same
+  // per-column immutability check every other structural-op context already uses, so it stays as
+  // ignorant of "what VMAD is" as every other row it renders.
+  structOpContextFor?: (plugin: string) => object | undefined;
 }
 
 export function DiffRow({
   diff, conflictAll, columns, overrideMap, fieldMetaMap, immutableSet,
   pendingChangeMap, collapsedColumns, onOpen, onEdit,
-  onCellDragStart, onCellDrop,
+  onCellDragStart, onCellDrop, structOpContextFor,
   context, hasChildren, isExpanded, onToggle, arrayEdit, onArrayAdd,
   rowKey, focusedCell, onFocusCell, formKey, recordLabel,
 }: Readonly<DiffRowProps>) {
-  const meta = context.kind === 'top-level' ? fieldMetaMap[diff.fieldName] : context.overrideMeta;
+  // Issue #231: prefer the caller's own `context.overrideMeta` whenever it's supplied — RecordPanel
+  // now always passes one (its recursive builder resolves every row's metadata itself, including
+  // the true top-level one), including for a row whose own `path` has just reset to `[]` because
+  // it's a synthesized subtree root (a VMAD property, a Condition field) rather than a genuine
+  // top-level `diffs` entry — `path.length === 0` alone can no longer distinguish the two. Falling
+  // back to `fieldMetaMap` only when `overrideMeta` is genuinely absent keeps every caller that
+  // still relies on that lookup (DiffRow.test.tsx's own top-level fixtures) working unchanged.
+  const meta = context.overrideMeta ?? fieldMetaMap[diff.fieldName];
   if (!meta) return null;
 
-  const pendingLookupField = context.kind === 'top-level' ? diff.fieldName : context.parentFieldName;
-  const showActions = context.kind === 'top-level' || context.kind === 'struct-child';
+  // Issue #231: rootField replaces the old kind-based pendingLookupField ternary — every row in
+  // one subtree (root, struct-child, array-element, grandchild, and now any deeper hop) shares the
+  // same wire path/pendingFields key, so RecordPanel hands it down unchanged at every depth rather
+  // than DiffRow re-deriving "top-level or not."
+  const pendingLookupField = context.rootField;
+  // Issue #231: showActions (the checkError icon) was "top-level or struct-child" under the old
+  // union — generalizes to "every hop on this row's path is a struct member," which reproduces
+  // that exact rule (path.length === 0 is vacuously true; a single array-index or sortKey hop, or
+  // one anywhere in a longer chain, turns it off, matching the old array-element/grandchild cases)
+  // and extends it uniformly to a struct nested more than one level deep, which the old model
+  // could not express at all.
+  const showActions = context.path.every(seg => seg.kind === 'member');
   const isRowFocused = focusedCell?.rowKey === rowKey;
 
   return (
@@ -310,7 +407,7 @@ export function DiffRow({
           undefined only for struct-child/grandchild rows, which RecordPanel never wires with
           one (no expand button there either), so this is a true no-op only for those. */}
       <td
-        style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.kind !== 'top-level' ? 24 : undefined }}
+        style={{ ...baseCell, opacity: 0.75, userSelect: 'text', paddingLeft: context.path.length > 0 ? 24 : undefined }}
         onDoubleClick={onToggle}
       >
         {hasChildren && (
@@ -332,6 +429,12 @@ export function DiffRow({
           const checkError = showActions
             ? overrideMap[o.plugin]?.fields.find(f => f.metadata.name === pendingLookupField)?.checkError
             : undefined;
+          // Issue #231: a synthesized row (e.g. the Condition section's AND/OR gate) can mark
+          // itself unconditionally read-only regardless of column mutability — `meta.readOnly` is
+          // the one new per-row override on top of immutableSet's existing per-column rule, ORed
+          // in wherever a column's mutability previously stood alone.
+          const isReadOnlyRow = meta.readOnly === true;
+          const isImmutableColumn = immutableSet.has(o.plugin) || isReadOnlyRow;
           // Issue #224 / ADR-0034: the string Ctrl+C copies for this cell — the same value used
           // for display below (diff.values[o.plugin]), run through the one shared modelValue
           // function (AC6), computed once here so both the struct/array-summary branch and the
@@ -341,13 +444,24 @@ export function DiffRow({
           // the separate Pending column does, out of scope here per #232).
           const copyText = modelValue(diff.values[o.plugin], meta, diff.resolutions?.[o.plugin]);
           const { arrayOp, arrayVscodeContext } = computeArrayOps(
-            context, diff.fieldName, o.plugin, formKey, immutableSet.has(o.plugin), arrayEdit, onArrayAdd,
+            context, o.plugin, formKey, isImmutableColumn, arrayEdit, onArrayAdd,
           );
+          // Issue #231 (review): a VMAD structural-op row's context — gated on the same
+          // per-column mutability check as every other structural-op context. Combined with
+          // arrayVscodeContext (not either/or) so a row that is *both* an array-op target and a
+          // VMAD-structural-op target (a VMAD array-of-scalars property) offers both menus —
+          // combineVscodeContexts merges their `webviewSection` tokens rather than one silently
+          // winning over the other.
+          const structOpVscodeContext = !isImmutableColumn ? structOpContextFor?.(o.plugin) : undefined;
+          const combinedVscodeContext = combineVscodeContexts(arrayVscodeContext, structOpVscodeContext);
           if (hasChildren) {
             const len = meta.type === 'array' && Array.isArray(diff.values[o.plugin])
               ? (diff.values[o.plugin] as unknown[]).length
               : '…';
-            const collapsedLabel = meta.type === 'array' ? `[${len}]` : '{…}';
+            // Issue #231 (review, design call): a Condition row's own xEdit-style prose summary
+            // (`diff.collapsedSummary`, conditionTreeAdapter.ts) replaces the generic "{…}" placeholder
+            // when present — every other struct row (VMAD included) has none, so falls through unchanged.
+            const collapsedLabel = meta.type === 'array' ? `[${len}]` : (diff.collapsedSummary?.[o.plugin] ?? '{…}');
             // Issue #204 / ADR-0033: a compound (struct/array) field's summary row is a drag
             // source for its whole value, exactly like a scalar leaf — every value-bearing cell,
             // expanded or collapsed, wired uniformly rather than branching on isExpanded.
@@ -361,7 +475,7 @@ export function DiffRow({
                 onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
                 onCopy={() => copyToClipboard(copyText)}
                 arrayOp={arrayOp}
-                dataVscodeContext={arrayVscodeContext}
+                dataVscodeContext={combinedVscodeContext}
               >
                 {!isExpanded && (
                   <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
@@ -383,7 +497,7 @@ export function DiffRow({
             // (struct/array summary) branch above has no onCommit at all today, since a compound
             // field is edited through its child rows, never as a unit.
             const { onCut, onPaste } = computeClipboardOps(
-              meta, !immutableSet.has(o.plugin), copyText, diff.resolutions?.[o.plugin], onCommit,
+              meta, !isImmutableColumn, copyText, diff.resolutions?.[o.plugin], onCommit,
             );
             // Issue #230: built only for `string` — every other type's double click already
             // opens the same (inline) editor second-click/F2 does, so there's nothing to
@@ -393,7 +507,7 @@ export function DiffRow({
             // (ScalarCell's own immutable branch), just read-only.
             const onOpenExtended = meta.type === 'string'
               ? () => openExtendedFieldEditor(
-                  { value: copyText, recordLabel, fieldName: diff.fieldName, plugin: o.plugin, readOnly: immutableSet.has(o.plugin) },
+                  { value: copyText, recordLabel, fieldName: diff.fieldName, plugin: o.plugin, readOnly: isImmutableColumn },
                   next => onCommit(next),
                 )
               : undefined;
@@ -409,11 +523,14 @@ export function DiffRow({
                 onCut={onCut}
                 onPaste={onPaste}
                 arrayOp={arrayOp}
-                dataVscodeContext={arrayVscodeContext}
+                dataVscodeContext={combinedVscodeContext}
               >
-                {renderCell(diff.values[o.plugin], meta, !immutableSet.has(o.plugin),
+                {renderCell(diff.values[o.plugin], meta, !isImmutableColumn,
                   focusedCell?.rowKey === rowKey && focusedCell.plugin === o.plugin, onOpen,
-                  onCommit, { checkError, resolution: diff.resolutions?.[o.plugin], onOpenExtended })}
+                  onCommit, {
+                    checkError, resolution: diff.resolutions?.[o.plugin], onOpenExtended,
+                    summaryLabel: diff.collapsedSummary?.[o.plugin],
+                  })}
               </DiskCell>
             );
           }
@@ -422,29 +539,12 @@ export function DiffRow({
         // pending companion column
         const override = overrideMap[col.plugin];
         const rawPending = override?.pendingFields?.[pendingLookupField];
-        let pendingValue: unknown;
-        switch (context.kind) {
-          case 'top-level':
-            pendingValue = pendingIfChanged(rawPending, diff.values[col.plugin]);
-            break;
-          case 'array-element':
-            pendingValue = extractPendingElementValue(rawPending, diff.fieldName, context.overrideMeta.isSortable ?? false, diff.values[col.plugin]);
-            break;
-          case 'struct-child': {
-            const sub = (rawPending as Record<string, unknown> | undefined)?.[diff.fieldName];
-            pendingValue = pendingIfChanged(sub, diff.values[col.plugin]);
-            break;
-          }
-          case 'grandchild': {
-            const elem = Array.isArray(rawPending) ? (rawPending as unknown[])[context.parentFieldIndex] : undefined;
-            const sub = (elem as Record<string, unknown> | undefined)?.[diff.fieldName];
-            pendingValue = pendingIfChanged(sub, diff.values[col.plugin]);
-            break;
-          }
-        }
+        // Issue #231: pendingValueAtPath replaces the old top-level/array-element/struct-child/
+        // grandchild switch — one path-based extraction for every depth (recordUtils.ts).
+        const pendingValue = pendingIfChanged(pendingValueAtPath(rawPending, context.path), diff.values[col.plugin]);
         const change = pendingChangeMap[`${col.plugin}:${pendingLookupField}`];
         const hasPending = pendingValue !== undefined;
-        const resolutionPath = pendingResolutionPath(context, diff.fieldName, rawPending);
+        const resolutionPath = pendingResolutionPath(context, rawPending);
         const pendingResolution = resolutionPath !== undefined ? change?.resolutions?.[resolutionPath] : undefined;
         return (
           <td

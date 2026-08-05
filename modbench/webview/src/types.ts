@@ -1,6 +1,18 @@
 export interface FieldMetadata {
   name: string;
-  type: 'string' | 'int' | 'float' | 'bool' | 'enum' | 'formKey' | 'struct' | 'array';
+  // Issue #231: 'vmadObject' | 'conditionFunction' | 'conditionRunOn' | 'conditionComparison' |
+  // 'conditionParam' are synthesized only by the VMAD/Condition tree adapters
+  // (vmadTreeAdapter.ts/conditionTreeAdapter.ts) — the backend never emits them (no schema/API
+  // change). Each names a leaf whose editor is a genuine exception to the plain type→widget
+  // mapping, the same way 'formKey' already is: a VMAD object property is a (FormKey, alias) pair
+  // (#229's VmadObjectEditor); a condition's Function field opens a QuickPick over the function
+  // catalogue, never a text/dropdown editor; Run On, Comparison and a parameter are each composite
+  // (target+conditional reference; float vs GLOB FormKey depending on the condition's own
+  // UseGlobal; FormKey/text/number depending on the parameter's own category) and vary their own
+  // widget from their own value's shape, exactly as VmadObjectEditor already does — not from a
+  // second per-plugin metadata branch DiffRow would otherwise need.
+  type: 'string' | 'int' | 'float' | 'bool' | 'enum' | 'formKey' | 'struct' | 'array'
+    | 'vmadObject' | 'conditionFunction' | 'conditionRunOn' | 'conditionComparison' | 'conditionParam';
   isArray: boolean;
   validFormKeyTypes: string[];
   enumValues: string[];
@@ -9,6 +21,20 @@ export interface FieldMetadata {
   isSortable?: boolean;           // on elementType: true for pure FormLink arrays
   isBitmask?: boolean;            // true when the C# enum has [Flags]
   enumBitValues?: string[];       // present iff isBitmask; decimal string bit values aligned with enumValues
+  // Issue #231: unconditionally read-only regardless of the column's own mutability — the
+  // Condition section's AND/OR gate (no renderEdit at all, previously enforced by the field simply
+  // having no editor built for it) is the one row that needs this; every other field's editability
+  // still comes purely from the column (immutableSet), matching #111's "per column, never a mode"
+  // rule for everything else.
+  readOnly?: boolean;
+  // Issue #231: overrides recordUtils.ts's generic defaultElementValue for a fresh array element,
+  // for a synthesized elementType whose real wire shape isn't the generic per-field-type default
+  // recordUtils.ts's own struct case would build. A condition list's own elementType is the one
+  // caller: a new condition's wire shape is `ParsedCondition` (`{function, operator, or,
+  // runOnTarget, ...}`), not an object keyed by this ticket's display field names ("Function",
+  // "Run On", …) with a generic per-type scalar default in each — the two don't match. Absent for
+  // every ordinary/VMAD elementType, which the generic per-type defaulting already gets right.
+  defaultValue?: unknown;
 }
 
 export interface FieldValue {
@@ -50,6 +76,19 @@ export interface CompareOverride extends RecordDetail {
   conflictThis: ConflictThis;
 }
 
+// Issue #231: the chain from a row's own restage root (a plain reflected field, or a
+// wirePath-bearing VMAD/Condition subtree — see FieldDiff.wirePath below) down to a given row's
+// own value: a struct hop addressed by member name, an unsorted-array hop by position, a sorted
+// (pure FormLink) array hop by the element's own value (there is nothing to address *beneath* a
+// sortKey hop — a sorted array's elements are themselves the value, never a struct/array). Defined
+// here (not recordUtils.ts, where its own getAtPath/setAtPath live) because FieldDiff.commitOverride
+// needs the type too, and types.ts is the lower-level of the two modules — recordUtils.ts re-exports
+// it for every existing caller.
+export type PathSegment =
+  | { kind: 'member'; name: string }
+  | { kind: 'index'; index: number }
+  | { kind: 'sortKey'; key: string };
+
 export interface FieldDiff {
   fieldName: string;
   values: Record<string, unknown>;
@@ -61,6 +100,41 @@ export interface FieldDiff {
   // cellStates — never aggregated up from children, so a dangling sibling can't hide a live
   // hyperlink/affordance on the leaf next to it.
   resolutions?: Record<string, FormKeyResolution>;
+  // Issue #231: the wire path this row (and every row in its subtree) stages under — decoupled
+  // from `fieldName`, which stays a pure display label. Absent (defaulting to `fieldName`) for an
+  // ordinary reflected field, where the two always coincide; set explicitly by the VMAD/Condition
+  // tree adapters, whose rows display under a short name ("Health", "Function") but stage under a
+  // longer wire path ("VMAD\ScriptA\Health", "CTDA\Conditions\0\Function") that the two frictions
+  // in #231 ("wire paths differ") call out by name.
+  wirePath?: string;
+  // Issue #231: the write-side analog of `wirePath`, needed only where the *staged value's own
+  // shape* also differs from the unified tree's plain nested-object/array model — currently just
+  // VMAD's Struct/ArrayOfStruct properties, whose wire value is the backend's raw node format
+  // (VmadStructEntry[]/VmadStructInstance[]: `{name, type, boolValue, ..., members}`), unchanged
+  // by this issue (no backend/API change). A plain nested object/array (every ordinary field,
+  // every Condition field, and VMAD's own scalar/object/array-of-scalar properties) never sets
+  // this — RecordPanel's generic `setAtPath` (recordUtils.ts) already produces the right shape for
+  // all of those. Present only on a `wirePath`-bearing root; called with the root's own current
+  // (pending-or-disk) raw value, this row's path within it, and the new leaf value, and must
+  // return the new raw root value to stage — the one place a subtree's commit mechanics can
+  // differ from the shared default without a second row/cell renderer existing to hide it in.
+  commitOverride?: (currentRaw: unknown, path: PathSegment[], value: unknown) => unknown;
+  // Issue #231: marks a row as a target for VMAD's own structural (named-op) commands — Add/
+  // Remove Script live on the "Scripts (VMAD)" wrapper/a script row; Add/Remove Property on a
+  // script/property row — reached the same way every other structural op is (the right-click
+  // menu), consistent with array operations. RecordPanel derives each command's own identity
+  // from this row's own `fieldName` (a script/wrapper row's own name) or `wirePath`
+  // (`parseVmadPath`, vmadOps.ts — a property row's own `VMAD\Script\Prop`) rather than this field
+  // carrying it directly, so the adapter that sets it stays a plain marker, not a second copy of
+  // that identity. Absent for every ordinary/Condition row.
+  vmadOpKind?: 'scripts' | 'script' | 'property';
+  // Issue #231 (review, design call): a per-plugin xEdit-style one-line prose summary
+  // (`wbConditionToStr`, references/TES5Edit/Core/wbDefinitionsCommon.pas) for this row's
+  // collapsed label — set only by conditionTreeAdapter.ts's condition rows, whose own values are
+  // already the whole ParsedCondition object this formats. DiffRow shows this in place of a
+  // struct row's generic "{…}" when present; absent (falling back to "{…}") for every ordinary
+  // struct row and every VMAD struct row, which have no equivalent per-record-type formatting.
+  collapsedSummary?: Record<string, string>;
 }
 
 export type VmadKind = 'scalar' | 'object' | 'array' | 'struct' | 'structList' | 'variable';

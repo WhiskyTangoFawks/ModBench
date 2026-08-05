@@ -2138,9 +2138,17 @@ describe('RecordPanel — action logging (issue #200)', () => {
   // hides).
   it('a VMAD leaf edit logs a DEBUG line naming the plugin, VMAD path, and record', async () => {
     renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
+    // Issue #231: MyScript now lives one level below the always-present "Scripts (VMAD)"
+    // wrapper row (an ordinary struct row, not a hand-drawn section) — expand it first.
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    fireEvent.click(screen.getByText('Scripts (VMAD)').closest('tr')!.querySelector('button')!);
     await waitFor(() => screen.getByText('MyScript'));
     fireEvent.click(screen.getByText('MyScript').closest('tr')!.querySelector('button')!);
     await waitFor(() => screen.getByText('false'));
+    // Issue #231: VMAD leaves now go through the field grid's real focus model (ADR-0034) rather
+    // than VmadSection's own always-open (isFocused defaulted true) shortcut — first click
+    // focuses, second click on the now-focused cell opens it, same as any other bool leaf.
+    fireEvent.click(screen.getByText('false'));
     fireEvent.click(screen.getByText('false'));
     fireEvent.click(screen.getByRole('checkbox'));
 
@@ -2168,6 +2176,8 @@ describe('RecordPanel — action logging (issue #200)', () => {
       recordType: 'npc_', formKey: '000001:Fallout4.esm', newValue: true,
     }];
     renderPanel(vmadPendingResult, { plugins: mutablePlugin, changes: pendingVmadChange });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    fireEvent.click(screen.getByText('Scripts (VMAD)').closest('tr')!.querySelector('button')!);
     await waitFor(() => screen.getByText('MyScript'));
     fireEvent.click(screen.getByText('MyScript').closest('tr')!.querySelector('button')!);
     await waitFor(() => screen.getByText('true'));
@@ -2189,9 +2199,16 @@ describe('RecordPanel — action logging (issue #200)', () => {
   // same stageChange call, tested explicitly rather than assumed.
   it('a Condition leaf edit logs a DEBUG line naming the plugin, condition path, and record', async () => {
     renderPanel(conditionEditableCompareResult, { plugins: mutablePlugin });
-    await waitFor(() => screen.getByText('#1'));
-    fireEvent.click(screen.getByText('#1').closest('tr')!.querySelector('button')!);
+    // Issue #231: a condition is now an ordinary array-element row, labeled "[i]" like any other
+    // unsorted array element rather than the deleted ConditionSection's own "#1" convention.
+    await waitFor(() => screen.getByText('Conditions'));
+    fireEvent.click(screen.getByText('Conditions').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('[0]'));
+    fireEvent.click(screen.getByText('[0]').closest('tr')!.querySelector('button')!);
     const useGlobalRow = screen.getByText('Use Global').closest('tr')!;
+    // Issue #231: same real focus model as the VMAD case above — first click focuses, second
+    // click on the now-focused cell opens it.
+    fireEvent.click(within(useGlobalRow).getByText('false'));
     fireEvent.click(within(useGlobalRow).getByText('false'));
     fireEvent.click(within(useGlobalRow).getByRole('checkbox'));
 
@@ -2219,8 +2236,10 @@ describe('RecordPanel — action logging (issue #200)', () => {
       recordType: 'cobj', formKey: '000001:Fallout4.esm', newValue: 'GreaterThan',
     }];
     renderPanel(conditionPendingResult, { plugins: mutablePlugin, changes: pendingConditionChange });
-    await waitFor(() => screen.getByText('#1'));
-    fireEvent.click(screen.getByText('#1').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('Conditions'));
+    fireEvent.click(screen.getByText('Conditions').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('[0]'));
+    fireEvent.click(screen.getByText('[0]').closest('tr')!.querySelector('button')!);
     const operatorRow = screen.getByText('Operator').closest('tr')!;
     fireEvent.click(within(operatorRow).getByText('GreaterThan'));
     const select = within(operatorRow).getByRole('combobox');
@@ -2329,5 +2348,411 @@ describe('RecordPanel — action logging (issue #200)', () => {
       expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
     );
     expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.LOG }));
+  });
+});
+
+// ── VMAD structural ops via the right-click menu (issue #231) ──────────────────
+//
+// Mirrors #227's array-op broadcast tests: the extension host has no live reference into this
+// webview's React state, so its native commands (Add/Remove Script, Remove Property, Add
+// Property) broadcast to every open record panel and each self-filters on `formKey`. Add
+// Property's own dialog is the one exception with async UI (#229's "one deliberate exception" —
+// a webview modal, not a QuickPick), so its own test drives the dialog after the broadcast opens it.
+
+describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function postVmadOp(msg: ExtensionToWebview) {
+    window.dispatchEvent(new MessageEvent('message', { data: msg }));
+  }
+
+  it('the "Scripts (VMAD)" wrapper row carries the vmadScripts context on a mutable column', async () => {
+    renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    const cell = screen.getByText('Scripts (VMAD)').closest('tr')!.querySelectorAll('td')[1];
+    expect(JSON.parse(cell.getAttribute('data-vscode-context')!)).toEqual({
+      webviewSection: 'vmadScripts', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('a script row carries the vmadScript context on a mutable column', async () => {
+    renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    fireEvent.click(screen.getByText('Scripts (VMAD)').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('MyScript'));
+    const cell = screen.getByText('MyScript').closest('tr')!.querySelectorAll('td')[1];
+    expect(JSON.parse(cell.getAttribute('data-vscode-context')!)).toEqual({
+      webviewSection: 'vmadScript', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', scriptName: 'MyScript',
+      currentFlags: 'Local', preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('a property row carries the vmadProperty context on a mutable column', async () => {
+    renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    fireEvent.click(screen.getByText('Scripts (VMAD)').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('MyScript'));
+    fireEvent.click(screen.getByText('MyScript').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('Enabled'));
+    const cell = screen.getByText('Enabled').closest('tr')!.querySelectorAll('td')[1];
+    expect(JSON.parse(cell.getAttribute('data-vscode-context')!)).toEqual({
+      webviewSection: 'vmadProperty', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      scriptName: 'MyScript', propName: 'Enabled', preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('VMAD_ADD_SCRIPT stages an add_script op', async () => {
+    const { client } = renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    postVmadOp({ type: EXTENSION_TO_WEBVIEW.VMAD_ADD_SCRIPT, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', name: 'NewScript' });
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp',
+      { 'VMAD\\NewScript': { op: 'add_script', name: 'NewScript', flags: 'Local', properties: [] } },
+      'vmad_struct_op',
+    ));
+  });
+
+  it('VMAD_REMOVE_SCRIPT stages a remove_script op', async () => {
+    const { client } = renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    postVmadOp({ type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', scriptName: 'MyScript' });
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp', { 'VMAD\\MyScript': { op: 'remove_script' } }, 'vmad_struct_op',
+    ));
+  });
+
+  it('VMAD_REMOVE_PROPERTY stages a remove_property op', async () => {
+    const { client } = renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    postVmadOp({
+      type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_PROPERTY, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', scriptName: 'MyScript', propName: 'Enabled',
+    });
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp', { 'VMAD\\MyScript\\Enabled': { op: 'remove_property' } }, 'vmad_struct_op',
+    ));
+  });
+
+  it('a VMAD op broadcast for a different formKey is ignored', async () => {
+    const { client } = renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    postVmadOp({ type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT, formKey: '000099:Other.esm', plugin: 'MyMod.esp', scriptName: 'MyScript' });
+    expect(client.save).not.toHaveBeenCalled();
+  });
+
+  it('VMAD_OPEN_ADD_PROPERTY opens the Add Property dialog, and confirming stages an add_property op', async () => {
+    const { client } = renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    postVmadOp({ type: EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', scriptName: 'MyScript' });
+
+    await waitFor(() => screen.getByText('Add property'));
+    fireEvent.change(screen.getByLabelText('New property name'), { target: { value: 'NewProp' } });
+    fireEvent.click(screen.getByText('Add'));
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp',
+      { 'VMAD\\MyScript\\NewProp': { op: 'add_property', type: 'Int', name: 'NewProp', flags: 'Edited', value: 0 } },
+      'vmad_struct_op',
+    ));
+  });
+
+  // Issue #231 (review): Set Script Flags/Set Property Flags restore a capability that worked on
+  // main (VmadSection's always-visible flag `<select>`s) and regressed to unreachable when that
+  // section was deleted — the "remove and re-add" fallback the spec briefly claimed doesn't
+  // actually work, since Add Script/Add Property hardcode default flag values.
+  it('VMAD_SET_SCRIPT_FLAGS stages a set_flags op against the script', async () => {
+    const { client } = renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    postVmadOp({
+      type: EXTENSION_TO_WEBVIEW.VMAD_SET_SCRIPT_FLAGS, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', scriptName: 'MyScript', flags: 'Removed',
+    });
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp', { 'VMAD\\MyScript': { op: 'set_flags', flags: 'Removed' } }, 'vmad_struct_op',
+    ));
+  });
+
+  it('VMAD_SET_PROPERTY_FLAGS stages a set_flags op against the property', async () => {
+    const { client } = renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    postVmadOp({
+      type: EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS, formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp', scriptName: 'MyScript', propName: 'Enabled', flags: 'Removed',
+    });
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp', { 'VMAD\\MyScript\\Enabled': { op: 'set_flags', flags: 'Removed' } }, 'vmad_struct_op',
+    ));
+  });
+});
+
+// Issue #231 (review, design call): a collapsed Condition row shows xEdit's own one-line prose
+// summary (conditionTreeAdapter.ts's collapsedSummary, DiffRow.tsx's struct branch), not the
+// generic "{…}" every other struct row is content with.
+describe('RecordPanel — collapsed Condition row shows the xEdit-style summary (issue #231 design call)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('renders "RunOn.Function(...) Op Comparison" instead of "{…}" on the collapsed row', async () => {
+    renderPanel(conditionEditableCompareResult, { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Conditions'));
+    fireEvent.click(screen.getByText('Conditions').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('Subject.GetStageDone = 3'));
+    expect(screen.queryByText('{…}')).not.toBeInTheDocument();
+  });
+});
+
+// ── Array ops on VMAD/Condition rows via the right-click menu broadcast (issue #231) ──────────
+//
+// The broadcast handlers (modbench.array.*, extension.ts) resolve "the current array" through
+// `overrideMap[plugin].fields` — which only ever lists *reflected* fields. A VMAD/Condition array
+// row is never one of those (SchemaReflector excludes conditions, #178; VMAD isn't reflection at
+// all), so this is the regression-proof slice for the fix that taught `resolveCurrentArrayFor`
+// to also search the synthesized diff tree: getting it wrong silently replaces the *whole* array
+// with the new/edited element alone, rather than restaging the one that changed.
+
+function twoConditions() {
+  const condition = (comparisonFloat: number) => ({
+    function: 'GetStageDone', operator: 'EqualTo', or: false, runOnTarget: 'Subject',
+    runOnReference: null, useGlobal: false, comparisonFloat, comparisonGlobal: null, parameters: [],
+  });
+  return {
+    conflictAll: 'OnlyOne', hasVmad: false,
+    overrides: [{
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 0, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Test Name' }],
+      pendingFields: {}, conflictThis: 'OnlyOne',
+    }],
+    diffs: [{ fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' }, winnerPlugin: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {} }],
+    conditions: {
+      groups: [{
+        fieldPath: 'Conditions',
+        conditions: [
+          { index: 0, perPlugin: { 'MyMod.esp': condition(1) }, winnerPlugin: 'MyMod.esp', cellStates: {}, fieldCellStates: {} },
+          { index: 1, perPlugin: { 'MyMod.esp': condition(2) }, winnerPlugin: 'MyMod.esp', cellStates: {}, fieldCellStates: {} },
+        ],
+      }],
+    },
+  };
+}
+
+describe('RecordPanel — Condition array ops via the right-click menu broadcast preserve siblings (issue #231)', () => {
+  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  function postArrayOp(type: string, extra: Record<string, unknown>) {
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fieldName: 'Conditions', ...extra },
+    }));
+  }
+
+  it('ARRAY_REMOVE on condition #0 restages the list with only #0 dropped, not the whole list emptied', async () => {
+    const { client } = renderPanel(twoConditions(), { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Conditions'));
+    postArrayOp(EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, { index: 0 });
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp',
+      { Conditions: [expect.objectContaining({ comparisonFloat: 2 })] },
+      undefined,
+    ));
+  });
+
+  it('ARRAY_ADD appends a default condition, keeping both existing ones', async () => {
+    const { client } = renderPanel(twoConditions(), { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Conditions'));
+    postArrayOp(EXTENSION_TO_WEBVIEW.ARRAY_ADD, {});
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp',
+      {
+        Conditions: [
+          expect.objectContaining({ comparisonFloat: 1 }),
+          expect.objectContaining({ comparisonFloat: 2 }),
+          expect.objectContaining({ function: 'GetIsID' }),
+        ],
+      },
+      undefined,
+    ));
+  });
+
+  it('ARRAY_MOVE_DOWN on condition #0 swaps the two, keeping both', async () => {
+    const { client } = renderPanel(twoConditions(), { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Conditions'));
+    postArrayOp(EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN, { index: 0 });
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp',
+      { Conditions: [expect.objectContaining({ comparisonFloat: 2 }), expect.objectContaining({ comparisonFloat: 1 })] },
+      undefined,
+    ));
+  });
+});
+
+function vmadStructListResult() {
+  const instance = (x: number, y: number) => [
+    { name: 'X', type: 'Int', intValue: x },
+    { name: 'Y', type: 'Int', intValue: y },
+  ];
+  const member = (name: string, value: number) => ({
+    name, kind: 'scalar', values: { 'MyMod.esp': value }, types: { 'MyMod.esp': 'Int' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+  });
+  const instanceDiff = (x: number, y: number) => ({
+    name: '', kind: 'struct', values: {}, types: {}, winnerPlugin: 'MyMod.esp', cellStates: {},
+    children: [member('X', x), member('Y', y)],
+  });
+  return {
+    conflictAll: 'OnlyOne', hasVmad: true,
+    overrides: [{
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 0, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Test Name' }],
+      pendingFields: {}, conflictThis: 'OnlyOne',
+    }],
+    diffs: [{ fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' }, winnerPlugin: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {} }],
+    vmad: {
+      scripts: [{
+        name: 'MyScript', flags: { 'MyMod.esp': 'Local' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+        properties: [{
+          name: 'Points', kind: 'structList',
+          values: {}, types: { 'MyMod.esp': 'ArrayOfStruct' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+          raw: { 'MyMod.esp': [instance(1, 2), instance(3, 4)] },
+          children: [instanceDiff(1, 2), instanceDiff(3, 4)],
+        }],
+      }],
+    },
+  };
+}
+
+describe('RecordPanel — VMAD structList (ArrayOfStruct) array ops via the right-click menu broadcast (issue #231)', () => {
+  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  function postArrayOp(type: string, extra: Record<string, unknown>) {
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fieldName: String.raw`VMAD\MyScript\Points`, ...extra },
+    }));
+  }
+
+  it('ARRAY_REMOVE on instance #0 restages the raw node array with only that instance dropped', async () => {
+    const { client } = renderPanel(vmadStructListResult(), { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    postArrayOp(EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, { index: 0 });
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp',
+      { 'VMAD\\MyScript\\Points': [[{ name: 'X', type: 'Int', intValue: 3 }, { name: 'Y', type: 'Int', intValue: 4 }]] },
+      undefined,
+    ));
+  });
+
+  it('ARRAY_MOVE_DOWN on instance #0 swaps the two raw node instances', async () => {
+    const { client } = renderPanel(vmadStructListResult(), { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    postArrayOp(EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN, { index: 0 });
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp',
+      {
+        'VMAD\\MyScript\\Points': [
+          [{ name: 'X', type: 'Int', intValue: 3 }, { name: 'Y', type: 'Int', intValue: 4 }],
+          [{ name: 'X', type: 'Int', intValue: 1 }, { name: 'Y', type: 'Int', intValue: 2 }],
+        ],
+      },
+      undefined,
+    ));
+  });
+
+  it('no arrayParent data-vscode-context is offered for a structList row — Add has no safe default yet (known gap)', async () => {
+    renderPanel(vmadStructListResult(), { plugins: mutablePlugin });
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    fireEvent.click(screen.getByText('Scripts (VMAD)').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('MyScript'));
+    fireEvent.click(screen.getByText('MyScript').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('Points'));
+
+    const cells = Array.from(document.querySelectorAll('td[data-vscode-context]'));
+    const arrayParentCells = cells.filter(c => JSON.parse(c.getAttribute('data-vscode-context')!).webviewSection === 'arrayParent');
+    expect(arrayParentCells).toHaveLength(0);
+  });
+});
+
+function vmadScalarArrayResult() {
+  const elem = (v: number) => ({
+    name: '', kind: 'scalar', values: { 'MyMod.esp': v }, types: { 'MyMod.esp': 'Int' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+  });
+  return {
+    conflictAll: 'OnlyOne', hasVmad: true,
+    overrides: [{
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 0, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Test Name' }],
+      pendingFields: {}, conflictThis: 'OnlyOne',
+    }],
+    diffs: [{ fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' }, winnerPlugin: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {} }],
+    vmad: {
+      scripts: [{
+        name: 'MyScript', flags: { 'MyMod.esp': 'Local' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+        properties: [{
+          name: 'Levels', kind: 'array',
+          values: {}, types: { 'MyMod.esp': 'ArrayOfInt' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+          children: [elem(1), elem(2)],
+        }],
+      }],
+    },
+  };
+}
+
+// Issue #231 (review): the right-click menu's own Add broadcast used to resolve its target field
+// purely through `fieldMetaMap`'s *top-level* keys, which a nested VMAD property's own wire path
+// was never one of (unlike a Condition list, which is a top-level synthesized entry, so its own
+// Add already worked via the broadcast — the prior describe block above) — `findMetaByWirePath`
+// (RecordPanel.tsx) now walks down from the VMAD tree's own top-level entry (`meta.fields`/
+// `meta.elementType`, the same struct-child/array-element resolution `buildRows` already does
+// during render) so the broadcast finds it too. Insert (the keyboard accelerator onto the same
+// menu item, DiskCell) never shared that limitation — it calls the row's own `onArrayAdd` closure
+// directly, already carrying the correct element type from the render that built it.
+describe('RecordPanel — VMAD array-of-scalars Add: keyboard and the right-click broadcast both stage (issue #231, review)', () => {
+  beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function expandToLevels() {
+    await waitFor(() => screen.getByText('Scripts (VMAD)'));
+    fireEvent.click(screen.getByText('Scripts (VMAD)').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('MyScript'));
+    fireEvent.click(screen.getByText('MyScript').closest('tr')!.querySelector('button')!);
+    await waitFor(() => screen.getByText('Levels'));
+  }
+
+  it('Insert on the focused Levels row stages a new default-valued element via the keyboard', async () => {
+    const { client } = renderPanel(vmadScalarArrayResult(), { plugins: mutablePlugin });
+    await expandToLevels();
+    const levelsRow = screen.getByText('Levels').closest('tr')!;
+    const mutableCell = levelsRow.querySelectorAll('td')[1];
+    fireEvent.keyDown(mutableCell, { key: 'Insert' });
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp', { 'VMAD\\MyScript\\Levels': [1, 2, 0] }, undefined,
+    ));
+  });
+
+  it('the right-click menu\'s ARRAY_ADD broadcast also stages a new default-valued element for this row', async () => {
+    const { client } = renderPanel(vmadScalarArrayResult(), { plugins: mutablePlugin });
+    await expandToLevels();
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.ARRAY_ADD, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fieldName: String.raw`VMAD\MyScript\Levels` },
+    }));
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith(
+      '000001:Fallout4.esm', 'MyMod.esp', { 'VMAD\\MyScript\\Levels': [1, 2, 0] }, undefined,
+    ));
   });
 });

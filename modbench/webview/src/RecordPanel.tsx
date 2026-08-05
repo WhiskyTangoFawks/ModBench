@@ -1,17 +1,21 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { PluginHeader } from './PluginHeader';
 import { confirmRevertGroup } from './nativeBridge';
-import { DiffRow, type FocusedCell } from './DiffRow';
+import { DiffRow, type ArrayEditControls, type FocusedCell } from './DiffRow';
 import { partialSaveMessage, staleIndexMessage } from '../../src/medit/saveClassification';
 import type { ReindexFailure, SaveResult } from '../../src/medit/saveClassification';
 import {
-  buildColumns, columnHeaderContext, currentMasters, defaultElementValue, parseElementIndex, updateArrayAtKey,
-  appendArrayElement, removeArrayElement, moveArrayElement,
+  buildColumns, columnHeaderContext, currentMasters, defaultElementValue, parseElementIndex,
+  appendArrayElement, removeArrayElement, moveArrayElement, getAtPath, setAtPath,
+  vmadScriptsContext, vmadScriptContext, vmadPropertyContext,
 } from './recordUtils';
+import type { PathSegment } from './recordUtils';
 import { mono, fg, baseCell, headerCell, getConflictBg } from './gridStyles';
-import { VmadSection } from './VmadSection';
-import { ConditionSection } from './ConditionSection';
-import type { CompareOverride, CompareResult, ConflictThis, FieldMetadata, PatchRecordValidationError, PendingChange } from './types';
+import { buildVmadRows } from './vmadTreeAdapter';
+import { buildConditionRows } from './conditionTreeAdapter';
+import { parseVmadPath } from './vmadOps';
+import { AddPropertyDialog } from './VmadPropertyOps';
+import type { CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, PatchRecordValidationError, PendingChange } from './types';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type LogLevel } from './messages';
 import type { RecordSessionClient } from './RecordSessionClient';
@@ -43,6 +47,74 @@ function logAction(level: LogLevel, message: string) {
 // doesn't say which plugin/field/record was affected, and both handlers need the same lookup.
 function changeIdentity(change: PendingChange | undefined): string {
   return change ? ` (${change.fieldPath} on ${change.plugin}, record ${change.formKey})` : '';
+}
+
+// Issue #231: a synthesized row can restage independently of its own parent rather than
+// extending it — a VMAD property under its script container, or a Condition field under its
+// condition element, each stage their own atomic PendingChange rather than folding into the
+// whole subtree their parent restages (ADR-0017's usual rule). `FieldDiff.wirePath` is the
+// signal: when a child carries one, it starts a fresh subtree right there (its own path resets to
+// `[]`, rootField becomes its own wirePath, rootDiff becomes itself) instead of inheriting the
+// parent's. An ordinary reflected field's children never carry `wirePath` (only the VMAD/
+// Condition tree adapters set it), so this is a no-op for every pre-#231 case — never true, never
+// taken, and the recursion behaves exactly as it did in slice 0. Module-scope (not a RecordPanel-
+// local closure like buildRows/buildArrayElementRows below) since it closes over nothing.
+function subtreeFor(
+  child: FieldDiff, seg: PathSegment, path: PathSegment[], rootField: string, rootDiff: FieldDiff,
+): { path: PathSegment[]; rootField: string; rootDiff: FieldDiff } {
+  if (child.wirePath !== undefined) return { path: [], rootField: child.wirePath, rootDiff: child };
+  return { path: [...path, seg], rootField, rootDiff };
+}
+
+// Issue #231: finds the FieldDiff node (searching `children` recursively) whose own restage
+// identity — `wirePath` if it carries one, its plain `fieldName` otherwise — matches
+// `targetWirePath`. The array-op broadcast handlers (resolveCurrentArrayFor below) need this: a
+// VMAD/Condition array row was never a reflected field (`overrideMap[plugin].fields` only ever
+// lists those), so its own disk value has to be found in the synthesized diff tree instead, by
+// the same wire identity the broadcast itself carries (`ArrayParentContext`/`ArrayElementContext`'s
+// `fieldName`, which is `context.rootField` at the row that emitted it).
+function findDiffByWirePath(nodes: FieldDiff[], targetWirePath: string): FieldDiff | undefined {
+  for (const node of nodes) {
+    if ((node.wirePath ?? node.fieldName) === targetWirePath) return node;
+    const found = node.children && findDiffByWirePath(node.children, targetWirePath);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+// Issue #231 (review): the metadata-side counterpart to findDiffByWirePath above — `fieldMetaMap`
+// already carries every *top-level* synthesized entry (vmadTree/conditionTree's own metaMap is
+// merged into it), which is enough for a Condition list (always itself top-level) and the VMAD
+// wrapper itself, but a VMAD property nested below a script has no flat metaMap entry of its own —
+// only reachable by walking down from the wrapper's own `meta.fields`/`meta.elementType`, exactly
+// buildRows'/buildArrayElementRows' own struct-child/array-element meta resolution during render.
+// handleArrayAdd (below) needs this for the broadcast path, which has no row closure to read that
+// resolution from the way a render does. Struct members are matched by name; array elements all
+// share one `elementType` — arbitrary depth, the same "N hops, not a fixed cap" this ticket's
+// other tree-walkers (findDiffByWirePath, vmadTreeAdapter's nodeAt/propertyAt) already establish.
+function findMetaInChildren(children: FieldDiff[], parentMeta: FieldMetadata, targetWirePath: string): FieldMetadata | undefined {
+  for (const child of children) {
+    let childMeta: FieldMetadata | undefined;
+    if (parentMeta.type === 'array') childMeta = parentMeta.elementType;
+    else if (parentMeta.type === 'struct') childMeta = parentMeta.fields?.find(f => f.name === child.fieldName);
+    if (!childMeta) continue;
+    if ((child.wirePath ?? child.fieldName) === targetWirePath) return childMeta;
+    const found = findMetaInChildren(child.children ?? [], childMeta, targetWirePath);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function findMetaByWirePath(
+  nodes: FieldDiff[], topMetaMap: Record<string, FieldMetadata>, targetWirePath: string,
+): FieldMetadata | undefined {
+  for (const node of nodes) {
+    const meta = topMetaMap[node.wirePath ?? node.fieldName];
+    if (!meta) continue;
+    const found = findMetaInChildren(node.children ?? [], meta, targetWirePath);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
@@ -140,6 +212,28 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     formKey: '', add: () => {}, remove: () => {}, moveUp: () => {}, moveDown: () => {},
   });
 
+  // Issue #231: same staleness problem as arrayOpActionsRef above, for VMAD's own structural-op
+  // menu commands (Add/Remove Script, Remove Property, Add Property). Self-filtered on `formKey`,
+  // no changeId concept here either.
+  const vmadOpActionsRef = useRef<{
+    formKey: string;
+    addScript: (plugin: string, name: string) => void;
+    removeScript: (plugin: string, scriptName: string) => void;
+    removeProperty: (plugin: string, scriptName: string, propName: string) => void;
+    openAddProperty: (plugin: string, scriptName: string) => void;
+    setScriptFlags: (plugin: string, scriptName: string, flags: string) => void;
+    setPropertyFlags: (plugin: string, scriptName: string, propName: string, flags: string) => void;
+  }>({
+    formKey: '', addScript: () => {}, removeScript: () => {}, removeProperty: () => {}, openAddProperty: () => {},
+    setScriptFlags: () => {}, setPropertyFlags: () => {},
+  });
+
+  // Issue #231: Add Property collects three fields at once (name, type, value) — #229's own
+  // "one deliberate exception", a webview-rendered dialog rather than a QuickPick chain. The
+  // right-click command has nothing to collect itself, so it only broadcasts "open the dialog for
+  // this script/plugin" (VMAD_OPEN_ADD_PROPERTY) — this is that dialog's own open/closed state.
+  const [addPropertyTarget, setAddPropertyTarget] = useState<{ plugin: string; scriptName: string } | null>(null);
+
   // When the handler drives a new-formKey navigation it calls refresh directly,
   // so the [formKey] effect must skip to avoid a double request.
   const prevFormKeyRef = useRef(formKey);
@@ -187,6 +281,37 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         actions.moveDown(msg.plugin, msg.fieldName, msg.index);
       }
     };
+    // Issue #231: VMAD's own structural-op menu broadcasts — same self-filter shape as
+    // handleArrayOpMessage above, split into its own function for the same reason.
+    const isVmadOpMessage = (msg: ExtensionToWebview) => (
+      msg.type === EXTENSION_TO_WEBVIEW.VMAD_ADD_SCRIPT || msg.type === EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT
+      || msg.type === EXTENSION_TO_WEBVIEW.VMAD_REMOVE_PROPERTY || msg.type === EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY
+      || msg.type === EXTENSION_TO_WEBVIEW.VMAD_SET_SCRIPT_FLAGS || msg.type === EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS
+    );
+    // Issue #231 (review): split out of the dispatch chain below purely to keep its own
+    // cognitive-complexity budget from tipping over now that Set Script/Property Flags make it
+    // six branches instead of four.
+    const dispatchVmadOpMessage = (actions: typeof vmadOpActionsRef.current, msg: ExtensionToWebview) => {
+      if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_ADD_SCRIPT) {
+        actions.addScript(msg.plugin, msg.name);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT) {
+        actions.removeScript(msg.plugin, msg.scriptName);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_REMOVE_PROPERTY) {
+        actions.removeProperty(msg.plugin, msg.scriptName, msg.propName);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY) {
+        actions.openAddProperty(msg.plugin, msg.scriptName);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_SET_SCRIPT_FLAGS) {
+        actions.setScriptFlags(msg.plugin, msg.scriptName, msg.flags);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS) {
+        actions.setPropertyFlags(msg.plugin, msg.scriptName, msg.propName, msg.flags);
+      }
+    };
+    const handleVmadOpMessage = (msg: ExtensionToWebview) => {
+      if (!isVmadOpMessage(msg)) { handleArrayOpMessage(msg); return; }
+      const actions = vmadOpActionsRef.current;
+      if (msg.formKey !== actions.formKey) return;
+      dispatchVmadOpMessage(actions, msg);
+    };
     const handler = (event: MessageEvent) => {
       const msg = event.data as ExtensionToWebview;
       if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) {
@@ -208,7 +333,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         const { allChanges: changes, revertGroup } = pendingCellActionsRef.current;
         if (changes.some(c => c.id === msg.changeId)) revertGroup(msg.changeId);
       } else {
-        handleArrayOpMessage(msg);
+        handleVmadOpMessage(msg);
       }
     };
     window.addEventListener('message', handler);
@@ -423,6 +548,26 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     });
   }
 
+  // Issue #86/#119: the header record (synthetic FormKey "000000:<plugin>") carries neither VMAD
+  // nor Conditions — same gate the deleted VmadSection/ConditionSection call sites used
+  // (`!isHeaderRecord`), computed here too since these two hooks run before `isHeaderRecord`'s own
+  // declaration further down (hooks can't follow the early-return guards that precede it).
+  const isHeaderRecordForVmad = formKey.startsWith('000000:');
+
+  // Issue #231: VMAD and Conditions map into the same node shape (FieldDiff + FieldMetadata) the
+  // ordinary reflected fields already use — vmadTreeAdapter.ts/conditionTreeAdapter.ts are pure
+  // functions with no rendering of their own, so their rows flow through the exact same
+  // buildRows/DiffRow path below as any other field, and there is no VmadSection/ConditionSection
+  // left to render separately.
+  const vmadTree = useMemo(
+    () => (isHeaderRecordForVmad || !result?.hasVmad) ? { diffs: [], metaMap: {} } : buildVmadRows(result.vmad),
+    [result, isHeaderRecordForVmad],
+  );
+  const conditionTree = useMemo(
+    () => isHeaderRecordForVmad ? { diffs: [], metaMap: {} } : buildConditionRows(result?.conditions),
+    [result, isHeaderRecordForVmad],
+  );
+
   const fieldMetaMap = useMemo((): Record<string, FieldMetadata> => {
     const map: Record<string, FieldMetadata> = {};
     for (const o of result?.overrides ?? []) {
@@ -430,8 +575,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         if (!map[fv.metadata.name]) map[fv.metadata.name] = fv.metadata;
       }
     }
+    Object.assign(map, vmadTree.metaMap, conditionTree.metaMap);
     return map;
-  }, [result]);
+  }, [result, vmadTree, conditionTree]);
 
   const overrideMap = useMemo((): Record<string, CompareOverride> => {
     const map: Record<string, CompareOverride> = {};
@@ -514,8 +660,21 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // disk merge for one plugin's array), needed here because the broadcast arrives asynchronously
   // in a mount-effect message handler, not inside a row's render, so there is no row closure to
   // reuse. Same pending-aware merge either way — an in-flight pending array wins over disk.
+  //
+  // Issue #231: `fieldName` here is the broadcast's own `ArrayParentContext`/`ArrayElementContext`
+  // payload, which is `context.rootField` at the row that emitted it — an ordinary field's own
+  // name, but a VMAD/Condition array's own wire path. The disk half of the merge has to follow
+  // that split too: an ordinary field's disk value lives in `overrideMap[plugin].fields`
+  // (unchanged), but a VMAD/Condition row was never a reflected field at all — its disk value
+  // lives in the synthesized diff tree instead (`vmadTree.diffs`/`conditionTree.diffs`, keyed by
+  // `wirePath`), which `findDiffByWirePath` searches. Getting this wrong silently replaces the
+  // *whole* array with the new/edited element alone — the pre-fix bug this comment replaces.
   function resolveCurrentArrayFor(plugin: string, fieldName: string): unknown[] {
-    const disk = overrideMap[plugin]?.fields.find(f => f.metadata.name === fieldName)?.value as unknown[] | undefined;
+    const ordinaryDisk = overrideMap[plugin]?.fields.find(f => f.metadata.name === fieldName)?.value as unknown[] | undefined;
+    const synthesizedDisk = ordinaryDisk === undefined
+      ? findDiffByWirePath([...vmadTree.diffs, ...conditionTree.diffs], fieldName)?.values[plugin] as unknown[] | undefined
+      : undefined;
+    const disk = ordinaryDisk ?? synthesizedDisk;
     const pending = overrideMap[plugin]?.pendingFields?.[fieldName] as unknown[] | undefined;
     return pending ?? disk ?? [];
   }
@@ -523,8 +682,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // Issue #227: Add — appends a default-valued element derived from the array's own elementType
   // (defaultElementValue), same as #142's inline "＋" button used to. A no-op if the field isn't
   // a known array (defends against a stale broadcast racing a record navigation).
+  //
+  // Issue #231 (review): `fieldMetaMap`'s own flat lookup only ever finds a *top-level* entry —
+  // enough for an ordinary field, the VMAD wrapper itself, and a Condition list (always itself
+  // top-level) — but not a VMAD array-of-scalars property nested below a script, which has no flat
+  // entry of its own. findMetaByWirePath falls back to walking down from vmadTree's/
+  // conditionTree's own top-level nodes for that case.
   function handleArrayAdd(plugin: string, fieldName: string) {
-    const meta = fieldMetaMap[fieldName];
+    const meta = fieldMetaMap[fieldName]
+      ?? findMetaByWirePath([...vmadTree.diffs, ...conditionTree.diffs], { ...vmadTree.metaMap, ...conditionTree.metaMap }, fieldName);
     const elementType = meta?.type === 'array' ? meta.elementType : undefined;
     if (!elementType) return;
     void handleEdit(plugin, fieldName, appendArrayElement(resolveCurrentArrayFor(plugin, fieldName), defaultElementValue(elementType)));
@@ -555,6 +721,42 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       remove: handleArrayRemove,
       moveUp: (plugin, fieldName, index) => handleArrayMove(plugin, fieldName, index, -1),
       moveDown: (plugin, fieldName, index) => handleArrayMove(plugin, fieldName, index, 1),
+    };
+  });
+
+  // Issue #231: VMAD's own structural-op commands — mirrors VmadScriptOps'/VmadPropertyOps'
+  // deleted AddScriptButton/RemoveScriptButton/RemovePropertyButton onClick bodies exactly, just
+  // reached from the right-click menu's broadcast instead of an inline button's own handler.
+  function vmadAddScript(plugin: string, name: string) {
+    void handleVmadStructOp(plugin, `VMAD\\${name}`, { op: 'add_script', name, flags: 'Local', properties: [] });
+  }
+  function vmadRemoveScript(plugin: string, scriptName: string) {
+    void handleVmadStructOp(plugin, `VMAD\\${scriptName}`, { op: 'remove_script' });
+  }
+  function vmadRemoveProperty(plugin: string, scriptName: string, propName: string) {
+    void handleVmadStructOp(plugin, `VMAD\\${scriptName}\\${propName}`, { op: 'remove_property' });
+  }
+  // Issue #231 (review): restores Set Script Flags/Set Property Flags — dropped when the deleted
+  // ScriptFlagsControl/PropertyFlagsControl's always-visible `<select>`s went with VmadSection,
+  // with no working replacement (AC7 regression) until this. Same `set_flags` op the deleted
+  // controls already staged, now reached from the right-click menu instead of an inline control.
+  function vmadSetScriptFlags(plugin: string, scriptName: string, flags: string) {
+    void handleVmadStructOp(plugin, `VMAD\\${scriptName}`, { op: 'set_flags', flags });
+  }
+  function vmadSetPropertyFlags(plugin: string, scriptName: string, propName: string, flags: string) {
+    void handleVmadStructOp(plugin, `VMAD\\${scriptName}\\${propName}`, { op: 'set_flags', flags });
+  }
+
+  // Issue #231: keeps vmadOpActionsRef current every render, mirroring arrayOpActionsRef above.
+  useLayoutEffect(() => {
+    vmadOpActionsRef.current = {
+      formKey,
+      addScript: vmadAddScript,
+      removeScript: vmadRemoveScript,
+      removeProperty: vmadRemoveProperty,
+      openAddProperty: (plugin, scriptName) => setAddPropertyTarget({ plugin, scriptName }),
+      setScriptFlags: vmadSetScriptFlags,
+      setPropertyFlags: vmadSetPropertyFlags,
     };
   });
 
@@ -602,11 +804,176 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // only it has an editable masters field.
   const isHeaderRecord = formKey.startsWith('000000:');
 
+  // Issue #231: replaces the old hand-built top-level/array-element/struct-child/grandchild
+  // special-casing (three near-duplicate `<DiffRow>` blocks, capped at exactly those three
+  // levels) with one recursive builder — the same recursion VMAD's own struct data has always
+  // needed (Schema/VmadCodec.cs: "the (de)serializer descends to arbitrary depth") and which
+  // folding VMAD into this one tree requires generalizing to, rather than bolting a second,
+  // VMAD-only deep path alongside this one. `path`/`rootField` are RowContext's own fields
+  // (DiffRow.tsx) — every row in one subtree stages through the same rootField, and getAtPath/
+  // setAtPath (recordUtils.ts) are the one generic read/write every depth shares.
+  //
+  // `meta` is this node's own resolved FieldMetadata (undefined only for a malformed diff tree —
+  // DiffRow's own `context.overrideMeta`-driven null-return handles that at render time, exactly
+  // as it always has); `rootDiff` is the top of this subtree (its `values` are what
+  // currentRootValue reads the disk fallback from); `arrayEdit` is supplied by the *parent* call
+  // when this row is itself an unsorted array's element — never computed by a row for itself.
+  function buildRows(
+    diff: FieldDiff, meta: FieldMetadata | undefined, path: PathSegment[],
+    rootField: string, rootDiff: FieldDiff, rowKey: string, arrayEdit?: ArrayEditControls,
+  ): React.ReactNode[] {
+    const hasChildren = (diff.children?.length ?? 0) > 0;
+    const isExpanded = expandedStructs.has(rowKey);
+
+    // Issue #142/#231: pending-over-disk value of the *root* this row restages into, generalized
+    // from resolveCurrentArr/the struct-child merge above to any depth — setAtPath/getAtPath
+    // handle walking from here down to this row's own path themselves.
+    const currentRootValue = (plugin: string): unknown => {
+      const pending = overrideMap[plugin]?.pendingFields?.[rootField];
+      return pending !== undefined ? pending : rootDiff.values[plugin];
+    };
+    // Issue #231: `rootDiff.commitOverride`, when present, replaces the generic setAtPath for
+    // this whole subtree — the one escape hatch for a wire value whose shape isn't a plain nested
+    // object/array (VMAD's Struct/ArrayOfStruct properties, whose backend wire format is its own
+    // raw node tree, unchanged by this issue). Absent for every ordinary field, every Condition
+    // field, and VMAD's own scalar/object/array-of-scalar properties — all of those produce the
+    // right shape via setAtPath already, so this is a no-op fallback for them, not a new branch
+    // they have to reason about.
+    const commitHere = (plugin: string, value: unknown) => {
+      const current = currentRootValue(plugin);
+      const next = rootDiff.commitOverride ? rootDiff.commitOverride(current, path, value) : setAtPath(current, path, value);
+      void handleEdit(plugin, rootField, next);
+    };
+    const currentArrayHere = (plugin: string): unknown[] => {
+      const v = getAtPath(currentRootValue(plugin), path);
+      return Array.isArray(v) ? v : [];
+    };
+
+    // Issue #142: "＋" on an array's own row — absent for sortable arrays and non-array fields,
+    // same gate as before, now evaluated at every depth rather than only at the top level.
+    // Issue #231: also absent when this row has a `commitOverride` (a raw-node wire format) whose
+    // elementType carries no explicit `defaultValue` — `defaultElementValue`'s generic per-field
+    // struct default doesn't know that format either, so appending one would stage a
+    // wrong-shaped element (VMAD's structList, whose own element default has no analogue yet —
+    // a known, deliberately scoped gap, see the record-editor spec). A condition list is the
+    // proof this isn't a blanket "commitOverride disables add" rule: it has both a
+    // `commitOverride` (compacting the sparse array) *and* an explicit `elementType.defaultValue`
+    // (`defaultCondition()`), so its own Add stays fully enabled.
+    const onArrayAdd = meta?.type === 'array' && meta.elementType != null && meta.elementType.isSortable !== true
+      && (!rootDiff.commitOverride || meta.elementType.defaultValue !== undefined)
+      ? (plugin: string) => commitHere(plugin, appendArrayElement(currentArrayHere(plugin), defaultElementValue(meta.elementType!)))
+      : undefined;
+
+    // Issue #231: builds this row's own VMAD structural-op data-vscode-context per plugin —
+    // `diff.vmadOpKind` is the adapter's marker (vmadTreeAdapter.ts); the script/property identity
+    // itself comes from this row's own fieldName ("scripts"/"script") or its wirePath
+    // (parseVmadPath, "property" — its own wirePath is always `VMAD\Script\Prop`, set by the same
+    // adapter). Absent for every non-VMAD row, so DiffRow's own gate (structOpContextFor?.(...))
+    // simply has nothing to call.
+    const structOpContextFor = ((): ((plugin: string) => object | undefined) | undefined => {
+      if (diff.vmadOpKind === 'scripts') return plugin => vmadScriptsContext(formKey, plugin);
+      // Issue #231 (review): Set Script Flags' own QuickPick seed — this script row's own
+      // `values[plugin]` (buildScript sets it to `s.flags`, VmadScriptDiff's per-plugin flag).
+      if (diff.vmadOpKind === 'script') {
+        return plugin => vmadScriptContext(formKey, plugin, diff.fieldName, (diff.values[plugin] as string | undefined) ?? null);
+      }
+      if (diff.vmadOpKind === 'property') {
+        const parsed = parseVmadPath(rootField);
+        if (!parsed) return undefined;
+        return plugin => vmadPropertyContext(formKey, plugin, parsed.script, parsed.prop);
+      }
+      return undefined;
+    })();
+
+    const rows: React.ReactNode[] = [
+      <DiffRow
+        key={rowKey}
+        formKey={formKey}
+        recordLabel={title}
+        diff={diff}
+        conflictAll={conflictAll}
+        columns={columns}
+        overrideMap={overrideMap}
+        fieldMetaMap={fieldMetaMap}
+        immutableSet={immutableSet}
+        pendingChangeMap={pendingChangeMap}
+        collapsedColumns={collapsedColumns}
+        onCellDragStart={handleCellDragStart}
+        onCellDrop={handleCellDrop}
+        onOpen={handleOpen}
+        onEdit={(plugin, _key, value) => commitHere(plugin, value)}
+        context={{ path, overrideMeta: meta, rootField }}
+        rowKey={rowKey}
+        focusedCell={focusedCell}
+        onFocusCell={handleFocusCell}
+        hasChildren={hasChildren}
+        isExpanded={isExpanded}
+        onToggle={() => setExpandedStructs(prev => {
+          const next = new Set(prev);
+          if (next.has(rowKey)) next.delete(rowKey); else next.add(rowKey);
+          return next;
+        })}
+        arrayEdit={arrayEdit}
+        onArrayAdd={onArrayAdd}
+        structOpContextFor={structOpContextFor}
+      />,
+    ];
+
+    if (!hasChildren || !isExpanded || !meta) return rows;
+
+    // Issue #231: split out of buildRows purely to keep its own branching under the repo's
+    // cognitive-complexity budget — an array child restages through this array's own
+    // currentArrayHere/commitHere (its move-up/move-down/remove controls, absent for a sortable
+    // element whose order/arity isn't user-editable), a struct child through the plain
+    // member-name path every other struct field already uses.
+    for (const child of diff.children ?? []) {
+      const childRowKey = `${rowKey}.${child.fieldName}`;
+      if (meta.type === 'array' && meta.elementType) {
+        rows.push(...buildArrayElementRows(child, meta.elementType, path, rootField, rootDiff, childRowKey, { currentArray: currentArrayHere, commit: commitHere }));
+      } else if (meta.type === 'struct') {
+        const memberMeta = meta.fields?.find(f => f.name === child.fieldName);
+        const sub = subtreeFor(child, { kind: 'member', name: child.fieldName }, path, rootField, rootDiff);
+        rows.push(...buildRows(child, memberMeta, sub.path, sub.rootField, sub.rootDiff, childRowKey));
+      }
+    }
+    return rows;
+  }
+
+  function buildArrayElementRows(
+    child: FieldDiff, elementMeta: FieldMetadata, arrayPath: PathSegment[], rootField: string, rootDiff: FieldDiff,
+    childRowKey: string, arrayOps: { currentArray: (plugin: string) => unknown[]; commit: (plugin: string, value: unknown) => void },
+  ): React.ReactNode[] {
+    const seg: PathSegment = elementMeta.isSortable
+      ? { kind: 'sortKey', key: child.fieldName }
+      : { kind: 'index', index: parseElementIndex(child.fieldName) };
+    const childArrayEdit: ArrayEditControls | undefined = elementMeta.isSortable !== true ? {
+      currentArray: arrayOps.currentArray,
+      index: parseElementIndex(child.fieldName),
+      onArrayEdit: (plugin, value) => arrayOps.commit(plugin, value),
+    } : undefined;
+    return buildRows(child, elementMeta, [...arrayPath, seg], rootField, rootDiff, childRowKey, childArrayEdit);
+  }
+
   return (
     <div style={containerStyle}>
       <div style={{ flex: '0 0 auto', marginBottom: 10, fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center' }}>
         {title}
       </div>
+      {/* Issue #231: Add Property's own dialog — opened by the right-click menu's
+          VMAD_OPEN_ADD_PROPERTY broadcast rather than an inline "+prop" button, but otherwise
+          unchanged from #229's own exception (three fields at once, a webview modal not a
+          QuickPick chain). Confirm stages through the same handleVmadStructOp every other VMAD
+          structural op uses. */}
+      {addPropertyTarget && (
+        <AddPropertyDialog
+          onCancel={() => setAddPropertyTarget(null)}
+          onConfirm={({ name, type, value }) => {
+            const { plugin, scriptName } = addPropertyTarget;
+            setAddPropertyTarget(null);
+            void handleVmadStructOp(plugin, `VMAD\\${scriptName}\\${name}`, { op: 'add_property', type, name, flags: 'Edited', value });
+          }}
+        />
+      )}
       {actionError && (
         <div style={{ flex: '0 0 auto', marginBottom: 8, fontSize: '11px', color: 'var(--vscode-errorForeground, #f88)', padding: '3px 6px', border: '1px solid var(--vscode-inputValidation-errorBorder, #f88)', borderRadius: 2 }}>
           {actionError}
@@ -658,193 +1025,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
             </tr>
           </thead>
           <tbody>
-            {diffs.flatMap(diff => {
-              const hasChildren = (diff.children?.length ?? 0) > 0;
-              const isExpanded = expandedStructs.has(diff.fieldName);
-              const parentMeta = fieldMetaMap[diff.fieldName];
-              const elementType = parentMeta?.type === 'array' ? parentMeta.elementType : undefined;
-              // Issue #142: current (pending-over-disk) array for the "＋" add control, hoisted
-              // above the per-child loop below so the parent row can use it too.
-              const resolveCurrentArr = (plugin: string): unknown[] => {
-                const diskArr = (diff.values[plugin] as unknown[]) ?? [];
-                const pendingArr = overrideMap[plugin]?.pendingFields?.[diff.fieldName] as unknown[] | undefined;
-                return pendingArr ?? diskArr;
-              };
-              const rows: React.ReactNode[] = [
-                <DiffRow
-                  key={diff.fieldName}
-                  formKey={formKey}
-                  recordLabel={title}
-                  diff={diff}
-                  conflictAll={conflictAll}
-                  columns={columns}
-                  overrideMap={overrideMap}
-                  fieldMetaMap={fieldMetaMap}
-                  immutableSet={immutableSet}
-                  pendingChangeMap={pendingChangeMap}
-                  collapsedColumns={collapsedColumns}
-                  onCellDragStart={handleCellDragStart}
-                  onCellDrop={handleCellDrop}
-                  onOpen={handleOpen}
-                  onEdit={(plugin, fieldName, value) => { void handleEdit(plugin, fieldName, value); }}
-                  context={{ kind: 'top-level' }}
-                  rowKey={diff.fieldName}
-                  focusedCell={focusedCell}
-                  onFocusCell={handleFocusCell}
-                  hasChildren={hasChildren}
-                  isExpanded={isExpanded}
-                  onToggle={() => setExpandedStructs(prev => {
-                    const next = new Set(prev);
-                    if (next.has(diff.fieldName)) next.delete(diff.fieldName);
-                    else next.add(diff.fieldName);
-                    return next;
-                  })}
-                  // Issue #142: "＋" on the array's parent row — absent for sortable arrays and
-                  // for non-array fields (elementType undefined covers both).
-                  onArrayAdd={elementType != null && elementType.isSortable !== true
-                    ? plugin => { void handleEdit(plugin, diff.fieldName, [...resolveCurrentArr(plugin), defaultElementValue(elementType)]); }
-                    : undefined}
-                />,
-              ];
-              if (hasChildren && isExpanded) {
-                for (const child of diff.children ?? []) {
-                  if (elementType != null) {
-                    const elementMeta = elementType;
-                    const childKey = `${diff.fieldName}.${child.fieldName}`;
-                    const elemExpanded = expandedStructs.has(childKey);
-                    const elemIdx = parseElementIndex(child.fieldName);
-                    rows.push(
-                      <DiffRow
-                        key={childKey}
-                        formKey={formKey}
-                        recordLabel={title}
-                        diff={child}
-                        conflictAll={conflictAll}
-                        columns={columns}
-                        overrideMap={overrideMap}
-                        fieldMetaMap={fieldMetaMap}
-                        immutableSet={immutableSet}
-                        pendingChangeMap={pendingChangeMap}
-                        collapsedColumns={collapsedColumns}
-                        onCellDragStart={handleCellDragStart}
-                        onCellDrop={handleCellDrop}
-                        onOpen={handleOpen}
-                        onEdit={(plugin, elemKey, newValue) => {
-                          void handleEdit(plugin, diff.fieldName, updateArrayAtKey(resolveCurrentArr(plugin), elemKey, newValue, elementMeta.isSortable ?? false));
-                        }}
-                        context={{ kind: 'array-element', overrideMeta: elementMeta, parentFieldName: diff.fieldName }}
-                        rowKey={childKey}
-                        focusedCell={focusedCell}
-                        onFocusCell={handleFocusCell}
-                        hasChildren={(child.children?.length ?? 0) > 0}
-                        isExpanded={elemExpanded}
-                        // Issue #142: move-up/move-down/remove — absent (not disabled) for
-                        // sortable elements, whose order/arity isn't user-editable. Writes the
-                        // whole array as one field edit (ADR-0017), same mechanism as element
-                        // value edits above.
-                        arrayEdit={elementMeta.isSortable !== true ? {
-                          currentArray: resolveCurrentArr,
-                          index: elemIdx,
-                          onArrayEdit: (plugin, value) => { void handleEdit(plugin, diff.fieldName, value); },
-                        } : undefined}
-                        onToggle={() => setExpandedStructs(prev => {
-                          const next = new Set(prev);
-                          if (next.has(childKey)) next.delete(childKey); else next.add(childKey);
-                          return next;
-                        })}
-                      />,
-                    );
-                    // Grandchild rows: struct sub-fields of struct-typed array elements
-                    if ((child.children?.length ?? 0) > 0 && elemExpanded) {
-                      for (const grandchild of child.children ?? []) {
-                        const subFieldMeta = elementMeta.fields?.find(f => f.name === grandchild.fieldName);
-                        rows.push(
-                          <DiffRow
-                            key={`${childKey}.${grandchild.fieldName}`}
-                            formKey={formKey}
-                            recordLabel={title}
-                            diff={grandchild}
-                            conflictAll={conflictAll}
-                            columns={columns}
-                            overrideMap={overrideMap}
-                            fieldMetaMap={fieldMetaMap}
-                            immutableSet={immutableSet}
-                            pendingChangeMap={pendingChangeMap}
-                            collapsedColumns={collapsedColumns}
-                            onCellDragStart={handleCellDragStart}
-                            onCellDrop={handleCellDrop}
-                            onOpen={handleOpen}
-                            onEdit={(plugin, subField, subValue) => {
-                              const cur = resolveCurrentArr(plugin);
-                              const curElem = (cur[elemIdx] as Record<string, unknown>) ?? {};
-                              const updatedArr = [...cur];
-                              updatedArr[elemIdx] = { ...curElem, [subField]: subValue };
-                              void handleEdit(plugin, diff.fieldName, updatedArr);
-                            }}
-                            context={{ kind: 'grandchild', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName, parentFieldIndex: elemIdx }}
-                            rowKey={`${childKey}.${grandchild.fieldName}`}
-                            focusedCell={focusedCell}
-                            onFocusCell={handleFocusCell}
-                          />,
-                        );
-                      }
-                    }
-                  } else {
-                    // Struct children
-                    const subFieldMeta = parentMeta?.fields?.find(f => f.name === child.fieldName);
-                    rows.push(
-                      <DiffRow
-                        key={`${diff.fieldName}.${child.fieldName}`}
-                        formKey={formKey}
-                        recordLabel={title}
-                        diff={child}
-                        conflictAll={conflictAll}
-                        columns={columns}
-                        overrideMap={overrideMap}
-                        fieldMetaMap={fieldMetaMap}
-                        immutableSet={immutableSet}
-                        pendingChangeMap={pendingChangeMap}
-                        collapsedColumns={collapsedColumns}
-                        onCellDragStart={handleCellDragStart}
-                        onCellDrop={handleCellDrop}
-                        onOpen={handleOpen}
-                        onEdit={(plugin, subField, subValue) => {
-                          const disk = (diff.values[plugin] as Record<string, unknown>) ?? {};
-                          const pending = overrideMap[plugin]?.pendingFields?.[diff.fieldName] as Record<string, unknown> | undefined;
-                          const cur = pending !== undefined ? { ...disk, ...pending } : disk;
-                          void handleEdit(plugin, diff.fieldName, { ...cur, [subField]: subValue });
-                        }}
-                        context={{ kind: 'struct-child', overrideMeta: subFieldMeta, parentFieldName: diff.fieldName }}
-                        rowKey={`${diff.fieldName}.${child.fieldName}`}
-                        focusedCell={focusedCell}
-                        onFocusCell={handleFocusCell}
-                      />,
-                    );
-                  }
-                }
-              }
-              return rows;
-            })}
-            {!isHeaderRecord && result.hasVmad && (
-              <VmadSection
-                          vmad={result.vmad}
-                          columns={columns}
-                          onOpen={handleOpen}
-                          immutableSet={immutableSet}
-                          pendingChangeMap={pendingChangeMap}
-                          onEdit={(plugin, vmadPath, value) => { void handleEdit(plugin, vmadPath, value); }}
-                          onStructOp={(plugin, vmadPath, op) => { void handleVmadStructOp(plugin, vmadPath, op); }}
-                        />
-            )}
-            {!isHeaderRecord && (
-              <ConditionSection
-                conditions={result.conditions}
-                columns={columns}
-                onOpen={handleOpen}
-                immutableSet={immutableSet}
-                onEdit={(plugin, path, value) => { void handleEdit(plugin, path, value); }}
-                pendingChangeMap={pendingChangeMap}
-              />
+            {/* Issue #231: VMAD/Condition rows are woven into the same flatMap as every ordinary
+                field — one row list, one recursive builder, no separate section/renderer. */}
+            {[...diffs, ...vmadTree.diffs, ...conditionTree.diffs].flatMap(
+              diff => buildRows(diff, fieldMetaMap[diff.fieldName], [], diff.wirePath ?? diff.fieldName, diff, diff.fieldName),
             )}
           </tbody>
         </table>

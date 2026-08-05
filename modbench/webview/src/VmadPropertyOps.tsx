@@ -2,25 +2,23 @@ import React, { useState } from 'react';
 import { fg, mono } from './gridStyles';
 import { pickFormKey } from './nativeBridge';
 import { ModalShell } from './ModalShell';
-import { ADDABLE_TYPES, PROP_FLAGS, defaultOpValue, opScalarKind, type OnStructOp } from './vmadOps';
+import { ADDABLE_TYPES, defaultOpValue, opScalarKind } from './vmadOps';
 
-// ── structural ops (13.8): add / remove property ───────────────────────────────
-
-const iconBtnStyle: React.CSSProperties = {
-  background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: 0, lineHeight: 1,
-};
-
-const structBtnStyle: React.CSSProperties = {
-  ...iconBtnStyle, fontSize: '14px', padding: '0 4px', color: fg,
-};
+// Issue #231: Add Property's own dialog — #229's "one deliberate exception" (three fields at
+// once, a webview modal rather than a QuickPick chain), reached now from the right-click menu's
+// VMAD_OPEN_ADD_PROPERTY broadcast (RecordPanel.tsx) instead of an inline "+prop" button.
+// AddPropertyButton/RemovePropertyButton/SetTypeControl/PropertyFlagsControl — the always-visible
+// buttons/selects this file used to also export — are deleted along with the section that
+// rendered them (ADR-0034's no-second-route rule: structural ops are right-click-menu-only now,
+// consistent with array operations); Remove Property is a plain broadcast (extension.ts,
+// modbench.vmad.removeProperty) with nothing to render here, and Set Type/Set Property Flags are
+// deferred (issue #231's own noted scope reduction).
 
 const dialogInputStyle: React.CSSProperties = {
   fontFamily: mono, fontSize: '12px',
   background: 'var(--vscode-input-background, #3c3c3c)', color: fg,
   border: '1px solid var(--vscode-input-border, #555)', padding: '2px 6px',
 };
-
-const flagSelectStyle: React.CSSProperties = { ...dialogInputStyle, fontSize: '11px' };
 
 export function AddPropertyDialog({ onConfirm, onCancel }: Readonly<{
   onConfirm: (v: { name: string; type: string; value: unknown }) => void;
@@ -86,70 +84,5 @@ export function AddPropertyDialog({ onConfirm, onCancel }: Readonly<{
       <tr><td style={{ paddingRight: 6, opacity: 0.7 }}>Value</td><td>{valueControl()}</td></tr>
       </tbody></table>
     </ModalShell>
-  );
-}
-
-export function AddPropertyButton({ plugin, scriptName, onStructOp }: Readonly<{
-  plugin: string; scriptName: string; onStructOp: OnStructOp;
-}>) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button title="Add property" onClick={() => setOpen(true)} style={structBtnStyle}>+ prop</button>
-      {open && (
-        <AddPropertyDialog
-          onCancel={() => setOpen(false)}
-          onConfirm={({ name, type, value }) => {
-            setOpen(false);
-            onStructOp(plugin, `VMAD\\${scriptName}\\${name}`,
-              { op: 'add_property', type, name, flags: 'Edited', value });
-          }}
-        />
-      )}
-    </>
-  );
-}
-
-export function RemovePropertyButton({ plugin, scriptName, propName, onStructOp }: Readonly<{
-  plugin: string; scriptName: string; propName: string; onStructOp: OnStructOp;
-}>) {
-  return (
-    <button
-      title="Remove property"
-      onClick={() => onStructOp(plugin, `VMAD\\${scriptName}\\${propName}`, { op: 'remove_property' })}
-      style={{ ...iconBtnStyle, color: 'var(--vscode-errorForeground, #f88)' }}
-    >×</button>
-  );
-}
-
-// Type dropdown (13.8.3) — changing it stages set_type, which resets the value on the backend.
-export function SetTypeControl({ plugin, scriptName, propName, currentType, onStructOp }: Readonly<{
-  plugin: string; scriptName: string; propName: string; currentType: string; onStructOp: OnStructOp;
-}>) {
-  const known = (ADDABLE_TYPES as readonly string[]).includes(currentType);
-  return (
-    <select
-      aria-label={`Type for ${propName}`}
-      title="Changing type resets the value"
-      value={known ? currentType : ''}
-      onChange={e => onStructOp(plugin, `VMAD\\${scriptName}\\${propName}`, { op: 'set_type', type: e.target.value })}
-      style={{ ...dialogInputStyle, fontSize: '11px' }}
-    >
-      {!known && <option value="">{currentType || '—'}</option>}
-      {ADDABLE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-    </select>
-  );
-}
-
-// Property flags control (13.8.4). The read model carries no per-property flag, so this is set-only
-// (defaults to Edited) — staging set_flags applies the chosen value on save.
-export function PropertyFlagsControl({ plugin, scriptName, propName, onStructOp }: Readonly<{
-  plugin: string; scriptName: string; propName: string; onStructOp: OnStructOp;
-}>) {
-  return (
-    <select aria-label={`Flags for ${propName}`} defaultValue="Edited" style={flagSelectStyle}
-      onChange={e => onStructOp(plugin, `VMAD\\${scriptName}\\${propName}`, { op: 'set_flags', flags: e.target.value })}>
-      {PROP_FLAGS.map(f => <option key={f} value={f}>{f}</option>)}
-    </select>
   );
 }
