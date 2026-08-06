@@ -494,7 +494,8 @@ function loadReturn(): LoadResult {
 }
 
 function fakeClient(): RecordSessionClient {
-  const resp = { ok: true, status: 200, statusText: 'HTTP 200', json: () => Promise.resolve([]) } as unknown as Response;
+  // #163: WriteResult stand-in — see RecordPanel.test.tsx's own resp() for the general shape.
+  const resp = { ok: true, data: [] };
   return {
     load: vi.fn().mockImplementation(() => Promise.resolve(loadReturn())),
     save: vi.fn().mockResolvedValue(resp),

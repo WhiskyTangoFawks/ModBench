@@ -158,12 +158,10 @@ describe('RecordSessionClient writes', () => {
     expect(await req.clone().json()).toEqual({ source: 'user' });
   });
 
-  it('returns an unconsumed Response so the panel can read the error body', async () => {
+  it('returns a typed error result for a non-ok response', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ detail: 'read-only' }, 409));
-    const resp = await createRecordSessionClient(5172).save('000001:A.esp', 'A.esp', {});
-    expect(resp.status).toBe(409);
-    expect(resp.bodyUsed).toBe(false);
-    expect(await resp.json()).toEqual({ detail: 'read-only' });
+    const result = await createRecordSessionClient(5172).save('000001:A.esp', 'A.esp', {});
+    expect(result).toEqual({ ok: false, status: 409, error: { detail: 'read-only' } });
   });
 
   it('saveGroup POSTs to the change-group save endpoint', async () => {
@@ -173,11 +171,10 @@ describe('RecordSessionClient writes', () => {
     expect(req.url).toContain('/change-groups/g1/save');
   });
 
-  it('saveGroup returns an unconsumed Response so the panel can read the body', async () => {
+  it('saveGroup returns a typed success result', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ byPlugin: {}, reindexFailure: null }));
-    const resp = await createRecordSessionClient(5172).saveGroup('g1');
-    expect(resp.bodyUsed).toBe(false);
-    expect(await resp.json()).toEqual({ byPlugin: {}, reindexFailure: null });
+    const result = await createRecordSessionClient(5172).saveGroup('g1');
+    expect(result).toEqual({ ok: true, data: { byPlugin: {}, reindexFailure: null } });
   });
 
   it('revertGroup DELETEs the whole component by member change id', async () => {

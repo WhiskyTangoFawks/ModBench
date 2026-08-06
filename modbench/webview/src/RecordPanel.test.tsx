@@ -71,9 +71,10 @@ const threePluginsResponse = [
   { name: 'Mod2.esp', isImmutable: false, loadOrderIndex: 2 },
 ];
 
-// A minimal stand-in for a fetch Response — the panel reads .ok/.status/.statusText/.json().
+// #163: a minimal stand-in for a client write method's typed WriteResult — the panel reads
+// .ok/.status/.data/.error now, not a raw Response's .ok/.status/.statusText/.json().
 function resp(status: number, body: unknown = {}) {
-  return { ok: status < 400, status, statusText: `HTTP ${status}`, json: () => Promise.resolve(body) } as unknown as Response;
+  return status < 400 ? { ok: true, data: body } : { ok: false, status, error: body };
 }
 
 // Issue #208: Save Group / Revert Group on a pending cell now arrive as a broadcast message
