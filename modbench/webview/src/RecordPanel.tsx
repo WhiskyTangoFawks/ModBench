@@ -1005,10 +1005,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                     <th
                       key={`disk:${col.override.plugin}`}
                       style={{ ...headerCell, textAlign: 'left', minWidth: isCollapsed ? '48px' : '200px', backgroundColor: getHeaderBg(col.override.conflictThis) }}
-                      // Issue #209: the column-header menu (Copy All to Pending / Copy as New
-                      // Record / Copy as Override… / Remove / Add Master) is VS Code's own
-                      // `webview/context` menu now — no `onContextMenu`/`preventDefault()` here
-                      // any more, same migration switch as #208's pending cells.
+                      // Issue #209: the column-header menu (Copy as Override… / Copy as New
+                      // Record / Remove / Add Master) is VS Code's own `webview/context` menu
+                      // now — no `onContextMenu`/`preventDefault()` here any more, same
+                      // migration switch as #208's pending cells.
                       data-vscode-context={columnHeaderContext(
                         formKey, col.override.plugin, isImmutable, isHeaderRecord, currentMasters(col.override),
                       )}

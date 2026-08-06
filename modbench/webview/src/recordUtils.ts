@@ -38,8 +38,8 @@ export function currentMasters(o: RecordDetail): string[] {
   return Array.isArray(value) ? value as string[] : [];
 }
 
-// Issue #209: the column-header right-click menu (Copy All to Pending / Copy as New Record /
-// Copy as Override… / Remove / Add Master) is native now too — same mechanism as
+// Issue #209: the column-header right-click menu (Copy as Override… / Copy as New Record /
+// Remove / Add Master) is native now too — same mechanism as
 // pendingCellContext above, carried by the header `<th>` instead of a pending cell. `plugin` is
 // this column's own plugin (the copy actions' exclude-from-target-picker source; Remove's
 // direct target); `masters` backs the Add Master command's candidate list without a round trip

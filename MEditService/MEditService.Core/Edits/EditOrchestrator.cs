@@ -345,12 +345,12 @@ public sealed partial class EditOrchestrator(
 
         // Issue #202: an explicit sourcePlugin copies that plugin's own version of the record (the
         // column-header menu's right-clicked column) rather than the overall winner.
-        var source_ = sourcePlugin != null
+        var sourceRecord = sourcePlugin != null
             ? _query.GetRecordForPlugin(formKey, sourcePlugin)
             : _query.GetRecord(formKey);
-        if (source_ == null) return new StageEditResult.RecordNotFound();
+        if (sourceRecord == null) return new StageEditResult.RecordNotFound();
 
-        var fields = source_.Fields.ToDictionary(
+        var fields = sourceRecord.Fields.ToDictionary(
             fv => fv.Metadata.Name,
             fv => JsonSerializer.SerializeToElement(fv.Value));
 
@@ -362,7 +362,7 @@ public sealed partial class EditOrchestrator(
                 oldValues[fv.Metadata.Name] = JsonSerializer.SerializeToElement(fv.Value);
         }
 
-        var placement = _query.GetPlacement(formKey, source_.Plugin);
+        var placement = _query.GetPlacement(formKey, sourceRecord.Plugin);
 
         var schemas = _schemaReflector.GetSchemas(session!.GameRelease);
         var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!, session!.GameRelease);
