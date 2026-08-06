@@ -151,6 +151,12 @@ function buildCondition(
     winnerValue: spec.values[condition.winnerPlugin] ?? null,
     cellStates: condition.fieldCellStates[spec.key] ?? {},
     wirePath: spec.wire ?? undefined,
+    // #166: ADR-0031 resolution for this field's own FormKey slot (runOn/comparison/param:{i}
+    // only — undefined for function/operator/gate, which carry no FormKey), keyed by plugin same
+    // as every other FieldDiff.resolutions — DiffRow's existing generic pass-through
+    // (`diff.resolutions?.[plugin]`) reaches FormKeyCell inside the composite cells with no
+    // DiffRow change needed.
+    resolutions: condition.fieldResolutions?.[spec.key],
   }));
   const fields: FieldMetadata[] = specs.map(spec => ({ ...spec.meta, name: spec.name }));
   // The struct row's own "value" is never shown as JSON (collapsed rows show collapsedSummary

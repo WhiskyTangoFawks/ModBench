@@ -78,7 +78,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         IndexVmad(pluginMod, plugin, refs);
 
         DeleteConditionsForPlugin(plugin);
-        IndexConditions(pluginMod, plugin);
+        IndexConditions(pluginMod, plugin, refs);
 
         IndexPlacement(pluginMod, plugin);
 
@@ -890,7 +890,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     // Walks every major record through the per-game condition codec (ADR-0032). No aspect interface
     // groups condition-bearing records, so enumeration is unfiltered; the codec's reflect-for-
     // `Conditions` check is cheap and yields nothing for records without conditions.
-    private void IndexConditions(IModGetter pluginMod, string plugin)
+    //
+    // refs: the same shared list IndexVmad appends to, both flushed to form_references in one pass
+    // after Index()'s per-type loop (#166 — ConditionIndexer now feeds it too, closing the gap where
+    // a record referenced only by a condition never appeared in form_references).
+    private void IndexConditions(IModGetter pluginMod, string plugin, List<FormRef> refs)
     {
         var codec = ConditionCodecRegistry.For(pluginMod.GameRelease.ToCategory());
         if (codec == null)
@@ -902,7 +906,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         using var conditionAppender = Connection.CreateAppender("conditions");
         using var paramAppender = Connection.CreateAppender("condition_parameters");
-        var indexer = new ConditionIndexer(conditionAppender, paramAppender);
+        var indexer = new ConditionIndexer(conditionAppender, paramAppender, refs);
 
         var count = 0;
         foreach (var record in pluginMod.EnumerateMajorRecords())

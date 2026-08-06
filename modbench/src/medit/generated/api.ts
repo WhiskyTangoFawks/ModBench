@@ -525,6 +525,11 @@ export interface components {
                     [key: string]: components["schemas"]["ConflictThis"];
                 };
             } | null;
+            fieldResolutions?: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["FormKeyResolution"];
+                };
+            } | null;
         };
         ConditionGroupDiff: {
             fieldPath?: string | null;
