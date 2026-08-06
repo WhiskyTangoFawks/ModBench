@@ -206,7 +206,7 @@ describe('DownloadsApp — row context', () => {
   const context = (text: string) => JSON.parse(rowFor(text).getAttribute('data-vscode-context')!);
 
   it('every row carries a data-vscode-context matching downloadRowContext for that row', () => {
-    const row: DownloadRow = { name: 'foo.zip', status: 'Downloaded', size: 100, mtimeMs: 200, hasMeta: true, hidden: false, modID: '12345' };
+    const row: DownloadRow = { name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 100, mtimeMs: 200, hasMeta: true, hidden: false, modID: '12345' };
     render(<DownloadsApp />);
     postFromExtension({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows: [row] });
     expect(rowFor('foo.zip').getAttribute('data-vscode-context')).toBe(downloadRowContext(row));
