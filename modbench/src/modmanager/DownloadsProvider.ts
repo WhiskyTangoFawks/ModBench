@@ -5,7 +5,15 @@
 
 import * as vscode from 'vscode';
 import { join } from 'node:path';
-import { buildDownloadRows, downloadContextValue, filterHiddenRows, type DownloadRow, type DownloadStatus } from './mo2/downloads';
+import {
+  buildDownloadRows,
+  downloadContextValue,
+  filterHiddenRows,
+  sortDownloadRows,
+  type DownloadRow,
+  type DownloadSortColumn,
+  type DownloadStatus,
+} from './mo2/downloads';
 import { scanDownloads } from './DownloadsPanel';
 
 /** Status -> ThemeIcon id + colour, mirroring MO2's Status-cell colours
@@ -93,6 +101,13 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
 
   private cache?: DownloadsNode[];
 
+  // Transient view state (#238) — never persisted, matching the Mods tree's Sort Direction
+  // toggle: a fresh activation always starts back at the spec's defaults (hidden excluded,
+  // Filetime descending).
+  private showHidden = false;
+  private sortColumn: DownloadSortColumn = 'mtimeMs';
+  private sortDescending = true;
+
   constructor(
     private readonly instanceRoot: string,
     private readonly log: (msg: string) => void = () => {},
@@ -104,6 +119,34 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
   invalidate(): void {
     this.cache = undefined;
     this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** Show hidden toggle (#238): additive, not an exclusive filter — matches MO2's own
+   *  Show-hidden (downloadmanager.cpp:102). Re-renders via invalidate(), same as
+   *  ModListProvider.toggleSortOrder(); the command handler owns setting the
+   *  `modbench.downloads.showHidden` context key. */
+  setShowHidden(show: boolean): void {
+    this.showHidden = show;
+    this.invalidate();
+  }
+
+  /** Sort by… quick pick (#238): re-orders the rendered rows by any of the four sortable
+   *  columns, either direction. Transient like showHidden above — resets to Filetime
+   *  descending on the next activation, never persisted. */
+  setSort(column: DownloadSortColumn, descending: boolean): void {
+    this.sortColumn = column;
+    this.sortDescending = descending;
+    this.invalidate();
+  }
+
+  /** Names of rows currently rendered as hidden — feeds HiddenDownloadDecorationProvider's
+   *  dimming. Empty before the first render, and empty whenever Show hidden is off, since
+   *  filterHiddenRows has already dropped hidden rows from the cache entirely in that case. */
+  hiddenNames(): ReadonlySet<string> {
+    const hidden = (this.cache ?? []).filter(
+      (n): n is DownloadNode => n instanceof DownloadNode && n.row.hidden,
+    );
+    return new Set(hidden.map((n) => n.row.name));
   }
 
   getTreeItem(element: DownloadsNode): vscode.TreeItem {
@@ -134,7 +177,9 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
     }
     void vscode.commands.executeCommand('setContext', 'modbench.downloadsFolderExists', entries !== undefined);
     if (!entries) return [];
-    const rows = filterHiddenRows(buildDownloadRows(entries), false);
+    // Hidden-filtering applies first, then sort — the acceptance criterion the two compose by.
+    const filtered = filterHiddenRows(buildDownloadRows(entries), this.showHidden);
+    const rows = sortDownloadRows(filtered, this.sortColumn, this.sortDescending);
     return rows.map((row) => new DownloadNode(row, this.instanceRoot));
   }
 }

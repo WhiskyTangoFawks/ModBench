@@ -190,7 +190,7 @@ describe('DownloadsProvider', () => {
     expect(rowNames(children)).toEqual(['new.zip', 'old.zip']);
   });
 
-  it('excludes hidden rows (no show-hidden toggle in this slice)', async () => {
+  it('excludes hidden rows by default (Show hidden off)', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'hidden.zip', '[General]\r\nremoved=true\r\n');
     await writeArchive(root, 'visible.zip');
@@ -198,6 +198,93 @@ describe('DownloadsProvider', () => {
     const provider = new DownloadsProvider(root);
     const children = await provider.getChildren();
     expect(rowNames(children)).toEqual(['visible.zip']);
+  });
+
+  describe('setShowHidden (#238)', () => {
+    it('includes hidden rows alongside visible ones when turned on', async () => {
+      const root = await makeInstanceRoot();
+      await writeArchive(root, 'hidden.zip', '[General]\r\nremoved=true\r\n');
+      await writeArchive(root, 'visible.zip');
+
+      const provider = new DownloadsProvider(root);
+      provider.setShowHidden(true);
+      const children = await provider.getChildren();
+      expect(rowNames(children).sort()).toEqual(['hidden.zip', 'visible.zip']);
+    });
+
+    it('excludes hidden rows again once turned back off', async () => {
+      const root = await makeInstanceRoot();
+      await writeArchive(root, 'hidden.zip', '[General]\r\nremoved=true\r\n');
+      await writeArchive(root, 'visible.zip');
+
+      const provider = new DownloadsProvider(root);
+      provider.setShowHidden(true);
+      await provider.getChildren();
+      provider.setShowHidden(false);
+      const children = await provider.getChildren();
+      expect(rowNames(children)).toEqual(['visible.zip']);
+    });
+
+    it('re-renders: fires onDidChangeTreeData', async () => {
+      const root = await makeInstanceRoot();
+      const provider = new DownloadsProvider(root);
+      await provider.getChildren();
+      let fired = false;
+      provider.onDidChangeTreeData(() => { fired = true; });
+      provider.setShowHidden(true);
+      expect(fired).toBe(true);
+    });
+  });
+
+  describe('setSort (#238)', () => {
+    it('re-sorts by name ascending, overriding the default Filetime-descending order', async () => {
+      const root = await makeInstanceRoot();
+      await writeArchive(root, 'banana.zip');
+      await writeArchive(root, 'apple.zip');
+
+      const provider = new DownloadsProvider(root);
+      provider.setSort('name', false);
+      const children = await provider.getChildren();
+      expect(rowNames(children)).toEqual(['apple.zip', 'banana.zip']);
+    });
+
+    it('re-renders: fires onDidChangeTreeData', async () => {
+      const root = await makeInstanceRoot();
+      const provider = new DownloadsProvider(root);
+      await provider.getChildren();
+      let fired = false;
+      provider.onDidChangeTreeData(() => { fired = true; });
+      provider.setSort('name', false);
+      expect(fired).toBe(true);
+    });
+  });
+
+  describe('hiddenNames (#238)', () => {
+    it('is empty before any render', async () => {
+      const root = await makeInstanceRoot();
+      const provider = new DownloadsProvider(root);
+      expect(provider.hiddenNames()).toEqual(new Set());
+    });
+
+    it('is empty while Show hidden is off, even with hidden archives on disk', async () => {
+      const root = await makeInstanceRoot();
+      await writeArchive(root, 'hidden.zip', '[General]\r\nremoved=true\r\n');
+
+      const provider = new DownloadsProvider(root);
+      await provider.getChildren();
+      expect(provider.hiddenNames()).toEqual(new Set());
+    });
+
+    it('lists hidden row names once Show hidden is on and the tree has rendered', async () => {
+      const root = await makeInstanceRoot();
+      await writeArchive(root, 'hidden.zip', '[General]\r\nremoved=true\r\n');
+      await writeArchive(root, 'visible.zip');
+
+      const provider = new DownloadsProvider(root);
+      provider.setShowHidden(true);
+      await provider.getChildren();
+      expect(provider.hiddenNames()).toEqual(new Set(['hidden.zip']));
+    });
   });
 
   it('returns no children (not an error) for an empty downloads/ folder', async () => {

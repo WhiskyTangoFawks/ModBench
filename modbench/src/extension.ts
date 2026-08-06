@@ -36,9 +36,15 @@ import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
 import { buildExplicitPlugins } from './modmanager/explicitSession';
 import { detectRoot } from './modmanager/install/detectRoot';
 import { extractArchive } from './modmanager/install/extractArchive';
-import { registerDownloadsMultiRowCommands, registerDownloadsSingleRowCommands } from './modmanager/DownloadsPanel';
+import {
+  registerDownloadsHiddenToggleCommands,
+  registerDownloadsMultiRowCommands,
+  registerDownloadsSingleRowCommands,
+  registerDownloadsSortCommand,
+} from './modmanager/DownloadsPanel';
 import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { createDownloadsWatcher } from './modmanager/downloadsWatcher';
+import { HiddenDownloadDecorationProvider } from './modmanager/HiddenDownloadDecorationProvider';
 import { makeReporter } from './reporter';
 
 let backendManager: BackendManager | undefined;
@@ -1240,6 +1246,13 @@ function registerDownloadsView(
     disposables: [
       downloadsView,
       createDownloadsWatcher(instanceRoot, () => downloadsProvider.invalidate()),
+      // Dims hidden rows once Show hidden is on (#238) — the sole cue distinguishing them,
+      // since Show hidden is additive, not an exclusive filter.
+      vscode.window.registerFileDecorationProvider(
+        new HiddenDownloadDecorationProvider(instanceRoot, () => downloadsProvider.hiddenNames()),
+      ),
+      registerDownloadsSortCommand(downloadsProvider),
+      ...registerDownloadsHiddenToggleCommands(downloadsProvider),
       ...registerDownloadsSingleRowCommands(instanceRoot, log),
       ...registerDownloadsMultiRowCommands(instanceRoot, log),
     ],

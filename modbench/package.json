@@ -429,6 +429,20 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.downloads.sortBy",
+        "title": "Modbench: Sort Downloads By…"
+      },
+      {
+        "command": "modbench.downloads.showHidden",
+        "title": "Modbench: Show Hidden Downloads",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "modbench.downloads.hideHidden",
+        "title": "Modbench: Hide Hidden Downloads",
+        "icon": "$(eye-closed)"
+      },
+      {
         "command": "modbench.pluginListTree.refresh",
         "title": "Modbench: Refresh Plugin List",
         "icon": "$(refresh)"
@@ -543,6 +557,21 @@
           "command": "modbench.modList.sortAscending",
           "when": "view == modbench.modList && modbench.modList.sortDescending",
           "group": "navigation@9"
+        },
+        {
+          "command": "modbench.downloads.showHidden",
+          "when": "view == modbench.downloads && !modbench.downloads.showHidden",
+          "group": "navigation@1"
+        },
+        {
+          "command": "modbench.downloads.hideHidden",
+          "when": "view == modbench.downloads && modbench.downloads.showHidden",
+          "group": "navigation@1"
+        },
+        {
+          "command": "modbench.downloads.sortBy",
+          "when": "view == modbench.downloads",
+          "group": "1_sort"
         },
         {
           "command": "modbench.saveAllGroups",
