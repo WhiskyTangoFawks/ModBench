@@ -1,18 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { executeCommand, registerCommand, showWarningMessage, showErrorMessage, showTextDocument, openExternal, fsDelete } = vi.hoisted(() => ({
+const { executeCommand, registerCommand, showWarningMessage, showErrorMessage, showTextDocument, showQuickPick, openExternal, fsDelete } = vi.hoisted(() => ({
   executeCommand: vi.fn(),
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
   showWarningMessage: vi.fn(),
   showErrorMessage: vi.fn(),
   showTextDocument: vi.fn(),
+  showQuickPick: vi.fn(),
   openExternal: vi.fn(),
   fsDelete: vi.fn(),
 }));
 
 vi.mock('vscode', () => ({
   commands: { executeCommand, registerCommand },
-  window: { showWarningMessage, showErrorMessage, showTextDocument },
+  window: { showWarningMessage, showErrorMessage, showTextDocument, showQuickPick },
   env: { openExternal },
   workspace: { fs: { delete: fsDelete } },
   Uri: {
@@ -28,14 +29,21 @@ import { join } from 'node:path';
 import {
   buildRowActionHandlers,
   deleteArchives,
+  registerDownloadsHiddenToggleCommands,
   registerDownloadsMultiRowCommands,
   registerDownloadsSingleRowCommands,
+  registerDownloadsSortCommand,
 } from './DownloadsPanel';
-import type { DownloadNode } from './DownloadsProvider';
+import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 
 /** A minimal stand-in for a tree row — only `row.name` is read by anything under test here,
  *  so a real vscode.TreeItem-backed DownloadNode isn't needed in this file. */
 const node = (name: string): DownloadNode => ({ row: { name } } as DownloadNode);
+
+/** A minimal stand-in for DownloadsProvider — only setSort/setShowHidden are called by
+ *  anything under test here, so a real fs-backed DownloadsProvider isn't needed in this file. */
+const fakeDownloadsProvider = (): DownloadsProvider & { setSort: ReturnType<typeof vi.fn>; setShowHidden: ReturnType<typeof vi.fn> } =>
+  ({ setSort: vi.fn(), setShowHidden: vi.fn() } as unknown as DownloadsProvider & { setSort: ReturnType<typeof vi.fn>; setShowHidden: ReturnType<typeof vi.fn> });
 
 // tmpdirs created via makeInstanceRoot() this test, cleaned up in afterEach even
 // if the test fails partway through (an inline rm() at the end of a test body
@@ -450,5 +458,75 @@ describe('deleteArchives', () => {
       { modal: true },
       'Delete',
     );
+  });
+});
+
+// ── registerDownloadsSortCommand (#238) ──────────────────────────────────────
+
+describe('registerDownloadsSortCommand', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('registers modbench.downloads.sortBy', () => {
+    registerDownloadsSortCommand(fakeDownloadsProvider());
+    expect(registerCommand.mock.calls.map((c) => c[0])).toContain('modbench.downloads.sortBy');
+  });
+
+  it('applies the picked option to DownloadsProvider.setSort', async () => {
+    const provider = fakeDownloadsProvider();
+    showQuickPick.mockResolvedValueOnce({ label: 'Size (Largest First)', column: 'size', descending: true });
+
+    registerDownloadsSortCommand(provider);
+    invoke('modbench.downloads.sortBy');
+
+    await vi.waitFor(() => {
+      expect(provider.setSort).toHaveBeenCalledWith('size', true);
+    });
+  });
+
+  it('does nothing when the pick is cancelled', async () => {
+    const provider = fakeDownloadsProvider();
+    showQuickPick.mockResolvedValueOnce(undefined);
+
+    registerDownloadsSortCommand(provider);
+    invoke('modbench.downloads.sortBy');
+
+    await vi.waitFor(() => {
+      expect(showQuickPick).toHaveBeenCalled();
+    });
+    expect(provider.setSort).not.toHaveBeenCalled();
+  });
+});
+
+// ── registerDownloadsHiddenToggleCommands (#238) ─────────────────────────────
+
+describe('registerDownloadsHiddenToggleCommands', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('registers modbench.downloads.showHidden and .hideHidden', () => {
+    registerDownloadsHiddenToggleCommands(fakeDownloadsProvider());
+    expect(registerCommand.mock.calls.map((c) => c[0])).toEqual(expect.arrayContaining([
+      'modbench.downloads.showHidden',
+      'modbench.downloads.hideHidden',
+    ]));
+  });
+
+  it('showHidden turns hidden rows on and sets the context key true', () => {
+    const provider = fakeDownloadsProvider();
+    registerDownloadsHiddenToggleCommands(provider);
+
+    invoke('modbench.downloads.showHidden');
+
+    expect(provider.setShowHidden).toHaveBeenCalledWith(true);
+    expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloads.showHidden', true);
+  });
+
+  it('hideHidden turns hidden rows off and sets the context key false', () => {
+    const provider = fakeDownloadsProvider();
+    registerDownloadsHiddenToggleCommands(provider);
+
+    invoke('modbench.downloads.hideHidden');
+
+    expect(provider.setShowHidden).toHaveBeenCalledWith(false);
+    expect(executeCommand).toHaveBeenCalledWith('setContext', 'modbench.downloads.showHidden', false);
   });
 });

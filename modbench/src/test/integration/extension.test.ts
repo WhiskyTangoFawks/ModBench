@@ -208,6 +208,10 @@ describe('modbench command registration', () => {
     'modbench.downloads.delete',
     'modbench.downloads.hide',
     'modbench.downloads.unhide',
+    // #238: the view/title Sort by… overflow command and the Show-hidden title-bar toggle.
+    'modbench.downloads.sortBy',
+    'modbench.downloads.showHidden',
+    'modbench.downloads.hideHidden',
     'modbench.pluginListTree.refresh',
     'modbench.pluginListTree.filter',
     'modbench.pluginListTree.revealInExplorer',

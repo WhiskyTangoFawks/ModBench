@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { readdir, stat, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseDownloadMeta, setHiddenInText, setInstalledInText, type DownloadEntry } from './mo2/downloads';
+import { parseDownloadMeta, setHiddenInText, setInstalledInText, type DownloadEntry, type DownloadSortColumn } from './mo2/downloads';
 import { deleteDownload } from './deleteDownload';
 import { readGameName } from './mo2/modOrganizerIni';
 import { nexusSlugForGame } from './mo2/nexusSlug';
-import type { DownloadNode } from './DownloadsProvider';
+import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 
 /** Best-effort read of an archive's `.meta` sidecar text; absent -> undefined
  *  (a metaless archive is a valid Downloaded row, per the spec). */
@@ -256,6 +256,54 @@ export function registerDownloadsMultiRowCommands(instanceRoot: string, log: (ms
     }),
     vscode.commands.registerCommand('modbench.downloads.unhide', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       for (const name of selectionNames(clicked, selected)) handlers.unhide(name);
+    }),
+  ];
+}
+
+// #238 slice 4: the view/title overflow (…) menu's Sort by… quick pick, plus the visible
+// Show-hidden title-bar toggle. Both apply straight to DownloadsProvider (sortDownloadRows/
+// filterHiddenRows are already applied inside its load()) — no row-level work, unlike the
+// per-archive commands above, so these take the provider instead of instanceRoot/log.
+
+/** The four sortable columns (`mo2/downloads.ts`' DownloadSortColumn), each offered in both
+ *  directions — spec user story 8. Filetime desc (last) is the default DownloadsProvider
+ *  already starts at, so leaving it unpicked here changes nothing. */
+const SORT_OPTIONS: readonly { label: string; column: DownloadSortColumn; descending: boolean }[] = [
+  { label: 'Name (A to Z)', column: 'name', descending: false },
+  { label: 'Name (Z to A)', column: 'name', descending: true },
+  { label: 'Download Status (A to Z)', column: 'status', descending: false },
+  { label: 'Download Status (Z to A)', column: 'status', descending: true },
+  { label: 'Size (Smallest First)', column: 'size', descending: false },
+  { label: 'Size (Largest First)', column: 'size', descending: true },
+  { label: 'Filetime (Oldest First)', column: 'mtimeMs', descending: false },
+  { label: 'Filetime (Newest First)', column: 'mtimeMs', descending: true },
+];
+
+/** Register the Sort by… overflow command: a `showQuickPick` over the four sortable columns
+ *  in both directions — native pick-one-of-N per modbench/CLAUDE.md, since a tree has no
+ *  clickable column headers. Applies the pick straight to DownloadsProvider.setSort, which
+ *  re-renders; Escape (undefined) is a silent no-op, matching switchProfile's own picker. */
+export function registerDownloadsSortCommand(downloadsProvider: DownloadsProvider): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.downloads.sortBy', async () => {
+    const picked = await vscode.window.showQuickPick(SORT_OPTIONS, { placeHolder: 'Sort downloads by' });
+    if (!picked) return;
+    downloadsProvider.setSort(picked.column, picked.descending);
+  });
+}
+
+/** Register the Show/Hide-hidden title-bar toggle: the same two-command-one-context-key
+ *  shape as the Mods tree's Sort Direction toggle (extension.ts' modbench.modList.sortDescending/
+ *  sortAscending) — state lives on DownloadsProvider, the command handler owns the
+ *  `modbench.downloads.showHidden` context key that package.json's `when` clauses gate on. */
+export function registerDownloadsHiddenToggleCommands(downloadsProvider: DownloadsProvider): vscode.Disposable[] {
+  return [
+    vscode.commands.registerCommand('modbench.downloads.showHidden', () => {
+      downloadsProvider.setShowHidden(true);
+      void vscode.commands.executeCommand('setContext', 'modbench.downloads.showHidden', true);
+    }),
+    vscode.commands.registerCommand('modbench.downloads.hideHidden', () => {
+      downloadsProvider.setShowHidden(false);
+      void vscode.commands.executeCommand('setContext', 'modbench.downloads.showHidden', false);
     }),
   ];
 }
