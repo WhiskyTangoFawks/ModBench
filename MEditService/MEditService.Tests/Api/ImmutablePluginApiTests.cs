@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 
 namespace MEditService.Tests.Api;
 
-public sealed class ImmutablePluginApiTests(LoadedImmutableApiFixture loaded) : IClassFixture<LoadedImmutableApiFixture>
+public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixture> loaded) : IClassFixture<LoadedApiFixture<ImmutablePluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
     private readonly ImmutablePluginFixture _fixture = loaded.Plugin;

@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
 
-public sealed class DeleteRecordsApiTests(LoadedDeleteRecordsApiFixture loaded) : IClassFixture<LoadedDeleteRecordsApiFixture>
+public sealed class DeleteRecordsApiTests(LoadedApiFixture<DeleteRecordsFixture> loaded) : IClassFixture<LoadedApiFixture<DeleteRecordsFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
     private readonly DeleteRecordsFixture _fixture = loaded.Plugin;

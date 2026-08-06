@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace MEditService.Tests.Api;
 
-public sealed class SessionFilterApiTests(LoadedNpcApiFixture loaded) : IClassFixture<LoadedNpcApiFixture>
+public sealed class SessionFilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
 

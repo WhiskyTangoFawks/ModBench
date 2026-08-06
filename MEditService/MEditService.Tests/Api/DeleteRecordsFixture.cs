@@ -12,7 +12,7 @@ namespace MEditService.Tests.Api;
 ///                  standalone NPCs for safe-delete tests.
 /// Fallout4.esm (implicit/immutable) — NPC referencing Kw1, blocking its deletion.
 /// </summary>
-public sealed class DeleteRecordsFixture : IDisposable
+public sealed class DeleteRecordsFixture : IApiPluginFixture<DeleteRecordsFixture>
 {
     public string DataFolder => _data.DataFolder;
     public string PluginsTxtPath => _data.PluginsTxtPath;
@@ -80,4 +80,6 @@ public sealed class DeleteRecordsFixture : IDisposable
     }
 
     public void Dispose() => _data.Dispose();
+
+    public static DeleteRecordsFixture Create() => new();
 }

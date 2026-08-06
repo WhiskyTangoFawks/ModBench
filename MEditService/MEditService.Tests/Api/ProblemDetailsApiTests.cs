@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
 
-public sealed class ProblemDetailsApiTests(LoadedNpcApiFixture loaded) : IClassFixture<LoadedNpcApiFixture>
+public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private const string ProblemContentType = "application/problem+json";
 
