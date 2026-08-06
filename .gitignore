@@ -39,10 +39,4 @@ modbench/LICENSE
 Thumbs.db
 
 # Source reference (read-only, not part of this project)
-Mutagen/
-TES5Edit/
-SFRecordCompareEngine/
-modorganizer/
-
-# Local grep-only reference clones (CLAUDE.md: never modify, never tracked)
 references/
