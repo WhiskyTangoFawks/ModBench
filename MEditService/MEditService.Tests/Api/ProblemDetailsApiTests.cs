@@ -63,6 +63,9 @@ public sealed class ProblemDetailsApiTests(LoadedNpcApiFixture loaded) : IClassF
     [InlineData("patch", 500)]
     [InlineData("copy", 500)]
     [InlineData("save", 400)]
+    [InlineData("recordTypes", 503)]
+    [InlineData("conditionFunctions", 503)]
+    [InlineData("conditionRunOnTargets", 503)]
     public async Task Endpoint_NoSession_ReturnsProblemDetails(string op, int expectedStatus)
     {
         await using var app = new WebApplicationFactory<Program>();
@@ -80,6 +83,9 @@ public sealed class ProblemDetailsApiTests(LoadedNpcApiFixture loaded) : IClassF
                 fields = new Dictionary<string, object?> { ["editor_id"] = "x" },
             }),
             "copy" => await client.PostAsJsonAsync($"/plugins/{plugin}/records", new { recordType = "npc_" }),
+            "recordTypes" => await client.GetAsync("/record-types"),
+            "conditionFunctions" => await client.GetAsync("/condition-functions"),
+            "conditionRunOnTargets" => await client.GetAsync("/condition-run-on-targets"),
             _ => await client.PostAsync($"/change-groups/{Guid.NewGuid()}/save", null),
         };
 
