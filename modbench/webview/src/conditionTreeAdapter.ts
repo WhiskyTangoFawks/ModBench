@@ -45,10 +45,13 @@ const OP_SYMBOL: Record<ParsedCondition['operator'], string> = {
 // (never an EditorID): conditionTreeAdapter never receives FormKey resolutions for a condition's
 // own parameters (unlike a top-level formKey leaf's `resolutions`, ADR-0031) — a raw FormKey here
 // is the same "unresolved, not wrong" state ConditionParamCell's own FormKeyCell shows today.
+// Issue #165: a decoded Number parameter shows only its member name (e.g. "Male"), matching
+// xEdit's own wbConditionToStr, which renders an enum-backed parameter's `.Summary` alone — never
+// the raw value once a name is known.
 function paramSummary(p: ParsedCondition['parameters'][number]): string {
   if (p.category === 'Form') return p.formKey ?? 'NULL';
   if (p.category === 'Text') return p.text ?? '';
-  return String(p.number ?? 0);
+  return p.decodedValue ?? String(p.number ?? 0);
 }
 
 // Issue #231 (review, design call): the exact shape of xEdit's `wbConditionToStr`

@@ -118,10 +118,17 @@ export function ConditionParamCell({ value, editable, isFocused, onCommit, onOpe
       </span>
     );
   }
+  // Issue #165: once DecodeParamValue resolves a name, xEdit's own wbConditionToStr shows only
+  // that name (e.g. "Male") — no raw value, no (TypeName) suffix (matches its own summary text
+  // exactly). Editing still targets the raw number unchanged (ScalarCell.displayOverride only
+  // substitutes the resting label).
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-      <ScalarCell value={p.number ?? 0} meta={scalarMeta('int')} editable={editable} isFocused={isFocused} onCommit={onCommit} />
-      {typeCue}
+      <ScalarCell
+        value={p.number ?? 0} meta={scalarMeta('int')} editable={editable} isFocused={isFocused}
+        onCommit={onCommit} displayOverride={p.decodedValue ?? undefined}
+      />
+      {p.decodedValue == null && typeCue}
     </span>
   );
 }

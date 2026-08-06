@@ -64,6 +64,14 @@ public interface IConditionCodec
     // doesn't have) would silently offer a name it can't actually parse or write. Same shape as
     // AvailableFunctions above.
     IEnumerable<string> AvailableRunOnTargets();
+
+    // #165: decodes a Number-category parameter's raw value to its enum member name — the
+    // ParsedConditionParam.TypeName hook ADR-0032 anticipated ("ActorValue 24 -> Health"). Per-game
+    // because the enums themselves are per-game (mirrors AvailableFunctions/AvailableRunOnTargets
+    // above). typeName is the parameter's own ParsedConditionParam.TypeName; a type this game has no
+    // static enum table for, or a value outside that table's known members, returns null — the
+    // caller falls back to the raw number, never a wrong or invented name.
+    string? DecodeParamValue(string typeName, int number);
 }
 
 // Outcome of applying a value onto a Mutagen condition field. Mirrors VmadApplyResult's shape
@@ -101,14 +109,21 @@ public enum ConditionParamCategory
 }
 
 // One used parameter of a condition function. TypeName is the resolved ParameterType name (e.g.
-// "ActorValue", "Global") — a display cue now and the hook for future enum-value decoding
-// (ActorValue 24 -> "Health"), which stays out of the neutral model deliberately (ADR-0032).
+// "ActorValue", "Global") — a display cue for an undecoded value, and the hook ADR-0032 anticipated
+// for enum-value decoding. DecodedValue (#165) is that decode's result — populated only for a
+// Number-category parameter whose TypeName has a known static enum table for the loaded game (e.g.
+// Sex 0 -> "Male"), via IConditionCodec.DecodeParamValue; null when undecodable (no table for
+// TypeName, or a value outside the table's known members) or the parameter isn't Number-category
+// (a Form/Text parameter is already human-legible without decoding). Never persisted — it's a pure
+// function of (TypeName, Number), recomputed at read time in DuckDbRecordRepository.GetConditions
+// rather than stored, so it can never drift from the raw value it was derived from.
 public sealed record ParsedConditionParam(
     ConditionParamCategory Category,
     string TypeName,
     int? Number = null,
     string? FormKey = null,
-    string? Text = null);
+    string? Text = null,
+    string? DecodedValue = null);
 
 // A single parsed condition in neutral form. Renders as
 // `RunOnTarget.Function(Parameters) <Operator> Comparison [AND|OR]`.

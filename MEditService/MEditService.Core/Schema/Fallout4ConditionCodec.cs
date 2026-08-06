@@ -352,6 +352,61 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     // #167: the Run On target catalog, same rationale as AvailableFunctions above.
     public IEnumerable<string> AvailableRunOnTargets() => Enum.GetNames<Condition.RunOnType>();
 
+    // #165: member-name tables for the Number-category ParameterTypes that have a real static enum
+    // in xEdit (references/TES5Edit/Core/wbDefinitionsCommon.pas + wbDefinitionsFO4.pas) and are
+    // actually used by an FO4 Condition.Function. Scoped to these seven deliberately — FormType
+    // (~120 members) and MiscStat (hash-keyed, ~100+ members) are real Number-category enums too but
+    // far larger/lower-value; out of scope for #165, left for a follow-up if ever needed. Every other
+    // Number-category ParameterType (Integer, Float, VariableName, QuestStage, VATSValueFunction/
+    // Param, AdvanceAction, Alias, Packdata, FurnitureAnim/Entry, Event) is either genuinely free-form
+    // or resolved relative to another parameter's value (context mEdit's neutral model doesn't carry)
+    // — not a static catalog, so it's never in this table and DecodeParamValue correctly falls
+    // through to null for it.
+    private static readonly Dictionary<string, IReadOnlyDictionary<int, string>> EnumTables =
+        new Dictionary<string, IReadOnlyDictionary<int, string>>
+        {
+            ["Sex"] = new Dictionary<int, string> { [0] = "Male", [1] = "Female" },
+            ["Axis"] = new Dictionary<int, string> { [88] = "X", [89] = "Y", [90] = "Z" },
+            ["CrimeType"] = new Dictionary<int, string>
+            {
+                [0] = "Steal",
+                [1] = "Pickpocket",
+                [2] = "Trespass",
+                [3] = "Attack",
+                [4] = "Murder",
+                [-1] = "None",
+            },
+            ["CriticalStage"] = new Dictionary<int, string>
+            {
+                [0] = "None",
+                [1] = "Goo Start",
+                [2] = "Goo End",
+                [3] = "Disintegrate Start",
+                [4] = "Disintegrate End",
+                [5] = "Freeze Start",
+                [6] = "Freeze End",
+            },
+            ["Alignment"] = new Dictionary<int, string>
+            {
+                [0] = "Good",
+                [1] = "Neutral",
+                [2] = "Evil",
+                [3] = "Very Good",
+                [4] = "Very Evil",
+            },
+            ["CastingSource"] = new Dictionary<int, string>
+            {
+                [0] = "Left",
+                [1] = "Right",
+                [2] = "Voice",
+                [3] = "Instant",
+            },
+            ["WardState"] = new Dictionary<int, string> { [0] = "None", [1] = "Absorb", [2] = "Break" },
+        };
+
+    public string? DecodeParamValue(string typeName, int number) =>
+        EnumTables.TryGetValue(typeName, out var table) && table.TryGetValue(number, out var name) ? name : null;
+
     // ---- ApplyFieldValue: write-back (#152) ----
 
     // Record-level entry point PluginWriter calls: finds the mutable condition list via the same

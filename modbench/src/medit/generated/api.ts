@@ -641,6 +641,7 @@ export interface components {
             number?: number | null;
             formKey?: string | null;
             text?: string | null;
+            decodedValue?: string | null;
         };
         PatchRecordRequest: {
             plugin?: string | null;

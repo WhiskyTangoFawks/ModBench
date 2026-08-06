@@ -179,6 +179,7 @@ export interface ParsedConditionParam {
   number?: number | null;
   formKey?: string | null;
   text?: string | null;
+  decodedValue?: string | null;            // #165: Number param's enum member name (e.g. "Male"), when known
 }
 
 export interface ParsedCondition {

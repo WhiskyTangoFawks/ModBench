@@ -20,11 +20,12 @@ public sealed class ConditionIndexerTests : IDisposable
     private readonly FormKey _cobjFormKey;
     private readonly FormKey _questFormKey;
     private readonly FormKey _multiListQuestFormKey;
+    private readonly FormKey _sexCobjFormKey;
     private readonly PluginFixtureData _fixture;
 
     public ConditionIndexerTests()
     {
-        FormKey cobjFk = default, questFk = default, multiListQuestFk = default;
+        FormKey cobjFk = default, questFk = default, multiListQuestFk = default, sexCobjFk = default;
         _fixture = new PluginFixtureBuilder()
             .WithPlugin("CtdaTest.esp", mod =>
             {
@@ -67,11 +68,27 @@ public sealed class ConditionIndexerTests : IDisposable
                         Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
                     },
                 ];
+
+                // #165: a Number-category parameter with a known enum table (Sex) — the read path
+                // (GetConditions) must attach the decoded member name alongside the raw value.
+                var sexCobj = mod.ConstructibleObjects.AddNew("SexTestRecipe");
+                sexCobjFk = sexCobj.FormKey;
+                sexCobj.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    ComparisonValue = 1.0f,
+                    Data = new FunctionConditionData
+                    {
+                        Function = Condition.Function.GetIsSex, // (Sex, None, None)
+                        ParameterOneNumber = 0, // Male
+                    },
+                });
             })
             .Build();
         _cobjFormKey = cobjFk;
         _questFormKey = questFk;
         _multiListQuestFormKey = multiListQuestFk;
+        _sexCobjFormKey = sexCobjFk;
     }
 
     public void Dispose() => _fixture.Dispose();
@@ -142,5 +159,23 @@ public sealed class ConditionIndexerTests : IDisposable
         var unusedCondition = Assert.Single(unused.Conditions);
         Assert.Equal(ConditionOperator.GreaterThan, unusedCondition.Operator);
         Assert.Equal(2.0f, unusedCondition.ComparisonFloat);
+    }
+
+    // #165: DecodeParamValue is wired through the read path — GetConditions attaches the decoded
+    // enum member name to a Number-category parameter whose TypeName has a known static table,
+    // alongside the raw value it was decoded from (never replacing it in storage).
+    [Fact]
+    public void GetConditions_NumberParameterWithKnownEnumType_AttachesDecodedValue()
+    {
+        using var repo = LoadedRepository();
+
+        var owner = Assert.Single(repo.GetConditions(_sexCobjFormKey.ToString(), "CtdaTest.esp"));
+        var condition = Assert.Single(owner.Conditions);
+        var param = Assert.Single(condition.Parameters);
+
+        Assert.Equal(ConditionParamCategory.Number, param.Category);
+        Assert.Equal("Sex", param.TypeName);
+        Assert.Equal(0, param.Number);
+        Assert.Equal("Male", param.DecodedValue);
     }
 }

@@ -214,4 +214,16 @@ describe('buildConditionRows — collapsedSummary (xEdit-style one-line prose, d
     expect(diffs[0].children?.[0].collapsedSummary?.['MyMod.esp']).toBe('Subject.A = 0');
     expect(diffs[0].children?.[0].collapsedSummary?.['Fallout4.esm']).toBe('Subject.A = 0 AND');
   });
+
+  // Issue #165: matches xEdit's own wbConditionToStr — a decoded Number parameter's summary text
+  // is its member name alone (e.g. "Male"), never the raw number.
+  it('a decoded Number parameter shows its member name, not the raw number', () => {
+    const c = condition({
+      function: 'GetIsSex',
+      parameters: [{ category: 'Number', typeName: 'Sex', number: 0, decodedValue: 'Male' }],
+    });
+    const diff = conditionDiff({ perPlugin: { 'Fallout4.esm': c } });
+    const { diffs } = buildConditionRows({ groups: [{ fieldPath: 'Conditions', conditions: [diff] }] });
+    expect(diffs[0].children?.[0].collapsedSummary?.['Fallout4.esm']).toBe('Subject.GetIsSex(Male) = 0');
+  });
 });
