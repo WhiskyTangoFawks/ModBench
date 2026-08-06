@@ -504,8 +504,8 @@ export interface components {
             diffs?: components["schemas"]["FieldDiff"][] | null;
             conflictAll?: components["schemas"]["ConflictAll"];
             hasVmad?: boolean;
-            vmad?: components["schemas"]["VmadCompare"];
-            conditions?: components["schemas"]["ConditionCompare"];
+            vmad?: components["schemas"]["VmadCompare"] | null;
+            conditions?: components["schemas"]["ConditionCompare"] | null;
         };
         ConditionCompare: {
             groups?: components["schemas"]["ConditionGroupDiff"][] | null;
@@ -574,7 +574,7 @@ export interface components {
             records?: components["schemas"]["DeleteRecordTarget"][] | null;
         };
         DeleteRecordsResponse: {
-            stagedGroup?: components["schemas"]["ChangeGroup"];
+            stagedGroup?: components["schemas"]["ChangeGroup"] | null;
             revertedFormKeys?: string[] | null;
         };
         ExplicitPlugin: {
@@ -602,7 +602,7 @@ export interface components {
             isArray?: boolean;
             validFormKeyTypes?: string[] | null;
             enumValues?: string[] | null;
-            elementType?: components["schemas"]["FieldMetadata"];
+            elementType?: components["schemas"]["FieldMetadata"] | null;
             fields?: components["schemas"]["FieldMetadata"][] | null;
             isSortable?: boolean;
             allowsNull?: boolean;
@@ -673,7 +673,7 @@ export interface components {
             resolutions?: {
                 [key: string]: components["schemas"]["FormKeyResolution"];
             } | null;
-            recordResolution?: components["schemas"]["FormKeyResolution"];
+            recordResolution?: components["schemas"]["FormKeyResolution"] | null;
             recordTypeDisplayName?: string | null;
         };
         PlacedSummary: {
@@ -767,7 +767,7 @@ export interface components {
             byPlugin?: {
                 [key: string]: components["schemas"]["SaveResult"];
             } | null;
-            reindexFailure?: components["schemas"]["ReindexFailure"];
+            reindexFailure?: components["schemas"]["ReindexFailure"] | null;
         };
         SaveResult: {
             backupPath?: string | null;
@@ -840,7 +840,7 @@ export interface components {
         };
         WorldspaceBlocks: {
             blocks?: components["schemas"]["WorldspaceBlockDto"][] | null;
-            topCell?: components["schemas"]["CellSummary"];
+            topCell?: components["schemas"]["CellSummary"] | null;
         };
         WorldspaceSubBlockDto: {
             /** Format: int32 */
@@ -1570,6 +1570,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
