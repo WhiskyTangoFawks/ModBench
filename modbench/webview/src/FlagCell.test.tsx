@@ -161,7 +161,7 @@ describe('FlagCell — editing the multi-select', () => {
     renderActivated(
       <FlagCell value={0b0101} meta={flagMeta} editable={true} isFocused={true} onCommit={vi.fn()} />
     );
-    const checkboxes = screen.getAllByRole('checkbox');
+    const checkboxes: HTMLInputElement[] = screen.getAllByRole('checkbox');
     expect(checkboxes).toHaveLength(4);
     expect(checkboxes[0].checked).toBe(true);  // A: bit 0 set
     expect(checkboxes[1].checked).toBe(false); // B: bit 1 not set
@@ -174,7 +174,7 @@ describe('FlagCell — editing the multi-select', () => {
     renderActivated(
       <FlagCell value={0b0101} meta={flagMeta} editable={true} isFocused={true} onCommit={onCommit} />
     );
-    const checkboxes = screen.getAllByRole('checkbox');
+    const checkboxes: HTMLInputElement[] = screen.getAllByRole('checkbox');
     fireEvent.click(checkboxes[0]); // uncheck A (bit 0)
     expect(onCommit).toHaveBeenCalledWith('4'); // 0b0101 ^ 0b0001 = 0b0100
   });
@@ -184,7 +184,7 @@ describe('FlagCell — editing the multi-select', () => {
     renderActivated(
       <FlagCell value={0b0101} meta={flagMeta} editable={true} isFocused={true} onCommit={onCommit} />
     );
-    const checkboxes = screen.getAllByRole('checkbox');
+    const checkboxes: HTMLInputElement[] = screen.getAllByRole('checkbox');
     fireEvent.click(checkboxes[1]); // check B (bit 1)
     expect(onCommit).toHaveBeenCalledWith('7'); // 0b0101 ^ 0b0010 = 0b0111
   });
@@ -228,7 +228,7 @@ describe('FlagCell — high-bit flags (BigInt arithmetic)', () => {
     renderActivated(
       <FlagCell value={9007199254740992} meta={highBitMeta} editable={true} isFocused={true} onCommit={vi.fn()} />
     );
-    const checkboxes = screen.getAllByRole('checkbox');
+    const checkboxes: HTMLInputElement[] = screen.getAllByRole('checkbox');
     expect(checkboxes[0].checked).toBe(false);  // Playable: not set
     expect(checkboxes[1].checked).toBe(true);   // LowPriorityPushable: set
   });
@@ -319,7 +319,7 @@ describe('FlagCell — sparse bit positions (F1)', () => {
     renderActivated(
       <FlagCell value={5} meta={sparseFlags} editable={true} isFocused={true} onCommit={vi.fn()} />
     );
-    const checkboxes = screen.getAllByRole('checkbox');
+    const checkboxes: HTMLInputElement[] = screen.getAllByRole('checkbox');
     expect(checkboxes[0].checked).toBe(true);   // X: 5 & 1 !== 0
     expect(checkboxes[1].checked).toBe(true);   // Z: 5 & 4 !== 0
   });

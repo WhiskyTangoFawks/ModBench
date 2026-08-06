@@ -1192,7 +1192,7 @@ describe('RecordPanel — drag-drop stages a pending field change', () => {
       message: expect.stringContaining('MyMod.esp'),
     }));
     const [{ message }] = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
-      .map(([m]: [{ message?: string }]) => m).filter((m: { message?: string }) => m.message);
+      .map((call: unknown[]) => call[0] as { message?: string }).filter((m) => m.message);
     expect(message).toContain('Bounds');
     expect(message).toContain('000001:Fallout4.esm');
   });
@@ -2132,7 +2132,7 @@ describe('RecordPanel — action logging (issue #200)', () => {
       message: expect.stringContaining('MyMod.esp'),
     }));
     const [{ message }] = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
-      .map(([m]: [{ message?: string }]) => m).filter((m: { message?: string }) => m.message);
+      .map((call: unknown[]) => call[0] as { message?: string }).filter((m) => m.message);
     expect(message).toContain('Name');
     expect(message).toContain('000001:Fallout4.esm');
   });
@@ -2177,7 +2177,7 @@ describe('RecordPanel — action logging (issue #200)', () => {
       message: expect.stringContaining('MyMod.esp'),
     }));
     const [{ message }] = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
-      .map(([m]: [{ message?: string }]) => m).filter((m: { message?: string }) => m.message);
+      .map((call: unknown[]) => call[0] as { message?: string }).filter((m) => m.message);
     expect(message).toContain(String.raw`VMAD\MyScript\Enabled`);
     expect(message).toContain('000001:Fallout4.esm');
   });
@@ -2212,7 +2212,7 @@ describe('RecordPanel — action logging (issue #200)', () => {
       message: expect.stringContaining('MyMod.esp'),
     }));
     const [{ message }] = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
-      .map(([m]: [{ message?: string }]) => m).filter((m: { message?: string }) => m.message);
+      .map((call: unknown[]) => call[0] as { message?: string }).filter((m) => m.message);
     expect(message).toContain(String.raw`VMAD\MyScript\Enabled`);
     expect(message).toContain('000001:Fallout4.esm');
   });
@@ -2240,7 +2240,7 @@ describe('RecordPanel — action logging (issue #200)', () => {
       message: expect.stringContaining('MyMod.esp'),
     }));
     const [{ message }] = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
-      .map(([m]: [{ message?: string }]) => m).filter((m: { message?: string }) => m.message);
+      .map((call: unknown[]) => call[0] as { message?: string }).filter((m) => m.message);
     expect(message).toContain(String.raw`CTDA\Conditions\0\UseGlobal`);
     expect(message).toContain('000001:Fallout4.esm');
   });
@@ -2277,7 +2277,7 @@ describe('RecordPanel — action logging (issue #200)', () => {
       message: expect.stringContaining('MyMod.esp'),
     }));
     const [{ message }] = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
-      .map(([m]: [{ message?: string }]) => m).filter((m: { message?: string }) => m.message);
+      .map((call: unknown[]) => call[0] as { message?: string }).filter((m) => m.message);
     expect(message).toContain(String.raw`CTDA\Conditions\0\Operator`);
     expect(message).toContain('000001:Fallout4.esm');
   });

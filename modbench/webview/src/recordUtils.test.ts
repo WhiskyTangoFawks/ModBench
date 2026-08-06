@@ -19,9 +19,9 @@ import {
   defaultElementValue,
   type PathSegment,
 } from './recordUtils';
-import type { FieldMetadata, RecordDetail } from './types';
+import type { FieldMetadata, CompareOverride } from './types';
 
-function makeOverride(plugin: string, extra: Partial<RecordDetail> = {}): RecordDetail {
+function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): CompareOverride {
   return {
     formKey: '000001:Test.esp',
     plugin,
@@ -29,6 +29,7 @@ function makeOverride(plugin: string, extra: Partial<RecordDetail> = {}): Record
     isWinner: false,
     editorId: null,
     fields: [],
+    conflictThis: 'OnlyOne',
     ...extra,
   };
 }

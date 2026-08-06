@@ -122,7 +122,7 @@ describe('ScalarCell — editable column renders text until clicked', () => {
   it('selects the whole value on focus, so a paste replaces rather than appends', () => {
     render(<ScalarCell value="100" meta={strMeta} editable={true} isFocused={true} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('100'));
-    const input = screen.getByDisplayValue('100');
+    const input: HTMLInputElement = screen.getByDisplayValue('100');
     expect(input.selectionStart).toBe(0);
     expect(input.selectionEnd).toBe(3);
   });
@@ -131,7 +131,8 @@ describe('ScalarCell — editable column renders text until clicked', () => {
     render(<ScalarCell value="Dogmeat" meta={strMeta} editable={true} isFocused={true} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('Dogmeat'));
     expect(screen.getByDisplayValue('Dogmeat')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Dogmeat').type).toBe('text');
+    const input: HTMLInputElement = screen.getByDisplayValue('Dogmeat');
+    expect(input.type).toBe('text');
   });
 
   it('returns to text on blur', () => {
@@ -145,7 +146,8 @@ describe('ScalarCell — editable column renders text until clicked', () => {
   it('renders a number input for int type when clicked', () => {
     render(<ScalarCell value={5} meta={intMeta} editable={true} isFocused={true} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('5'));
-    expect(screen.getByDisplayValue('5').type).toBe('number');
+    const input: HTMLInputElement = screen.getByDisplayValue('5');
+    expect(input.type).toBe('number');
   });
 
   it('calls onCommit with a number (not a string) when int input is blurred', () => {
@@ -173,7 +175,8 @@ describe('ScalarCell — editable column renders text until clicked', () => {
     render(<ScalarCell value={false} meta={boolMeta} editable={true} isFocused={true} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('false'));
     expect(screen.getByRole('checkbox')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox').checked).toBe(false);
+    const checkbox: HTMLInputElement = screen.getByRole('checkbox');
+    expect(checkbox.checked).toBe(false);
   });
 
   // Activating a bool must not toggle it: a stray click would otherwise stage a change.
