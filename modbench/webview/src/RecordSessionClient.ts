@@ -42,7 +42,9 @@ export interface RecordSessionClient {
   load(formKey: string): Promise<LoadResult>;
   save(formKey: string, plugin: string, fields: Record<string, unknown>, changeType?: string): Promise<Response>;
   revert(changeId: string): Promise<Response>;
-  copyTo(formKey: string, targetPlugin: string): Promise<Response>;
+  // Issue #202: sourcePlugin, when given, copies that plugin's own version of the record (the
+  // column-header menu's right-clicked column) rather than the overall winner.
+  copyTo(formKey: string, targetPlugin: string, sourcePlugin?: string): Promise<Response>;
   removeOverride(formKey: string, plugin: string): Promise<Response>;
   createRecord(plugin: string, recordType?: string): Promise<Response>;
   // Issue #139: the changes in the whole component `changeId` belongs to (ADR-0028). Read fully
@@ -118,10 +120,10 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
       }));
     },
 
-    copyTo(formKey, targetPlugin) {
+    copyTo(formKey, targetPlugin, sourcePlugin) {
       return rawWrite(fetchImpl => client.POST('/records/{formKey}/copy-to/{targetPlugin}', {
         params: { path: { formKey, targetPlugin } },
-        body: {},
+        body: sourcePlugin ? { sourcePlugin } : {},
         parseAs: 'stream',
         fetch: fetchImpl,
       }));

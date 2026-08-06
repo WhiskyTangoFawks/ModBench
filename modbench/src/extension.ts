@@ -481,16 +481,16 @@ function registerChangeGroupCommands(deps: EditorCommandDeps): vscode.Disposable
 }
 
 // #209: the "New Plugin…" affordance every target-plugin QuickPick offers (Copy as Override…,
-// and — new in #209 — Copy All to Pending / Copy as New Record, now that they share this same
-// picker). Add Master deliberately does NOT use this — see pickAddMasterCandidate below.
+// and — new in #209 — Copy as New Record, now that they share this same picker). Add Master
+// deliberately does NOT use this — see pickAddMasterCandidate below.
 const NEW_PLUGIN_LABEL = '$(add) New Plugin…';
 
 // #209: extracted from modbench.copyAsOverrideInto's command body (previously the only caller)
-// so Copy All to Pending / Copy as New Record can share it too — "no second picker
-// implementation survives" applies to this QuickPick construction, not just the deleted React
-// components. Candidates are every mutable plugin minus `excludePlugin` (the column-header
-// menu's own right-clicked column, when invoked that way; the plugins-tree call site passes
-// none, matching its pre-#209 behavior exactly).
+// so Copy as New Record can share it too — "no second picker implementation survives" applies
+// to this QuickPick construction, not just the deleted React components. Candidates are every
+// mutable plugin minus `excludePlugin` (the column-header menu's own right-clicked column, when
+// invoked that way; the plugins-tree call site passes none, matching its pre-#209 behavior
+// exactly).
 async function pickTargetPlugin(
   repository: ApiPluginRepository, controller: SessionController, excludePlugin?: string,
 ): Promise<string | undefined> {
@@ -566,7 +566,11 @@ function registerCopyCreateCommands(deps: EditorCommandDeps): vscode.Disposable[
       if (!targetPlugin) return;
 
       if (fromColumnHeader) {
-        broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE, formKey, targetPlugin });
+        // #202: sourcePlugin (the right-clicked column, `excludePlugin` above) is forwarded so
+        // the backend copies that plugin's own version of the record, not necessarily the winner.
+        broadcastToRecordPanels(recordPanels, {
+          type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE, formKey, sourcePlugin: excludePlugin!, targetPlugin,
+        });
       } else {
         await controller.copyRecordTo(formKey, targetPlugin);
       }
@@ -590,22 +594,15 @@ function registerCopyCreateCommands(deps: EditorCommandDeps): vscode.Disposable[
   ];
 }
 
-// #209: Copy All to Pending / Copy as New Record / Remove / Add Master have no plugins-tree
-// equivalent to reuse — they only ever existed as column-header actions — so each gets its own
-// new command (split out from registerCopyCreateCommands to stay under the file's size budget).
-// Copy All to Pending and Copy as New Record still share pickTargetPlugin with
-// modbench.copyAsOverrideInto rather than re-implementing it.
+// #209: Copy as New Record / Remove / Add Master have no plugins-tree equivalent to reuse — they
+// only ever existed as column-header actions — so each gets its own new command (split out from
+// registerCopyCreateCommands to stay under the file's size budget). Copy as New Record still
+// shares pickTargetPlugin with modbench.copyAsOverrideInto rather than re-implementing it.
+// #202: Copy All to Pending deleted outright (not just unwired) — Copy as Override
+// (modbench.copyAsOverrideInto above) now covers that case via sourcePlugin.
 function registerColumnHeaderCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const { repository, controller, recordPanels } = deps;
   return [
-    vscode.commands.registerCommand('modbench.columnHeader.copyAllToPending', async (ctx?: ColumnHeaderContext) => {
-      if (!ctx) return;
-      const targetPlugin = await pickTargetPlugin(repository, controller, ctx.plugin);
-      if (!targetPlugin) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_ALL_TO_PENDING, formKey: ctx.formKey, sourcePlugin: ctx.plugin, targetPlugin,
-      });
-    }),
     vscode.commands.registerCommand('modbench.columnHeader.copyAsNewRecord', async (ctx?: ColumnHeaderContext) => {
       if (!ctx) return;
       const targetPlugin = await pickTargetPlugin(repository, controller, ctx.plugin);

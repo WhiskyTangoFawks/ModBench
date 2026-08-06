@@ -151,8 +151,8 @@ describe('modbench command registration', () => {
     // webviewId/webviewSection/immutable/isHeaderRecord, not testable from this harness; and
     // RecordPanel's data-vscode-context wiring, unit-tested). modbench.copyAsOverrideInto
     // (already listed above) is reused for Copy as Override… from this same menu — no separate
-    // command id for it.
-    'modbench.columnHeader.copyAllToPending',
+    // command id for it. #202: modbench.columnHeader.copyAllToPending deleted outright — Copy as
+    // Override now covers that case via sourcePlugin instead of a fourth, near-duplicate action.
     'modbench.columnHeader.copyAsNewRecord',
     'modbench.columnHeader.removeOverride',
     'modbench.columnHeader.addMaster',

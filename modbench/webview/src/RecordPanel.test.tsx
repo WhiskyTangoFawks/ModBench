@@ -1281,10 +1281,10 @@ describe('RecordPanel — drag-drop stages a pending field change', () => {
   });
 });
 
-// ── Column header native context menu (issue #3, native since #209) ───────────
+// ── Column header native context menu (issue #3, native since #209; consolidated in #202) ─────
 //
-// The column-header menu (Copy All to Pending / Copy as New Record / Copy as Override… / Remove
-// / Add Master) is VS Code's own `webview/context` menu now, gated on the header `<th>`'s
+// The column-header menu (Copy as Override… / Copy as New Record / Remove / Add Master) is VS
+// Code's own `webview/context` menu now, gated on the header `<th>`'s
 // data-vscode-context — not a rendered `<ul role="menu">` (#208's migration switch applied
 // here too: no `onContextMenu`/`preventDefault()` on the `<th>` any more). Its own availability
 // (the `when` clauses in package.json) isn't renderable in this harness — see EXPECTED_COMMANDS
@@ -1368,33 +1368,6 @@ describe('RecordPanel — Remove', () => {
   });
 });
 
-// ── Copy All to Pending (issue #3, native menu + QuickPick since #209) ────────
-
-describe('RecordPanel — Copy All to Pending', () => {
-  beforeEach(() => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it("the native menu's broadcast stages one save with every field from the source column", async () => {
-    const { client } = renderPanel(threePluginConflictResult, { plugins: threePluginsResponse });
-    await waitFor(() => screen.getByText('Bob'));
-    postColumnHeaderAction({
-      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_ALL_TO_PENDING,
-      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', targetPlugin: 'Mod2.esp',
-    });
-
-    await waitFor(() =>
-      expect(client.save).toHaveBeenCalledWith(
-        '000001:Fallout4.esm',
-        'Mod2.esp',
-        { Name: 'Bob' },
-        undefined,
-      ),
-    );
-  });
-});
-
 // ── Copy as New Record (issue #3, native menu + QuickPick since #209) ─────────
 
 describe('RecordPanel — Copy as New Record', () => {
@@ -1422,15 +1395,17 @@ describe('RecordPanel — Copy as New Record', () => {
   });
 });
 
-// ── Copy as Override… (issue #176; native menu since #209 reuses modbench.copyAsOverrideInto) ─
+// ── Copy as Override… (issue #176; native menu since #209 reuses modbench.copyAsOverrideInto;
+//    #202 sources the right-clicked column, not the winner) ───────────────────────────────────
 //
 // Formerly a standalone button, then (#176) a hand-drawn menu item sharing PluginTargetPicker;
 // now the same handleCopyTo flow, triggered by the extension host's modbench.copyAsOverrideInto
 // — the same command the plugins tree already used, extended (#209) to accept the column
 // header's record identity instead of only a tree node, and to resolve its target via a native
-// QuickPick instead of a positioned in-webview list. handleCopyTo(target) never reads the
-// right-clicked column's plugin — it always copies the currently-loaded record (formKey) — so
-// there is no per-source-column field payload to assert here, only the target and formKey.
+// QuickPick instead of a positioned in-webview list. #202: the broadcast now also carries
+// `sourcePlugin` (the right-clicked column) — handleCopyTo forwards it to `client.copyTo`
+// unchanged, so the backend (not this webview) decides whose fields actually get copied
+// (EditOrchestratorTests.CopyRecordTo_ExplicitSourcePlugin_CopiesThatPluginsFields_NotWinner).
 
 describe('RecordPanel — Copy as Override…', () => {
   beforeEach(() => {
@@ -1438,16 +1413,31 @@ describe('RecordPanel — Copy as Override…', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("the native modbench.copyAsOverrideInto broadcast copies the current record to the QuickPick's chosen target via copyTo", async () => {
+  it("the native modbench.copyAsOverrideInto broadcast copies the right-clicked column into the QuickPick's chosen target via copyTo", async () => {
     const { client } = renderPanel(threePluginConflictResult, { plugins: threePluginsResponse });
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE,
-      formKey: '000001:Fallout4.esm', targetPlugin: 'Mod2.esp',
+      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', targetPlugin: 'Mod2.esp',
     });
 
     await waitFor(() =>
-      expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp'),
+      expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp', 'Mod1.esp'),
+    );
+  });
+
+  // Mod1.esp is NOT the winner in threePluginConflictResult (Mod2.esp is) — proves the
+  // right-clicked column is what's forwarded, not whatever plugin happens to be winning.
+  it('forwards the right-clicked column even when it is not the winning plugin', async () => {
+    const { client } = renderPanel(threePluginConflictResult, { plugins: threePluginsResponse });
+    await waitFor(() => screen.getByText('Bob'));
+    postColumnHeaderAction({
+      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE,
+      formKey: '000001:Fallout4.esm', sourcePlugin: 'Fallout4.esm', targetPlugin: 'Mod2.esp',
+    });
+
+    await waitFor(() =>
+      expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp', 'Fallout4.esm'),
     );
   });
 
@@ -1456,7 +1446,7 @@ describe('RecordPanel — Copy as Override…', () => {
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE,
-      formKey: '000099:Other.esm', targetPlugin: 'Mod2.esp',
+      formKey: '000099:Other.esm', sourcePlugin: 'Mod1.esp', targetPlugin: 'Mod2.esp',
     });
 
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -1975,10 +1965,10 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE,
-      formKey: '000001:Fallout4.esm', targetPlugin: 'Mod2.esp',
+      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', targetPlugin: 'Mod2.esp',
     });
 
-    await waitFor(() => expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp'));
+    await waitFor(() => expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp', 'Mod1.esp'));
     expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED });
   });
 
@@ -1987,19 +1977,6 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
     await waitFor(() => screen.getByText('MyMod.esp'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
-    });
-
-    await waitFor(() =>
-      expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
-    );
-  });
-
-  it('the native Copy All to Pending broadcast posts pendingChanged once staged', async () => {
-    renderPanel(threePluginConflictResult, { plugins: threePluginsResponse });
-    await waitFor(() => screen.getByText('Bob'));
-    postColumnHeaderAction({
-      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_ALL_TO_PENDING,
-      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', targetPlugin: 'Mod2.esp',
     });
 
     await waitFor(() =>
@@ -2355,24 +2332,24 @@ describe('RecordPanel — action logging (issue #200)', () => {
     }));
   });
 
-  // Issue #200: "Copy All to Pending" and "Copy as Override…" are #202's surface, deliberately
-  // untouched here — both stage through the same low-level stageChange as every field edit
-  // above, so this locks in that the log call lives at handleEdit/handleVmadStructOp (its
-  // named callers), not inside stageChange itself, where it would leak onto every caller. Still
-  // true post-#209: the native menu only changed how the target plugin is chosen, not which
-  // low-level function ends up staging the change.
-  it('the native Copy All to Pending broadcast does not log — out of scope, owned by #202', async () => {
+  // Issue #202: Copy as Override's own log call was deliberately deferred by #200 to this
+  // ticket ("Copy All to Pending" and "Copy as Override…" are #202's surface") — now it logs
+  // INFO on success, matching Remove/Copy as New Record's own pattern above. "Copy All to
+  // Pending" itself is gone entirely (the consolidated three-action menu), so there is no longer
+  // a sibling "does not log" case to pin down here.
+  it('the native Copy as Override… broadcast logs an INFO line naming source, target, and record', async () => {
     renderPanel(threePluginConflictResult, { plugins: threePluginsResponse });
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
-      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_ALL_TO_PENDING,
+      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE,
       formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', targetPlugin: 'Mod2.esp',
     });
 
-    await waitFor(() =>
-      expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }),
-    );
-    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.LOG }));
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
+      type: WEBVIEW_TO_EXTENSION.LOG,
+      level: 'info',
+      message: expect.stringContaining('Mod2.esp'),
+    }));
   });
 });
 

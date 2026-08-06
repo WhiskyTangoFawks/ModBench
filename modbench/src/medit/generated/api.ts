@@ -546,6 +546,7 @@ export interface components {
         ConflictThis: "OnlyOne" | "Master" | "IdenticalToMaster" | "Override" | "ConflictWins" | "ConflictLoses";
         CopyRecordRequest: {
             source?: string | null;
+            sourcePlugin?: string | null;
         };
         CreatePlacedRecordRequest: {
             recordType?: string | null;

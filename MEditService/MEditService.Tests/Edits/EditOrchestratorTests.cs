@@ -471,6 +471,75 @@ public sealed class EditOrchestratorTests
         }
     }
 
+    // Issue #202: Copy as Override must copy the right-clicked column's version of the record, not
+    // necessarily the overall winner — Source.esp is loaded first (loses conflicts to Middle.esp's
+    // override), so an explicit `sourcePlugin: "Source.esp"` proves the copy reads off that plugin's
+    // own value rather than falling through to the default winner-only path.
+    [Fact]
+    public void CopyRecordTo_ExplicitSourcePlugin_CopiesThatPluginsFields_NotWinner()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-copy-explicit-source")
+            .WithPlugin("Source.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("TestNPC");
+                npc.Aggression = Npc.AggressionType.Frenzied;
+                npcKey = npc.FormKey;
+            })
+            .WithPlugin("Middle.esp", mod =>
+            {
+                var overrideNpc = new Npc(npcKey, Fallout4Release.Fallout4)
+                {
+                    Aggression = Npc.AggressionType.Unaggressive
+                };
+                mod.Npcs.Add(overrideNpc);
+            })
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                // Sanity: Middle.esp is the winner, so an un-sourced copy would carry its value.
+                var winnerCheck = orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user");
+                var winnerStaged = Assert.IsType<StageEditResult.Staged>(winnerCheck);
+                Assert.Contains(winnerStaged.Changes, c =>
+                    c.FieldPath == "aggression" && c.NewValue.GetString() == "Unaggressive");
+
+                var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user", sourcePlugin: "Source.esp");
+
+                var staged = Assert.IsType<StageEditResult.Staged>(result);
+                Assert.Contains(staged.Changes, c =>
+                    c.FieldPath == "aggression" && c.NewValue.GetString() == "Frenzied");
+            }
+        }
+    }
+
+    [Fact]
+    public void CopyRecordTo_ExplicitSourcePluginNotOverridden_ReturnsRecordNotFound()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-copy-explicit-source-missing")
+            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user", sourcePlugin: "NoOverride.esp");
+
+                Assert.IsType<StageEditResult.RecordNotFound>(result);
+            }
+        }
+    }
+
     [Fact]
     public void CopyRecordTo_NoSession_ReturnsNoSession()
     {

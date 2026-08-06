@@ -335,7 +335,7 @@ public sealed partial class EditOrchestrator(
         };
     }
 
-    public StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source)
+    public StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source, string? sourcePlugin = null)
     {
         var (earlyOut, session, recordType) = ValidateEditContext(formKey, targetPlugin);
         if (earlyOut != null) return earlyOut;
@@ -343,10 +343,14 @@ public sealed partial class EditOrchestrator(
         if (PendingLifecycleChangeType(formKey, targetPlugin) is { } blockingType)
             return new StageEditResult.RecordPendingDeleteOrRenumber(blockingType);
 
-        var winner = _query.GetRecord(formKey);
-        if (winner == null) return new StageEditResult.RecordNotFound();
+        // Issue #202: an explicit sourcePlugin copies that plugin's own version of the record (the
+        // column-header menu's right-clicked column) rather than the overall winner.
+        var source_ = sourcePlugin != null
+            ? _query.GetRecordForPlugin(formKey, sourcePlugin)
+            : _query.GetRecord(formKey);
+        if (source_ == null) return new StageEditResult.RecordNotFound();
 
-        var fields = winner.Fields.ToDictionary(
+        var fields = source_.Fields.ToDictionary(
             fv => fv.Metadata.Name,
             fv => JsonSerializer.SerializeToElement(fv.Value));
 
@@ -358,7 +362,7 @@ public sealed partial class EditOrchestrator(
                 oldValues[fv.Metadata.Name] = JsonSerializer.SerializeToElement(fv.Value);
         }
 
-        var placement = _query.GetPlacement(formKey, winner.Plugin);
+        var placement = _query.GetPlacement(formKey, source_.Plugin);
 
         var schemas = _schemaReflector.GetSchemas(session!.GameRelease);
         var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!, session!.GameRelease);

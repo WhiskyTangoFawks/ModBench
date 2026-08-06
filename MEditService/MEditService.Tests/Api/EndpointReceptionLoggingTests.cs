@@ -160,7 +160,7 @@ public sealed class EndpointReceptionLoggingTests
             string formKey, string plugin, Dictionary<string, System.Text.Json.JsonElement> fields,
             string source, string? description, string? changeType = null) =>
             new StageEditResult.NoSession();
-        public StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source) => throw new NotSupportedException();
+        public StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source, string? sourcePlugin = null) => throw new NotSupportedException();
         public CreateRecordOutcome CreateRecord(string plugin, string recordType, string? templateFormKey, string source) =>
             throw new NotSupportedException();
         public CreateRecordOutcome CreatePlacedRecord(string plugin, string recordType, string parentCell, string placementGroup,
