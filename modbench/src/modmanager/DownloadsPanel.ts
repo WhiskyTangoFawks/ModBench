@@ -1,31 +1,11 @@
 import * as vscode from 'vscode';
-import * as crypto from 'crypto';
 import { readdir, stat, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { buildDownloadRows, parseDownloadMeta, setHiddenInText, setInstalledInText, type DownloadEntry } from './mo2/downloads';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type DownloadRowContext, type WebviewToExtension } from './downloadsMessages';
-import { createDownloadsWatcher } from './downloadsWatcher';
+import { parseDownloadMeta, setHiddenInText, setInstalledInText, type DownloadEntry } from './mo2/downloads';
 import { deleteDownload } from './deleteDownload';
 import { readGameName } from './mo2/modOrganizerIni';
 import { nexusSlugForGame } from './mo2/nexusSlug';
-
-const PANEL_KEY = '__downloads__';
-
-function buildHtml(scriptUri: string, cspSource: string): string {
-  const nonce = crypto.randomBytes(16).toString('base64');
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; script-src 'nonce-${nonce}' ${cspSource}; style-src ${cspSource} 'unsafe-inline';">
-</head>
-<body>
-  <div id="root"></div>
-  <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
-</body>
-</html>`;
-}
+import type { DownloadNode } from './DownloadsProvider';
 
 /** Best-effort read of an archive's `.meta` sidecar text; absent -> undefined
  *  (a metaless archive is a valid Downloaded row, per the spec). */
@@ -38,7 +18,7 @@ async function readMetaText(path: string): Promise<string | undefined> {
   }
 }
 
-async function scanDownloads(instanceRoot: string): Promise<DownloadEntry[] | undefined> {
+export async function scanDownloads(instanceRoot: string): Promise<DownloadEntry[] | undefined> {
   const dir = join(instanceRoot, 'downloads');
   let names: string[];
   try {
@@ -112,24 +92,24 @@ async function runRowAction(
   }
 }
 
-/** Row Delete action: move the archive and its `.meta` sidecar (if any) to the
- *  system trash, behind a modal confirmation. All sequencing/ordering lives in
- *  the injected-dep `deleteDownload` (unit-tested); this adapter only supplies
- *  the VS Code surface — the native confirm, trash via `workspace.fs.delete`
- *  with `useTrash`, and ADR-0026 failure surfacing. The file-watcher removes the
- *  row on its own once the archive leaves disk. Never touches the installed mod. */
-async function deleteArchive(instanceRoot: string, name: string, log: (msg: string) => void): Promise<void> {
+/** Trash one archive + its `.meta` sidecar (if any) — no confirmation of its own; the caller
+ *  (deleteArchive / deleteArchives) supplies `confirm`, so a batch delete can ask once for the
+ *  whole selection instead of once per file. All sequencing/ordering lives in the injected-dep
+ *  `deleteDownload` (unit-tested); this adapter only supplies the VS Code surface — trash via
+ *  `workspace.fs.delete` with `useTrash`, and ADR-0026 failure surfacing. The file-watcher
+ *  removes the row on its own once the archive leaves disk. Never touches the installed mod. */
+async function trashOneArchive(
+  instanceRoot: string,
+  name: string,
+  log: (msg: string) => void,
+  confirm: () => Promise<boolean>,
+): Promise<void> {
   const archivePath = join(instanceRoot, 'downloads', name);
   const metaPath = `${archivePath}.meta`;
   await deleteDownload({
     archivePath,
     metaPath,
-    confirm: async () =>
-      (await vscode.window.showWarningMessage(
-        `Delete "${name}"? The archive and its .meta file (if any) will be moved to the system trash.`,
-        { modal: true },
-        'Delete',
-      )) === 'Delete',
+    confirm,
     metaExists: async () => (await readMetaText(metaPath)) !== undefined,
     trash: async (path) => {
       await vscode.workspace.fs.delete(vscode.Uri.file(path), { useTrash: true });
@@ -140,6 +120,35 @@ async function deleteArchive(instanceRoot: string, name: string, log: (msg: stri
       void vscode.window.showErrorMessage(`Modbench: Failed to delete "${name}".`);
     },
   });
+}
+
+/** Row Delete action (single file): move the archive and its `.meta` sidecar (if any) to the
+ *  system trash, behind a modal confirmation naming the file. */
+async function deleteArchive(instanceRoot: string, name: string, log: (msg: string) => void): Promise<void> {
+  await trashOneArchive(instanceRoot, name, log, async () =>
+    (await vscode.window.showWarningMessage(
+      `Delete "${name}"? The archive and its .meta file (if any) will be moved to the system trash.`,
+      { modal: true },
+      'Delete',
+    )) === 'Delete');
+}
+
+/** Delete action for the tree's multi-select command (#233): confirms ONCE for the WHOLE
+ *  selection, never once per file — an N-file selection must not stack N modal dialogs. A
+ *  single-name selection reuses `deleteArchive` as-is (identical modal text to before #233).
+ *  Cancel is a silent no-op for the whole batch, matching the single-file contract. */
+export async function deleteArchives(instanceRoot: string, names: string[], log: (msg: string) => void): Promise<void> {
+  if (names.length === 1) {
+    await deleteArchive(instanceRoot, names[0], log);
+    return;
+  }
+  const confirmed = (await vscode.window.showWarningMessage(
+    `Delete ${names.length} items? Each archive and its .meta file (if any) will be moved to the system trash.`,
+    { modal: true },
+    'Delete',
+  )) === 'Delete';
+  if (!confirmed) return;
+  for (const name of names) await trashOneArchive(instanceRoot, name, log, () => Promise.resolve(true));
 }
 
 /** Row Visit-on-Nexus action: read the archive's `.meta` for the Nexus mod id
@@ -166,19 +175,6 @@ async function setArchiveHidden(instanceRoot: string, name: string, hidden: bool
   await writeFile(metaPath, setHiddenInText(metaText, hidden), 'utf8');
 }
 
-/** Map each webview message type to its handler. READY fires the first scan:
- *  the extension waits for the webview's own message listener to be live rather
- *  than posting immediately after `webview.html` is set, which would race the
- *  page still loading. REFRESH is the manual re-scan. (Per-row actions used to
- *  live here too — see #214: they're native `webview/context` commands now,
- *  built by buildRowActionHandlers below, no webview round trip needed.) */
-export function buildMessageHandlers(refresh: () => Promise<void>): Record<string, () => void> {
-  return {
-    [WEBVIEW_TO_EXTENSION.READY]: () => void refresh(),
-    [WEBVIEW_TO_EXTENSION.REFRESH]: () => void refresh(),
-  };
-}
-
 // #214: the row's right-click actions (Install/Visit on Nexus/Open File/Open Meta File/
 // Reveal in Explorer/Delete/Hide/Unhide) as directly-callable handlers, keyed the same way
 // buildMessageHandlers used to key them before their sole trigger — the hand-drawn row menu —
@@ -201,108 +197,65 @@ export function buildRowActionHandlers(instanceRoot: string, log: (msg: string) 
       void runRowAction('Open Meta File', name, log, async () => {
         await vscode.window.showTextDocument(vscode.Uri.file(join(instanceRoot, 'downloads', `${name}.meta`)));
       }),
-    // Reveal the archive in the OS file manager.
-    reveal: (name) =>
-      void runRowAction('Reveal in Explorer', name, log, async () => {
-        await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(join(instanceRoot, 'downloads', name)));
-      }),
     delete: (name) => void deleteArchive(instanceRoot, name, log),
     hide: (name) => void runRowAction('Hide', name, log, () => setArchiveHidden(instanceRoot, name, true)),
     unhide: (name) => void runRowAction('Unhide', name, log, () => setArchiveHidden(instanceRoot, name, false)),
   };
 }
 
-// #214: one command id per native `webview/context` menu entry (package.json's
-// contributes.commands/menus), mapped to its buildRowActionHandlers key. `keyof
-// ReturnType<typeof buildRowActionHandlers>` (not a bare `string`) so a typo'd or renamed key on
-// either side of this table is a compile error, not a silent no-op at that one command. Hide/
-// Unhide are two separate commands rather than one toggle, gated by the row's `hidden` in
-// package.json's `when` clauses — same shape as #209's isHeaderRecord/!immutable gating.
-const DOWNLOAD_ROW_COMMANDS: Record<string, keyof ReturnType<typeof buildRowActionHandlers>> = {
+// #233: one command id per native `view/item/context` menu entry on the modbench.downloads
+// TreeView (package.json's contributes.commands/menus), mapped to its buildRowActionHandlers
+// key. `keyof ReturnType<typeof buildRowActionHandlers>` (not a bare `string`) so a typo'd or
+// renamed key on either side of this table is a compile error, not a silent no-op at that one
+// command.
+const SINGLE_ROW_COMMANDS: Record<string, keyof ReturnType<typeof buildRowActionHandlers>> = {
   'modbench.downloads.install': 'install',
   'modbench.downloads.visitNexus': 'visitNexus',
   'modbench.downloads.openFile': 'openFile',
   'modbench.downloads.openMeta': 'openMeta',
-  'modbench.downloads.reveal': 'reveal',
-  'modbench.downloads.delete': 'delete',
-  'modbench.downloads.hide': 'hide',
-  'modbench.downloads.unhide': 'unhide',
 };
 
-/** Register the Downloads row's native context-menu commands. Each receives the row's merged
- *  `data-vscode-context` (DownloadRowContext) as its sole argument — see downloadRowContext in
- *  mo2/downloads.ts, which builds the attribute these commands are invoked from. */
-export function registerDownloadsRowCommands(instanceRoot: string, log: (msg: string) => void): vscode.Disposable[] {
+/** Register Install / Visit on Nexus / Open File / Open Meta File — clicked row only, ignoring
+ *  the rest of any multi-selection (#233): MO2 doesn't batch Install either, and batching the
+ *  navigational actions is "open five browser tabs / five archives / five editors". VS Code
+ *  invokes a contributed `view/item/context` command as `(clickedItem, selectedItems[])`; the
+ *  selection argument is simply unused here. */
+export function registerDownloadsSingleRowCommands(instanceRoot: string, log: (msg: string) => void): vscode.Disposable[] {
   const handlers = buildRowActionHandlers(instanceRoot, log);
-  return Object.entries(DOWNLOAD_ROW_COMMANDS).map(([commandId, key]) =>
-    vscode.commands.registerCommand(commandId, (ctx?: DownloadRowContext) => {
-      if (ctx?.name) handlers[key](ctx.name);
+  return Object.entries(SINGLE_ROW_COMMANDS).map(([commandId, key]) =>
+    vscode.commands.registerCommand(commandId, (node?: DownloadNode) => {
+      if (node?.row.name) handlers[key](node.row.name);
     }),
   );
 }
 
-/** Route a raw inbound webview message to its handler by `type`. Extracted as its own seam
- *  (#71) so message dispatch is directly testable without a real `vscode.WebviewPanel`.
- *  Malformed/unrecognized messages are silently ignored, matching prior inline behavior.
- *  Only READY/REFRESH flow through here now — see buildMessageHandlers (#214). */
-export function dispatchWebviewMessage(
-  msg: unknown,
-  handlers: Record<string, () => void>,
-): void {
-  if (typeof msg === 'object' && msg !== null && 'type' in msg) {
-    const m = msg as WebviewToExtension;
-    handlers[m.type]?.();
-  }
+/** The clicked row plus its multi-selection, collapsed to the row-name set a batch command
+ *  acts on. Falls back to the clicked row alone when no selection array is passed (a host
+ *  that doesn't supply one, or a single-row click). */
+function selectionNames(clicked: DownloadNode | undefined, selected: DownloadNode[] | undefined): string[] {
+  if (selected && selected.length > 0) return selected.map((n) => n.row.name);
+  return clicked ? [clicked.row.name] : [];
 }
 
-export function openDownloadsPanel(
-  context: vscode.ExtensionContext,
-  openPanels: Map<string, vscode.WebviewPanel>,
-  instanceRoot: string,
-  log: (msg: string) => void,
-): void {
-  const existing = openPanels.get(PANEL_KEY);
-  if (existing) {
-    existing.reveal();
-    return;
-  }
-
-  const panel = vscode.window.createWebviewPanel('modbench.downloads', 'Downloads', vscode.ViewColumn.One, {
-    enableScripts: true,
-    localResourceRoots: [vscode.Uri.file(join(context.extensionPath, 'out', 'webview'))],
-  });
-  openPanels.set(PANEL_KEY, panel);
-
-  const refresh = async (): Promise<void> => {
-    try {
-      const entries = await scanDownloads(instanceRoot);
-      if (!entries) {
-        await panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.NO_FOLDER });
-        return;
-      }
-      await panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.ROWS_UPDATED, rows: buildDownloadRows(entries) });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      log(`[DownloadsPanel] scanning downloads/ failed: ${message}`);
-      // Inline UI + log, not a toast (ADR-0026: background/recoverable failure).
-      await panel.webview.postMessage({
-        type: EXTENSION_TO_WEBVIEW.ERROR,
-        message: 'Failed to read the downloads folder — see the Modbench output log.',
-      });
-    }
-  };
-
-  const handlers = buildMessageHandlers(refresh);
-  panel.webview.onDidReceiveMessage((msg: unknown) => dispatchWebviewMessage(msg, handlers));
-
-  const watcher = createDownloadsWatcher(instanceRoot, () => void refresh());
-  panel.onDidDispose(() => {
-    watcher.dispose();
-    openPanels.delete(PANEL_KEY);
-  });
-
-  const scriptUri = panel.webview.asWebviewUri(
-    vscode.Uri.file(join(context.extensionPath, 'out', 'webview', 'assets', 'downloads.js')),
-  );
-  panel.webview.html = buildHtml(scriptUri.toString(), panel.webview.cspSource);
+/** Register Delete / Hide / Unhide — act on the WHOLE selection, not just the clicked row
+ *  (#233). Hide/Unhide are idempotent per row (buildRowActionHandlers' hide/unhide always
+ *  write `removed=true/false` regardless of prior state), so a mixed hidden/visible selection
+ *  never errors — the `when` clause gating Hide vs Unhide can only inspect the clicked row, so
+ *  a mixed selection applies whichever action that row's state offers to every selected row,
+ *  matching MO2's own "Hide All". Delete gets its own batch-confirm entry point
+ *  (`deleteArchives`) since one modal must cover the whole batch, never one per file. */
+export function registerDownloadsMultiRowCommands(instanceRoot: string, log: (msg: string) => void): vscode.Disposable[] {
+  const handlers = buildRowActionHandlers(instanceRoot, log);
+  return [
+    vscode.commands.registerCommand('modbench.downloads.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
+      const names = selectionNames(clicked, selected);
+      if (names.length > 0) void deleteArchives(instanceRoot, names, log);
+    }),
+    vscode.commands.registerCommand('modbench.downloads.hide', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
+      for (const name of selectionNames(clicked, selected)) handlers.hide(name);
+    }),
+    vscode.commands.registerCommand('modbench.downloads.unhide', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
+      for (const name of selectionNames(clicked, selected)) handlers.unhide(name);
+    }),
+  ];
 }

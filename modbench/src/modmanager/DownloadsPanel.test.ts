@@ -25,8 +25,17 @@ vi.mock('vscode', () => ({
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildMessageHandlers, buildRowActionHandlers, dispatchWebviewMessage, registerDownloadsRowCommands } from './DownloadsPanel';
-import { WEBVIEW_TO_EXTENSION } from './downloadsMessages';
+import {
+  buildRowActionHandlers,
+  deleteArchives,
+  registerDownloadsMultiRowCommands,
+  registerDownloadsSingleRowCommands,
+} from './DownloadsPanel';
+import type { DownloadNode } from './DownloadsProvider';
+
+/** A minimal stand-in for a tree row — only `row.name` is read by anything under test here,
+ *  so a real vscode.TreeItem-backed DownloadNode isn't needed in this file. */
+const node = (name: string): DownloadNode => ({ row: { name } } as DownloadNode);
 
 // tmpdirs created via makeInstanceRoot() this test, cleaned up in afterEach even
 // if the test fails partway through (an inline rm() at the end of a test body
@@ -67,50 +76,14 @@ function calledFsPath(mockFn: { mock: { calls: unknown[][] } }): string {
   return (mockFn.mock.calls[0][0] as { fsPath: string }).fsPath;
 }
 
-describe('dispatchWebviewMessage', () => {
-  it('routes a known message type to the matching handler', () => {
-    const handlers = { foo: vi.fn() };
-    dispatchWebviewMessage({ type: 'foo' }, handlers);
-    expect(handlers.foo).toHaveBeenCalledTimes(1);
-  });
-
-  it('does nothing for an unknown message type', () => {
-    const handlers = { foo: vi.fn() };
-    dispatchWebviewMessage({ type: 'bar' }, handlers);
-    expect(handlers.foo).not.toHaveBeenCalled();
-  });
-
-  it('does nothing and does not throw for a malformed message (non-object, null, missing type)', () => {
-    const handlers = { foo: vi.fn() };
-    expect(() => dispatchWebviewMessage(null, handlers)).not.toThrow();
-    expect(() => dispatchWebviewMessage('a string', handlers)).not.toThrow();
-    expect(() => dispatchWebviewMessage({}, handlers)).not.toThrow();
-    expect(handlers.foo).not.toHaveBeenCalled();
-  });
-});
-
-describe('buildMessageHandlers — READY / REFRESH', () => {
-  it('READY triggers a refresh', () => {
-    const refresh = vi.fn(() => Promise.resolve());
-    const handlers = buildMessageHandlers(refresh);
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.READY }, handlers);
-    expect(refresh).toHaveBeenCalledTimes(1);
-  });
-
-  it('REFRESH triggers a refresh', () => {
-    const refresh = vi.fn(() => Promise.resolve());
-    const handlers = buildMessageHandlers(refresh);
-    dispatchWebviewMessage({ type: WEBVIEW_TO_EXTENSION.REFRESH }, handlers);
-    expect(refresh).toHaveBeenCalledTimes(1);
-  });
-});
-
 // ── buildRowActionHandlers ──────────────────────────────────────────────────
 // Issue #214: these used to be reached only via buildMessageHandlers + a webview
-// postMessage (the hand-drawn row menu's sole trigger). That trigger is native
-// commands now (registerDownloadsRowCommands, tested further down) — the handler
-// bodies themselves are unchanged, so these suites are the same real
-// fixture-in/behavior-out exercises as before, just invoked directly.
+// postMessage (the hand-drawn row menu's sole trigger, both since removed with the webview
+// itself — #233). Issue #233 moved the trigger again,
+// to the modbench.downloads TreeView's native commands (registerDownloadsSingleRowCommands /
+// registerDownloadsMultiRowCommands, tested further down) — the handler bodies themselves are
+// unchanged (bar `reveal`'s removal — the workspace root is already in the Explorer), so these
+// suites are the same real fixture-in/behavior-out exercises as before, just invoked directly.
 
 describe('buildRowActionHandlers — install', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -249,7 +222,7 @@ describe('buildRowActionHandlers — visitNexus', () => {
   });
 });
 
-describe('buildRowActionHandlers — nav actions (openFile / openMeta / reveal)', () => {
+describe('buildRowActionHandlers — nav actions (openFile / openMeta)', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('openFile OS-opens the archive', async () => {
@@ -274,19 +247,8 @@ describe('buildRowActionHandlers — nav actions (openFile / openMeta / reveal)'
     expect(calledFsPath(showTextDocument)).toBe(meta);
   });
 
-  it('reveal reveals the archive in the OS file manager', async () => {
-    const root = await makeInstanceRoot();
-    const archive = await writeArchive(root, 'foo.7z');
-
-    const handlers = buildRowActionHandlers(root, vi.fn());
-    handlers.reveal('foo.7z');
-
-    await vi.waitFor(() => expect(executeCommand).toHaveBeenCalled());
-    expect(executeCommand).toHaveBeenCalledWith('revealFileInOS', expect.objectContaining({ fsPath: archive }));
-  });
-
-  // runRowAction's catch -> log + error-notification path is shared by all four
-  // nav actions (visitNexus/openFile/openMeta/reveal) — proving it once here
+  // runRowAction's catch -> log + error-notification path is shared by both
+  // nav actions (visitNexus/openFile/openMeta) — proving it once here
   // covers all of them; no need to duplicate per action.
   it('on failure, logs and surfaces an error notification naming the action and row', async () => {
     const root = await makeInstanceRoot();
@@ -303,53 +265,190 @@ describe('buildRowActionHandlers — nav actions (openFile / openMeta / reveal)'
   });
 });
 
-// ── registerDownloadsRowCommands ────────────────────────────────────────────
-// Issue #214: the adapter from a native `webview/context` command invocation (its sole
-// argument is the row's merged data-vscode-context, DownloadRowContext) to the
-// buildRowActionHandlers handler for that action. Registration itself (that all 8 ids get
-// wired to vscode.commands.registerCommand) is covered by the EXPECTED_COMMANDS integration
-// test; this is the dispatch/gating behavior.
-describe('registerDownloadsRowCommands', () => {
+// ── registerDownloadsSingleRowCommands / registerDownloadsMultiRowCommands (#233) ───────────
+// The adapter from a native modbench.downloads TreeView `view/item/context` command invocation
+// — VS Code's own `(clickedItem, selectedItems[])` shape — to the buildRowActionHandlers
+// handler(s) for that action. Registration itself (that all 7 ids get wired to
+// vscode.commands.registerCommand) is covered by the EXPECTED_COMMANDS integration test; this
+// is the dispatch/gating/selection behavior.
+
+function invoke(commandId: string, ...args: unknown[]): void {
+  const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
+  if (!call) throw new Error(`command not registered: ${commandId}`);
+  call[1](...args);
+}
+
+describe('registerDownloadsSingleRowCommands', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  function invoke(commandId: string, ctx?: unknown): void {
-    const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
-    if (!call) throw new Error(`command not registered: ${commandId}`);
-    call[1](ctx);
-  }
-
-  it('registers all eight row commands', () => {
-    registerDownloadsRowCommands('/instance', vi.fn());
+  it('registers Install / Visit on Nexus / Open File / Open Meta File', () => {
+    registerDownloadsSingleRowCommands('/instance', vi.fn());
     const ids = registerCommand.mock.calls.map((c) => c[0]);
     expect(ids).toEqual(expect.arrayContaining([
       'modbench.downloads.install',
       'modbench.downloads.visitNexus',
       'modbench.downloads.openFile',
       'modbench.downloads.openMeta',
-      'modbench.downloads.reveal',
-      'modbench.downloads.delete',
-      'modbench.downloads.hide',
-      'modbench.downloads.unhide',
     ]));
+    expect(ids).not.toContain('modbench.downloads.reveal');
   });
 
-  it('invoking modbench.downloads.install with a DownloadRowContext installs that row\'s archive', async () => {
+  it('invoking modbench.downloads.install with a DownloadNode installs that row\'s archive', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     await writeMeta(root, 'foo.7z');
     executeCommand.mockResolvedValueOnce(true);
 
-    registerDownloadsRowCommands(root, vi.fn());
-    invoke('modbench.downloads.install', { webviewSection: 'downloadRow', name: 'foo.7z' });
+    registerDownloadsSingleRowCommands(root, vi.fn());
+    invoke('modbench.downloads.install', node('foo.7z'));
 
     await vi.waitFor(() => {
       expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive);
     });
   });
 
-  it('is a no-op when invoked with no context (no row name to act on)', () => {
-    registerDownloadsRowCommands('/instance', vi.fn());
+  it('is a no-op when invoked with no node (no row to act on)', () => {
+    registerDownloadsSingleRowCommands('/instance', vi.fn());
     expect(() => invoke('modbench.downloads.install', undefined)).not.toThrow();
     expect(executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('ignores the rest of a multi-selection — only the clicked row is installed', async () => {
+    const root = await makeInstanceRoot();
+    const archive = await writeArchive(root, 'foo.7z');
+    await writeArchive(root, 'other.7z');
+    await writeMeta(root, 'foo.7z');
+    executeCommand.mockResolvedValueOnce(true);
+
+    registerDownloadsSingleRowCommands(root, vi.fn());
+    invoke('modbench.downloads.install', node('foo.7z'), [node('foo.7z'), node('other.7z')]);
+
+    await vi.waitFor(() => {
+      expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive);
+    });
+    expect(executeCommand).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('registerDownloadsMultiRowCommands', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('registers Delete / Hide / Unhide', () => {
+    registerDownloadsMultiRowCommands('/instance', vi.fn());
+    const ids = registerCommand.mock.calls.map((c) => c[0]);
+    expect(ids).toEqual(expect.arrayContaining([
+      'modbench.downloads.delete',
+      'modbench.downloads.hide',
+      'modbench.downloads.unhide',
+    ]));
+  });
+
+  it('hide applies to the whole selection, not just the clicked row', async () => {
+    const root = await makeInstanceRoot();
+    const metaA = await writeMeta(root, 'a.7z');
+    const metaB = await writeMeta(root, 'b.7z');
+
+    registerDownloadsMultiRowCommands(root, vi.fn());
+    invoke('modbench.downloads.hide', node('a.7z'), [node('a.7z'), node('b.7z')]);
+
+    await vi.waitFor(async () => {
+      expect(await readFile(metaA, 'utf8')).toContain('removed=true');
+      expect(await readFile(metaB, 'utf8')).toContain('removed=true');
+    });
+  });
+
+  it('is idempotent over a mixed hidden/visible selection — hide leaves both hidden, no error', async () => {
+    const root = await makeInstanceRoot();
+    const already = await writeMeta(root, 'already-hidden.7z', '[General]\r\nremoved=true\r\n');
+    const visible = await writeMeta(root, 'visible.7z');
+
+    registerDownloadsMultiRowCommands(root, vi.fn());
+    invoke('modbench.downloads.hide', node('visible.7z'), [node('already-hidden.7z'), node('visible.7z')]);
+
+    await vi.waitFor(async () => {
+      expect(await readFile(already, 'utf8')).toContain('removed=true');
+      expect(await readFile(visible, 'utf8')).toContain('removed=true');
+    });
+    expect(showErrorMessage).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent over a mixed selection for unhide too — both end up unhidden, no error', async () => {
+    const root = await makeInstanceRoot();
+    const hidden = await writeMeta(root, 'hidden.7z', '[General]\r\nremoved=true\r\n');
+    const already = await writeMeta(root, 'already-visible.7z');
+
+    registerDownloadsMultiRowCommands(root, vi.fn());
+    invoke('modbench.downloads.unhide', node('hidden.7z'), [node('hidden.7z'), node('already-visible.7z')]);
+
+    await vi.waitFor(async () => {
+      expect(await readFile(hidden, 'utf8')).toContain('removed=false');
+      expect(await readFile(already, 'utf8')).toContain('removed=false');
+    });
+    expect(showErrorMessage).not.toHaveBeenCalled();
+  });
+
+  it('delete falls back to the clicked row alone when no selection array is passed', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    showWarningMessage.mockResolvedValueOnce('Delete');
+
+    registerDownloadsMultiRowCommands(root, vi.fn());
+    invoke('modbench.downloads.delete', node('foo.7z'));
+
+    await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(1));
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('"foo.7z"'),
+      { modal: true },
+      'Delete',
+    );
+  });
+});
+
+// ── deleteArchives — batch delete confirmation (#233) ───────────────────────
+describe('deleteArchives', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('confirms once for the whole batch, then trashes every archive (+ its .meta, if present)', async () => {
+    const root = await makeInstanceRoot();
+    const a = await writeArchive(root, 'a.7z');
+    const b = await writeArchive(root, 'b.7z');
+    await writeMeta(root, 'a.7z');
+    showWarningMessage.mockResolvedValueOnce('Delete');
+
+    await deleteArchives(root, ['a.7z', 'b.7z'], vi.fn());
+
+    expect(showWarningMessage).toHaveBeenCalledTimes(1);
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('2 items'),
+      { modal: true },
+      'Delete',
+    );
+    const trashedPaths = fsDelete.mock.calls.map((c) => (c[0] as { fsPath: string }).fsPath);
+    expect(trashedPaths).toEqual(expect.arrayContaining([a, b]));
+  });
+
+  it('on cancel, trashes nothing', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'a.7z');
+    await writeArchive(root, 'b.7z');
+    showWarningMessage.mockResolvedValueOnce(undefined);
+
+    await deleteArchives(root, ['a.7z', 'b.7z'], vi.fn());
+
+    expect(fsDelete).not.toHaveBeenCalled();
+  });
+
+  it('a single-item batch reuses the singular per-file confirmation text', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    showWarningMessage.mockResolvedValueOnce('Delete');
+
+    await deleteArchives(root, ['foo.7z'], vi.fn());
+
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('"foo.7z"'),
+      { modal: true },
+      'Delete',
+    );
   });
 });

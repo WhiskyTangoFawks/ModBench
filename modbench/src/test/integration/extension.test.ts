@@ -195,15 +195,16 @@ describe('modbench command registration', () => {
     'modbench.modList.separator.addSeparatorBelow',
     'modbench.modList.separator.delete',
     'modbench.modList.overwrite.reveal',
-    'modbench.downloads.open',
-    // #214: the Downloads row's native `webview/context` menu commands — see package.json's
-    // contributes.menus["webview/context"] (gated on webviewId/webviewSection, not testable
-    // from this harness) and DownloadsApp's data-vscode-context wiring (unit-tested).
+    // #233: the Downloads row's native `view/item/context` menu commands on the
+    // modbench.downloads TreeView — see package.json's contributes.menus["view/item/context"]
+    // (regex `when` gating, not testable from this harness) and DownloadsProvider's
+    // contextValue wiring (unit-tested). modbench.downloads.open/.reveal are gone with the
+    // webview — VS Code auto-generates modbench.downloads.focus for the contributed view, and
+    // the workspace-root Explorer already reveals downloads/.
     'modbench.downloads.install',
     'modbench.downloads.visitNexus',
     'modbench.downloads.openFile',
     'modbench.downloads.openMeta',
-    'modbench.downloads.reveal',
     'modbench.downloads.delete',
     'modbench.downloads.hide',
     'modbench.downloads.unhide',
@@ -275,31 +276,62 @@ describe('modbench.openEditor', () => {
   });
 });
 
-// ── downloads.open ──────────────────────────────────────────────────────────
+// ── modbench.downloads tree (#233) ──────────────────────────────────────────
 
-describe('modbench.downloads.open', () => {
-  it('opens a new webview tab (test workspace has no downloads/ folder)', async () => {
-    const tabsBefore = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+interface DownloadsProviderLike {
+  invalidate(): void;
+  getChildren(element?: unknown): Promise<Array<{ label?: unknown; row?: { name: string } }>>;
+}
 
-    await vscode.commands.executeCommand('modbench.downloads.open');
-    await new Promise(r => setTimeout(r, 500));
+describe('modbench.downloads tree (#233)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const downloadsDir = root ? path.join(root, 'downloads') : '';
+  const provider = () => (ext?.exports as { downloadsProvider?: DownloadsProviderLike } | undefined)?.downloadsProvider;
 
-    const tabsAfter = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
-    assert.ok(tabsAfter > tabsBefore, 'Expected a new tab to be opened by modbench.downloads.open');
+  // The committed test workspace fixture (#192) has no downloads/ folder — created and
+  // torn down here so the "no downloads/ folder" empty state stays exercisable against
+  // the same workspace elsewhere (mirrors the Overwrite suite's overwriteDir cleanup, #82).
+  after(() => {
+    if (!root) return;
+    fs.rmSync(downloadsDir, { recursive: true, force: true });
   });
 
-  it('reuses the existing panel on a second call', async () => {
-    const tabsAfterFirst = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
+  it('exposes the live DownloadsProvider from activate()', () => {
+    assert.ok(provider(), 'activate() should return { downloadsProvider } for the open workspace');
+  });
 
-    await vscode.commands.executeCommand('modbench.downloads.open');
-    await new Promise(r => setTimeout(r, 300));
+  it('renders one row per archive, .meta sidecars suppressed', async () => {
+    fs.mkdirSync(downloadsDir, { recursive: true });
+    fs.writeFileSync(path.join(downloadsDir, 'foo.zip'), 'data');
+    fs.writeFileSync(path.join(downloadsDir, 'foo.zip.meta'), '[General]\r\n');
 
-    const tabsAfterSecond = vscode.window.tabGroups.all.flatMap(g => g.tabs).length;
-    assert.strictEqual(
-      tabsAfterSecond,
-      tabsAfterFirst,
-      'Second modbench.downloads.open call should reuse the existing panel, not open a new tab'
-    );
+    const p = provider()!;
+    p.invalidate();
+    const rows = await p.getChildren();
+    assert.deepStrictEqual(rows.map((r) => r.row?.name), ['foo.zip']);
+  });
+
+  it('reflects a new archive dropped into downloads/ via the file-watcher, with no manual refresh', async () => {
+    fs.writeFileSync(path.join(downloadsDir, 'bar.zip'), 'data');
+
+    // The watcher debounces 200ms (downloadsWatcher.ts) before it calls invalidate() itself —
+    // poll for the row rather than a fixed sleep, so this isn't flaky under load. Never calls
+    // p.invalidate() directly: the point of this test is that the watcher does it unprompted.
+    const rows = await new Promise<Array<{ row?: { name: string } }>>((resolve, reject) => {
+      const deadline = Date.now() + 10000;
+      const check = () => {
+        provider()!
+          .getChildren()
+          .then((found) => {
+            if (found.some((r) => r.row?.name === 'bar.zip')) return resolve(found);
+            if (Date.now() > deadline) return reject(new Error('bar.zip did not appear via the watcher within 10s'));
+            setTimeout(check, 200);
+          })
+          .catch(reject);
+      };
+      check();
+    });
+    assert.ok(rows.some((r) => r.row?.name === 'bar.zip'), 'expected bar.zip among the watcher-refreshed rows');
   });
 });
 

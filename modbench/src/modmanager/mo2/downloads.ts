@@ -7,7 +7,6 @@
 // MO2's `removed` means HIDDEN, never the Uninstalled Status (`uninstalled=true`).
 
 import { lineRanges } from './lineScan';
-import type { DownloadRowContext } from '../downloadsMessages';
 
 export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
 
@@ -152,40 +151,28 @@ export function setHiddenInText(text: string, hidden: boolean): string {
 
 /** Filter hidden rows for rendering — a view concern, so it runs client-side on
  *  the already-built rows (like `sortDownloadRows`), not in row building. Off
- *  by default excludes hidden rows; on includes all, flags left intact so the
- *  webview can dim them. The name-filter (`filterRowsByName`) composes after this. */
+ *  by default excludes hidden rows; on includes all, flags left intact so a
+ *  future dimming decoration can distinguish them (#233 slice 4). Name filtering
+ *  has no equivalent here — the modbench.downloads TreeView uses VS Code's native
+ *  tree Find instead of a bespoke filter box (#233), so there is no filterRowsByName. */
 export function filterHiddenRows(rows: DownloadRow[], showHidden: boolean): DownloadRow[] {
   return showHidden ? rows : rows.filter((r) => !r.hidden);
 }
 
-/** Filter rows by a case-insensitive substring match on Name — the toolbar
- *  Filter box. A view concern like `filterHiddenRows`, run client-side and
- *  composed AFTER it (hidden-filtering wins first). An empty or whitespace-only
- *  query returns all rows. */
-export function filterRowsByName(rows: DownloadRow[], query: string): DownloadRow[] {
-  const q = query.trim().toLowerCase();
-  return q === '' ? rows : rows.filter((r) => r.name.toLowerCase().includes(q));
-}
-
-// Issue #214: the row's right-click menu (Install / Visit on Nexus / Open File / Open Meta
-// File / Reveal in Explorer / Delete / Hide|Unhide) is VS Code's own
-// `contributes.menus["webview/context"]` now, not a hand-drawn `<ul role="menu">`.
-// `webviewSection` is the gating key every menu entry's `when` clause checks (alongside VS
-// Code's own `webviewId`, equal to the view type passed to `createWebviewPanel` —
-// 'modbench.downloads'); `name` is forwarded to the invoked command as part of the merged
-// context object, exactly like DiffRow's pendingCellContext (#208) carries `changeId`.
-// `hasMeta`/`hasModID`/`hidden` are booleans (not the raw optional `modID`) for symmetry with
-// #209's ColumnHeaderContext gating keys. `preventDefaultContextMenuItems` suppresses the
-// built-in Cut/Copy/Paste entries.
-export function downloadRowContext(row: DownloadRow): string {
-  return JSON.stringify({
-    webviewSection: 'downloadRow',
-    name: row.name,
-    hasMeta: row.hasMeta,
-    hasModID: row.modID !== undefined,
-    hidden: row.hidden,
-    preventDefaultContextMenuItems: true,
-  } satisfies DownloadRowContext);
+// Issue #233: the row's right-click menu is a native `contributes.menus["view/item/context"]`
+// contribution on the `modbench.downloads` TreeView, gated by this space-separated `contextValue`
+// flag string and `viewItem =~ /\bflag\b/` `when` clauses — replacing #214's JSON
+// `data-vscode-context` (downloadRowContext), which only a webview row can carry. The base
+// `'download'` token identifies the row kind (mirrors ModNode's plain `contextValue = 'mod'`);
+// `hasMeta`/`hasModID`/`hidden` are appended only when true, in that fixed order, so a `when`
+// clause testing any one of them via a word-boundary regex doesn't care about the others' order.
+export function downloadContextValue(row: DownloadRow): string {
+  const flags = [
+    row.hasMeta && 'hasMeta',
+    row.modID !== undefined && 'hasModID',
+    row.hidden && 'hidden',
+  ].filter((f): f is string => f !== false);
+  return ['download', ...flags].join(' ');
 }
 
 /** Build render-ready rows: suppresses `.meta` sidecars as their own rows,
