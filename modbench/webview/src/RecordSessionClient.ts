@@ -1,7 +1,22 @@
 import { createApiClient } from '../../src/medit/ApiClient';
-import type { CompareResult, PendingChange } from './types';
+import type { components } from '../../src/medit/generated/api';
+import type { CompareResult, PatchRecordValidationError, PendingChange } from './types';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, type LogLevel } from './messages';
+
+type ProblemDetails = components['schemas']['ProblemDetails'];
+type CreateRecordResult = components['schemas']['CreateRecordResult'];
+type DeleteRecordsResponse = components['schemas']['DeleteRecordsResponse'];
+type SaveGroupResponse = components['schemas']['SaveGroupResponse'];
+
+// #163: the typed alternative to a hand-parsed raw Response — every write method resolves to
+// this instead. Mirrors LoadResult's own discriminated-union shape (below `load`'s own return
+// type) rather than exposing openapi-fetch's native `{ data, error, response }` triple verbatim:
+// every caller already branches on ok/status, so this is a direct rename of that branch, and
+// `status`/`error` stay readable without reaching through `response`.
+export type WriteResult<TData, TError> =
+  | { ok: true; data: TData }
+  | { ok: false; status: number; error: TError };
 
 // Mirrors RecordPanel's own logAction — this module has no component instance to hang a callback
 // off of, but the bridge is the same one-line postMessage either way.
@@ -34,32 +49,38 @@ export type LoadResult =
 // Issue #122: the webview-side typed backend client. Owns every backend call the record panel
 // makes — mirrors the host-side ApiClient (openapi-fetch over the generated `paths` types), so
 // there are no hand-built URL strings or stringly-typed request shapes. Read choreography (load)
-// is fully parsed here; writes return the raw Response so the panel keeps its existing
-// status-code / body-shape error handling verbatim. #210: searchRecords moved off this client —
-// the FormKey picker it backed is a native QuickPick now, and its search runs in the extension
-// host via PluginRepository.searchRecords instead of round-tripping through this webview.
+// is fully parsed here; writes resolve to a typed `WriteResult` (#163) so the panel branches on
+// `ok`/`status`/`error` instead of hand-parsing a raw Response body. #210: searchRecords moved
+// off this client — the FormKey picker it backed is a native QuickPick now, and its search runs
+// in the extension host via PluginRepository.searchRecords instead of round-tripping through
+// this webview.
 export interface RecordSessionClient {
   load(formKey: string): Promise<LoadResult>;
-  save(formKey: string, plugin: string, fields: Record<string, unknown>, changeType?: string): Promise<Response>;
-  revert(changeId: string): Promise<Response>;
+  save(
+    formKey: string, plugin: string, fields: Record<string, unknown>, changeType?: string,
+  ): Promise<WriteResult<PendingChange[], ProblemDetails | PatchRecordValidationError>>;
+  revert(changeId: string): Promise<WriteResult<undefined, ProblemDetails>>;
   // Issue #202: sourcePlugin, when given, copies that plugin's own version of the record (the
   // column-header menu's right-clicked column) rather than the overall winner.
-  copyTo(formKey: string, targetPlugin: string, sourcePlugin?: string): Promise<Response>;
-  removeOverride(formKey: string, plugin: string): Promise<Response>;
-  createRecord(plugin: string, recordType?: string): Promise<Response>;
+  copyTo(
+    formKey: string, targetPlugin: string, sourcePlugin?: string,
+  ): Promise<WriteResult<PendingChange[], ProblemDetails | PatchRecordValidationError>>;
+  removeOverride(formKey: string, plugin: string): Promise<WriteResult<DeleteRecordsResponse, ProblemDetails>>;
+  createRecord(plugin: string, recordType?: string): Promise<WriteResult<CreateRecordResult, ProblemDetails>>;
   // Issue #139: the changes in the whole component `changeId` belongs to (ADR-0028). Read fully
   // here (not a raw Response) because the panel only needs the member list to decide the Revert
   // Group confirmation; a failed read yields [] so the panel falls back to a plain single-change
   // revert.
   groupMembers(changeId: string): Promise<PendingChange[]>;
-  // Issue #139: save/revert the whole component a member change belongs to. Both return the raw
-  // Response so the panel reads the SaveGroupResponse body / status itself (ADR-0026 surfacing).
-  saveGroup(changeId: string): Promise<Response>;
+  // Issue #139: save/revert the whole component a member change belongs to. Both resolve to a
+  // typed WriteResult so the panel reads the SaveGroupResponse data / status itself (ADR-0026
+  // surfacing).
+  saveGroup(changeId: string): Promise<WriteResult<SaveGroupResponse, ProblemDetails>>;
   // Issue #211: revertGroup is the last write here — the condition-function picker's catalog
   // (formerly `conditionFunctions()` above) moved off this client entirely. It's a native
   // QuickPick now, fetched in the extension host via PluginRepository.getConditionFunctions()
   // instead of round-tripping through this webview, same as #210's searchRecords removal.
-  revertGroup(changeId: string): Promise<Response>;
+  revertGroup(changeId: string): Promise<WriteResult<undefined, ProblemDetails>>;
   // Issue #167: the Run On target dropdown's catalog — unlike the function catalog above, this
   // one *does* stay on this client: it feeds ConditionRunOnCell's own inline `<select>` rendered
   // in this webview (not a native QuickPick), so this webview needs the list itself, the same way
@@ -69,22 +90,27 @@ export interface RecordSessionClient {
   conditionRunOnTargets(): Promise<string[]>;
 }
 
+// #163: adapts an openapi-fetch call's own `{ data, error, response }` triple into WriteResult.
+// Supersedes the old rawWrite/capture-fetch hack — that existed only so the panel could
+// hand-parse a raw Response body itself; now that callers consume the typed `data`/`error`
+// openapi-fetch already parses, there is no raw body left to protect from being drained. Module
+// scope (not a closure inside createRecordSessionClient) since it captures nothing but its args.
+// TData/TError are explicit at each call site (not inferred from `call`, which is deliberately
+// `unknown`-shaped here) because the generated per-operation schema types (all-optional, mirroring
+// C# nullable reference types) are looser than this webview's own hand-declared DTOs (`./types`)
+// — the same narrowing `load()` above already does with its own `as CompareResult`/`as
+// PendingChange[]` casts.
+async function write<TData, TError>(
+  call: Promise<{ data?: unknown; error?: unknown; response: Response }>,
+): Promise<WriteResult<TData, TError>> {
+  const { data, error, response } = await call;
+  return response.ok
+    ? { ok: true, data: data as TData }
+    : { ok: false, status: response.status, error: error as TError };
+}
+
 export function createRecordSessionClient(port: number): RecordSessionClient {
   const client = createApiClient(port);
-
-  // Write methods must return an *unconsumed* Response so the panel can read the 409/422 body
-  // itself: openapi-fetch consumes the body on the error path (response.text()) regardless of
-  // parseAs, so a returned response would already be drained. A per-call fetch override does the
-  // real request, hands openapi-fetch a clone to consume, and keeps the original intact for us.
-  async function rawWrite(send: (fetchImpl: typeof globalThis.fetch) => Promise<unknown>): Promise<Response> {
-    let raw!: Response;
-    const capture: typeof globalThis.fetch = async (input, init) => {
-      raw = await globalThis.fetch(input, init);
-      return raw.clone();
-    };
-    await send(capture);
-    return raw;
-  }
 
   return {
     async load(formKey) {
@@ -104,45 +130,37 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
     },
 
     save(formKey, plugin, fields, changeType) {
-      return rawWrite(fetchImpl => client.PATCH('/records/{formKey}', {
+      return write<PendingChange[], ProblemDetails | PatchRecordValidationError>(client.PATCH('/records/{formKey}', {
         params: { path: { formKey } },
         body: { plugin, fields, source: 'user', ...(changeType ? { changeType } : {}) },
-        parseAs: 'stream',
-        fetch: fetchImpl,
       }));
     },
 
     revert(changeId) {
-      return rawWrite(fetchImpl => client.DELETE('/changes/{changeId}', {
+      return write<undefined, ProblemDetails>(client.DELETE('/changes/{changeId}', {
         params: { path: { changeId } },
-        parseAs: 'stream',
-        fetch: fetchImpl,
       }));
     },
 
     copyTo(formKey, targetPlugin, sourcePlugin) {
-      return rawWrite(fetchImpl => client.POST('/records/{formKey}/copy-to/{targetPlugin}', {
-        params: { path: { formKey, targetPlugin } },
-        body: sourcePlugin ? { sourcePlugin } : {},
-        parseAs: 'stream',
-        fetch: fetchImpl,
-      }));
+      return write<PendingChange[], ProblemDetails | PatchRecordValidationError>(
+        client.POST('/records/{formKey}/copy-to/{targetPlugin}', {
+          params: { path: { formKey, targetPlugin } },
+          body: sourcePlugin ? { sourcePlugin } : {},
+        }),
+      );
     },
 
     removeOverride(formKey, plugin) {
-      return rawWrite(fetchImpl => client.POST('/records/delete', {
+      return write<DeleteRecordsResponse, ProblemDetails>(client.POST('/records/delete', {
         body: { records: [{ formKey, plugin }] },
-        parseAs: 'stream',
-        fetch: fetchImpl,
       }));
     },
 
     createRecord(plugin, recordType) {
-      return rawWrite(fetchImpl => client.POST('/plugins/{plugin}/records', {
+      return write<CreateRecordResult, ProblemDetails>(client.POST('/plugins/{plugin}/records', {
         params: { path: { plugin } },
         body: { source: 'user', ...(recordType ? { recordType } : {}) },
-        parseAs: 'stream',
-        fetch: fetchImpl,
       }));
     },
 
@@ -156,18 +174,14 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
     },
 
     saveGroup(changeId) {
-      return rawWrite(fetchImpl => client.POST('/change-groups/{groupId}/save', {
+      return write<SaveGroupResponse, ProblemDetails>(client.POST('/change-groups/{groupId}/save', {
         params: { path: { groupId: changeId } },
-        parseAs: 'stream',
-        fetch: fetchImpl,
       }));
     },
 
     revertGroup(changeId) {
-      return rawWrite(fetchImpl => client.DELETE('/changes/group/{groupId}', {
+      return write<undefined, ProblemDetails>(client.DELETE('/changes/group/{groupId}', {
         params: { path: { groupId: changeId } },
-        parseAs: 'stream',
-        fetch: fetchImpl,
       }));
     },
 

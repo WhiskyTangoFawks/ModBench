@@ -3,7 +3,7 @@ import { PluginHeader } from './PluginHeader';
 import { confirmRevertGroup } from './nativeBridge';
 import { DiffRow, type ArrayEditControls, type FocusedCell } from './DiffRow';
 import { partialSaveMessage, staleIndexMessage } from '../../src/medit/saveClassification';
-import type { ReindexFailure, SaveResult } from '../../src/medit/saveClassification';
+import { errorText } from '../../src/medit/ApiClient';
 import {
   buildColumns, columnHeaderContext, currentMasters, defaultElementValue, parseElementIndex,
   appendArrayElement, removeArrayElement, moveArrayElement, getAtPath, setAtPath,
@@ -379,18 +379,20 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
 
   async function stageChange(plugin: string, fields: Record<string, unknown>, changeType?: string): Promise<boolean> {
     setActionError(null);
-    const resp = await client.save(formKey, plugin, fields, changeType);
-    if (!resp.ok) {
-      if (resp.status === 409) {
-        const body = await resp.json().catch(() => ({})) as Record<string, unknown>;
-        const detail = typeof body?.detail === 'string' ? body.detail : '';
+    const result = await client.save(formKey, plugin, fields, changeType);
+    if (!result.ok) {
+      if (result.status === 409) {
+        const detail = typeof result.error.detail === 'string' ? result.error.detail : '';
         setActionError(detail.toLowerCase().includes('group') ? detail : 'Plugin is read-only');
-      } else if (resp.status === 422) {
+      } else if (result.status === 422) {
         // #147: single documented envelope (PatchRecordValidationError) — fieldErrors is non-null
         // for reference/append-only/type-mismatch/null-not-allowed failures, detail is non-null for
-        // everything else (e.g. ESL-ineligible, read-only fields). Never both.
-        const body = await resp.json().catch(() => null) as PatchRecordValidationError | null;
-        if (body?.fieldErrors && body.fieldErrors.length > 0) {
+        // everything else (e.g. ESL-ineligible, read-only fields). Never both. #163: 422 is the
+        // one status this operation's typed error union resolves to PatchRecordValidationError
+        // (409/404 resolve to ProblemDetails instead) — the cast below just names what the status
+        // code already guarantees, same as the old body-shape check it replaces.
+        const body = result.error as PatchRecordValidationError;
+        if (body.fieldErrors && body.fieldErrors.length > 0) {
           setActionError(body.fieldErrors.map(e => {
             const path = e.fieldPath ?? '?';
             if (e.reason === 'not_in_session') return `${path}: reference not found in session`;
@@ -399,13 +401,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
             if (e.reason === 'null_not_allowed') return `${path}: cannot be null`;
             return `${path}: ${e.reason ?? 'invalid'}`;
           }).join('; '));
-        } else if (typeof body?.detail === 'string') {
+        } else if (typeof body.detail === 'string') {
           setActionError(body.detail);
         } else {
           setActionError('Invalid reference');
         }
       } else {
-        setActionError(`Error: ${resp.statusText}`);
+        setActionError(`Error: ${errorText(result.error)}`);
       }
       return false;
     }
@@ -438,11 +440,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
 
   async function revertGroup(changeId: string) {
     setActionError(null);
-    const resp = await client.revertGroup(changeId);
-    if (!resp.ok) {
-      const body = await resp.json().catch(() => ({})) as Record<string, unknown>;
-      const detail = typeof body?.detail === 'string' ? body.detail : '';
-      setActionError(detail || `Revert failed: ${resp.statusText}`);
+    const result = await client.revertGroup(changeId);
+    if (!result.ok) {
+      const detail = typeof result.error.detail === 'string' ? result.error.detail : '';
+      setActionError(detail || `Revert failed: ${errorText(result.error)}`);
       return;
     }
     // Issue #200: looked up before refresh() replaces allChanges.
@@ -459,13 +460,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // a stale reindex reads as a completed-save warning to reload, never as a failure.
   async function handleSaveGroup(changeId: string) {
     setActionError(null);
-    const resp = await client.saveGroup(changeId);
-    if (!resp.ok) {
-      setActionError(`Save failed: ${resp.statusText}`);
+    const result = await client.saveGroup(changeId);
+    if (!result.ok) {
+      setActionError(`Save failed: ${errorText(result.error)}`);
       return;
     }
-    const body = await resp.json().catch(() => ({})) as { byPlugin?: Record<string, SaveResult>; reindexFailure?: ReindexFailure | null };
-    const messages = [partialSaveMessage(body.byPlugin), staleIndexMessage(body.reindexFailure)].filter(Boolean);
+    // #163: byPlugin is nullable on the generated SaveGroupResponse; partialSaveMessage's own
+    // SaveOutcome type isn't, so normalize null to the same undefined it already treats as
+    // "nothing to summarize".
+    const messages = [
+      partialSaveMessage(result.data.byPlugin ?? undefined),
+      staleIndexMessage(result.data.reindexFailure),
+    ].filter(Boolean);
     setActionError(messages.length > 0 ? messages.join(' ') : null);
     // Issue #200: looked up before refresh() replaces allChanges.
     const identity = changeIdentity(allChanges.find(c => c.id === changeId));
@@ -492,9 +498,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   async function handleCopyTo(sourcePlugin: string, targetPlugin: string) {
     setActionError(null);
     try {
-      const resp = await client.copyTo(formKey, targetPlugin, sourcePlugin);
-      if (!resp.ok) {
-        setActionError(resp.status === 409 ? 'Plugin is read-only' : `Copy failed: ${resp.statusText}`);
+      const result = await client.copyTo(formKey, targetPlugin, sourcePlugin);
+      if (!result.ok) {
+        setActionError(result.status === 409 ? 'Plugin is read-only' : `Copy failed: ${errorText(result.error)}`);
         return;
       }
       logAction('info', `Copied ${sourcePlugin} as override into ${targetPlugin} (record ${formKey})`);
@@ -512,9 +518,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   async function handleRemoveOverride(plugin: string) {
     setActionError(null);
     try {
-      const resp = await client.removeOverride(formKey, plugin);
-      if (!resp.ok) {
-        setActionError(resp.status === 409 ? 'Plugin is read-only' : `Remove failed: ${resp.statusText}`);
+      const result = await client.removeOverride(formKey, plugin);
+      if (!result.ok) {
+        setActionError(result.status === 409 ? 'Plugin is read-only' : `Remove failed: ${errorText(result.error)}`);
         return;
       }
       logAction('info', `Removed override of ${plugin} (record ${formKey})`);
@@ -610,17 +616,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     if (!source) return;
     setActionError(null);
     try {
-      const createResp = await client.createRecord(targetPlugin, source.recordType);
-      if (!createResp.ok) {
-        setActionError(createResp.status === 409 ? 'Plugin is read-only' : `Copy failed: ${createResp.statusText}`);
+      const createResult = await client.createRecord(targetPlugin, source.recordType);
+      if (!createResult.ok) {
+        setActionError(createResult.status === 409 ? 'Plugin is read-only' : `Copy failed: ${errorText(createResult.error)}`);
         return;
       }
-      const { formKey: newFormKey } = await createResp.json() as { formKey: string };
+      // #163: formKey is nullable on the generated CreateRecordResult; the backend always
+      // populates it on a 200 (same trust the old `.json() as { formKey: string }` cast placed).
+      const newFormKey = createResult.data.formKey as string;
       const fields: Record<string, unknown> = {};
       for (const fv of source.fields) fields[fv.metadata.name] = fv.value;
-      const patchResp = await client.save(newFormKey, targetPlugin, fields);
-      if (!patchResp.ok) {
-        setActionError(`Copy failed: ${patchResp.statusText}`);
+      const patchResult = await client.save(newFormKey, targetPlugin, fields);
+      if (!patchResult.ok) {
+        setActionError(`Copy failed: ${errorText(patchResult.error)}`);
         return;
       }
       logAction('info', `Copied ${sourcePlugin} (record ${formKey}) as new record ${newFormKey} on ${targetPlugin}`);
