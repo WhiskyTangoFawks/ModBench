@@ -202,6 +202,11 @@ export interface ConditionDiff {
   // Per-field two-axis states for the expanded view, keyed by field id ("function", "operator",
   // "gate", "runOn", "comparison", "param:{i}") — only the field that differs is colored.
   fieldCellStates: Record<string, Record<string, ConflictThis>>;
+  // #166: FormKey→EditorID resolution (ADR-0031) for a condition's three FormKey-bearing slots —
+  // keyed like fieldCellStates ("runOn", "comparison", "param:{i}"; never "function"/"operator"/
+  // "gate"), then by plugin. Absent when the field carries no FormKey for that plugin (e.g. runOn
+  // isn't Reference, or useGlobal is false).
+  fieldResolutions?: Record<string, Record<string, FormKeyResolution>>;
 }
 
 export interface ConditionGroupDiff {

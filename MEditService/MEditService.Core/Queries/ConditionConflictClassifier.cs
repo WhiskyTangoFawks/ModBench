@@ -1,3 +1,4 @@
+using MEditService.Core.Records;
 using MEditService.Core.Schema;
 
 namespace MEditService.Core.Queries;
@@ -13,7 +14,11 @@ public sealed record ConditionClassifyResult(ConditionCompare Compare, ConflictA
 // array-element alignment without its struct/nesting machinery. [ADR-0032]
 public static class ConditionConflictClassifier
 {
-    public static ConditionClassifyResult Classify(IReadOnlyList<ConditionPluginInput> inputs)
+    // resolveFormKey: ADR-0031's O(1) lookup, batched once per Classify call (mirrors
+    // VmadConflictClassifier's identical parameter) — #166 closes the gap where GetCompare built
+    // this resolver but never threaded it into the condition path at all.
+    public static ConditionClassifyResult Classify(
+        IReadOnlyList<ConditionPluginInput> inputs, Func<string, RecordLookupEntry?>? resolveFormKey = null)
     {
         var present = inputs.Where(i => i.Owners.Count > 0).ToList();
         if (present.Count == 0)
@@ -38,7 +43,7 @@ public static class ConditionConflictClassifier
             var maxLen = perPluginConditions.Values.Select(c => c.Count).DefaultIfEmpty(0).Max();
 
             var diffs = Enumerable.Range(0, maxLen)
-                .Select(idx => BuildDiff(idx, inputs, perPluginConditions, masterPlugin, pluginOrder, allStates))
+                .Select(idx => BuildDiff(idx, inputs, perPluginConditions, masterPlugin, pluginOrder, allStates, resolveFormKey))
                 .ToList();
 
             return new ConditionGroupDiff(fieldPath, diffs);
@@ -53,7 +58,8 @@ public static class ConditionConflictClassifier
         Dictionary<string, IReadOnlyList<ParsedCondition>> perPluginConditions,
         string masterPlugin,
         IReadOnlyList<(string Plugin, int LoadOrderIndex)> pluginOrder,
-        List<ConflictThis> allStates)
+        List<ConflictThis> allStates,
+        Func<string, RecordLookupEntry?>? resolveFormKey)
     {
         var perPlugin = inputs.ToDictionary(
             i => i.Plugin,
@@ -65,8 +71,9 @@ public static class ConditionConflictClassifier
 
         var winner = ConflictRules.PickWinner(pluginOrder, p => perPlugin[p] != null);
         var fieldCellStates = FieldCellStates(perPlugin, masterPlugin, pluginOrder);
+        var fieldResolutions = FieldResolutions(perPlugin, resolveFormKey);
 
-        return new ConditionDiff(idx, perPlugin, winner, cellStates, fieldCellStates);
+        return new ConditionDiff(idx, perPlugin, winner, cellStates, fieldCellStates, fieldResolutions);
     }
 
     // Per-field two-axis states so the expanded view colors each field independently — the same
@@ -102,6 +109,48 @@ public static class ConditionConflictClassifier
         }
 
         return states;
+    }
+
+    // FormKey→EditorID resolution (#166, ADR-0031) for a condition's three FormKey-bearing slots,
+    // keyed the same way FieldCellStates already keys its per-field states — "runOn" (only when
+    // RunOnTarget == Reference), "comparison" (only when UseGlobal), "param:{i}" for each
+    // Form-category parameter. null when no resolver was passed, mirroring
+    // VmadConflictClassifier.BuildResolutions' identical resolver-absent short-circuit.
+    private static Dictionary<string, IReadOnlyDictionary<string, FormKeyResolution>>? FieldResolutions(
+        Dictionary<string, ParsedCondition?> perPlugin, Func<string, RecordLookupEntry?>? resolveFormKey)
+    {
+        if (resolveFormKey == null) return null;
+
+        var resolutions = new Dictionary<string, IReadOnlyDictionary<string, FormKeyResolution>>();
+
+        void Field(string key, Func<ParsedCondition, string?> extractFormKey, IReadOnlyList<string> validTypes)
+        {
+            var perPluginResolution = perPlugin
+                .Where(kv => kv.Value != null && extractFormKey(kv.Value) is { Length: > 0 })
+                .ToDictionary(kv => kv.Key, kv => FormKeyResolution.From(resolveFormKey(extractFormKey(kv.Value!)!), validTypes));
+            if (perPluginResolution.Count > 0) resolutions[key] = perPluginResolution;
+        }
+
+        // RunOnReference / a Form parameter's FormKey have no known expected record type (no
+        // Mutagen-side function-parameter-type→record-type table exists), matching VMAD Object
+        // properties' own `[]`. ComparisonGlobal always expects a GLOB, matching the frontend's own
+        // hardcoded formKeyMeta(['glob']) for this field (ConditionCells.tsx) — passing it through
+        // here costs nothing and buys ResolvedWrongType detection for free.
+        Field("runOn", c => c.RunOnTarget == "Reference" ? c.RunOnReference : null, []);
+        Field("comparison", c => c.UseGlobal ? c.ComparisonGlobal : null, ["glob"]);
+
+        var maxParams = perPlugin.Values.Where(c => c != null).Select(c => c!.Parameters.Count).DefaultIfEmpty(0).Max();
+        for (var i = 0; i < maxParams; i++)
+        {
+            var index = i;
+            Field($"param:{index}",
+                c => index < c.Parameters.Count && c.Parameters[index].Category == ConditionParamCategory.Form
+                    ? c.Parameters[index].FormKey
+                    : null,
+                []);
+        }
+
+        return resolutions.Count > 0 ? resolutions : null;
     }
 
     private static string CanonParam(ParsedConditionParam p) =>

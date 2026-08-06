@@ -698,8 +698,10 @@ alias's/stage's own conditions) until #184.
 Codec support is FO4-only today, reflecting Mutagen's four structurally different per-game
 condition data shapes (no shared cross-game interface, unlike VMAD's `IHaveVirtualMachineAdapter`)
 — a per-game `IConditionCodec` strategy resolved by `GameCategory` (ADR-0032); other games are
-tracked separately (#164). FormKey-typed condition parameters and the Run On reference inherit the
-same resolution-signal gap as VMAD (#141/#166) until that lands — they render the raw FormKey.
+tracked separately (#164). FormKey-typed condition parameters, the Run On reference, and a
+Use-Global comparison target each resolve through the same backend signal VMAD uses (#166) — link
+label and affordance follow the real resolution, not a raw FormKey — and each is fed into
+`form_references` (#166), so a record referenced only by a condition now surfaces in Referenced By.
 
 ### Field type rendering rules
 

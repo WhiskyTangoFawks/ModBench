@@ -1,4 +1,5 @@
 using MEditService.Core.Queries;
+using MEditService.Core.Records;
 using MEditService.Core.Schema;
 
 namespace MEditService.Tests.Query;
@@ -153,5 +154,93 @@ public class ConditionConflictClassifierTests
         Assert.Equal(
             ["Effects[2].Conditions[2].Conditions", "Effects[2].Conditions[10].Conditions"],
             result.Compare.Groups.Select(g => g.FieldPath).ToArray());
+    }
+
+    // --- FieldResolutions (#166, ADR-0031's FormKeyResolution applied to condition FormKey slots) ---
+
+    [Fact]
+    public void Classify_FormParameter_PopulatesFieldResolutionForParamKey()
+    {
+        var param = new ParsedConditionParam(ConditionParamCategory.Form, "Quest", FormKey: "000800:Base.esp");
+        var condition = new ParsedCondition("GetStageDone", ConditionOperator.EqualTo, false, "Subject", null,
+            false, 1.0f, null, [param]);
+        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])]);
+
+        static RecordLookupEntry? Resolve(string fk) =>
+            fk == "000800:Base.esp" ? new RecordLookupEntry("quest", "SomeQuest") : null;
+
+        var result = ConditionConflictClassifier.Classify([input], Resolve);
+
+        var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
+        Assert.NotNull(diff.FieldResolutions);
+        var paramResolutions = diff.FieldResolutions!["param:0"];
+        Assert.Equal(FormKeyResolutionState.ResolvedValidType, paramResolutions["A.esp"].State);
+        Assert.Equal("SomeQuest", paramResolutions["A.esp"].EditorId);
+    }
+
+    [Fact]
+    public void Classify_RunOnReference_PopulatesFieldResolutionForRunOnKey()
+    {
+        var condition = new ParsedCondition("GetIsID", ConditionOperator.EqualTo, false, "Reference",
+            "000800:Base.esp", false, 1.0f, null, []);
+        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])]);
+
+        static RecordLookupEntry? Resolve(string fk) =>
+            fk == "000800:Base.esp" ? new RecordLookupEntry("npc_", "SomeActor") : null;
+
+        var result = ConditionConflictClassifier.Classify([input], Resolve);
+
+        var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
+        Assert.NotNull(diff.FieldResolutions);
+        Assert.Equal(FormKeyResolutionState.ResolvedValidType, diff.FieldResolutions!["runOn"]["A.esp"].State);
+        Assert.Equal("SomeActor", diff.FieldResolutions["runOn"]["A.esp"].EditorId);
+    }
+
+    // ComparisonGlobal is checked against ["glob"] (unlike RunOnReference/parameter FormKeys, which
+    // have no known expected record type) — the frontend already hardcodes formKeyMeta(['glob']) for
+    // this same field, so passing it through here costs nothing and buys ResolvedWrongType detection.
+    [Fact]
+    public void Classify_ComparisonGlobal_ResolvedWrongType_WhenTargetIsNotAGlobal()
+    {
+        var condition = new ParsedCondition("GetIsID", ConditionOperator.EqualTo, false, "Subject", null,
+            true, null, "000800:Base.esp", []);
+        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])]);
+
+        static RecordLookupEntry? Resolve(string fk) =>
+            fk == "000800:Base.esp" ? new RecordLookupEntry("kywd", "NotAGlobal") : null;
+
+        var result = ConditionConflictClassifier.Classify([input], Resolve);
+
+        var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
+        Assert.Equal(FormKeyResolutionState.ResolvedWrongType, diff.FieldResolutions!["comparison"]["A.esp"].State);
+    }
+
+    [Fact]
+    public void Classify_ComparisonGlobal_ResolvedValidType_WhenTargetIsAGlobal()
+    {
+        var condition = new ParsedCondition("GetIsID", ConditionOperator.EqualTo, false, "Subject", null,
+            true, null, "000800:Base.esp", []);
+        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])]);
+
+        static RecordLookupEntry? Resolve(string fk) =>
+            fk == "000800:Base.esp" ? new RecordLookupEntry("glob", "SomeGlobal") : null;
+
+        var result = ConditionConflictClassifier.Classify([input], Resolve);
+
+        var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
+        Assert.Equal(FormKeyResolutionState.ResolvedValidType, diff.FieldResolutions!["comparison"]["A.esp"].State);
+    }
+
+    [Fact]
+    public void Classify_NoResolverPassed_FieldResolutionsStayNull()
+    {
+        var condition = new ParsedCondition("GetIsID", ConditionOperator.EqualTo, false, "Reference",
+            "000800:Base.esp", false, 1.0f, null, []);
+        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])]);
+
+        var result = ConditionConflictClassifier.Classify([input]);
+
+        var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
+        Assert.Null(diff.FieldResolutions);
     }
 }

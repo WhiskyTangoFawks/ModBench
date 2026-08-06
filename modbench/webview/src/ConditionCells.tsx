@@ -3,7 +3,7 @@ import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
 import { pickConditionFunction } from './nativeBridge';
 import { mono, fg } from './gridStyles';
-import type { FieldMetadata, ParsedConditionParam } from './types';
+import type { FieldMetadata, FormKeyResolution, ParsedConditionParam } from './types';
 
 // Issue #231: the four `renderCell` dispatch targets for Condition's composite leaf types —
 // `conditionFunction` opens a QuickPick over the function catalogue (never a text/dropdown
@@ -61,7 +61,11 @@ interface RunOnValue { target: string; reference: string | null }
 // /condition-run-on-targets, threaded in by conditionTreeAdapter's `runOnMeta`) — no hardcoded
 // FO4 member list here anymore, so a future game's differently-shaped RunOnType enum offers
 // exactly what it resolves, never a name it can't parse or write.
-export function ConditionRunOnCell({ value, meta, editable, isFocused, onCommit, onOpen }: Readonly<CompositeCellProps & { meta: FieldMetadata; onOpen: (fk: string) => void }>) {
+// resolution (#166): ADR-0031's FormKey→EditorID signal for the Reference FormKey, sourced from
+// conditionTreeAdapter's `fieldResolutions["runOn"][plugin]` via DiffRow's existing generic
+// per-leaf resolution pass-through — same prop FormKeyCell already accepts for the generic field
+// path (FormKeyCell.tsx).
+export function ConditionRunOnCell({ value, meta, editable, isFocused, onCommit, onOpen, resolution }: Readonly<CompositeCellProps & { meta: FieldMetadata; onOpen: (fk: string) => void; resolution?: FormKeyResolution }>) {
   const v = (value ?? { target: 'Subject', reference: null }) as RunOnValue;
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -72,7 +76,7 @@ export function ConditionRunOnCell({ value, meta, editable, isFocused, onCommit,
       {v.target === 'Reference' && (
         <FormKeyCell
           value={v.reference} meta={formKeyMeta()} editable={editable} isFocused={isFocused}
-          onOpen={onOpen} onCommit={fk => onCommit({ target: v.target, reference: fk })}
+          onOpen={onOpen} onCommit={fk => onCommit({ target: v.target, reference: fk })} resolution={resolution}
         />
       )}
     </span>
@@ -84,12 +88,12 @@ export function ConditionRunOnCell({ value, meta, editable, isFocused, onCommit,
 // this infers which widget to show from the value's own JS type rather than a sibling UseGlobal
 // flag this row has no access to (each condition field commits independently, #231's own "wire
 // paths differ" friction — there is no single parent object here to read a sibling off of).
-export function ConditionComparisonCell({ value, editable, isFocused, onCommit, onOpen }: Readonly<CompositeCellProps & { onOpen: (fk: string) => void }>) {
+export function ConditionComparisonCell({ value, editable, isFocused, onCommit, onOpen, resolution }: Readonly<CompositeCellProps & { onOpen: (fk: string) => void; resolution?: FormKeyResolution }>) {
   if (typeof value === 'string') {
     return (
       <FormKeyCell
         value={value} meta={formKeyMeta(['glob'])} editable={editable} isFocused={isFocused}
-        onOpen={onOpen} onCommit={onCommit}
+        onOpen={onOpen} onCommit={onCommit} resolution={resolution}
       />
     );
   }
@@ -98,14 +102,14 @@ export function ConditionComparisonCell({ value, editable, isFocused, onCommit, 
   );
 }
 
-export function ConditionParamCell({ value, editable, isFocused, onCommit, onOpen }: Readonly<CompositeCellProps & { onOpen: (fk: string) => void }>) {
+export function ConditionParamCell({ value, editable, isFocused, onCommit, onOpen, resolution }: Readonly<CompositeCellProps & { onOpen: (fk: string) => void; resolution?: FormKeyResolution }>) {
   const p = value as ParsedConditionParam | null;
   if (!p) return <span style={{ opacity: 0.35 }}>—</span>;
   const typeCue = <span style={{ opacity: 0.6 }}>&nbsp;({p.typeName})</span>;
   if (p.category === 'Form') {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-        <FormKeyCell value={p.formKey} meta={formKeyMeta()} editable={editable} isFocused={isFocused} onOpen={onOpen} onCommit={onCommit} />
+        <FormKeyCell value={p.formKey} meta={formKeyMeta()} editable={editable} isFocused={isFocused} onOpen={onOpen} onCommit={onCommit} resolution={resolution} />
         {typeCue}
       </span>
     );

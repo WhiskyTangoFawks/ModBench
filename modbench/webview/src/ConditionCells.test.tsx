@@ -11,7 +11,7 @@ vi.mock('./nativeBridge', () => ({
 }));
 
 import { ConditionFunctionCell, ConditionRunOnCell, ConditionComparisonCell, ConditionParamCell } from './ConditionCells';
-import type { FieldMetadata } from './types';
+import type { FieldMetadata, FormKeyResolution } from './types';
 
 // Issue #167: ConditionRunOnCell's dropdown options come from `meta.enumValues` (the server's Run
 // On target catalog) rather than a hardcoded FO4 member list — this fixture stands in for whatever
@@ -70,6 +70,19 @@ describe('ConditionRunOnCell', () => {
     expect(screen.getByText('000010:Fallout4.esm')).toBeInTheDocument();
   });
 
+  // #166: the resolution prop reaches the inner FormKeyCell (same "EditorID [FormKey]" composite
+  // FormKeyCell.test.tsx already pins for the generic field path).
+  it('labels the reference with its resolved EditorID when a resolution is supplied', () => {
+    const resolution: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'SomeActor' };
+    render(
+      <ConditionRunOnCell
+        value={{ target: 'Reference', reference: '000010:Fallout4.esm' }} meta={runOnMeta(FO4_RUN_ON_TARGETS)}
+        editable onCommit={vi.fn()} onOpen={vi.fn()} resolution={resolution}
+      />,
+    );
+    expect(screen.getByText('SomeActor [000010:Fallout4.esm]')).toBeInTheDocument();
+  });
+
   it('changing the target to Reference commits {target, reference: null}', () => {
     const onCommit = vi.fn();
     render(<ConditionRunOnCell value={{ target: 'Subject', reference: null }} meta={runOnMeta(FO4_RUN_ON_TARGETS)} editable onCommit={onCommit} onOpen={vi.fn()} />);
@@ -103,6 +116,12 @@ describe('ConditionComparisonCell', () => {
   it('renders a FormKey cell when the value is a string (GLOB comparison)', () => {
     render(<ConditionComparisonCell value="000020:Fallout4.esm" editable onCommit={vi.fn()} onOpen={vi.fn()} />);
     expect(screen.getByText('000020:Fallout4.esm')).toBeInTheDocument();
+  });
+
+  it('labels the GLOB comparison with its resolved EditorID when a resolution is supplied', () => {
+    const resolution: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'glob', editorId: 'SomeGlobal' };
+    render(<ConditionComparisonCell value="000020:Fallout4.esm" editable onCommit={vi.fn()} onOpen={vi.fn()} resolution={resolution} />);
+    expect(screen.getByText('SomeGlobal [000020:Fallout4.esm]')).toBeInTheDocument();
   });
 });
 
@@ -146,5 +165,16 @@ describe('ConditionParamCell', () => {
   it('shows a dash when the parameter is absent for this plugin', () => {
     render(<ConditionParamCell value={null} editable onCommit={vi.fn()} onOpen={vi.fn()} />);
     expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('labels a Form-category parameter with its resolved EditorID when a resolution is supplied', () => {
+    const resolution: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'avif', editorId: 'SomeActorValue' };
+    render(
+      <ConditionParamCell
+        value={{ category: 'Form', typeName: 'ActorValue', formKey: '000030:Fallout4.esm' }}
+        editable onCommit={vi.fn()} onOpen={vi.fn()} resolution={resolution}
+      />,
+    );
+    expect(screen.getByText('SomeActorValue [000030:Fallout4.esm]')).toBeInTheDocument();
   });
 });

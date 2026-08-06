@@ -1,3 +1,6 @@
+using DuckDB.NET.Data;
+using MEditService.Core.Edits;
+using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -21,11 +24,16 @@ public sealed class ConditionIndexerTests : IDisposable
     private readonly FormKey _questFormKey;
     private readonly FormKey _multiListQuestFormKey;
     private readonly FormKey _sexCobjFormKey;
+    private readonly FormKey _runOnRefCobjFormKey;
+    private readonly FormKey _referenceTargetFormKey;
+    private readonly FormKey _globalCobjFormKey;
+    private readonly FormKey _globalFormKey;
     private readonly PluginFixtureData _fixture;
 
     public ConditionIndexerTests()
     {
         FormKey cobjFk = default, questFk = default, multiListQuestFk = default, sexCobjFk = default;
+        FormKey runOnRefCobjFk = default, referenceTargetFk = default, globalCobjFk = default, globalFk = default;
         _fixture = new PluginFixtureBuilder()
             .WithPlugin("CtdaTest.esp", mod =>
             {
@@ -48,6 +56,41 @@ public sealed class ConditionIndexerTests : IDisposable
                     Flags = Condition.Flag.OR,
                     Data = data,
                 });
+
+                // #166: a Run-On target of Reference and a Use-Global comparison are the other two
+                // FormKey-bearing condition slots (alongside a Form parameter, covered by `cobj`
+                // above) that must feed form_references — each gets its own record fixture below so
+                // GetReferences can prove the referencing record surfaces in Referenced-By.
+                var referenceTarget = mod.Npcs.AddNew("ReferenceTarget");
+                referenceTargetFk = referenceTarget.FormKey;
+
+                var runOnRefCobj = mod.ConstructibleObjects.AddNew("RunOnRefRecipe");
+                runOnRefCobjFk = runOnRefCobj.FormKey;
+                var runOnData = new FunctionConditionData
+                {
+                    Function = Condition.Function.GetIsID,
+                    RunOnType = Condition.RunOnType.Reference,
+                };
+                runOnData.Reference.SetTo(referenceTarget.FormKey);
+                runOnRefCobj.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    ComparisonValue = 1.0f,
+                    Data = runOnData,
+                });
+
+                var global = mod.Globals.AddNewFloat("SomeGlobal");
+                globalFk = global.FormKey;
+
+                var globalCobj = mod.ConstructibleObjects.AddNew("GlobalRecipe");
+                globalCobjFk = globalCobj.FormKey;
+                var globalCondition = new ConditionGlobal
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                };
+                globalCondition.ComparisonValue.SetTo(global.FormKey);
+                globalCobj.Conditions.Add(globalCondition);
 
                 // #154: Quest has two flat, top-level condition-carrying fields
                 // (DialogConditions, UnusedConditions) — the multi-owner fixture. Both are
@@ -89,6 +132,10 @@ public sealed class ConditionIndexerTests : IDisposable
         _questFormKey = questFk;
         _multiListQuestFormKey = multiListQuestFk;
         _sexCobjFormKey = sexCobjFk;
+        _runOnRefCobjFormKey = runOnRefCobjFk;
+        _referenceTargetFormKey = referenceTargetFk;
+        _globalCobjFormKey = globalCobjFk;
+        _globalFormKey = globalFk;
     }
 
     public void Dispose() => _fixture.Dispose();
@@ -177,5 +224,86 @@ public sealed class ConditionIndexerTests : IDisposable
         Assert.Equal("Sex", param.TypeName);
         Assert.Equal(0, param.Number);
         Assert.Equal("Male", param.DecodedValue);
+    }
+
+    // --- form_references (#166): a condition's FormKey-bearing slots feed the same shared refs
+    // list VmadIndexer already feeds, so a record referenced only by a condition surfaces in
+    // Referenced-By. Mirrors VmadIndexerTests.VmadObjectProperty_RegistersFormReference. ---
+
+    [Fact]
+    public void FormParameter_RegistersFormReference()
+    {
+        using var repo = LoadedRepository();
+        var conn = repo.Connection;
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT field_path, target_form_key
+            FROM form_references
+            WHERE source_form_key = $1 AND field_path LIKE 'CTDA%'
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = _cobjFormKey.ToString() });
+        using var reader = cmd.ExecuteReader();
+
+        Assert.True(reader.Read(), "Expected a form_references row for the condition's Form parameter");
+        Assert.Contains("CTDA", reader.GetString(0));
+        Assert.Equal(_questFormKey.ToString(), reader.GetString(1));
+    }
+
+    [Fact]
+    public void RunOnReference_RegistersFormReference()
+    {
+        using var repo = LoadedRepository();
+        var conn = repo.Connection;
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT field_path, target_form_key
+            FROM form_references
+            WHERE source_form_key = $1 AND field_path LIKE 'CTDA%'
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = _runOnRefCobjFormKey.ToString() });
+        using var reader = cmd.ExecuteReader();
+
+        Assert.True(reader.Read(), "Expected a form_references row for the condition's Run-On reference");
+        Assert.Equal(_referenceTargetFormKey.ToString(), reader.GetString(1));
+    }
+
+    [Fact]
+    public void ComparisonGlobal_RegistersFormReference()
+    {
+        using var repo = LoadedRepository();
+        var conn = repo.Connection;
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT field_path, target_form_key
+            FROM form_references
+            WHERE source_form_key = $1 AND field_path LIKE 'CTDA%'
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = _globalCobjFormKey.ToString() });
+        using var reader = cmd.ExecuteReader();
+
+        Assert.True(reader.Read(), "Expected a form_references row for the condition's Use-Global comparison");
+        Assert.Equal(_globalFormKey.ToString(), reader.GetString(1));
+    }
+
+    // The actual issue-described behavior, one level above the raw table checks above: a record
+    // referenced only by a condition (never by an ordinary field or VMAD) must appear in
+    // GetReferences' result — i.e. show up in the Referenced-By tab. GetReferences also queries
+    // pending_changes (to exclude a since-overridden ref), a table only DuckDbPendingChangeService
+    // creates — every other GetReferences test in this suite wires one onto the shared connection
+    // for the same reason (DeleteRecordsTests.MakeOrchestratorWithChanges).
+    [Fact]
+    public void GetReferences_RecordReferencedOnlyByCondition_ReturnsReferencingRecord()
+    {
+        using var repo = LoadedRepository();
+        using var changes = new DuckDbPendingChangeService(repo.Connection);
+
+        var references = repo.GetReferences(_referenceTargetFormKey.ToString());
+
+        var reference = Assert.Single(references);
+        Assert.Equal(_runOnRefCobjFormKey.ToString(), reference.FormKey);
+        Assert.Equal("CtdaTest.esp", reference.Plugin);
     }
 }

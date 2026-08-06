@@ -144,7 +144,7 @@ public sealed class RecordQueryService(
             ConditionCompare? conditions = null;
             if (conditionInputs.Any(i => i.Owners.Count > 0))
             {
-                var conditionResult = ConditionConflictClassifier.Classify(conditionInputs);
+                var conditionResult = ConditionConflictClassifier.Classify(conditionInputs, resolveFormKey);
                 conditions = conditionResult.Compare;
                 conflictAll = ConflictRules.Escalate(conflictAll, conditionResult.ConflictContribution);
             }

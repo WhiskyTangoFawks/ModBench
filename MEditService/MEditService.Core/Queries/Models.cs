@@ -129,7 +129,15 @@ public record ConditionDiff(
     IReadOnlyDictionary<string, ConflictThis> CellStates,
     // Per-field two-axis states for the expanded view, keyed by field id ("function", "operator",
     // "gate", "runOn", "comparison", "param:{i}"), so only fields that actually differ are colored.
-    IReadOnlyDictionary<string, IReadOnlyDictionary<string, ConflictThis>> FieldCellStates);
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, ConflictThis>> FieldCellStates,
+    // #166: FormKey→EditorID resolution (ADR-0031) for a condition's three FormKey-bearing slots —
+    // keyed the same way as FieldCellStates ("runOn", "comparison", "param:{i}"; never "function" /
+    // "operator" / "gate", which carry no FormKey), then by plugin. Unlike VmadPropertyDiff's single
+    // per-leaf Resolutions, a condition has up to three independent FormKey slots live at once, so
+    // one shared per-leaf dictionary would collide them — this mirrors FieldCellStates' shape
+    // instead. Null (not just empty) when no resolver was passed, matching VmadPropertyDiff's own
+    // resolver-absent convention.
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, FormKeyResolution>>? FieldResolutions = null);
 
 public record ConditionGroupDiff(string FieldPath, IReadOnlyList<ConditionDiff> Conditions);
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildConditionRows } from './conditionTreeAdapter';
-import type { ConditionDiff, ParsedCondition } from './types';
+import type { ConditionDiff, FormKeyResolution, ParsedCondition } from './types';
 
 function condition(partial: Partial<ParsedCondition> = {}): ParsedCondition {
   return {
@@ -160,6 +160,30 @@ describe('buildConditionRows — condition fields', () => {
     const { diffs: d3 } = buildConditionRows({ groups: [{ fieldPath: 'Conditions', conditions: [diffWithConflict] }] });
     const functionField = d3[0].children?.[0].children?.find(f => f.fieldName === 'Function');
     expect(functionField?.cellStates).toEqual({ 'MyMod.esp': 'ConflictWins' });
+  });
+
+  // #166: FormKey resolution (ADR-0031) for the condition's three FormKey-bearing slots — sourced
+  // from the same fieldResolutions bag fieldCellStates already uses, threaded onto each field's own
+  // FieldDiff.resolutions so FormKeyCell (via DiffRow's generic resolution pass-through, already
+  // wired for every leaf row) can render "EditorID [FormKey]" instead of the bare FormKey.
+  it('Run On / Comparison / a Parameter field carry their own resolution from fieldResolutions, keyed per field', () => {
+    const resolution: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'quest', editorId: 'SomeQuest' };
+    const diffWithResolutions = conditionDiff({
+      perPlugin: { 'Fallout4.esm': c },
+      fieldResolutions: {
+        runOn: { 'Fallout4.esm': resolution },
+        comparison: { 'Fallout4.esm': resolution },
+        'param:0': { 'Fallout4.esm': resolution },
+      },
+    });
+    const { diffs: d4 } = buildConditionRows({ groups: [{ fieldPath: 'Conditions', conditions: [diffWithResolutions] }] });
+    const fieldsByName = (name: string) => d4[0].children?.[0].children?.find(f => f.fieldName === name);
+
+    expect(fieldsByName('Run On')?.resolutions).toEqual({ 'Fallout4.esm': resolution });
+    expect(fieldsByName('Comparison')?.resolutions).toEqual({ 'Fallout4.esm': resolution });
+    expect(fieldsByName('Parameter 1')?.resolutions).toEqual({ 'Fallout4.esm': resolution });
+    // Function has no FormKey slot — never receives a resolution even when the bag is populated.
+    expect(fieldsByName('Function')?.resolutions).toBeUndefined();
   });
 });
 

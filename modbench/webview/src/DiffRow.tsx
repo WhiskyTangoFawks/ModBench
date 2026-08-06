@@ -274,13 +274,13 @@ function renderCell(
     return <ConditionFunctionCell value={value} editable={editable} isFocused={isFocused} onCommit={onCommit} />;
   }
   if (meta.type === 'conditionRunOn') {
-    return <ConditionRunOnCell value={value} meta={meta} editable={editable} isFocused={isFocused} onCommit={onCommit} onOpen={onOpen} />;
+    return <ConditionRunOnCell value={value} meta={meta} editable={editable} isFocused={isFocused} onCommit={onCommit} onOpen={onOpen} resolution={resolution} />;
   }
   if (meta.type === 'conditionComparison') {
-    return <ConditionComparisonCell value={value} editable={editable} isFocused={isFocused} onCommit={onCommit} onOpen={onOpen} />;
+    return <ConditionComparisonCell value={value} editable={editable} isFocused={isFocused} onCommit={onCommit} onOpen={onOpen} resolution={resolution} />;
   }
   if (meta.type === 'conditionParam') {
-    return <ConditionParamCell value={value} editable={editable} isFocused={isFocused} onCommit={onCommit} onOpen={onOpen} />;
+    return <ConditionParamCell value={value} editable={editable} isFocused={isFocused} onCommit={onCommit} onOpen={onOpen} resolution={resolution} />;
   }
   return (
     <ScalarCell

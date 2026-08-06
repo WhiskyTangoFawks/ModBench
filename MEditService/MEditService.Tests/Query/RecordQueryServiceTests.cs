@@ -533,6 +533,44 @@ public sealed class RecordQueryServiceTests : IDisposable
             });
     }
 
+    // #166: GetCompare built its own memoized resolveFormKey (ADR-0031) for generic fields and VMAD
+    // but never threaded it into the condition path — this proves the wiring at the actual call
+    // site, not just that the classifier accepts a resolver (ConditionConflictClassifierTests
+    // already covers the classifier's own behavior in isolation).
+    [Fact]
+    public void GetCompare_ConditionFormParameter_ResolvesEditorId()
+    {
+        FormKey cobjKey = default;
+        var data = new PluginFixtureBuilder("rqs-condition-resolution")
+            .WithPlugin("Base.esp", mod =>
+            {
+                var quest = mod.Quests.AddNew("SomeQuest");
+
+                var cobj = mod.ConstructibleObjects.AddNew("Recipe");
+                cobjKey = cobj.FormKey;
+                var conditionData = new FunctionConditionData { Function = Condition.Function.GetStageDone };
+                conditionData.ParameterOneRecord.SetTo(quest.FormKey);
+                cobj.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    ComparisonValue = 1f,
+                    Data = conditionData,
+                });
+            })
+            .Build();
+        using (data)
+            WithCompareService(data, svc =>
+            {
+                var compare = svc.GetCompare(cobjKey.ToString());
+
+                var diff = Assert.Single(Assert.Single(compare!.Conditions!.Groups).Conditions);
+                Assert.NotNull(diff.FieldResolutions);
+                var paramResolution = diff.FieldResolutions!["param:0"]["Base.esp"];
+                Assert.Equal(FormKeyResolutionState.ResolvedValidType, paramResolution.State);
+                Assert.Equal("SomeQuest", paramResolution.EditorId);
+            });
+    }
+
     private static void WithCompareService(PluginFixtureData data, Action<RecordQueryService> test)
     {
         var reflector = SharedSchemaReflector.Instance;
