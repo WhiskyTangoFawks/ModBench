@@ -88,6 +88,12 @@
           "when": "modbench.viewMode == 'loadout'"
         },
         {
+          "id": "modbench.downloads",
+          "name": "Downloads",
+          "when": "modbench.viewMode == 'loadout'",
+          "visibility": "collapsed"
+        },
+        {
           "id": "modbench.pluginTree",
           "name": "Plugins",
           "when": "modbench.viewMode == 'editing'"
@@ -109,6 +115,16 @@
         "view": "modbench.modList",
         "contents": "This isn't an MO2 instance.\nOpen the folder containing `ModOrganizer.ini`, alongside `mods/` and `profiles/`.\n[Open Folder…](command:vscode.openFolder)",
         "when": "modbench.viewMode == 'loadout' && workspaceFolderCount != 0 && !modbench.workspaceIsMo2Instance"
+      },
+      {
+        "view": "modbench.downloads",
+        "contents": "This instance has no `downloads/` folder.",
+        "when": "!modbench.downloadsFolderExists"
+      },
+      {
+        "view": "modbench.downloads",
+        "contents": "No downloads yet. Copy archives into `downloads/` to see them here.",
+        "when": "modbench.downloadsFolderExists"
       }
     ],
     "commands": [
@@ -378,11 +394,6 @@
         "title": "Open in Explorer"
       },
       {
-        "command": "modbench.downloads.open",
-        "title": "Modbench: Open Downloads",
-        "icon": "$(archive)"
-      },
-      {
         "command": "modbench.downloads.install",
         "title": "Install",
         "category": "Modbench"
@@ -400,11 +411,6 @@
       {
         "command": "modbench.downloads.openMeta",
         "title": "Open Meta File",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.downloads.reveal",
-        "title": "Reveal in Explorer",
         "category": "Modbench"
       },
       {
@@ -527,11 +533,6 @@
           "command": "modbench.modList.launchGame",
           "when": "view == modbench.modList && modbench.deploymentStandalone",
           "group": "navigation@7"
-        },
-        {
-          "command": "modbench.downloads.open",
-          "when": "view == modbench.modList",
-          "group": "navigation@8"
         },
         {
           "command": "modbench.modList.sortDescending",
@@ -683,6 +684,41 @@
           "group": "overwriteActions@1"
         },
         {
+          "command": "modbench.downloads.install",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
+          "group": "downloadActions@1"
+        },
+        {
+          "command": "modbench.downloads.visitNexus",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bhasModID\\b/",
+          "group": "downloadActions@2"
+        },
+        {
+          "command": "modbench.downloads.openFile",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
+          "group": "downloadActions@3"
+        },
+        {
+          "command": "modbench.downloads.openMeta",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bhasMeta\\b/",
+          "group": "downloadActions@4"
+        },
+        {
+          "command": "modbench.downloads.delete",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/",
+          "group": "downloadActions@5"
+        },
+        {
+          "command": "modbench.downloads.hide",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && !(viewItem =~ /\\bhidden\\b/)",
+          "group": "downloadActions@6"
+        },
+        {
+          "command": "modbench.downloads.unhide",
+          "when": "view == modbench.downloads && viewItem =~ /\\bdownload\\b/ && viewItem =~ /\\bhidden\\b/",
+          "group": "downloadActions@6"
+        },
+        {
           "command": "modbench.pluginListTree.revealInExplorer",
           "when": "view == modbench.pluginListTree && viewItem == plugin",
           "group": "pluginActions@1"
@@ -783,46 +819,6 @@
           "command": "modbench.vmad.setPropertyFlags",
           "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadProperty\\b/",
           "group": "modbench@18"
-        },
-        {
-          "command": "modbench.downloads.install",
-          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow'",
-          "group": "downloads@1"
-        },
-        {
-          "command": "modbench.downloads.visitNexus",
-          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow' && hasModID",
-          "group": "downloads@2"
-        },
-        {
-          "command": "modbench.downloads.openFile",
-          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow'",
-          "group": "downloads@3"
-        },
-        {
-          "command": "modbench.downloads.openMeta",
-          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow' && hasMeta",
-          "group": "downloads@4"
-        },
-        {
-          "command": "modbench.downloads.reveal",
-          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow'",
-          "group": "downloads@5"
-        },
-        {
-          "command": "modbench.downloads.delete",
-          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow'",
-          "group": "downloads@6"
-        },
-        {
-          "command": "modbench.downloads.hide",
-          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow' && !hidden",
-          "group": "downloads@7"
-        },
-        {
-          "command": "modbench.downloads.unhide",
-          "when": "webviewId == 'modbench.downloads' && webviewSection == 'downloadRow' && hidden",
-          "group": "downloads@7"
         }
       ]
     },

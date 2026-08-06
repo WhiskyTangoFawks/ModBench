@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildDownloadRows,
-  downloadRowContext,
+  downloadContextValue,
   filterHiddenRows,
-  filterRowsByName,
   parseDownloadMeta,
   setHiddenInText,
   setInstalledInText,
@@ -119,19 +118,6 @@ describe('filterHiddenRows', () => {
   });
 });
 
-describe('filterRowsByName', () => {
-  const rows = [row('Sleep Or Save.zip', 1), row('other.zip', 2)];
-
-  it('matches name by case-insensitive substring', () => {
-    expect(filterRowsByName(rows, 'SlEeP').map((r) => r.name)).toEqual(['Sleep Or Save.zip']);
-  });
-
-  it('shows all rows for an empty (or whitespace-only) filter', () => {
-    expect(filterRowsByName(rows, '').map((r) => r.name)).toEqual(['Sleep Or Save.zip', 'other.zip']);
-    expect(filterRowsByName(rows, '   ').map((r) => r.name)).toEqual(['Sleep Or Save.zip', 'other.zip']);
-  });
-});
-
 describe('setHiddenInText', () => {
   it('creates a fresh [General] section with removed=true when there is no .meta text', () => {
     expect(setHiddenInText('', true)).toBe('[General]\r\nremoved=true\r\n');
@@ -224,25 +210,31 @@ describe('setUninstalledInText', () => {
   });
 });
 
-// Issue #214: the row's right-click menu is VS Code's own `webview/context` contribution now,
-// gated by this `data-vscode-context` JSON — same pattern as recordUtils.ts' pendingCellContext.
-describe('downloadRowContext', () => {
-  it('carries the gating keys the native menu needs, all false/undefined for a plain row', () => {
-    const plain: DownloadRow = { name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, hidden: false };
-    expect(JSON.parse(downloadRowContext(plain))).toEqual({
-      webviewSection: 'downloadRow', name: 'foo.zip', hasMeta: false, hasModID: false, hidden: false,
-      preventDefaultContextMenuItems: true,
-    });
+// Issue #233: the row's right-click menu is a native `view/item/context` contribution now,
+// gated by this space-separated `contextValue` flag string and `viewItem =~ /\bflag\b/` `when`
+// clauses (replacing #214's JSON `data-vscode-context`, which only a webview can carry).
+describe('downloadContextValue', () => {
+  const plain: DownloadRow = { name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, hidden: false };
+
+  it('is the base "download" token alone when no optional flag applies', () => {
+    expect(downloadContextValue(plain)).toBe('download');
   });
 
-  it('flags hasMeta, hasModID, and hidden true when the row has them', () => {
-    const row: DownloadRow = {
-      name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: true, hidden: true, modID: '12345',
-    };
-    expect(JSON.parse(downloadRowContext(row))).toEqual({
-      webviewSection: 'downloadRow', name: 'foo.zip', hasMeta: true, hasModID: true, hidden: true,
-      preventDefaultContextMenuItems: true,
-    });
+  it('appends hasMeta, hasModID, and hidden, in that order, when all three are set', () => {
+    const row: DownloadRow = { ...plain, hasMeta: true, hidden: true, modID: '12345' };
+    expect(downloadContextValue(row)).toBe('download hasMeta hasModID hidden');
+  });
+
+  it('appends only hasMeta when just hasMeta is set', () => {
+    expect(downloadContextValue({ ...plain, hasMeta: true })).toBe('download hasMeta');
+  });
+
+  it('appends only hasModID when just modID is present', () => {
+    expect(downloadContextValue({ ...plain, modID: '12345' })).toBe('download hasModID');
+  });
+
+  it('appends only hidden when just hidden is set', () => {
+    expect(downloadContextValue({ ...plain, hidden: true })).toBe('download hidden');
   });
 });
 

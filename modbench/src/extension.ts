@@ -36,7 +36,9 @@ import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
 import { buildExplicitPlugins } from './modmanager/explicitSession';
 import { detectRoot } from './modmanager/install/detectRoot';
 import { extractArchive } from './modmanager/install/extractArchive';
-import { openDownloadsPanel, registerDownloadsRowCommands } from './modmanager/DownloadsPanel';
+import { registerDownloadsMultiRowCommands, registerDownloadsSingleRowCommands } from './modmanager/DownloadsPanel';
+import { DownloadsProvider } from './modmanager/DownloadsProvider';
+import { createDownloadsWatcher } from './modmanager/downloadsWatcher';
 import { makeReporter } from './reporter';
 
 let backendManager: BackendManager | undefined;
@@ -187,9 +189,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   registerDeploymentModeContext(context);
 
-  const modListProvider = registerLoadoutView({
-    context, log, outputChannel, revealLog: () => outputChannel.show(true), controller, changeGroupTreeProvider, openPanels,
-  });
+  const { modListProvider, downloadsProvider } = registerLoadoutView({
+    context, log, outputChannel, revealLog: () => outputChannel.show(true), controller, changeGroupTreeProvider,
+  }) ?? {};
 
   context.subscriptions.push(
     treeView,
@@ -207,8 +209,9 @@ export function activate(context: vscode.ExtensionContext) {
   statusBarItem.text = '$(plug) mEdit';
 
   // Exposed for integration tests (pinned Overwrite row #82; editing tree after launch #75;
-  // editing tree title follows view mode #109; leveled output channel #198) — unused in production.
-  return { modListProvider, treeProvider, treeView, changeGroupTreeView, outputChannel };
+  // editing tree title follows view mode #109; leveled output channel #198; Downloads tree
+  // #233) — unused in production.
+  return { modListProvider, downloadsProvider, treeProvider, treeView, changeGroupTreeView, outputChannel };
 }
 
 
@@ -1103,14 +1106,13 @@ interface LoadoutViewDeps {
   revealLog: () => void;
   controller: SessionController;
   changeGroupTreeProvider: PendingChangesTreeProvider;
-  openPanels: Map<string, vscode.WebviewPanel>;
 }
 /** Register the Loadout (Mod List) view and its commands. Returns the live
- *  ModListProvider (exposed via activate() for integration tests), or undefined
- *  with a neutral log when no workspace is open, or when the workspace isn't
- *  an MO2 instance (#192 — the Mods view shows welcome content instead). */
-function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined {
-  const { context, log, outputChannel, revealLog, controller, changeGroupTreeProvider, openPanels } = deps;
+ *  ModListProvider and DownloadsProvider (exposed via activate() for integration
+ *  tests), or undefined with a neutral log when no workspace is open, or when the
+ *  workspace isn't an MO2 instance (#192 — the Mods view shows welcome content instead). */
+function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider } | undefined {
+  const { context, log, outputChannel, revealLog, controller, changeGroupTreeProvider } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
     outputChannel.info('[extension] No workspace folder open — Mod List view not registered.');
@@ -1212,28 +1214,36 @@ function registerLoadoutView(deps: LoadoutViewDeps): ModListProvider | undefined
       ...registerOverwriteView(instanceRoot, modListProvider, outputChannel),
       registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, outputChannel),
       ...registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder }),
-      ...registerDownloadsCommands({ context, openPanels, instanceRoot, log }),
     );
-    return modListProvider;
+
+    const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, log);
+    context.subscriptions.push(...downloadsDisposables);
+    return { modListProvider, downloadsProvider };
 }
 
-interface DownloadsDeps {
-  context: vscode.ExtensionContext;
-  openPanels: Map<string, vscode.WebviewPanel>;
-  instanceRoot: string;
-  log: (msg: string) => void;
-}
-/** Downloads tab: opens the editor-tab webview listing downloads/ archives, plus the row's
- *  native `webview/context` menu commands (#214) — see DownloadsPanel.ts'
- *  registerDownloadsRowCommands and package.json's contributes.menus["webview/context"]. */
-function registerDownloadsCommands(deps: DownloadsDeps): vscode.Disposable[] {
-  const { context, openPanels, instanceRoot, log } = deps;
-  return [
-    vscode.commands.registerCommand('modbench.downloads.open', () => {
-      openDownloadsPanel(context, openPanels, instanceRoot, log);
-    }),
-    ...registerDownloadsRowCommands(instanceRoot, log),
-  ];
+/** Downloads sidebar tree (#233): a native TreeView over downloads/, replacing the editor-tab
+ *  webview. The row's native `view/item/context` menu commands are registered here too — see
+ *  DownloadsPanel.ts' registerDownloadsSingleRowCommands/registerDownloadsMultiRowCommands and
+ *  package.json's contributes.menus["view/item/context"]. Returns the live provider (exposed
+ *  via activate() for integration tests) alongside its disposables. */
+function registerDownloadsView(
+  instanceRoot: string,
+  log: (msg: string) => void,
+): { downloadsProvider: DownloadsProvider; disposables: vscode.Disposable[] } {
+  const downloadsProvider = new DownloadsProvider(instanceRoot, log);
+  const downloadsView = vscode.window.createTreeView('modbench.downloads', {
+    treeDataProvider: downloadsProvider,
+    canSelectMany: true,
+  });
+  return {
+    downloadsProvider,
+    disposables: [
+      downloadsView,
+      createDownloadsWatcher(instanceRoot, () => downloadsProvider.invalidate()),
+      ...registerDownloadsSingleRowCommands(instanceRoot, log),
+      ...registerDownloadsMultiRowCommands(instanceRoot, log),
+    ],
+  };
 }
 
 interface EnterEditingDeps {

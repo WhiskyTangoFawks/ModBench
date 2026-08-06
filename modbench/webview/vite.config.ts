@@ -11,7 +11,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, "src/index.html"),
-        downloads: resolve(__dirname, "src/downloads.html"),
       },
       output: {
         entryFileNames: "assets/[name].js",
