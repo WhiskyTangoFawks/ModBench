@@ -791,24 +791,73 @@ describe('DiffRow — pending companion column', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
-  // Issue #232 (documented deviation — see DiffRow.tsx's RenderCellExtras comment and the
-  // record-editor spec's extended-editor "Scope" note): a `string` pending cell's double click
-  // still opens the *inline* editor, not the extended one — the extended editor's temp-file
-  // identity (extendedFieldEditor.ts) isn't column-aware yet, so wiring it here would silently
-  // reuse/reseed the disk cell's own open tab for the same field.
-  it('double click on the pending cell opens the inline editor even when unfocused, not the extended editor', () => {
+  // Issue #242: extendedFieldEditor.ts's tab identity now carries a column discriminant
+  // (mirroring FocusedCell's own disk/pending split, #232) — a pending string cell's double click
+  // reaches the extended editor exactly like its disk companion, closing the #232-era gap this
+  // block used to pin (see git history for the superseded "opens the inline editor" test).
+  it('a mutable pending string cell double click opens the extended editor, not the inline one, matching a disk cell of the same type', () => {
     openExtendedFieldEditor.mockClear();
     render(<table><tbody>{React.createElement(DiffRow, pendingProps({ focusedCell: null }))}</tbody></table>);
     fireEvent.doubleClick(screen.getByText('pending-value'));
-    expect(openExtendedFieldEditor).not.toHaveBeenCalled();
-    expect(screen.getByDisplayValue('pending-value')).toBeInTheDocument();
+
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(openExtendedFieldEditor).toHaveBeenCalledTimes(1);
+    expect(openExtendedFieldEditor).toHaveBeenCalledWith(
+      {
+        value: 'pending-value', recordLabel: 'TestNPC [000001:Fallout4.esm]', fieldName: 'Name',
+        plugin: 'MyMod.esp', readOnly: false, column: 'pending',
+      },
+      expect.any(Function),
+    );
   });
 
-  it('committing an edit on the pending cell calls onEdit with plugin/fieldName/value, the same shape a disk-cell edit uses', () => {
-    const onEdit = vi.fn();
-    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ onEdit }))}</tbody></table>);
-    // Issue #232: double click opens unconditionally, so this doesn't need a pre-seeded focus.
+  // AC2: a pending cell and its disk companion produce two independent tabs, not one reseeding
+  // the other — proven at this boundary as two independent openExtendedFieldEditor calls sharing
+  // the same record+field+plugin identity, distinguished only by `column`.
+  it('double-clicking the pending cell and its disk companion produce two independent openExtendedFieldEditor calls', () => {
+    openExtendedFieldEditor.mockClear();
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ focusedCell: null }))}</tbody></table>);
+    fireEvent.doubleClick(screen.getAllByText('disk-value')[1]); // MyMod.esp disk cell — mutable
     fireEvent.doubleClick(screen.getByText('pending-value'));
+
+    expect(openExtendedFieldEditor).toHaveBeenCalledTimes(2);
+    expect(openExtendedFieldEditor).toHaveBeenNthCalledWith(1,
+      { value: 'disk-value', recordLabel: 'TestNPC [000001:Fallout4.esm]', fieldName: 'Name', plugin: 'MyMod.esp', readOnly: false },
+      expect.any(Function),
+    );
+    expect(openExtendedFieldEditor).toHaveBeenNthCalledWith(2,
+      {
+        value: 'pending-value', recordLabel: 'TestNPC [000001:Fallout4.esm]', fieldName: 'Name',
+        plugin: 'MyMod.esp', readOnly: false, column: 'pending',
+      },
+      expect.any(Function),
+    );
+  });
+
+  // AC4-adjacent (same shape as the disk cell's own "commit callback stages through the same
+  // onEdit path" test, #230): the pending extended editor's commit callback is the row's own
+  // pending onEdit closure, not a second route.
+  it('the pending extended-editor commit callback stages through the same onEdit path as any other pending edit', () => {
+    openExtendedFieldEditor.mockClear();
+    const onEdit = vi.fn();
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({ focusedCell: null, onEdit }))}</tbody></table>);
+    fireEvent.doubleClick(screen.getByText('pending-value'));
+
+    const onCommit = openExtendedFieldEditor.mock.calls[0][1] as (value: string) => void;
+    onCommit('a much longer description');
+
+    expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Name', 'a much longer description');
+  });
+
+  // Issue #232's own commit-path coverage, moved off double click (which now opens the extended
+  // editor, see above) onto the still-inline "second click on an already-focused cell" trigger —
+  // the same gesture the disk-cell equivalent test uses.
+  it('committing an edit on the pending cell via the inline editor calls onEdit with plugin/fieldName/value, the same shape a disk-cell edit uses', () => {
+    const onEdit = vi.fn();
+    render(<table><tbody>{React.createElement(DiffRow, pendingProps({
+      onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+    }))}</tbody></table>);
+    fireEvent.click(screen.getByText('pending-value')); // second click on the already-focused cell
     const input = screen.getByDisplayValue('pending-value');
     fireEvent.change(input, { target: { value: 'edited-again' } });
     fireEvent.blur(input);

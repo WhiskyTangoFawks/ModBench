@@ -394,19 +394,16 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
     `F2` is unaffected and stays immediate for every type including `string`: it dispatches its
     open via a real `element.click()` call (`DiskCell`), which the DOM spec gives `detail: 0`, and
     the debounce only ever applies to a real mouse click (`detail >= 1`).
-  - **Scope**: the field grid's disk columns only (`ScalarCell`/`DiffRow`) — the Pending column
-    still doesn't wire it, post-#232. Not for lack of a focus model any more (#232 gave the
-    pending column its own real one); `extendedFieldEditor.ts`'s temp-file path is keyed by
-    record+field+plugin only, with no column-kind discriminant, so wiring a pending cell to it
-    today would silently reuse — and reseed — the disk cell's own already-open tab for that same
-    field. Giving the tab its own identity is this feature's own fix to make, not something #232
-    should improvise; a `string` pending cell's double click opens the same inline editor a second
-    click/F2 would, until then. A plain `string`-typed disk row reaches the extended editor
-    regardless of whether it's an ordinary field or a VMAD property (#231 folds both onto the same
-    `ScalarCell`). A composite leaf's own inner string widget (a condition parameter's Text
-    category, `conditionParam`) doesn't yet — its outer `FieldMetadata.type` isn't `'string'`,
-    which is what this gesture keys on (#231's own noted gap). A `string` cell that doesn't reach
-    it keeps opening its inline editor on double click, unchanged.
+  - **Scope**: the field grid's disk *and* pending columns alike (`ScalarCell`/`DiffRow`) —
+    `extendedFieldEditor.ts`'s temp-file path carries a disk/pending discriminant (`column:
+    'pending'`, mirroring `FocusedCell`'s own, #242), so a pending cell's extended editor opens its
+    own independent tab rather than aliasing its disk companion's. A plain `string`-typed disk or
+    pending row reaches the extended editor regardless of whether it's an ordinary field or a VMAD
+    property (#231 folds both onto the same `ScalarCell`). A composite leaf's own inner string
+    widget (a condition parameter's Text category, `conditionParam`) doesn't yet — its outer
+    `FieldMetadata.type` isn't `'string'`, which is what this gesture keys on (#231's own noted
+    gap). A `string` cell that doesn't reach it keeps opening its inline editor on double click,
+    unchanged.
 - **Unsorted array fields have arity and order operations** — **Move Up** / **Move Down** (swap
   with the neighbour) and **Remove** on an element row, and **Add** on the parent array row,
   appending a default-valued element (#142). They live in the **right-click menu**, with
@@ -459,11 +456,10 @@ plugin:
   this exact same code now, not a bespoke copy (#231). The pending column's own focus is tracked
   independently of its disk-column companion (`FocusedCell` carries a `column: 'pending'`
   discriminant, since the two share the same plugin name) — focusing or editing one never affects
-  the other. One divergence from full disk-cell parity: a `string` pending cell's double click
-  still opens the inline editor, not the extended editor (see "By cell" gesture matrix and the
-  extended-editor section's own `Scope` note) — the extended editor's temp-file identity isn't
-  column-aware yet, and reaching it from a pending cell today would silently reuse and reseed the
-  disk cell's own open tab for that field.
+  the other. A `string` pending cell's double click reaches the extended editor exactly like its
+  disk companion's (see "By cell" gesture matrix and the extended-editor section's own `Scope`
+  note): `extendedFieldEditor.ts`'s own tab identity carries the same `column: 'pending'`
+  discriminant `FocusedCell` does (#242), so the two cells' tabs never alias.
 - **Right-click** on a pending value opens VS Code's own native context menu (#208 —
   `contributes.menus["webview/context"]`, gated by a `data-vscode-context` attribute the cell
   carries; the cell must not call `preventDefault()` on the contextmenu event, or VS Code's
