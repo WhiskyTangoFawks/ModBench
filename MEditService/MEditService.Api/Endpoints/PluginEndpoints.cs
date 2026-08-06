@@ -16,42 +16,15 @@ public static class PluginEndpoints
             .WithTags("Plugins")
             .Produces<IReadOnlyList<PluginResponse>>();
 
-        app.MapGet("/record-types", (IRecordQueryService svc, ILoggerFactory loggerFactory) =>
-        {
-            loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogInformation("Received GetRecordTypes");
-            return Results.Ok(svc.GetRecordTypes());
-        })
-            .WithName("GetRecordTypes")
-            .WithTags("Records")
-            .Produces<IReadOnlyList<string>>();
+        MapCatalog(app, "/record-types", "GetRecordTypes", svc => svc.GetRecordTypes());
 
         // The condition function picker's catalog (#152) — filtered to what the loaded session's
         // game actually resolves (ConditionCodecRegistry), not a hardcoded list.
-        app.MapGet("/condition-functions", (IRecordQueryService svc, ILoggerFactory loggerFactory) =>
-        {
-            loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogInformation("Received GetConditionFunctions");
-            return Results.Ok(svc.GetConditionFunctions());
-        })
-            .WithName("GetConditionFunctions")
-            .WithTags("Records")
-            .Produces<IReadOnlyList<string>>();
+        MapCatalog(app, "/condition-functions", "GetConditionFunctions", svc => svc.GetConditionFunctions());
 
         // The Run On target dropdown's catalog (#167) — filtered to what the loaded session's
         // game actually resolves (ConditionCodecRegistry), not a hardcoded frontend array.
-        app.MapGet("/condition-run-on-targets", (IRecordQueryService svc, ILoggerFactory loggerFactory) =>
-        {
-            loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogInformation("Received GetConditionRunOnTargets");
-            return Results.Ok(svc.GetConditionRunOnTargets());
-        })
-            .WithName("GetConditionRunOnTargets")
-            .WithTags("Records")
-            .Produces<IReadOnlyList<string>>()
-            // RequireSession() throws InvalidOperationException when no session is loaded — same
-            // "no session loaded" case CreatePlugin's own catch maps to 503 below. This endpoint
-            // doesn't yet catch it itself (#244 tracks fixing that uniformly across all three
-            // catalog endpoints in this file); the annotation documents the real failure mode so
-            // the generated client's type isn't a lie about what can come back.
-            .ProducesProblem(503);
+        MapCatalog(app, "/condition-run-on-targets", "GetConditionRunOnTargets", svc => svc.GetConditionRunOnTargets());
 
         app.MapGet("/plugins/{plugin}/record-types", (string plugin, IRecordQueryService svc, ILoggerFactory loggerFactory) =>
         {
@@ -71,6 +44,33 @@ public static class PluginEndpoints
             .ProducesProblem(409);
 
         return app;
+    }
+
+    // Shared shape for the /record-types, /condition-functions and /condition-run-on-targets
+    // catalog endpoints (#244): log receipt, run the read against the loaded session, and map the
+    // "no session loaded" failure (RequireSession()'s InvalidOperationException) to the same 503
+    // CreatePlugin's own catch below uses.
+    private static void MapCatalog(
+        IEndpointRouteBuilder app, string route, string name, Func<IRecordQueryService, IReadOnlyList<string>> getCatalog)
+    {
+        app.MapGet(route, (IRecordQueryService svc, ILoggerFactory loggerFactory) =>
+        {
+            var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+            logger.LogInformation("Received {Name}", name);
+            try
+            {
+                return Results.Ok(getCatalog(svc));
+            }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogError(ex, "No session for {Name}", name);
+                return Results.Problem(ex.Message, statusCode: 503);
+            }
+        })
+            .WithName(name)
+            .WithTags("Records")
+            .Produces<IReadOnlyList<string>>()
+            .ProducesProblem(503);
     }
 
     internal static IResult CreatePlugin(CreatePluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
