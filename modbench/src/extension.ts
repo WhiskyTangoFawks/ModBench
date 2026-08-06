@@ -1230,7 +1230,7 @@ function registerDownloadsView(
   instanceRoot: string,
   log: (msg: string) => void,
 ): { downloadsProvider: DownloadsProvider; disposables: vscode.Disposable[] } {
-  const downloadsProvider = new DownloadsProvider(instanceRoot);
+  const downloadsProvider = new DownloadsProvider(instanceRoot, log);
   const downloadsView = vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,
     canSelectMany: true,

@@ -33,8 +33,14 @@ vi.mock('vscode', () => ({
   commands: { executeCommand },
 }));
 
-import { DownloadsProvider, DownloadNode } from './DownloadsProvider';
+import { DownloadsProvider, DownloadNode, type DownloadsNode } from './DownloadsProvider';
 import type { DownloadRow } from './mo2/downloads';
+
+/** Archive filenames among a getChildren() result, ignoring any ErrorNode — the happy-path
+ *  tests below only ever expect DownloadNodes; the error-path tests further down assert on
+ *  `kind` directly instead. */
+const rowNames = (nodes: DownloadsNode[]): string[] =>
+  nodes.filter((n): n is DownloadNode => n instanceof DownloadNode).map((n) => n.row.name);
 
 const row = (extra: Partial<DownloadRow> = {}): DownloadRow => ({
   name: 'foo.zip',
@@ -181,7 +187,7 @@ describe('DownloadsProvider', () => {
 
     const provider = new DownloadsProvider(root);
     const children = await provider.getChildren();
-    expect(children.map((n) => n.row.name)).toEqual(['new.zip', 'old.zip']);
+    expect(rowNames(children)).toEqual(['new.zip', 'old.zip']);
   });
 
   it('excludes hidden rows (no show-hidden toggle in this slice)', async () => {
@@ -191,7 +197,7 @@ describe('DownloadsProvider', () => {
 
     const provider = new DownloadsProvider(root);
     const children = await provider.getChildren();
-    expect(children.map((n) => n.row.name)).toEqual(['visible.zip']);
+    expect(rowNames(children)).toEqual(['visible.zip']);
   });
 
   it('returns no children (not an error) for an empty downloads/ folder', async () => {
@@ -241,7 +247,38 @@ describe('DownloadsProvider', () => {
       expect(fired).toBe(true);
 
       const children = await provider.getChildren();
-      expect(children.map((n) => n.row.name)).toEqual(['new.zip']);
+      expect(rowNames(children)).toEqual(['new.zip']);
+    });
+  });
+
+  // ADR-0026: a read failure other than "no downloads/ folder" (ENOENT, handled as the
+  // structural-absence empty state above) must surface, never silently render as "nothing
+  // here" — mirrors ModListProvider's ErrorNode on a readModlist failure. A `downloads` path
+  // that's a FILE, not a directory, makes readdir() throw ENOTDIR: a real, portable failure
+  // distinct from ENOENT, without needing to mock fs.
+  describe('getChildren — scan failure (ADR-0026)', () => {
+    it('returns an error node instead of throwing, and logs the failure', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'downloads-provider-'));
+      instanceRoots.push(root);
+      await writeFile(join(root, 'downloads'), 'not a directory');
+      const log = vi.fn();
+
+      const provider = new DownloadsProvider(root, log);
+      const children = await provider.getChildren();
+
+      expect(children).toHaveLength(1);
+      expect((children[0] as unknown as { kind: string }).kind).toBe('error');
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('scanning downloads/ failed'));
+    });
+
+    it('does not report modbench.downloadsFolderExists on a scan failure — folder existence is unknown, not false', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'downloads-provider-'));
+      instanceRoots.push(root);
+      await writeFile(join(root, 'downloads'), 'not a directory');
+
+      await new DownloadsProvider(root, vi.fn()).getChildren();
+
+      expect(executeCommand).not.toHaveBeenCalledWith('setContext', 'modbench.downloadsFolderExists', expect.anything());
     });
   });
 });

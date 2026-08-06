@@ -69,15 +69,34 @@ export class DownloadNode extends vscode.TreeItem {
   }
 }
 
+/** Inline error surface: shown instead of an empty list when scanning downloads/ fails for a
+ *  reason other than "no downloads/ folder" (that's the structural-absence empty state, not an
+ *  error — see load()). Mirrors ModListProvider's ErrorNode (ADR-0026: a failure must never be
+ *  indistinguishable from "nothing here"). */
+export class ErrorNode extends vscode.TreeItem {
+  readonly kind = 'error' as const;
+  constructor(message: string) {
+    super(`⚠ Failed to load: ${message}`, vscode.TreeItemCollapsibleState.None);
+    this.contextValue = 'error';
+    this.tooltip = message;
+    this.iconPath = new vscode.ThemeIcon('error');
+  }
+}
+
+export type DownloadsNode = DownloadNode | ErrorNode;
+
 /** Sidebar Downloads tree over an MO2 instance's downloads/ folder. Flat (no grouping/
  *  reorder concept, unlike ModListProvider) — every row is a leaf. */
-export class DownloadsProvider implements vscode.TreeDataProvider<DownloadNode> {
-  private readonly _onDidChangeTreeData = new vscode.EventEmitter<DownloadNode | undefined>();
+export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode> {
+  private readonly _onDidChangeTreeData = new vscode.EventEmitter<DownloadsNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private cache?: DownloadNode[];
+  private cache?: DownloadsNode[];
 
-  constructor(private readonly instanceRoot: string) {}
+  constructor(
+    private readonly instanceRoot: string,
+    private readonly log: (msg: string) => void = () => {},
+  ) {}
 
   /** Clears the cached rows and re-renders — a mutation or watcher-observed disk change
    *  invalidated what's on screen, so the next read must re-scan downloads/ (mirrors
@@ -87,11 +106,11 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadNode> 
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  getTreeItem(element: DownloadNode): vscode.TreeItem {
+  getTreeItem(element: DownloadsNode): vscode.TreeItem {
     return element;
   }
 
-  async getChildren(element?: DownloadNode): Promise<DownloadNode[]> {
+  async getChildren(element?: DownloadsNode): Promise<DownloadsNode[]> {
     if (element) return []; // flat list — no row has children
     if (!this.cache) this.cache = await this.load();
     return this.cache;
@@ -100,9 +119,19 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadNode> 
   /** Scans downloads/, builds and hidden-filters rows, and republishes
    *  modbench.downloadsFolderExists — the folder can appear/disappear live via the watcher,
    *  so this is re-issued on every re-scan (not a one-time activation check, unlike the
-   *  MO2-instance welcome's `workspaceIsMo2Instance`, extension.ts:1093/1121/1131). */
-  private async load(): Promise<DownloadNode[]> {
-    const entries = await scanDownloads(this.instanceRoot);
+   *  MO2-instance welcome's `workspaceIsMo2Instance`, extension.ts:1093/1121/1131). A scan
+   *  failure other than "no folder" (scanDownloads only swallows ENOENT) surfaces as an
+   *  ErrorNode instead of throwing out of getChildren — ADR-0026, mirrors ModListProvider.load().
+   *  The folder-exists key is left untouched on failure: existence is genuinely unknown, not false. */
+  private async load(): Promise<DownloadsNode[]> {
+    let entries;
+    try {
+      entries = await scanDownloads(this.instanceRoot);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log(`[DownloadsProvider] scanning downloads/ failed: ${message}`);
+      return [new ErrorNode(message)];
+    }
     void vscode.commands.executeCommand('setContext', 'modbench.downloadsFolderExists', entries !== undefined);
     if (!entries) return [];
     const rows = filterHiddenRows(buildDownloadRows(entries), false);
