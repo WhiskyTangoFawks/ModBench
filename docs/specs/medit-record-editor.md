@@ -39,7 +39,7 @@ One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared ses
 status bar, command palette, and architecture seams. Siblings:
 [Plugins tree](medit-plugins-tree.md) (what opens this panel),
 [Pending Changes tree](medit-pending-changes-tree.md) (where staged edits are grouped),
-[Referenced By panel](medit-referenced-by.md).
+[Referenced By tree](medit-referenced-by.md).
 
 ## Problem Statement
 
@@ -794,7 +794,7 @@ new value, so a large array or struct edit can't flood the panel.
 - **Per-plugin and per-record save** — a ChangeGroup may span plugins, so those scopes could
   only be honoured by splitting a group. Save and revert act on a group, a multi-selection of
   groups, or everything (ADR-0029).
-- **Referenced By** — a separate panel, [medit-referenced-by.md](medit-referenced-by.md).
+- **Referenced By** — a separate tree, [medit-referenced-by.md](medit-referenced-by.md).
 - **Grouping semantics** — settled in ADR-0028 and computed backend-side; this surface renders
   grouping, it does not derive it.
 - **Array arity/order editing of *sorted* (`wbArrayS`) arrays** — deliberately absent: order is

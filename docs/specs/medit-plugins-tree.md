@@ -11,7 +11,7 @@ One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared ses
 status bar, command palette, and architecture seams. Siblings:
 [Record editor panel](medit-record-editor.md) (what this tree opens),
 [Pending Changes tree](medit-pending-changes-tree.md),
-[Referenced By panel](medit-referenced-by.md).
+[Referenced By tree](medit-referenced-by.md).
 
 **Vocabulary note:** this "Plugins tree" is the entry point into per-record browsing and
 requires a spawned backend. It is distinct from the Mod-Management **Plugin List**

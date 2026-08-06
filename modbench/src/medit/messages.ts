@@ -120,7 +120,6 @@ export const EXTENSION_TO_WEBVIEW = {
 
 export const WEBVIEW_TO_EXTENSION = {
   OPEN_RECORD: 'openRecord',
-  OPEN_RECORD_BESIDE: 'openRecordBeside',
   // #174: posted after every successful pending-change mutation (stage/copy/remove/save/revert)
   // so the extension host's Pending Changes tree — a separate process from this webview,
   // bridged only by postMessage — refreshes instead of going stale.
@@ -184,7 +183,6 @@ export type LogLevel = 'debug' | 'info' | 'warn';
 
 export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_RECORD; formKey: string }
-  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_RECORD_BESIDE; formKey: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.PENDING_CHANGED }
   | { type: typeof WEBVIEW_TO_EXTENSION.LOG; level: LogLevel; message: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
