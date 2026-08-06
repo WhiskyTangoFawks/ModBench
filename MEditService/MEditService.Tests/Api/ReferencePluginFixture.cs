@@ -4,7 +4,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-public sealed class ReferencePluginFixture : IDisposable
+public sealed class ReferencePluginFixture : IApiPluginFixture<ReferencePluginFixture>
 {
     public string DataFolder => _data.DataFolder;
     public string PluginsTxtPath => _data.PluginsTxtPath;
@@ -49,4 +49,6 @@ public sealed class ReferencePluginFixture : IDisposable
     }
 
     public void Dispose() => _data.Dispose();
+
+    public static ReferencePluginFixture Create() => new();
 }

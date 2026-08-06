@@ -7,7 +7,7 @@ namespace MEditService.Tests.Api;
 /// Creates a data folder containing Fallout4.esm (implicit / immutable) and a user plugin.
 /// Plugins.txt lists only the user plugin so Fallout4.esm is loaded as an implicit listing.
 /// </summary>
-public sealed class ImmutablePluginFixture : IDisposable
+public sealed class ImmutablePluginFixture : IApiPluginFixture<ImmutablePluginFixture>
 {
     public string DataFolder => _data.DataFolder;
     public string PluginsTxtPath => _data.PluginsTxtPath;
@@ -28,4 +28,6 @@ public sealed class ImmutablePluginFixture : IDisposable
     }
 
     public void Dispose() => _data.Dispose();
+
+    public static ImmutablePluginFixture Create() => new();
 }

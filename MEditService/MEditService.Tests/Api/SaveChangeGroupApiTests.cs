@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace MEditService.Tests.Api;
 
-public sealed class SaveChangeGroupApiTests(LoadedNpcApiFixture loaded) : IClassFixture<LoadedNpcApiFixture>
+public sealed class SaveChangeGroupApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
 

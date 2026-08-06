@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Api;
 
-public sealed class SessionApiTests(LoadedNpcApiFixture loaded) : IClassFixture<LoadedNpcApiFixture>
+public sealed class SessionApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
     private readonly TestPluginFixture _fixture = loaded.Plugin;

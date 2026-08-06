@@ -96,6 +96,18 @@ public sealed record PluginFixtureData(string DataFolder, string PluginsTxtPath)
     public void Dispose() => Directory.Delete(DataFolder, recursive: true);
 }
 
+/// <summary>
+/// Shared shape of a plugin-data fixture loadable through the API test host: a data folder +
+/// Plugins.txt built by <see cref="PluginFixtureBuilder"/>, plus a construction hook so generic
+/// consumers (<c>LoadedApiFixture&lt;TPlugin&gt;</c>) don't need a bare <c>new()</c> constraint.
+/// </summary>
+public interface IApiPluginFixture<TSelf> : IDisposable where TSelf : IApiPluginFixture<TSelf>
+{
+    string DataFolder { get; }
+    string PluginsTxtPath { get; }
+    static abstract TSelf Create();
+}
+
 public sealed record ScatteredFixtureData(
     string Root, string GameDirectory, IReadOnlyList<(string Name, string Path)> Plugins) : IDisposable
 {

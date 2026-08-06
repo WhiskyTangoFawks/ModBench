@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.Api;
 
-public sealed class ChangeApiTests(LoadedNpcApiFixture loaded) : IClassFixture<LoadedNpcApiFixture>
+public sealed class ChangeApiTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private readonly HttpClient _client = loaded.Client;
     private readonly TestPluginFixture _fixture = loaded.Plugin;

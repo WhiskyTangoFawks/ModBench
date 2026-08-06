@@ -3,13 +3,16 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
 
-public sealed class LoadedDeleteRecordsApiFixture : IAsyncLifetime, IDisposable
+public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
+    where TPlugin : IApiPluginFixture<TPlugin>
 {
     private readonly WebApplicationFactory<Program> _app = new();
-    private bool _disposed;
 
     public HttpClient Client { get; private set; } = null!;
-    public DeleteRecordsFixture Plugin { get; } = new();
+    public TPlugin Plugin { get; } = TPlugin.Create();
+    public IServiceProvider Services => _app.Services;
+
+    private bool _disposed;
 
     public async Task InitializeAsync()
     {
