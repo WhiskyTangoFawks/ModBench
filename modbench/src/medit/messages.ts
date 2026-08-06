@@ -13,18 +13,22 @@ export const EXTENSION_TO_WEBVIEW = {
   PENDING_CELL_SAVE_GROUP: 'pendingCellSaveGroup',
   PENDING_CELL_REVERT_GROUP: 'pendingCellRevertGroup',
   // #209: the column-header menu is a native `webview/context` contribution too, but unlike the
-  // pending-cell commands above, none of these five actions' real work moved to the extension
-  // host — Copy All to Pending / Copy as New Record / Add Master need field data
-  // (`overrideMap`/`currentMasters`) that only exists in this webview's already-loaded
-  // CompareResult, and Copy as Override / Remove already had their own working webview-side
-  // fetch (RecordSessionClient.copyTo/removeOverride) that the extension host would otherwise
-  // have to re-derive. So the command handler's only extension-host-side job is resolving *which*
-  // plugin (QuickPick, mutable-list-plus-"New Plugin…" for the copy actions, all-loaded-plugins-
-  // minus-current-masters for Add Master) — then it broadcasts the resolved target down to every
-  // open record panel, same self-filtering shape as Save/Revert Group above but keyed on
-  // `formKey` (there is no changeId here) so only the panel actually showing the mutated record
-  // acts on it.
-  COLUMN_HEADER_COPY_ALL_TO_PENDING: 'columnHeaderCopyAllToPending',
+  // pending-cell commands above, none of these actions' real work moved to the extension host —
+  // Copy as New Record / Add Master need field data (`overrideMap`/`currentMasters`) that only
+  // exists in this webview's already-loaded CompareResult, and Copy as Override / Remove already
+  // had their own working webview-side fetch (RecordSessionClient.copyTo/removeOverride) that the
+  // extension host would otherwise have to re-derive. So the command handler's only
+  // extension-host-side job is resolving *which* plugin (QuickPick, mutable-list-plus-"New
+  // Plugin…" for the copy actions, all-loaded-plugins-minus-current-masters for Add Master) —
+  // then it broadcasts the resolved target down to every open record panel, same self-filtering
+  // shape as Save/Revert Group above but keyed on `formKey` (there is no changeId here) so only
+  // the panel actually showing the mutated record acts on it.
+  //
+  // #202: "Copy All to Pending" (a fourth, near-duplicate action here — it also copied one
+  // column's fields, but by shallow client-side field-copy instead of CopyRecordTo's richer
+  // FormKey-reference-validated/placement-aware staging) is deleted outright, not just unused —
+  // Copy as Override now covers that case by carrying `sourcePlugin` (the right-clicked column)
+  // through to the backend instead of always copying the winner.
   COLUMN_HEADER_COPY_AS_NEW_RECORD: 'columnHeaderCopyAsNewRecord',
   COLUMN_HEADER_COPY_AS_OVERRIDE: 'columnHeaderCopyAsOverride',
   COLUMN_HEADER_REMOVE_OVERRIDE: 'columnHeaderRemoveOverride',
@@ -276,9 +280,10 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP; changeId: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP; changeId: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_ALL_TO_PENDING; formKey: string; sourcePlugin: string; targetPlugin: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD; formKey: string; sourcePlugin: string; targetPlugin: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE; formKey: string; targetPlugin: string }
+  // #202: sourcePlugin is the right-clicked column — CopyRecordTo copies that plugin's own
+  // version of the record, not necessarily the winner (see IEditOrchestrator.CopyRecordTo).
+  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE; formKey: string; sourcePlugin: string; targetPlugin: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE; formKey: string; plugin: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER; formKey: string; plugin: string; newMaster: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }

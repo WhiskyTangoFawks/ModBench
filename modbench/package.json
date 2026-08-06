@@ -230,11 +230,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.columnHeader.copyAllToPending",
-        "title": "Copy All to Pending",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.columnHeader.copyAsNewRecord",
         "title": "Copy as New Record",
         "category": "Modbench"
@@ -773,11 +768,6 @@
           "command": "modbench.pendingCell.revertGroup",
           "when": "webviewId == 'modbench' && webviewSection == 'pendingCell'",
           "group": "modbench@3"
-        },
-        {
-          "command": "modbench.columnHeader.copyAllToPending",
-          "when": "webviewId == 'modbench' && webviewSection == 'columnHeader'",
-          "group": "modbench@4"
         },
         {
           "command": "modbench.columnHeader.copyAsNewRecord",

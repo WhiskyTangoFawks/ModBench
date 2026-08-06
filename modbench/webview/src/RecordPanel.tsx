@@ -192,20 +192,21 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   }>({ allChanges: [], saveGroup: () => {}, revertGroup: () => {} });
 
   // Issue #209: same staleness problem as pendingCellActionsRef above, for the column-header
-  // menu's five native commands (none of which carry a changeId — self-filtering is on `formKey`
+  // menu's native commands (none of which carry a changeId — self-filtering is on `formKey`
   // instead, since these act on whichever record this panel currently has loaded, not a specific
-  // pending change). copyAllToPending/copyAsNewRecord/copyTo/removeOverride are called with the
-  // signatures their own handlers already take; addMaster is synthesized here since the inline
-  // master picker that used to own it (PluginHeader) is gone — see currentMasters below.
+  // pending change). copyAsNewRecord/copyAsOverride/removeOverride are called with the signatures
+  // their own handlers already take; addMaster is synthesized here since the inline master picker
+  // that used to own it (PluginHeader) is gone — see currentMasters below.
+  // Issue #202: copyAllToPending deleted — Copy as Override now carries the right-clicked column
+  // (sourcePlugin) through to the backend instead of a separate shallow-copy action.
   const columnHeaderActionsRef = useRef<{
     formKey: string;
-    copyAllToPending: (sourcePlugin: string, targetPlugin: string) => void;
     copyAsNewRecord: (sourcePlugin: string, targetPlugin: string) => void;
-    copyAsOverride: (targetPlugin: string) => void;
+    copyAsOverride: (sourcePlugin: string, targetPlugin: string) => void;
     removeOverride: (plugin: string) => void;
     addMaster: (plugin: string, newMaster: string) => void;
   }>({
-    formKey: '', copyAllToPending: () => {}, copyAsNewRecord: () => {}, copyAsOverride: () => {},
+    formKey: '', copyAsNewRecord: () => {}, copyAsOverride: () => {},
     removeOverride: () => {}, addMaster: () => {},
   });
 
@@ -253,18 +254,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // Listen for loadRecord messages from extension (panel reuse), plus #208's Save Group/Revert
   // Group and #209's column-header broadcasts from the native menu commands.
   useEffect(() => {
-    // Issue #209: the column-header menu's five broadcasts, factored out of `handler` below so
-    // its own branching doesn't balloon — each one only fires when this panel is the one showing
-    // the mutated record (formKey self-filter, no changeId here).
+    // Issue #209: the column-header menu's broadcasts, factored out of `handler` below so its own
+    // branching doesn't balloon — each one only fires when this panel is the one showing the
+    // mutated record (formKey self-filter, no changeId here). #202: COLUMN_HEADER_COPY_AS_OVERRIDE
+    // now carries sourcePlugin too (the right-clicked column, not necessarily the winner) —
+    // COLUMN_HEADER_COPY_ALL_TO_PENDING is gone, that action's own case with it.
     const handleColumnHeaderMessage = (msg: ExtensionToWebview) => {
       const actions = columnHeaderActionsRef.current;
       if (!('formKey' in msg) || msg.formKey !== actions.formKey) return;
-      if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_ALL_TO_PENDING) {
-        actions.copyAllToPending(msg.sourcePlugin, msg.targetPlugin);
-      } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD) {
+      if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD) {
         actions.copyAsNewRecord(msg.sourcePlugin, msg.targetPlugin);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE) {
-        actions.copyAsOverride(msg.targetPlugin);
+        actions.copyAsOverride(msg.sourcePlugin, msg.targetPlugin);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE) {
         actions.removeOverride(msg.plugin);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER) {
@@ -363,9 +364,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       // Issue #200: covers disk-cell click-to-edit, VMAD/Condition leaf edits, array
       // add/remove/move, and a successful drag-drop copy uniformly — every one of them calls
       // handleEdit, with no source-specific branching, so one log call covers them all. Logged
-      // here rather than inside stageChange itself: handleCopyAllToPending ("Copy All to
-      // Pending", #202's surface, deliberately untouched) also calls stageChange directly and
-      // must stay silent.
+      // here rather than inside stageChange itself, which stays a silent low-level primitive
+      // shared with handleVmadStructOp's own separate log call.
       logAction('debug', `Staged field edit on ${plugin}: ${fieldName} (record ${formKey})`);
     }
   }
@@ -486,14 +486,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     };
   });
 
-  async function handleCopyTo(targetPlugin: string) {
+  // Issue #202: sourcePlugin is the right-clicked column (not necessarily the winner) — forwarded
+  // to copyTo unchanged; the backend (EditOrchestrator.CopyRecordTo) decides whose fields actually
+  // get copied. Logged on success (#200 deliberately deferred this action's own log call here).
+  async function handleCopyTo(sourcePlugin: string, targetPlugin: string) {
     setActionError(null);
     try {
-      const resp = await client.copyTo(formKey, targetPlugin);
+      const resp = await client.copyTo(formKey, targetPlugin, sourcePlugin);
       if (!resp.ok) {
         setActionError(resp.status === 409 ? 'Plugin is read-only' : `Copy failed: ${resp.statusText}`);
         return;
       }
+      logAction('info', `Copied ${sourcePlugin} as override into ${targetPlugin} (record ${formKey})`);
       notifyPendingChanged();
       await refresh(formKey);
     } catch (e) {
@@ -596,25 +600,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     return map;
   }, [result]);
 
-  // Issue #3: "Copy All to Pending" — copies every field value from the source column into a
-  // pending change for the target plugin (xEdit's "copy as override" from the column header).
-  // Declared after overrideMap (not grouped with the other handlers above) — a forward reference
-  // to overrideMap from an earlier-declared function broke the React Compiler's ability to
-  // preserve overrideMap's own useMemo (react-hooks/preserve-manual-memoization).
-  async function handleCopyAllToPending(sourcePlugin: string, targetPlugin: string) {
-    const source = overrideMap[sourcePlugin];
-    if (!source) return;
-    const fields: Record<string, unknown> = {};
-    for (const fv of source.fields) fields[fv.metadata.name] = fv.value;
-    await stageChange(targetPlugin, fields);
-  }
-
   // Issue #3: "Copy as New Record" — a fresh FormKey in the target plugin, not an override of
   // this one. CreateRecord's TemplateFormKey only templates from the overall winner (EditOrchestrator
   // .CreateRecordCore calls _query.GetRecord(formKey), winner-only), which isn't necessarily this
   // source column's plugin — so instead of relying on TemplateFormKey, create a blank record of the
-  // right type, then PATCH every source-column field onto it (mirrors handleCopyAllToPending's field
-  // collection, retargeted at the new FormKey).
+  // right type, then PATCH every source-column field onto it.
   async function handleCopyAsNewRecord(sourcePlugin: string, targetPlugin: string) {
     const source = overrideMap[sourcePlugin];
     if (!source) return;
@@ -658,9 +648,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   useLayoutEffect(() => {
     columnHeaderActionsRef.current = {
       formKey,
-      copyAllToPending: (sourcePlugin, targetPlugin) => { void handleCopyAllToPending(sourcePlugin, targetPlugin); },
       copyAsNewRecord: (sourcePlugin, targetPlugin) => { void handleCopyAsNewRecord(sourcePlugin, targetPlugin); },
-      copyAsOverride: targetPlugin => { void handleCopyTo(targetPlugin); },
+      copyAsOverride: (sourcePlugin, targetPlugin) => { void handleCopyTo(sourcePlugin, targetPlugin); },
       removeOverride: plugin => { void handleRemoveOverride(plugin); },
       addMaster: handleAddMaster,
     };
@@ -1016,10 +1005,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                     <th
                       key={`disk:${col.override.plugin}`}
                       style={{ ...headerCell, textAlign: 'left', minWidth: isCollapsed ? '48px' : '200px', backgroundColor: getHeaderBg(col.override.conflictThis) }}
-                      // Issue #209: the column-header menu (Copy All to Pending / Copy as New
-                      // Record / Copy as Override… / Remove / Add Master) is VS Code's own
-                      // `webview/context` menu now — no `onContextMenu`/`preventDefault()` here
-                      // any more, same migration switch as #208's pending cells.
+                      // Issue #209: the column-header menu (Copy as Override… / Copy as New
+                      // Record / Remove / Add Master) is VS Code's own `webview/context` menu
+                      // now — no `onContextMenu`/`preventDefault()` here any more, same
+                      // migration switch as #208's pending cells.
                       data-vscode-context={columnHeaderContext(
                         formKey, col.override.plugin, isImmutable, isHeaderRecord, currentMasters(col.override),
                       )}

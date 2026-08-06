@@ -12,7 +12,14 @@ public interface IEditOrchestrator
         string? description,
         string? changeType = null);
 
-    StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source);
+    /// <summary>
+    /// Stages a copy of <paramref name="formKey"/> into <paramref name="targetPlugin"/>. When
+    /// <paramref name="sourcePlugin"/> is given, copies that plugin's own version of the record
+    /// (issue #202: the column-header menu's "Copy as Override" copies the right-clicked column,
+    /// not necessarily the winner); omitted (null), copies the overall winner, unchanged from
+    /// pre-#202 behavior.
+    /// </summary>
+    StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source, string? sourcePlugin = null);
 
     /// <summary>
     /// Reserves a new FormKey for <paramref name="plugin"/>, stages a <c>$create</c> change with a new GroupId,

@@ -127,6 +127,15 @@ describe('RecordSessionClient writes', () => {
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe('POST');
     expect(req.url).toContain('/records/000001%3AA.esp/copy-to/B.esp');
+    expect(await req.clone().json()).toEqual({});
+  });
+
+  // Issue #202: Copy as Override copies the right-clicked column, not necessarily the winner —
+  // sourcePlugin, when given, must reach the backend in the request body.
+  it('copyTo includes sourcePlugin in the request body when given', async () => {
+    await createRecordSessionClient(5172).copyTo('000001:A.esp', 'B.esp', 'C.esp');
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(await req.clone().json()).toEqual({ sourcePlugin: 'C.esp' });
   });
 
   it('removeOverride POSTs a delete-records request', async () => {

@@ -383,4 +383,36 @@ public sealed class ChangeApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
         var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(body.ValueKind == JsonValueKind.Array, "Response should be an array of pending changes");
     }
+
+    // Issue #202: SourcePlugin in the request body must reach the orchestrator — a thin
+    // pass-through, proven both ways: an explicit, valid source plugin still stages (200), and an
+    // explicit plugin with no override of this record surfaces as RecordNotFound (404), which a
+    // default (winner-only) copy of an existing record would never hit.
+    [Fact]
+    public async Task CopyRecordTo_ExplicitSourcePlugin_Returns200WithChanges()
+    {
+        var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
+        var targetPlugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
+
+        var resp = await _client.PostAsJsonAsync(
+            $"/records/{formKey}/copy-to/{targetPlugin}",
+            new { sourcePlugin = TestPluginFixture.PluginName });
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.ValueKind == JsonValueKind.Array, "Response should be an array of pending changes");
+    }
+
+    [Fact]
+    public async Task CopyRecordTo_ExplicitSourcePluginNotOverridden_Returns404()
+    {
+        var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
+        var targetPlugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
+
+        var resp = await _client.PostAsJsonAsync(
+            $"/records/{formKey}/copy-to/{targetPlugin}",
+            new { sourcePlugin = "NoOverride.esp" });
+
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+    }
 }
