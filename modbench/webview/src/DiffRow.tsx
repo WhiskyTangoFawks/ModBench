@@ -207,16 +207,12 @@ function computeClipboardOps(
 // fourth (onOpenExtended) is needed. `onOpenExtended` is only ever built (and only ever read,
 // inside ScalarCell) for `meta.type === 'string'` — every other leaf ignores it.
 //
-// Issue #232 (review, deviation noted): still left undefined at the pending-column call site
-// below — not for lack of a focus model any more (it has a real one now), but because
-// `extendedFieldEditor.ts`'s own temp-file path is keyed by record+field+plugin only, with no
-// column-kind discriminant. Wiring this here would make a pending cell's extended editor silently
-// reuse — and reseed — the disk cell's own already-open tab for that same field, showing whichever
-// value opened it last rather than the one the user just double-clicked. Giving the tab its own
-// identity is a fix on #230's own side, not something to improvise here; a `string` pending cell's
-// double click therefore still opens the same inline editor a second click/F2 would, one narrower
-// than "identical to a disk cell of the same type" for this one type/gesture pair, for this
-// documented reason.
+// Issue #242: built at both the disk and pending column call sites below now — #232 had left the
+// pending one undefined (`extendedFieldEditor.ts`'s temp-file path was keyed by record+field+plugin
+// only, with no column-kind discriminant, so wiring it there would have silently reused and
+// reseeded the disk cell's own open tab). `extendedEditorPath` now takes that fourth discriminant
+// (mirroring `FocusedCell`'s own `column: 'pending'`), so a pending cell's extended editor opens
+// its own independent tab exactly like its disk companion's.
 interface RenderCellExtras {
   checkError?: string | null;
   resolution?: FormKeyResolution;
@@ -613,6 +609,18 @@ export function DiffRow({
         const { onCut: pendingOnCut, onPaste: pendingOnPaste } = computeClipboardOps(
           meta, true, pendingCopyText, pendingResolution, pendingOnCommit,
         );
+        // Issue #242: built only for `string`, same gate the disk column's own onOpenExtended
+        // uses above — every other type's double click already opens the same (inline) editor
+        // second-click/F2 does. `column: 'pending'` is extendedFieldEditor.ts's own disk/pending
+        // discriminant (mirroring FocusedCell's), so this cell's tab never aliases its disk
+        // companion's — see extendedEditorPath's own comment. Always `readOnly: false`: a pending
+        // cell is always mutable, same reasoning `pendingOnCommit` above already relies on.
+        const pendingOnOpenExtended = meta.type === 'string'
+          ? () => openExtendedFieldEditor(
+              { value: pendingCopyText, recordLabel, fieldName: diff.fieldName, plugin: col.plugin, readOnly: false, column: 'pending' },
+              next => pendingOnCommit(next),
+            )
+          : undefined;
         // Issue #232: this cell's own focus identity — `column: 'pending'` is required here (not
         // merely `plugin`) to stay distinct from the disk cell for the same plugin/row.
         const isPendingFocused = isCellFocused(focusedCell, rowKey, col.plugin, 'pending');
@@ -637,7 +645,7 @@ export function DiffRow({
                 (pendingResolutionPath) — the same tri-state signal disk columns use, not a
                 stand-in. */}
             {renderCell(pendingValue, meta, true, isPendingFocused, onOpen, pendingOnCommit,
-              { resolution: meta.type === 'formKey' ? pendingResolution : undefined })}
+              { resolution: meta.type === 'formKey' ? pendingResolution : undefined, onOpenExtended: pendingOnOpenExtended })}
           </DiskCell>
         );
       })}

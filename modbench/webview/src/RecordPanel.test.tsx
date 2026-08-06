@@ -1865,13 +1865,15 @@ describe('RecordPanel — Pending column right-click reveal (issue #203, moved f
   });
 });
 
-// ── Pending column direct editing (issue #203, reverses #140; gesture updated by #232) ──────────
+// ── Pending column direct editing (issue #203, reverses #140; gesture updated by #232/#242) ─────
 //
 // A pending value's cell is directly editable, on the same terms as a disk cell — plain click no
 // longer reveals the change in the Pending Changes tree; that gesture moved to the right-click
 // menu tested above. Issue #232: opening it now takes a second click, F2, or a double click, the
-// same as a disk cell (a bare first click only focuses) — these use double click, which opens
-// unconditionally, so they don't need to reach into RecordPanel's own focus state.
+// same as a disk cell (a bare first click only focuses). Issue #242: for a `string` field (as
+// `Name` is here) double click now reaches the extended editor, not the inline one — matching a
+// disk cell of the same type — so the inline-commit test below uses a first click (focus) then a
+// second click (open) instead.
 
 describe('RecordPanel — Pending column direct editing (issue #203/#232)', () => {
   beforeEach(() => {
@@ -1880,24 +1882,35 @@ describe('RecordPanel — Pending column direct editing (issue #203/#232)', () =
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('a double click on a pending value opens an editable input, on the same terms as a disk cell', async () => {
+  // Issue #242: `Name` is a `string` field, so a double click now reaches the extended editor —
+  // matching a disk cell of the same type — rather than the inline input this test used to pin
+  // (extendedFieldEditor.ts's tab identity carries a disk/pending discriminant, so this doesn't
+  // alias the disk cell's own tab).
+  it('a double click on a pending value opens the extended editor, on the same terms as a disk cell', async () => {
     renderPanel(pendingNameResult, { changes: soloChange });
     await waitFor(() => screen.getByText('Staged Name'));
 
     fireEvent.doubleClick(screen.getByText('Staged Name'));
 
-    expect(screen.getByDisplayValue('Staged Name')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Staged Name')).not.toBeInTheDocument();
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, value: 'Staged Name', column: 'pending',
+    }));
   });
 
   // Issue #200/#203: a pending-cell edit reaches the SAME handleEdit→stageChange path a disk-cell
   // edit does — no new/separate logging code — so it logs DEBUG identically (pinned explicitly,
   // matching how #200 already pinned this for the drag-copy path sharing the same call site).
-  it('committing an edit on a pending value stages it and logs DEBUG the same as a disk-cell edit', async () => {
+  // Issue #242: reaches the inline editor via a first click (focus) then a second click on the
+  // now-focused cell — double click moved onto the extended editor (see the test above), same
+  // "second click / F2 opens inline" rule a disk cell's string field follows.
+  it('committing an edit on a pending value via the inline editor stages it and logs DEBUG the same as a disk-cell edit', async () => {
     const save = vi.fn().mockResolvedValue(resp(200, []));
     renderPanel(pendingNameResult, { changes: soloChange, save });
     await waitFor(() => screen.getByText('Staged Name'));
 
-    fireEvent.doubleClick(screen.getByText('Staged Name'));
+    fireEvent.click(screen.getByText('Staged Name')); // focus
+    fireEvent.click(screen.getByText('Staged Name')); // second click on the already-focused cell
     const input = screen.getByDisplayValue('Staged Name');
     fireEvent.change(input, { target: { value: 'Re-edited Name' } });
     fireEvent.blur(input);

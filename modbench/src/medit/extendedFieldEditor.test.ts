@@ -82,6 +82,20 @@ describe('extendedEditorPath', () => {
     const b = extendedEditorPath('/tmp/root', 'Deacon [000123:Fallout4.esm]', 'Description', 'Fallout4.esm');
     expect(a).toBe(b);
   });
+
+  // Issue #242: a pending cell and its disk companion share record+field+plugin exactly (a
+  // pending column only ever exists alongside a disk column for the same plugin) — without a
+  // fourth discriminant, opening one would silently reuse/reseed the other's already-open tab.
+  it('a pending cell path differs from its disk companion, given identical record+field+plugin', () => {
+    const disk = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm');
+    const pending = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm', 'pending');
+    expect(pending).not.toBe(disk);
+  });
+
+  it('the pending path stays in the same record directory, suffixed on the filename only', () => {
+    const pending = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm', 'pending');
+    expect(pending).toBe(join('/tmp/root', 'Deacon', 'Description [Fallout4.esm] (Pending).txt'));
+  });
 });
 
 describe('openExtendedFieldEditor', () => {
@@ -246,6 +260,30 @@ describe('openExtendedFieldEditor', () => {
     expect(secondDeps.reporter.report).not.toHaveBeenCalled();
     const mode = (await stat(path)).mode & 0o777;
     expect(mode & 0o200).toBe(0); // still read-only after the second open
+  });
+
+  // Issue #242 (AC2): a pending cell and its disk companion share record+field+plugin exactly —
+  // opening both must land on two distinct files, each holding its own value, not one silently
+  // reseeding the other. Proves the independence at openExtendedFieldEditor's own boundary (the
+  // path-level discriminant is extendedEditorPath's own test above).
+  it('a pending cell and its disk companion open independent temp files for the same record+field+plugin', async () => {
+    const tempRoot = await makeTempRoot();
+    const diskPath = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm');
+    const pendingPath = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'pending');
+    openTextDocument.mockImplementation((uri: { fsPath: string }) => Promise.resolve({ uri, getText: () => '' }));
+
+    await openExtendedFieldEditor(
+      { requestId: 'r1', value: 'disk value', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: false },
+      makeDeps(tempRoot),
+    );
+    await openExtendedFieldEditor(
+      { requestId: 'r2', value: 'pending value', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: false, column: 'pending' },
+      makeDeps(tempRoot),
+    );
+
+    expect(diskPath).not.toBe(pendingPath);
+    expect(await readFile(diskPath, 'utf8')).toBe('disk value');
+    expect(await readFile(pendingPath, 'utf8')).toBe('pending value');
   });
 
   // Review fix (finding #3): AC3's "multi-line string values can be read and edited in full"

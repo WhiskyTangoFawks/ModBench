@@ -149,7 +149,13 @@ export function readClipboardText(): Promise<string | null> {
 // content — DiffRow passes the same `onCommit` closure it already builds for the cell's inline
 // editor, so this is a second *trigger* onto the identical commit path, not a second path.
 export function openExtendedFieldEditor(
-  params: { value: string; recordLabel: string; fieldName: string; plugin: string; readOnly: boolean },
+  params: {
+    value: string; recordLabel: string; fieldName: string; plugin: string; readOnly: boolean;
+    // Issue #242: FocusedCell's own disk/pending discriminant (#232) — absent (disk cell) is
+    // every pre-#242 call site's own meaning, unchanged; the pending column's own call site is
+    // the one place that passes 'pending'.
+    column?: 'pending';
+  },
   onCommit: (value: string) => void,
 ): void {
   const requestId = `nb-${++counter}`;

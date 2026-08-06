@@ -194,6 +194,10 @@ export type WebviewToExtension =
   | {
       type: typeof WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR; requestId: string; value: string;
       recordLabel: string; fieldName: string; plugin: string; readOnly: boolean;
+      // Issue #242: FocusedCell's own disk/pending discriminant (#232), mirrored here so the
+      // extension host's tab identity can tell a pending cell's request apart from its disk
+      // companion's — see extendedFieldEditor.ts's extendedEditorPath comment.
+      column?: 'pending';
     };
 
 // #227: same broadcast-and-self-filter shape as PendingCellContext/ColumnHeaderContext above,
