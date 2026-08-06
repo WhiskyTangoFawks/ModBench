@@ -38,6 +38,13 @@ interface ScalarCellProps {
   // #231), where a string cell's double click keeps opening the inline editor, same "not wired
   // here yet" convention `isFocused`'s own default already uses.
   onOpenExtended?: () => void;
+  // Issue #165: overrides the resting (not-yet-active) text only — e.g. a condition parameter's
+  // decoded enum member name ("Male") standing in for its raw underlying value (0). Editing still
+  // targets the real `value`/`meta` unchanged (the input opens showing modelValue(value, meta), and
+  // commitIfChanged still compares against it) — this is a display-only substitution, matching
+  // ADR-0032's "pure rendering enrichment, reshapes nothing downstream." Absent, every other caller
+  // is unaffected.
+  displayOverride?: string;
 }
 
 // Issue #230: how long a second click on an already-focused string cell waits before opening the
@@ -52,13 +59,16 @@ const STRING_OPEN_DEBOUNCE_MS = 300;
 // em-dash, never "null"/"undefined" (spec: field type rendering rule 5). Issue #224: sources the
 // non-null text from modelValue rather than its own toStr call, so this is provably the same
 // string Ctrl+C copies (AC6) — not a second formatter that merely happens to agree with it today.
-function ScalarText({ value, meta }: { value: unknown; meta: FieldMetadata }) {
+// Issue #165: displayOverride, when given, replaces that text alone (the value Ctrl+C copies is
+// still the real model value — only this resting label changes).
+function ScalarText({ value, meta, displayOverride }: { value: unknown; meta: FieldMetadata; displayOverride?: string }) {
+  if (displayOverride != null) return <span>{displayOverride}</span>;
   return value == null
     ? <span style={{ opacity: 0.35 }}>—</span>
     : <span>{modelValue(value, meta)}</span>;
 }
 
-export function ScalarCell({ value, meta, editable, isFocused = true, onCommit, ariaLabel, onActiveChange, onOpenExtended }: ScalarCellProps) {
+export function ScalarCell({ value, meta, editable, isFocused = true, onCommit, ariaLabel, onActiveChange, onOpenExtended, displayOverride }: ScalarCellProps) {
   const [draft, setDraft] = useState(() => modelValue(value, meta));
   const [prevValue, setPrevValue] = useState(value);
   // Issue #111: only the clicked cell is an input; everything else stays text. Meaningless on an
@@ -103,9 +113,9 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit, 
   // immutable cell — only double click is being carved out, not the other two triggers.
   if (!editable) {
     if (meta.type === 'string' && onOpenExtended) {
-      return <span onDoubleClick={onOpenExtended}><ScalarText value={value} meta={meta} /></span>;
+      return <span onDoubleClick={onOpenExtended}><ScalarText value={value} meta={meta} displayOverride={displayOverride} /></span>;
     }
-    return <ScalarText value={value} meta={meta} />;
+    return <ScalarText value={value} meta={meta} displayOverride={displayOverride} />;
   }
 
   // Issue #201 / ADR-0033: the resting state is text, no cursor of its own, clickable.
@@ -147,7 +157,7 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit, 
           }}
           style={{ display: 'block', minHeight: '1em' }}
         >
-          <ScalarText value={value} meta={meta} />
+          <ScalarText value={value} meta={meta} displayOverride={displayOverride} />
         </span>
       );
     }
@@ -158,7 +168,7 @@ export function ScalarCell({ value, meta, editable, isFocused = true, onCommit, 
         onDoubleClick={() => setActiveNotified(true)}
         style={{ display: 'block', minHeight: '1em' }}
       >
-        <ScalarText value={value} meta={meta} />
+        <ScalarText value={value} meta={meta} displayOverride={displayOverride} />
       </span>
     );
   }

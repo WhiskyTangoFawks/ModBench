@@ -125,6 +125,24 @@ describe('ConditionParamCell', () => {
     expect(screen.getByDisplayValue('5')).toBeInTheDocument();
   });
 
+  // Issue #165: matches xEdit's own wbConditionToStr, which renders an enum-backed parameter's
+  // `.Summary` alone (e.g. "Male") — no raw value and no separate type-name suffix once decoded.
+  // The (TypeName) cue stays reserved for the undecoded case (Form-category test above).
+  it('renders the decoded member name, not the raw number or a type cue, for a decoded Number parameter', () => {
+    render(<ConditionParamCell value={{ category: 'Number', typeName: 'Sex', number: 0, decodedValue: 'Male' }} editable onCommit={vi.fn()} onOpen={vi.fn()} />);
+    expect(screen.getByText('Male')).toBeInTheDocument();
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
+    expect(screen.queryByText('(Sex)')).not.toBeInTheDocument();
+  });
+
+  // The decode is a display-only enrichment (ADR-0032) — editing still targets the underlying raw
+  // number, unchanged.
+  it('still edits the underlying raw number when a decoded Number parameter is clicked', () => {
+    render(<ConditionParamCell value={{ category: 'Number', typeName: 'Sex', number: 0, decodedValue: 'Male' }} editable onCommit={vi.fn()} onOpen={vi.fn()} />);
+    fireEvent.click(screen.getByText('Male'));
+    expect(screen.getByDisplayValue('0')).toBeInTheDocument();
+  });
+
   it('shows a dash when the parameter is absent for this plugin', () => {
     render(<ConditionParamCell value={null} editable onCommit={vi.fn()} onOpen={vi.fn()} />);
     expect(screen.getByText('—')).toBeInTheDocument();

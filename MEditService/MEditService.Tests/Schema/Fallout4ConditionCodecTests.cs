@@ -704,6 +704,50 @@ public class Fallout4ConditionCodecTests
         Assert.Equal("bLeftHandedMode", parsed.Parameters[0].Text);
     }
 
+    // ---- DecodeParamValue: enum-valued Number parameters (#165) ----
+    // xEdit decodes these to member names (wbSexEnum/wbAxisEnum/etc.,
+    // references/TES5Edit/Core/wbDefinitionsCommon.pas); Mutagen only exposes the raw int. Scoped to
+    // the seven Number-category ParameterTypes with real static xEdit enum tables actually used by an
+    // FO4 Function (Sex, Axis, CrimeType, CriticalStage, Alignment, CastingSource, WardState) — issue
+    // #165. ActorValue is deliberately excluded: Mutagen categorizes it as Form (an AVIF FormID link),
+    // not Number, in FO4 — already decoded via FormKeyCell, never reaches this method.
+    [Theory]
+    [InlineData("Sex", 0, "Male")]
+    [InlineData("Sex", 1, "Female")]
+    [InlineData("Axis", 88, "X")]
+    [InlineData("Axis", 89, "Y")]
+    [InlineData("Axis", 90, "Z")]
+    [InlineData("CrimeType", 0, "Steal")]
+    [InlineData("CrimeType", 4, "Murder")]
+    [InlineData("CrimeType", -1, "None")]
+    [InlineData("CriticalStage", 5, "Freeze Start")]
+    [InlineData("Alignment", 3, "Very Good")]
+    [InlineData("CastingSource", 2, "Voice")]
+    [InlineData("WardState", 1, "Absorb")]
+    public void DecodeParamValue_KnownEnumTypeAndValue_ReturnsMemberName(string typeName, int number, string expected)
+    {
+        Assert.Equal(expected, Codec.DecodeParamValue(typeName, number));
+    }
+
+    // A value outside the known member set for an otherwise-decodable type fails closed to null —
+    // the caller falls back to showing the raw number, never a wrong or made-up name.
+    [Fact]
+    public void DecodeParamValue_UnknownValueForKnownType_ReturnsNull()
+    {
+        Assert.Null(Codec.DecodeParamValue("Sex", 99));
+    }
+
+    // A ParameterType with no static enum table (a plain number, or a type this decoder doesn't cover
+    // — e.g. Integer, or ActorValue which never reaches here since it's Form-category) is untouched.
+    [Theory]
+    [InlineData("Integer")]
+    [InlineData("ActorValue")]
+    [InlineData("QuestStage")]
+    public void DecodeParamValue_NonEnumType_ReturnsNull(string typeName)
+    {
+        Assert.Null(Codec.DecodeParamValue(typeName, 0));
+    }
+
     // ---- Comparison value: global vs float ----
 
     [Fact]

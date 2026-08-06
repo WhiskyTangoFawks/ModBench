@@ -21,6 +21,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     private readonly PlacementWalker _placementWalker = new();
     private static readonly string[] PlacedTableNames = ["refr", "achr"];
     private bool _filterActive;
+    // #165: resolved once at Initialize (this repository is one game/session for its whole
+    // lifetime) so GetConditions can decode a Number-category parameter's enum member name without
+    // re-resolving per call. Null for a game with no condition codec — same "fails to nothing, not
+    // silently wrong" fallback ConditionCodecRegistry.For already establishes elsewhere.
+    private IConditionCodec? _conditionCodec;
 
     public DuckDBConnection Connection { get; }
 
@@ -40,6 +45,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     {
         _ddlBuilder.CreateTables(Connection, release);
         _schemas = _schemaReflector.GetSchemas(release);
+        _conditionCodec = ConditionCodecRegistry.For(release.ToCategory());
     }
 
     // --- Indexing (absorbed from RecordIndexer) ---
@@ -341,7 +347,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             .GroupBy(p => (p.FieldPath, p.ConditionIndex))
             .ToDictionary(g => g.Key, g => g.OrderBy(p => p.ParamIndex)
                 .Select(p => new ParsedConditionParam(
-                    Enum.Parse<ConditionParamCategory>(p.Category), p.TypeName, p.Number, p.FormKey, p.Text))
+                    Enum.Parse<ConditionParamCategory>(p.Category), p.TypeName, p.Number, p.FormKey, p.Text,
+                    DecodeParamValue(p.Category, p.TypeName, p.Number)))
                 .ToList());
 
         return [.. conditionRows
@@ -359,6 +366,15 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                     c.ComparisonGlobal,
                     paramsByCondition.GetValueOrDefault((c.FieldPath, c.ConditionIndex)) ?? []))]))];
     }
+
+    // #165: only a Number-category parameter is ever decodable (Form/Text are already
+    // human-legible); a Form/Text row's stored number_value is null regardless of category, so this
+    // also guards the null-Number case a Number row itself can never actually hit (Number.Value is
+    // always non-null once category checks out — AppendParameter always writes one for that row).
+    private string? DecodeParamValue(string category, string typeName, int? number) =>
+        category == nameof(ConditionParamCategory.Number) && number is { } n
+            ? _conditionCodec?.DecodeParamValue(typeName, n)
+            : null;
 
     private List<ConditionRow> ReadConditionRows(string formKey, string plugin)
     {
