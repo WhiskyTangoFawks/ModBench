@@ -5,11 +5,12 @@ import * as fs from 'fs';
 import * as cp from 'child_process';
 import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
-import { createApiClient } from './medit/ApiClient';
+import { createApiClient, type ApiClient } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController } from './medit/SessionController';
 import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
 import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type PendingTreeNode } from './medit/PendingChangesTreeProvider';
+import { ReferencedByTreeProvider } from './medit/ReferencedByTreeProvider';
 import { ApiPluginRepository } from './medit/PluginRepository';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
@@ -22,7 +23,6 @@ import {
   routeRecordPanelMessage, revealPendingChange, pickScriptNameViaInputBox,
   type RevealDeps, type RouteRecordPanelMessageDeps,
 } from './medit/recordPanelMessageRouter';
-import { openReferencedByPanel } from './medit/ReferencedByPanel';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from './modmanager/ModListProvider';
@@ -106,6 +106,28 @@ function makeDetectPaths(): DetectPaths {
   };
 }
 
+// Issue #213: the "Referenced By" tree — provider + view construction pulled out of `activate`
+// (which is already at its line budget) purely to keep that one under the lint budget; no other
+// reason to split it out.
+function createReferencedByTree(client: ApiClient, log: (msg: string) => void) {
+  const referencedByTreeProvider = new ReferencedByTreeProvider(client, log);
+  const referencedByTreeView = vscode.window.createTreeView('modbench.referencedByTree', {
+    treeDataProvider: referencedByTreeProvider,
+  });
+  return { referencedByTreeProvider, referencedByTreeView };
+}
+
+// Issue #213: retargets and reveals the Referenced By tree — hidden until first asked for, same
+// shape as VS Code's own Call Hierarchy/Type Hierarchy views. `modbench.referencedByShown` gates
+// the view's package.json `when` clause; setting it true makes the view exist before `.focus`
+// reveals it. Re-invoking on a different record just retargets the already-visible view.
+async function showReferencedByTree(provider: ReferencedByTreeProvider, node?: RecordNode): Promise<void> {
+  if (!node?.record?.formKey) return;
+  provider.showFor(node.record.formKey, node.record.editorId);
+  await vscode.commands.executeCommand('setContext', 'modbench.referencedByShown', true);
+  await vscode.commands.executeCommand('modbench.referencedByTree.focus');
+}
+
 export function activate(context: vscode.ExtensionContext) {
   const cfg = vscode.workspace.getConfiguration('modbench');
   const port: number = cfg.get('backendPort') ?? 5172;
@@ -157,6 +179,7 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: changeGroupTreeProvider,
     canSelectMany: true,
   });
+  const { referencedByTreeProvider, referencedByTreeView } = createReferencedByTree(client, log);
   // ── Mod List (Loadout) view ──────────────────────────────────────────────────
   // The open workspace root IS the MO2 instance (see modbench/CLAUDE.md). Until
   // the Loadout↔Editing toggle lands (Modbench-5), Mod List is the only visible view.
@@ -171,9 +194,10 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     treeView,
     changeGroupTreeView,
+    referencedByTreeView,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, port, treeProvider, treeView, controller, repository, scriptsPath, changeGroupTreeProvider, changeGroupTreeView, log, outputChannel,
+      context, openPanels, recordPanels, port, treeProvider, treeView, controller, repository, scriptsPath, changeGroupTreeProvider, changeGroupTreeView, referencedByTreeProvider, log, outputChannel,
     }),
   );
 
@@ -204,6 +228,9 @@ interface EditorCommandDeps {
   // tree — resolve the change id here, then TreeView.reveal it.
   changeGroupTreeProvider: PendingChangesTreeProvider;
   changeGroupTreeView: vscode.TreeView<PendingTreeNode>;
+  // Issue #213: backs the "Referenced By" tree — hidden until the first `modbench.showReferencedBy`
+  // (see registerRecordViewCommands), then retargeted per invocation via `showFor`.
+  referencedByTreeProvider: ReferencedByTreeProvider;
   log: (msg: string) => void;
   outputChannel: vscode.LogOutputChannel;
 }
@@ -224,7 +251,7 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
 function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
     context, openPanels, recordPanels, port, treeProvider, controller, scriptsPath,
-    changeGroupTreeProvider, changeGroupTreeView, log, outputChannel, repository,
+    changeGroupTreeProvider, changeGroupTreeView, referencedByTreeProvider, log, outputChannel, repository,
   } = deps;
   const reveal: RevealDeps = {
     provider: changeGroupTreeProvider, view: changeGroupTreeView, log,
@@ -249,6 +276,11 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, repository });
+    }),
+    // Issue #213: Referenced By's named "Open to the Side" (ADR-0033), not a right-click side effect.
+    vscode.commands.registerCommand('modbench.openEditorBeside', (args?: { formKey?: string; label?: string }) => {
+      openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
+        vscode.ViewColumn.Beside, { routerDeps, recordPanels, repository });
     }),
     vscode.commands.registerCommand('modbench.openCompare', () => {
       openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One, { routerDeps, recordPanels, repository });
@@ -294,15 +326,8 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
         formKey: headerFormKeyFor(pluginName), label: pluginName,
       });
     }),
-    vscode.commands.registerCommand('modbench.showReferencedBy', (node?: RecordNode) => {
-      if (!node?.record?.formKey) return;
-      openReferencedByPanel(
-        context, openPanels,
-        node.record.formKey, node.record.editorId, port,
-        (fk) => { void vscode.commands.executeCommand('modbench.openEditor', { formKey: fk, label: fk }); },
-        (fk) => { openRecordPanel(context, openPanels, fk, fk, port, vscode.ViewColumn.Beside, { routerDeps, recordPanels, repository }); },
-      );
-    }),
+    vscode.commands.registerCommand('modbench.showReferencedBy',
+      (node?: RecordNode) => showReferencedByTree(referencedByTreeProvider, node)),
   ];
 }
 
@@ -1425,8 +1450,8 @@ const extendedFieldEditorTempRoot = path.join(os.tmpdir(), 'modbench-medit-field
 
 // #200/#208: bundled as one trailing param (not two/three) — kept the parameter count under the
 // lint budget and there's no reason to unpack them only to repack below. recordPanels is every
-// open 'modbench'-viewType panel (main *and* any "Beside" one — see showReferencedBy's
-// open-beside path); the pending-cell native menu commands broadcast a changeId to every panel
+// open 'modbench'-viewType panel (main *and* any "Beside" one — see modbench.openEditorBeside
+// above); the pending-cell native menu commands broadcast a changeId to every panel
 // in it and let each one self-filter (see RecordPanel.tsx) rather than picking "the right one"
 // here.
 interface OpenRecordPanelDeps {

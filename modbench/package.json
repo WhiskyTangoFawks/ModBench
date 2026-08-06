@@ -96,6 +96,11 @@
           "id": "modbench.changeGroupTree",
           "name": "Pending Changes",
           "when": "modbench.viewMode == 'editing'"
+        },
+        {
+          "id": "modbench.referencedByTree",
+          "name": "Referenced By",
+          "when": "modbench.viewMode == 'editing' && modbench.referencedByShown"
         }
       ]
     },
@@ -110,6 +115,10 @@
       {
         "command": "modbench.openEditor",
         "title": "Modbench: Open Editor"
+      },
+      {
+        "command": "modbench.openEditorBeside",
+        "title": "Modbench: Open Editor to the Side"
       },
       {
         "command": "modbench.openCompare",
@@ -597,6 +606,16 @@
           "command": "modbench.saveGroup",
           "when": "view == modbench.changeGroupTree && viewItem == pendingGroup",
           "group": "inline"
+        },
+        {
+          "command": "modbench.openEditor",
+          "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",
+          "group": "modbench@1"
+        },
+        {
+          "command": "modbench.openEditorBeside",
+          "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",
+          "group": "modbench@2"
         },
         {
           "command": "modbench.modList.mod.openInExplorer",

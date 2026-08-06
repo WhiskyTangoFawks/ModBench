@@ -122,6 +122,7 @@ describe('Modbench output channel (#198)', () => {
 describe('modbench command registration', () => {
   const EXPECTED_COMMANDS = [
     'modbench.openEditor',
+    'modbench.openEditorBeside',
     'modbench.openCompare',
     'modbench.openHeader',
     'modbench.closeMedit',

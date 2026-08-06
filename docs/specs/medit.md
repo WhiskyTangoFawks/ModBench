@@ -45,7 +45,7 @@ session over the active loadout:
 | **Plugins tree** | Sidebar tree; the entry point for all navigation — records by type, a spatial worldspace/cell tree, a Conflicts node, and the SQL record filter | [medit-plugins-tree.md](medit-plugins-tree.md) |
 | **Pending Changes tree** | Sidebar tree below it; staged work grouped into the units that must be saved or reverted together | [medit-pending-changes-tree.md](medit-pending-changes-tree.md) |
 | **Record editor panel** | Editor-tab webview; the per-field, per-plugin compare grid with conflict color coding and in-place editing that stages pending changes | [medit-record-editor.md](medit-record-editor.md) |
-| **Referenced By panel** | Editor-tab webview opened beside it; what points at this record | [medit-referenced-by.md](medit-referenced-by.md) |
+| **Referenced By tree** | Sidebar tree, hidden until invoked from a record; what points at this record | [medit-referenced-by.md](medit-referenced-by.md) |
 | **Status bar item** | Backend/session state | This document |
 
 **Launch mEdit** (from the Loadout header) switches into editing mode, spawns the backend, and

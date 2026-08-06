@@ -14,7 +14,7 @@ vocabulary, and architecture seams. Siblings:
 [Plugins tree](medit-plugins-tree.md) (which browses staged edits in context, under the
 `pending-changes` filter preset — this view deliberately does not),
 [Record editor panel](medit-record-editor.md) (whose Pending column stages the changes this
-view groups), [Referenced By panel](medit-referenced-by.md).
+view groups), [Referenced By tree](medit-referenced-by.md).
 
 ## Problem Statement
 
