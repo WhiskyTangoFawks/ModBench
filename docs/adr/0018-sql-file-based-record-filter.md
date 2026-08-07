@@ -1,5 +1,10 @@
 # Record tree filtering uses raw DuckDB SQL in plain `.sql` files
 
+**Status: accepted, amended by [ADR-0035](0035-one-plugins-tree-editing-is-a-capability.md).** The
+pruning rule changes: a record filter prunes records and record types but **never removes a plugin
+row**, because the tree it prunes is now also the Plugin load order. A filter acts only on the level
+it names.
+
 The record tree filter is a DuckDB SQL SELECT, stored as a plain `.sql` file in `mEdit.scriptsPath`, applied via VS Code Code Lens. The filter must return a `form_key` column; the backend materializes the result into a `_filter` table and joins against it on all subsequent record queries. No structured filter UI controls (toggle buttons, dropdowns) are built.
 
 ## Why this is the right choice
