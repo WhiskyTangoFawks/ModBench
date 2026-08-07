@@ -1,8 +1,15 @@
 ---
-status: accepted
+status: accepted (amended by ADR-0035)
 ---
 
 # MO2's Mods/Plugins/Downloads panels map onto native VS Code surfaces, not a custom panel switcher
+
+**Amended by [ADR-0035](0035-one-plugins-tree-editing-is-a-capability.md).** The rejected option
+"Plugins (load order) folded into the existing Editing `pluginTree`" is overturned: both of its
+stated objections are addressed there (the merged tree works with no backend, and the composite
+lives at the composition root with neither context importing the other's vocabulary). Everything
+else in this ADR — the Downloads placement, the auxiliary-bar convention, the Archives decision —
+stands.
 
 Modbench's goal is to reconstruct MO2's workflow — a persistent Mods list on the left, a switchable Plugins/Downloads/Archives tab group on the right — using VS Code's own UI conventions rather than reinventing MO2's layout widgets. Three placement decisions follow:
 
