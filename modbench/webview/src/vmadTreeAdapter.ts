@@ -28,7 +28,7 @@ import type {
   VmadCompare, VmadPropertyDiff, VmadScriptDiff,
 } from './types';
 import { opScalarKind, SCRIPT_FLAGS } from './vmadOps';
-import { sparseArrayByPlugin } from './recordUtils';
+import { sparseArrayByPlugin, aggregateConflictAll } from './recordUtils';
 
 type ScalarKind = 'bool' | 'int' | 'float' | 'string';
 
@@ -66,6 +66,7 @@ function buildScalarOrObject(p: VmadPropertyDiff): Built {
       winnerPlugin: p.winnerPlugin,
       winnerValue: p.values[p.winnerPlugin] ?? null,
       cellStates: p.cellStates,
+      conflictAll: aggregateConflictAll(p.cellStates),
       resolutions: isObject ? p.resolutions : undefined,
     },
     meta: isObject ? OBJECT_META : scalarMeta(scalarKindOf(p)),
@@ -89,6 +90,7 @@ function buildVariable(p: VmadPropertyDiff): Built {
     diff: {
       fieldName: p.name, values, winnerPlugin: p.winnerPlugin,
       winnerValue: values[p.winnerPlugin] ?? null, cellStates: p.cellStates,
+      conflictAll: aggregateConflictAll(p.cellStates),
     },
     meta: { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [], readOnly: true },
   };
@@ -115,11 +117,13 @@ function buildArray(p: VmadPropertyDiff): Built {
   const values = sparseArrayByPlugin(children.map(c => c.values));
   // Matches the deleted VmadSection's own default ('Int') when the array is currently empty.
   const elementType = elementBuilds[0]?.meta ?? scalarMeta('int');
+  const arrayChildren = elementBuilds.map((b, i) => ({ ...b.diff, fieldName: `[${i}]` }));
   return {
     diff: {
       fieldName: p.name, values, winnerPlugin: p.winnerPlugin, winnerValue: values[p.winnerPlugin] ?? null,
       cellStates: p.cellStates,
-      children: elementBuilds.map((b, i) => ({ ...b.diff, fieldName: `[${i}]` })),
+      conflictAll: aggregateConflictAll(p.cellStates, arrayChildren),
+      children: arrayChildren,
     },
     meta: { name: '', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [], elementType },
   };
@@ -210,6 +214,7 @@ function buildMember(c: VmadPropertyDiff): Built {
 
 function buildStruct(p: VmadPropertyDiff): Built {
   const members = (p.children ?? []).map(buildMember);
+  const memberDiffs = members.map(m => m.diff);
   return {
     diff: {
       fieldName: p.name,
@@ -217,7 +222,8 @@ function buildStruct(p: VmadPropertyDiff): Built {
       winnerPlugin: p.winnerPlugin,
       winnerValue: p.raw?.[p.winnerPlugin] ?? null,
       cellStates: p.cellStates,
-      children: members.map(m => m.diff),
+      conflictAll: aggregateConflictAll(p.cellStates, memberDiffs),
+      children: memberDiffs,
       commitOverride: structCommitOverride(p),
     },
     meta: { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: members.map(m => m.meta) },
@@ -228,6 +234,7 @@ function buildStructList(p: VmadPropertyDiff): Built {
   const instances = p.children ?? [];
   const instanceBuilds = instances.map(buildStruct);
   const values = p.raw ?? {};
+  const instanceChildren = instanceBuilds.map((b, i) => ({ ...b.diff, fieldName: `[${i}]` }));
   return {
     diff: {
       fieldName: p.name,
@@ -235,7 +242,8 @@ function buildStructList(p: VmadPropertyDiff): Built {
       winnerPlugin: p.winnerPlugin,
       winnerValue: values[p.winnerPlugin] ?? null,
       cellStates: p.cellStates,
-      children: instanceBuilds.map((b, i) => ({ ...b.diff, fieldName: `[${i}]` })),
+      conflictAll: aggregateConflictAll(p.cellStates, instanceChildren),
+      children: instanceChildren,
       commitOverride: structCommitOverride(p),
     },
     meta: {
@@ -264,6 +272,7 @@ function buildFlagsChild(s: VmadScriptDiff): FieldDiff {
     winnerPlugin: s.winnerPlugin,
     winnerValue: s.flags[s.winnerPlugin] ?? null,
     cellStates: s.cellStates,
+    conflictAll: aggregateConflictAll(s.cellStates),
   };
 }
 
@@ -290,6 +299,7 @@ function buildScript(s: VmadScriptDiff): { diff: FieldDiff; meta: FieldMetadata 
       winnerPlugin: s.winnerPlugin,
       winnerValue: s.flags[s.winnerPlugin] ?? null,
       cellStates: s.cellStates,
+      conflictAll: aggregateConflictAll(s.cellStates, children),
       children,
       vmadOpKind: 'script',
     },
@@ -320,13 +330,15 @@ const WRAPPER_NAME = 'Scripts (VMAD)';
 // zero scripts, since that's exactly the "capable but currently empty" case the wrapper exists for.
 export function buildVmadRows(vmad: VmadCompare | null | undefined): VmadTreeRows {
   const scriptBuilds = (vmad?.scripts ?? []).map(buildScript);
+  const scriptDiffs = scriptBuilds.map(b => b.diff);
   const wrapper: FieldDiff = {
     fieldName: WRAPPER_NAME,
     values: {},
     winnerPlugin: '',
     winnerValue: null,
     cellStates: {},
-    children: scriptBuilds.map(b => b.diff),
+    conflictAll: aggregateConflictAll({}, scriptDiffs),
+    children: scriptDiffs,
     vmadOpKind: 'scripts',
   };
   const wrapperMeta: FieldMetadata = {

@@ -475,6 +475,124 @@ public class ConflictClassifierTests
         Assert.True(nameDiff.CellStates.ContainsKey("C.esp"));
     }
 
+    // --- Per-node ConflictAll (#114: bottom-up, scoped to one FieldDiff's own subtree — distinct
+    // from ClassifyResult.ConflictAll, the record-wide value the Plugins-tree badge still uses) ---
+
+    [Fact]
+    public void Classify_LeafField_AllPluginsAgree_ConflictAllIsNoConflict()
+    {
+        var master = MakeOverride("A.esp", 0, false, ("name", "Alice"));
+        var override1 = MakeOverride("B.esp", 1, true, ("name", "Alice"));
+        var result = Classify([master, override1]);
+        var nameDiff = result.Diffs.First(d => d.FieldName == "name");
+        Assert.Equal(ConflictAll.NoConflict, nameDiff.ConflictAll);
+    }
+
+    [Fact]
+    public void Classify_LeafField_UncontestedOverride_ConflictAllIsOverride()
+    {
+        var master = MakeOverride("A.esp", 0, false, ("name", "Alice"));
+        var override1 = MakeOverride("B.esp", 1, true, ("name", "Bob"));
+        var result = Classify([master, override1]);
+        var nameDiff = result.Diffs.First(d => d.FieldName == "name");
+        Assert.Equal(ConflictAll.Override, nameDiff.ConflictAll);
+    }
+
+    [Fact]
+    public void Classify_LeafField_ContestedWinLose_ConflictAllIsConflict()
+    {
+        var master = MakeOverride("A.esp", 0, false, ("name", "Alice"));
+        var loser = MakeOverride("B.esp", 1, false, ("name", "Bob"));
+        var winner = MakeOverride("C.esp", 2, true, ("name", "Charlie"));
+        var result = Classify([master, loser, winner]);
+        var nameDiff = result.Diffs.First(d => d.FieldName == "name");
+        Assert.Equal(ConflictAll.Conflict, nameDiff.ConflictAll);
+    }
+
+    // The literal regression guard for #114: a naive implementation that stamped the record-wide
+    // ConflictAll onto every FieldDiff would make "level" (which every plugin agrees on) read
+    // Override, same as "name" — this proves the two sibling rows carry independent values.
+    [Fact]
+    public void Classify_TwoSiblingFields_OnlyOneDiffers_OnlyThatFieldsConflictAllIsNonNoConflict()
+    {
+        var master = MakeOverride("A.esp", 0, false, ("name", "Alice"), ("level", 5));
+        var override1 = MakeOverride("B.esp", 1, true, ("name", "Bob"), ("level", 5));
+        var result = Classify([master, override1]);
+
+        var nameDiff = result.Diffs.First(d => d.FieldName == "name");
+        var levelDiff = result.Diffs.First(d => d.FieldName == "level");
+        Assert.Equal(ConflictAll.Override, nameDiff.ConflictAll);
+        Assert.Equal(ConflictAll.NoConflict, levelDiff.ConflictAll);
+    }
+
+    [Fact]
+    public void Classify_StructField_OneSubFieldDiffers_StructConflictAllAggregatesFromChild()
+    {
+        var subX = Meta("X", "int");
+        var subY = Meta("Y", "int");
+        var structMeta = StructMeta("Bounds", subX, subY);
+
+        var masterVal = JsonSerializer.Deserialize<JsonElement>("{\"X\": 10, \"Y\": 20}");
+        var overrideVal = JsonSerializer.Deserialize<JsonElement>("{\"X\": 15, \"Y\": 20}");
+
+        var master = MakeStructOverride("A.esp", 0, false, structMeta, masterVal);
+        var override1 = MakeStructOverride("B.esp", 1, true, structMeta, overrideVal);
+
+        var result = Classify([master, override1]);
+
+        var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
+        var xChild = boundsDiff.Children!.First(c => c.FieldName == "X");
+        var yChild = boundsDiff.Children!.First(c => c.FieldName == "Y");
+
+        Assert.Equal(ConflictAll.Override, xChild.ConflictAll);
+        Assert.Equal(ConflictAll.NoConflict, yChild.ConflictAll);
+        // The struct row itself aggregates the worst state found anywhere in its subtree.
+        Assert.Equal(ConflictAll.Override, boundsDiff.ConflictAll);
+    }
+
+    [Fact]
+    public void Classify_NestedStructInsideArrayElement_GrandchildConflictAggregatesTwoLevelsUp()
+    {
+        // Array field "Items" of struct elements, each struct carrying a sub-struct "Pos" with
+        // field "X" — proves aggregation recurses through more than one level (array -> struct
+        // element -> nested struct -> leaf), not just a single hop.
+        var subX = Meta("X", "int");
+        var posMeta = new FieldMetadata("Pos", "struct", false, [], [], Fields: [subX]);
+        var elementMeta = new FieldMetadata("", "struct", false, [], [], Fields: [posMeta]);
+        var itemsMeta = new FieldMetadata("Items", "array", true, [], [], ElementType: elementMeta);
+
+        var masterVal = JsonSerializer.Deserialize<JsonElement>("[{\"Pos\":{\"X\":1}}]");
+        var overrideVal = JsonSerializer.Deserialize<JsonElement>("[{\"Pos\":{\"X\":2}}]");
+
+        var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
+            [new FieldValue(itemsMeta, masterVal)]);
+        var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
+            [new FieldValue(itemsMeta, overrideVal)]);
+
+        var result = Classify([master, override1]);
+
+        var itemsDiff = result.Diffs.First(d => d.FieldName == "Items");
+        var elementDiff = itemsDiff.Children!.First(c => c.FieldName == "[0]");
+        var posDiff = elementDiff.Children!.First(c => c.FieldName == "Pos");
+        var xDiff = posDiff.Children!.First(c => c.FieldName == "X");
+
+        Assert.Equal(ConflictAll.Override, xDiff.ConflictAll);
+        Assert.Equal(ConflictAll.Override, posDiff.ConflictAll);
+        Assert.Equal(ConflictAll.Override, elementDiff.ConflictAll);
+        Assert.Equal(ConflictAll.Override, itemsDiff.ConflictAll);
+    }
+
+    [Fact]
+    public void Classify_PerNodeConflictAll_DoesNotChangeRecordWideConflictAll()
+    {
+        // AC: the record-wide ClassifyResult.ConflictAll (Plugins-tree badge) is a different,
+        // legitimate use of the same concept at record scope and must stay untouched by this.
+        var master = MakeOverride("A.esp", 0, false, ("name", "Alice"), ("level", 5));
+        var override1 = MakeOverride("B.esp", 1, true, ("name", "Bob"), ("level", 5));
+        var result = Classify([master, override1]);
+        Assert.Equal(ConflictAll.Override, result.ConflictAll);
+    }
+
     // --- Struct Children ---
 
     private static FieldMetadata StructMeta(string name, params FieldMetadata[] subFields) =>

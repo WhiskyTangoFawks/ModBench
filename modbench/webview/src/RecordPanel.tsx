@@ -810,7 +810,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   if (error) return <div style={{ ...containerStyle, color: 'var(--vscode-errorForeground, #f44)' }}>Error: {error}</div>;
   if (!result) return <div style={containerStyle}>Loading…</div>;
 
-  const { overrides, diffs, conflictAll } = result;
+  // Issue #114: `result.conflictAll` (record-wide) is no longer threaded into the compare grid's
+  // row background — that's now each row's own `diff.conflictAll` (DiffRow), computed bottom-up
+  // per node. The record-wide value remains the Plugins-tree's own record badge, sourced there
+  // independently — this component has no use for it any more.
+  const { overrides, diffs } = result;
 
   const winner = overrides.find(o => o.isWinner);
   const displayId = (winner ?? overrides[0])?.editorId;
@@ -906,7 +910,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         formKey={formKey}
         recordLabel={title}
         diff={diff}
-        conflictAll={conflictAll}
         columns={columns}
         overrideMap={overrideMap}
         fieldMetaMap={fieldMetaMap}

@@ -46,7 +46,7 @@
 
 **ITM (Identical to Master)**: Override byte-for-byte equal to the master; wastes a load-order slot with no effect. _Avoid: clean record._
 
-**ConflictAll**: Row-level conflict classification for a record's override stack. Drives record-row background color. Values (ascending severity):
+**ConflictAll**: Conflict classification for an override stack, computed at two independent scopes (#114, [ADR-0016](docs/adr/0016-two-axis-conflict-model.md)): **record-wide** (one value per record — drives the Plugins-tree's record-node badge) and **per-node, bottom-up** (one value per compare-grid row — a leaf reduces its own cross-plugin values; a struct/array node aggregates the worst state anywhere in its subtree, and shows that aggregate while collapsed but defers to its own children's individual values while expanded). Same values, same severity order, at both scopes — only the tree scope over which they're folded differs. Drives row background color at whichever scope applies. Values (ascending severity):
 
 - **OnlyOne** — exists in one plugin only
 - **NoConflict** — all overrides agree

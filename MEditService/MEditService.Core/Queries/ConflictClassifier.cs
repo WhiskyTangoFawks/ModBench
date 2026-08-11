@@ -121,7 +121,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                 else if (meta?.ElementType != null)
                     children = BuildArrayChildren(meta.ElementType, values, ctx, MaxArrayChildCount, fieldName);
                 var resolutions = BuildResolutions(meta, values, ctx.ResolveFormKey);
-                return new FieldDiff(fieldName, values, winner.Plugin, winnerValue, cellStates, children, resolutions);
+                var conflictAll = AggregateConflictAll(cellStates, children);
+                return new FieldDiff(fieldName, values, winner.Plugin, winnerValue, cellStates, conflictAll, children, resolutions);
             })
             .Where(d => d.Values.Values.Any(v => v != null))];
     }
@@ -269,7 +270,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                 ? BuildStructChildren(elementMeta.Fields, subValues, ctx)
                 : null;
             var resolutions = BuildResolutions(elementMeta, subValues, ctx.ResolveFormKey);
-            return new FieldDiff(label, subValues, fieldWinner.Plugin, winnerValue, cellStates, childChildren, resolutions);
+            var conflictAll = AggregateConflictAll(cellStates, childChildren);
+            return new FieldDiff(label, subValues, fieldWinner.Plugin, winnerValue, cellStates, conflictAll, childChildren, resolutions);
         }
 
         private void WarnTooLarge(int count) => _logger.LogWarning(
@@ -304,7 +306,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             var winnerValue = subValues[fieldWinner.Plugin];
             var cellStates = ComputeCellStates(subField.Name, subValues, ctx.MasterPlugin, ctx.Records, []);
             var resolutions = BuildResolutions(subField, subValues, ctx.ResolveFormKey);
-            children.Add(new FieldDiff(subField.Name, subValues, fieldWinner.Plugin, winnerValue, cellStates, subChildren, resolutions));
+            var conflictAll = AggregateConflictAll(cellStates, subChildren);
+            children.Add(new FieldDiff(subField.Name, subValues, fieldWinner.Plugin, winnerValue, cellStates, conflictAll, subChildren, resolutions));
         }
         return children.Count > 0 ? children : null;
     }
@@ -319,6 +322,22 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             je.TryGetProperty(subFieldName, out var sub)
             ? NonNull(sub)
             : null;
+    }
+
+    // #114: a FieldDiff node's own bottom-up ConflictAll — this node's own CellStates reduced via
+    // the shared rule, escalated against each already-built child's own (already-aggregated)
+    // ConflictAll. Escalate's "worst of two" folding is associative/commutative over
+    // {NoConflict, Override, Conflict} (Reduce never produces OnlyOne/ConflictCritical, which are
+    // record-wide-only terminal states), so this is equivalent to reducing the union of this
+    // node's own CellStates with every descendant's, in one pass, without re-walking the subtree.
+    private static ConflictAll AggregateConflictAll(
+        IReadOnlyDictionary<string, ConflictThis> ownCellStates, IReadOnlyList<FieldDiff>? children)
+    {
+        var result = ConflictRules.Reduce(ownCellStates.Values);
+        if (children == null) return result;
+        foreach (var child in children)
+            result = ConflictRules.Escalate(result, child.ConflictAll);
+        return result;
     }
 
     private static Dictionary<string, ConflictThis> ComputeCellStates(

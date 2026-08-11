@@ -38,7 +38,10 @@ const ROW_BG: Partial<Record<ConflictAll, string>> = {
   ConflictCritical: 'rgba(244,67,54,0.20)',
 };
 
-const getRowBg = (c: ConflictAll): string | undefined => ROW_BG[c];
+// Issue #114: undefined (an adapter that hasn't populated FieldDiff.conflictAll yet) degrades to
+// "no background" rather than throwing — the same safe default a genuinely NoConflict/OnlyOne
+// node already gets, since ROW_BG has no entry for either.
+const getRowBg = (c: ConflictAll | undefined): string | undefined => (c ? ROW_BG[c] : undefined);
 
 // Issue #159 / #231: maps a row's own path (from the root value it restages, RowContext.path) to
 // the sub-path key PendingChangeResolver used when building `change.resolutions`
@@ -338,7 +341,6 @@ function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: 
 
 interface DiffRowProps {
   diff: FieldDiff;
-  conflictAll: ConflictAll;
   columns: Column[];
   overrideMap: Record<string, CompareOverride>;
   fieldMetaMap: Record<string, FieldMetadata>;
@@ -395,7 +397,7 @@ interface DiffRowProps {
 }
 
 export function DiffRow({
-  diff, conflictAll, columns, overrideMap, fieldMetaMap, immutableSet,
+  diff, columns, overrideMap, fieldMetaMap, immutableSet,
   pendingChangeMap, collapsedColumns, onOpen, onEdit,
   onCellDragStart, onCellDrop, structOpContextFor,
   context, hasChildren, isExpanded, onToggle, arrayEdit, onArrayAdd,
@@ -424,9 +426,15 @@ export function DiffRow({
   // could not express at all.
   const showActions = context.path.every(seg => seg.kind === 'member');
   const isRowFocused = focusedCell?.rowKey === rowKey;
+  // Issue #114: this row paints its own node's bottom-up conflict state, not a record-wide value
+  // smeared onto every row. A struct/array row with children defers to its own children's tints
+  // while expanded — painting both would duplicate the signal and misattribute it to fields that
+  // didn't change — and shows the subtree's aggregate only while collapsed, so collapsing never
+  // hides that something inside differs.
+  const rowConflictAll = hasChildren && isExpanded ? undefined : diff.conflictAll;
 
   return (
-    <tr style={{ backgroundColor: getRowBg(conflictAll), ...(isRowFocused ? focusedRowStyle : undefined) }}>
+    <tr style={{ backgroundColor: getRowBg(rowConflictAll), ...(isRowFocused ? focusedRowStyle : undefined) }}>
       {/* Issue #223 / ADR-0034: double-clicking the label column expands/collapses the node,
           the same action the toggle button already performs. RecordPanel always supplies a
           defined onToggle for top-level and array-element rows, even when hasChildren is

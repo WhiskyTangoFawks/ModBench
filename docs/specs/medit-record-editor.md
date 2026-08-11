@@ -501,14 +501,37 @@ The compare grid uses the two-axis model from
 [ADR-0016](../adr/0016-two-axis-conflict-model.md). These two mappings are kept as tables
 deliberately — they are enum→visual encodings that prose would only make less precise.
 
-**Axis 1 — ConflictAll → row background** (one value per record):
+**Axis 1 — ConflictAll → row background.** `ConflictAll` is computed at two independent scopes
+(#114, [ADR-0016](../adr/0016-two-axis-conflict-model.md)'s 2026-08-11 update) — this table's
+colors apply at both, only the *granularity of computation* differs:
+
+- **Record-wide** (one value per record, `CompareResult.ConflictAll`): drives the
+  [Plugins tree](medit-plugins-tree.md)'s per-record conflict badge only — "the record's override
+  stack as a whole."
+- **Per-node, bottom-up** (one value per compare-grid row, `FieldDiff.ConflictAll`): drives the
+  compare grid's own row background. Each row paints from *its own* node, not the record-wide
+  value — a leaf row (a scalar field, or an array/struct element with no children) colors from its
+  own cross-plugin cell states alone; a struct/array row with children aggregates the worst state
+  found anywhere in its subtree, recursively. **Collapsed**, that row shows the subtree's aggregate
+  tint — collapsing must not hide that something inside differs. **Expanded**, it shows no
+  background of its own — its now-visible child rows each carry their own individual tint instead,
+  so the signal isn't duplicated or misattributed to a field that didn't change. A record with
+  exactly one differing leaf field therefore tints only that field's row (and any collapsed
+  struct/array ancestor of it) — every sibling and every agreeing field's row stays untinted, which
+  is the whole point: an unchanged record, or an unchanged field within a changed record, carries
+  no background color.
 
 | ConflictAll | Row background | Meaning |
 | --- | --- | --- |
 | OnlyOne, NoConflict | No tint | Only in one plugin, or all overrides agree |
 | Override | Subtle green | Overrides exist but no real conflict |
 | Conflict | Subtle orange | Overrides disagree on a field |
-| ConflictCritical | Subtle red | Injected record (FormKey origin not in a plugin's master list) whose overrides actually differ — content-identical injected records stay NoConflict |
+| ConflictCritical | Subtle red | Injected record (FormKey origin not in a plugin's master list) whose overrides actually differ — content-identical injected records stay NoConflict; record-wide scope only — no per-node equivalent exists (a node is never itself "injected") |
+
+No tint on `NoConflict`/`OnlyOne` is a **deliberate mEdit divergence** from xEdit's own default
+palette, which tints even its no-conflict row state — not an oversight. Reserving "has a
+background color" for "something here actually needs attention" is the signal #114's original
+report found muddied by the pre-#114 record-wide smear.
 
 **Axis 2 — ConflictThis → cell background + text color** (computed per-field, per-plugin — a
 plugin may be Override on one field and ConflictLoses on another):
@@ -526,7 +549,8 @@ with no background and no text color. Column headers use the worst ConflictThis 
 plugin's fields as a quick summary; individual cell colors are authoritative.
 
 The [Plugins tree](medit-plugins-tree.md)'s record-node conflict badge is driven by the same
-classification.
+classification, at the record-wide scope specifically (Axis 1 above) — never the per-node scope
+the compare grid's own rows use.
 
 ### VMAD and Conditions are ordinary rows in the one tree
 

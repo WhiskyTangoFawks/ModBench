@@ -29,7 +29,7 @@
 import type { FieldDiff, FieldMetadata, ConditionCompare, ConditionDiff, ConditionGroupDiff, ParsedCondition, PathSegment } from './types';
 import { conditionFieldPath, conditionParamPath } from './conditionPath';
 import { defaultCondition } from './conditionOps';
-import { sparseArrayByPlugin } from './recordUtils';
+import { sparseArrayByPlugin, aggregateConflictAll } from './recordUtils';
 
 const OPERATOR_VALUES = ['EqualTo', 'NotEqualTo', 'GreaterThan', 'GreaterThanOrEqualTo', 'LessThan', 'LessThanOrEqualTo'];
 
@@ -144,20 +144,25 @@ function buildCondition(
   condition: ConditionDiff, groupFieldPath: string, lastIndexForPlugin: Record<string, number>, runOnTargets: string[],
 ): { diff: FieldDiff; meta: FieldMetadata } {
   const specs = fieldsFor(condition, groupFieldPath, runOnTargets);
-  const children: FieldDiff[] = specs.map(spec => ({
-    fieldName: spec.name,
-    values: spec.values,
-    winnerPlugin: condition.winnerPlugin,
-    winnerValue: spec.values[condition.winnerPlugin] ?? null,
-    cellStates: condition.fieldCellStates[spec.key] ?? {},
-    wirePath: spec.wire ?? undefined,
-    // #166: ADR-0031 resolution for this field's own FormKey slot (runOn/comparison/param:{i}
-    // only — undefined for function/operator/gate, which carry no FormKey), keyed by plugin same
-    // as every other FieldDiff.resolutions — DiffRow's existing generic pass-through
-    // (`diff.resolutions?.[plugin]`) reaches FormKeyCell inside the composite cells with no
-    // DiffRow change needed.
-    resolutions: condition.fieldResolutions?.[spec.key],
-  }));
+  const children: FieldDiff[] = specs.map(spec => {
+    const cellStates = condition.fieldCellStates[spec.key] ?? {};
+    return {
+      fieldName: spec.name,
+      values: spec.values,
+      winnerPlugin: condition.winnerPlugin,
+      winnerValue: spec.values[condition.winnerPlugin] ?? null,
+      cellStates,
+      // Issue #114: a field leaf's own bottom-up conflictAll (no children of its own).
+      conflictAll: aggregateConflictAll(cellStates),
+      wirePath: spec.wire ?? undefined,
+      // #166: ADR-0031 resolution for this field's own FormKey slot (runOn/comparison/param:{i}
+      // only — undefined for function/operator/gate, which carry no FormKey), keyed by plugin same
+      // as every other FieldDiff.resolutions — DiffRow's existing generic pass-through
+      // (`diff.resolutions?.[plugin]`) reaches FormKeyCell inside the composite cells with no
+      // DiffRow change needed.
+      resolutions: condition.fieldResolutions?.[spec.key],
+    };
+  });
   const fields: FieldMetadata[] = specs.map(spec => ({ ...spec.meta, name: spec.name }));
   // The struct row's own "value" is never shown as JSON (collapsed rows show collapsedSummary
   // below instead), but Ctrl+C and drag on it still copy this — the whole condition, matching
@@ -179,6 +184,11 @@ function buildCondition(
       winnerPlugin: condition.winnerPlugin,
       winnerValue: wholeValues[condition.winnerPlugin] ?? null,
       cellStates: condition.cellStates,
+      // Issue #114: this condition's own bottom-up conflictAll — its own whole-condition
+      // cellStates folded with the worst of its own field children (Function/Parameters/Run
+      // On/etc.), so a collapsed condition row still shows a tint when one of its fields differs
+      // even if condition.cellStates itself didn't already capture it.
+      conflictAll: aggregateConflictAll(condition.cellStates, children),
       children,
       collapsedSummary,
     },
@@ -209,6 +219,7 @@ function buildGroup(group: ConditionGroupDiff, runOnTargets: string[]): { diff: 
   const winnerPlugin = Object.keys(values)[0] ?? '';
   const elementMeta = conditionBuilds[0]?.meta
     ?? { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: [] };
+  const conditionDiffs = conditionBuilds.map(b => b.diff);
   return {
     diff: {
       fieldName: group.fieldPath,
@@ -217,7 +228,10 @@ function buildGroup(group: ConditionGroupDiff, runOnTargets: string[]): { diff: 
       winnerPlugin,
       winnerValue: values[winnerPlugin] ?? null,
       cellStates: {},
-      children: conditionBuilds.map(b => b.diff),
+      // Issue #114: the group (array) row's own bottom-up conflictAll — it carries no cellStates
+      // of its own, so this is purely the worst of its condition elements.
+      conflictAll: aggregateConflictAll({}, conditionDiffs),
+      children: conditionDiffs,
       commitOverride: compactCommitOverride,
     },
     meta: {

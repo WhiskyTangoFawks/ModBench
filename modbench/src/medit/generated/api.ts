@@ -597,6 +597,7 @@ export interface components {
             cellStates?: {
                 [key: string]: components["schemas"]["ConflictThis"];
             } | null;
+            conflictAll?: components["schemas"]["ConflictAll"];
             children?: components["schemas"]["FieldDiff"][] | null;
             resolutions?: {
                 [key: string]: components["schemas"]["FormKeyResolution"];

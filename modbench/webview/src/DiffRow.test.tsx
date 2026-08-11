@@ -71,7 +71,6 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     formKey: '000001:Fallout4.esm',
     recordLabel: 'TestNPC [000001:Fallout4.esm]',
     diff: effectiveDiff,
-    conflictAll: 'NoConflict',
     columns: [diskColumn(master), diskColumn(mod)],
     overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
     fieldMetaMap: { Name: strMeta },
@@ -125,6 +124,41 @@ describe('DiffRow — top-level scalar row', () => {
     renderRow({ collapsedColumns: new Set(['MyMod.esp']) });
     // Only one 'disk-value' now shows — MyMod.esp's column is blanked.
     expect(screen.getAllByText('disk-value').length).toBe(1);
+  });
+});
+
+// Issue #114: the row paints its own node's bottom-up conflictAll, never a record-wide value —
+// each test below deliberately does *not* thread anything record-wide into DiffRow at all
+// (DiffRowProps carries no such prop any more) to prove the row can only be reading `diff.conflictAll`.
+describe('DiffRow — per-row conflict color coding (#114)', () => {
+  it('a leaf row paints its own diff.conflictAll', () => {
+    renderRow({ diff: diff({ conflictAll: 'Override' }) });
+    const row = screen.getByText('Name').closest('tr')!;
+    expect(row.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
+  });
+
+  it('a leaf row with conflictAll NoConflict shows no background', () => {
+    renderRow({ diff: diff({ conflictAll: 'NoConflict' }) });
+    const row = screen.getByText('Name').closest('tr')!;
+    expect(row.style.backgroundColor).toBe('');
+  });
+
+  it('a collapsed struct/array row shows its own aggregate tint', () => {
+    renderRow({
+      hasChildren: true, isExpanded: false,
+      diff: diff({ conflictAll: 'Conflict' }),
+    });
+    const row = screen.getByText('Name').closest('tr')!;
+    expect(row.style.backgroundColor).toBe('rgba(255, 152, 0, 0.20)');
+  });
+
+  it('the same struct/array row, expanded, shows no background of its own — it defers to its children', () => {
+    renderRow({
+      hasChildren: true, isExpanded: true,
+      diff: diff({ conflictAll: 'Conflict' }),
+    });
+    const row = screen.getByText('Name').closest('tr')!;
+    expect(row.style.backgroundColor).toBe('');
   });
 });
 

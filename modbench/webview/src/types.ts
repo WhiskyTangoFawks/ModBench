@@ -95,6 +95,13 @@ export interface FieldDiff {
   winnerPlugin: string;
   winnerValue: unknown;
   cellStates: Record<string, ConflictThis>;
+  // Issue #114: this node's own bottom-up conflict classification (own cellStates folded with
+  // every descendant's, recursively) — distinct from CompareResult.conflictAll (record-wide,
+  // drives the Plugins-tree badge). Populated by the backend for an ordinary reflected field;
+  // vmadTreeAdapter.ts/conditionTreeAdapter.ts compute it themselves for their own synthesized
+  // nodes (see recordUtils.ts's aggregateConflictAll). Optional so a stale fixture/adapter that
+  // hasn't set it degrades to "no background" (DiffRow's getRowBg) rather than crashing.
+  conflictAll?: ConflictAll;
   children?: FieldDiff[] | null;
   // ADR-0031: only populated for a scalar formKey-typed leaf, keyed by plugin like values/
   // cellStates — never aggregated up from children, so a dangling sibling can't hide a live
