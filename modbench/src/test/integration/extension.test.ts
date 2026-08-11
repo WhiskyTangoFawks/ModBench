@@ -135,6 +135,9 @@ describe('modbench command registration', () => {
     'modbench.clearFilter',
     'modbench.setFilterFromDocument',
     'modbench.showReferencedBy',
+    // #282: the Referenced By view's own copy command — see packageJson.test.ts for its
+    // view/item/context and keybinding contributions (declarative, not exercised here).
+    'modbench.referencedByTree.copy',
     'modbench.deleteRecord',
     'modbench.saveGroup',
     'modbench.revertGroup',
