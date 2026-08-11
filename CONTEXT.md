@@ -102,6 +102,6 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 **Filter file**: `.sql` file in `modbench.scriptsPath` returning a `form_key` column. Shares folder/UX surface with scripts but has no Python body. _Avoid: filter script._
 
-**Script**: Python file with YAML frontmatter declaring a SQL query + Python body that iterates records and calls `edit()`. All `edit()` calls route through `PendingChangeService`. Preferred agent output for complex multi-record operations — reviewable, rerunnable, deterministic. See Phase 15. _Avoid: macro, automation._
+**Script**: Plain `.py` file, no special syntax — imports `medit` and calls `medit.query(sql)` (optional; a script may drive several queries across record types, or none) and `edit()`/`row.set()` to stage changes. All `edit()` calls route through `PendingChangeService`. Runs as a normal Python process (any interpreter, any tool) since it's an HTTP client of the backend, not a backend-spawned subprocess — ADR-0024. Preferred agent output for complex multi-record operations — reviewable, rerunnable, deterministic. See Phase 15, issue #2. _Avoid: macro, automation, frontmatter script (superseded design)._
 
 **Agent**: VS Code chat participant or LM tool. May call the HTTP API directly for simple tasks or generate a script for complex ones. All edits land in pending changes. See ADR-0012, ADR-0013.
