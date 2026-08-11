@@ -17,7 +17,7 @@ Architecture is fixed by four ADRs:
 - [MM ADR-0001](../../modbench/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md)
   — the modlist format **is** MO2's format, behind a source adapter.
 
-Sibling surfaces: Editing ([medit.md](medit.md)); the planned Downloads tab
+Sibling surfaces: Editing ([medit.md](medit.md)); the Downloads tree
 ([downloads.md](downloads.md)); the planned Plugins load-order tree
 ([plugins.md](plugins.md)).
 
@@ -309,8 +309,10 @@ The extension owns the editing backend process
   (case-insensitive substring). A toggle beside it controls separator behavior — **on**
   (default): sections with matches auto-expand, empty ones hide, matches show in section
   context; **off**: a flat list of matching mods, separators hidden. The toggle resets to on
-  when the filter clears and is not persisted. This is the same cross-surface filter
-  convention used by Downloads and the Plugin List.
+  when the filter clears and is not persisted. The structural/flat choice exists because
+  Mods rows sit inside separators; Downloads has no grouping concept (a flat list of leaf
+  rows), so it uses VS Code's native tree Find instead of this filter box — see
+  [downloads.md](downloads.md)'s Toolbar section.
 - **Profile selector**: "Switch Profile" opens a quick pick of directories under
   `profiles/`; selecting one persists `selected_profile` and refreshes the tree (a new
   session boundary — any editing session tears down).
@@ -328,7 +330,8 @@ The extension owns the editing backend process
 ### Install (Modbench-6)
 
 - Sources: **Install from Archive…** (`.zip`/`.7z`/`.rar`) and **Install from Folder…**;
-  Nexus `nxm://` is planned (see [downloads.md](downloads.md)).
+  Nexus `nxm://` install (a Downloads-tree concern) is planned — see
+  [downloads.md](downloads.md).
 - Flow: extract to temp staging → detect root type (`Data/` subfolder vs `.esp`/meshes at
   root) and normalise → write `mods/<name>/` + `meta.ini` via the active `IModlistSource` →
   append to `modlist.txt` **disabled** → the user enables and (standalone) deploys.
@@ -562,7 +565,7 @@ folder so the user can reassign or discard those files without leaving Modbench.
 - **Full Vortex management** — only a deferred read-only snapshot via
   `vortex.deployment.json` is contemplated; no text modlist exists to manage.
 - **Nexus integration** (`nxm://` install, update-available badge, endorsements) — a
-  Downloads-tab concern; see [downloads.md](downloads.md).
+  Downloads-tree concern; see [downloads.md](downloads.md).
 - **Plugin load-order management** (`plugins.txt` reorder/enable, missing-master, auto-sort)
   — its own Mod-Management surface; see [plugins.md](plugins.md).
 - **Per-profile isolated saves and base-game config** (`local savegames` / INI) — optional

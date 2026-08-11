@@ -3,255 +3,345 @@
  Feature landscape:
 [mod-manager feature inventory](../research/mod-manager-feature-inventory.md).
 
-Mod Management context — operates on downloads, archives, and mods; never on records.
+Mod Management context — operates on downloads and mods; never on records.
 The mEdit-context vocabulary ("record", "FormKey") is absent here by construction
 ([CONTEXT-MAP.md](../../CONTEXT-MAP.md)).
 
-Placement: [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) — an
-editor-tab webview (the same mechanism as the mEdit Record Editor panel and
-`modbench.openEditor`), not a sidebar tree. Downloads is occasional/rich rather than
-something referenced mid-navigation, so it doesn't compete for the permanent sidebar
-slots Mods and Plugins occupy, and it gets full editor width for the columns below.
+Placement: [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) (as amended
+by #236) — a native sidebar `TreeView` (`modbench.downloads`), third in the loadout stack
+below Mods and Plugins, registered collapsed by default. Downloads is occasional/rich
+rather than something referenced mid-navigation, so it doesn't compete with Mods and
+Plugins for attention until there's something to act on — a placement decision, not a
+webview one; the surface that shipped (four user-visible fields — label, status,
+description, tooltip — behind a native context menu) has nothing an editor tab's extra
+width was ever needed for.
 
 MO2 behavioral reference: `modorganizer/src/downloadmanager.cpp` (the `.meta` state
-semantics this spec mirrors).
+semantics this spec mirrors) and `modorganizer/src/downloadlist.cpp` (the Status word/
+colour convention — `downloadlist.cpp:196` uses "Uninstalled", not "Removed").
 
 ## Problem Statement
 
 A user pointing Modbench at an MO2 instance can manage and deploy the mods they've
-already installed, but has no view of the **archives** sitting in the instance's
+already installed, but has no view of the **downloads** sitting in the instance's
 `downloads/` folder. In MO2 the Downloads tab is where you see what you've fetched,
-install an archive into the loadout, tell at a glance what's already installed, revisit
+install a download into the loadout, tell at a glance what's already installed, revisit
 a mod's Nexus page, and clear out clutter. Without it, the user has to leave Modbench
 and use MO2 (or a file manager) to do any of that — breaking the "point Modbench at an
 MO2 folder and work on the loadout in place" promise.
 
 ## Solution
 
-A **Downloads tab** — an editor-tab webview listing the archives in the instance's
-shared `downloads/` folder as a sortable table (Name / Status / Size / Filetime), with
-per-row actions (Install, Visit on Nexus, Open File, Open Meta File, Reveal in Explorer,
-Delete, Hide/Unhide) and a small toolbar (Refresh, Show hidden). The tab is a **live
-file view**: a file-watcher keeps it in sync as archives appear or change on disk
-(dropped in via the OS file manager today; delivered by the `nxm://` download handler
-later). It mirrors MO2's Downloads tab closely enough that a user can alternate between
-MO2 and Modbench on the same instance, while fixing MO2's one UX wart — batch cleanup
-actions are kept out of the per-row context menu. The row's right-click menu is VS
-Code's own native context menu (#214 — see [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)),
-not a rendered overlay.
+A **Downloads tree** — a sidebar `TreeView` listing the downloads in the instance's
+shared `downloads/` folder, one leaf row per file, with per-row actions (Install, Visit
+on Nexus, Open File, Open Meta File, Delete, Hide/Unhide) and a small toolbar (Show
+hidden, Sort by…). The tree is a **live file view**: a file-watcher keeps it in sync as
+downloads appear or change on disk (dropped in via the OS file manager today; delivered
+by the `nxm://` download handler later). It mirrors MO2's Downloads tab closely enough
+that a user can alternate between MO2 and Modbench on the same instance, while fixing
+MO2's one UX wart — batch cleanup actions are kept out of the per-row context menu, and
+apply to a multi-selection instead. The row's right-click menu is VS Code's own native
+`view/item/context` menu (#214/#233 — see
+[ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)), not a rendered
+overlay.
 
-The tab reads the per-archive `.meta` sidecar MO2 already writes: it derives each row's
-Status from that file and, on a successful Install, writes the install state back to it —
-so the loadout and the Downloads view stay consistent with MO2's own bookkeeping.
+The tree reads the per-download `.meta` sidecar MO2 already writes: it derives each
+row's Status from that file and, on a successful Install, writes the install state back
+to it — so the loadout and the Downloads view stay consistent with MO2's own
+bookkeeping.
 
 ## User Stories
 
-1. As a mod author curating a loadout, I want to open a Downloads tab showing the
-   archives in my instance's `downloads/` folder, so that I can see everything I've
-   fetched without leaving Modbench.
-2. As a user, I want each archive shown as a single row with its filename, so that the
+1. As a mod author curating a loadout, I want a Downloads tree in the sidebar showing
+   the downloads in my instance's `downloads/` folder, so that I can see everything
+   I've fetched without leaving Modbench.
+2. As a user, I want each download shown as a single row with its filename, so that the
    list maps one-to-one to the files on disk.
-3. As a user, I want the archive's `.meta` sidecar to *not* appear as its own row, so
+3. As a user, I want the download's `.meta` sidecar to *not* appear as its own row, so
    that the list isn't cluttered with bookkeeping files.
-4. As a user, I want a Status column telling me whether an archive is Downloaded,
-   Installed, or Removed, so that I can tell at a glance what I still need to install.
-5. As a user, I want the archive's size shown, so that I can gauge how large a mod is.
-6. As a user, I want the archive's file time shown, so that I know when I fetched it.
+4. As a user, I want each row's status shown at a glance — Downloaded, Installed, or
+   Uninstalled — via a coloured icon, so that I can tell what I still need to install
+   without opening anything.
+5. As a user, I want the download's size available on the row, so that I can gauge how
+   large a mod is.
+6. As a user, I want the download's file time available on the row, so that I know when
+   I fetched it.
 7. As a user, I want the list sorted newest-first by default, so that the mod I just
    downloaded is at the top.
-8. As a user, I want to click any column header to re-sort by that column, so that I can
-   group by Status or find a mod by name or size.
-9. As a user, I want to right-click a row and Install that archive into my loadout, so
+8. As a user, I want a "Sort by…" command offering every sortable field in both
+   directions, so that I can group by Status or find a mod by name or size — the tree
+   equivalent of clicking a column header, since a tree row has none to click.
+9. As a user, I want to right-click a row and Install that download into my loadout, so
    that I can add a downloaded mod without re-picking the file from a dialog.
-10. As a user, I want an archive's Status to flip to Installed immediately after I
+10. As a user, I want a download's Status to flip to Installed immediately after I
     install it, so that the list reflects what I've done.
 11. As a user, I want to Visit on Nexus from a row, so that I can open the mod's page to
     read about it or check for updates.
-12. As a user, I want the Visit on Nexus action unavailable when the archive has no Nexus
-    mod id, so that I'm not offered a link that can't work.
-13. As a user, I want to Open File on a row, so that I can inspect the archive's contents
-    in my system's archive tool.
+12. As a user, I want the Visit on Nexus action unavailable when the download has no
+    Nexus mod id, so that I'm not offered a link that can't work.
+13. As a user, I want to Open File on a row, so that I can inspect the download's
+    contents in my system's associated application.
 14. As a user, I want to Open Meta File on a row, so that I can read or hand-edit the
     `.meta` sidecar when I need to.
-15. As a user, I want Open Meta File unavailable when there's no sidecar, so that I'm not
-    offered an action with nothing to open.
-16. As a user, I want to Reveal in Explorer from a row, so that I can find the archive in
-    my OS file manager.
-17. As a user, I want to Delete an archive from a row, so that I can reclaim disk space.
-18. As a user, I want Delete to remove both the archive and its `.meta` sidecar, so that
-    I don't leave an orphaned metadata file behind.
+15. As a user, I want Open Meta File unavailable when there's no sidecar, so that I'm
+    not offered an action with nothing to open.
+16. As a user, I don't need a separate "Reveal in Explorer" row action, because the
+    instance's `downloads/` folder already sits inside VS Code's own Explorer at the
+    workspace root — so I can find any file there directly, with nothing Downloads-
+    specific to add.
+17. As a user, I want to Delete a download from a row, so that I can reclaim disk space.
+18. As a user, I want Delete to remove both the download and its `.meta` sidecar, so
+    that I don't leave an orphaned metadata file behind.
 19. As a user, I want Delete to move files to the system trash rather than erasing them,
     so that I can recover from a mistake.
-20. As a user, I want Delete to ask for confirmation, so that I don't lose an archive by
-    a stray click.
-21. As a user, I want deleting an archive to leave the installed mod untouched, so that
+20. As a user, I want Delete to ask for confirmation, so that I don't lose a download by
+    a stray click — once for the whole selection when I've selected several.
+21. As a user, I want deleting a download to leave the installed mod untouched, so that
     freeing download space never uninstalls anything.
-22. As a user, I want to Hide an archive I don't want to see, so that I can declutter the
-    list without deleting the file.
-23. As a user, I want hidden archives filtered out of the list by default, so that hiding
-    actually declutters.
-24. As a user, I want a "Show hidden" tick box, so that I can bring hidden archives back
+22. As a user, I want to Hide a download I don't want to see, so that I can declutter
+    the list without deleting the file.
+23. As a user, I want hidden downloads filtered out of the list by default, so that
+    hiding actually declutters.
+24. As a user, I want a "Show hidden" toggle, so that I can bring hidden downloads back
     into view when I need them.
-25. As a user, I want hidden archives shown dimmed when "Show hidden" is on, so that I can
-    tell them apart from visible ones.
-26. As a user, I want to Unhide an archive while hidden ones are shown, so that I can undo
-    a hide.
-27. As a user, I want a Refresh button, so that I can force a re-scan of the folder if the
-    list ever looks stale.
+25. As a user, I want hidden downloads shown dimmed when "Show hidden" is on, so that I
+    can tell them apart from visible ones.
+26. As a user, I want to Unhide a download while hidden ones are shown, so that I can
+    undo a hide.
+27. As a user, I want to select several rows and Delete, Hide, or Unhide them together,
+    so that clearing out a batch of downloads doesn't take one click per file.
 28. As a user, I want the list to update on its own as files change in `downloads/`, so
-    that archives I drop into the folder appear without my doing anything.
-29. As a user, I want to drop archive files into the `downloads/` folder from my OS file
-    manager and have them show up in the tab, so that adding a manually-downloaded mod is
-    frictionless.
-30. As a user, I want a clear "no downloads yet" message when the folder is empty, so that
-    I know the tab is working and just has nothing to show.
-31. As a user, I want a clear message when the instance has no `downloads/` folder at all,
-    so that I understand why the tab is empty and what's expected.
-32. As a user opening the tab from the command palette (or a Mods-view toolbar button), I
-    want a single obvious entry point, so that I can get to my downloads quickly.
-33. As a user with a long downloads folder, I want to type a substring into a filter box and
-    have the list narrow to matching archive names, so that I can find one without scrolling.
+    that downloads I drop into the folder appear without my doing anything.
+29. As a user, I want to drop files into the `downloads/` folder from my OS file
+    manager and have them show up in the tree, so that adding a manually-downloaded mod
+    is frictionless.
+30. As a user, I want a clear "no downloads yet" message when the folder is empty, so
+    that I know the tree is working and just has nothing to show.
+31. As a user, I want a clear message when the instance has no `downloads/` folder at
+    all, so that I understand why the tree is empty and what's expected.
+32. As a user, I want the Downloads tree available from the command palette (VS Code
+    auto-generates a "Focus on Downloads View" command for any contributed view) and
+    always present — collapsed, not hidden — in the sidebar stack, so that I can get to
+    my downloads without a bespoke open command or toolbar button anywhere else.
+33. As a user with a long downloads folder, I want to use VS Code's native tree Find to
+    narrow to matching rows by name, so that I can find one without scrolling, and
+    without Modbench reinventing a filter box the platform already gives every tree.
 
 ## Implementation Decisions
 
 ### Scope
 
-- This spec covers the **Downloads tab surface only** — the editor-tab webview, its
-  table, toolbar, row actions, and the live file view over `downloads/`.
+- This spec covers the **Downloads tree surface only** — the sidebar `TreeView`, its
+  row rendering, toolbar, row actions, and the live file view over `downloads/`.
 - The `nxm://` protocol handler and Nexus API integration (issue #5) are **out of scope**
   — a download/protocol handler, not UI. **Deferred past alpha to milestone "7 — Nexus
   integration":** `nxm://` is a signed handle, not a download URL, so it (and any metadata
   enrichment) requires the *authenticated* Nexus API, which requires registering Modbench
   as a Nexus application (staff outreach). Modbench does not intercept Nexus downloads —
-  the browser owns the transfer and this tab's file-watcher surfaces the result. When
-  built, the handler will populate the same `downloads/` folder this tab watches.
-- Update checks (issue #6) are **out of scope** — a Mods-tab concern (you update an
+  the browser owns the transfer and this tree's file-watcher surfaces the result. When
+  built, the handler will populate the same `downloads/` folder this tree watches.
+- Update checks (issue #6) are **out of scope** — a Mods-tree concern (you update an
   *installed* mod), and likewise deferred to milestone "7 — Nexus integration" (needs the
   authenticated Nexus API).
-- Endorsements / mod tracking are **out of scope** — a Mods-tab concern.
+- Endorsements / mod tracking are **out of scope** — a Mods-tree concern.
 
 ### Downloads directory
 
-- The tab views the MO2 instance's shared `downloads/` folder
+- The tree views the MO2 instance's shared `downloads/` folder
   (`<instanceRoot>/downloads/`), per
   [modmanager ADR-0001](../../modbench/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md).
   Not a Modbench-private location — a user must be able to alternate between MO2 and
   Modbench on the same instance with no divergence.
-- Retention (keep vs. purge archives after install) is **not a Downloads-tab decision**:
-  the tab only views files; it imposes no keep/purge policy.
+- Retention (keep vs. purge downloads after install) is **not a Downloads-tree decision**:
+  the tree only views files; it imposes no keep/purge policy.
 
 ### Row model & the `.meta` sidecar
 
-- **One row per archive.** The `.meta` sidecar is suppressed as its own row and read as
-  the data behind the archive's row.
-- **Status is read from the `.meta`** (MVP), mirroring `downloadmanager.cpp`:
+- **One row per download.** The `.meta` sidecar is suppressed as its own row and read as
+  the data behind the download's row.
+- **Status is read from the `.meta`**, mirroring `downloadmanager.cpp`:
   - `installed=true` → **Installed**
-  - `uninstalled=true` → **Removed**
+  - `uninstalled=true` → **Uninstalled**
   - neither flag → **Downloaded**
-- ⚠️ **Terminology:** MO2's `.meta` key `removed=true` means **hidden** (the Hide action),
-  which is a *different axis* from the **Removed** Status (`uninstalled=true`). This spec
-  and the code use "hidden" for `removed=true` and "Removed" only for the
-  `uninstalled=true` Status, and must never conflate the two.
-- An archive with **no `.meta` sidecar** (e.g. a manually-dropped file) is a valid row:
+- A download with **no `.meta` sidecar** (e.g. a manually-dropped file) is a valid row:
   Status **Downloaded**, with Nexus/meta actions gated off (below).
 
-### Columns
+### Row rendering
 
-- MVP columns: **Name / Status / Size / Filetime**.
-- **Name** = the raw archive filename (MO2 parity), e.g.
-  `Sleep Or Save-12262-2-2-1540248406.zip`.
-- Column headers are **sortable**; default sort is **Filetime descending** (newest first).
-- Row selection is **single-row** in MVP.
+Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeItem`
+(`DownloadsProvider.ts`):
+
+- **Label** — `.meta` `name` when present and non-empty, else the raw filename (never
+  blank, mirroring MO2's `displayNameByInfo`). This is a friendly display name, not the
+  identifier: mutations, selection, and `id` all key off the raw filename.
+- **Status icon + colour** — a `ThemeIcon`, always set explicitly so the file-icon theme
+  never takes over: `archive`/green for Downloaded, `check`/no explicit colour for
+  Installed, `circle-slash`/yellow for Uninstalled, mirroring `downloadlist.cpp`'s
+  Status-cell colours (`STATE_READY`→green, `STATE_UNINSTALLED`→yellow). This is the
+  Mods tree's own icon-carries-status convention (`ModListProvider`'s `statusIconId`),
+  not a Downloads invention. A **file-type icon was considered and rejected** — every row
+  in this tree is the same kind of file (a compressed download), so a file-type icon
+  would be a constant, carrying no information a fixed icon doesn't already convey; the
+  icon slot is spent on Status instead.
+- **Description** — the `.meta` version (`v2.2.1`) plus the status word, the latter
+  omitted when the status is the default (Downloaded), mirroring `ModNode`'s
+  description convention: the icon always carries status, the description repeats it
+  only when it's not the unmarked default.
+- **Tooltip** — a `MarkdownString`: filename, mod name, version, Nexus ID, size,
+  filetime, game, and author — each field present only when the `.meta` (or, for
+  filename/size/filetime, the filesystem) actually records it, so a metaless download
+  still gets a valid, minimal tooltip. Size and filetime, no longer columns, live here.
+- **`resourceUri`** — `downloads/<name>` as a file `Uri`. It exists to feed
+  `HiddenDownloadDecorationProvider`'s dimming lookup (below), not to derive the icon —
+  `iconPath` is always explicitly set, so the file-icon theme is never consulted.
+- **`id`** — pinned to the raw filename, never the label, so a later `.meta` name change
+  can't silently drop the user's tree selection (`TreeItem.id` otherwise auto-derives
+  from the label).
+- **`contextValue`** — see *Row context menu* below.
 
 ### Toolbar
 
-- **Refresh** — force a re-scan of `downloads/` (safety valve).
-- **Filter** — a text box matching archive **Name** (raw filename) by case-insensitive
-  substring; the table narrows live as the user types. No separator/grouping concept here
-  (unlike the Mods tree's filter toggle) — Downloads is a flat list, so this is a plain
-  substring match, applied after hidden-filtering. Every Modbench list surface gets this same
-  filter box (Mods tree, Downloads, Plugin List) for consistency.
-- **Show hidden** — a tick box; off by default. When on, hidden rows are shown **dimmed**.
-- Batch cleanup buttons are **deferred** to a separate issue (see Out of Scope).
+- **Show hidden** — a title-bar eye/eye-closed toggle pair (`modbench.downloads.showHidden`
+  / `.hideHidden`), off by default. It's **additive, not an exclusive filter** (matching
+  MO2's own Show-hidden, `downloadmanager.cpp:102`): turning it on shows hidden rows
+  *alongside* visible ones, dimmed via `HiddenDownloadDecorationProvider`, rather than
+  switching to a hidden-only view.
+- **Sort by…** — a command in the view's `…` overflow menu (no icon, so it doesn't
+  compete for title-bar space): a `showQuickPick` over the four sortable fields (Name,
+  Status, Size, Filetime) in both directions. Default remains Filetime descending.
+- **No name-filter box.** VS Code's **native tree Find** (`list.find`, `Ctrl+F` with the
+  tree focused) replaces it outright — there is no bespoke Downloads filter input at
+  all, unlike the old webview tab. This is a **deliberate divergence** from the
+  cross-surface filter/grouping-toggle convention documented in
+  [mods.md](mods.md)'s "UI — the Mods tree" section: that convention exists there specifically because
+  Mods rows sit inside separators, so a name filter needs a structural-vs-flat choice
+  (keep matching sections in context, or collapse to a flat list of matches). Downloads
+  rows are flat leaves with no grouping concept at all — there is nothing for a
+  structural/flat toggle to decide — so native Find, with no toggle needed, is the
+  better native fit rather than a smaller copy of the Mods convention.
+- **No manual Refresh.** Unlike the Mods tree's title-bar Refresh (a safety-net for
+  filesystems with unreliable watch events), the Downloads tree ships with no Refresh
+  command or button at all: `downloadsWatcher.ts` debounces filesystem events on
+  `downloads/` and invalidates the provider automatically, so every mutation and every
+  external file-manager drop is picked up without user action. This is a documented
+  decision, not a gap left for a later slice — the surface has been fully watcher-driven
+  since it first shipped (#233).
 
 ### Live updates
 
-- A **file-watcher** on `downloads/` drives live updates: archives (and `.meta` changes)
-  added, removed, or modified on disk are reflected without user action. Refresh remains
-  as a manual fallback for filesystems where watch events are unreliable.
+- A **file-watcher** (`downloadsWatcher.ts`) on `downloads/` drives every re-render:
+  downloads (and `.meta` changes) added, removed, or modified on disk are reflected with
+  no user action and no manual Refresh (see *Toolbar* above). Events are debounced
+  (200ms) so a single logical file operation (e.g. a download write followed by its
+  `.meta` sidecar write) doesn't trigger overlapping re-scans.
 
-### Row context menu (per-item only)
+### Row context menu
 
-Kept scoped to the clicked row — batch/category actions are deliberately **not** here
-(MO2's conflation of the two in one dropdown is the UX wart being fixed).
+Kept scoped to actions a row (or a selection of rows) can take — batch/category actions
+apply to the multi-selection rather than living in a separate dropdown (MO2's conflation
+of the two in one menu is the UX wart being fixed).
 
-**The menu is VS Code's own native context menu (#214), not a hand-drawn one.** The row
-carries a `data-vscode-context` attribute (`downloadRowContext` in `mo2/downloads.ts`) —
-`{ webviewSection: 'downloadRow', name, hasMeta, hasModID, hidden,
-preventDefaultContextMenuItems: true }` — and each action is a `modbench.downloads.*`
-command contributed via `contributes.menus["webview/context"]` in `package.json`, gated
-by `webviewId == 'modbench.downloads' && webviewSection == 'downloadRow'` plus the
-per-action key below. `preventDefaultContextMenuItems` suppresses VS Code's built-in
-Cut/Copy/Paste entries on the row. All eight actions' real work already lives in the
-extension host (`DownloadsPanel.ts`'s `buildRowActionHandlers`), so the native commands
-(`registerDownloadsRowCommands`) call it directly — no webview round trip, unlike the
-record editor's Save/Revert Group (#208), whose mutation logic lives in the webview and
-so must broadcast. This follows the same `data-vscode-context` +
-`webview/context` shape #208/#209 established for the record editor's pending-cell and
-column-header menus.
+**The menu is VS Code's own native `view/item/context` menu**, contributed in
+`package.json` and gated on the row's `contextValue` — a space-separated flag string
+(`downloadContextValue`, `mo2/downloads.ts`): the base `download` token plus `hasMeta`,
+`hasModID`, and/or `hidden` when true. Each `when` clause tests a flag via a
+word-boundary regex (`viewItem =~ /\bflag\b/`), so flag order never matters. This
+replaces the old webview era's JSON `data-vscode-context` (`downloadRowContext`) — the
+same `contextValue`-flag-string idiom #214 established for Mods/Plugins, now ported to a
+tree row for the first time.
 
-- **Install** — reuse the existing `modbench.modList.installFromArchive` flow
-  (extract → detect root → install into the loadout, stamping `installationFile` into the
-  new mod's `meta.ini`), pre-supplied with this row's archive path (skipping the
-  file-picker). On **success**, write `installed=true` back to the download's `.meta`, so
-  the row's Status transitions Downloaded → Installed live. (The symmetric
-  `uninstalled=true` write belongs to the Mods-tab uninstall path — out of scope here.)
-- **Visit on Nexus** — open `https://www.nexusmods.com/{gameSlug}/mods/{modID}`, where
-  `gameSlug` derives from the instance's game (the existing MO2 game-name → Nexus-slug
-  mapping) and `modID` from the `.meta`. **Gated off** when there's no `modID` (the
-  menu's `when` clause checks the context's `hasModID`).
-- **Open File** — OS-open the archive in the system's associated application.
-- **Open Meta File** — open the `.meta` sidecar in the editor. **Gated off** when there's
-  no sidecar (`when` checks `hasMeta`).
-- **Reveal in Explorer** — reveal the archive in the OS file manager.
-- **Delete** — move **both** the archive and its `.meta` sidecar to the **system trash**
-  (recoverable), behind a **confirmation** dialog. Removes files only; never uninstalls
-  the mod that was installed from the archive.
-- **Hide / Unhide** — two separate commands (`modbench.downloads.hide` /
-  `.unhide`), mutually exclusive via `when: !hidden` / `when: hidden` so only one ever
-  shows for a given row. Hide sets `removed=true` in the `.meta` (filtering the row out
-  unless *Show hidden* is on); Unhide clears it.
+**Seven commands, not eight** — Reveal in Explorer is gone (see user story 16): once
+Downloads became a sidebar tree living beside the Mods/Plugins trees and the workspace's
+own Explorer, an in-tree reveal action was redundant in a way it wasn't for the old
+editor-tab webview.
+
+- **Install, Visit on Nexus, Open File, Open Meta File** act on the **clicked row only**,
+  ignoring any multi-selection. VS Code invokes a `view/item/context` command as
+  `(clickedItem, selectedItems[])`; these four simply don't read the second argument.
+  MO2 doesn't batch Install either, and batching a navigational action reads as "open
+  five browser tabs / five downloads / five editors" — not useful.
+  - **Install** — reuse the existing `modbench.modList.installFromArchive` flow
+    (extract → detect root → install into the loadout, stamping `installationFile` into
+    the new mod's `meta.ini`), pre-supplied with this row's download path (skipping the
+    file-picker). On **success**, write `installed=true` back to the download's `.meta`,
+    so the row's Status transitions Downloaded → Installed live via the watcher.
+  - **Visit on Nexus** — open `https://www.nexusmods.com/{gameSlug}/mods/{modID}`, where
+    `gameSlug` derives from the instance's game (the existing MO2 game-name → Nexus-slug
+    mapping) and `modID` from the `.meta`. **Gated off** when there's no `modID`
+    (`when` checks `hasModID`).
+  - **Open File** — OS-open the download in the system's associated application.
+  - **Open Meta File** — open the `.meta` sidecar in the editor. **Gated off** when
+    there's no sidecar (`when` checks `hasMeta`).
+- **Delete, Hide, Unhide** act on the **whole selection**.
+  - **Delete** — move both the download and its `.meta` sidecar (if any) to the system
+    trash, behind a confirmation. A multi-item selection confirms **once for the whole
+    batch**, never once per file (`deleteArchives`); a single-item selection reuses the
+    exact single-file confirmation text. Removes files only; never uninstalls the mod
+    that was installed from the download.
+  - **Hide / Unhide** — two commands (`modbench.downloads.hide` / `.unhide`), mutually
+    exclusive in the menu via `when: !hidden` / `when: hidden` on the *clicked* row, so
+    only one ever shows. Hide sets `removed=true` in the `.meta` (filtering the row out
+    unless *Show hidden* is on); Unhide clears it. Both are **idempotent per row**
+    (always writing `removed=true`/`false` regardless of the row's prior state), which
+    is what makes them safe over a **mixed hidden/visible selection**: the `when` clause
+    deciding which of the two commands appears can only inspect the clicked row (there
+    is no `when` primitive for "the selection is mixed"), so whichever action that row's
+    state offers gets applied to every selected row — matching MO2's own "Hide All"
+    rather than erroring on a mixed batch.
 
 ### Placement & entry point
 
-- Editor-tab webview opened via a command (same mechanism as `modbench.openEditor`), with
-  an entry point from the command palette and/or a Mods-view title-bar button. The
-  ambient `↓ N downloading` status-bar item and MO2's inline green progress bar are
+- A sidebar `TreeView` (`modbench.downloads`), third in the `modbench` view container's
+  loadout stack below Mods and Plugins, registered `"visibility": "collapsed"` by
+  default — always present, never opened via a command the way the old editor tab was.
+- **Entry point**: VS Code auto-generates a `modbench.downloads.focus` command for any
+  contributed view (surfaced in the command palette as "Downloads: Focus on Downloads
+  View"); no bespoke `modbench.downloads.open` command and no Mods-toolbar button exist
+  or are needed.
+- The ambient "↓ N downloading" status-bar item and MO2's inline green progress bar are
   **described here but deferred to #5** — nothing is mid-download in this MVP.
 
 ### Architecture / seams
 
-- **A new pure `downloads` model module** is the primary seam. It takes a directory
-  listing of `downloads/` plus each archive's `.meta` text and produces the render-ready
-  rows (Name, Status, Size, Filetime, hidden flag, per-row action-enabled flags), already
-  sorted and hidden-filtered. This mirrors the existing pure-logic layer
+- **The pure `downloads` model** (`mo2/downloads.ts`) is unchanged and **placement-
+  agnostic** — `buildDownloadRows`, `sortDownloadRows`, `filterHiddenRows`,
+  `parseDownloadMeta`, `downloadContextValue`, and the `.meta`-mutation surgical text
+  transforms (`setInstalledInText` / `setUninstalledInText` / `setHiddenInText`) are the
+  exact same functions the editor-tab webview used; the surface swap from webview to
+  tree (#233) didn't touch this module. This mirrors the existing pure-logic layer
   (`statusChecker.ts`, `metaIni.ts`, `modlistText.ts`).
-- The `.meta` **mutations** — Install writeback (`installed=true`) and Hide/Unhide
-  (`removed=true/false`) — fold into this same module as surgical text transforms (the
-  `modlistText.ts`/`metaIni.ts` pattern), so they exercise the **same seam**. Writes are
-  surgical/byte-faithful, consistent with the rest of the MO2 adapter.
-- A **thin VS Code adapter** (webview panel + file-watcher + command handlers) wires the
-  model to the webview and performs the unavoidable VS Code calls (trash-delete,
-  OS-open, reveal, and the Install hand-off). Install **delegates to the already-tested
-  `installFromArchive`**; the other calls stay too thin to hold logic.
-- **Row actions are native `webview/context` commands (#214), not webview messages.**
-  `DownloadsPanel.ts`'s `buildRowActionHandlers(instanceRoot, log)` returns the eight
-  action functions keyed by name; `registerDownloadsRowCommands` wires each to a
-  `modbench.downloads.*` command whose sole argument is the row's `data-vscode-context`
-  object. Only `READY`/`REFRESH` remain on the original webview→extension `postMessage`
-  path (`buildMessageHandlers`/`dispatchWebviewMessage`) — the webview still triggers
-  those itself (mount, the Refresh button); the row actions don't need a webview round
-  trip at all, since their real work already lives entirely in the extension host.
+- **`DownloadsProvider` / `DownloadNode`** (`DownloadsProvider.ts`) is a thin
+  `TreeDataProvider` that replaces the old webview panel: it scans `downloads/`, runs
+  the pure model to build render-ready rows, turns each into a `TreeItem` (see *Row
+  rendering*), and holds the toolbar's transient view state (`showHidden`, `sortColumn`,
+  `sortDescending` — reset on every activation, never persisted, matching the Mods
+  tree's Sort Direction toggle). A mutation or the watcher calls `invalidate()`, which
+  clears the cache and fires `onDidChangeTreeData`.
+- **`contextValue` flag strings replace `downloadRowContext`'s JSON.** The webview-only
+  `data-vscode-context` object is gone; `downloadContextValue` produces the
+  space-separated flag string a native `view/item/context` `when` clause can regex-match
+  directly — the row now carries its own gating state as a `TreeItem` property instead
+  of a webview DOM attribute.
+- **`DownloadsPanel.ts`** is action functions plus command registration only — no
+  webview, no `postMessage`, no panel lifecycle. `buildRowActionHandlers` returns the
+  seven action functions keyed by name; `registerDownloadsSingleRowCommands` wires the
+  clicked-row-only four, `registerDownloadsMultiRowCommands` wires the
+  selection-wide three (Delete additionally routing through the batch-confirming
+  `deleteArchives`); `registerDownloadsSortCommand` and
+  `registerDownloadsHiddenToggleCommands` wire the toolbar. Every command calls its
+  handler directly — no round trip, since the real work always lived in the extension
+  host.
+- **`downloadsWatcher.ts`** (unchanged) is the sole re-render trigger now that there's no
+  manual Refresh — see *Toolbar*.
+- **`HiddenDownloadDecorationProvider`** dims hidden rows: a stateless
+  `FileDecorationProvider` keyed on `resourceUri`, reading `DownloadsProvider.hiddenNames()`
+  live on every call. It exists only because Show hidden is additive (hidden rows render
+  alongside visible ones with no separate list), so a visual cue is the sole way to tell
+  them apart — MO2 itself draws none.
+- **`deleteDownload.ts`** (unchanged pure sequencing helper, no `vscode` import) owns the
+  trash-both-files ordering (`.meta` before the download, so a mid-failure never orphans
+  a sidecar) and the confirm/trash/report seam `DownloadsPanel.ts`'s VS Code adapter
+  injects into.
 
 ## Testing Decisions
 
@@ -260,41 +350,47 @@ column-header menus.
   produced rows (and their Status / hidden / action-enabled flags / order); given a
   `.meta` text + a mutation, assert the resulting text. No assertions about private
   helpers or call sequences.
-- **Primary unit seam — the `downloads` model module** (Vitest, `npm run test:unit`, no
-  backend). Cases to cover:
-  - filename → row mapping; `.meta`-sidecar files suppressed as rows.
-  - Status derivation: `installed=true` → Installed; `uninstalled=true` → Removed;
-    neither / no-`.meta` → Downloaded.
-  - hidden filtering: `removed=true` excluded by default; included (flagged hidden) under
-    show-hidden.
-  - name filter: case-insensitive substring match against Name; empty filter shows all rows.
-  - default sort Filetime descending; header re-sort by each column.
-  - action gating: no `modID` → `hasModID: false` in the row's `data-vscode-context`; no
-    `.meta` → `hasMeta: false`.
-  - mutations: Install writeback sets `installed=true`; Hide sets and Unhide clears
-    `removed=true`, byte-faithfully.
-  - `downloadRowContext`: given a row, produces the exact `data-vscode-context` JSON the
-    row carries (`webviewSection`, `name`, `hasMeta`, `hasModID`, `hidden`,
-    `preventDefaultContextMenuItems`).
-- **Prior art:** `metaIni.test.ts`, `modlistText.test.ts`, `statusChecker.test.ts`,
+- **Primary unit seam — the `downloads` model module** (`mo2/downloads.test.ts`, Vitest,
+  `npm run test:unit`, no backend): filename → row mapping with `.meta` sidecars
+  suppressed; Status derivation (`installed`/`uninstalled`/neither/no-`.meta`); hidden
+  filtering; default and re-sort ordering; `downloadContextValue`'s flag-string output;
+  the three mutation functions, byte-faithfully.
+- **`DownloadsProvider.test.ts`** (Vitest): `DownloadNode` row rendering (label/id, status
+  icon+colour, description, tooltip composition including the metaless-minimal case,
+  `contextValue`, `resourceUri`); provider behavior — default sort, hidden exclusion,
+  `setShowHidden`/`setSort` re-rendering and firing `onDidChangeTreeData`, `hiddenNames()`,
+  the empty-folder and no-folder empty states, the `modbench.downloadsFolderExists`
+  context key (including that a scan failure leaves it untouched — existence is unknown,
+  not false), and `ErrorNode` surfacing on a non-ENOENT scan failure (ADR-0026).
+- **`DownloadsPanel.test.ts`** (Vitest, `vscode` stubbed the way `ModListProvider.test.ts`
+  does): `buildRowActionHandlers` exercised directly (fixture-in / real-fs-out) for
+  install (success/cancel/throw), delete (confirm/cancel), hide/unhide, visitNexus
+  (with/without modID), and the nav actions; `registerDownloadsSingleRowCommands` /
+  `registerDownloadsMultiRowCommands` exercised by capturing the mocked
+  `vscode.commands.registerCommand` calls and invoking the captured handler with
+  `DownloadNode`-shaped arguments — including the mixed-selection idempotency case for
+  Hide/Unhide and the selection-fallback case for Delete; `deleteArchives`'
+  once-for-the-whole-batch confirmation, including the single-item-reuses-singular-text
+  case; `registerDownloadsSortCommand` and `registerDownloadsHiddenToggleCommands`
+  against the mocked provider.
+- **`downloadsWatcher.test.ts`**: debounces multiple rapid fs events into one `onChange`
+  call.
+- **`HiddenDownloadDecorationProvider.test.ts`**: decorates only rows both under the
+  `downloads/` prefix and named in the live `hiddenNames()` set.
+- **`deleteDownload.test.ts`**: the trash-`.meta`-before-download ordering, the
+  confirm-gate, and cancel-is-a-no-op.
+- **Prior art**: `metaIni.test.ts`, `modlistText.test.ts`, `statusChecker.test.ts`,
   `modOrganizerIni.test.ts` — same fixture-in / value-out style; instance fixtures live
   under `modbench/src/modmanager/test/fixtures/`.
-- **Reused integration seam** (`npm run test:integration`, real VS Code process) for
-  opening the tab and the file-watcher reflecting a folder change, plus asserting the
-  eight `modbench.downloads.*` row commands register (`EXPECTED_COMMANDS`).
-- **Row-action command bodies are unit-tested** (`DownloadsPanel.test.ts`,
-  `npm run test:unit`), `vscode` stubbed the way `ModListProvider.test.ts` does (see #71):
-  `buildRowActionHandlers` is exercised directly (fixture-in / real-fs-out, same style as
-  before #214 — only the call site moved from a dispatched webview message to a direct
-  call), and `registerDownloadsRowCommands` is exercised by capturing the mocked
-  `vscode.commands.registerCommand` calls and invoking the captured handler with a
-  `DownloadRowContext`-shaped argument. The Install hand-off needs no new logic tests
-  beyond that — it delegates to the already-tested `installFromArchive`. Trash/open/reveal
-  stay thin. The webview-side assertion is that each row carries the right
-  `data-vscode-context` (`DownloadsApp.test.tsx`) — menu *availability*, previously
-  asserted via rendered `menuitem`s, is asserted there instead; the `when`-clause gating
-  in `package.json` itself isn't exercised by any test (declarative, verified manually).
-- Add the new command id(s) to `EXPECTED_COMMANDS` (per `modbench/CLAUDE.md`).
+- **Reused integration seam** (`npm run test:integration`, real VS Code process,
+  `extension.test.ts`'s "modbench.downloads tree (#233)" block): the tree renders from a
+  real instance; a dropped-in file is reflected via the watcher with no manual refresh;
+  the folder-exists welcome states; and all ten `modbench.downloads.*` commands (seven
+  row + `sortBy`/`showHidden`/`hideHidden`) register, asserted via `EXPECTED_COMMANDS`.
+- The `when`-clause gating in `package.json` itself isn't exercised by any test
+  (declarative, verified manually), same caveat as every other native context menu in
+  this codebase.
+- Add any new command id(s) to `EXPECTED_COMMANDS` (per `modbench/CLAUDE.md`).
 
 ## Out of Scope
 
@@ -303,30 +399,35 @@ column-header menus.
   past alpha to milestone "7 — Nexus integration"** — needs an OS-level `nxm://` broker
   (MO2's `nxmhandler.exe` pattern) plus the authenticated Nexus API, gated on registering
   Modbench as a Nexus application (staff outreach).
-- **Update checks** (issue #6) and **endorsements / mod tracking** — Mods-tab concerns.
-- **Batch cleanup actions** (Delete/Hide Installed / Uninstalled / All) — deferred to a
-  separate "Batch downloads actions" design issue (#57); a multi-row selection model comes
-  with it (MVP is single-select).
-- **Friendly display name + a Version column** (#58) — the raw filename ships in MVP; a
-  parsed friendly name and a Version column (sourced from the `.meta`) are high-value
-  follow-ups.
-- **In-webview drag-and-drop onto the tab** (#59) — the watcher + OS-drop-into-folder
-  covers the essential case for MVP; doing in-webview DnD *properly* (resolving
-  dropped-file paths, not streaming multi-GB archive bytes through the webview message
-  channel) is its own chunk of work.
-- **Meta-vs-reality Status validation** (#60) — MVP trusts the `.meta`. Correlating each
-  download against the actually-present installed mods (via `installationFile`) to catch
-  drift is a follow-up.
+- **Update checks** (issue #6) and **endorsements / mod tracking** — Mods-tree concerns.
+- **Meta-vs-reality Status validation** (#60) — the tree trusts the `.meta`
+  unconditionally. Correlating each download against the actually-present installed
+  mods (via `installationFile`) to catch drift is a follow-up.
 - The **status-bar item and in-progress/downloading state** — described above but
   implemented with #5.
+- **Drag-to-install onto the Mods tree** — no `TreeDragAndDropController` is registered
+  on `modbench.downloads`; Install stays a context-menu/command action. A drag affordance
+  is a plausible future convenience, not a gap in this slice.
+- **MO2's "info incomplete" warning icon** — MO2 flags a download whose `.meta` metadata
+  fetch never completed; this tree has no equivalent icon. Every row here already
+  degrades gracefully to a minimal Downloaded row with no metadata, so there's nothing
+  distinct to warn about yet.
+- **Compact/standard row density** — no density option exists; row rendering is fixed,
+  matching every other Modbench tree.
 
 ## Further Notes
 
-- MVP build tickets: #51 (lists archives, tracer) → #52 (file-watcher), #53 (Install with
-  status writeback), #54 (navigational actions + gating), #55 (Delete to trash), #56
-  (Hide/Unhide and Show-hidden), the latter five each blocked only by #51.
-- Deferred follow-ups filed as their own tracker issues: #57 (batch actions), #58
-  (friendly-name + Version column), #59 (in-webview DnD), #60 (meta-vs-reality validation).
-- Consequence of ADR-0027: this surface's "editor-tab webview + status-bar item" shape is
-  now resolved; the earlier `downloads.md` open questions (downloads directory,
-  endorsements, retention) are all closed by the Implementation Decisions above.
+- Refactor tickets: #233 (Downloads becomes a sidebar tree; the editor-tab webview
+  deleted outright — row rendering, watcher, and the seven surviving row commands),
+  #238 (Sort by… quick pick and the Show-hidden toggle pair, plus the hidden-row dimming
+  decoration), #236 (the ADR-0027 amendment recording the placement change), #239 (this
+  spec rewrite).
+- **What the alpha's Downloads surface actually is**: the `modbench.downloads` sidebar
+  `TreeView`, collapsed by default, reachable via the command palette or by expanding it
+  in the loadout stack — no separate command to open it, no columns, no filter box, no
+  manual Refresh. Live entirely off `downloadsWatcher.ts` and the pure `downloads` model
+  in `mo2/downloads.ts`.
+- Consequence of ADR-0027 (as amended): this surface's shape — sidebar tree, collapsed by
+  default, status-bar item deferred to #5 — is now resolved; the earlier `downloads.md`
+  open questions (downloads directory, endorsements, retention) remain closed by the
+  Implementation Decisions above, unaffected by the placement change.
