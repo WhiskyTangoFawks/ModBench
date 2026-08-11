@@ -1,4 +1,4 @@
-import type { CompareOverride, FieldMetadata, PathSegment, RecordDetail } from './types';
+import type { CompareOverride, ConflictAll, ConflictThis, FieldMetadata, PathSegment, RecordDetail } from './types';
 import type {
   ArrayElementContext, ArrayParentContext, ColumnHeaderContext, PendingCellContext,
   VmadScriptsContext, VmadScriptContext, VmadPropertyContext,
@@ -234,6 +234,56 @@ export function sparseArrayByPlugin<T>(perPositionValues: Record<string, T | nul
       if (value == null) continue;
       if (!result[plugin]) result[plugin] = [];
       result[plugin][i] = value;
+    }
+  }
+  return result;
+}
+
+// ── Conflict aggregation (issue #114) ─────────────────────────────────────────
+//
+// The compare grid colors each row from its own FieldDiff.conflictAll (DiffRow), not a
+// record-wide value smeared across every row. The backend computes it for an ordinary reflected
+// field (MEditService.Core/Queries/ConflictClassifier.cs's AggregateConflictAll); VMAD/Condition
+// rows are synthesized entirely on the frontend (vmadTreeAdapter.ts/conditionTreeAdapter.ts) from
+// their own backend DTOs (VmadPropertyDiff/ConditionDiff), which carry no such field themselves —
+// so those two adapters compute it here, at every node they build, using the identical rule the
+// backend applies. Kept in sync by design (same rule, mirrored by hand across the two languages),
+// not by shared code — there is no cross-language module to share.
+
+// Mirrors ConflictRules.Reduce: folds a set of per-plugin ConflictThis cell states into the
+// ConflictAll they imply — any ConflictWins/ConflictLoses => Conflict; else any Override =>
+// Override; else NoConflict. Never produces OnlyOne/ConflictCritical — those are record-wide-only
+// terminal states (the Plugins-tree badge), which no per-node value ever needs to express.
+export function reduceConflictAll(states: ConflictThis[]): ConflictAll {
+  let hasConflict = false;
+  let hasOverride = false;
+  for (const state of states) {
+    if (state === 'ConflictWins' || state === 'ConflictLoses') hasConflict = true;
+    else if (state === 'Override') hasOverride = true;
+  }
+  if (hasConflict) return 'Conflict';
+  if (hasOverride) return 'Override';
+  return 'NoConflict';
+}
+
+// OnlyOne/ConflictCritical are included only so this satisfies TS's Record<ConflictAll, number>
+// exhaustiveness check — reduceConflictAll/aggregateConflictAll never produce or compare against
+// them (both are record-wide-only terminal states), so their severity numbers are never read.
+const CONFLICT_ALL_SEVERITY: Record<ConflictAll, number> = {
+  NoConflict: 0, Override: 1, Conflict: 2, OnlyOne: 3, ConflictCritical: 3,
+};
+
+// A node's own bottom-up conflictAll: its own cellStates reduced, then folded with each
+// already-built child's own (already-aggregated) conflictAll via "worst of two" — mirrors
+// ConflictRules.Escalate, restricted to the three non-terminal states this ever sees.
+export function aggregateConflictAll(
+  ownCellStates: Record<string, ConflictThis>,
+  children?: ({ conflictAll?: ConflictAll } | undefined)[] | null,
+): ConflictAll {
+  let result = reduceConflictAll(Object.values(ownCellStates));
+  for (const child of children ?? []) {
+    if (child?.conflictAll && CONFLICT_ALL_SEVERITY[child.conflictAll] > CONFLICT_ALL_SEVERITY[result]) {
+      result = child.conflictAll;
     }
   }
   return result;

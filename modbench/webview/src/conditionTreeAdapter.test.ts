@@ -251,3 +251,36 @@ describe('buildConditionRows — collapsedSummary (xEdit-style one-line prose, d
     expect(diffs[0].children?.[0].collapsedSummary?.['Fallout4.esm']).toBe('Subject.GetIsSex(Male) = 0');
   });
 });
+
+// Issue #114: every synthesized FieldDiff node this adapter builds must populate its own
+// bottom-up conflictAll — DiffRow reads it directly, with no fallback computation of its own.
+describe('buildConditionRows — per-node conflictAll (issue #114)', () => {
+  it('a field leaf carries its own reduced conflictAll', () => {
+    const diff = conditionDiff({ fieldCellStates: { operator: { 'MyMod.esp': 'Override' } } });
+    const { diffs } = buildConditionRows({ groups: [{ fieldPath: 'Conditions', conditions: [diff] }] });
+    const conditionRow = diffs[0].children?.[0];
+    const operatorField = conditionRow?.children?.find(c => c.fieldName === 'Operator');
+    const functionField = conditionRow?.children?.find(c => c.fieldName === 'Function');
+    expect(operatorField?.conflictAll).toBe('Override');
+    expect(functionField?.conflictAll).toBe('NoConflict');
+  });
+
+  // Bottom-up: the condition's own cellStates is empty here, but one of its own fields differs —
+  // the condition row must still aggregate to the worse of its children, not stay NoConflict.
+  it("a condition row aggregates from its field children even when its own whole-condition cellStates doesn't capture it", () => {
+    const diff = conditionDiff({ cellStates: {}, fieldCellStates: { function: { 'MyMod.esp': 'ConflictWins' } } });
+    const { diffs } = buildConditionRows({ groups: [{ fieldPath: 'Conditions', conditions: [diff] }] });
+    expect(diffs[0].children?.[0].conflictAll).toBe('Conflict');
+  });
+
+  it('the group (array) row aggregates across its condition elements — one differing, one agreeing', () => {
+    const conflicting = conditionDiff({ index: 0, fieldCellStates: { operator: { 'MyMod.esp': 'Override' } } });
+    const agreeing = conditionDiff({ index: 1, fieldCellStates: {} });
+    const { diffs } = buildConditionRows({ groups: [{ fieldPath: 'Conditions', conditions: [conflicting, agreeing] }] });
+    const [conflictingRow, agreeingRow] = diffs[0].children ?? [];
+    expect(conflictingRow?.conflictAll).toBe('Override');
+    expect(agreeingRow?.conflictAll).toBe('NoConflict');
+    // The group row itself aggregates to the worse of its two condition elements.
+    expect(diffs[0].conflictAll).toBe('Override');
+  });
+});

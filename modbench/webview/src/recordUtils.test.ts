@@ -17,6 +17,8 @@ import {
   setAtPath,
   pendingValueAtPath,
   defaultElementValue,
+  reduceConflictAll,
+  aggregateConflictAll,
   type PathSegment,
 } from './recordUtils';
 import type { FieldMetadata, CompareOverride } from './types';
@@ -456,5 +458,56 @@ describe('setAtPath', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Outer' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Inner' }];
     setAtPath(root, path, 'z');
     expect(root).toEqual({ Outer: [{ Inner: 'a' }] });
+  });
+});
+
+// Issue #114: mirrors MEditService.Core/Queries/ConflictRules.cs's Reduce, used by
+// vmadTreeAdapter.ts/conditionTreeAdapter.ts to compute their own synthesized FieldDiff nodes'
+// bottom-up conflictAll.
+describe('reduceConflictAll', () => {
+  it('returns NoConflict for no cell states', () => {
+    expect(reduceConflictAll([])).toBe('NoConflict');
+  });
+
+  it('returns NoConflict when every state is IdenticalToMaster', () => {
+    expect(reduceConflictAll(['IdenticalToMaster', 'IdenticalToMaster'])).toBe('NoConflict');
+  });
+
+  it('returns Override when the worst state is an uncontested Override', () => {
+    expect(reduceConflictAll(['IdenticalToMaster', 'Override'])).toBe('Override');
+  });
+
+  it('returns Conflict when any state is ConflictWins', () => {
+    expect(reduceConflictAll(['Override', 'ConflictWins'])).toBe('Conflict');
+  });
+
+  it('returns Conflict when any state is ConflictLoses', () => {
+    expect(reduceConflictAll(['ConflictLoses'])).toBe('Conflict');
+  });
+});
+
+describe('aggregateConflictAll', () => {
+  it('reduces just the own cell states when there are no children', () => {
+    expect(aggregateConflictAll({ 'MyMod.esp': 'Override' })).toBe('Override');
+  });
+
+  it('reduces just the own cell states when children is undefined or empty', () => {
+    expect(aggregateConflictAll({}, undefined)).toBe('NoConflict');
+    expect(aggregateConflictAll({}, [])).toBe('NoConflict');
+  });
+
+  // The literal #114 requirement at the adapter seam: a struct/array node with no conflict of its
+  // own still escalates to the worse of its children — collapsing it must not hide that something
+  // inside differs.
+  it('escalates from a conflicting child even when the node has no own-cell-state conflict', () => {
+    expect(aggregateConflictAll({}, [{ conflictAll: 'Conflict' }, { conflictAll: 'NoConflict' }])).toBe('Conflict');
+  });
+
+  it('does not let an agreeing child pull the aggregate down below the node’s own state', () => {
+    expect(aggregateConflictAll({ 'MyMod.esp': 'Override' }, [{ conflictAll: 'NoConflict' }])).toBe('Override');
+  });
+
+  it('a child with no conflictAll of its own contributes nothing (safe default)', () => {
+    expect(aggregateConflictAll({}, [{ conflictAll: undefined }])).toBe('NoConflict');
   });
 });

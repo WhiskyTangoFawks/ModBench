@@ -339,3 +339,56 @@ describe('buildVmadRows — structList property (ArrayOfStruct)', () => {
     expect((next[0].find((n): n is Record<string, unknown> => (n as Record<string, unknown>).name === 'X') as Record<string, unknown>).intValue).toBe(1);
   });
 });
+
+// Issue #114: every synthesized FieldDiff node this adapter builds must populate its own
+// bottom-up conflictAll — the compare grid's per-row renderer reads it directly, with no fallback
+// computation of its own, so a node the adapter forgot would silently paint no background.
+describe('buildVmadRows — per-node conflictAll (issue #114)', () => {
+  it('a leaf property carries its own reduced conflictAll', () => {
+    const conflicting = scalarProp({ name: 'Health', cellStates: { 'MyMod.esp': 'Override' } });
+    const agreeing = scalarProp({ name: 'Speed', cellStates: {} });
+    const { diff } = scriptRowFor([script({ properties: [conflicting, agreeing] })]);
+    const healthChild = diff?.children?.find(c => c.fieldName === 'Health');
+    const speedChild = diff?.children?.find(c => c.fieldName === 'Speed');
+    expect(healthChild?.conflictAll).toBe('Override');
+    expect(speedChild?.conflictAll).toBe('NoConflict');
+  });
+
+  it('a script row aggregates the worst conflictAll found among its own properties (bottom-up)', () => {
+    const conflicting = scalarProp({ name: 'Health', cellStates: { 'MyMod.esp': 'ConflictWins' } });
+    const agreeing = scalarProp({ name: 'Speed', cellStates: {} });
+    const { diff } = scriptRowFor([script({ properties: [conflicting, agreeing], cellStates: {} })]);
+    expect(diff?.conflictAll).toBe('Conflict');
+  });
+
+  it('the top-level "Scripts (VMAD)" wrapper aggregates across every script — one conflicting script among agreeing ones', () => {
+    const conflictingScript = script({
+      name: 'ScriptA', cellStates: {},
+      properties: [scalarProp({ name: 'Health', cellStates: { 'MyMod.esp': 'Override' } })],
+    });
+    const agreeingScript = script({
+      name: 'ScriptB', cellStates: {},
+      properties: [scalarProp({ name: 'Speed', cellStates: {} })],
+    });
+    const { wrapper } = scriptRowFor([conflictingScript, agreeingScript]);
+    expect(wrapper.conflictAll).toBe('Override');
+  });
+
+  it('an array property shows element-level isolation — a conflicting element does not contaminate its agreeing sibling', () => {
+    const arrProp: VmadPropertyDiff = {
+      name: 'Levels', kind: 'array',
+      values: {}, types: { 'Fallout4.esm': 'ArrayOfInt' }, winnerPlugin: 'Fallout4.esm', cellStates: {},
+      children: [
+        { name: '', kind: 'scalar', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
+        { name: '', kind: 'scalar', values: { 'Fallout4.esm': 2, 'MyMod.esp': 9 }, types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' }, winnerPlugin: 'MyMod.esp', cellStates: { 'MyMod.esp': 'Override' } },
+      ],
+    };
+    const { diff: scriptDiff } = scriptRowFor([script({ properties: [arrProp] })]);
+    const arrayChild = scriptDiff?.children?.find(c => c.fieldName === 'Levels');
+    const [element0, element1] = arrayChild?.children ?? [];
+    expect(element0?.conflictAll).toBe('NoConflict');
+    expect(element1?.conflictAll).toBe('Override');
+    // The array's own row aggregates to the worse of its two elements.
+    expect(arrayChild?.conflictAll).toBe('Override');
+  });
+});

@@ -15,6 +15,7 @@ import type { LoadResult, RecordSessionClient } from './RecordSessionClient';
 // ── shared metadata fixtures ──────────────────────────────────────────────────
 
 const strMeta: FieldMetadata  = { name: 'Name',   type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
+const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
 const fkMeta: FieldMetadata = {
   name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumValues: [],
 };
@@ -56,6 +57,7 @@ const compareResult = {
       winnerPlugin: 'MyMod.esp',
       winnerValue: 'Override Name',
       cellStates: { 'MyMod.esp': 'ConflictWins' },
+      conflictAll: 'Conflict',
     },
   ],
 };
@@ -270,7 +272,31 @@ const overrideCompareResult = {
       pendingFields: {}, conflictThis: 'Override' },
   ],
   diffs: [{ fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
-    winnerPlugin: 'MyMod.esp', winnerValue: 'Override Name', cellStates: { 'MyMod.esp': 'Override' } }],
+    winnerPlugin: 'MyMod.esp', winnerValue: 'Override Name', cellStates: { 'MyMod.esp': 'Override' },
+    conflictAll: 'Override' }],
+};
+
+// Issue #114: two sibling top-level fields, only one of which differs — proves the compare grid
+// colors each row from its own field's conflictAll, not a record-wide value smeared across every
+// row (the literal bug #114 reports). "Level" here is agreed by every plugin.
+const twoSiblingFieldsResult = {
+  conflictAll: 'Override',
+  overrides: [
+    { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }, { metadata: intMeta, value: 5 }],
+      pendingFields: {}, conflictThis: 'Master' },
+    { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Override Name' }, { metadata: intMeta, value: 5 }],
+      pendingFields: {}, conflictThis: 'Override' },
+  ],
+  diffs: [
+    { fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
+      winnerPlugin: 'MyMod.esp', winnerValue: 'Override Name', cellStates: { 'MyMod.esp': 'Override' },
+      conflictAll: 'Override' },
+    { fieldName: 'Level', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 },
+      winnerPlugin: 'MyMod.esp', winnerValue: 5, cellStates: {},
+      conflictAll: 'NoConflict' },
+  ],
 };
 
 // Three-plugin conflict fixture for per-cell ConflictLoses/ConflictWins tests
@@ -344,7 +370,10 @@ describe('RecordPanel — grid scroll container stays viewport-bound (#175)', ()
 describe('RecordPanel — conflict color coding', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('applies green row background when conflictAll is Override', async () => {
+  // Issue #114: these two used to assert the record-wide CompareResult.conflictAll was smeared
+  // onto the row — now each field's own diffs[].conflictAll drives its own row, exercised
+  // end-to-end through RecordPanel's merge/recursion pipeline (not just DiffRow's own props).
+  it('applies green row background to a field whose own conflictAll is Override', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(overrideCompareResult);
     await waitFor(() => screen.getByText('Name'));
@@ -352,12 +381,25 @@ describe('RecordPanel — conflict color coding', () => {
     expect(row.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
   });
 
-  it('applies orange row background when conflictAll is Conflict', async () => {
+  it('applies orange row background to a field whose own conflictAll is Conflict', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Name'));
     const row = screen.getByText('Name').closest('tr')!;
     expect(row.style.backgroundColor).toBe('rgba(255, 152, 0, 0.20)');
+  });
+
+  // The literal #114 regression guard: two sibling fields, only one differs — the agreeing
+  // sibling's row must show no background even though the record as a whole (and the other
+  // field) is Override. A record-wide smear would incorrectly tint both rows the same way.
+  it('colors only the field that actually differs — an agreeing sibling row gets no background', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    renderPanel(twoSiblingFieldsResult);
+    await waitFor(() => screen.getByText('Name'));
+    const nameRow = screen.getByText('Name').closest('tr')!;
+    const levelRow = screen.getByText('Level').closest('tr')!;
+    expect(nameRow.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
+    expect(levelRow.style.backgroundColor).toBe('');
   });
 
   it('applies orange cell background when cellStates is ConflictWins', async () => {

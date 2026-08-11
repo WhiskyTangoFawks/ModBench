@@ -77,12 +77,21 @@ public record CompareOverride(
 // struct/array field's own FieldDiff (its Values aren't FormKey strings) and never aggregated up
 // from Children — each leaf's signal is independent, so a dangling sibling can't hide a live
 // hyperlink/affordance on the leaf next to it.
+//
+// ConflictAll (#114): this node's own bottom-up conflict classification — this field/element's own
+// CellStates folded with the same ConflictAll aggregate of every descendant (recursively), via the
+// shared ConflictRules.Reduce/Escalate rules. Scoped to exactly this FieldDiff's subtree — distinct
+// from ClassifyResult.ConflictAll (record-wide, drives the Plugins-tree badge), which is computed
+// only from the top-level Diffs and is unaffected by this field's addition. Drives the compare
+// grid's per-row background (ADR-0016): a leaf's own value; a struct/array's aggregate while
+// collapsed, deferred to its children while expanded.
 public record FieldDiff(
     string FieldName,
     Dictionary<string, object?> Values,
     string WinnerPlugin,
     object? WinnerValue,
     IReadOnlyDictionary<string, ConflictThis> CellStates,
+    ConflictAll ConflictAll,
     IReadOnlyList<FieldDiff>? Children = null,
     IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null);
 

@@ -99,6 +99,55 @@ Investigation revealed that xEdit's `ConflictPriority` system exists because xEd
 - The `IsPartialForm` flag on `IFormRecord` must be checked before building override column data; absent fields in a partial form are omitted from the column entirely, not shown as blank.
 - `ConflictAll` and `ConflictThis` are cached per FormKey and invalidated on index update (same lifecycle as DuckDB rows today).
 
+## Update (2026-08-11): ConflictAll now has two independent scopes (#114)
+
+The "Decision" section above defines `ConflictAll` as classifying "each row (record) as a whole."
+Issue #114 found that the compare grid was applying that one record-wide value unconditionally to
+*every* rendered row — every leaf field, every struct member, every array element, at every
+nesting depth — so a record with one differing field turned every row of its grid the same color,
+including rows where every plugin agreed. That conflated two genuinely different questions: "is
+the record's override stack, as a whole, in conflict" (a Plugins-tree badge question) and "does
+*this specific field* differ" (a compare-grid row question).
+
+**This extends the model rather than reversing it: `ConflictAll` is now computed at two
+independent scopes, both legitimate, neither superseding the other:**
+
+- **Record-wide** (unchanged) — `ClassifyResult.ConflictAll` / `CompareResult.ConflictAll`,
+  computed once per record from its top-level fields' cell states. Still exactly what it always
+  was: the Plugins-tree's per-record conflict badge, meaning "the record's override stack as a
+  whole."
+- **Per-node, bottom-up** (new) — `FieldDiff.ConflictAll`, computed once per node in the field-diff
+  tree (every leaf, every struct member, every array element, at every depth), using the *same*
+  reduction rule (`ConflictRules.Reduce`/`Escalate`) the record-wide value already used, just
+  scoped to that one node's own subtree instead of the whole record. A leaf's value comes from its
+  own cross-plugin cell states alone. A struct/array node with children aggregates the worst state
+  found anywhere in its subtree, recursively — computed by folding its own reduced cell states
+  with each already-built child's own (already-aggregated) value, which is mathematically the same
+  as reducing the union of every cell state in the subtree in one pass. This is the value the
+  compare grid's row background now reads (`docs/specs/medit-record-editor.md`'s "Conflict color
+  coding" section).
+
+**Collapsed/expanded rule** (compare grid only, not the Plugins tree): a struct/array row shows its
+per-node aggregate tint while **collapsed** — collapsing must not hide the fact that something
+inside differs — and shows **no** background of its own while **expanded**, since its now-visible
+child rows each carry their own individual tint instead; painting both would duplicate the signal
+and misattribute it to fields that didn't actually change.
+
+**No tint on `NoConflict`/`OnlyOne` is a deliberate mEdit divergence, not an oversight.** xEdit's
+own default palette tints even its no-conflict row state; mEdit's compare grid deliberately leaves
+`NoConflict`/`OnlyOne` unpainted at both scopes so a background color is reserved for "something
+here needs attention" — the signal #114 reports was being muddied by the record-wide smear.
+
+VMAD and Condition rows (synthesized by `vmadTreeAdapter.ts`/`conditionTreeAdapter.ts` into the
+same `FieldDiff` shape, #231) compute their own per-node `ConflictAll` the same way, in TypeScript
+(`recordUtils.ts`'s `reduceConflictAll`/`aggregateConflictAll`, mirroring `ConflictRules.Reduce`/
+`Escalate` by hand) — their own backend DTOs (`VmadPropertyDiff`, `ConditionDiff`) carry no such
+field, since they're folded into the unified tree entirely on the frontend.
+
+No new colors: both scopes reuse the existing `ConflictAll`→row-background mapping unchanged
+(`docs/specs/medit-record-editor.md`); only the granularity at which it's computed and applied
+changed.
+
 ## Alternatives rejected
 
 **Keep the four-state model** — cannot drive per-cell color coding. The "Change Lost" state (a mid-stack change overwritten by a later plugin) maps to `ctConflictLoses` on a specific plugin column, which requires ConflictThis to exist at all.

@@ -396,6 +396,51 @@ const structEditPriorPendingChange = {
   source: 'agent', description: null, changedAt: '2026-06-20T12:00:00Z',
 };
 
+// Issue #114: X1 differs (Override), X2 agrees (no cellState entry, own conflictAll NoConflict) —
+// the struct row's own conflictAll aggregates to Override (the worse of its two children), so
+// collapsed it shows the aggregate tint; expanded, that tint moves onto X1's own row only, leaving
+// both the struct row and X2's row untinted.
+const structCollapseExpandResult = {
+  conflictAll: 'Override',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: structMeta, value: { X1: 0, X2: 100 } }],
+      pendingFields: {}, conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: structMeta, value: { X1: 5, X2: 100 } }],
+      pendingFields: {}, conflictThis: 'Override',
+    },
+  ],
+  diffs: [{
+    fieldName: 'ObjectBounds',
+    values: { 'Fallout4.esm': { X1: 0, X2: 100 }, 'MyMod.esp': { X1: 5, X2: 100 } },
+    winnerPlugin: 'MyMod.esp', winnerValue: { X1: 5, X2: 100 },
+    cellStates: { 'MyMod.esp': 'Override' },
+    conflictAll: 'Override',
+    children: [
+      {
+        fieldName: 'X1',
+        values: { 'Fallout4.esm': 0, 'MyMod.esp': 5 },
+        winnerPlugin: 'MyMod.esp', winnerValue: 5,
+        cellStates: { 'MyMod.esp': 'Override' },
+        conflictAll: 'Override',
+      },
+      {
+        fieldName: 'X2',
+        values: { 'Fallout4.esm': 100, 'MyMod.esp': 100 },
+        winnerPlugin: 'Fallout4.esm', winnerValue: 100,
+        cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
+        conflictAll: 'NoConflict',
+      },
+    ],
+  }],
+};
+
 // ── Struct-in-array (grandchild) fixtures ─────────────────────────────────────
 
 const structInArrayMeta: FieldMetadata = {
@@ -730,6 +775,50 @@ describe('RecordPanel — struct sub-field edit', () => {
         undefined,
       ),
     );
+  });
+});
+
+// Issue #114: collapsed-aggregate / expanded-defers-to-children, exercised end-to-end through the
+// real toggle interaction (RecordPanel's expandedStructs state), not just DiffRow's static props.
+describe('RecordPanel — struct row conflict color follows collapse state (#114)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    currentCompare = structCollapseExpandResult;
+    currentChanges = [];
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('collapsed: the struct row shows the aggregate tint from its conflicting child', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('▶'));
+    const structRow = screen.getByText('ObjectBounds').closest('tr')!;
+    expect(structRow.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
+  });
+
+  it('expanded: the struct row loses its own background, and only the differing child is tinted', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => screen.getByText('X1'));
+
+    const structRow = screen.getByText('ObjectBounds').closest('tr')!;
+    const x1Row = screen.getByText('X1').closest('tr')!;
+    const x2Row = screen.getByText('X2').closest('tr')!;
+    expect(structRow.style.backgroundColor).toBe('');
+    expect(x1Row.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
+    expect(x2Row.style.backgroundColor).toBe('');
+  });
+
+  it('re-collapsed: the aggregate tint returns to the struct row', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶')); // expand
+    await waitFor(() => screen.getByText('X1'));
+    fireEvent.click(screen.getByText('▼')); // collapse again
+    await waitFor(() => expect(screen.queryByText('X1')).not.toBeInTheDocument());
+
+    const structRow = screen.getByText('ObjectBounds').closest('tr')!;
+    expect(structRow.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
   });
 });
 
