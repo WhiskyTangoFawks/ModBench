@@ -73,6 +73,13 @@
           "title": "Modbench",
           "icon": "images/medit.svg"
         }
+      ],
+      "panel": [
+        {
+          "id": "modbenchReferencedBy",
+          "title": "Referenced By",
+          "icon": "images/medit.svg"
+        }
       ]
     },
     "views": {
@@ -102,11 +109,13 @@
           "id": "modbench.changeGroupTree",
           "name": "Pending Changes",
           "when": "modbench.viewMode == 'editing'"
-        },
+        }
+      ],
+      "modbenchReferencedBy": [
         {
           "id": "modbench.referencedByTree",
           "name": "Referenced By",
-          "when": "modbench.viewMode == 'editing' && modbench.referencedByShown"
+          "when": "modbench.viewMode == 'editing'"
         }
       ]
     },
@@ -185,6 +194,11 @@
       {
         "command": "modbench.showReferencedBy",
         "title": "Modbench: Show Referenced By"
+      },
+      {
+        "command": "modbench.referencedByTree.copy",
+        "title": "Copy",
+        "category": "Modbench"
       },
       {
         "command": "modbench.deleteRecord",
@@ -603,14 +617,9 @@
           "group": "modbench@1"
         },
         {
-          "command": "modbench.showReferencedBy",
-          "when": "view == modbench.pluginTree && viewItem == record",
-          "group": "modbench@2"
-        },
-        {
           "command": "modbench.deleteRecord",
           "when": "view == modbench.pluginTree && viewItem == record",
-          "group": "modbench@3"
+          "group": "modbench@2"
         },
         {
           "command": "modbench.createPlaced",
@@ -641,6 +650,11 @@
           "command": "modbench.openEditorBeside",
           "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",
           "group": "modbench@2"
+        },
+        {
+          "command": "modbench.referencedByTree.copy",
+          "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",
+          "group": "modbench@3"
         },
         {
           "command": "modbench.modList.mod.openInExplorer",
@@ -846,6 +860,12 @@
         "command": "modbench.deleteRecord",
         "key": "Delete",
         "when": "focusedView == modbench.pluginTree && viewItem == record"
+      },
+      {
+        "command": "modbench.referencedByTree.copy",
+        "key": "ctrl+c",
+        "mac": "cmd+c",
+        "when": "focusedView == modbench.referencedByTree"
       }
     ]
   },

@@ -28,7 +28,8 @@ import {
   ReferencedByFieldNode,
   EmptyStateNode,
   ErrorNode,
-  NotShownNode,
+  NoActiveRecordNode,
+  referencedByCopyText,
 } from '../ReferencedByTreeProvider';
 
 type Reference = {
@@ -51,14 +52,26 @@ function makeClient(opts: { references?: Reference[]; ok?: boolean; status?: num
   } as any;
 }
 
-describe('ReferencedByTreeProvider — before first showFor', () => {
-  it('returns a NotShownNode without calling the client', async () => {
+describe('ReferencedByTreeProvider — no active record', () => {
+  it('returns a NoActiveRecordNode without calling the client, before any showFor', async () => {
     const client = makeClient({});
     const provider = new ReferencedByTreeProvider(client);
     const children = await provider.getChildren();
     expect(children).toHaveLength(1);
-    expect(children[0]).toBeInstanceOf(NotShownNode);
+    expect(children[0]).toBeInstanceOf(NoActiveRecordNode);
     expect(client.GET).not.toHaveBeenCalled();
+  });
+
+  it('returns a NoActiveRecordNode when retargeted to undefined (record panel closed)', async () => {
+    const client = makeClient({ references: [] });
+    const provider = new ReferencedByTreeProvider(client);
+    provider.showFor('000001:Fallout4.esm');
+    await provider.getChildren();
+    provider.showFor(undefined);
+    const children = await provider.getChildren();
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(NoActiveRecordNode);
+    expect(client.GET).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -67,7 +80,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
 
   it('returns an ErrorNode (not an empty list) when the fetch fails', async () => {
     const provider = new ReferencedByTreeProvider(makeClient({ ok: false }), vi.fn());
-    provider.showFor('000001:Fallout4.esm', 'Player');
+    provider.showFor('000001:Fallout4.esm');
     const children = await provider.getChildren();
     expect(children).toHaveLength(1);
     expect(children[0]).toBeInstanceOf(ErrorNode);
@@ -75,7 +88,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
 
   it('returns an EmptyStateNode when there are no references', async () => {
     const provider = new ReferencedByTreeProvider(makeClient({ references: [] }));
-    provider.showFor('000001:Fallout4.esm', 'Player');
+    provider.showFor('000001:Fallout4.esm');
     const children = await provider.getChildren();
     expect(children).toHaveLength(1);
     expect(children[0]).toBeInstanceOf(EmptyStateNode);
@@ -87,7 +100,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
       references: [reference({ formKey: '000002:Fallout4.esm', recordType: 'NPC_', editorId: 'TestNPC' })],
     });
     const provider = new ReferencedByTreeProvider(client);
-    provider.showFor('000001:Fallout4.esm', 'Player');
+    provider.showFor('000001:Fallout4.esm');
     const children = await provider.getChildren();
     expect(children).toHaveLength(1);
     const group = children[0] as ReferencedByGroupNode;
@@ -104,7 +117,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
       ],
     });
     const provider = new ReferencedByTreeProvider(client);
-    provider.showFor('000001:Fallout4.esm', 'Player');
+    provider.showFor('000001:Fallout4.esm');
     const children = await provider.getChildren();
     expect(children).toHaveLength(1);
     const group = children[0] as ReferencedByGroupNode;
@@ -119,7 +132,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
       ],
     });
     const provider = new ReferencedByTreeProvider(client);
-    provider.showFor('000001:Fallout4.esm', 'Player');
+    provider.showFor('000001:Fallout4.esm');
     const children = await provider.getChildren();
     expect(children).toHaveLength(2);
   });
@@ -129,7 +142,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
       references: [reference({ formKey: '000002:Fallout4.esm', recordType: 'NPC_', editorId: 'TestNPC' })],
     });
     const provider = new ReferencedByTreeProvider(client);
-    provider.showFor('000001:Fallout4.esm', 'Player');
+    provider.showFor('000001:Fallout4.esm');
     const [group] = await provider.getChildren() as ReferencedByGroupNode[];
     expect(group.command).toEqual({
       command: 'modbench.openEditor',
@@ -148,7 +161,7 @@ describe('ReferencedByTreeProvider — group children (field rows)', () => {
       ],
     });
     const provider = new ReferencedByTreeProvider(client);
-    provider.showFor('000001:Fallout4.esm', 'Player');
+    provider.showFor('000001:Fallout4.esm');
     const [group] = await provider.getChildren() as ReferencedByGroupNode[];
     const fields = await provider.getChildren(group);
     expect(fields).toHaveLength(2);
@@ -159,13 +172,104 @@ describe('ReferencedByTreeProvider — group children (field rows)', () => {
   });
 });
 
+describe('ReferencedByTreeProvider — referrer count (#282, view-title badge)', () => {
+  it('reports undefined when there is no active record', async () => {
+    const onCountChanged = vi.fn();
+    const provider = new ReferencedByTreeProvider(makeClient({}), undefined, onCountChanged);
+    await provider.getChildren();
+    expect(onCountChanged).toHaveBeenCalledWith(undefined);
+  });
+
+  it('reports undefined (not 0) when the fetch fails, so a failure never reads as "no references"', async () => {
+    const onCountChanged = vi.fn();
+    const provider = new ReferencedByTreeProvider(makeClient({ ok: false }), undefined, onCountChanged);
+    provider.showFor('000001:Fallout4.esm');
+    await provider.getChildren();
+    expect(onCountChanged).toHaveBeenCalledWith(undefined);
+  });
+
+  it('reports 0 for a genuine zero-referrer result', async () => {
+    const onCountChanged = vi.fn();
+    const provider = new ReferencedByTreeProvider(makeClient({ references: [] }), undefined, onCountChanged);
+    provider.showFor('000001:Fallout4.esm');
+    await provider.getChildren();
+    expect(onCountChanged).toHaveBeenCalledWith(0);
+  });
+
+  it('reports the number of distinct referencing groups, not the raw row count', async () => {
+    const onCountChanged = vi.fn();
+    const client = makeClient({
+      references: [
+        reference({ formKey: '000002:Fallout4.esm', plugin: 'Fallout4.esm' }),
+        reference({ formKey: '000002:Fallout4.esm', plugin: 'MyMod.esp' }),
+        reference({ formKey: '000003:Fallout4.esm' }),
+      ],
+    });
+    const provider = new ReferencedByTreeProvider(client, undefined, onCountChanged);
+    provider.showFor('000001:Fallout4.esm');
+    await provider.getChildren();
+    expect(onCountChanged).toHaveBeenCalledWith(2);
+  });
+});
+
+describe('referencedByCopyText — the clipboard copy command\'s text (#282)', () => {
+  it('returns empty text for an empty selection', () => {
+    expect(referencedByCopyText([])).toBe('');
+  });
+
+  it("copies a single selected group's own displayed label", async () => {
+    const client = makeClient({
+      references: [reference({ formKey: '000002:Fallout4.esm', recordType: 'NPC_', editorId: 'TestNPC' })],
+    });
+    const provider = new ReferencedByTreeProvider(client);
+    provider.showFor('000001:Fallout4.esm');
+    const [group] = await provider.getChildren() as ReferencedByGroupNode[];
+    expect(referencedByCopyText([group])).toBe('NPC_ / TestNPC');
+  });
+
+  it('joins multiple selected groups one per line, in selection order', async () => {
+    const client = makeClient({
+      references: [
+        reference({ formKey: '000002:Fallout4.esm', recordType: 'NPC_', editorId: 'TestNPC' }),
+        reference({ formKey: '000003:Fallout4.esm', recordType: 'NPC_', editorId: 'OtherNPC', fieldPath: 'Template' }),
+      ],
+    });
+    const provider = new ReferencedByTreeProvider(client);
+    provider.showFor('000001:Fallout4.esm');
+    const [first, second] = await provider.getChildren() as ReferencedByGroupNode[];
+    expect(referencedByCopyText([second, first])).toBe('NPC_ / OtherNPC\nNPC_ / TestNPC');
+  });
+
+  it('excludes a selected field row — the group is the copyable unit, field rows are detail', async () => {
+    const client = makeClient({
+      references: [reference({ formKey: '000002:Fallout4.esm', recordType: 'NPC_', editorId: 'TestNPC', plugin: 'Fallout4.esm', fieldPath: 'DefaultOutfit' })],
+    });
+    const provider = new ReferencedByTreeProvider(client);
+    provider.showFor('000001:Fallout4.esm');
+    const [group] = await provider.getChildren() as ReferencedByGroupNode[];
+    const [field] = await provider.getChildren(group) as ReferencedByFieldNode[];
+    expect(referencedByCopyText([group, field])).toBe('NPC_ / TestNPC');
+  });
+
+  it('returns empty text when only a field row is selected (no group in the selection)', async () => {
+    const client = makeClient({
+      references: [reference({ formKey: '000002:Fallout4.esm', plugin: 'Fallout4.esm', fieldPath: 'DefaultOutfit' })],
+    });
+    const provider = new ReferencedByTreeProvider(client);
+    provider.showFor('000001:Fallout4.esm');
+    const [group] = await provider.getChildren() as ReferencedByGroupNode[];
+    const [field] = await provider.getChildren(group) as ReferencedByFieldNode[];
+    expect(referencedByCopyText([field])).toBe('');
+  });
+});
+
 describe('ReferencedByTreeProvider — showFor retargeting', () => {
   it('fires onDidChangeTreeData and re-queries the new FormKey', async () => {
     const client = makeClient({ references: [] });
     const provider = new ReferencedByTreeProvider(client);
     const handler = vi.fn();
     provider.onDidChangeTreeData(handler);
-    provider.showFor('000001:Fallout4.esm', 'Player');
+    provider.showFor('000001:Fallout4.esm');
     expect(handler).toHaveBeenCalledTimes(1);
     await provider.getChildren();
     expect(client.GET).toHaveBeenCalledWith(

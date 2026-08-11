@@ -24,6 +24,33 @@ describe('package.json viewsWelcome (#192)', () => {
   });
 });
 
+describe('package.json Referenced By panel migration (#282)', () => {
+  it('lives in a Panel-location viewsContainer, not stacked under the modbench activity-bar container', () => {
+    const panelContainerIds = new Set(
+      (pkg.contributes.viewsContainers.panel as { id: string }[]).map((c) => c.id),
+    );
+    const views = pkg.contributes.views as Record<string, { id: string }[]>;
+    const referencedByContainer = Object.entries(views)
+      .find(([, entries]) => entries.some((v) => v.id === 'modbench.referencedByTree'))?.[0];
+
+    expect(referencedByContainer, 'expected a views entry for modbench.referencedByTree').toBeTruthy();
+    expect(panelContainerIds.has(referencedByContainer!)).toBe(true);
+
+    const sidebarViews = pkg.contributes.views.modbench as { id: string }[];
+    expect(sidebarViews.some((v) => v.id === 'modbench.referencedByTree')).toBe(false);
+  });
+
+  it('is never a right-click entry point — modbench.showReferencedBy no longer appears in any menu contribution', () => {
+    const menus = pkg.contributes.menus as Record<string, { command: string }[]>;
+    for (const [menuId, entries] of Object.entries(menus)) {
+      expect(
+        entries.some((e) => e.command === 'modbench.showReferencedBy'),
+        `expected no "${menuId}" entry invoking modbench.showReferencedBy`,
+      ).toBe(false);
+    }
+  });
+});
+
 describe('package.json standalone Deploy/Purge/Launch Game withdrawal (#186)', () => {
   it('defaults deploymentMode to external so the alpha never exposes standalone deploy without explicit opt-in', () => {
     const prop = pkg.contributes.configuration.properties['modbench.mods.deploymentMode'];

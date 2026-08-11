@@ -10,7 +10,10 @@ import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController } from './medit/SessionController';
 import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
 import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type PendingTreeNode } from './medit/PendingChangesTreeProvider';
-import { ReferencedByTreeProvider } from './medit/ReferencedByTreeProvider';
+import {
+  ReferencedByTreeProvider, ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode,
+} from './medit/ReferencedByTreeProvider';
+import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
 import { ApiPluginRepository } from './medit/PluginRepository';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
@@ -114,26 +117,32 @@ function makeDetectPaths(): DetectPaths {
   };
 }
 
-// Issue #213: the "Referenced By" tree — provider + view construction pulled out of `activate`
+// Issue #282: the "Referenced By" tree — provider + view construction pulled out of `activate`
 // (which is already at its line budget) purely to keep that one under the lint budget; no other
-// reason to split it out.
-function createReferencedByTree(client: ApiClient, log: (msg: string) => void) {
-  const referencedByTreeProvider = new ReferencedByTreeProvider(client, log);
+// reason to split it out. Lives in the Panel container now (package.json) and retargets on
+// `activeRecordTracker`'s active-record changes instead of an explicit command — `showFor` is
+// wired here, once, rather than at every command call site. The onCountChanged callback below
+// closes over `referencedByTreeView` before its own `const` line runs — safe because VS Code
+// never calls getChildren (and so never invokes the callback) until createTreeView returns and
+// this whole function has finished, by which point the const is long since initialized.
+function createReferencedByTree(
+  client: ApiClient, log: (msg: string) => void, activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
+) {
+  const referencedByTreeProvider = new ReferencedByTreeProvider(client, log, (count) => {
+    referencedByTreeView.title = count === undefined ? 'Referenced By' : `Referenced By (${count})`;
+  });
   const referencedByTreeView = vscode.window.createTreeView('modbench.referencedByTree', {
     treeDataProvider: referencedByTreeProvider,
+    canSelectMany: true,
   });
-  return { referencedByTreeProvider, referencedByTreeView };
-}
-
-// Issue #213: retargets and reveals the Referenced By tree — hidden until first asked for, same
-// shape as VS Code's own Call Hierarchy/Type Hierarchy views. `modbench.referencedByShown` gates
-// the view's package.json `when` clause; setting it true makes the view exist before `.focus`
-// reveals it. Re-invoking on a different record just retargets the already-visible view.
-async function showReferencedByTree(provider: ReferencedByTreeProvider, node?: RecordNode): Promise<void> {
-  if (!node?.record?.formKey) return;
-  provider.showFor(node.record.formKey, node.record.editorId);
-  await vscode.commands.executeCommand('setContext', 'modbench.referencedByShown', true);
-  await vscode.commands.executeCommand('modbench.referencedByTree.focus');
+  const activeRecordSubscription = activeRecordTracker.onDidChangeActiveRecord(
+    (formKey) => referencedByTreeProvider.showFor(formKey));
+  // Primes the view with whatever activeRecordTracker already knows — a no-op today (this runs
+  // before any openRecordPanel call ever exists to make a panel active), but it's what makes
+  // ActiveRecordTracker.current()'s own "initial state" contract true rather than aspirational,
+  // and guards the construction order above ever changing.
+  referencedByTreeProvider.showFor(activeRecordTracker.current());
+  return { referencedByTreeProvider, referencedByTreeView, activeRecordSubscription };
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -158,6 +167,9 @@ export function activate(context: vscode.ExtensionContext) {
   });
   const openPanels = new Map<string, vscode.WebviewPanel>();
   const recordPanels = new Set<vscode.WebviewPanel>();
+  // #282: the Referenced By view's input — which record panel is active and what FormKey it
+  // shows — replacing the old showReferencedBy(node) command argument.
+  const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const { scriptsPath, filterProvider } = setupScripts(cfg);
 
   const setFilterActive = (active: boolean, sql?: string) => {
@@ -187,7 +199,7 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: changeGroupTreeProvider,
     canSelectMany: true,
   });
-  const { referencedByTreeProvider, referencedByTreeView } = createReferencedByTree(client, log);
+  const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
   // ── Mod List (Loadout) view ──────────────────────────────────────────────────
   // The open workspace root IS the MO2 instance (see modbench/CLAUDE.md). Until
   // the Loadout↔Editing toggle lands (Modbench-5), Mod List is the only visible view.
@@ -203,9 +215,10 @@ export function activate(context: vscode.ExtensionContext) {
     treeView,
     changeGroupTreeView,
     referencedByTreeView,
+    activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, port, treeProvider, treeView, controller, repository, scriptsPath, changeGroupTreeProvider, changeGroupTreeView, referencedByTreeProvider, log, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, treeView, controller, repository, scriptsPath, changeGroupTreeProvider, changeGroupTreeView, referencedByTreeView, log, outputChannel,
     }),
   );
 
@@ -227,6 +240,9 @@ interface EditorCommandDeps {
   // #208: every open 'modbench'-viewType record panel — see openRecordPanel's recordPanels
   // param and modbench.pendingCell.saveGroup/revertGroup below.
   recordPanels: Set<vscode.WebviewPanel>;
+  // #282: which of recordPanels is active, and what FormKey each shows — openRecordPanel keeps
+  // this current; the Referenced By view retargets from it, not from a command argument.
+  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
   port: number;
   treeProvider: PluginTreeProvider;
   treeView: vscode.TreeView<PluginTreeNode>;
@@ -237,9 +253,11 @@ interface EditorCommandDeps {
   // tree — resolve the change id here, then TreeView.reveal it.
   changeGroupTreeProvider: PendingChangesTreeProvider;
   changeGroupTreeView: vscode.TreeView<PendingTreeNode>;
-  // Issue #213: backs the "Referenced By" tree — hidden until the first `modbench.showReferencedBy`
-  // (see registerRecordViewCommands), then retargeted per invocation via `showFor`.
-  referencedByTreeProvider: ReferencedByTreeProvider;
+  // Issue #282: the Referenced By view itself — needed for its Copy command's selection
+  // fallback (`.selection`), same shape as treeView/changeGroupTreeView above. The provider is
+  // no longer threaded here: nothing in this file retargets it directly anymore (createReferencedByTree
+  // wires that to activeRecordTracker once, in `activate`).
+  referencedByTreeView: vscode.TreeView<ReferencedByTreeNode>;
   log: (msg: string) => void;
   outputChannel: vscode.LogOutputChannel;
 }
@@ -259,8 +277,8 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
 /** Record view/navigation + filter commands. */
 function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
-    context, openPanels, recordPanels, port, treeProvider, controller, scriptsPath,
-    changeGroupTreeProvider, changeGroupTreeView, referencedByTreeProvider, log, outputChannel, repository,
+    context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, scriptsPath,
+    changeGroupTreeProvider, changeGroupTreeView, referencedByTreeView, log, outputChannel, repository,
   } = deps;
   const reveal: RevealDeps = {
     provider: changeGroupTreeProvider, view: changeGroupTreeView, log,
@@ -284,15 +302,16 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     vscode.commands.registerCommand('modbench.reloadSession', () => treeProvider.refresh()),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
-        vscode.ViewColumn.One, { routerDeps, recordPanels, repository });
+        vscode.ViewColumn.One, { routerDeps, recordPanels, repository, activeRecordTracker });
     }),
     // Issue #213: Referenced By's named "Open to the Side" (ADR-0033), not a right-click side effect.
     vscode.commands.registerCommand('modbench.openEditorBeside', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
-        vscode.ViewColumn.Beside, { routerDeps, recordPanels, repository });
+        vscode.ViewColumn.Beside, { routerDeps, recordPanels, repository, activeRecordTracker });
     }),
     vscode.commands.registerCommand('modbench.openCompare', () => {
-      openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One, { routerDeps, recordPanels, repository });
+      openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One,
+        { routerDeps, recordPanels, repository, activeRecordTracker });
     }),
     ...registerPendingCellCommands(reveal, recordPanels),
     vscode.commands.registerCommand('modbench.loadMore', (node: LoadMoreNode) => treeProvider.loadMore(node)),
@@ -335,9 +354,41 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
         formKey: headerFormKeyFor(pluginName), label: pluginName,
       });
     }),
+    // #282: no longer retargets anything — the view follows activeRecordTracker on its own.
+    // Kept as a Command Palette reveal-this-view convenience (issue's own allowance); no menu
+    // invokes this anymore (package.json's view/item/context entry is removed).
     vscode.commands.registerCommand('modbench.showReferencedBy',
-      (node?: RecordNode) => showReferencedByTree(referencedByTreeProvider, node)),
+      () => vscode.commands.executeCommand('modbench.referencedByTree.focus')),
+    registerReferencedByCopyCommand(referencedByTreeView, outputChannel),
   ];
+}
+
+// #282: the Referenced By view's own Copy — pulled out of registerRecordViewCommands purely for
+// its line budget, same reasoning as createReferencedByTree's own split from `activate`. A
+// keybinding (Ctrl+C while focused) and a view/item/context entry both invoke this one command
+// (package.json), the same "keybinding + menu, one command" shape modbench.deleteRecord already
+// uses; ADR-0033's "no action reachable two ways" is about redundant *affordances* for one action
+// (e.g. an inline button duplicating a menu item), not a command having both a keybinding and a
+// menu entry. Selection resolution mirrors modbench.deleteRecord: the multi-select array VS Code
+// passes when several rows are selected, else the view's own current selection, else the single
+// right-clicked node.
+function registerReferencedByCopyCommand(
+  referencedByTreeView: vscode.TreeView<ReferencedByTreeNode>, outputChannel: vscode.LogOutputChannel,
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.referencedByTree.copy',
+    async (node?: ReferencedByGroupNode, allSelected?: ReferencedByTreeNode[]) => {
+      const nodes = allSelected?.length ? allSelected
+        : referencedByTreeView.selection.length ? referencedByTreeView.selection
+        : node ? [node] : [];
+      const text = referencedByCopyText(nodes);
+      if (!text) return;
+      try {
+        await vscode.env.clipboard.writeText(text);
+      } catch (err) {
+        makeReporter(outputChannel, 'referencedByTree.copy').report(
+          'error', 'Could not copy to the clipboard.', err instanceof Error ? err.message : String(err));
+      }
+    });
 }
 
 // #208: the pending cell's right-click menu is VS Code's own `webview/context` contribution now
@@ -1468,6 +1519,26 @@ const RECORD_PANEL_KEY = '__record_view__';
 // than per panel/per open, since it never varies within a run.
 const extendedFieldEditorTempRoot = path.join(os.tmpdir(), 'modbench-medit-fields');
 
+// #282: pulled out of openRecordPanel purely for its line budget (same reasoning as
+// createReferencedByTree/registerReferencedByCopyCommand above) — wires a freshly created panel
+// into activeRecordTracker. FormKey is recorded before the panel is declared active, so a brand
+// new panel fires the Referenced By retarget exactly once, already carrying it (see
+// ActiveRecordTracker's own doc comment on ordering). onDidChangeViewState only needs to announce
+// *gaining* focus: losing it to another record panel is that other panel's own
+// onDidChangeViewState(active) firing, which naturally supersedes this one
+// (ActiveRecordTracker.setActivePanel dedupes same-panel calls), and losing it to a closed panel
+// is removePanel's job.
+function wireActiveRecordTracking(
+  panel: vscode.WebviewPanel, formKey: string | undefined, activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
+): void {
+  if (formKey) activeRecordTracker.setFormKey(panel, formKey);
+  activeRecordTracker.setActivePanel(panel);
+  panel.onDidChangeViewState(() => {
+    if (panel.active) activeRecordTracker.setActivePanel(panel);
+  });
+  panel.onDidDispose(() => activeRecordTracker.removePanel(panel));
+}
+
 // #200/#208: bundled as one trailing param (not two/three) — kept the parameter count under the
 // lint budget and there's no reason to unpack them only to repack below. recordPanels is every
 // open 'modbench'-viewType panel (main *and* any "Beside" one — see modbench.openEditorBeside
@@ -1481,6 +1552,9 @@ interface OpenRecordPanelDeps {
   // available per panel — see the onDidReceiveMessage wiring below for why it's rebuilt per
   // panel/per message rather than folded into the shared routerDeps.
   repository: ApiPluginRepository;
+  // #282: kept current at both branches below (reuse-and-retarget, create) — the Referenced By
+  // view's whole input, replacing the old showReferencedBy(node) command argument.
+  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
 }
 
 function openRecordPanel(
@@ -1490,16 +1564,20 @@ function openRecordPanel(
   formKey: string | undefined,
   port: number,
   viewColumn: vscode.ViewColumn = vscode.ViewColumn.One,
-  { routerDeps, recordPanels, repository }: OpenRecordPanelDeps,
+  { routerDeps, recordPanels, repository, activeRecordTracker }: OpenRecordPanelDeps,
 ) {
   if (viewColumn !== vscode.ViewColumn.Beside) {
     const existing = openPanels.get(RECORD_PANEL_KEY);
     if (existing) {
       existing.title = title;
       existing.reveal();
+      // #282: setFormKey before setActivePanel so a genuinely new record fires exactly once,
+      // already carrying it — see ActiveRecordTracker's own doc comment on ordering.
       if (formKey) {
         existing.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey } satisfies ExtensionToWebview);
+        activeRecordTracker.setFormKey(existing, formKey);
       }
+      activeRecordTracker.setActivePanel(existing);
       return;
     }
   }
@@ -1516,6 +1594,8 @@ function openRecordPanel(
 
   recordPanels.add(panel);
   panel.onDidDispose(() => recordPanels.delete(panel));
+
+  wireActiveRecordTracking(panel, formKey, activeRecordTracker);
 
   // #210/#211/#212: every *Picker/*Confirm/*Name .reply is bound to this specific panel — the
   // native prompt a request opens only ever exists for the one click that asked, so the reply is

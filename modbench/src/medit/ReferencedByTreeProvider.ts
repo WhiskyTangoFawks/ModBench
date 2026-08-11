@@ -52,39 +52,63 @@ export class ErrorNode extends vscode.TreeItem {
   }
 }
 
-/** Shown before the first `showFor` of the session — the view is contributed but hidden
- *  (`modbench.referencedByShown`) until then, so in practice nothing renders this node, but
- *  `getChildren` still needs a defined answer if VS Code queries it early. */
-export class NotShownNode extends vscode.TreeItem {
+/** Shown whenever no record editor is active — before the first record is opened this session,
+ *  or after the last one closes (#282: the view is always visible now, retargeting on the active
+ *  record panel instead of being hidden until an explicit "Show Referenced By" invocation). */
+export class NoActiveRecordNode extends vscode.TreeItem {
   constructor() {
-    super('Right-click a record and choose "Show Referenced By".', vscode.TreeItemCollapsibleState.None);
+    super('Open a record to see what references it.', vscode.TreeItemCollapsibleState.None);
   }
 }
 
 export type ReferencedByTreeNode =
-  | ReferencedByGroupNode | ReferencedByFieldNode | EmptyStateNode | ErrorNode | NotShownNode;
+  | ReferencedByGroupNode | ReferencedByFieldNode | EmptyStateNode | ErrorNode | NoActiveRecordNode;
 
-/** Backs the "Referenced By" tree — an on-demand, per-record relationship query, same shape as
- *  VS Code's own Call Hierarchy / Type Hierarchy: hidden until first invoked (see extension.ts's
- *  `modbench.showReferencedBy`), then retargeted in place by `showFor` on every subsequent
- *  invocation rather than recreated. Root data comes from `GET /records/{formKey}/references`
- *  (the generated `ApiClient` — no raw `fetch()`), grouped by referencing FormKey. */
+/** The `modbench.referencedByTree.copy` command's text (#282) — one line per selected
+ *  *referrer*, matching its own displayed label exactly. Field rows are detail under a group,
+ *  not independently copyable, so a field row in the selection contributes nothing; a selection
+ *  containing only field rows copies empty text rather than falling back to them. */
+export function referencedByCopyText(nodes: readonly ReferencedByTreeNode[]): string {
+  return nodes
+    .filter((n): n is ReferencedByGroupNode => n instanceof ReferencedByGroupNode)
+    // ReferencedByGroupNode always constructs `label` as a template-literal string (never
+    // TreeItemLabel), so this cast is safe — unlike a generic TreeItem it never carries highlights.
+    .map(n => n.label as string)
+    .join('\n');
+}
+
+/** Backs the "Referenced By" tree — a Panel view that follows the active record editor (#282),
+ *  retargeted by `showFor` on every active-record change (`ActiveRecordTracker`) rather than by
+ *  an explicit command. Root data comes from `GET /records/{formKey}/references` (the generated
+ *  `ApiClient` — no raw `fetch()`), grouped by referencing FormKey. */
 export class ReferencedByTreeProvider implements vscode.TreeDataProvider<ReferencedByTreeNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<ReferencedByTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private target: { formKey: string; editorId: string | null | undefined } | undefined;
+  private target: string | undefined;
 
   private readonly log: (msg: string) => void;
+  private readonly onCountChanged: (count: number | undefined) => void;
 
-  constructor(private readonly client: ApiClient, log?: (msg: string) => void) {
+  constructor(
+    private readonly client: ApiClient,
+    log?: (msg: string) => void,
+    // #282: the view title's "Referenced By (N)" badge (xEdit's `Referenced By (%d)` caption) —
+    // same callback shape as PendingChangesTreeProvider's onPendingState, fired from rootNodes()
+    // whenever it resolves. `undefined` means "no known count" (no active record, or a failed
+    // fetch) so extension.ts never renders a misleading "(0)" for either — only a genuine
+    // zero-referrer result reports 0.
+    onCountChanged?: (count: number | undefined) => void,
+  ) {
     this.log = log ?? (() => {});
+    this.onCountChanged = onCountChanged ?? (() => {});
   }
 
-  /** Retargets the tree at a different record and refreshes — called every time
-   *  `modbench.showReferencedBy` runs, including the first. */
-  showFor(formKey: string, editorId: string | null | undefined): void {
-    this.target = { formKey, editorId };
+  /** Retargets the tree at a different record (or `undefined` — no record editor is active) and
+   *  refreshes. Called by the active-record tracker on every active-panel/record change, not by
+   *  an explicit command (#282). */
+  showFor(formKey: string | undefined): void {
+    this.target = formKey;
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -101,14 +125,21 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
   }
 
   private async rootNodes(): Promise<ReferencedByTreeNode[]> {
-    if (!this.target) return [new NotShownNode()];
-    const { formKey } = this.target;
+    if (!this.target) {
+      this.onCountChanged(undefined);
+      return [new NoActiveRecordNode()];
+    }
+    const formKey = this.target;
     const res = await this.client.GET('/records/{formKey}/references', { params: { path: { formKey } } });
     if (!res.response.ok || !Array.isArray(res.data)) {
       this.log(`[ReferencedByTreeProvider] /records/${formKey}/references fetch failed (${res.response.status})`);
+      this.onCountChanged(undefined);
       return [new ErrorNode()];
     }
-    if (res.data.length === 0) return [new EmptyStateNode()];
+    if (res.data.length === 0) {
+      this.onCountChanged(0);
+      return [new EmptyStateNode()];
+    }
 
     const groups = new Map<string, ReferenceResult[]>();
     for (const r of res.data) {
@@ -117,6 +148,7 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
       if (existing) existing.push(r);
       else groups.set(key, [r]);
     }
+    this.onCountChanged(groups.size);
     return Array.from(groups.entries()).map(([formKey, results]) => new ReferencedByGroupNode(formKey, results));
   }
 }
