@@ -24,9 +24,11 @@
 
 **EditorID (EDID)**: Human-readable string identifier (e.g. `NordRace`). Stable across load orders; not guaranteed unique. _Avoid: name, label._
 
-**Master**: Plugin declared as a dependency in another plugin's header. A master reference is validated against the loaded plugins — it must name a plugin present in the load order, since a master resolving to no file makes the plugin unloadable. _Avoid: parent plugin, base plugin._
+**Master**: Plugin declared as a dependency in another plugin's header, required because the header's own FormIDs are indexed against this list. Derived entirely from what the plugin's content actually references — never directly added, removed, sorted, or cleaned by the user (ADR-0038). A master reference is validated against the loaded plugins — it must name a plugin present in the load order, since a master resolving to no file makes the plugin unloadable. _Avoid: parent plugin, base plugin._
 
-**Header record**: A plugin's ModHeader (author, masters, flags) modeled as a first-class, single-column record at synthetic FormKey `000000:<plugin>`. Not an override of any other plugin's header — headers do not conflict across plugins. Editing it (author, ESL/ESM flags, master references) stages through the normal pending-change / change-group machinery. _Avoid: TES4 record (internal jargon), plugin metadata._
+**Header record**: A plugin's ModHeader (author, masters, flags) modeled as a first-class, single-column record at synthetic FormKey `000000:<plugin>`. Not an override of any other plugin's header — headers do not conflict across plugins. Editing its author or ESL/ESM flags stages through the normal pending-change / change-group machinery; its masters do not — they're read-only, computed from content (see Master, Effective masters). _Avoid: TES4 record (internal jargon), plugin metadata._
+
+**Effective masters**: The masters a plugin will actually have once its currently staged edits are saved — committed masters unioned with the origin plugins referenced by pending content changes. What validation and the header panel read before save; never itself a pending change, since masters are never staged. _Avoid: pending masters, staged masters._
 
 **Immutable plugin**: Plugin mEdit treats as read-only — base-game files per Mutagen. Not a property of the file itself. _Avoid: read-only plugin, locked plugin._
 

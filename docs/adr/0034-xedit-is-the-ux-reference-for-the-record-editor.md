@@ -126,5 +126,9 @@ plugin-editing surface. Divergences taken under that wider rule are recorded as 
 they stay findable: see
 [ADR-0037](0037-unresolvable-masters-are-indexed-and-flagged.md) (a plugin with unresolvable masters
 is indexed and flagged rather than force-deactivated, justified by Mutagen's self-describing
-FormKeys against xEdit's whole-graph resolution). It does not govern Mod Management, which has no xEdit counterpart and takes
-its cues from MO2 instead ([ADR-0027](0027-mo2-surfaces-map-to-native-vscode-views.md)).
+FormKeys against xEdit's whole-graph resolution) and
+[ADR-0038](0038-masters-are-lifecycle-derived-never-user-declared.md) (masters are derived from
+content and never user-declared, justified by Mutagen rebuilding the master list from the live
+object graph on every save against xEdit's in-place byte patching). It does not govern Mod
+Management, which has no xEdit counterpart and takes its cues from MO2 instead
+([ADR-0027](0027-mo2-surfaces-map-to-native-vscode-views.md)).
