@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type {
-  PluginMetadata, RecordSummary,
+  RecordSummary,
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
 } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
@@ -16,19 +16,13 @@ export function headerFormKeyFor(pluginName: string): string {
   return `000000:${pluginName}`;
 }
 
-export class PluginNode extends vscode.TreeItem {
-  readonly kind = 'plugin' as const;
-  constructor(public readonly plugin: PluginMetadata) {
-    super(plugin.name, vscode.TreeItemCollapsibleState.Collapsed);
-    this.description = `[${plugin.loadOrderIndex}] ${plugin.recordCount.toLocaleString()} records`;
-    this.tooltip = plugin.path;
-    this.contextValue = plugin.isImmutable ? 'pluginImmutable' : 'plugin';
-    if (plugin.isImmutable) {
-      this.iconPath = new vscode.ThemeIcon('lock');
-    }
-    this.command = { command: 'modbench.openHeader', title: 'Open Record Header', arguments: [this] };
-  }
-}
+// #273: this provider's own standalone plugin-row node (PluginNode, contextValue "plugin" /
+// "pluginImmutable") is deleted — it was only ever constructed by fetchPlugins(), the root
+// listing for the standalone editing Plugins tree (modbench.pluginTree) that this ticket retired.
+// The merged tree's plugin rows are modmanager/PluginListProvider's PluginNode/ImplicitMasterNode
+// instead (contextValue "plugin" / "pluginImplicit" — see plugins.md). Do not reintroduce a
+// plugin-row node here: reconciling "pluginImmutable" with modmanager's read-only-ness story is
+// #276's question, not answered by resurrecting this class.
 
 export class RecordTypeNode extends vscode.TreeItem {
   readonly kind = 'recordType' as const;
@@ -172,7 +166,7 @@ export class ErrorNode extends vscode.TreeItem {
 }
 
 export type PluginTreeNode =
-  | PluginNode | RecordTypeNode | RecordNode | LoadMoreNode
+  | RecordTypeNode | RecordNode | LoadMoreNode
   | WorldspacesNode | WorldspaceNode | BlockNode | SubBlockNode | CellNode
   | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorLoadMoreNode | ErrorNode;
 
@@ -207,13 +201,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private readonly interiorLoadMoreFailures = new Map<string, string>();
   private readonly log: (msg: string) => void;
 
-  // Plugin-name filter (issue #70): a client-side substring match over whatever
-  // fetchPlugins() returns. Distinct axis from the SQL record filter (§2.6),
-  // which is backend/session state already reflected in that same response —
-  // this never needs to know whether a record filter is active.
-  private filterText = '';
-  private filterLower = '';
-
   constructor(private readonly repository: PluginRepository, log?: (msg: string) => void) {
     this.log = log ?? (() => {});
   }
@@ -227,22 +214,17 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Live-filter top-level plugin nodes by case-insensitive filename substring.
-   *  Does not clear pageCache/interiorCache/refCache — unlike refresh(), typing
-   *  in the filter box shouldn't discard unrelated expanded-record pagination. */
-  setFilter(text: string): void {
-    this.filterText = text;
-    this.filterLower = text.toLowerCase();
-    this._onDidChangeTreeData.fire(undefined);
-  }
-
   getTreeItem(element: PluginTreeNode): vscode.TreeItem {
     return element;
   }
 
   async getChildren(element?: PluginTreeNode): Promise<PluginTreeNode[]> {
-    if (!element) return this.fetchPlugins();
-    if (element instanceof PluginNode) return this.getPluginChildren(element.plugin.name);
+    // #273: `element` is never actually undefined here — PluginsTreeComposite's own
+    // `children` contract (PluginsTreeCompositeDeps) declares getChildren(child: TChild) as
+    // required, and calls this only with a defined element (root rows come from
+    // PluginListProvider instead) or via getPluginChildren(file) directly. The `!element`
+    // case stays only to satisfy vscode.TreeDataProvider<T>'s own optional-parameter contract.
+    if (!element) return [];
     if (element instanceof RecordTypeNode) return this.fetchRecords(element);
     return this.getSpatialChildren(element);
   }
@@ -301,25 +283,13 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return e instanceof Error ? e.message : String(e);
   }
 
-  private async fetchPlugins(): Promise<PluginTreeNode[]> {
-    try {
-      const plugins = await this.repository.getPlugins();
-      const nodes = plugins.map(p => new PluginNode(p));
-      return this.filterText
-        ? nodes.filter(n => n.plugin.name.toLowerCase().includes(this.filterLower))
-        : nodes;
-    } catch (e) {
-      const message = this.err(e);
-      this.log(`[PluginTreeProvider] fetchPlugins failed: ${message}`);
-      return [new ErrorNode(message)];
-    }
-  }
-
   /** A plugin's children — its spatial group nodes and flat record-type nodes — keyed by filename
    *  rather than by a node this provider built. Public because the merged Plugins tree (#270 /
-   *  ADR-0035) expands rows built elsewhere, by a composite at the composition root that knows a
-   *  plugin filename and nothing else. `getChildren` routes its own PluginNode here too, so both
-   *  trees browse through exactly one implementation. */
+   *  ADR-0035) is the only caller: `PluginsTreeComposite` expands rows built by
+   *  `PluginListProvider`, and its whole knowledge of this side is a plugin filename. #273
+   *  deleted this provider's own standalone root listing (`fetchPlugins`/`PluginNode`) once the
+   *  standalone editing Plugins tree that was its only caller was retired — this is now the one
+   *  way into a plugin's children. */
   async getPluginChildren(pluginName: string): Promise<PluginTreeNode[]> {
     try {
       const types = await this.repository.getRecordTypes(pluginName);

@@ -102,21 +102,15 @@
           "visibility": "collapsed"
         },
         {
-          "id": "modbench.pluginTree",
-          "name": "Plugins",
-          "when": "modbench.viewMode == 'editing'"
-        },
-        {
           "id": "modbench.changeGroupTree",
-          "name": "Pending Changes",
-          "when": "modbench.viewMode == 'editing'"
+          "name": "Plugins - Pending Changes",
+          "when": "modbench.hasPendingChanges"
         }
       ],
       "modbenchReferencedBy": [
         {
           "id": "modbench.referencedByTree",
-          "name": "Referenced By",
-          "when": "modbench.viewMode == 'editing'"
+          "name": "Plugins - Referenced By"
         }
       ]
     },
@@ -172,11 +166,6 @@
       {
         "command": "modbench.copyAsOverrideInto",
         "title": "Modbench: Copy as Override Into…"
-      },
-      {
-        "command": "modbench.filterPluginTree",
-        "title": "Modbench: Filter Plugins by Name…",
-        "icon": "$(search)"
       },
       {
         "command": "modbench.setFilter",
@@ -509,24 +498,19 @@
           "group": "navigation@1"
         },
         {
-          "command": "modbench.filterPluginTree",
-          "when": "view == modbench.pluginTree",
-          "group": "navigation@1"
-        },
-        {
-          "command": "modbench.newPlugin",
-          "when": "view == modbench.pluginTree",
-          "group": "navigation@3"
-        },
-        {
           "command": "modbench.setFilter",
-          "when": "view == modbench.pluginTree",
+          "when": "view == modbench.pluginListTree",
           "group": "navigation@2"
         },
         {
           "command": "modbench.clearFilter",
-          "when": "view == modbench.pluginTree && modbench.filterActive",
+          "when": "view == modbench.pluginListTree && modbench.filterActive",
           "group": "navigation@2"
+        },
+        {
+          "command": "modbench.newPlugin",
+          "when": "view == modbench.pluginListTree",
+          "group": "navigation@3"
         },
         {
           "command": "modbench.modList.filter",
@@ -584,37 +568,37 @@
       "view/item/context": [
         {
           "command": "modbench.openHeader",
-          "when": "view == modbench.pluginTree && (viewItem == plugin || viewItem == pluginImmutable)",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)",
           "group": "modbench@1"
         },
         {
           "command": "modbench.openHeader",
-          "when": "view == modbench.pluginTree && (viewItem == plugin || viewItem == pluginImmutable)",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)",
           "group": "inline"
         },
         {
           "command": "modbench.copyAsOverrideInto",
-          "when": "(view == modbench.pluginTree || view == modbench.pluginListTree) && viewItem == record",
+          "when": "view == modbench.pluginListTree && viewItem == record",
           "group": "modbench@1"
         },
         {
           "command": "modbench.deleteRecord",
-          "when": "(view == modbench.pluginTree || view == modbench.pluginListTree) && viewItem == record",
+          "when": "view == modbench.pluginListTree && viewItem == record",
           "group": "modbench@2"
         },
         {
           "command": "modbench.createPlaced",
-          "when": "(view == modbench.pluginTree || view == modbench.pluginListTree) && (viewItem == placedGroup-persistent || viewItem == placedGroup-temporary)",
+          "when": "view == modbench.pluginListTree && (viewItem == placedGroup-persistent || viewItem == placedGroup-temporary)",
           "group": "modbench@1"
         },
         {
           "command": "modbench.copyAsOverrideInto",
-          "when": "(view == modbench.pluginTree || view == modbench.pluginListTree) && viewItem == refr",
+          "when": "view == modbench.pluginListTree && viewItem == refr",
           "group": "modbench@1"
         },
         {
           "command": "modbench.deleteRecord",
-          "when": "(view == modbench.pluginTree || view == modbench.pluginListTree) && viewItem == refr",
+          "when": "view == modbench.pluginListTree && viewItem == refr",
           "group": "modbench@2"
         },
         {
@@ -840,7 +824,7 @@
       {
         "command": "modbench.deleteRecord",
         "key": "Delete",
-        "when": "(focusedView == modbench.pluginTree || focusedView == modbench.pluginListTree) && viewItem == record"
+        "when": "focusedView == modbench.pluginListTree && viewItem == record"
       },
       {
         "command": "modbench.referencedByTree.copy",

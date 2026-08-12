@@ -26,7 +26,7 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  PluginTreeProvider, PluginNode, RecordTypeNode, RecordNode, LoadMoreNode,
+  PluginTreeProvider, RecordTypeNode, RecordNode, LoadMoreNode,
   CellNode, InteriorCellsNode, InteriorLoadMoreNode,
   WorldspacesNode, WorldspaceNode, ErrorNode, headerFormKeyFor,
 } from '../PluginTreeProvider';
@@ -78,112 +78,25 @@ function makeRepository(overrides: Partial<{
   };
 }
 
-// ── getChildren(root) ─────────────────────────────────────────────────────────
+// #273: PluginTreeProvider's own standalone root listing (fetchPlugins/PluginNode/the
+// getChildren(undefined) path) is deleted — it was reachable only through the standalone
+// editing Plugins tree (modbench.pluginTree) this ticket retired. getPluginChildren(name) is now
+// the one way into a plugin's children (also true in production: PluginsTreeComposite always
+// calls this directly, never getChildren(undefined) — see the comment on getChildren itself).
 
-describe('PluginTreeProvider.getChildren(root)', () => {
-  it('returns one PluginNode per plugin', async () => {
-    const repo = makeRepository({ plugins: [makePlugin(0), makePlugin(1), makePlugin(2)] });
-    const provider = new PluginTreeProvider(repo);
+// #273 Slice D: PluginTreeProvider.setFilter (issue #70's plugin-name filter) is deleted — it
+// duplicated modbench.pluginListTree.filter over the same rows (both narrowed plugin rows by
+// filename substring) once the merged tree made this provider's own root TreeView unreachable.
+// The merged tree's own name filter is covered in PluginListProvider.test.ts.
 
-    const children = await provider.getChildren(undefined);
+// ── getPluginChildren (record types) ────────────────────────────────────────────
 
-    expect(children).toHaveLength(3);
-    expect(children.every(c => c instanceof PluginNode)).toBe(true);
-    expect((children[0] as PluginNode).plugin.name).toBe('Plugin0.esp');
-  });
-
-  it('returns empty array when no plugins exist', async () => {
-    const repo = makeRepository({ plugins: [] });
-    const provider = new PluginTreeProvider(repo);
-
-    expect(await provider.getChildren(undefined)).toEqual([]);
-  });
-});
-
-// ── setFilter (plugin-name filter, issue #70) ──────────────────────────────────
-
-describe('PluginTreeProvider.setFilter (plugin-name filter)', () => {
-  function makeNamedPlugin(name: string): PluginMetadata {
-    return { ...makePlugin(0), name };
-  }
-
-  it('narrows top-level plugin nodes to a case-insensitive filename substring match', async () => {
-    const repo = makeRepository({
-      plugins: [makeNamedPlugin('Fallout4.esm'), makeNamedPlugin('ArmorMod.esp'), makeNamedPlugin('WeaponMod.esp')],
-    });
-    const provider = new PluginTreeProvider(repo);
-
-    provider.setFilter('armor');
-    const children = await provider.getChildren(undefined) as PluginNode[];
-
-    expect(children).toHaveLength(1);
-    expect(children[0].plugin.name).toBe('ArmorMod.esp');
-  });
-
-  it('matches regardless of query case', async () => {
-    const repo = makeRepository({
-      plugins: [makeNamedPlugin('Fallout4.esm'), makeNamedPlugin('ArmorMod.esp')],
-    });
-    const provider = new PluginTreeProvider(repo);
-
-    provider.setFilter('FALLOUT');
-    const children = await provider.getChildren(undefined) as PluginNode[];
-
-    expect(children).toHaveLength(1);
-    expect(children[0].plugin.name).toBe('Fallout4.esm');
-  });
-
-  it('returns an empty array (not an ErrorNode) when nothing matches', async () => {
-    const repo = makeRepository({ plugins: [makeNamedPlugin('Fallout4.esm')] });
-    const provider = new PluginTreeProvider(repo);
-
-    provider.setFilter('nonexistent');
-    const children = await provider.getChildren(undefined);
-
-    expect(children).toEqual([]);
-  });
-
-  it('restores the full plugin list when the filter is cleared', async () => {
-    const repo = makeRepository({
-      plugins: [makeNamedPlugin('Fallout4.esm'), makeNamedPlugin('ArmorMod.esp')],
-    });
-    const provider = new PluginTreeProvider(repo);
-
-    provider.setFilter('armor');
-    expect(await provider.getChildren(undefined)).toHaveLength(1);
-
-    provider.setFilter('');
-    const children = await provider.getChildren(undefined) as PluginNode[];
-
-    expect(children).toHaveLength(2);
-  });
-
-  it('composes with an already-filtered plugin list (e.g. from an active record filter) by narrowing further, without needing to know about it', async () => {
-    // Simulates the backend having already pruned the session to plugins with
-    // matching records under an active SQL record filter (§2.6) — the name
-    // filter must layer on top of whatever getPlugins() returns, not fight it.
-    const repo = makeRepository({
-      plugins: [makeNamedPlugin('ArmorMod.esp'), makeNamedPlugin('ArmorReplacer.esp')],
-    });
-    const provider = new PluginTreeProvider(repo);
-
-    provider.setFilter('replacer');
-    const children = await provider.getChildren(undefined) as PluginNode[];
-
-    expect(children).toHaveLength(1);
-    expect(children[0].plugin.name).toBe('ArmorReplacer.esp');
-  });
-});
-
-// ── getChildren(PluginNode) ───────────────────────────────────────────────────
-
-describe('PluginTreeProvider.getChildren(PluginNode)', () => {
+describe('PluginTreeProvider.getPluginChildren (record types)', () => {
   it('returns one RecordTypeNode per record type', async () => {
     const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 10 }, { type: 'NPC_', count: 3 }] });
     const provider = new PluginTreeProvider(repo);
-    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
 
-    const children = await provider.getChildren(pluginNode);
+    const children = await provider.getPluginChildren('Plugin0.esp');
 
     expect(children).toHaveLength(2);
     expect(children.every(c => c instanceof RecordTypeNode)).toBe(true);
@@ -195,9 +108,8 @@ describe('PluginTreeProvider.getChildren(PluginNode)', () => {
       recordTypes: [{ type: 'acti', count: 10, displayName: 'Activator' }],
     });
     const provider = new PluginTreeProvider(repo);
-    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
 
-    const [typeNode] = await provider.getChildren(pluginNode) as RecordTypeNode[];
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
 
     expect(typeNode.label).toBe('Activator');
     expect(typeNode.recordType).toBe('acti');
@@ -211,8 +123,7 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     const records = [makeRecord(0), makeRecord(1), makeRecord(2)];
     const repo = makeRepository({ records: { items: records, total: 3 } });
     const provider = new PluginTreeProvider(repo);
-    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
-    const [typeNode] = await provider.getChildren(pluginNode) as RecordTypeNode[];
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
 
     const children = await provider.getChildren(typeNode);
 
@@ -224,8 +135,7 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     const records = Array.from({ length: 50 }, (_, i) => makeRecord(i));
     const repo = makeRepository({ records: { items: records, total: 120 } });
     const provider = new PluginTreeProvider(repo);
-    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
-    const [typeNode] = await provider.getChildren(pluginNode) as RecordTypeNode[];
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
 
     const children = await provider.getChildren(typeNode);
 
@@ -238,8 +148,7 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
   it('uses cache on second expand without re-fetching', async () => {
     const repo = makeRepository({ records: { items: [makeRecord(0)], total: 1 } });
     const provider = new PluginTreeProvider(repo);
-    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
-    const [typeNode] = await provider.getChildren(pluginNode) as RecordTypeNode[];
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
 
     await provider.getChildren(typeNode);
     await provider.getChildren(typeNode);
@@ -260,8 +169,7 @@ describe('PluginTreeProvider.loadMore', () => {
       .mockResolvedValueOnce({ items: secondPage, total: 70 });
 
     const provider = new PluginTreeProvider(repo);
-    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
-    const [typeNode] = await provider.getChildren(pluginNode) as RecordTypeNode[];
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
     const firstChildren = await provider.getChildren(typeNode);
     const loadMoreNode = firstChildren.find(c => c instanceof LoadMoreNode) as LoadMoreNode;
 
@@ -280,8 +188,7 @@ describe('PluginTreeProvider.loadMore', () => {
       .mockResolvedValueOnce({ items: [makeRecord(50)], total: 60 });
 
     const provider = new PluginTreeProvider(repo);
-    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
-    const [typeNode] = await provider.getChildren(pluginNode) as RecordTypeNode[];
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
     const firstChildren = await provider.getChildren(typeNode);
     const loadMoreNode = firstChildren.find(c => c instanceof LoadMoreNode) as LoadMoreNode;
 
@@ -301,8 +208,7 @@ describe('PluginTreeProvider.loadMore', () => {
       .mockRejectedValueOnce(new Error('boom'));
 
     const provider = new PluginTreeProvider(repo);
-    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
-    const [typeNode] = await provider.getChildren(pluginNode) as RecordTypeNode[];
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
     const firstChildren = await provider.getChildren(typeNode);
     const loadMoreNode = firstChildren.find(c => c instanceof LoadMoreNode) as LoadMoreNode;
 
@@ -326,8 +232,7 @@ describe('PluginTreeProvider.loadMore', () => {
       .mockResolvedValueOnce({ items: secondPage, total: 70 });
 
     const provider = new PluginTreeProvider(repo);
-    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
-    const [typeNode] = await provider.getChildren(pluginNode) as RecordTypeNode[];
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
     const firstChildren = await provider.getChildren(typeNode);
     const loadMoreNode = firstChildren.find(c => c instanceof LoadMoreNode) as LoadMoreNode;
 
@@ -390,58 +295,10 @@ describe('PluginTreeProvider.loadMoreInterior', () => {
   });
 });
 
-// ── PluginNode ────────────────────────────────────────────────────────────────
-
-describe('PluginNode', () => {
-  it('has contextValue "plugin" for mutable plugins', () => {
-    const node = new PluginNode({ ...makePlugin(0), isImmutable: false });
-    expect(node.contextValue).toBe('plugin');
-  });
-
-  it('has contextValue "pluginImmutable" for immutable plugins', () => {
-    const node = new PluginNode({ ...makePlugin(0), isImmutable: true });
-    expect(node.contextValue).toBe('pluginImmutable');
-  });
-
-  it('uses plugin name as label', () => {
-    const node = new PluginNode(makePlugin(2));
-    expect(node.label).toBe('Plugin2.esp');
-  });
-
-  it('formats description as "[index] count records"', () => {
-    const plugin = { ...makePlugin(0), loadOrderIndex: 3, recordCount: 1500 };
-    const node = new PluginNode(plugin);
-    expect(node.description).toBe('[3] 1,500 records');
-  });
-
-  it('has a lock ThemeIcon for immutable plugins', () => {
-    const node = new PluginNode({ ...makePlugin(0), isImmutable: true });
-    expect((node.iconPath as { id: string }).id).toBe('lock');
-  });
-
-  it('has no icon for mutable plugins', () => {
-    const node = new PluginNode({ ...makePlugin(0), isImmutable: false });
-    expect(node.iconPath).toBeUndefined();
-  });
-
-  it('wires .command to modbench.openHeader with itself as the argument (mutable)', () => {
-    const node = new PluginNode({ ...makePlugin(0), isImmutable: false });
-    expect(node.command).toEqual({
-      command: 'modbench.openHeader',
-      title: 'Open Record Header',
-      arguments: [node],
-    });
-  });
-
-  it('wires .command to modbench.openHeader with itself as the argument (immutable)', () => {
-    const node = new PluginNode({ ...makePlugin(0), isImmutable: true });
-    expect(node.command).toEqual({
-      command: 'modbench.openHeader',
-      title: 'Open Record Header',
-      arguments: [node],
-    });
-  });
-});
+// #273: PluginNode (this provider's own standalone plugin-row node) is deleted along with its
+// tests — see the comment above getPluginChildren for why. The equivalent coverage for the
+// merged tree's actual plugin rows (contextValue "plugin"/"pluginImplicit", lock icon absent —
+// see plugins.md) lives in PluginListProvider.test.ts.
 
 // ── InteriorCellsNode ─────────────────────────────────────────────────────────
 
@@ -534,8 +391,7 @@ describe('PluginTreeProvider.refresh', () => {
   it('clears cache so next getChildren re-fetches', async () => {
     const repo = makeRepository({ records: { items: [makeRecord(0)], total: 1 } });
     const provider = new PluginTreeProvider(repo);
-    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
-    const [typeNode] = await provider.getChildren(pluginNode) as RecordTypeNode[];
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
 
     await provider.getChildren(typeNode);  // fills cache
     provider.refresh();
@@ -569,9 +425,8 @@ describe('PluginTreeProvider worldspace tree', () => {
       ],
     });
     const provider = new PluginTreeProvider(repo);
-    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
 
-    const children = await provider.getChildren(pluginNode);
+    const children = await provider.getPluginChildren('Plugin0.esp');
     const labels = children.map(c => c.label);
 
     expect(labels).toContain('Worldspaces');
@@ -591,8 +446,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       blocks: [{ x: 0, y: 0, subBlocks: [{ x: 0, y: 0, cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5 }] }] }],
     });
     const provider = new PluginTreeProvider(repo);
-    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
-    const [wsRoot] = await provider.getChildren(pluginNode);
+    const [wsRoot] = await provider.getPluginChildren('Plugin0.esp');
     const [wsNode] = await provider.getChildren(wsRoot);
 
     const wsChildren = await provider.getChildren(wsNode);
@@ -641,16 +495,9 @@ describe('PluginTreeProvider worldspace tree', () => {
 // ── Fetch failures render an error node instead of an empty list (ADR-0026) ──
 
 describe('PluginTreeProvider fetch failures', () => {
-  it('fetchPlugins: renders an error node when getPlugins fails', async () => {
-    const repo = { ...makeRepository(), getPlugins: vi.fn().mockRejectedValue(new Error('boom')) };
-    const provider = new PluginTreeProvider(repo);
-
-    const children = await provider.getChildren(undefined);
-
-    expect(children).toHaveLength(1);
-    expect(children[0]).toBeInstanceOf(ErrorNode);
-    expect(children[0].tooltip).toContain('boom');
-  });
+  // #273: fetchPlugins (this provider's own root listing) is deleted along with the standalone
+  // tree that was its only caller — its error-path test (getPlugins rejects) goes with it.
+  // getPluginChildren's own error path is covered just below.
 
   // #270: the merged Plugins tree's rows are Mod Management's, not this provider's, so it needs a
   // way in that starts from a plugin filename rather than from a PluginNode this provider built.
@@ -694,16 +541,9 @@ describe('PluginTreeProvider fetch failures', () => {
     expect(children[0]).toBeInstanceOf(ErrorNode);
   });
 
-  it('fetchPluginChildren: renders an error node when getRecordTypes fails', async () => {
-    const repo = { ...makeRepository(), getRecordTypes: vi.fn().mockRejectedValue(new Error('boom')) };
-    const provider = new PluginTreeProvider(repo);
-    const [pluginNode] = await provider.getChildren(undefined) as PluginNode[];
-
-    const children = await provider.getChildren(pluginNode);
-
-    expect(children).toHaveLength(1);
-    expect(children[0]).toBeInstanceOf(ErrorNode);
-  });
+  // #273: this test duplicated 'getPluginChildren: renders an error node when getRecordTypes
+  // fails' above through the now-deleted getChildren(undefined) entry point — same error path,
+  // same assertion, reached the only way production reaches it now.
 
   it('fetchRecords: renders an error node when getRecords fails', async () => {
     const repo = { ...makeRepository(), getRecords: vi.fn().mockRejectedValue(new Error('boom')) };

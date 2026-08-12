@@ -37,7 +37,7 @@ here ([CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary: [CONTEXT.md](../../CONTE
 
 One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared session lifecycle,
 status bar, command palette, and architecture seams. Siblings:
-[Plugins tree](medit-plugins-tree.md) (what opens this panel),
+[Plugins tree](plugins.md) (what opens this panel),
 [Pending Changes tree](medit-pending-changes-tree.md) (where staged edits are grouped),
 [Referenced By tree](medit-referenced-by.md).
 
@@ -506,7 +506,7 @@ deliberately — they are enum→visual encodings that prose would only make les
 colors apply at both, only the *granularity of computation* differs:
 
 - **Record-wide** (one value per record, `CompareResult.ConflictAll`): drives the
-  [Plugins tree](medit-plugins-tree.md)'s per-record conflict badge only — "the record's override
+  [Plugins tree](plugins.md)'s per-record conflict badge only — "the record's override
   stack as a whole."
 - **Per-node, bottom-up** (one value per compare-grid row, `FieldDiff.ConflictAll`): drives the
   compare grid's own row background. Each row paints from *its own* node, not the record-wide
@@ -548,7 +548,7 @@ Absent fields (a null value in a non-master plugin — the PartialForm absent-fi
 with no background and no text color. Column headers use the worst ConflictThis across that
 plugin's fields as a quick summary; individual cell colors are authoritative.
 
-The [Plugins tree](medit-plugins-tree.md)'s record-node conflict badge is driven by the same
+The [Plugins tree](plugins.md)'s record-node conflict badge is driven by the same
 classification, at the record-wide scope specifically (Axis 1 above) — never the per-node scope
 the compare grid's own rows use.
 

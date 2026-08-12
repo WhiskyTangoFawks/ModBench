@@ -6,10 +6,9 @@ One living spec per Modbench UI surface. A **surface** is a top-level UI unit th
 |---|---|---|
 | [loadout-header.md](loadout-header.md) | Loadout header — workspace-scope readout and action home (profile, session, deployment) | Implemented; Launch… wiring deferred (#293) |
 | [mods.md](mods.md) | Mods (Loadout) — install, order, enable, deploy | Implemented; executables-as-tasks specced (#96) |
-| [plugins.md](plugins.md) | Plugins (load order) — enable/reorder `plugins.txt` | Specced — ready to build |
+| [plugins.md](plugins.md) | Plugins — the one Plugins tree: enable/reorder `plugins.txt` (Mod Management), plus record navigation and the SQL record filter whenever a session is running (Editing) | Implemented |
 | [downloads.md](downloads.md) | Downloads — Nexus integration, download queue | Specced — MVP ready to build |
 | [medit.md](medit.md) | **mEdit — context overview** (session lifecycle, status bar, command palette, seams). Not a surface | Implemented |
-| [medit-plugins-tree.md](medit-plugins-tree.md) | mEdit Plugins tree — navigate records; SQL record filter | Implemented |
 | [medit-record-editor.md](medit-record-editor.md) | mEdit Record editor panel — compare grid, in-place editing, Pending column | Implemented; edit-mode removal + Pending column actions specced |
 | [medit-referenced-by.md](medit-referenced-by.md) | mEdit Referenced By tree — what points at this record | Implemented |
 | [medit-pending-changes-tree.md](medit-pending-changes-tree.md) | mEdit Pending Changes tree — what must be saved or reverted together | Specced — needs re-slicing (ADR-0029) |

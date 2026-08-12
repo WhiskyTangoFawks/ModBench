@@ -23,10 +23,15 @@ const MOCK_PLUGINS = [
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let sessionLoaded = false;
 const requestLog: string[] = [];
+// #273 Slice A: GET /change-groups' answer, mutable per-test so a suite can flip staged work
+// on and off and observe modbench.hasPendingChanges (via the badge, its same-signal proxy —
+// see the toggle test) react both directions, not just once.
+let pendingGroups: Array<{ id: string; operation: string; description: string | null; changeCount: number; pluginCount: number }> = [];
 
 function resetMockBackend(): void {
   sessionLoaded = false;
   requestLog.length = 0;
+  pendingGroups = [];
 }
 
 function createMockBackend(): http.Server {
@@ -67,6 +72,19 @@ function createMockBackend(): http.Server {
     if (/^\/plugins\/[^/]+\/record-types$/.test(url)) {
       res.writeHead(sessionLoaded ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(sessionLoaded ? JSON.stringify(MOCK_RECORD_TYPES) : 'No session loaded.');
+      return;
+    }
+    // #273 Slice A: PendingChangesTreeProvider.getChildren() reads both on every root render —
+    // /changes only matters when a group is expanded, which this suite never does, so it always
+    // answers empty.
+    if (url === '/change-groups') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(pendingGroups));
+      return;
+    }
+    if (url === '/changes') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify([]));
       return;
     }
     res.writeHead(404);
@@ -142,7 +160,9 @@ describe('modbench command registration', () => {
     'modbench.refresh',
     'modbench.newPlugin',
     'modbench.copyAsOverrideInto',
-    'modbench.filterPluginTree',
+    // #273 Slice D: modbench.filterPluginTree (issue #70) is gone — it duplicated
+    // modbench.pluginListTree.filter over the same rows once the merged tree made this
+    // command's own view (modbench.pluginTree) unreachable.
     'modbench.setFilter',
     'modbench.clearFilter',
     'modbench.setFilterFromDocument',
@@ -296,6 +316,34 @@ describe('modbench.openEditor', () => {
   });
 });
 
+// ── modbench.openHeader reachable from every plugin-bearing row (#273 Slice E) ──
+// The gap this closes: the old modbench.pluginTree's Open Header reached both 'plugin' and
+// 'pluginImmutable' rows (medit's own read-only-master contextValue). The merged tree's rows
+// come from modmanager/PluginListProvider.ts instead, whose implicit-master row is a *different*
+// class with a *different* contextValue ('pluginImplicit', not 'pluginImmutable') and no `.plugin`
+// field at all — so the handler's own node-shape assumption, not just the package.json `when`,
+// had to change for this row kind to keep working. Reconciling the two contextValues is #276's,
+// not this ticket's.
+import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../modmanager/PluginListProvider';
+
+describe('modbench.openHeader reachable from every plugin-bearing row of the merged tree (#273 Slice E)', () => {
+  it('opens a header tab from an ordinary plugin row (PluginListProvider.PluginNode)', async () => {
+    const node = new PluginListPluginNode({ name: 'TestMod.esp', path: '/data/TestMod.esp', enabled: true } as any);
+    await vscode.commands.executeCommand('modbench.openHeader', node);
+    await new Promise(r => setTimeout(r, 300));
+    const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
+    assert.ok(tabs.some(t => t.label === 'TestMod.esp'), 'expected a header tab titled after the plugin');
+  });
+
+  it('opens a header tab from an implicit-master row (PluginListProvider.ImplicitMasterNode) — the gap #273 closes', async () => {
+    const node = new ImplicitMasterNode('Fallout4.esm');
+    await vscode.commands.executeCommand('modbench.openHeader', node);
+    await new Promise(r => setTimeout(r, 300));
+    const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
+    assert.ok(tabs.some(t => t.label === 'Fallout4.esm'), 'expected a header tab titled after the implicit master');
+  });
+});
+
 // ── modbench.downloads tree (#233) ──────────────────────────────────────────
 
 interface DownloadsProviderLike {
@@ -409,6 +457,43 @@ describe('Overwrite row (#82)', () => {
   });
 });
 
+// ── Pending Changes visible exactly when there is staged work (#273 Slice A) ────
+// The declarative gate itself (view.when === 'modbench.hasPendingChanges') is proven statically
+// in packageJson.test.ts. What only a live host can show is that the key actually toggles both
+// directions as staged work appears and clears — makePendingStateHandler sets the context key
+// and the view's badge from the same stagedGroups number in the same call, so the badge (public,
+// already exported on changeGroupTreeView) is the observable proxy for the key: they cannot
+// disagree by construction, and VS Code exposes no public API to read a context key's value
+// directly from a test.
+
+interface PendingChangesTreeProviderLike {
+  getChildren(element?: unknown): Promise<unknown[]>;
+}
+
+describe('Pending Changes visibility tracks staged work, both directions (#273 Slice A)', () => {
+  const exportsOf = () => ext?.exports as {
+    changeGroupTreeProvider?: PendingChangesTreeProviderLike;
+    changeGroupTreeView?: { badge?: { value: number } };
+  } | undefined;
+
+  before(() => resetMockBackend());
+  after(() => resetMockBackend());
+
+  it('sets the badge (and so modbench.hasPendingChanges) once a change group is staged', async () => {
+    pendingGroups = [{ id: 'g1', operation: 'field_edit', description: null, changeCount: 1, pluginCount: 1 }];
+    await exportsOf()!.changeGroupTreeProvider!.getChildren();
+    assert.strictEqual(exportsOf()?.changeGroupTreeView?.badge?.value, 1,
+      'badge should report 1 staged group once /change-groups returns one');
+  });
+
+  it('clears the badge (and so modbench.hasPendingChanges) once nothing is staged', async () => {
+    pendingGroups = [];
+    await exportsOf()!.changeGroupTreeProvider!.getChildren();
+    assert.strictEqual(exportsOf()?.changeGroupTreeView?.badge, undefined,
+      'badge should clear once /change-groups returns no groups — the same call path, run again, must undo itself');
+  });
+});
+
 // ── Launch mEdit → editing plugin tree populated (#75) ──────────────────────────
 
 interface TreeLike {
@@ -440,7 +525,6 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
     if (!root) return;
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
-    await vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
     fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '');
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
@@ -462,87 +546,31 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
     const prematurePlugins = duringLaunch.slice(0, load).includes('GET /plugins');
     assert.ok(!prematurePlugins, 'GET /plugins must not fire before POST /session/load-explicit');
 
-    const nodes = await treeProvider()!.getChildren();
-    assert.ok(nodes.length > 0, 'the plugin tree should not be empty after a successful launch');
-    assert.ok(!nodes.some((n) => n.kind === 'error'), 'the plugin tree should not show an ErrorNode');
-    assert.deepStrictEqual(
-      nodes.map((n) => n.plugin?.name),
-      MOCK_PLUGINS.map((p) => p.name),
-      'the tree should list the plugins the backend returned',
+    // #273: the standalone editing tree's own root listing (what this assertion read before) is
+    // gone — nothing in production calls treeProvider.getChildren(undefined) any more. The merged
+    // Plugins tree (modbench.pluginListTree / pluginsTree export) is what actually reflects a
+    // successful launch now: its TestMod.esp row only becomes expandable once
+    // PluginsTreeComposite.setSession() has run, which only happens after the session's own
+    // GET /plugins lands — so an expandable row here proves both halves of the #75 regression
+    // this test guards: the fetch happened, and it happened after load, not before.
+    const pluginsTreeExport = (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
+    assert.ok(pluginsTreeExport, 'activate() should return { pluginsTree } for the merged view');
+    const rows = await pluginsTreeExport.getChildren();
+    assert.ok(rows.length > 0, 'the merged plugins tree should not be empty after a successful launch');
+    const testMod = findRow(rows, 'TestMod.esp');
+    assert.strictEqual(
+      pluginsTreeExport.getTreeItem(testMod).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
+      'TestMod.esp should be expandable once the session has loaded and GET /plugins has landed',
     );
   });
 });
 
-// ── mEdit plugin tree title reflects view mode (#109) ───────────────────────────
-// The activity-bar container title ("Modbench") is fixed by VS Code; the mEdit
-// context instead lives on the editing plugin tree's own writable `title`.
-
-interface TitledTreeView { title?: string }
-
-describe('mEdit plugin tree title reflects view mode (#109)', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const exportsOf = () => ext?.exports as {
-    treeView?: TitledTreeView;
-    changeGroupTreeView?: TitledTreeView;
-    modListProvider?: unknown;
-  } | undefined;
-  let gameDir = '';
-
-  // The committed test workspace fixture (#192) already supplies a valid MO2
-  // instance (empty plugins.txt) — only the suite-scoped plugins.txt content
-  // and game dir are set up here.
-  before(async () => {
-    if (!root) return;
-    resetMockBackend();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-
-    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n');
-  });
-
-  after(async () => {
-    if (!root) return;
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
-    await vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
-    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '');
-    // This suite's own Launch Game test deploys against gameDir before the
-    // (failing, fake) launch — that writes mods/.medit-manifest.json. purge()
-    // never runs since the spawn errors rather than exits, so clean the manifest
-    // up by hand to keep the committed fixture pristine across runs.
-    fs.rmSync(path.join(root, 'mods', '.medit-manifest.json'), { force: true });
-    fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('sets the mEdit plugin tree title when Launch mEdit enters editing mode', async () => {
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
-    assert.strictEqual(
-      exportsOf()?.treeView?.title, 'mEdit — Plugins',
-      'the editing plugin tree title should convey the mEdit context after Launch mEdit',
-    );
-  });
-
-  it('leaves the Pending Changes view title untouched entering editing mode', () => {
-    assert.strictEqual(
-      exportsOf()?.changeGroupTreeView?.title, 'Pending Changes',
-      'only the editing plugin tree title should change — Pending Changes keeps its declared default',
-    );
-  });
-
-  it('restores the default plugin tree title when Close mEdit exits editing mode', async () => {
-    await vscode.commands.executeCommand('modbench.closeMedit');
-    assert.strictEqual(
-      exportsOf()?.treeView?.title, 'Plugins',
-      'closing mEdit should restore the plugin tree title to its declared default',
-    );
-  });
-
-  // #247 deleted the Launch-Game-enters-editing-mode case along with the command. Launching
-  // and editing are separate operations: the replacement (modbench.launch) runs a contributed
-  // task and touches no view mode, so there is no longer a title to assert.
-});
+// #273 AC6: the #109 runtime view-title swap ("mEdit plugin tree title reflects view mode") is
+// removed outright, not adapted — modbench.pluginTree (the view whose title it swapped) and
+// modbench.viewMode (the key it swapped on) are both gone, so there is no mode left to reflect
+// and nothing left to assert. This comment is the suite's own tombstone; the merged tree's own
+// identity is covered by the #270 suite below, and Pending Changes' title is covered by Slice B's
+// packageJson.test.ts assertion (its declared name never changes at runtime).
 
 // ── Loadout stays visible through an editing session (#268) ────────────────────
 // The declarative view-mode gate itself is proven statically in packageJson.test.ts. These
@@ -580,7 +608,6 @@ describe('Loadout stays visible through an editing session (#268)', () => {
     if (!root) return;
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
-    await vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
     fs.writeFileSync(pluginsTxtPath, '');
     fs.rmSync(gameDir, { recursive: true, force: true });
   });

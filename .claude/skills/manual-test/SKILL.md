@@ -43,10 +43,14 @@ have nothing to show. A known local instance: `/home/wayne/Games/FO4/LitR`.
 
 `activationEvents` is intentionally `[]` — the extension does not auto-activate on startup
 (see `src/test/integration/extension.test.ts`). The Modbench activity bar icon stays hidden
-until something activates the extension and sets the `modbench.viewMode` context key, because
-every contributed view has a `when` clause and none default to true.
+until something activates the extension, because every contributed view had a `when` clause and
+none defaulted to true; #273 retired that gate (`modbench.viewMode`) along with the second
+Plugins view it existed to disambiguate, so the loadout views (Mods, Plugins, Downloads) are
+contributed unconditionally now — activation is still required to populate them, just not a
+context key to reveal them.
 
 Force activation once per session by running any Modbench command from the Command Palette,
 e.g. **Modbench: Refresh Mod List**. The activity bar icon then appears (Loadout view). From
-there, use **Modbench: Launch mEdit** to spawn/attach the backend and switch to the Editing
-view.
+there, use **Modbench: Launch mEdit** to spawn/attach the backend — the Plugins tree's rows
+gain chevrons once the session is ready, and Pending Changes appears once there is staged work.
+Nothing switches views; every loadout view stays exactly where it was.
