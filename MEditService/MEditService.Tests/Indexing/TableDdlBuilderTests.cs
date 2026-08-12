@@ -43,6 +43,7 @@ public class TableDdlBuilderTests
         Assert.Contains("plugin", cols);
         Assert.Contains("load_order_idx", cols);
         Assert.Contains("file_mtime", cols);
+        Assert.Contains("participates", cols); // #267 / ADR-0035
     }
 
     [Fact]

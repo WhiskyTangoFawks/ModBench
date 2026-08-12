@@ -52,6 +52,23 @@ public sealed class VmadConflictClassifierTests
         Assert.Equal(ConflictAll.Conflict, result.ConflictContribution);
     }
 
+    // #267 / ADR-0035: a non-participating plugin's VMAD is excluded before classification — a
+    // differing property between an enabled master and a disabled override is not a conflict.
+    [Fact]
+    public void Classify_DisabledPluginDiffers_ExcludedFromClassification_ReturnsNoConflict()
+    {
+        var a = Input("A.esp", 0, Script("S", "Local", Prop("Power", Scalar("Int", 10))));
+        var b = Input("B.esp", 1, Script("S", "Local", Prop("Power", Scalar("Int", 20))));
+        var participation = new Dictionary<string, bool> { ["A.esp"] = true, ["B.esp"] = false };
+
+        var result = VmadConflictClassifier.Classify([a, b], pluginParticipates: participation);
+
+        Assert.Equal(ConflictAll.NoConflict, result.ConflictContribution);
+        var script = Assert.Single(result.Compare.Scripts);
+        var power = Assert.Single(script.Properties);
+        Assert.False(power.CellStates.ContainsKey("B.esp"));
+    }
+
     [Fact]
     public void Classify_ScriptPresentInOnePluginOnly_ReflectsAbsenceAndClassifiesOverride()
     {

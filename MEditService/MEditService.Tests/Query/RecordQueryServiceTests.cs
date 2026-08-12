@@ -255,6 +255,62 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.NotEmpty(compare.Diffs);
     }
 
+    // #267 / ADR-0035: a FormKey present in one enabled and one disabled plugin is not a conflict —
+    // the disabled override is indexed and browsable, but excluded from conflict classification.
+    [Fact]
+    public void GetCompare_FormKeyInEnabledAndDisabledPlugin_ReturnsOnlyOne_NotConflict()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-participation")
+            .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("SharedNPC").FormKey)
+            .WithPlugin("Disabled.esp", (mod, prev) =>
+                mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).CalcMinLevel = 5, enabled: false)
+            .Build();
+        using (data)
+        {
+            var reflector = SharedSchemaReflector.Instance;
+            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+
+            var compare = svc.GetCompare(npcKey.ToString());
+
+            Assert.NotNull(compare);
+            Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
+        }
+    }
+
+    // #267 / ADR-0035: VMAD's own conflict contribution (folded into ConflictAll alongside the
+    // generic field path) must be participation-aware too. Base and Mid agree on everything
+    // (generic fields + VMAD) so the record-level classification isn't the OnlyOne shortcut — Mid
+    // makes it a real 2-participant NoConflict — and only the disabled, last-in-order plugin
+    // differs on VMAD. Pre-fix, VMAD's own unfiltered winner/cell-state pass would pick the
+    // disabled plugin as winner and escalate this to Override.
+    [Fact]
+    public void GetCompare_VmadDiffersOnlyInDisabledPlugin_ReturnsNoConflict()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-vmad-participation")
+            .WithPlugin("Base.esp", mod => npcKey = MakeScriptedNpc(mod, 10))
+            .WithPlugin("Mid.esp", (mod, prev) =>
+                mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(10))
+            .WithPlugin("Disabled.esp", (mod, prev) =>
+                mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).VirtualMachineAdapter = ScriptVmad(20),
+                enabled: false)
+            .Build();
+        using (data)
+        {
+            WithCompareService(data, svc =>
+            {
+                var compare = svc.GetCompare(npcKey.ToString());
+
+                Assert.NotNull(compare);
+                Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
+            });
+        }
+    }
+
     [Fact]
     public void GetCompare_OverridesCarryRecordType()
     {

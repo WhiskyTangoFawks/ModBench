@@ -50,7 +50,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     // --- Indexing (absorbed from RecordIndexer) ---
 
-    public void Index(IModGetter pluginMod, int loadOrderIndex)
+    public void Index(IModGetter pluginMod, int loadOrderIndex, bool participates = true)
     {
         var schemas = RequireSchemas();
         var plugin = pluginMod.ModKey.FileName.ToString();
@@ -62,6 +62,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         // read model intact rather than a partial snapshot. DuckDB appenders enroll in the active
         // transaction, so deletes and appender flushes roll back together on Dispose-without-Commit.
         using var tx = Connection.BeginTransaction();
+
+        // #267: one `plugins` row per indexed plugin — UpdateWinners() joins against it so a
+        // non-participating plugin's rows never win regardless of load_order_idx.
+        UpsertPluginParticipation(plugin, loadOrderIndex, participates);
 
         foreach (var (tableName, schema) in schemas)
         {
@@ -186,6 +190,29 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         }
     }
 
+    // #267 / ADR-0035: one row per indexed plugin, upserted every Index() call. UpdateWinners()
+    // joins record tables against it by plugin name rather than widening every reflected table
+    // with its own participates column.
+    private void UpsertPluginParticipation(string plugin, int loadOrderIndex, bool participates)
+    {
+        DeleteExisting("plugins", plugin);
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = "INSERT INTO plugins (plugin, load_order_idx, participates) VALUES ($1, $2, $3)";
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = loadOrderIndex });
+        cmd.Parameters.Add(new DuckDBParameter { Value = participates });
+        cmd.ExecuteNonQuery();
+    }
+
+    public void SetPluginParticipation(string plugin, bool participates)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = "UPDATE plugins SET participates = $2 WHERE plugin = $1";
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = participates });
+        cmd.ExecuteNonQuery();
+    }
+
     public void UpdateWinners()
     {
         var schemas = RequireSchemas();
@@ -193,10 +220,17 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         {
             Execute($"""
                 UPDATE "{tableName}"
-                SET is_winner = (load_order_idx = (
-                    SELECT MAX(t2.load_order_idx) FROM "{tableName}" t2
-                    WHERE t2.form_key = "{tableName}".form_key
-                ))
+                SET is_winner = (
+                    load_order_idx = (
+                        SELECT MAX(t2.load_order_idx) FROM "{tableName}" t2
+                        JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.participates
+                        WHERE t2.form_key = "{tableName}".form_key
+                    )
+                    AND EXISTS (
+                        SELECT 1 FROM plugins p1
+                        WHERE p1.plugin = "{tableName}".plugin AND p1.participates
+                    )
+                )
                 """);
         }
 
@@ -205,10 +239,17 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         // like every other resolved field, not a winner-agnostic special case (ADR-0031).
         Execute("""
             UPDATE form_lookup
-            SET is_winner = (load_order_idx = (
-                SELECT MAX(t2.load_order_idx) FROM form_lookup t2
-                WHERE t2.form_key = form_lookup.form_key
-            ))
+            SET is_winner = (
+                load_order_idx = (
+                    SELECT MAX(t2.load_order_idx) FROM form_lookup t2
+                    JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.participates
+                    WHERE t2.form_key = form_lookup.form_key
+                )
+                AND EXISTS (
+                    SELECT 1 FROM plugins p1
+                    WHERE p1.plugin = form_lookup.plugin AND p1.participates
+                )
+            )
             """);
     }
 

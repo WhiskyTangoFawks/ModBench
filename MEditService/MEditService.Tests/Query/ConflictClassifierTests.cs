@@ -11,8 +11,9 @@ public class ConflictClassifierTests
     private static readonly IConflictClassifier Classifier = new ConflictClassifier();
 
     private static ClassifyResult Classify(IReadOnlyList<RecordDetail> records,
-        IReadOnlyDictionary<string, IReadOnlyList<string>>? masters = null) =>
-        Classifier.Classify(records, masters ?? NoMasters);
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? masters = null,
+        IReadOnlyDictionary<string, bool>? participation = null) =>
+        Classifier.Classify(records, masters ?? NoMasters, pluginParticipates: participation);
 
     private static FieldMetadata Meta(string name, string type = "string") =>
         new(name, type, false, [], []);
@@ -142,6 +143,45 @@ public class ConflictClassifierTests
         var winner = MakeOverride("C.esp", 2, true, ("name", "Bob"), ("level", 10));
         var result = Classify([master, loser, winner]);
         Assert.Equal(ConflictAll.Conflict, result.ConflictAll);
+    }
+
+    // --- Participation (#267 / ADR-0035) ---
+
+    [Fact]
+    public void Classify_OneEnabledOneDisabled_ReturnsOnlyOne_NotConflict()
+    {
+        var enabled = MakeOverride("A.esp", 0, true, ("name", "Alice"));
+        var disabled = MakeOverride("B.esp", 1, false, ("name", "Bob"));
+        var participation = new Dictionary<string, bool> { ["A.esp"] = true, ["B.esp"] = false };
+
+        var result = Classify([enabled, disabled], participation: participation);
+
+        Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
+        Assert.Equal(ConflictThis.OnlyOne, result.PluginStates["A.esp"]);
+        Assert.DoesNotContain("B.esp", result.PluginStates.Keys);
+    }
+
+    [Fact]
+    public void Classify_AllDisabled_ReturnsOnlyOne_NoDiffs()
+    {
+        var a = MakeOverride("A.esp", 0, false, ("name", "Alice"));
+        var b = MakeOverride("B.esp", 1, false, ("name", "Bob"));
+        var participation = new Dictionary<string, bool> { ["A.esp"] = false, ["B.esp"] = false };
+
+        var result = Classify([a, b], participation: participation);
+
+        Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
+        Assert.Empty(result.Diffs);
+    }
+
+    [Fact]
+    public void Classify_NoParticipationSupplied_BehavesAsBefore()
+    {
+        // Default (null participation) = every plugin participates — legacy call sites unaffected.
+        var master = MakeOverride("A.esp", 0, false, ("name", "Alice"));
+        var winner = MakeOverride("B.esp", 1, true, ("name", "Bob"));
+        var result = Classify([master, winner]);
+        Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
 
     // --- Winner ConflictThis ---

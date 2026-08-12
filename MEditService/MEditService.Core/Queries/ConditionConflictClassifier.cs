@@ -17,9 +17,18 @@ public static class ConditionConflictClassifier
     // resolveFormKey: ADR-0031's O(1) lookup, batched once per Classify call (mirrors
     // VmadConflictClassifier's identical parameter) — #166 closes the gap where GetCompare built
     // this resolver but never threaded it into the condition path at all.
+    // pluginParticipates (#267 / ADR-0035): the plugins.txt `*` prefix, keyed by plugin name. A
+    // non-participating plugin's conditions are excluded before any diff/winner/cell-state
+    // computation — mirrors ConflictClassifier.Classify's identical filter. Null (the default)
+    // means every plugin in inputs participates, preserving prior behavior for existing callers.
     public static ConditionClassifyResult Classify(
-        IReadOnlyList<ConditionPluginInput> inputs, Func<string, RecordLookupEntry?>? resolveFormKey = null)
+        IReadOnlyList<ConditionPluginInput> inputs,
+        Func<string, RecordLookupEntry?>? resolveFormKey = null,
+        IReadOnlyDictionary<string, bool>? pluginParticipates = null)
     {
+        if (pluginParticipates != null)
+            inputs = [.. inputs.Where(i => pluginParticipates.GetValueOrDefault(i.Plugin, true))];
+
         var present = inputs.Where(i => i.Owners.Count > 0).ToList();
         if (present.Count == 0)
             return new ConditionClassifyResult(new ConditionCompare([]), ConflictAll.NoConflict);

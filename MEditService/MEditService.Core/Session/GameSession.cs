@@ -31,7 +31,7 @@ public sealed class GameSession : IGameSession
     public IModGetter? GetMod(string pluginName) =>
         _modsByName.TryGetValue(pluginName, out var mod) ? mod : null;
 
-    private sealed record ResolvedPlugin(string FileName, string FilePath, bool IsImmutable);
+    private sealed record ResolvedPlugin(string FileName, string FilePath, bool IsImmutable, bool Participates);
 
     public GameSession(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease, ILogger? logger = null)
         : this(dataFolderPath, gameRelease, ResolveFromDataFolder(dataFolderPath, pluginsTxtPath, gameRelease), logger)
@@ -49,11 +49,13 @@ public sealed class GameSession : IGameSession
     {
         var implicitKeys = ResolveImplicitKeys(gameDirectory, gameRelease);
 
+        // LoadExplicit takes an already-enabled list (an MO2 profile's active plugins) — there is
+        // no plugins.txt here to carry a disabled entry, so every resolved plugin participates.
         var ordered = implicitKeys
-            .Select(name => new ResolvedPlugin(name, Path.Combine(gameDirectory, name), IsImmutable: true))
+            .Select(name => new ResolvedPlugin(name, Path.Combine(gameDirectory, name), IsImmutable: true, Participates: true))
             .Concat(plugins
                 .Where(p => !implicitKeys.Contains(p.Name))
-                .Select(p => new ResolvedPlugin(p.Name, p.Path, IsImmutable: false)))
+                .Select(p => new ResolvedPlugin(p.Name, p.Path, IsImmutable: false, Participates: true)))
             .ToList();
 
         return new GameSession(gameDirectory, gameRelease, ordered, logger);
@@ -70,17 +72,17 @@ public sealed class GameSession : IGameSession
     {
         var implicitKeys = ResolveImplicitKeys(dataFolderPath, gameRelease);
 
-        var explicitNames = PluginListings.RawLoadOrderListingsFromPath(pluginsTxtPath, gameRelease)
-            .Where(l => l.Enabled)
-            .Select(l => l.FileName)
-            .Where(name => !implicitKeys.Contains(name));
+        // #267 / ADR-0035: every non-comment, non-blank plugins.txt entry is indexed — enabled and
+        // disabled alike. The `*` prefix (Enabled) becomes Participates, not a filter on presence.
+        var explicitListings = PluginListings.RawLoadOrderListingsFromPath(pluginsTxtPath, gameRelease)
+            .Where(l => !implicitKeys.Contains(l.FileName));
 
         return
         [
             .. implicitKeys
-                        .Select(name => new ResolvedPlugin(name, Path.Combine(dataFolderPath, name), IsImmutable: true)),
-            .. explicitNames
-                    .Select(name => new ResolvedPlugin(name, Path.Combine(dataFolderPath, name), IsImmutable: false)),
+                        .Select(name => new ResolvedPlugin(name, Path.Combine(dataFolderPath, name), IsImmutable: true, Participates: true)),
+            .. explicitListings
+                    .Select(l => new ResolvedPlugin(l.FileName, Path.Combine(dataFolderPath, l.FileName), IsImmutable: false, Participates: l.Enabled)),
         ];
     }
 
@@ -97,15 +99,15 @@ public sealed class GameSession : IGameSession
 
         for (int i = 0; i < ordered.Count; i++)
         {
-            var (fileName, filePath, isImmutable) = ordered[i];
+            var (fileName, filePath, isImmutable, participates) = ordered[i];
             if (!File.Exists(filePath))
             {
                 logger.LogWarning("Plugin file not found, skipping: {FilePath}", filePath);
                 continue;
             }
 
-            logger.LogInformation("[{Index}] Opening binary overlay: {FileName} (immutable={Immutable})",
-                i, fileName, isImmutable);
+            logger.LogInformation("[{Index}] Opening binary overlay: {FileName} (immutable={Immutable}, participates={Participates})",
+                i, fileName, isImmutable, participates);
 
             var modKey = ModKey.FromFileName(fileName);
             var modPath = new ModPath(modKey, filePath);
@@ -117,7 +119,7 @@ public sealed class GameSession : IGameSession
             try
             {
                 mod = ModFactory.ImportGetter(modPath, gameRelease);
-                var metadata = BuildPluginMetadata(mod, fileName, filePath, i, isImmutable);
+                var metadata = BuildPluginMetadata(mod, fileName, filePath, i, isImmutable, participates);
 
                 _mods.Add(mod);
                 _modsByName[fileName] = mod;
@@ -153,13 +155,15 @@ public sealed class GameSession : IGameSession
         _mods.Add(mod);
         _modsByName[fileName] = mod;
 
-        var metadata = BuildPluginMetadata(mod, fileName, filePath, loadOrderIndex, isImmutable: false);
+        // A plugin created via AddPlugin is appended to plugins.txt with the `*` prefix
+        // (SessionManager.CreatePlugin) — it always participates.
+        var metadata = BuildPluginMetadata(mod, fileName, filePath, loadOrderIndex, isImmutable: false, participates: true);
         _plugins.Add(metadata);
         return metadata;
     }
 
     private static PluginMetadata BuildPluginMetadata(
-        IModGetter mod, string fileName, string filePath, int loadOrderIndex, bool isImmutable)
+        IModGetter mod, string fileName, string filePath, int loadOrderIndex, bool isImmutable, bool participates)
     {
         var masters = mod.MasterReferences
             .Select(r => r.Master.FileName.ToString())
@@ -173,7 +177,8 @@ public sealed class GameSession : IGameSession
             IsMaster: fileName.EndsWith(".esm", StringComparison.OrdinalIgnoreCase),
             Masters: masters,
             RecordCount: mod.EnumerateMajorRecords().Count(),
-            IsImmutable: isImmutable
+            IsImmutable: isImmutable,
+            Participates: participates
         );
     }
 

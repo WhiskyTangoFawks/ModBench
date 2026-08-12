@@ -12,8 +12,15 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
-        Func<string, RecordLookupEntry?>? resolveFormKey = null)
+        Func<string, RecordLookupEntry?>? resolveFormKey = null,
+        IReadOnlyDictionary<string, bool>? pluginParticipates = null)
     {
+        // #267 / ADR-0035: a non-participating plugin's override never contributes to conflict
+        // classification — filtered out before OnlyOne/winner/diff computation below, not just
+        // masked in the result, so it can't leak into pluginMasters/IsInjectedRecord either.
+        if (pluginParticipates != null)
+            conflictingRecords = [.. conflictingRecords.Where(r => pluginParticipates.GetValueOrDefault(r.Plugin, true))];
+
         if (conflictingRecords.Count == 0)
             return new ClassifyResult(ConflictAll.OnlyOne, new Dictionary<string, ConflictThis>(), []);
 

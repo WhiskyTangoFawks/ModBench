@@ -1,5 +1,9 @@
 namespace MEditService.Core.Session;
 
+// Participates (#267 / ADR-0035): the plugins.txt `*` prefix — whether this plugin loads in the
+// game and competes for winner. An indexed-but-non-participating row can never be a winner and
+// never contributes to conflict classification; see DuckDbRecordRepository.UpdateWinners and
+// ConflictClassifier.Classify. Implicit masters and freshly created plugins always participate.
 public record PluginMetadata(
     string Name,
     string Path,
@@ -8,7 +12,8 @@ public record PluginMetadata(
     bool IsMaster,
     IReadOnlyList<string> Masters,
     int RecordCount,
-    bool IsImmutable
+    bool IsImmutable,
+    bool Participates = true
 );
 
 /// <summary>A plugin that could not be loaded into the session (e.g. an unparseable record);
