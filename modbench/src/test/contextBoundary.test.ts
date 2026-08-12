@@ -37,7 +37,13 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
   });
 
   it('the row provider contains no record vocabulary', () => {
-    const offending = [...read('modmanager/PluginListProvider.ts').matchAll(/\b(records?|formkeys?|recordtypes?|editorids?)\b/gi)];
+    // #276: "immutable"/"read-only" pinned alongside the original record vocabulary — Editing's
+    // "Immutable plugin" (read-only-for-editing) is a distinct concept from this row's own
+    // "can't be toggled or moved" facts (the lock, #276/ADR-0035) and must stay decided and named
+    // on the Editing/composite side (PluginsTreeComposite.ts, deliberately exempted from this
+    // scan), never here. Bare `readonly` is excluded — it's a TypeScript keyword this file uses
+    // throughout for unrelated reasons, not the domain term.
+    const offending = [...read('modmanager/PluginListProvider.ts').matchAll(/\b(records?|formkeys?|recordtypes?|editorids?|immutable|read-only)\b/gi)];
     expect(offending.map((m) => m[0])).toEqual([]);
   });
 

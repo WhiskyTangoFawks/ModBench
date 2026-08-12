@@ -13,6 +13,7 @@ vi.mock('vscode', () => ({
     tooltip?: string;
     contextValue?: string;
     iconPath?: unknown;
+    resourceUri?: unknown;
     collapsibleState: number;
     checkboxState?: number;
     constructor(label: string, collapsibleState = 0) {
@@ -28,6 +29,7 @@ vi.mock('vscode', () => ({
     fire(e?: unknown) { this.handlers.forEach(h => h(e)); }
   },
   ThemeIcon: class { constructor(public id: string) {} },
+  Uri: { file: (fsPath: string) => ({ fsPath }) },
   DataTransferItem: class { constructor(public value: unknown) {} },
   DataTransfer: class {
     private readonly map = new Map<string, unknown>();
@@ -83,6 +85,37 @@ class FakeSource implements IModlistSource {
     return Promise.resolve();
   }
 }
+
+// #276: the leading slot answers exactly one question — "can you change whether this loads?"
+// ImplicitMasterNode already renders no checkbox (nothing to toggle); it now also renders a lock
+// where a togglable row renders a checkbox, so the empty slot isn't mistakable for "no plugin
+// here". Icon/tooltip only — the platform has no non-interactive checkbox variant
+// (TreeItemCheckboxState is Checked/Unchecked only), so MO2's own grayed-but-checked-and-disabled
+// checkbox can't be reproduced; the label-graying and tooltip wording it does allow are adopted
+// verbatim (see ImplicitMasterDecorationProvider for the label graying).
+describe('ImplicitMasterNode — leading slot (#276)', () => {
+  it('renders a lock icon, not a checkbox', () => {
+    const node = new ImplicitMasterNode('Fallout4.esm');
+    expect(node.iconPath).toEqual({ id: 'lock' });
+    expect(node.checkboxState).toBeUndefined();
+  });
+
+  it('tooltip explains why, in MO2\'s own wording', () => {
+    const node = new ImplicitMasterNode('Fallout4.esm');
+    expect(node.tooltip).toContain('Fallout4.esm');
+    expect(node.tooltip).toContain("can't be disabled or moved (enforced by the game)");
+  });
+
+  it('sets resourceUri from the given path, for the label-graying decoration provider to key on', () => {
+    const node = new ImplicitMasterNode('Fallout4.esm', '/game/Data/Fallout4.esm');
+    expect(node.resourceUri).toEqual({ fsPath: '/game/Data/Fallout4.esm' });
+  });
+
+  it('leaves resourceUri undefined when no path is given (test-construction convenience)', () => {
+    const node = new ImplicitMasterNode('Fallout4.esm');
+    expect(node.resourceUri).toBeUndefined();
+  });
+});
 
 describe('PluginListProvider', () => {
   it('builds one row per plugins.txt line, in Plugin load order, with the enabled checkbox', async () => {
@@ -633,7 +666,7 @@ describe('PluginListProvider — resolvePluginPath (Reveal in Explorer, issue #6
 
 // Issue #108: the game's implicitly-loaded vanilla masters (discovered from the
 // resolved Data folder — a plugin file that is NOT a hardlink, nlink === 1) render
-// as immutable rows ahead of plugins.txt's own lines, so their absence never makes a
+// as forced-on rows ahead of plugins.txt's own lines, so their absence never makes a
 // plugin declaring one show a false "missing master".
 describe('PluginListProvider — implicit (vanilla) master rows (issue #108)', () => {
   let dir: string;

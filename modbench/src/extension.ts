@@ -49,6 +49,7 @@ import {
 import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { createDownloadsWatcher } from './modmanager/downloadsWatcher';
 import { HiddenDownloadDecorationProvider } from './modmanager/HiddenDownloadDecorationProvider';
+import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
 import { makeReporter } from './reporter';
 import { LoadoutHeaderProvider } from './LoadoutHeaderProvider';
 
@@ -1133,6 +1134,13 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
   return { pluginListProvider, disposables: [
     pluginListView,
     composite,
+    // #276: grays an implicit master's row the way MO2 grays COL_NAME for a forceLoaded
+    // plugin (ImplicitMasterDecorationProvider's own comment) — keyed off the same
+    // dataFolder this view already resolves, live against PluginListProvider's own
+    // implicitMasterNames() so it never drifts from what the tree actually rendered.
+    vscode.window.registerFileDecorationProvider(
+      new ImplicitMasterDecorationProvider(dataFolder, () => pluginListProvider.implicitMasterNames()),
+    ),
     trackRecordSelection(pluginListView),
     pluginListView.onDidChangeCheckboxState(async (e) => {
       for (const [node, state] of e.items) {
