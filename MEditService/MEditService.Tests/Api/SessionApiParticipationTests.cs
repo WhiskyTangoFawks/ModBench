@@ -58,4 +58,30 @@ public sealed class SessionApiParticipationTests(LoadedApiFixture<TestPluginFixt
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    // #277 / ADR-0037 AC3: a missing master is detection and display (MasterResolution), never a
+    // change to loading — nothing computes or consumes it on the participation path, so a plugin
+    // enabled in plugins.txt with a missing master keeps competing for winner exactly as it would
+    // without the flag. Pinning, not new behavior: today nothing couples the two at all.
+    [Fact]
+    public async Task PostSessionLoadExplicit_ParticipatingPluginWithMissingMaster_StaysParticipating()
+    {
+        using var fx = new PluginFixtureBuilder("api-explicit-participation-missing-master")
+            .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("PatchedNpc").Race.SetTo(
+                new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800)))
+            .BuildScattered();
+
+        var response = await _client.PostAsJsonAsync("/session/load-explicit", new
+        {
+            gameDirectory = fx.GameDirectory,
+            plugins = fx.Plugins.Select(p => new { name = p.Name, path = p.Path, origin = p.Origin, participates = p.Participates }),
+            gameRelease = "Fallout4",
+        });
+        response.EnsureSuccessStatusCode();
+
+        var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
+        var patch = plugins.EnumerateArray().Single(p => p.GetProperty("name").GetString() == "Patch.esp");
+        Assert.True(patch.GetProperty("participates").GetBoolean());
+        Assert.Single(patch.GetProperty("masterIssues").EnumerateArray());
+    }
 }
