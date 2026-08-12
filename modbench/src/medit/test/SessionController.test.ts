@@ -902,4 +902,81 @@ describe('SessionController.loadExplicitSession', () => {
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('bad dir'));
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
+
+  // #295 AC4: the caller (makeEnterEditing) tells a failed load apart from a load that
+  // simply had nothing to report by the return value alone — `[]` is ambiguous with
+  // "loaded, zero failures" and previously meant both. Backend-confirmed (SessionManager.
+  // LoadExplicitCore disposes the old session unconditionally, before the new one can even
+  // fail to build), so a failed POST really does mean "no session", not "the old one, stale".
+  it('resolves undefined (not an empty array) when the load fails, so a failed load is never mistaken for zero failures', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue(drainedError(400, 'bad dir')),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    const failures = await ctrl.loadExplicitSession(plugins, '/game/Data');
+
+    expect(failures).toBeUndefined();
+  });
+});
+
+// ── hasPendingChanges ──────────────────────────────────────────────────────────
+
+// #295: the live answer to "is there staged work right now", read fresh off the backend —
+// not `modbench.hasPendingChanges` (a write-only VS Code context key; there is no API to read
+// one back) and not the Pending Changes view's badge (a rendering side-effect of the same
+// fetch, not something business logic should key off). Gates Reload Session's confirm.
+describe('SessionController.hasPendingChanges', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('resolves true when the backend reports at least one change group', async () => {
+    const client = {
+      ...makeClient(),
+      GET: vi.fn().mockResolvedValue({
+        data: [{ id: 'g1', operation: 'edit', description: null, changeCount: 1, pluginCount: 1 }],
+        response: { ok: true },
+      }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await expect(ctrl.hasPendingChanges()).resolves.toBe(true);
+  });
+
+  it('resolves false when the backend reports no change groups', async () => {
+    const client = {
+      ...makeClient(),
+      GET: vi.fn().mockResolvedValue({ data: [], response: { ok: true } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await expect(ctrl.hasPendingChanges()).resolves.toBe(false);
+  });
+
+  // Fail toward the confirm: a spurious modal costs one click, a silent discard of staged
+  // work is unrecoverable — asymmetric costs, so an unreadable answer defaults to true.
+  it('resolves true (assumes pending work) when the fetch fails', async () => {
+    const client = {
+      ...makeClient(),
+      GET: vi.fn().mockResolvedValue(drainedError(500, 'boom')),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await expect(ctrl.hasPendingChanges()).resolves.toBe(true);
+  });
+
+  it('resolves true (assumes pending work) when the fetch throws', async () => {
+    const client = {
+      ...makeClient(),
+      GET: vi.fn().mockRejectedValue(new Error('network error')),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await expect(ctrl.hasPendingChanges()).resolves.toBe(true);
+  });
 });

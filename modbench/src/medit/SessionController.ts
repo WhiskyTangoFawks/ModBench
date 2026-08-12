@@ -63,7 +63,7 @@ export class SessionController {
     plugins: { name: string; path: string; origin: string; participates: boolean }[],
     gameDirectory: string,
     gameRelease = 'Fallout4',
-  ): Promise<{ name?: string | null; reason?: string | null }[]> {
+  ): Promise<{ name?: string | null; reason?: string | null }[] | undefined> {
     const { data, error, response } = await this.deps.client.POST('/session/load-explicit', {
       body: { plugins, gameDirectory, gameRelease },
     });
@@ -71,7 +71,11 @@ export class SessionController {
       const text = errorText(error);
       this.log(`[SessionController] loadExplicitSession failed (${response.status}): ${text}`);
       this.deps.showError(`mEdit: Failed to load session — ${text}`);
-      return [];
+      // #295: undefined, not `[]` — the backend's own SessionManager.LoadExplicitCore disposes
+      // the previous session unconditionally before attempting the new one, so a failed POST
+      // means no session at all, not "loaded with nothing to report". `[]` stays reserved for
+      // that latter case; the caller (makeEnterEditing) must be able to tell them apart.
+      return undefined;
     }
     reportSkippedPlugins(data?.failures, {
       log: (m) => this.log(`[SessionController] ${m}`),
@@ -122,6 +126,27 @@ export class SessionController {
       return;
     }
     this.deps.setFilterActive(sql !== null, sql ?? undefined);
+  }
+
+  /** #295: whether the backend currently holds any staged work — read live off
+   *  `GET /change-groups`, not a cached frontend signal. `modbench.hasPendingChanges` is a
+   *  write-only VS Code context key (there is no API to read one back); the Pending Changes
+   *  view's badge is a rendering side-effect of the same async fetch, not a value business
+   *  logic should key off. Gates Reload Session's confirm — a destructive reload must never
+   *  guess. Fails toward `true` (assume staged work) on a read it can't complete: a spurious
+   *  confirm costs one click, a silently-skipped one risks an unrecoverable discard. */
+  async hasPendingChanges(): Promise<boolean> {
+    try {
+      const { data, response } = await this.deps.client.GET('/change-groups', {});
+      if (!response.ok || !Array.isArray(data)) {
+        this.log(`[SessionController] hasPendingChanges: /change-groups fetch failed (${response.status}) — assuming pending work`);
+        return true;
+      }
+      return data.length > 0;
+    } catch (e) {
+      this.log(`[SessionController] hasPendingChanges threw: ${e instanceof Error ? e.message : String(e)} — assuming pending work`);
+      return true;
+    }
   }
 
   async deleteRecords(records: { formKey: string; plugin: string }[]): Promise<boolean> {

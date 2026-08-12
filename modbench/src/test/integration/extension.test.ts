@@ -15,7 +15,15 @@ let ext: vscode.Extension<unknown> | undefined;
 // is received, then serves the loaded plugins (issue #75).
 // #270: the session holds every plugins.txt line, so a disabled one is present and browsable —
 // it just never participates in winner computation.
-const MOCK_PLUGINS = [
+// #295: an explicit type (rather than inferred from the literal below) so mockPluginsOverride
+// can build a variant of one entry (e.g. its masterIssues resolved) without every other entry's
+// shape narrowing what's assignable — the literal below is otherwise deliberately loose per its
+// own #277 comment (some entries omit isImmutable/masterIssues entirely).
+type MockPlugin = {
+  name: string; path: string; origin: string; participates: boolean;
+  isImmutable?: boolean; masterIssues?: { masterName: string; kind: string }[];
+};
+const MOCK_PLUGINS: MockPlugin[] = [
   { name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', participates: true },
   { name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data', participates: true },
   { name: 'Other.esp', path: '/data/Other.esp', origin: 'Data', participates: false },
@@ -39,11 +47,22 @@ const requestLog: string[] = [];
 // on and off and observe modbench.hasPendingChanges (via the badge, its same-signal proxy —
 // see the toggle test) react both directions, not just once.
 let pendingGroups: Array<{ id: string; operation: string; description: string | null; changeCount: number; pluginCount: number }> = [];
+// #295: lets a test change what the *next* load reports without touching MOCK_PLUGINS itself —
+// simulates a plugin's decoration-worthy state (a master issue, a load failure) changing between
+// one load and a reload of the same session.
+let mockPluginsOverride: MockPlugin[] | null = null;
+// #295 AC4: makes the next POST /session/load-explicit fail, the way a bad game directory or a
+// backend-side load error would — session.md's own contract (SessionManager.LoadExplicitCore
+// disposes the previous session unconditionally first) means the mock must *not* set
+// sessionLoaded on this path, matching the real backend leaving no session behind either.
+let loadExplicitShouldFail = false;
 
 function resetMockBackend(): void {
   sessionLoaded = false;
   requestLog.length = 0;
   pendingGroups = [];
+  mockPluginsOverride = null;
+  loadExplicitShouldFail = false;
 }
 
 function createMockBackend(): http.Server {
@@ -59,6 +78,15 @@ function createMockBackend(): http.Server {
     if (method === 'POST' && url === '/session/load-explicit') {
       req.on('data', () => {}); // drain the body so 'end' fires
       req.on('end', () => {
+        // #295 AC4: mirrors SessionManager.LoadExplicitCore — the real backend disposes the
+        // previous session unconditionally before attempting the new one, so a failed load
+        // leaves no session behind either, not the stale one.
+        if (loadExplicitShouldFail) {
+          sessionLoaded = false;
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'simulated load failure' }));
+          return;
+        }
         sessionLoaded = true;
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ failures: [] }));
@@ -77,7 +105,7 @@ function createMockBackend(): http.Server {
         return;
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(MOCK_PLUGINS));
+      res.end(JSON.stringify(mockPluginsOverride ?? MOCK_PLUGINS));
       return;
     }
     // #270: a plugin row's children come from here once a session is running.
@@ -931,5 +959,140 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
     const item = tree.getTreeItem(row);
 
     assert.strictEqual(item.tooltip, undefined);
+  });
+});
+
+// #295: modbench.reloadSession through the real wiring — reloadSession backed by
+// SessionController.hasPendingChanges and the reused makeEnterEditing path, not just
+// reloadSession's own unit seam (already covered directly, confirm/cancel included, since
+// showWarningMessage can't be driven headlessly here).
+describe('Reload Session actually reloads (#295)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
+  const pluginListProviderOf = () =>
+    (ext?.exports as { pluginListProvider?: PluginListProviderLike } | undefined)?.pluginListProvider;
+  let gameDir = '';
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-reload-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n');
+    pluginListProviderOf()?.invalidate();
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.commands.executeCommand('modbench.closeMedit');
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '');
+    fs.rmSync(gameDir, { recursive: true, force: true });
+  });
+
+  // AC1 / AC3: nothing is staged (resetMockBackend leaves pendingGroups empty), so this must
+  // re-run the session load with no modal in the way — a real showWarningMessage would hang
+  // a headless test, so this doubles as proof the no-pending-changes path truly skips it.
+  it('re-POSTs /session/load-explicit with nothing staged, no prompt required', async () => {
+    const before = requestLog.filter((l) => l === 'POST /session/load-explicit').length;
+
+    await vscode.commands.executeCommand('modbench.reloadSession');
+
+    const after = requestLog.filter((l) => l === 'POST /session/load-explicit').length;
+    assert.strictEqual(after, before + 1, 'reloadSession must issue a fresh load-explicit, not merely re-render the tree');
+  });
+
+  // The WeakMap-based decoration in PluginsTreeComposite restores each row to its captured
+  // original before re-deciding what to layer back on (already covered in isolation by
+  // PluginsTreeComposite.test.ts) — this proves the *real* reload wiring actually reaches it:
+  // the same row object PluginListProvider handed out before the reload must lose a decoration
+  // whose backend condition no longer holds, not merely gain a second copy of it. #276 shipped
+  // a bug of exactly this shape (stacked, not cleared); #277 had to generalise the fix.
+  it('clears a resolved master-issue decoration on the same row after reload, not just applies it', async () => {
+    const tree = pluginsTree()!;
+    const before = findRow(await tree.getChildren(), 'MissingMaster.esp');
+    const beforeTooltip = tree.getTreeItem(before).tooltip;
+    assert.ok(typeof beforeTooltip === 'string' && beforeTooltip.includes('Missing master: Ghost.esm'),
+      `expected the pre-reload row to carry the master-issue tooltip, got: ${String(beforeTooltip)}`);
+
+    // The next load reports the same plugin with its master issue resolved.
+    mockPluginsOverride = MOCK_PLUGINS.map((p) => p.name === 'MissingMaster.esp' ? { ...p, masterIssues: [] } : p);
+    await vscode.commands.executeCommand('modbench.reloadSession');
+
+    const after = findRow(await tree.getChildren(), 'MissingMaster.esp');
+    assert.strictEqual(after, before, 'the row list is unchanged (plugins.txt untouched), so this must be the same reused row object');
+    assert.strictEqual(tree.getTreeItem(after).tooltip, undefined,
+      'a resolved master issue must clear the tooltip, not leave the stale decoration stacked on top of the fresh one');
+  });
+
+  // AC4: a failed reload must not leave the tree claiming a session the backend has already
+  // discarded (SessionManager.LoadExplicitCore disposes the previous session unconditionally
+  // before the new one can fail) — mirrors #270's own "returns every row to a leaf when the
+  // session closes" assertion, triggered by a failed reload instead of an explicit close.
+  it('returns every row to a leaf, without throwing, when the reload itself fails', async () => {
+    const tree = pluginsTree()!;
+    const before = findRow(await tree.getChildren(), 'TestMod.esp');
+    assert.strictEqual(tree.getTreeItem(before).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
+      'sanity: the row is expandable before the failing reload');
+
+    loadExplicitShouldFail = true;
+    await vscode.commands.executeCommand('modbench.reloadSession');
+
+    const after = findRow(await tree.getChildren(), 'TestMod.esp');
+    assert.strictEqual(tree.getTreeItem(after).collapsibleState, vscode.TreeItemCollapsibleState.None,
+      'a failed reload must not leave rows claiming an expandable session that no longer exists');
+  });
+
+  // Code-review finding: AC4 must hold for every way enterEditing can fail, not only
+  // loadExplicitSession resolving undefined — resolveGameDirectory throwing (an explicit
+  // gameDirectory config with no Data/ subfolder) is uncaught by any of enterEditing's own
+  // internal branches, so this exercises registerReloadSessionCommand's own try/catch, the
+  // same one modbench.modList.launchMedit already has.
+  it('tears the session down, without throwing, when the reload fails for a reason other than a rejected load-explicit', async () => {
+    // The previous test's failed load-explicit already tore the session down — re-establish one.
+    resetMockBackend();
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    const tree = pluginsTree()!;
+    const before = findRow(await tree.getChildren(), 'TestMod.esp');
+    assert.strictEqual(tree.getTreeItem(before).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
+      'sanity: the row is expandable before the failing reload');
+
+    // resolveGameDirectory's very first branch: an explicit config directory with no Data/
+    // subfolder throws, not something loadExplicitSession's undefined-failures handling covers.
+    const brokenDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-reload-nodatafolder-'));
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', brokenDir, vscode.ConfigurationTarget.Workspace);
+
+    await vscode.commands.executeCommand('modbench.reloadSession');
+
+    const after = findRow(await tree.getChildren(), 'TestMod.esp');
+    assert.strictEqual(tree.getTreeItem(after).collapsibleState, vscode.TreeItemCollapsibleState.None,
+      'an unhandled reload failure must still tear the session down, not leave the tree claiming a session that is gone');
+
+    fs.rmSync(brokenDir, { recursive: true, force: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+  });
+});
+
+// #295 AC5: Refresh (#247's single Mod-Management refresh) must remain distinct and never
+// trigger a reload — a regression assertion, not new behavior; modbench.refresh's own body
+// never touches enterEditing/loadExplicitSession.
+describe('Refresh never triggers a session reload (#295 AC5)', () => {
+  before(() => resetMockBackend());
+  after(() => resetMockBackend());
+
+  it('does not POST /session/load-explicit', async () => {
+    await vscode.commands.executeCommand('modbench.refresh');
+
+    assert.ok(
+      !requestLog.some((l) => l === 'POST /session/load-explicit'),
+      'modbench.refresh must never reload the editing session',
+    );
   });
 });

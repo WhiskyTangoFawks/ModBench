@@ -87,9 +87,14 @@ remains a safety net for flaky watch events, never the primary path: every one o
 sources is watcher-driven.
 
 **Reload Session** is not Refresh: it concerns the Editing session, costs seconds, and can
-disturb staged work, so it is separately named and lives in overflow. Its body is still the
-tree re-read it has always been — making it genuinely reload is
-[#295](https://github.com/WhiskyTangoFawks/ModBench/issues/295).
+disturb staged work, so it is separately named and lives in overflow. It re-runs the session
+load — re-resolves the game directory, rebuilds the explicit plugin set from the current
+modlist, and reloads it into the backend — the same `makeEnterEditing` path Launch mEdit and
+the crash-restart handler take ([#295](https://github.com/WhiskyTangoFawks/ModBench/issues/295)).
+Staged work makes it confirm modally first (`showWarningMessage(…, { modal: true })`); with
+nothing staged it reloads directly. A failed reload tears the session down the same way a
+failed launch does (`exitToLoadout`) rather than leave the Plugins tree decorated for a session
+the backend has already discarded.
 
 ### Launch…
 
