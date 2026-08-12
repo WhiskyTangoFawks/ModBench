@@ -962,9 +962,9 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
   });
 });
 
-// #295: modbench.reloadSession through the real wiring — makeReloadSession backed by
+// #295: modbench.reloadSession through the real wiring — reloadSession backed by
 // SessionController.hasPendingChanges and the reused makeEnterEditing path, not just
-// makeReloadSession's own unit seam (already covered directly, confirm/cancel included, since
+// reloadSession's own unit seam (already covered directly, confirm/cancel included, since
 // showWarningMessage can't be driven headlessly here).
 describe('Reload Session actually reloads (#295)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
