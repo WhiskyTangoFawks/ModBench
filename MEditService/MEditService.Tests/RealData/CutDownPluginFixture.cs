@@ -39,7 +39,7 @@ public sealed class CutDownPluginFixture : IDisposable
 
         Repo = new DuckDbRecordRepository(reflector, ddl, NullLogger.Instance);
         Repo.Initialize(GameRelease.Fallout4);
-        Repo.Index(_overlay, 0);
+        Repo.Index(_overlay, 0, participates: true, origin: "Data");
         Repo.UpdateWinners();
     }
 

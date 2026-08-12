@@ -43,6 +43,7 @@ function makePlugin(i: number): PluginMetadata {
     masters: [],
     recordCount: 100,
     isImmutable: false,
+    origin: 'Data',
   };
 }
 

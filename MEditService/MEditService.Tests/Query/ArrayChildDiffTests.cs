@@ -31,7 +31,7 @@ public class ArrayChildDiffTests
     private static RecordDetail MakeRecord(string plugin, int loadOrder, bool isWinner,
         FieldMetadata meta, object? value) =>
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
-            [new FieldValue(meta, value)]);
+            [new FieldValue(meta, value)], "Data");
 
     // ── Sorted array tests ───────────────────────────────────────────────────
 

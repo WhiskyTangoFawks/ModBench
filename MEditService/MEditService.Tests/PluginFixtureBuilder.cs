@@ -1,3 +1,4 @@
+using MEditService.Core.Session;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -8,17 +9,17 @@ namespace MEditService.Tests;
 public sealed class PluginFixtureBuilder(string prefix = "medit")
 {
     private readonly string _prefix = prefix;
-    private readonly List<(string Name, bool Listed, bool Enabled, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>>? Configure, BinaryWriteParameters? WriteParams)> _plugins = [];
+    private readonly List<(string Name, bool Listed, bool Enabled, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>>? Configure, BinaryWriteParameters? WriteParams, string Origin)> _plugins = [];
 
-    public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, bool listed = true, BinaryWriteParameters? writeParams = null, bool enabled = true)
+    public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, bool listed = true, BinaryWriteParameters? writeParams = null, bool enabled = true, string origin = PluginOrigin.DataDirectory)
     {
-        _plugins.Add((name, listed, enabled, configure is null ? null : (mod, _) => configure(mod), writeParams));
+        _plugins.Add((name, listed, enabled, configure is null ? null : (mod, _) => configure(mod), writeParams, origin));
         return this;
     }
 
-    public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, bool listed = true, bool enabled = true)
+    public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, bool listed = true, bool enabled = true, string origin = PluginOrigin.DataDirectory)
     {
-        _plugins.Add((name, listed, enabled, configure, null));
+        _plugins.Add((name, listed, enabled, configure, null, origin));
         return this;
     }
 
@@ -28,7 +29,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         Directory.CreateDirectory(dataFolder);
 
         var builtMods = new List<Fallout4Mod>();
-        foreach (var (name, _, _, configure, writeParams) in _plugins)
+        foreach (var (name, _, _, configure, writeParams, _) in _plugins)
         {
             var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
             configure?.Invoke(mod, builtMods.AsReadOnly());
@@ -62,9 +63,9 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         Directory.CreateDirectory(gameDir);
 
         var builtMods = new List<Fallout4Mod>();
-        var explicitPlugins = new List<(string Name, string Path)>();
+        var explicitPlugins = new List<(string Name, string Path, string Origin)>();
         var i = 0;
-        foreach (var (name, _, _, configure, writeParams) in _plugins)
+        foreach (var (name, _, _, configure, writeParams, origin) in _plugins)
         {
             var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
             configure?.Invoke(mod, builtMods.AsReadOnly());
@@ -79,7 +80,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
                 var folder = Path.Combine(root, $"mod-{i:D2}-{Path.GetFileNameWithoutExtension(name)}");
                 Directory.CreateDirectory(folder);
                 targetPath = Path.Combine(folder, name);
-                explicitPlugins.Add((name, targetPath));
+                explicitPlugins.Add((name, targetPath, origin));
             }
 
             mod.WriteToBinary(targetPath, writeParams);
@@ -109,7 +110,7 @@ public interface IApiPluginFixture<TSelf> : IDisposable where TSelf : IApiPlugin
 }
 
 public sealed record ScatteredFixtureData(
-    string Root, string GameDirectory, IReadOnlyList<(string Name, string Path)> Plugins) : IDisposable
+    string Root, string GameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> Plugins) : IDisposable
 {
     public void Dispose() => Directory.Delete(Root, recursive: true);
 }

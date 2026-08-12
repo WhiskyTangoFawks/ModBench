@@ -16,7 +16,7 @@ public record PluginResponse(
     int RecordCount,
     bool IsImmutable,
     bool Participates,
-    string Origin = PluginOrigin.DataDirectory)
+    string Origin)
 {
     public static PluginResponse FromMetadata(PluginMetadata m) =>
         new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates, m.Origin);
@@ -55,9 +55,10 @@ public record FieldValue(FieldMetadata Metadata, object? Value, string? CheckErr
 // test fixtures) that don't need it — always populated for real reads (ReadDetail knows its own
 // schema's TableName).
 // Origin (#272 / ADR-0036): the mod folder that provided this row's physical file, or a reserved
-// PluginOrigin value — paired with Plugin, never encoded into it. Defaulted so every pre-existing
-// direct construction (test fixtures) keeps compiling; always populated with a real value by the
-// repository read path (DuckDbRecordRepository.ReadDetail).
+// PluginOrigin value — paired with Plugin, never encoded into it. Required (#275): every
+// construction (including a test fixture) must say which origin, not fall back to one silently.
+// Declared before the two still-defaulted trailing fields only because C# requires a required
+// parameter to precede any optional one — callers may still pass it by name in any position.
 public record RecordDetail(
     string FormKey,
     string Plugin,
@@ -65,9 +66,9 @@ public record RecordDetail(
     bool IsWinner,
     string? EditorId,
     IReadOnlyList<FieldValue> Fields,
+    string Origin,
     Dictionary<string, object?>? PendingFields = null,
-    string RecordType = "",
-    string Origin = PluginOrigin.DataDirectory);
+    string RecordType = "");
 
 public record CompareOverride(
     string FormKey,
@@ -78,9 +79,9 @@ public record CompareOverride(
     IReadOnlyList<FieldValue> Fields,
     Dictionary<string, object?>? PendingFields,
     ConflictThis ConflictThis,
-    string RecordType = "",
-    string Origin = PluginOrigin.DataDirectory)
-    : RecordDetail(FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, PendingFields, RecordType, Origin);
+    string Origin,
+    string RecordType = "")
+    : RecordDetail(FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, PendingFields, RecordType);
 
 // Resolutions (ADR-0031): only populated for a scalar formKey-typed leaf, keyed by plugin like
 // Values/CellStates — one entry per plugin whose cell holds a FormKey value. Never populated on a
@@ -187,10 +188,10 @@ public record SessionLoadResponse(string Status, IReadOnlyList<PluginLoadFailure
 public record SessionLoadExplicitRequest(
     IReadOnlyList<ExplicitPlugin> Plugins, string GameDirectory, string GameRelease = "Fallout4");
 // Origin (#269 / ADR-0036): Mod Management resolves this — the mod folder that provided the
-// file, or one of the reserved values (PluginOrigin.DataDirectory / MO2's overwrite). Optional so
-// an older client omitting it doesn't fail binding; SessionEndpoints defaults a missing/empty
-// value to PluginOrigin.DataDirectory rather than letting a null origin reach GameSession.
-public record ExplicitPlugin(string Name, string Path, string? Origin = null);
+// file, or one of the reserved values (PluginOrigin.DataDirectory / MO2's overwrite). Required —
+// the one production caller (modbench/src/modmanager/explicitSession.ts) already resolves it, so
+// there is nothing left to default (#275).
+public record ExplicitPlugin(string Name, string Path, string Origin);
 
 public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId);
 

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Core.Session;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -57,7 +58,7 @@ public sealed class SessionApiTests(LoadedApiFixture<TestPluginFixture> loaded) 
         var response = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
             gameDirectory = fx.GameDirectory,
-            plugins = fx.Plugins.Select(p => new { name = p.Name, path = p.Path }),
+            plugins = fx.Plugins.Select(p => new { name = p.Name, path = p.Path, origin = p.Origin }),
             gameRelease = "Fallout4",
         });
 
@@ -76,8 +77,8 @@ public sealed class SessionApiTests(LoadedApiFixture<TestPluginFixture> loaded) 
         var badPath = System.IO.Path.Combine(fx.Root, "Bad.esp");
         await System.IO.File.WriteAllTextAsync(badPath, "this is not a plugin");
 
-        var plugins = fx.Plugins.Append((Name: "Bad.esp", Path: badPath))
-            .Select(p => new { name = p.Name, path = p.Path });
+        var plugins = fx.Plugins.Append((Name: "Bad.esp", Path: badPath, Origin: PluginOrigin.DataDirectory))
+            .Select(p => new { name = p.Name, path = p.Path, origin = p.Origin });
 
         var response = await _client.PostAsJsonAsync("/session/load-explicit", new
         {

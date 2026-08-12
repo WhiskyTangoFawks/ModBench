@@ -15,7 +15,7 @@ public sealed class ExecuteGroupSaveAsyncTests
         var members = new[]
         {
             new GroupMember("000001:Test.esp", plugin, "npc_", "field_edit",
-                field, J("\"Unaggressive\""), J("\"Frenzied\""))
+                field, J("\"Unaggressive\""), J("\"Frenzied\""), Source: "system", ParentCell: null, PlacementGroup: null, Origin: "Data")
         };
         return svc.StageChanges(members);
     }
@@ -34,14 +34,14 @@ public sealed class ExecuteGroupSaveAsyncTests
         var created = svc.Upsert(new PendingChangeUpsert(
             createdFormKey, createPlugin, "npc_",
             new Dictionary<string, JsonElement> { ["$create"] = J("null") },
-            "user", null, [], FormRefs: null, ChangeType: "create"));
+            "user", null, [], FormRefs: null, ChangeType: "create", ParentCell: null, PlacementGroup: null, Origin: "Data"));
 
         svc.Upsert(new PendingChangeUpsert(
             "000002:Test.esp", dependentPlugin, "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null,
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            [new PendingFormRef("aggression", "aggression", createdFormKey)]));
+            [new PendingFormRef("aggression", "aggression", createdFormKey)], ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
 
         return created[0].Id;
     }
@@ -115,7 +115,7 @@ public sealed class ExecuteGroupSaveAsyncTests
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null,
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            formRefs));
+            formRefs, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
 
         await Assert.ThrowsAsync<IOException>(() =>
             svc.ExecuteGroupSaveAsync(staged[0].Id, _ =>
@@ -135,11 +135,11 @@ public sealed class ExecuteGroupSaveAsyncTests
         // record the create brings into existence, so edge rule 2 makes them one component of two.
         var created = svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["$create"] = J("null") },
-            "user", null, [], FormRefs: null, ChangeType: "create"));
+            "user", null, [], FormRefs: null, ChangeType: "create", ParentCell: null, PlacementGroup: null, Origin: "Data"));
         svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null,
-            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") }));
+            new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") }, FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
 
         IReadOnlyDictionary<string, IReadOnlyList<PendingChange>>? captured = null;
         await svc.ExecuteGroupSaveAsync(created[0].Id, byPlugin =>
@@ -191,7 +191,7 @@ public sealed class ExecuteGroupSaveAsyncTests
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null,
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            formRefs));
+            formRefs, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
 
         await svc.ExecuteGroupSaveAsync(staged[0].Id, _ => Task.FromResult(NoResults()));
 

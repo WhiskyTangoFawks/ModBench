@@ -25,7 +25,7 @@ public class ConflictClassifierTests
     private static RecordDetail MakeOverride(string plugin, int loadOrder, bool isWinner,
         params (string name, object? value)[] fields) =>
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
-            [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))]);
+            [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], "Data");
 
     private static RecordDetail MakeOverrideWithOrigin(string plugin, string origin, int loadOrder, bool isWinner,
         params (string name, object? value)[] fields) =>
@@ -327,9 +327,9 @@ public class ConflictClassifierTests
     {
         // B.esp's Fields list doesn't include "name" at all (not just null — absent from list).
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [new FieldValue(Meta("name"), "Alice"), new FieldValue(Meta("level"), 1)]);
+            [new FieldValue(Meta("name"), "Alice"), new FieldValue(Meta("level"), 1)], Origin: "Data");
         var partial = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [new FieldValue(Meta("level"), 5)]);
+            [new FieldValue(Meta("level"), 5)], Origin: "Data");
         var result = Classify([master, partial]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
         Assert.Equal(ConflictThis.Override, result.PluginStates["B.esp"]);
@@ -342,9 +342,9 @@ public class ConflictClassifierTests
     {
         // FormKey origin is "Origin.esm" but B.esp's masters don't include it → injected
         var master = new RecordDetail("000001:Origin.esm", "A.esm", 0, false, null,
-            [new FieldValue(Meta("name"), "Alice")]);
+            [new FieldValue(Meta("name"), "Alice")], Origin: "Data");
         var override1 = new RecordDetail("000001:Origin.esm", "B.esp", 1, true, null,
-            [new FieldValue(Meta("name"), "Bob")]);
+            [new FieldValue(Meta("name"), "Bob")], Origin: "Data");
         var masters = new Dictionary<string, IReadOnlyList<string>>
         {
             ["A.esm"] = ["Origin.esm"],
@@ -360,11 +360,11 @@ public class ConflictClassifierTests
         // B.esp has originPlugin in masters (not injected), C.esp doesn't (injected).
         // Any()=true (C.esp injected), All()=false (B.esp is not) → kills the Any→All mutant.
         var master = new RecordDetail("000001:Origin.esm", "Origin.esm", 0, false, null,
-            [new FieldValue(Meta("name"), "Alice")]);
+            [new FieldValue(Meta("name"), "Alice")], Origin: "Data");
         var override1 = new RecordDetail("000001:Origin.esm", "B.esp", 1, false, null,
-            [new FieldValue(Meta("name"), "Bob")]);
+            [new FieldValue(Meta("name"), "Bob")], Origin: "Data");
         var override2 = new RecordDetail("000001:Origin.esm", "C.esp", 2, true, null,
-            [new FieldValue(Meta("name"), "Charlie")]);
+            [new FieldValue(Meta("name"), "Charlie")], Origin: "Data");
         var masters = new Dictionary<string, IReadOnlyList<string>>
         {
             ["Origin.esm"] = [],
@@ -380,9 +380,9 @@ public class ConflictClassifierTests
     {
         // FormKey.TryFactory fails for "INVALID" → IsInjectedRecord returns false (defensive guard).
         var master = new RecordDetail("INVALID", "A.esm", 0, false, null,
-            [new FieldValue(Meta("name"), "Alice")]);
+            [new FieldValue(Meta("name"), "Alice")], Origin: "Data");
         var override1 = new RecordDetail("INVALID", "B.esp", 1, true, null,
-            [new FieldValue(Meta("name"), "Bob")]);
+            [new FieldValue(Meta("name"), "Bob")], Origin: "Data");
         var masters = new Dictionary<string, IReadOnlyList<string>>
         {
             ["A.esm"] = [],
@@ -399,9 +399,9 @@ public class ConflictClassifierTests
         // exactly — xEdit only escalates injected records to caConflictCritical when a real value
         // difference exists (xeMainForm.pas ConflictLevelForNodeDatas); content-identical stays NoConflict.
         var master = new RecordDetail("000001:Origin.esm", "A.esm", 0, false, null,
-            [new FieldValue(Meta("name"), "Alice")]);
+            [new FieldValue(Meta("name"), "Alice")], Origin: "Data");
         var override1 = new RecordDetail("000001:Origin.esm", "B.esp", 1, true, null,
-            [new FieldValue(Meta("name"), "Alice")]);
+            [new FieldValue(Meta("name"), "Alice")], Origin: "Data");
         var masters = new Dictionary<string, IReadOnlyList<string>>
         {
             ["A.esm"] = ["Origin.esm"],
@@ -415,9 +415,9 @@ public class ConflictClassifierTests
     public void Classify_NonInjectedRecord_DoesNotBumpToCritical()
     {
         var master = new RecordDetail("000001:Origin.esm", "A.esm", 0, false, null,
-            [new FieldValue(Meta("name"), "Alice")]);
+            [new FieldValue(Meta("name"), "Alice")], Origin: "Data");
         var override1 = new RecordDetail("000001:Origin.esm", "B.esp", 1, true, null,
-            [new FieldValue(Meta("name"), "Bob")]);
+            [new FieldValue(Meta("name"), "Bob")], Origin: "Data");
         var masters = new Dictionary<string, IReadOnlyList<string>>
         {
             ["A.esm"] = ["Origin.esm"],
@@ -435,9 +435,9 @@ public class ConflictClassifierTests
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\",\"c\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"c\",\"a\",\"b\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [SortedArrayField("scriptProperties", (object?)arrayA)]);
+            [SortedArrayField("scriptProperties", (object?)arrayA)], Origin: "Data");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [SortedArrayField("scriptProperties", (object?)arrayB)]);
+            [SortedArrayField("scriptProperties", (object?)arrayB)], Origin: "Data");
         var result = Classify([master, override1]);
         Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
     }
@@ -449,9 +449,9 @@ public class ConflictClassifierTests
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [SortedArrayField("scriptProperties", (object?)arrayA)]);
+            [SortedArrayField("scriptProperties", (object?)arrayA)], Origin: "Data");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [SortedArrayField("scriptProperties", (object?)arrayB)]);
+            [SortedArrayField("scriptProperties", (object?)arrayB)], Origin: "Data");
         var result = Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
@@ -462,9 +462,9 @@ public class ConflictClassifierTests
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"c\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [SortedArrayField("scriptProperties", (object?)arrayA)]);
+            [SortedArrayField("scriptProperties", (object?)arrayA)], Origin: "Data");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [SortedArrayField("scriptProperties", (object?)arrayB)]);
+            [SortedArrayField("scriptProperties", (object?)arrayB)], Origin: "Data");
         var result = Classify([master, override1]);
         Assert.Equal(ConflictAll.Override, result.ConflictAll);
     }
@@ -648,9 +648,9 @@ public class ConflictClassifierTests
         var overrideVal = JsonSerializer.Deserialize<JsonElement>("[{\"Pos\":{\"X\":2}}]");
 
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [new FieldValue(itemsMeta, masterVal)]);
+            [new FieldValue(itemsMeta, masterVal)], Origin: "Data");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [new FieldValue(itemsMeta, overrideVal)]);
+            [new FieldValue(itemsMeta, overrideVal)], Origin: "Data");
 
         var result = Classify([master, override1]);
 
@@ -685,7 +685,7 @@ public class ConflictClassifierTests
         string plugin, int loadOrder, bool isWinner,
         FieldMetadata structMeta, object? structValue) =>
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
-            [new FieldValue(structMeta, structValue)]);
+            [new FieldValue(structMeta, structValue)], "Data");
 
     [Fact]
     public void Classify_NonStructField_ChildrenIsNull()
@@ -782,7 +782,7 @@ public class ConflictClassifierTests
         // C.esp is the winner but doesn't have "Pos" at all
         var master = MakeStructOverride("A.esp", 0, false, structMeta, masterVal);
         var override1 = MakeStructOverride("B.esp", 1, false, structMeta, overrideVal);
-        var winnerWithoutField = new RecordDetail("000001:Test.esp", "C.esp", 2, true, null, []);
+        var winnerWithoutField = new RecordDetail("000001:Test.esp", "C.esp", 2, true, null, [], Origin: "Data");
 
         var result = Classify([master, override1, winnerWithoutField]);
 
@@ -892,9 +892,9 @@ public class ConflictClassifierTests
     {
         var meta = new FieldMetadata("race", "formKey", false, ["race"], []);
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
-            [new FieldValue(meta, "000AAA:Test.esp")]);
+            [new FieldValue(meta, "000AAA:Test.esp")], Origin: "Data");
         var override1 = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null,
-            [new FieldValue(meta, "000BBB:Test.esp")]);
+            [new FieldValue(meta, "000BBB:Test.esp")], Origin: "Data");
 
         static MEditService.Core.Records.RecordLookupEntry? Resolve(string fk) =>
             fk == "000AAA:Test.esp" ? new MEditService.Core.Records.RecordLookupEntry("race", "GoodRace") : null;
@@ -915,7 +915,7 @@ public class ConflictClassifierTests
         // resolution suppress kw1's (or vice versa) by aggregating to the array field's own state.
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"000AAA:Test.esp\",\"000BBB:Test.esp\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
-            [SortedArrayField("keywords", (object?)arrayA)]);
+            [SortedArrayField("keywords", (object?)arrayA)], Origin: "Data");
 
         static MEditService.Core.Records.RecordLookupEntry? Resolve(string fk) =>
             fk == "000AAA:Test.esp" ? new MEditService.Core.Records.RecordLookupEntry("kywd", "GoodKeyword") : null;
@@ -957,7 +957,7 @@ public class ConflictClassifierTests
     {
         var meta = new FieldMetadata("race", "formKey", false, ["race"], []);
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, true, null,
-            [new FieldValue(meta, "000AAA:Test.esp")]);
+            [new FieldValue(meta, "000AAA:Test.esp")], Origin: "Data");
 
         var result = Classify([master]);
 

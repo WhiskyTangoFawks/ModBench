@@ -19,7 +19,7 @@ public sealed class PluginSaverSaveGroupTests
         var members = new[]
         {
             new GroupMember("000001:Test.esp", plugin, "npc_", "field_edit",
-                "aggression", J("\"Unaggressive\""), J("\"Frenzied\""))
+                "aggression", J("\"Unaggressive\""), J("\"Frenzied\""), Source: "system", ParentCell: null, PlacementGroup: null, Origin: "Data")
         };
         return svc.StageChanges(members);
     }
@@ -37,14 +37,14 @@ public sealed class PluginSaverSaveGroupTests
         var created = svc.Upsert(new PendingChangeUpsert(
             createdFormKey, "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["$create"] = J("null") },
-            "user", null, [], FormRefs: null, ChangeType: "create"));
+            "user", null, [], FormRefs: null, ChangeType: "create", ParentCell: null, PlacementGroup: null, Origin: "Data"));
 
         svc.Upsert(new PendingChangeUpsert(
             "000001:B.esp", "B.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
             "user", null,
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Unaggressive\"") },
-            [new PendingFormRef("aggression", "aggression", createdFormKey)]));
+            [new PendingFormRef("aggression", "aggression", createdFormKey)], ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
 
         return created[0].Id;
     }
@@ -72,7 +72,7 @@ public sealed class PluginSaverSaveGroupTests
         var members = new[]
         {
             new GroupMember("000001:Test.esp", "A.esp", "npc_", "field_edit",
-                "aggression", J("\"Unaggressive\""), J("\"Frenzied\""), Origin: "ModA"),
+                "aggression", J("\"Unaggressive\""), J("\"Frenzied\""), Origin: "ModA", Source: "system", ParentCell: null, PlacementGroup: null),
         };
         var group = changes.StageChanges(members);
         var session = new StubSession();
@@ -283,7 +283,7 @@ public sealed class PluginSaverSaveGroupTests
     private static SaveResult EmptySaveResult() => new(string.Empty, [], [], [], []);
 
     private static PluginMetadata MakeImmutablePlugin(string name) =>
-        new(name, string.Empty, 0, false, true, [], 0, IsImmutable: true);
+        new(name, string.Empty, 0, false, true, [], 0, IsImmutable: true, Origin: "Data");
 
     private sealed class StubSession : ISessionManager, IDisposable
     {
@@ -324,7 +324,7 @@ public sealed class PluginSaverSaveGroupTests
         public IGameSession? Session { get; private set; } = new StubGameSession([]);
         public IRecordReader? Repository => throw new NotSupportedException();
         public void Load(string d, string p, GameRelease g) => throw new NotSupportedException();
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
+        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
         public string ReserveFormKey(string plugin) => throw new NotSupportedException();

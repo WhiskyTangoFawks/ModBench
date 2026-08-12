@@ -29,6 +29,7 @@ function makePlugins(count: number): PluginMetadata[] {
     masters: [],
     recordCount: 10,
     isImmutable: false,
+    origin: 'Data',
   }));
 }
 
@@ -774,8 +775,8 @@ describe('SessionController.loadExplicitSession', () => {
   beforeEach(() => vi.resetAllMocks());
 
   const plugins = [
-    { name: 'Foo.esp', path: '/mods/A/Foo.esp' },
-    { name: 'Fallout4.esm', path: '/game/Data/Fallout4.esm' },
+    { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A' },
+    { name: 'Fallout4.esm', path: '/game/Data/Fallout4.esm', origin: 'Data' },
   ];
 
   it('POSTs the ordered plugin list + dataFolder game directory and refreshes', async () => {

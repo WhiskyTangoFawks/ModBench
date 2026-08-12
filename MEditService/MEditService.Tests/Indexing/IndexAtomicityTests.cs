@@ -52,7 +52,7 @@ public class IndexAtomicityTests
             drop.ExecuteNonQuery();
         }
 
-        Assert.ThrowsAny<Exception>(() => repo.Index(LoadMod(fixture.DataFolder, "Atomic.esp"), 0));
+        Assert.ThrowsAny<Exception>(() => repo.Index(LoadMod(fixture.DataFolder, "Atomic.esp"), 0, participates: true, origin: "Data"));
 
         Assert.Equal(0, RowCount(repo, "npc_"));
     }

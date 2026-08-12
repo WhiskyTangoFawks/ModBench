@@ -16,21 +16,10 @@ public interface ISessionManager
     /// Builds the single active session from an ordered list of scattered physical plugin paths
     /// (an MO2-style instance's enabled plugins), with the game's implicit masters resolved from
     /// <paramref name="gameDirectory"/>, then indexes it and computes winners. Replaces any prior
-    /// session (ADR-0015).
+    /// session (ADR-0015). Each plugin also carries the origin Mod Management resolved it from — a
+    /// mod folder name, or a reserved PluginOrigin value (#269 / ADR-0036).
     /// </summary>
-    void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path)> plugins, GameRelease gameRelease);
-
-    /// <summary>
-    /// Same contract as the (Name, Path) overload above, but each plugin also carries the origin
-    /// Mod Management resolved it from — a mod folder name, or a reserved PluginOrigin value
-    /// (#269 / ADR-0036). Declared as a default interface method rather than a plain abstract
-    /// member on purpose: adding a required interface member would force every ISessionManager
-    /// test double across the suite (none of which exercise origin) to implement it too. The
-    /// default just forwards to the origin-less overload above, dropping origin, so those fakes
-    /// keep compiling unmodified; SessionManager overrides this one with the real implementation.
-    /// </summary>
-    void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease) =>
-        LoadExplicit(gameDirectory, plugins.Select(p => (p.Name, p.Path)).ToList(), gameRelease);
+    void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease);
 
     void Unload();
 

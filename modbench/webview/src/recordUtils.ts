@@ -153,7 +153,7 @@ export function combineVscodeContexts(...contexts: (object | undefined)[]): stri
 // out of `key` itself.
 export type Column =
   | { kind: 'disk'; key: ColumnKey; override: CompareOverride }
-  | { kind: 'pending'; key: ColumnKey; plugin: string; origin?: string };
+  | { kind: 'pending'; key: ColumnKey; plugin: string; origin: string };
 
 export function buildColumns(overrides: CompareOverride[], immutableSet?: Set<ColumnKey>): Column[] {
   const cols: Column[] = [];

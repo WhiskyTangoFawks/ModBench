@@ -23,8 +23,8 @@ public class WorldspaceQueryServiceTests
             new(records ?? [], (records ?? []).Count);
         public RecordDetail? GetRecord(string t, string fk, string? p, bool w) => null;
         public IReadOnlyList<RecordDetail> GetAllOverrides(string t, string fk) => [];
-        public VmadData? GetVmad(string fk, string p, string origin = "Data") => null;
-        public IReadOnlyList<ConditionOwner> GetConditions(string fk, string p, string origin = "Data") => [];
+        public VmadData? GetVmad(string fk, string p, string origin) => null;
+        public IReadOnlyList<ConditionOwner> GetConditions(string fk, string p, string origin) => [];
         public int CountRecordsForPlugin(string t, string p) => 0;
         public string? FindRecordType(string fk) => null;
         public RecordLookupEntry? ResolveFormKey(string fk) => null;
@@ -34,7 +34,7 @@ public class WorldspaceQueryServiceTests
         public IReadOnlyList<ReferenceResult> GetReferences(string fk) => [];
         public PagedResult<CellSummary> GetInteriorCells(string p, int l, int o) => new([], 0);
         public CellReferences GetCellReferences(string p, string fk) => cellRefs ?? new([], []);
-        public PlacementRow? GetPlacement(string formKey, string plugin, string origin = "Data") => null;
+        public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => null;
     }
 
     private sealed class StubSession(IRecordReader repo) : ISessionManager
@@ -42,7 +42,7 @@ public class WorldspaceQueryServiceTests
         public IGameSession? Session => null;
         public IRecordReader? Repository => repo;
         public void Load(string d, string p, GameRelease g) => throw new NotSupportedException();
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
+        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string n) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string p, IReadOnlyList<PendingChange> c) => throw new NotSupportedException();
@@ -159,7 +159,7 @@ public class WorldspaceQueryServiceTests
             new() { [PendingChangeConstants.CreateFieldPath] = PendingChangeConstants.NullElement },
             "user", null, [],
             ChangeType: PendingChangeConstants.CreateChangeType,
-            ParentCell: "cell:Fallout4.esm", PlacementGroup: PendingChangeConstants.PlacementGroupPersistent));
+            ParentCell: "cell:Fallout4.esm", PlacementGroup: PendingChangeConstants.PlacementGroupPersistent, FormRefs: null, Origin: "Data"));
 
         var result = ServiceWithChanges(changes).GetCellReferences("Patch.esp", "cell:Fallout4.esm");
 
@@ -177,7 +177,7 @@ public class WorldspaceQueryServiceTests
             new() { [PendingChangeConstants.DeleteFieldPath] = PendingChangeConstants.NullElement },
             "user", null, [],
             ChangeType: PendingChangeConstants.DeleteChangeType,
-            ParentCell: "cell:Fallout4.esm"));
+            ParentCell: "cell:Fallout4.esm", FormRefs: null, PlacementGroup: null, Origin: "Data"));
 
         var result = ServiceWithChanges(changes, committed).GetCellReferences("Mod.esp", "cell:Fallout4.esm");
 
@@ -192,7 +192,7 @@ public class WorldspaceQueryServiceTests
             new() { [PendingChangeConstants.CreateFieldPath] = PendingChangeConstants.NullElement },
             "user", null, [],
             ChangeType: PendingChangeConstants.CreateChangeType,
-            ParentCell: "target:Fallout4.esm", PlacementGroup: PendingChangeConstants.PlacementGroupTemporary));
+            ParentCell: "target:Fallout4.esm", PlacementGroup: PendingChangeConstants.PlacementGroupTemporary, FormRefs: null, Origin: "Data"));
 
         var svc = ServiceWithChanges(changes);
 

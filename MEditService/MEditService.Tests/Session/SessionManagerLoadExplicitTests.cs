@@ -117,7 +117,7 @@ public sealed class SessionManagerLoadExplicitTests
         public void SetFilter(string? sql) => inner.SetFilter(sql);
         public void Initialize(GameRelease release) => inner.Initialize(release);
 
-        public void Index(IModGetter pluginMod, int loadOrderIndex, bool participates = true, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory)
+        public void Index(IModGetter pluginMod, int loadOrderIndex, bool participates, string origin)
         {
             if (pluginMod.ModKey.FileName.ToString().Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"injected index failure for {poisonPlugin}");
@@ -125,7 +125,7 @@ public sealed class SessionManagerLoadExplicitTests
         }
 
         public void UpdateWinners() => inner.UpdateWinners();
-        public void SetPluginParticipation(string plugin, bool participates, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+        public void SetPluginParticipation(string plugin, bool participates, string origin) =>
             inner.SetPluginParticipation(plugin, participates, origin);
         public void Dispose() => inner.Dispose();
 
@@ -135,8 +135,8 @@ public sealed class SessionManagerLoadExplicitTests
             inner.GetRecord(tableName, formKey, plugin, winnerOnly);
         public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey) =>
             inner.GetAllOverrides(tableName, formKey);
-        public VmadData? GetVmad(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => inner.GetVmad(formKey, plugin, origin);
-        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+        public VmadData? GetVmad(string formKey, string plugin, string origin) => inner.GetVmad(formKey, plugin, origin);
+        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) =>
             inner.GetConditions(formKey, plugin, origin);
         public int CountRecordsForPlugin(string tableName, string plugin) =>
             inner.CountRecordsForPlugin(tableName, plugin);
@@ -154,6 +154,6 @@ public sealed class SessionManagerLoadExplicitTests
             inner.GetInteriorCells(plugin, limit, offset);
         public CellReferences GetCellReferences(string plugin, string cellFormKey) =>
             inner.GetCellReferences(plugin, cellFormKey);
-        public PlacementRow? GetPlacement(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => inner.GetPlacement(formKey, plugin, origin);
+        public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => inner.GetPlacement(formKey, plugin, origin);
     }
 }

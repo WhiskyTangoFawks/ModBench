@@ -51,11 +51,10 @@ export class SessionController {
   /** Load the editing session from an ordered { name, path, origin } list built from the
    *  active modlist (POST /session/load-explicit). `gameDirectory` must be the
    *  resolved Data folder — the backend prepends implicit masters from it. `origin` is
-   *  optional here (#269 / ADR-0036) — a caller that doesn't resolve it (or a pre-existing
-   *  test fixture) still type-checks; the backend defaults a missing origin to the reserved
-   *  Data-directory value rather than reject the request. */
+   *  required (#269 / ADR-0036, #275) — the caller resolves it before this point; the
+   *  backend no longer defaults a missing origin. */
   async loadExplicitSession(
-    plugins: { name: string; path: string; origin?: string }[],
+    plugins: { name: string; path: string; origin: string }[],
     gameDirectory: string,
     gameRelease = 'Fallout4',
   ): Promise<void> {

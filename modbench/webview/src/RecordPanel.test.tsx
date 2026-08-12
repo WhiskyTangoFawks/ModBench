@@ -131,7 +131,7 @@ function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordSessionClient 
     // #272 / ADR-0036: mirrors RecordSessionClient.load()'s own columnKey()-keyed construction —
     // a fake that built this as a bare-plugin-name Set (pre-#272) would silently pass every AC5
     // test that exercises immutableSet, since the fake itself wouldn't reproduce the bug.
-    immutableSet: new Set(pl.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin))),
+    immutableSet: new Set(pl.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin ?? null))),
   } as unknown as LoadResult;
   return {
     load: opts.load ?? vi.fn().mockResolvedValue(okLoad),

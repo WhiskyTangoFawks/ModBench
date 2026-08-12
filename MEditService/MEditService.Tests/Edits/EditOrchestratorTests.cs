@@ -1257,6 +1257,46 @@ public sealed class EditOrchestratorTests
         }
     }
 
+    // #275 / ADR-0036: the guard's own lookup (PendingLifecycleChangeType) must scope by the
+    // plugin's real origin, not just its filename — otherwise a pending delete staged against one
+    // origin's copy of a filename would incorrectly block an edit on a *different* origin's copy of
+    // the same filename. Two same-filename plugins can't be loaded simultaneously via GameSession
+    // yet (#34), so the "different origin" side is constructed directly at the IPendingChangeService
+    // seam (AC3-style, mirroring CompoundPluginIdentityTests) rather than through a real dual load.
+    [Fact]
+    public void StageEdit_PendingDeleteOnDifferentOrigin_SameFilename_DoesNotBlockEdit()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("guard-edit-origin")
+            .WithPlugin("Shared.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC_GuardOrigin").FormKey)
+            .BuildScattered();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+
+            using (manager)
+            {
+                var withOrigin = data.Plugins.Select(p => (p.Name, p.Path, Origin: "ModB")).ToList();
+                manager.LoadExplicit(data.GameDirectory, withOrigin, GameRelease.Fallout4);
+
+                // Phantom pending delete against "Shared.esp" but a *different* origin ("ModA")
+                // than the one just loaded ("ModB") — same filename, different physical plugin.
+                changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Shared.esp", "npc_",
+                    new() { [PendingChangeConstants.DeleteFieldPath] = PendingChangeConstants.NullElement },
+                    "user", null, [],
+                    ChangeType: PendingChangeConstants.DeleteChangeType,
+                    Origin: "ModA", FormRefs: null, ParentCell: null, PlacementGroup: null));
+
+                var result = orchestrator.StageEdit(npcKey.ToString(), "Shared.esp",
+                    new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") }, "user", null);
+
+                // Today PendingLifecycleChangeType ignores origin and finds "ModA"'s delete anyway,
+                // wrongly blocking an edit against the unrelated "ModB" copy.
+                Assert.IsType<StageEditResult.Staged>(result);
+            }
+        }
+    }
+
     // Genuinely red against the old guard: SourceNPC's factions edit references a pending-created
     // Faction, so under the stored model it carried a non-null group_id — and the old guard blocked
     // any further edit on it. A field edit is not a delete or renumber, so it must not block.
@@ -1594,7 +1634,7 @@ public sealed class EditOrchestratorTests
 
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) =>
             throw new NotSupportedException();
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path)> plugins, GameRelease gameRelease) =>
+        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease) =>
             throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();

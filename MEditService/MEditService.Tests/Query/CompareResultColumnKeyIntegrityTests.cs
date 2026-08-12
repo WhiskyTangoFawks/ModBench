@@ -166,7 +166,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public IGameSession? Session => session;
         public IRecordReader? Repository => repository;
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) => throw new NotSupportedException();
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
+        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
@@ -237,11 +237,11 @@ public sealed class CompareResultColumnKeyIntegrityTests
         var ddl = new TableDdlBuilder(reflector);
         using var repo = new DuckDbRecordRepository(reflector, ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, 0, origin: "ModA");
-        repo.Index((IModGetter)mod, 1, origin: "ModB");
+        repo.Index((IModGetter)mod, 0, origin: "ModA", participates: true);
+        repo.Index((IModGetter)mod, 1, origin: "ModB", participates: true);
         repo.UpdateWinners();
 
-        var plugins = new[] { new PluginMetadata("Shared.esp", "", 0, false, false, [], 1, false) };
+        var plugins = new[] { new PluginMetadata("Shared.esp", "", 0, false, false, [], 1, false, Origin: "Data") };
         var session = new FakeSessionManager(new FakeGameSession(plugins), repo);
         var svc = new RecordQueryService(session, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
 

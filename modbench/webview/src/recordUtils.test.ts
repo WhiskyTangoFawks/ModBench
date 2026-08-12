@@ -33,6 +33,7 @@ function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): Com
     editorId: null,
     fields: [],
     conflictThis: 'OnlyOne',
+    origin: 'Data',
     ...extra,
   };
 }
@@ -54,7 +55,7 @@ describe('buildColumns', () => {
   it('skips the pending column for immutable overrides even if they have pending fields', () => {
     const cols = buildColumns(
       [makeOverride('Fallout4.esm', { pendingFields: { Name: 'draft' } })],
-      new Set([columnKey('Fallout4.esm')]),
+      new Set([columnKey('Fallout4.esm', null)]),
     );
     expect(cols).toHaveLength(1);
     expect(cols[0]).toMatchObject({ kind: 'disk' });

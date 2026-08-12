@@ -137,7 +137,7 @@ public sealed class RecordQueryService(
                 .ConvertAll(o => new CompareOverride(
                     o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields, o.PendingFields,
                     classification.PluginStates.GetValueOrDefault(ColumnKey.Of(o.Plugin, o.Origin), ConflictThis.OnlyOne),
-                    o.RecordType, o.Origin));
+                    Origin: o.Origin, RecordType: o.RecordType));
 
             // VMAD is outside the generic reflection pipeline, so classify it separately and fold
             // its conflict contribution into the record-level ConflictAll (computed on demand, never stored).
@@ -204,10 +204,10 @@ public sealed class RecordQueryService(
         return PendingChangeResolver.ResolveAll(pending, RequireSchemas(), resolveFormKey);
     }
 
-    public VmadData? GetVmad(string formKey, string plugin, string origin = PluginOrigin.DataDirectory) =>
+    public VmadData? GetVmad(string formKey, string plugin, string origin) =>
         RequireRepository().GetVmad(formKey, plugin, origin);
 
-    public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = PluginOrigin.DataDirectory) =>
+    public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) =>
         RequireRepository().GetConditions(formKey, plugin, origin);
 
     public IReadOnlyList<string> GetConditionFunctions() =>
@@ -216,7 +216,7 @@ public sealed class RecordQueryService(
     public IReadOnlyList<string> GetConditionRunOnTargets() =>
         ConditionCodecRegistry.For(RequireSession().GameRelease.ToCategory())?.AvailableRunOnTargets().ToList() ?? [];
 
-    public PlacementRow? GetPlacement(string formKey, string plugin, string origin = PluginOrigin.DataDirectory) =>
+    public PlacementRow? GetPlacement(string formKey, string plugin, string origin) =>
         RequireRepository().GetPlacement(formKey, plugin, origin);
 
     private IGameSession RequireSession() =>

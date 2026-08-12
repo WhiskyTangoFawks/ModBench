@@ -40,7 +40,7 @@ public class FormLookupTests
             .Build();
 
         using var repo = OpenRepo();
-        repo.Index(LoadMod(fixture.DataFolder, "Lookup.esp"), 0);
+        repo.Index(LoadMod(fixture.DataFolder, "Lookup.esp"), 0, participates: true, origin: "Data");
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();
@@ -61,8 +61,8 @@ public class FormLookupTests
 
         using var repo = OpenRepo();
         var mod = LoadMod(fixture.DataFolder, "Reindex.esp");
-        repo.Index(mod, 0);
-        repo.Index(mod, 0); // re-index same plugin
+        repo.Index(mod, 0, participates: true, origin: "Data");
+        repo.Index(mod, 0, participates: true, origin: "Data"); // re-index same plugin
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();

@@ -730,6 +730,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
 
         return new PendingChange(
             id, formKey, plugin, fieldPath, recordType, oldValue, newValue, source, description, changedAt, changeType,
-            parentCell, placementGroup, Origin: origin);
+            parentCell, placementGroup,
+            Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: origin);
     }
 }

@@ -905,4 +905,52 @@ public sealed class EditOrchestratorConditionTests
             Assert.True(pendingAfter?.ContainsKey("effects"));
         }
     }
+
+    // ---- #275 / ADR-0036: StageEdit must query GetConditions with the plugin's *own* origin, not
+    // the defaulted Data origin — mirrors the identical VMAD gap
+    // (EditOrchestratorVmadTests.StageEdit_VmadBoolEdit_NonDataOrigin_OldValueStillCaptured).
+    // LoadExplicit + a caller-supplied origin exercises a single plugin whose real origin is
+    // "SomeMod", not manager.Load (which always resolves Data).
+
+    [Fact]
+    public void StageEdit_ConditionOperatorEdit_NonDataOrigin_OldValueStillCaptured()
+    {
+        FormKey cobjFk = default;
+        using var fx = new PluginFixtureBuilder("eo-cond-origin")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var cobj = mod.ConstructibleObjects.AddNew("Recipe");
+                cobjFk = cobj.FormKey;
+                cobj.Conditions.Add(new ConditionFloat
+                {
+                    CompareOperator = CompareOperator.EqualTo,
+                    ComparisonValue = 1.0f,
+                    Data = new FunctionConditionData { Function = Condition.Function.GetIsID },
+                });
+            })
+            .BuildScattered();
+        var withOrigin = fx.Plugins.Select(p => (p.Name, p.Path, Origin: "SomeMod")).ToList();
+
+        var (orchestrator, manager, _) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.LoadExplicit(fx.GameDirectory, withOrigin, GameRelease.Fallout4);
+            var fields = new Dictionary<string, JsonElement>
+            {
+                [@"CTDA\Conditions\0\Operator"] = J("\"GreaterThan\"")
+            };
+
+            var result = orchestrator.StageEdit(cobjFk.ToString(), "TestPlugin.esp", fields, "user", null);
+
+            var staged = Assert.IsType<StageEditResult.Staged>(result);
+            var change = Assert.Single(staged.Changes);
+            Assert.Equal(@"CTDA\Conditions\0\Operator", change.FieldPath);
+
+            // Old value must be the in-plugin operator ("EqualTo") — today GetConditions is queried
+            // at the default (Data) origin instead of the plugin's real "SomeMod" origin, finds no
+            // row, and old-value capture silently falls back to null.
+            Assert.Equal(JsonValueKind.String, change.OldValue.ValueKind);
+            Assert.Equal("EqualTo", change.OldValue.GetString());
+        }
+    }
 }

@@ -9,6 +9,18 @@ type PluginResponse = components['schemas']['PluginResponse'];
 type GeneratedRecordSummary = components['schemas']['RecordSummary'];
 type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 
+// #275 / ADR-0036: the backend always populates PluginResponse.Origin with a real, non-empty
+// value — the generated type still shows `origin?: string | null` only because this backend's
+// OpenAPI schema generator isn't NRT-aware for any property (#297), not because origin is ever
+// actually optional on the wire. Fabricating a fallback (the reserved Data-directory value some
+// previous code used) would silently mislabel a real backend regression as "this plugin came
+// from the Data directory" — exactly the silent-wrong-state class of bug this epic exists to
+// stop (ADR-0026). Fail loudly instead.
+function requireOrigin(r: PluginResponse): string {
+  if (!r.origin) throw new Error(`mEdit: backend returned a plugin without an origin (${r.name ?? '<unknown>'})`);
+  return r.origin;
+}
+
 function toPluginMetadata(r: PluginResponse): PluginMetadata {
   return {
     name: r.name ?? '',
@@ -19,6 +31,7 @@ function toPluginMetadata(r: PluginResponse): PluginMetadata {
     masters: r.masters ?? [],
     recordCount: r.recordCount ?? 0,
     isImmutable: r.isImmutable ?? false,
+    origin: requireOrigin(r),
   };
 }
 

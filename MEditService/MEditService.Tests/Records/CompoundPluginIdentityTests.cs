@@ -45,8 +45,8 @@ public class CompoundPluginIdentityTests
         var (modA, modB, npcKey) = BuildSharedFilenameFixture();
 
         using var repo = OpenRepo();
-        repo.Index(modA, loadOrderIndex: 0, origin: "ModA");
-        repo.Index(modB, loadOrderIndex: 1, origin: "ModB");
+        repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
+        repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
 
         var overrides = repo.GetAllOverrides("npc_", npcKey.ToString());
 
@@ -115,8 +115,8 @@ public class CompoundPluginIdentityTests
         Assert.Equal(npcKeyA, npcKeyB);
 
         using var repo = OpenRepo();
-        repo.Index(modA, loadOrderIndex: 0, origin: "ModA");
-        repo.Index(modB, loadOrderIndex: 1, origin: "ModB");
+        repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
+        repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
 
         Assert.Equal(2L, Count(repo, "cell_location", "cell_form_key", cellKeyA.ToString()));
         Assert.Equal(2L, Count(repo, "placement", "form_key", placedKeyA.ToString()));

@@ -76,7 +76,8 @@ public class PluginWriterVmadTests
 
     private static PendingChange MakeVmadChange(FormKey formKey, string fieldPath, string json) =>
         new(Guid.NewGuid(), formKey.ToString(), "VmadWrite.esp", fieldPath, "npc_",
-            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null);
+            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null,
+            null, null, null, null, "Data");
 
     private static INpcGetter ReloadNpc(string pluginPath, FormKey npcKey)
     {
@@ -546,10 +547,10 @@ public class PluginWriterVmadTests
         using var repo = new DuckDbRecordRepository(Reflector, ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         var modPath = new ModPath(ModKey.FromFileName("VmadWrite.esp"), pathA);
-        repo.Index((IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4), 0);
+        repo.Index((IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4), 0, participates: true, origin: "Data");
         repo.UpdateWinners();
-        var vmadData = repo.GetVmad(npcA.ToString(), "VmadWrite.esp");
-        var compare = VmadConflictClassifier.Classify([new VmadPluginInput("VmadWrite.esp", 0, vmadData)]);
+        var vmadData = repo.GetVmad(npcA.ToString(), "VmadWrite.esp", origin: "Data");
+        var compare = VmadConflictClassifier.Classify([new VmadPluginInput("VmadWrite.esp", 0, vmadData, Origin: "Data")]);
         var rawConfig = compare.Compare.Scripts[0].Properties.First(p => p.Name == "Config").Raw!["VmadWrite.esp"];
 
         // A: passthrough save. B: restage the struct from its own Raw.
@@ -761,7 +762,8 @@ public class PluginWriterVmadTests
 
     private static PendingChange MakeStructOp(FormKey formKey, string fieldPath, string opJson) =>
         new(Guid.NewGuid(), formKey.ToString(), "VmadWrite.esp", fieldPath, "npc_",
-            JsonDocument.Parse("null").RootElement, J(opJson), "user", null, DateTime.UtcNow, "vmad_struct_op", null);
+            JsonDocument.Parse("null").RootElement, J(opJson), "user", null, DateTime.UtcNow, "vmad_struct_op", null,
+            null, null, null, null, "Data");
 
     [Fact]
     public async Task SaveAsync_VmadAddProperty_Scalar_AddsAndKeepsSorted()

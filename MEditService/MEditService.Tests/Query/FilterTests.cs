@@ -23,7 +23,7 @@ public class FilterTests(TestPluginFixture fixture)
             ModKey.FromFileName(TestPluginFixture.PluginName),
             Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0);
+        repo.Index(mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
         return repo;
     }

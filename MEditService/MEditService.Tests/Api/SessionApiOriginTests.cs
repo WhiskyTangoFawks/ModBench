@@ -32,24 +32,4 @@ public sealed class SessionApiOriginTests(LoadedApiFixture<TestPluginFixture> lo
         var plugin = plugins.EnumerateArray().Single(p => p.GetProperty("name").GetString() == "A.esp");
         Assert.Equal("SomeMod", plugin.GetProperty("origin").GetString());
     }
-
-    [Fact]
-    public async Task PostSessionLoadExplicit_PluginWithoutOrigin_DefaultsToDataDirectory()
-    {
-        using var fx = new PluginFixtureBuilder("api-explicit-no-origin")
-            .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
-            .BuildScattered();
-
-        var response = await _client.PostAsJsonAsync("/session/load-explicit", new
-        {
-            gameDirectory = fx.GameDirectory,
-            plugins = fx.Plugins.Select(p => new { name = p.Name, path = p.Path }),
-            gameRelease = "Fallout4",
-        });
-        response.EnsureSuccessStatusCode();
-
-        var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
-        var plugin = plugins.EnumerateArray().Single(p => p.GetProperty("name").GetString() == "B.esp");
-        Assert.Equal("Data", plugin.GetProperty("origin").GetString());
-    }
 }

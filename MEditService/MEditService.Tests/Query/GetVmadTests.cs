@@ -112,7 +112,7 @@ public sealed class GetVmadTests : IDisposable
             ModKey.FromFileName("VmadQuery.esp"),
             Path.Combine(_fixture.DataFolder, "VmadQuery.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0);
+        repo.Index(mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
         return repo;
     }
@@ -122,7 +122,7 @@ public sealed class GetVmadTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var vmad = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp");
+        var vmad = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data");
 
         Assert.NotNull(vmad);
         var script = Assert.Single(vmad!.Scripts);
@@ -141,7 +141,7 @@ public sealed class GetVmadTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var vmad = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp");
+        var vmad = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data");
 
         var prop = vmad!.Scripts[0].Properties.First(p => p.Name == "TargetActor").Value;
         Assert.Equal("Object", prop.Type);
@@ -154,7 +154,7 @@ public sealed class GetVmadTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var vmad = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp");
+        var vmad = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data");
 
         var prop = vmad!.Scripts[0].Properties.First(p => p.Name == "Scores").Value;
         Assert.Equal("ArrayOfInt", prop.Type);
@@ -167,7 +167,7 @@ public sealed class GetVmadTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var vmad = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp");
+        var vmad = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data");
 
         var config = vmad!.Scripts[0].Properties.First(p => p.Name == "Config").Value;
         Assert.Equal("Struct", config.Type);
@@ -184,7 +184,7 @@ public sealed class GetVmadTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var config = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp")!.Scripts[0].Properties
+        var config = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data")!.Scripts[0].Properties
             .First(p => p.Name == "Config").Value;
 
         var inner = config.Members!.First(m => m.Name == "Inner").Value;
@@ -200,7 +200,7 @@ public sealed class GetVmadTests : IDisposable
     public void GetVmad_MapsFloatAndStringScalars()
     {
         using var repo = LoadedRepository();
-        var props = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp")!.Scripts[0].Properties;
+        var props = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data")!.Scripts[0].Properties;
 
         var weight = props.First(p => p.Name == "Weight").Value;
         Assert.Equal("Float", weight.Type);
@@ -215,7 +215,7 @@ public sealed class GetVmadTests : IDisposable
     public void GetVmad_MapsAllScalarArrayElementTypes()
     {
         using var repo = LoadedRepository();
-        var props = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp")!.Scripts[0].Properties;
+        var props = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data")!.Scripts[0].Properties;
 
         Assert.Equal([true, false], props.First(p => p.Name == "Bits").Value.ListItems!.Select(i => i.Value));
         Assert.Equal([1.5f, 2.5f], props.First(p => p.Name == "Mults").Value.ListItems!.Select(i => i.Value));
@@ -231,7 +231,7 @@ public sealed class GetVmadTests : IDisposable
     public void GetVmad_ReconstructsArrayOfStruct_FromStructJson()
     {
         using var repo = LoadedRepository();
-        var items = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp")!.Scripts[0].Properties
+        var items = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data")!.Scripts[0].Properties
             .First(p => p.Name == "Items").Value;
 
         Assert.Equal("ArrayOfStruct", items.Type);
@@ -246,7 +246,7 @@ public sealed class GetVmadTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        Assert.Null(repo.GetVmad(_plainNpcFormKey.ToString(), "VmadQuery.esp"));
+        Assert.Null(repo.GetVmad(_plainNpcFormKey.ToString(), "VmadQuery.esp", origin: "Data"));
     }
 
     [Fact]
@@ -274,12 +274,12 @@ public sealed class GetVmadTests : IDisposable
             ModKey.FromFileName("VmadEmptyList.esp"),
             Path.Combine(emptyListFixture.DataFolder, "VmadEmptyList.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0);
+        repo.Index(mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
 
         using (repo)
         {
-            var vmad = repo.GetVmad(emptyListFk.ToString(), "VmadEmptyList.esp");
+            var vmad = repo.GetVmad(emptyListFk.ToString(), "VmadEmptyList.esp", origin: "Data");
             Assert.NotNull(vmad);
             var emptyProp = vmad!.Scripts[0].Properties.First(p => p.Name == "Empty").Value;
             Assert.Equal("ArrayOfInt", emptyProp.Type);

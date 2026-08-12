@@ -8,9 +8,8 @@ namespace MEditService.Core.Session;
 // Origin (#269 / ADR-0036): the mod folder that provided this physical file, or one of the
 // reserved values in PluginOrigin — opaque here, never interpreted. As of #271, SessionManager
 // threads this into DuckDbRecordRepository.Index, so record tables key on (form_key, origin,
-// plugin) — this is no longer inert. Defaulted (like Participates) so pre-existing test fixtures
-// that construct a PluginMetadata positionally without naming every field keep compiling; every
-// real construction site (GameSession.BuildPluginMetadata) always passes it explicitly.
+// plugin) — this is no longer inert. Required (#275): every construction site must say which
+// origin this is, not fall back to one silently.
 public record PluginMetadata(
     string Name,
     string Path,
@@ -20,7 +19,7 @@ public record PluginMetadata(
     IReadOnlyList<string> Masters,
     int RecordCount,
     bool IsImmutable,
-    string Origin = PluginOrigin.DataDirectory,
+    string Origin,
     bool Participates = true
 );
 

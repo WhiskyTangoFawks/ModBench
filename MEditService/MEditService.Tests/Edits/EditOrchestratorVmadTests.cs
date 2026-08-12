@@ -57,13 +57,13 @@ public sealed class EditOrchestratorVmadTests
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => inner.GetPluginRecordTypes(plugin);
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
-        public VmadData? GetVmad(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+        public VmadData? GetVmad(string formKey, string plugin, string origin) =>
             throw new InvalidOperationException("GetVmad must not be called for non-VMAD edits");
-        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) =>
             inner.GetConditions(formKey, plugin, origin);
         public IReadOnlyList<string> GetConditionFunctions() => inner.GetConditionFunctions();
         public IReadOnlyList<string> GetConditionRunOnTargets() => inner.GetConditionRunOnTargets();
-        public PlacementRow? GetPlacement(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => inner.GetPlacement(formKey, plugin, origin);
+        public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => inner.GetPlacement(formKey, plugin, origin);
         public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
             inner.GetChanges(plugin, formKey, memberChangeId);
     }
@@ -119,7 +119,7 @@ public sealed class EditOrchestratorVmadTests
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => inner.GetPluginRecordTypes(plugin);
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
-        public VmadData? GetVmad(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+        public VmadData? GetVmad(string formKey, string plugin, string origin) =>
             !formKey.Equals(vmadFormKey, StringComparison.OrdinalIgnoreCase)
                 ? inner.GetVmad(formKey, plugin, origin)
                 : new VmadData([
@@ -127,11 +127,11 @@ public sealed class EditOrchestratorVmadTests
                         new VmadNamedValue("VarProp", new VmadPropertyValue("Variable", "", null))
                     ])
                 ]);
-        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) =>
             inner.GetConditions(formKey, plugin, origin);
         public IReadOnlyList<string> GetConditionFunctions() => inner.GetConditionFunctions();
         public IReadOnlyList<string> GetConditionRunOnTargets() => inner.GetConditionRunOnTargets();
-        public PlacementRow? GetPlacement(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => inner.GetPlacement(formKey, plugin, origin);
+        public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => inner.GetPlacement(formKey, plugin, origin);
         public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
             inner.GetChanges(plugin, formKey, memberChangeId);
     }
@@ -700,6 +700,50 @@ public sealed class EditOrchestratorVmadTests
             var change = Assert.Single(staged.Changes);
             Assert.Equal("vmad_struct_op", change.ChangeType);
             // Old value captures the property's current value (true) for revert display.
+            Assert.Equal(JsonValueKind.True, change.OldValue.ValueKind);
+        }
+    }
+
+    // ---- #275 / ADR-0036: StageEdit must query GetVmad with the plugin's *own* origin, not the
+    // defaulted Data origin — a plugin loaded from a real mod folder is indexed at that origin, so
+    // querying at the default finds nothing and old-value capture silently loses the plugin's real
+    // VMAD data. LoadExplicit + a caller-supplied origin (not manager.Load, which always resolves
+    // Data) exercises exactly this: a single plugin whose real origin is "SomeMod".
+
+    [Fact]
+    public void StageEdit_VmadBoolEdit_NonDataOrigin_OldValueStillCaptured()
+    {
+        FormKey npcFk = default, targetFk = default;
+        using var fx = new PluginFixtureBuilder("eo-vmad-origin")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var target = mod.Npcs.AddNew("Target");
+                targetFk = target.FormKey;
+                var npc = mod.Npcs.AddNew("ScriptedNpc");
+                npcFk = npc.FormKey;
+                npc.VirtualMachineAdapter = BuildVmad(target.FormKey);
+            })
+            .BuildScattered();
+        var withOrigin = fx.Plugins.Select(p => (p.Name, p.Path, Origin: "SomeMod")).ToList();
+
+        var (orchestrator, manager, _) = MakeOrchestrator();
+        using (manager)
+        {
+            manager.LoadExplicit(fx.GameDirectory, withOrigin, GameRelease.Fallout4);
+            var fields = new Dictionary<string, JsonElement>
+            {
+                [@"VMAD\DefaultScript\IsActive"] = J("false")
+            };
+
+            var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null);
+
+            var staged = Assert.IsType<StageEditResult.Staged>(result);
+            var change = Assert.Single(staged.Changes);
+            Assert.Equal(@"VMAD\DefaultScript\IsActive", change.FieldPath);
+
+            // Old value must be the in-plugin Bool value (true) — today GetVmad is queried at the
+            // default (Data) origin instead of the plugin's real "SomeMod" origin, finds no row,
+            // and old-value capture silently falls back to null.
             Assert.Equal(JsonValueKind.True, change.OldValue.ValueKind);
         }
     }

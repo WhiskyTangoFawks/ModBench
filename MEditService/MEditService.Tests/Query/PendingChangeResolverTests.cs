@@ -12,7 +12,8 @@ public class PendingChangeResolverTests
 
     private static PendingChange MakeChange(string fieldPath, string recordType, JsonElement newValue) =>
         new(Guid.NewGuid(), "000001:Test.esp", "Test.esp", fieldPath, recordType,
-            J("null"), newValue, "user", null, DateTime.UtcNow, "field_edit");
+            J("null"), newValue, "user", null, DateTime.UtcNow, "field_edit",
+            null, null, null, null, null, "Data");
 
     private static ColumnSpec FormKeyColumn(string name, params string[] validTypes) =>
         new(name, name, "VARCHAR", _ => null, "formKey", validTypes, [], null);

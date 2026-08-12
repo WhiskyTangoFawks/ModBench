@@ -17,8 +17,8 @@ public interface IRecordQueryService
     CompareResult? GetCompare(string formKey);
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
-    VmadData? GetVmad(string formKey, string plugin, string origin = PluginOrigin.DataDirectory);
-    IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = PluginOrigin.DataDirectory);
+    VmadData? GetVmad(string formKey, string plugin, string origin);
+    IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin);
 
     // The condition function picker's catalog (#152): every function name the loaded session's
     // game/category actually resolves — see ConditionCodecRegistry / IConditionCodec.AvailableFunctions.
@@ -30,7 +30,7 @@ public interface IRecordQueryService
     // differently-shaped RunOnType enum never silently offers a name it can't parse or write.
     IReadOnlyList<string> GetConditionRunOnTargets();
 
-    PlacementRow? GetPlacement(string formKey, string plugin, string origin = PluginOrigin.DataDirectory);
+    PlacementRow? GetPlacement(string formKey, string plugin, string origin);
 
     // ADR-0031: the /changes read surface (Pending Changes tree, pending-column rendering) — each
     // PendingChange's NewValue gets its FormKey-typed leaves resolved in one batched pass via

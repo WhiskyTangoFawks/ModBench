@@ -14,8 +14,8 @@ let ext: vscode.Extension<unknown> | undefined;
 // GET /plugins fails with 503 "No session loaded" until POST /session/load-explicit
 // is received, then serves the loaded plugins (issue #75).
 const MOCK_PLUGINS = [
-  { name: 'Fallout4.esm', path: '/data/Fallout4.esm' },
-  { name: 'TestMod.esp', path: '/data/TestMod.esp' },
+  { name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data' },
+  { name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data' },
 ];
 let sessionLoaded = false;
 const requestLog: string[] = [];

@@ -69,7 +69,7 @@ describe('RecordSessionClient.load', () => {
     // dropdown) is gone. #272: keyed by compound column identity (ColumnKey), not the bare
     // plugin name — this fixture has no `origin`, which columnKey() treats as the elided Data
     // origin, same as every pre-#272 fixture.
-    expect(r.immutableSet).toEqual(new Set([columnKey('A.esp')]));
+    expect(r.immutableSet).toEqual(new Set([columnKey('A.esp', null)]));
   });
 
   // #272 / ADR-0036: the genuinely red case — two PluginInfo entries sharing a filename but

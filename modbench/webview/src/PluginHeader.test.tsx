@@ -9,7 +9,7 @@ import type { RecordDetail } from './types';
 function override(partial: Partial<RecordDetail> = {}): RecordDetail {
   return {
     formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', loadOrderIndex: 1,
-    isWinner: true, editorId: 'TestNPC', fields: [],
+    isWinner: true, editorId: 'TestNPC', fields: [], origin: 'Data',
     ...partial,
   };
 }

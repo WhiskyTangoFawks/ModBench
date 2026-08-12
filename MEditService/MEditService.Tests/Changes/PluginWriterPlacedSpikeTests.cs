@@ -65,7 +65,7 @@ public class PluginWriterPlacedSpikeTests
             "$create", "refr",
             J("null"), J("null"),
             "user", null, DateTime.UtcNow, "create",
-            ParentCell: extCellFk.ToString(), PlacementGroup: "persistent");
+            ParentCell: extCellFk.ToString(), PlacementGroup: "persistent", Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
 
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var result = await writer.SaveAsync(activePath, [createChange], GameRelease.Fallout4, linkCache);

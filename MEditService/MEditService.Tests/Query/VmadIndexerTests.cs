@@ -82,7 +82,7 @@ public sealed class VmadIndexerTests : IDisposable
             ModKey.FromFileName("VmadTest.esp"),
             Path.Combine(_fixture.DataFolder, "VmadTest.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0);
+        repo.Index(mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
         return repo;
     }
@@ -106,7 +106,7 @@ public sealed class VmadIndexerTests : IDisposable
     public void GetVmad_MapsPropertyFlags_EditedAndZero()
     {
         using var repo = LoadedRepository();
-        var props = repo.GetVmad(_npc1FormKey.ToString(), "VmadTest.esp")!
+        var props = repo.GetVmad(_npc1FormKey.ToString(), "VmadTest.esp", origin: "Data")!
             .Scripts.First(s => s.Name == "DefaultScript").Properties;
 
         Assert.Equal("Edited", props.First(p => p.Name == "IsActive").Value.Flags);
@@ -117,7 +117,7 @@ public sealed class VmadIndexerTests : IDisposable
     public void GetVmad_MapsScriptFlags_InheritedAndRemoved()
     {
         using var repo = LoadedRepository();
-        var scripts = repo.GetVmad(_npc1FormKey.ToString(), "VmadTest.esp")!.Scripts;
+        var scripts = repo.GetVmad(_npc1FormKey.ToString(), "VmadTest.esp", origin: "Data")!.Scripts;
 
         Assert.Equal("Inherited and Removed",
             scripts.First(s => s.Name == "InheritedScript").Flags);
@@ -131,7 +131,7 @@ public sealed class VmadIndexerTests : IDisposable
             ModKey.FromFileName("VmadTest.esp"),
             Path.Combine(_fixture.DataFolder, "VmadTest.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0);
+        repo.Index(mod, 0, participates: true, origin: "Data");
 
         var count = CountRows(repo.Connection, "vmad_scripts",
             "form_key = $1 AND script_name = 'DefaultScript'",
