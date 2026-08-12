@@ -80,8 +80,41 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     item.collapsibleState = this.expandableFile(element as TRow) === undefined
       ? vscode.TreeItemCollapsibleState.None
       : vscode.TreeItemCollapsibleState.Collapsed;
+    // #276 / ADR-0035: read-only-for-editing (Editing's "Immutable plugin") is decided here for
+    // the same reason the chevron is — this is the one place allowed to know both what the row
+    // provider built and what the session says, so neither side has to learn the other's
+    // vocabulary. Tooltip only, never a contextValue: no per-row editing command exists yet to
+    // gate off one (see plugins.md) — inventing that plumbing ahead of a consumer is exactly the
+    // "boilerplate for later" the project's conventions rule out.
+    //
+    // Both real row providers return the row *as* its own TreeItem (getTreeItem(el) { return el;
+    // }), so `item` here is the same mutable object the tree keeps handing back on every render —
+    // unlike collapsibleState (an idempotent assignment either way), naively appending a note to
+    // `item.tooltip` would accumulate it permanently the first time a plugin is read-only, with no
+    // way back to the row provider's own tooltip (e.g. PluginNode's missing-master badge) once it
+    // stops being read-only. `originalTooltip` captures each row's own tooltip the first time this
+    // sees it, so every render recomputes read-only-or-not from that fixed base instead of from
+    // whatever the previous render left behind.
+    if (!this.originalTooltip.has(element as object)) this.originalTooltip.set(element as object, item.tooltip);
+    const base = this.originalTooltip.get(element as object);
+    const file = this.deps.pluginFileOf(element as TRow)?.toLowerCase();
+    const readOnly = file !== undefined && (this.readOnlyFiles?.has(file) ?? false);
+    if (readOnly) {
+      const note = `This plugin is read-only — its records can't be edited.`;
+      // A MarkdownString base would be replaced here, not appended to — no row provider produces
+      // one today, so this is a documented assumption, not a bug to handle.
+      item.tooltip = typeof base === 'string' ? `${base}\n${note}` : note;
+    } else {
+      item.tooltip = base;
+    }
     return item;
   }
+
+  /** Each row's own tooltip, captured the first time this composite renders it — the base
+   *  `getTreeItem` above restores to (or builds on top of) on every subsequent render, since the
+   *  row it decorates is the same mutable object the tree keeps reusing. Weak for the same reason
+   *  as `rowsSeen`. */
+  private readonly originalTooltip = new WeakMap<object, string | vscode.MarkdownString | undefined>();
 
   private isRow(element: TRow | TChild): boolean {
     return this.rowsSeen.has(element as object);
@@ -98,14 +131,24 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   }
 
   private sessionFiles?: Set<string>;
+  private readOnlyFiles?: Set<string>;
 
-  /** The plugin files the editing session holds, or undefined when there is no session. This is
-   *  the whole of the composite's own state: chevrons appear across the tree when it is set and
-   *  come off when it is cleared, which ADR-0035 makes the entire "editing is available now"
-   *  signal — no banner, no mode. Re-renders what is already built; it never re-reads the load
-   *  order, so filter state, expansion and scroll position survive a session starting or closing. */
-  setSession(pluginFiles: Set<string> | undefined): void {
+  /** The plugin files the editing session holds, or undefined when there is no session, plus
+   *  (#276 / ADR-0035) the subset that's read-only for editing — Editing's "Immutable plugin"
+   *  (`medit/ApiClient.ts` `PluginMetadata.isImmutable`). One setter, not two: the two facts are a
+   *  single hand-off from the same session and never change independently — every call site in
+   *  `extension.ts` either sets both (session start) or clears both (session close, backend gone),
+   *  so two separately-callable setters would only be a coupling something could call apart by
+   *  mistake. `readOnlyFiles` defaults to empty, so existing single-argument callers are unaffected.
+   *
+   *  This is the whole of the composite's own state: chevrons appear across the tree when a
+   *  session is set and come off when it is cleared, which ADR-0035 makes the entire "editing is
+   *  available now" signal — no banner, no mode. Re-renders what is already built; it never
+   *  re-reads the load order, so filter state, expansion and scroll position survive a session
+   *  starting or closing. */
+  setSession(pluginFiles: Set<string> | undefined, readOnlyFiles: Set<string> = new Set()): void {
     this.sessionFiles = pluginFiles && new Set([...pluginFiles].map((f) => f.toLowerCase()));
+    this.readOnlyFiles = pluginFiles && new Set([...readOnlyFiles].map((f) => f.toLowerCase()));
     this.emitter.fire(undefined);
   }
 

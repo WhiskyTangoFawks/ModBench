@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { join } from 'node:path';
 import type { IModlistSource, PluginEntry } from './model';
 import type { Reporter } from './deployer';
 import { dropIndexForMove } from './mo2/pluginsText';
@@ -52,16 +53,34 @@ export class PluginNode extends vscode.TreeItem {
 /** A synthetic row for one of the game's implicitly-loaded vanilla/DLC masters
  *  (issue #108) — discovered from the resolved Data folder (a plugin file that
  *  is NOT a hardlink), never hardcoded. Rendered ahead of plugins.txt's own
- *  rows, in topological order. Immutable: no checkbox (unset, so VS Code
- *  renders none — nothing to toggle), and excluded from drag by
- *  `handleDrag`'s existing `kind === 'plugin'` filter (not draggable). Its
- *  `contextValue` (`pluginImplicit`, distinct from `plugin`) lets package.json
- *  menu `when` clauses hide any plugin-only command (reorder, toggle) for it. */
+ *  rows, in topological order. No checkbox (unset, so VS Code renders none —
+ *  nothing to toggle), and excluded from drag by `handleDrag`'s existing
+ *  `kind === 'plugin'` filter (not draggable). Its `contextValue`
+ *  (`pluginImplicit`, distinct from `plugin`) lets package.json menu `when`
+ *  clauses hide any plugin-only command (reorder, toggle) for it.
+ *
+ *  #276 / ADR-0035: the leading slot answers exactly one question — "can you
+ *  change whether this loads?" — so this row (forced on, can't be toggled or
+ *  moved) renders a lock where a togglable row renders a checkbox, adopting
+ *  MO2's own `forceLoaded` wording verbatim (`pluginlist.cpp`) rather than
+ *  inventing new copy. MO2 itself renders this case as a checked-but-disabled
+ *  checkbox plus grayed name text, not a lock — that's not reproducible here:
+ *  `vscode.TreeItemCheckboxState` is `Checked`/`Unchecked` only, with no
+ *  non-interactive variant, so a rendered checkbox is always clickable and a
+ *  forced-on row would invite a toggle the extension would have to silently
+ *  revert. A lock is the platform-forced substitute for the icon only; the
+ *  label-graying MO2 also does *is* reproducible (`resourceUri` +
+ *  `FileDecorationProvider`, same pattern as `HiddenDownloadDecorationProvider`)
+ *  and is wired separately via `ImplicitMasterDecorationProvider`, keyed off
+ *  the `resourceUri` this constructor sets when given a resolved path. */
 export class ImplicitMasterNode extends vscode.TreeItem {
   readonly kind = 'implicitMaster' as const;
-  constructor(public readonly name: string) {
+  constructor(public readonly name: string, path?: string) {
     super(name, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'pluginImplicit';
+    this.iconPath = new vscode.ThemeIcon('lock');
+    this.tooltip = [name, "This plugin can't be disabled or moved (enforced by the game)."].join('\n');
+    if (path !== undefined) this.resourceUri = vscode.Uri.file(path);
   }
 }
 
@@ -251,8 +270,8 @@ export class PluginListProvider
     this.lastOrder = order;
 
     // The game's implicitly-loaded vanilla/DLC masters (issue #108): discovered from
-    // the resolved Data folder, never from plugins.txt. Rendered first, immutable. A
-    // name in both sets renders exactly once — as the implicit row — so its
+    // the resolved Data folder, never from plugins.txt. Rendered first, forced on — can't be
+    // toggled or moved (#276). A name in both sets renders exactly once — as the implicit row — so its
     // plugins.txt line (if any, e.g. a stale CC .esl entry) is filtered out here.
     // `fullOrder` (implicit-first) is used for row rendering and badge computation
     // ONLY; `this.lastOrder` above stays plugins.txt's raw order, since that's what
@@ -268,12 +287,24 @@ export class PluginListProvider
     // Badges are computed against the full order (never the filtered subset) so a
     // filtered-out master still counts toward a visible row's order-aware verdict.
     const statuses = await this.computeStatuses(fullOrder);
+    this.lastImplicitNames = new Set(implicitNames.map((n) => n.toLowerCase()));
     const rows: PluginListNode[] = [
-      ...implicitNames.map((name) => new ImplicitMasterNode(name)),
+      ...implicitNames.map((name) => new ImplicitMasterNode(name, dataFolder ? join(dataFolder, name) : undefined)),
       ...dedupedOrder.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }, statuses?.get(name))),
     ];
     return { kind: 'ok', cache: { rows } };
   }
+
+  /** The lowercased implicit-master names from the last render (#276) — what
+   *  `ImplicitMasterDecorationProvider` matches a `resourceUri` against to gray an
+   *  implicit master's label the way MO2 grays `COL_NAME` for a `forceLoaded` row. Empty
+   *  before the first render; a live read (not a snapshot), same convention as
+   *  `DownloadsProvider.hiddenNames()`. */
+  implicitMasterNames(): ReadonlySet<string> {
+    return this.lastImplicitNames;
+  }
+
+  private lastImplicitNames: ReadonlySet<string> = new Set();
 
   /** Order-aware missing-master verdicts for `order` (the implicit-first, deduped
    *  full row order — see `getChildren`), or undefined when no instanceRoot is
@@ -313,9 +344,9 @@ export class PluginListProvider
    *  drop is past the last row / onto a non-plugin node), writing plugins.txt
    *  immediately. `dropIndexForMove` reconciles the drop target with
    *  `movePluginsInText`'s post-removal index convention. A drop onto the
-   *  immutable implicit-master block (issue #108) is not a plugins.txt position —
+   *  undraggable implicit-master block (issue #108) is not a plugins.txt position —
    *  those rows have no line — so it lands at file-index 0, the top of the
-   *  mutable region, computed against `this.lastOrder` (plugins.txt's raw order,
+   *  reorderable region, computed against `this.lastOrder` (plugins.txt's raw order,
    *  NEVER the display-composed implicit-first order — writing against the
    *  wrong index would corrupt plugins.txt). */
   async handleDrop(
