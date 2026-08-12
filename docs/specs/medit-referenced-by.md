@@ -10,7 +10,7 @@ vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not her
 
 One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared session lifecycle,
 status bar, command palette, and architecture seams. Siblings:
-[Plugins tree](medit-plugins-tree.md) (a record node's own context menu, no longer this tree's
+[Plugins tree](plugins.md) (a record node's own context menu, no longer this tree's
 entry point — see below), [Record editor panel](medit-record-editor.md) (the active record this
 tree follows, and what a referrer opens into), [Pending Changes tree](medit-pending-changes-tree.md)
 (the structural model this tree mirrors — `TreeDataProvider`, typed node classes, the
@@ -68,15 +68,23 @@ Code surface. Zero referrers renders the tree's own empty state instead.
 
 ## Implementation Decisions
 
-- A native `TreeView` (`modbench.referencedByTree`, "Referenced By"), contributed to its own
-  Panel-location `viewsContainers` entry (`modbenchReferencedBy`) rather than stacked under the
-  `modbench` activity-bar container with Plugins/Pending Changes — a per-record relationship query
-  is not the always-relevant session state those two are, and Panel placement is VS Code's own
-  answer to "a tab beside the thing it describes." Gated on `modbench.viewMode == 'editing'` only
-  — there is no visibility context key anymore (the old `modbench.referencedByShown`, set by the
-  first `modbench.showReferencedBy` invocation, is gone: the view exists whenever Editing does).
-  Since #268 that gate no longer implies the Loadout views are hidden — they carry no
-  `viewMode` gate at all and stay visible for the whole of the session.
+- A native `TreeView` (`modbench.referencedByTree`, declared name **"Plugins - Referenced By"** —
+  the `Plugins - …` prefix is [#273](https://github.com/WhiskyTangoFawks/ModBench/issues/273)'s
+  naming convention for a sub-functionality of the Plugins tree, since VS Code has no view
+  nesting/grouping within a container to say so structurally; referred to here by its short name
+  for readability), contributed to its own Panel-location `viewsContainers` entry
+  (`modbenchReferencedBy`) rather than stacked under the `modbench` activity-bar container with
+  Plugins/Pending Changes — a per-record relationship query is not the always-relevant session
+  state those two are, and Panel placement is VS Code's own answer to "a tab beside the thing it
+  describes." **Carries no gate at all** — always present, exactly like Mods/Plugins/Downloads
+  (#273 retired `modbench.viewMode` and, with it, the old `'editing'`-only gate; there was never a
+  separate visibility context key before that — the old `modbench.referencedByShown`, set by the
+  first `modbench.showReferencedBy` invocation, was already gone by #282). The consequence is
+  deliberate, not an oversight: with no session and no active record, the view still renders —
+  its own empty state (`NoActiveRecordNode`, "Open a record to see what references it.") covers
+  it, the same way it already covers "a record is active but has zero referrers." No fetch is
+  attempted until `ActiveRecordTracker` actually reports a FormKey, which cannot happen without a
+  session, so an idle Referenced By panel costs nothing.
 - **Retargeting is driven by `ActiveRecordTracker`** (`src/medit/ActiveRecordTracker.ts`), not by
   a command argument. `openRecordPanel` (the record editor's own panel-open/reuse/retarget choke
   point) reports each panel's currently displayed FormKey and which panel is active; the tracker

@@ -11,7 +11,7 @@ not here ([CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary: [CONTEXT.md](../../C
 
 One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared session lifecycle,
 vocabulary, and architecture seams. Siblings:
-[Plugins tree](medit-plugins-tree.md) (which browses staged edits in context, under the
+[Plugins tree](plugins.md) (which browses staged edits in context, under the
 `pending-changes` filter preset — this view deliberately does not),
 [Record editor panel](medit-record-editor.md) (whose Pending column stages the changes this
 view groups), [Referenced By tree](medit-referenced-by.md).
@@ -87,12 +87,18 @@ exactly what it will carry.
 
 ## Implementation Decisions
 
-- A second sidebar `TreeView` (`modbench.changeGroupTree`, "Pending Changes") stacked below
-  the Plugins tree in the `modbench` view container, visible while
-  `modbench.viewMode == 'editing'`. Since #268 this sits alongside the Loadout views (Mods,
-  Plugin load order, Downloads), which carry no `viewMode` gate at all and stay visible and
-  interactive for the whole of the session — this tree, the mEdit Plugins tree, and Referenced
-  By are the only three still gated on `'editing'`. Sidebar placement follows
+- A second sidebar `TreeView` (`modbench.changeGroupTree`, declared name **"Plugins - Pending
+  Changes"** — the `Plugins - …` prefix is [#273](https://github.com/WhiskyTangoFawks/ModBench/issues/273)'s
+  naming convention for a sub-functionality of the Plugins tree, since VS Code has no view
+  nesting/grouping within a container to say so structurally; referred to here by its short name
+  for readability) stacked below the Plugins tree in the `modbench` view container. **Visible
+  exactly when there is staged work, absent otherwise** — gated on `modbench.hasPendingChanges`,
+  not on a view mode (#273 retired `modbench.viewMode` entirely). This tree is **not** nested
+  inside the Plugins tree despite the naming convention suggesting a hierarchy — VS Code has no
+  such nesting, and structurally this is a ChangeGroup-organised projection over the same staged
+  work the Plugins tree's `pending-changes` filter preset browses in place, not a subtree of it
+  ([ADR-0029](../adr/0029-pending-changes-tree-is-a-grouping-view.md)). Sidebar placement
+  otherwise follows
   [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s stacked-tree pattern;
   ADR-0017 §5's bottom-panel location is superseded (ADR-0029).
 - **Top-level nodes are ChangeGroups**, sorted with multi-member groups first, then single

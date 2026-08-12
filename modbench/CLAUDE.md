@@ -47,7 +47,7 @@ Placement:
 - Context menu availability = tree node `contextValue` (from backend metadata): `"plugin"`, `"pluginImmutable"`, `"recordType"`, `"record"`.
 - New commands: prompt in `extension.ts`, delegate to `SessionController` (explicit args, no VS Code types).
 - New data queries: add to `PluginRepository` interface, implement in `ApiPluginRepository`, test without VS Code.
-- New UI surface: read the surface spec in `docs/specs/` first — one spec per surface (`medit-plugins-tree.md`, `medit-record-editor.md`, `medit-pending-changes-tree.md`, `medit-referenced-by.md` for Editing, with `medit.md` the cross-cutting overview; `mods.md`, `plugins.md`, `downloads.md` for Loadout; `loadout-header.md` for the cross-context header). Update the spec if not covered.
+- New UI surface: read the surface spec in `docs/specs/` first — one spec per surface (`medit-record-editor.md`, `medit-pending-changes-tree.md`, `medit-referenced-by.md` for Editing, with `medit.md` the cross-cutting overview; `mods.md`, `plugins.md` (the one Plugins tree — #273/ADR-0035; joint Mod Management/Editing), `downloads.md` for Loadout; `loadout-header.md` for the cross-context header). Update the spec if not covered.
 
 ## Type mapping: PluginMetadata
 

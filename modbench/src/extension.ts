@@ -916,9 +916,9 @@ function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[]
         { icon: 'list-tree', label: 'Group by separator' },
       ),
       vscode.commands.registerCommand('modbench.modList.launchMedit', async () => {
-        // enterEditing reveals the editing view itself, only once the session is
-        // loaded (issue #75) — don't flip viewMode here. Show progress while the
-        // backend spawns and the session loads.
+        // enterEditing puts chevrons on the merged tree's rows only once the session is
+        // loaded (issue #75 / #270) — there is no view mode left to flip (#273). Show
+        // progress while the backend spawns and the session loads.
         try {
           await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: 'mEdit' },
