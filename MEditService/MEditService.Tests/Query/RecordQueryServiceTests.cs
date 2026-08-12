@@ -40,6 +40,40 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal(TestPluginFixture.RecordCount, plugins[0].RecordCount);
     }
 
+    // #277 / ADR-0037: a plugin whose master is absent from the whole session is flagged on the
+    // wire, not just detected in-memory — this is what lets the tree render it.
+    [Fact]
+    public void GetPlugins_PluginWithMissingMaster_ReportsItAsDirectlyMissing()
+    {
+        // ADR-0038: masters are lifecycle-derived from the live object graph, never
+        // user-declared — a bare ModHeader.MasterReferences.Add is discarded on write. A genuine
+        // reference into the (never-built) master is what makes Mutagen record it for real.
+        using var fx = new PluginFixtureBuilder("rqs-missing-master")
+            .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("PatchedNpc").Race.SetTo(
+                new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800)))
+            .Build();
+        using var manager = new SessionManager(
+            new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)),
+            new PluginWriter(SharedSchemaReflector.Instance, NullLogger<PluginWriter>.Instance));
+        manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
+        var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), SharedSchemaReflector.Instance, new ConflictClassifier());
+
+        var plugins = svc.GetPlugins();
+
+        var patch = Assert.Single(plugins, p => p.Name == "Patch.esp");
+        var issue = Assert.Single(patch.MasterIssues);
+        Assert.Equal("Ghost.esm", issue.MasterName);
+        Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
+    }
+
+    [Fact]
+    public void GetPlugins_PluginWithNoMissingMasters_ReportsEmptyMasterIssues()
+    {
+        var plugins = _svc.GetPlugins();
+
+        Assert.Empty(plugins[0].MasterIssues);
+    }
+
     // --- GET /record-types ---
 
     [Fact]
