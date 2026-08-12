@@ -117,7 +117,10 @@ public sealed class SessionManager(
             _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
             try
             {
-                repository.Index(mod, plugin.LoadOrderIndex, plugin.Participates);
+                // #271 / ADR-0036: threads the origin GameSession already resolved (#269) into the
+                // index, so the DuckDB row is identified by (origin, plugin) together, not filename
+                // alone.
+                repository.Index(mod, plugin.LoadOrderIndex, plugin.Participates, plugin.Origin);
             }
             catch (Exception ex)
             {
@@ -220,7 +223,7 @@ public sealed class SessionManager(
 
         lock (_lock)
         {
-            repository.Index(loaded.Getter, metadata.LoadOrderIndex, metadata.Participates);
+            repository.Index(loaded.Getter, metadata.LoadOrderIndex, metadata.Participates, metadata.Origin);
             repository.UpdateWinners();
         }
 
@@ -243,7 +246,7 @@ public sealed class SessionManager(
             lock (_lock)
             {
                 foreach (var (metadata, repository, item) in loaded)
-                    repository.Index(item.Getter, metadata.LoadOrderIndex, metadata.Participates);
+                    repository.Index(item.Getter, metadata.LoadOrderIndex, metadata.Participates, metadata.Origin);
                 if (loaded.Count > 0)
                     loaded[0].Repository.UpdateWinners();
             }

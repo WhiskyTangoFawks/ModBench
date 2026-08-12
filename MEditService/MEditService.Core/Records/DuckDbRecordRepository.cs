@@ -4,6 +4,7 @@ using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
+using MEditService.Core.Session;
 using Microsoft.Extensions.Logging;
 
 using Mutagen.Bethesda;
@@ -50,7 +51,13 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     // --- Indexing (absorbed from RecordIndexer) ---
 
-    public void Index(IModGetter pluginMod, int loadOrderIndex, bool participates = true)
+    // origin (#271 / ADR-0036): the mod folder that provided this physical file, or a reserved
+    // PluginOrigin value. Defaulted so the many existing single-origin call sites (real sessions
+    // today only ever resolve PluginOrigin.DataDirectory or a caller-supplied origin threaded by
+    // SessionManager) keep compiling — see IRecordIndexer.Index. Threaded into every per-plugin
+    // delete/upsert/append below so a plugin is identified by (origin, plugin) together, not
+    // filename alone: two plugins sharing a filename but differing in origin no longer collide.
+    public void Index(IModGetter pluginMod, int loadOrderIndex, bool participates = true, string origin = PluginOrigin.DataDirectory)
     {
         var schemas = RequireSchemas();
         var plugin = pluginMod.ModKey.FileName.ToString();
@@ -65,7 +72,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         // #267: one `plugins` row per indexed plugin — UpdateWinners() joins against it so a
         // non-participating plugin's rows never win regardless of load_order_idx.
-        UpsertPluginParticipation(plugin, loadOrderIndex, participates);
+        UpsertPluginParticipation(plugin, origin, loadOrderIndex, participates);
 
         foreach (var (tableName, schema) in schemas)
         {
@@ -73,23 +80,27 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             // IndexRecordTable's EnumerateMajorRecords call assumes one, so it's indexed separately,
             // and header rows never enter form_lookup for the same reason.
             if (tableName == "header") continue;
-            IndexRecordTable(tableName, schema, pluginMod, plugin, loadOrderIndex, refs, lookupRows);
+            IndexRecordTable(tableName, schema, pluginMod, plugin, origin, loadOrderIndex, refs, lookupRows);
         }
 
         // Walk VMAD after the per-type loop so both generic and VMAD Object refs land in `refs`
         // before the single form_references flush below.
+        // #271 / ADR-0036: VMAD/conditions/header/form_lookup stay filename-only-keyed for now —
+        // out of this ticket's named scope (AC1/AC4 name record tables, plugins, placement,
+        // cell_location and form_references only). A second origin sharing a filename would still
+        // collide on these four; left as a known gap for a follow-up.
         DeleteVmadForPlugin(plugin);
         IndexVmad(pluginMod, plugin, refs);
 
         DeleteConditionsForPlugin(plugin);
         IndexConditions(pluginMod, plugin, refs);
 
-        IndexPlacement(pluginMod, plugin);
+        IndexPlacement(pluginMod, plugin, origin);
 
-        IndexHeader(pluginMod, plugin, loadOrderIndex, schemas);
+        IndexHeader(pluginMod, plugin, origin, loadOrderIndex, schemas);
 
         // Clear this plugin's stale refs, then rebuild from the refs gathered across both passes.
-        DeleteFormReferencesForPlugin(plugin);
+        DeleteFormReferencesForPlugin(plugin, origin);
         if (refs.Count > 0)
         {
             using var refAppender = Connection.CreateAppender("form_references");
@@ -98,6 +109,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 var row = refAppender.CreateRow();
                 row.AppendValue(r.SourceFormKey);
                 row.AppendValue(plugin);
+                row.AppendValue(origin);
                 row.AppendValue(r.TargetFormKey);
                 row.AppendValue(r.FieldPath);
                 row.AppendValue(r.RecordType);
@@ -136,7 +148,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     private void IndexRecordTable(
         string tableName, RecordTableSchema schema, IModGetter pluginMod,
-        string plugin, int loadOrderIndex, List<FormRef> refs,
+        string plugin, string origin, int loadOrderIndex, List<FormRef> refs,
         List<(string FormKey, string RecordType, string? EditorId)> lookupRows)
     {
         List<IMajorRecordGetter> records;
@@ -154,7 +166,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         _logger.LogDebug("Appending {Count} {RecordType} records from {Plugin}", records.Count, tableName, plugin);
 
-        DeleteExisting(tableName, plugin);
+        DeleteExistingForOrigin(tableName, plugin, origin);
 
         using var appender = Connection.CreateAppender(tableName);
         foreach (var record in records)
@@ -164,6 +176,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 var row = appender.CreateRow();
                 row.AppendValue(record.FormKey.ToString());
                 row.AppendValue(plugin);
+                row.AppendValue(origin);
                 row.AppendValue((int?)loadOrderIndex);
                 row.AppendValue((bool?)false);
                 if (record.EditorID is { } edId)
@@ -193,22 +206,25 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     // #267 / ADR-0035: one row per indexed plugin, upserted every Index() call. UpdateWinners()
     // joins record tables against it by plugin name rather than widening every reflected table
     // with its own participates column.
-    private void UpsertPluginParticipation(string plugin, int loadOrderIndex, bool participates)
+    private void UpsertPluginParticipation(string plugin, string origin, int loadOrderIndex, bool participates)
     {
-        DeleteExisting("plugins", plugin);
+        DeleteExistingForOrigin("plugins", plugin, origin);
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO plugins (plugin, load_order_idx, participates) VALUES ($1, $2, $3)";
+        cmd.CommandText = "INSERT INTO plugins (plugin, origin, load_order_idx, participates) VALUES ($1, $2, $3, $4)";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         cmd.Parameters.Add(new DuckDBParameter { Value = loadOrderIndex });
         cmd.Parameters.Add(new DuckDBParameter { Value = participates });
         cmd.ExecuteNonQuery();
     }
 
-    public void SetPluginParticipation(string plugin, bool participates)
+    // origin defaulted (like Index's) so existing single-origin callers keep compiling — #271 / ADR-0036.
+    public void SetPluginParticipation(string plugin, bool participates, string origin = PluginOrigin.DataDirectory)
     {
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = "UPDATE plugins SET participates = $2 WHERE plugin = $1";
+        cmd.CommandText = "UPDATE plugins SET participates = $3 WHERE plugin = $1 AND origin = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         cmd.Parameters.Add(new DuckDBParameter { Value = participates });
         cmd.ExecuteNonQuery();
     }
@@ -218,17 +234,20 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         var schemas = RequireSchemas();
         foreach (var tableName in schemas.Keys)
         {
+            // #271 / ADR-0036: joined on (plugin, origin) together — two plugins sharing a filename
+            // but differing in origin are distinct participants, each judged on its own load_order_idx
+            // and participation, not folded into one MAX() bucket by filename alone.
             Execute($"""
                 UPDATE "{tableName}"
                 SET is_winner = (
                     load_order_idx = (
                         SELECT MAX(t2.load_order_idx) FROM "{tableName}" t2
-                        JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.participates
+                        JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
                         WHERE t2.form_key = "{tableName}".form_key
                     )
                     AND EXISTS (
                         SELECT 1 FROM plugins p1
-                        WHERE p1.plugin = "{tableName}".plugin AND p1.participates
+                        WHERE p1.plugin = "{tableName}".plugin AND p1.origin = "{tableName}".origin AND p1.participates
                     )
                 )
                 """);
@@ -817,6 +836,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             cmd.Parameters.Add(new DuckDBParameter { Value = v });
     }
 
+    // Filename-only scope — kept for form_lookup only, which stays out of #271's named scope
+    // (AC1/AC4 name record tables, plugins, placement, cell_location and form_references; VMAD,
+    // conditions, header and form_lookup are a known follow-up gap, see Index()'s comment above).
     private void DeleteExisting(string tableName, string plugin)
     {
         using var cmd = Connection.CreateCommand();
@@ -825,11 +847,24 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.ExecuteNonQuery();
     }
 
-    private void DeleteFormReferencesForPlugin(string plugin)
+    // #271 / ADR-0036: scoped to (plugin, origin) together — reindexing one origin's plugin must
+    // never delete another origin's rows for the same filename. Used everywhere in #271's named
+    // scope; DeleteExisting above stays filename-only for the tables this ticket doesn't touch.
+    private void DeleteExistingForOrigin(string tableName, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = "DELETE FROM form_references WHERE source_plugin = $1";
+        cmd.CommandText = $"DELETE FROM \"{tableName}\" WHERE plugin = $1 AND origin = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
+        cmd.ExecuteNonQuery();
+    }
+
+    private void DeleteFormReferencesForPlugin(string plugin, string origin)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM form_references WHERE source_plugin = $1 AND source_origin = $2";
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         cmd.ExecuteNonQuery();
     }
 
@@ -865,10 +900,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     // Phase 16: populate the worldspace-tree side tables from the GRUP hierarchy that
     // EnumerateMajorRecords flattens away.
-    private void IndexPlacement(IModGetter pluginMod, string plugin)
+    private void IndexPlacement(IModGetter pluginMod, string plugin, string origin)
     {
-        DeleteExisting("placement", plugin);
-        DeleteExisting("cell_location", plugin);
+        DeleteExistingForOrigin("placement", plugin, origin);
+        DeleteExistingForOrigin("cell_location", plugin, origin);
 
         using var cellAppender = Connection.CreateAppender("cell_location");
         using var placeAppender = Connection.CreateAppender("placement");
@@ -879,6 +914,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 var row = cellAppender.CreateRow();
                 row.AppendValue(cell.CellFormKey);
                 row.AppendValue(plugin);
+                row.AppendValue(origin);
                 DuckDbAppend.Nullable(row, cell.ParentWorldspace);
                 DuckDbAppend.Nullable(row, cell.BlockX);
                 DuckDbAppend.Nullable(row, cell.BlockY);
@@ -894,6 +930,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 var row = placeAppender.CreateRow();
                 row.AppendValue(placed.FormKey);
                 row.AppendValue(plugin);
+                row.AppendValue(origin);
                 row.AppendValue(placed.ParentCell);
                 row.AppendValue(placed.PlacementGroup);
                 DuckDbAppend.Nullable(row, placed.PosX);
@@ -905,15 +942,19 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     // Issue #1 slice A1: header rows never flow through IndexRecordTable (see the Index() skip
     // above), so they need their own delete-then-append step, matching every other side table.
+    // #271 / ADR-0036: the header table's DDL comes from the same generic CreateRecordTable as
+    // every reflected schema, so it carries the `origin` column too — HeaderIndexer.Index appends
+    // it for row-shape consistency, but the delete step below stays filename-only-scoped (header
+    // is out of this ticket's named scope, same known gap as VMAD/conditions/form_lookup).
     private void IndexHeader(
-        IModGetter pluginMod, string plugin, int loadOrderIndex,
+        IModGetter pluginMod, string plugin, string origin, int loadOrderIndex,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         if (!schemas.TryGetValue("header", out var headerSchema)) return;
 
         DeleteExisting("header", plugin);
         using var appender = Connection.CreateAppender("header");
-        HeaderIndexer.Index(pluginMod, plugin, loadOrderIndex, headerSchema, appender);
+        HeaderIndexer.Index(pluginMod, plugin, origin, loadOrderIndex, headerSchema, appender);
     }
 
     private void DeleteVmadForPlugin(string plugin)
@@ -1026,6 +1067,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 SELECT 1 FROM pending_changes pc
                 WHERE pc.form_key = fr.source_form_key
                   AND pc.plugin   = fr.source_plugin
+                  AND pc.origin   = fr.source_origin
                   AND (
                     fr.field_path = pc.field_path
                     OR fr.field_path LIKE pc.field_path || '[%'
@@ -1066,7 +1108,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.CommandText = """
             SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
             FROM cell_location cl
-            LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin
+            LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
             WHERE cl.parent_worldspace = $1 AND cl.plugin = $2
             ORDER BY cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
             """;
@@ -1101,7 +1143,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.CommandText = $"""
             SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y
             FROM cell_location cl
-            LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin
+            LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
             WHERE cl.is_interior AND cl.plugin = $1
             ORDER BY c.editor_id
             LIMIT {limit} OFFSET {offset}
@@ -1130,13 +1172,13 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             return new CellReferences([], []);
 
         var union = string.Join("\nUNION ALL\n",
-            placedTables.Select(t => $"SELECT '{t}' AS rt, form_key, plugin, editor_id, \"base\" FROM \"{t}\""));
+            placedTables.Select(t => $"SELECT '{t}' AS rt, form_key, plugin, origin, editor_id, \"base\" FROM \"{t}\""));
 
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
             SELECT p.placement_group, r.rt, p.form_key, r.editor_id, r.base
             FROM placement p
-            JOIN ({union}) r ON r.form_key = p.form_key AND r.plugin = p.plugin
+            JOIN ({union}) r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
             WHERE p.parent_cell = $1 AND p.plugin = $2
             ORDER BY r.editor_id
             """;

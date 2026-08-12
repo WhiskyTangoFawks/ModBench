@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Session;
 
 namespace MEditService.Core.Edits;
 
@@ -10,7 +11,12 @@ public sealed record DrainResult(
 
 /// <summary>
 /// One record's worth of staged field edits to insert or update in the pending-changes buffer.
+/// Input command only — never serialized to the wire; the response type is <see cref="PendingChange"/>.
 /// </summary>
+// Origin (#271 / ADR-0036): binds the staged edit to the compound identity, same as the committed
+// record index — EditOrchestrator resolves it from the session's PluginMetadata before construction.
+// Defaulted to PluginOrigin.DataDirectory so every pre-existing direct construction (test fixtures)
+// keeps compiling unchanged.
 public sealed record PendingChangeUpsert(
     string FormKey,
     string Plugin,
@@ -22,7 +28,8 @@ public sealed record PendingChangeUpsert(
     IReadOnlyList<PendingFormRef>? FormRefs = null,
     string ChangeType = PendingChangeConstants.FieldEditChangeType,
     string? ParentCell = null,
-    string? PlacementGroup = null);
+    string? PlacementGroup = null,
+    string Origin = PluginOrigin.DataDirectory);
 
 public interface IPendingChangeService
 {

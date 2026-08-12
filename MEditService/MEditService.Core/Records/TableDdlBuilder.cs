@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using DuckDB.NET.Data;
 using MEditService.Core.Schema;
+using MEditService.Core.Session;
 using Mutagen.Bethesda;
 
 namespace MEditService.Core.Records;
@@ -26,10 +27,14 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // #267 / ADR-0035: `participates` is the plugins.txt `*` prefix — the one row per plugin that
     // UpdateWinners()'s per-table sweep joins against so a disabled plugin's row can never win.
     // Populated by DuckDbRecordRepository.Index (one row per indexed plugin), not hand-maintained.
+    // #271 / ADR-0036: `origin` (the mod folder that provided this physical file, or a reserved
+    // PluginOrigin value) is part of this table's identity alongside `plugin` — two plugins sharing
+    // a filename but differing in origin are distinct rows, not a collision.
     private static void CreatePluginsTable(DuckDBConnection connection) =>
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS plugins (
-                plugin VARCHAR PRIMARY KEY,
+                plugin VARCHAR NOT NULL,
+                origin VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 load_order_idx INTEGER NOT NULL,
                 is_master BOOLEAN NOT NULL DEFAULT FALSE,
                 is_light BOOLEAN NOT NULL DEFAULT FALSE,
@@ -37,7 +42,8 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 masters VARCHAR[],
                 record_count INTEGER,
                 file_mtime TIMESTAMP,
-                participates BOOLEAN NOT NULL DEFAULT TRUE
+                participates BOOLEAN NOT NULL DEFAULT TRUE,
+                PRIMARY KEY (plugin, origin)
             )
             """);
 
@@ -51,10 +57,11 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
 
     internal static void CreateFormReferencesTable(DuckDBConnection connection)
     {
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS form_references (
                 source_form_key VARCHAR NOT NULL,
                 source_plugin   VARCHAR NOT NULL,
+                source_origin   VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 target_form_key VARCHAR NOT NULL,
                 field_path      VARCHAR NOT NULL,
                 record_type     VARCHAR NOT NULL,
@@ -208,10 +215,11 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // by construction and isolating "move a ref between cells" as a structural op.
     internal static void CreatePlacementTables(DuckDBConnection connection)
     {
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS placement (
                 form_key        VARCHAR NOT NULL,
                 plugin          VARCHAR NOT NULL,
+                origin          VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 parent_cell     VARCHAR NOT NULL,
                 placement_group VARCHAR NOT NULL,
                 pos_x           FLOAT,
@@ -224,10 +232,11 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 ON placement(parent_cell, plugin)
             """);
 
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS cell_location (
                 cell_form_key    VARCHAR NOT NULL,
                 plugin           VARCHAR NOT NULL,
+                origin           VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 parent_worldspace VARCHAR,
                 block_x          INTEGER,
                 block_y          INTEGER,
@@ -248,11 +257,15 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
     }
 
+    // #271 / ADR-0036: `origin` is part of every record table's identity alongside `plugin` — the
+    // composite key is (form_key, origin, plugin). Placed right after `plugin` (not load-bearing for
+    // the explicit-column-list reads in DuckDbRecordRepository, which never SELECT *).
     private static void CreateRecordTable(DuckDBConnection connection, RecordTableSchema schema)
     {
         var sb = new StringBuilder();
         sb.Append("form_key VARCHAR NOT NULL, ");
         sb.Append("plugin VARCHAR NOT NULL, ");
+        sb.Append(CultureInfo.InvariantCulture, $"origin VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}', ");
         sb.Append("load_order_idx INTEGER NOT NULL, ");
         sb.Append("is_winner BOOLEAN NOT NULL DEFAULT FALSE, ");
         sb.Append("editor_id VARCHAR");

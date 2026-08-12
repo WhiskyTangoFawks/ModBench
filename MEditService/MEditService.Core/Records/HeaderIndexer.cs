@@ -26,7 +26,7 @@ internal static class HeaderIndexer
     public static string FormKeyFor(ModKey plugin) => FormKey.Factory($"000000:{plugin}").ToString();
 
     public static void Index(
-        IModGetter pluginMod, string plugin, int loadOrderIndex,
+        IModGetter pluginMod, string plugin, string origin, int loadOrderIndex,
         RecordTableSchema headerSchema, DuckDBAppender appender)
     {
         var extracts = headerSchema.HeaderColumnExtract;
@@ -35,6 +35,7 @@ internal static class HeaderIndexer
         var row = appender.CreateRow();
         row.AppendValue(FormKeyFor(pluginMod.ModKey));
         row.AppendValue(plugin);
+        row.AppendValue(origin);
         row.AppendValue(loadOrderIndex);
         row.AppendValue(false);   // is_winner: corrected by UpdateWinners(), same as every other table
         row.AppendNullValue();    // editor_id: headers have no EditorID concept

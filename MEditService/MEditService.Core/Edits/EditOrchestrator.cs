@@ -92,7 +92,7 @@ public sealed partial class EditOrchestrator(
         // No group is assigned here (#134): an edit that references a pending-created record is
         // grouped with that create by the edge rules (ADR-0028), not by a group id stamped at stage
         // time. The pending_form_references written by this upsert are the edge the rules read.
-        var staged = _changes.Upsert(new PendingChangeUpsert(formKey, plugin, recordType!, fields, source, description, oldValues, formRefs));
+        var staged = _changes.Upsert(new PendingChangeUpsert(formKey, plugin, recordType!, fields, source, description, oldValues, formRefs, Origin: ResolveOrigin(plugin)));
         return new StageEditResult.Staged(staged);
     }
 
@@ -177,7 +177,7 @@ public sealed partial class EditOrchestrator(
 
         var staged = _changes.Upsert(new PendingChangeUpsert(
             formKey, plugin, recordType, fields, source, description,
-            oldValues, formRefs, ChangeType: PendingChangeConstants.VmadStructOpChangeType));
+            oldValues, formRefs, ChangeType: PendingChangeConstants.VmadStructOpChangeType, Origin: ResolveOrigin(plugin)));
         return new StageEditResult.Staged(staged);
     }
 
@@ -375,7 +375,7 @@ public sealed partial class EditOrchestrator(
         StageMissingMasters(formKey, targetPlugin, formRefs, source);
 
         var staged = _changes.Upsert(new PendingChangeUpsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues, formRefs,
-            ParentCell: placement?.ParentCell, PlacementGroup: placement?.PlacementGroup));
+            ParentCell: placement?.ParentCell, PlacementGroup: placement?.PlacementGroup, Origin: ResolveOrigin(targetPlugin)));
         return new StageEditResult.Staged(staged);
     }
 
@@ -411,7 +411,8 @@ public sealed partial class EditOrchestrator(
             headerFormKey, targetPlugin, Records.HeaderIndexer.TableName,
             new Dictionary<string, JsonElement> { [HeaderMastersField] = JsonSerializer.SerializeToElement(newMasters) },
             source, null,
-            new Dictionary<string, JsonElement> { [HeaderMastersField] = JsonSerializer.SerializeToElement(currentMasters) }));
+            new Dictionary<string, JsonElement> { [HeaderMastersField] = JsonSerializer.SerializeToElement(currentMasters) },
+            Origin: ResolveOrigin(targetPlugin)));
     }
 
     // The plugin substring of a "FormID:Plugin" FormKey string; null when malformed (no colon, or
@@ -500,7 +501,8 @@ public sealed partial class EditOrchestrator(
             FormRefs: null,
             ChangeType: PendingChangeConstants.CreateChangeType,
             ParentCell: parentCell,
-            PlacementGroup: placementGroup));
+            PlacementGroup: placementGroup,
+            Origin: ResolveOrigin(plugin)));
 
         if (templateFields != null)
         {
@@ -510,7 +512,8 @@ public sealed partial class EditOrchestrator(
                 templateFields, source, null,
                 [],
                 templateRefs,
-                ChangeType: PendingChangeConstants.FieldEditChangeType));
+                ChangeType: PendingChangeConstants.FieldEditChangeType,
+                Origin: ResolveOrigin(plugin)));
         }
 
         // The id callers get back names the $create change itself. Groups have no identity of their
@@ -622,7 +625,8 @@ public sealed partial class EditOrchestrator(
                 PendingChangeConstants.NullElement,
                 source,
                 placement?.ParentCell,
-                placement?.PlacementGroup));
+                placement?.PlacementGroup,
+                ResolveOrigin(plugin)));
         }
         return members;
     }
@@ -693,7 +697,8 @@ public sealed partial class EditOrchestrator(
                 topLevelField,
                 oldValue,
                 newValue,
-                source));
+                source,
+                Origin: ResolveOrigin(sourcePlugin)));
         }
     }
 
@@ -744,7 +749,8 @@ public sealed partial class EditOrchestrator(
                 PendingChangeConstants.RenumberFieldPath,
                 JsonSerializer.SerializeToElement(formKey),
                 JsonSerializer.SerializeToElement(newFormKey),
-                source),
+                source,
+                Origin: ResolveOrigin(plugin)),
         };
 
         // FieldEdit changes for cross-plugin editable references only
@@ -767,7 +773,8 @@ public sealed partial class EditOrchestrator(
                 topLevelField,
                 oldValue,
                 newValue,
-                source));
+                source,
+                Origin: ResolveOrigin(sourcePlugin)));
         }
 
         var group = _changes.StageChanges(members);
@@ -1102,6 +1109,23 @@ public sealed partial class EditOrchestrator(
             }
         }
     }
+
+    // #271 / ADR-0036: resolves the real origin the session already knows for `plugin` (populated
+    // by GameSession/SessionManager since #269), so every staged edit binds to the compound
+    // identity rather than the reserved default. Falls back to the default when no session or no
+    // matching plugin is found (mirrors every other origin-default fallback introduced this ticket) —
+    // callers here always have a valid session by the time they stage, so this is a belt-and-braces
+    // fallback, not a real path. Safe today only because ValidateEditContext never rejects on a
+    // missing PluginMetadata (only on IsImmutable == true, and a null pluginMeta passes that check)
+    // and because every plugin filename currently maps to exactly one origin — a name absent from
+    // Session.Plugins can't yet mean "a second origin for a filename already staged elsewhere." Once
+    // #272 lets two same-filename origins coexist in a session, this fallback would silently
+    // misattribute such an edit to the reserved default origin instead of surfacing the lookup
+    // miss — revisit then.
+    private string ResolveOrigin(string plugin) =>
+        _sessionManager.Session?.Plugins
+            .FirstOrDefault(p => p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase))?.Origin
+        ?? PluginOrigin.DataDirectory;
 
     private (StageEditResult? earlyOut, IGameSession? session, string? recordType) ValidateEditContext(
         string formKey, string plugin)
