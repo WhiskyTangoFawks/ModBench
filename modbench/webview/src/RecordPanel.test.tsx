@@ -10,6 +10,7 @@ import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 import type { ExtensionToWebview } from './messages';
 import type { FieldMetadata } from './types';
+import { columnKey } from './types';
 import type { LoadResult, RecordSessionClient } from './RecordSessionClient';
 
 // ── shared metadata fixtures ──────────────────────────────────────────────────
@@ -54,7 +55,7 @@ const compareResult = {
     {
       fieldName: 'Name',
       values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
-      winnerPlugin: 'MyMod.esp',
+      winnerColumn: 'MyMod.esp',
       winnerValue: 'Override Name',
       cellStates: { 'MyMod.esp': 'ConflictWins' },
       conflictAll: 'Conflict',
@@ -124,10 +125,13 @@ interface FakeOpts {
 // Issue #122: a fake record-session client. `load` returns the composite view built from the
 // given compare fixture; write methods are spies tests can assert on and override.
 function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordSessionClient {
-  const pl = (opts.plugins ?? pluginsResponse) as { name: string; isImmutable: boolean }[];
+  const pl = (opts.plugins ?? pluginsResponse) as { name: string; isImmutable: boolean; origin?: string }[];
   const okLoad = {
     ok: true, result: compare, changes: opts.changes ?? [], plugins: pl,
-    immutableSet: new Set(pl.filter(p => p.isImmutable).map(p => p.name)),
+    // #272 / ADR-0036: mirrors RecordSessionClient.load()'s own columnKey()-keyed construction —
+    // a fake that built this as a bare-plugin-name Set (pre-#272) would silently pass every AC5
+    // test that exercises immutableSet, since the fake itself wouldn't reproduce the bug.
+    immutableSet: new Set(pl.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin))),
   } as unknown as LoadResult;
   return {
     load: opts.load ?? vi.fn().mockResolvedValue(okLoad),
@@ -249,7 +253,7 @@ const fkCompareResult = {
     {
       fieldName: 'Race',
       values: { 'Fallout4.esm': '00013918:Fallout4.esm' },
-      winnerPlugin: 'Fallout4.esm',
+      winnerColumn: 'Fallout4.esm',
       winnerValue: '00013918:Fallout4.esm',
       cellStates: {},
       // ADR-0031: the backend now carries a resolution signal per FormKey value — this fixture
@@ -272,7 +276,7 @@ const overrideCompareResult = {
       pendingFields: {}, conflictThis: 'Override' },
   ],
   diffs: [{ fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
-    winnerPlugin: 'MyMod.esp', winnerValue: 'Override Name', cellStates: { 'MyMod.esp': 'Override' },
+    winnerColumn: 'MyMod.esp', winnerValue: 'Override Name', cellStates: { 'MyMod.esp': 'Override' },
     conflictAll: 'Override' }],
 };
 
@@ -291,10 +295,10 @@ const twoSiblingFieldsResult = {
   ],
   diffs: [
     { fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
-      winnerPlugin: 'MyMod.esp', winnerValue: 'Override Name', cellStates: { 'MyMod.esp': 'Override' },
+      winnerColumn: 'MyMod.esp', winnerValue: 'Override Name', cellStates: { 'MyMod.esp': 'Override' },
       conflictAll: 'Override' },
     { fieldName: 'Level', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 },
-      winnerPlugin: 'MyMod.esp', winnerValue: 5, cellStates: {},
+      winnerColumn: 'MyMod.esp', winnerValue: 5, cellStates: {},
       conflictAll: 'NoConflict' },
   ],
 };
@@ -316,11 +320,98 @@ const threePluginConflictResult = {
   diffs: [{
     fieldName: 'Name',
     values: { 'Fallout4.esm': 'Alice', 'Mod1.esp': 'Bob', 'Mod2.esp': 'Charlie' },
-    winnerPlugin: 'Mod2.esp',
+    winnerColumn: 'Mod2.esp',
     winnerValue: 'Charlie',
     cellStates: { 'Mod1.esp': 'ConflictLoses', 'Mod2.esp': 'ConflictWins' },
   }],
 };
+
+// #272 / ADR-0036: two columns sharing a filename ('Shared.esp') but differing in origin —
+// display never changes (both columns' own `.plugin` reads "Shared.esp"), so only the compound
+// (plugin, origin) identity can tell them apart. Nothing loads such a pair today (blocked on
+// #34), but the backend already returns this shape (ColumnKey-keyed dictionaries, per-override
+// Origin) once two rows exist for one FormKey — this fixture is that shape, built by hand rather
+// than through a real session load, the same way the backend's own AC5 tests do.
+const sameFilenameCompareResult = {
+  conflictAll: 'Conflict',
+  overrides: [
+    { formKey: '000001:Fallout4.esm', plugin: 'Shared.esp', origin: 'ModA', loadOrderIndex: 0, isWinner: false,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'FromA' }],
+      pendingFields: {}, conflictThis: 'Master', recordType: 'npc_' },
+    { formKey: '000001:Fallout4.esm', plugin: 'Shared.esp', origin: 'ModB', loadOrderIndex: 1, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'FromB' }],
+      pendingFields: {}, conflictThis: 'ConflictWins', recordType: 'npc_' },
+  ],
+  diffs: [{
+    fieldName: 'Name',
+    values: { [columnKey('Shared.esp', 'ModA')]: 'FromA', [columnKey('Shared.esp', 'ModB')]: 'FromB' },
+    winnerColumn: columnKey('Shared.esp', 'ModB'),
+    winnerValue: 'FromB',
+    cellStates: { [columnKey('Shared.esp', 'ModB')]: 'ConflictWins' },
+  }],
+};
+
+const sameFilenamePluginsResponse = [
+  { name: 'Shared.esp', origin: 'ModA', isImmutable: false, loadOrderIndex: 0 },
+  { name: 'Shared.esp', origin: 'ModB', isImmutable: false, loadOrderIndex: 1 },
+];
+
+describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  // The genuinely red case for collapsedColumns: pre-#272, collapsedColumns.has(o.plugin)
+  // collided on the bare "Shared.esp" filename both columns share, so collapsing one collapsed
+  // (or left expanded) both.
+  it('collapsing one column does not collapse the other same-filename column', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse });
+    await waitFor(() => expect(screen.getByText('FromA')).toBeInTheDocument());
+    expect(screen.getByText('FromB')).toBeInTheDocument();
+
+    const [colAHeader] = screen.getAllByText('Shared.esp');
+    fireEvent.click(colAHeader); // collapses ModA's column only
+
+    await waitFor(() => expect(screen.queryByText('FromA')).not.toBeInTheDocument());
+    expect(screen.getByText('FromB')).toBeInTheDocument();
+  });
+
+  // The genuinely red case for overrideMap: pre-#272, `map[o.plugin] = o` collided on the bare
+  // filename and the second override silently discarded the first — Copy as New Record would
+  // have read whichever column happened to be inserted last into the map, regardless of which
+  // one was actually right-clicked. Array/VMAD op targeting resolve through the identical
+  // overrideMap-by-ColumnKey mechanism (RecordPanel.tsx's resolveCurrentArrayFor/handleArrayAdd/
+  // handleVmadStructOp dispatch), so this is representative of that whole class, not narrowly
+  // about Copy as New Record.
+  it("Copy as New Record on one column stages that column's own fields, never the other same-filename column's", async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    const createRecord = vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Target.esp' }));
+    const { client } = renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse, createRecord });
+    await waitFor(() => expect(screen.getByText('FromA')).toBeInTheDocument());
+
+    postColumnHeaderAction({
+      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD,
+      formKey: '000001:Fallout4.esm', sourcePlugin: 'Shared.esp', sourceOrigin: 'ModA', targetPlugin: 'Target.esp',
+    });
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith('000099:Target.esp', 'Target.esp', { Name: 'FromA' }));
+    expect(client.save).not.toHaveBeenCalledWith('000099:Target.esp', 'Target.esp', { Name: 'FromB' });
+  });
+
+  it("...and targeting the other column's origin stages its own fields instead", async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    const createRecord = vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Target.esp' }));
+    const { client } = renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse, createRecord });
+    await waitFor(() => expect(screen.getByText('FromA')).toBeInTheDocument());
+
+    postColumnHeaderAction({
+      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD,
+      formKey: '000001:Fallout4.esm', sourcePlugin: 'Shared.esp', sourceOrigin: 'ModB', targetPlugin: 'Target.esp',
+    });
+
+    await waitFor(() => expect(client.save).toHaveBeenCalledWith('000099:Target.esp', 'Target.esp', { Name: 'FromB' }));
+    expect(client.save).not.toHaveBeenCalledWith('000099:Target.esp', 'Target.esp', { Name: 'FromA' });
+  });
+});
 
 describe('RecordPanel — OnlyOne record display', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -517,21 +608,21 @@ const structCompareResult = {
     {
       fieldName: 'Bounds',
       values: { 'Fallout4.esm': { X: 10, Y: 20 }, 'MyMod.esp': { X: 15, Y: 20 } },
-      winnerPlugin: 'MyMod.esp',
+      winnerColumn: 'MyMod.esp',
       winnerValue: { X: 15, Y: 20 },
       cellStates: { 'MyMod.esp': 'Override' },
       children: [
         {
           fieldName: 'X',
           values: { 'Fallout4.esm': 10, 'MyMod.esp': 15 },
-          winnerPlugin: 'MyMod.esp',
+          winnerColumn: 'MyMod.esp',
           winnerValue: 15,
           cellStates: { 'MyMod.esp': 'Override' },
         },
         {
           fieldName: 'Y',
           values: { 'Fallout4.esm': 20, 'MyMod.esp': 20 },
-          winnerPlugin: 'MyMod.esp',
+          winnerColumn: 'MyMod.esp',
           winnerValue: 20,
           cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
         },
@@ -668,7 +759,7 @@ const headerCompareResult = {
     {
       fieldName: 'masters',
       values: { 'MyMod.esp': ['Fallout4.esm'] },
-      winnerPlugin: 'MyMod.esp',
+      winnerColumn: 'MyMod.esp',
       winnerValue: ['Fallout4.esm'],
       cellStates: {},
     },
@@ -700,7 +791,7 @@ describe('RecordPanel — Add Master (issue #86, native menu + QuickPick since #
     await waitFor(() => screen.getByText('MyMod.esp'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER,
-      formKey: '000000:MyMod.esp', plugin: 'MyMod.esp', newMaster: 'DLCRobot.esm',
+      formKey: '000000:MyMod.esp', plugin: 'MyMod.esp', origin: 'Data', newMaster: 'DLCRobot.esm',
     });
 
     await waitFor(() =>
@@ -719,7 +810,7 @@ describe('RecordPanel — Add Master (issue #86, native menu + QuickPick since #
     await waitFor(() => screen.getByText('MyMod.esp'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER,
-      formKey: '000099:Other.esp', plugin: 'MyMod.esp', newMaster: 'DLCRobot.esm',
+      formKey: '000099:Other.esp', plugin: 'MyMod.esp', origin: 'Data', newMaster: 'DLCRobot.esm',
     });
 
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -733,7 +824,7 @@ describe('RecordPanel — Add Master (issue #86, native menu + QuickPick since #
     await waitFor(() => screen.getByText('MyMod.esp'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER,
-      formKey: '000000:MyMod.esp', plugin: 'MyMod.esp', newMaster: 'DLCRobot.esm',
+      formKey: '000000:MyMod.esp', plugin: 'MyMod.esp', origin: 'Data', newMaster: 'DLCRobot.esm',
     });
 
     await waitFor(() =>
@@ -775,7 +866,7 @@ const vmadIncapableCompareResult = {
     {
       fieldName: 'Name',
       values: { 'MyMod.esp': 'Some Component' },
-      winnerPlugin: 'MyMod.esp',
+      winnerColumn: 'MyMod.esp',
       winnerValue: 'Some Component',
       cellStates: {},
     },
@@ -804,7 +895,7 @@ const vmadCapableCompareResult = {
     {
       fieldName: 'Name',
       values: { 'MyMod.esp': 'Test Name' },
-      winnerPlugin: 'MyMod.esp',
+      winnerColumn: 'MyMod.esp',
       winnerValue: 'Test Name',
       cellStates: {},
     },
@@ -853,7 +944,7 @@ describe('RecordPanel — top-level pending suppressed when identical to disk', 
     diffs: [{
       fieldName: 'Name',
       values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
-      winnerPlugin: 'MyMod.esp', winnerValue: 'Override Name',
+      winnerColumn: 'MyMod.esp', winnerValue: 'Override Name',
       cellStates: { 'MyMod.esp': 'Override' },
     }],
   };
@@ -1064,8 +1155,8 @@ const twoFieldResult = {
     },
   ],
   diffs: [
-    { fieldName: 'Name', values: { 'Fallout4.esm': 'Name A', 'MyMod.esp': 'Name B' }, winnerPlugin: 'MyMod.esp', winnerValue: 'Name B', cellStates: {} },
-    { fieldName: 'Description', values: { 'Fallout4.esm': 'Desc A', 'MyMod.esp': 'Desc B' }, winnerPlugin: 'MyMod.esp', winnerValue: 'Desc B', cellStates: {} },
+    { fieldName: 'Name', values: { 'Fallout4.esm': 'Name A', 'MyMod.esp': 'Name B' }, winnerColumn: 'MyMod.esp', winnerValue: 'Name B', cellStates: {} },
+    { fieldName: 'Description', values: { 'Fallout4.esm': 'Desc A', 'MyMod.esp': 'Desc B' }, winnerColumn: 'MyMod.esp', winnerValue: 'Desc B', cellStates: {} },
   ],
 };
 
@@ -1301,7 +1392,7 @@ describe('RecordPanel — drag-drop stages a pending field change', () => {
         {
           fieldName: 'Name',
           values: { 'Mod1.esp': 'Same Name', 'Mod2.esp': 'Same Name' },
-          winnerPlugin: 'Mod2.esp', winnerValue: 'Same Name',
+          winnerColumn: 'Mod2.esp', winnerValue: 'Same Name',
           cellStates: {},
         },
       ],
@@ -1391,7 +1482,7 @@ describe('RecordPanel — Remove', () => {
     const { client } = renderPanel(compareResult);
     await waitFor(() => screen.getByText('MyMod.esp'));
     postColumnHeaderAction({
-      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
     });
 
     await waitFor(() =>
@@ -1403,7 +1494,7 @@ describe('RecordPanel — Remove', () => {
     const { client } = renderPanel(compareResult);
     await waitFor(() => screen.getByText('MyMod.esp'));
     postColumnHeaderAction({
-      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: '000099:Other.esm', plugin: 'MyMod.esp',
+      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: '000099:Other.esm', plugin: 'MyMod.esp', origin: 'Data',
     });
 
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -1425,7 +1516,7 @@ describe('RecordPanel — Copy as New Record', () => {
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD,
-      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', targetPlugin: 'Mod2.esp',
+      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', sourceOrigin: 'Data', targetPlugin: 'Mod2.esp',
     });
 
     // Creates a blank record of the source column's type in the target plugin…
@@ -1461,7 +1552,7 @@ describe('RecordPanel — Copy as Override…', () => {
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE,
-      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', targetPlugin: 'Mod2.esp',
+      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', sourceOrigin: 'Data', targetPlugin: 'Mod2.esp',
     });
 
     await waitFor(() =>
@@ -1476,7 +1567,7 @@ describe('RecordPanel — Copy as Override…', () => {
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE,
-      formKey: '000001:Fallout4.esm', sourcePlugin: 'Fallout4.esm', targetPlugin: 'Mod2.esp',
+      formKey: '000001:Fallout4.esm', sourcePlugin: 'Fallout4.esm', sourceOrigin: 'Data', targetPlugin: 'Mod2.esp',
     });
 
     await waitFor(() =>
@@ -1489,7 +1580,7 @@ describe('RecordPanel — Copy as Override…', () => {
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE,
-      formKey: '000099:Other.esm', sourcePlugin: 'Mod1.esp', targetPlugin: 'Mod2.esp',
+      formKey: '000099:Other.esm', sourcePlugin: 'Mod1.esp', sourceOrigin: 'Data', targetPlugin: 'Mod2.esp',
     });
 
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -1530,7 +1621,7 @@ const pendingFlagsResult = {
   diffs: [{
     fieldName: 'Flags',
     values: { 'Fallout4.esm': '1', 'MyMod.esp': '1' },
-    winnerPlugin: 'MyMod.esp', winnerValue: '1',
+    winnerColumn: 'MyMod.esp', winnerValue: '1',
     cellStates: { 'MyMod.esp': 'Override' },
   }],
 };
@@ -1555,7 +1646,7 @@ const pendingFormKeyResult = {
   diffs: [{
     fieldName: 'Race',
     values: { 'Fallout4.esm': '000019:Fallout4.esm', 'MyMod.esp': '000019:Fallout4.esm' },
-    winnerPlugin: 'MyMod.esp', winnerValue: '000019:Fallout4.esm',
+    winnerColumn: 'MyMod.esp', winnerValue: '000019:Fallout4.esm',
     cellStates: { 'MyMod.esp': 'Override' },
   }],
 };
@@ -1580,7 +1671,7 @@ const pendingNullResult = {
   diffs: [{
     fieldName: 'Race',
     values: { 'Fallout4.esm': '000019:Fallout4.esm', 'MyMod.esp': '000019:Fallout4.esm' },
-    winnerPlugin: 'MyMod.esp', winnerValue: '000019:Fallout4.esm',
+    winnerColumn: 'MyMod.esp', winnerValue: '000019:Fallout4.esm',
     cellStates: { 'MyMod.esp': 'Override' },
   }],
 };
@@ -1669,7 +1760,7 @@ const pendingNameResult = {
   diffs: [{
     fieldName: 'Name',
     values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Original Name' },
-    winnerPlugin: 'MyMod.esp', winnerValue: 'Original Name',
+    winnerColumn: 'MyMod.esp', winnerValue: 'Original Name',
     cellStates: { 'MyMod.esp': 'Override' },
   }],
 };
@@ -1861,7 +1952,7 @@ const pendingFkResult = {
   diffs: [{
     fieldName: 'Race',
     values: { 'Fallout4.esm': '00013918:Fallout4.esm', 'MyMod.esp': '00013918:Fallout4.esm' },
-    winnerPlugin: 'MyMod.esp', winnerValue: '00013918:Fallout4.esm',
+    winnerColumn: 'MyMod.esp', winnerValue: '00013918:Fallout4.esm',
     cellStates: { 'MyMod.esp': 'Override' },
   }],
 };
@@ -2008,7 +2099,7 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE,
-      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', targetPlugin: 'Mod2.esp',
+      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', sourceOrigin: 'Data', targetPlugin: 'Mod2.esp',
     });
 
     await waitFor(() => expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp', 'Mod1.esp'));
@@ -2019,7 +2110,7 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('MyMod.esp'));
     postColumnHeaderAction({
-      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
     });
 
     await waitFor(() =>
@@ -2033,7 +2124,7 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD,
-      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', targetPlugin: 'Mod2.esp',
+      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', sourceOrigin: 'Data', targetPlugin: 'Mod2.esp',
     });
 
     await waitFor(() =>
@@ -2084,14 +2175,14 @@ const vmadEditableCompareResult = {
   ],
   diffs: [{
     fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
-    winnerPlugin: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {},
+    winnerColumn: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {},
   }],
   vmad: {
     scripts: [{
-      name: 'MyScript', flags: { 'MyMod.esp': 'Local' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+      name: 'MyScript', flags: { 'MyMod.esp': 'Local' }, winnerColumn: 'MyMod.esp', cellStates: {},
       properties: [{
         name: 'Enabled', kind: 'scalar', values: { 'MyMod.esp': false }, types: { 'MyMod.esp': 'Bool' },
-        winnerPlugin: 'MyMod.esp', cellStates: {}, children: null,
+        winnerColumn: 'MyMod.esp', cellStates: {}, children: null,
       }],
     }],
   },
@@ -2109,7 +2200,7 @@ const conditionEditableCompareResult = {
   ],
   diffs: [{
     fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
-    winnerPlugin: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {},
+    winnerColumn: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {},
   }],
   conditions: {
     groups: [{
@@ -2122,7 +2213,7 @@ const conditionEditableCompareResult = {
             runOnReference: null, useGlobal: false, comparisonFloat: 3, comparisonGlobal: null, parameters: [],
           },
         },
-        winnerPlugin: 'MyMod.esp', cellStates: {}, fieldCellStates: {},
+        winnerColumn: 'MyMod.esp', cellStates: {}, fieldCellStates: {},
       }],
     }],
   },
@@ -2351,7 +2442,7 @@ describe('RecordPanel — action logging (issue #200)', () => {
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD,
-      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', targetPlugin: 'Mod2.esp',
+      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', sourceOrigin: 'Data', targetPlugin: 'Mod2.esp',
     });
 
     await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
@@ -2365,7 +2456,7 @@ describe('RecordPanel — action logging (issue #200)', () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('MyMod.esp'));
     postColumnHeaderAction({
-      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
     });
 
     await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
@@ -2385,7 +2476,7 @@ describe('RecordPanel — action logging (issue #200)', () => {
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE,
-      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', targetPlugin: 'Mod2.esp',
+      formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', sourceOrigin: 'Data', targetPlugin: 'Mod2.esp',
     });
 
     await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith({
@@ -2419,7 +2510,7 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
     await waitFor(() => screen.getByText('Scripts (VMAD)'));
     const cell = screen.getByText('Scripts (VMAD)').closest('tr')!.querySelectorAll('td')[1];
     expect(JSON.parse(cell.getAttribute('data-vscode-context')!)).toEqual({
-      webviewSection: 'vmadScripts', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      webviewSection: 'vmadScripts', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
       preventDefaultContextMenuItems: true,
     });
   });
@@ -2431,7 +2522,7 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
     await waitFor(() => screen.getByText('MyScript'));
     const cell = screen.getByText('MyScript').closest('tr')!.querySelectorAll('td')[1];
     expect(JSON.parse(cell.getAttribute('data-vscode-context')!)).toEqual({
-      webviewSection: 'vmadScript', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', scriptName: 'MyScript',
+      webviewSection: 'vmadScript', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', scriptName: 'MyScript',
       currentFlags: 'Local', preventDefaultContextMenuItems: true,
     });
   });
@@ -2445,7 +2536,7 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
     await waitFor(() => screen.getByText('Enabled'));
     const cell = screen.getByText('Enabled').closest('tr')!.querySelectorAll('td')[1];
     expect(JSON.parse(cell.getAttribute('data-vscode-context')!)).toEqual({
-      webviewSection: 'vmadProperty', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      webviewSection: 'vmadProperty', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
       scriptName: 'MyScript', propName: 'Enabled', preventDefaultContextMenuItems: true,
     });
   });
@@ -2453,7 +2544,7 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
   it('VMAD_ADD_SCRIPT stages an add_script op', async () => {
     const { client } = renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
     await waitFor(() => screen.getByText('Scripts (VMAD)'));
-    postVmadOp({ type: EXTENSION_TO_WEBVIEW.VMAD_ADD_SCRIPT, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', name: 'NewScript' });
+    postVmadOp({ type: EXTENSION_TO_WEBVIEW.VMAD_ADD_SCRIPT, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', name: 'NewScript' });
 
     await waitFor(() => expect(client.save).toHaveBeenCalledWith(
       '000001:Fallout4.esm', 'MyMod.esp',
@@ -2465,7 +2556,7 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
   it('VMAD_REMOVE_SCRIPT stages a remove_script op', async () => {
     const { client } = renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
     await waitFor(() => screen.getByText('Scripts (VMAD)'));
-    postVmadOp({ type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', scriptName: 'MyScript' });
+    postVmadOp({ type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', scriptName: 'MyScript' });
 
     await waitFor(() => expect(client.save).toHaveBeenCalledWith(
       '000001:Fallout4.esm', 'MyMod.esp', { 'VMAD\\MyScript': { op: 'remove_script' } }, 'vmad_struct_op',
@@ -2477,7 +2568,7 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
     await waitFor(() => screen.getByText('Scripts (VMAD)'));
     postVmadOp({
       type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_PROPERTY, formKey: '000001:Fallout4.esm',
-      plugin: 'MyMod.esp', scriptName: 'MyScript', propName: 'Enabled',
+      plugin: 'MyMod.esp', origin: 'Data', scriptName: 'MyScript', propName: 'Enabled',
     });
 
     await waitFor(() => expect(client.save).toHaveBeenCalledWith(
@@ -2488,14 +2579,14 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
   it('a VMAD op broadcast for a different formKey is ignored', async () => {
     const { client } = renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
     await waitFor(() => screen.getByText('Scripts (VMAD)'));
-    postVmadOp({ type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT, formKey: '000099:Other.esm', plugin: 'MyMod.esp', scriptName: 'MyScript' });
+    postVmadOp({ type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT, formKey: '000099:Other.esm', plugin: 'MyMod.esp', origin: 'Data', scriptName: 'MyScript' });
     expect(client.save).not.toHaveBeenCalled();
   });
 
   it('VMAD_OPEN_ADD_PROPERTY opens the Add Property dialog, and confirming stages an add_property op', async () => {
     const { client } = renderPanel(vmadEditableCompareResult, { plugins: mutablePlugin });
     await waitFor(() => screen.getByText('Scripts (VMAD)'));
-    postVmadOp({ type: EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', scriptName: 'MyScript' });
+    postVmadOp({ type: EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', scriptName: 'MyScript' });
 
     await waitFor(() => screen.getByText('Add property'));
     fireEvent.change(screen.getByLabelText('New property name'), { target: { value: 'NewProp' } });
@@ -2517,7 +2608,7 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
     await waitFor(() => screen.getByText('Scripts (VMAD)'));
     postVmadOp({
       type: EXTENSION_TO_WEBVIEW.VMAD_SET_SCRIPT_FLAGS, formKey: '000001:Fallout4.esm',
-      plugin: 'MyMod.esp', scriptName: 'MyScript', flags: 'Removed',
+      plugin: 'MyMod.esp', origin: 'Data', scriptName: 'MyScript', flags: 'Removed',
     });
 
     await waitFor(() => expect(client.save).toHaveBeenCalledWith(
@@ -2530,7 +2621,7 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
     await waitFor(() => screen.getByText('Scripts (VMAD)'));
     postVmadOp({
       type: EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS, formKey: '000001:Fallout4.esm',
-      plugin: 'MyMod.esp', scriptName: 'MyScript', propName: 'Enabled', flags: 'Removed',
+      plugin: 'MyMod.esp', origin: 'Data', scriptName: 'MyScript', propName: 'Enabled', flags: 'Removed',
     });
 
     await waitFor(() => expect(client.save).toHaveBeenCalledWith(
@@ -2578,13 +2669,13 @@ function twoConditions() {
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Test Name' }],
       pendingFields: {}, conflictThis: 'OnlyOne',
     }],
-    diffs: [{ fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' }, winnerPlugin: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {} }],
+    diffs: [{ fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' }, winnerColumn: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {} }],
     conditions: {
       groups: [{
         fieldPath: 'Conditions',
         conditions: [
-          { index: 0, perPlugin: { 'MyMod.esp': condition(1) }, winnerPlugin: 'MyMod.esp', cellStates: {}, fieldCellStates: {} },
-          { index: 1, perPlugin: { 'MyMod.esp': condition(2) }, winnerPlugin: 'MyMod.esp', cellStates: {}, fieldCellStates: {} },
+          { index: 0, perPlugin: { 'MyMod.esp': condition(1) }, winnerColumn: 'MyMod.esp', cellStates: {}, fieldCellStates: {} },
+          { index: 1, perPlugin: { 'MyMod.esp': condition(2) }, winnerColumn: 'MyMod.esp', cellStates: {}, fieldCellStates: {} },
         ],
       }],
     },
@@ -2650,10 +2741,10 @@ function vmadStructListResult() {
     { name: 'Y', type: 'Int', intValue: y },
   ];
   const member = (name: string, value: number) => ({
-    name, kind: 'scalar', values: { 'MyMod.esp': value }, types: { 'MyMod.esp': 'Int' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+    name, kind: 'scalar', values: { 'MyMod.esp': value }, types: { 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: {},
   });
   const instanceDiff = (x: number, y: number) => ({
-    name: '', kind: 'struct', values: {}, types: {}, winnerPlugin: 'MyMod.esp', cellStates: {},
+    name: '', kind: 'struct', values: {}, types: {}, winnerColumn: 'MyMod.esp', cellStates: {},
     children: [member('X', x), member('Y', y)],
   });
   return {
@@ -2663,13 +2754,13 @@ function vmadStructListResult() {
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Test Name' }],
       pendingFields: {}, conflictThis: 'OnlyOne',
     }],
-    diffs: [{ fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' }, winnerPlugin: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {} }],
+    diffs: [{ fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' }, winnerColumn: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {} }],
     vmad: {
       scripts: [{
-        name: 'MyScript', flags: { 'MyMod.esp': 'Local' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+        name: 'MyScript', flags: { 'MyMod.esp': 'Local' }, winnerColumn: 'MyMod.esp', cellStates: {},
         properties: [{
           name: 'Points', kind: 'structList',
-          values: {}, types: { 'MyMod.esp': 'ArrayOfStruct' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+          values: {}, types: { 'MyMod.esp': 'ArrayOfStruct' }, winnerColumn: 'MyMod.esp', cellStates: {},
           raw: { 'MyMod.esp': [instance(1, 2), instance(3, 4)] },
           children: [instanceDiff(1, 2), instanceDiff(3, 4)],
         }],
@@ -2733,7 +2824,7 @@ describe('RecordPanel — VMAD structList (ArrayOfStruct) array ops via the righ
 
 function vmadScalarArrayResult() {
   const elem = (v: number) => ({
-    name: '', kind: 'scalar', values: { 'MyMod.esp': v }, types: { 'MyMod.esp': 'Int' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+    name: '', kind: 'scalar', values: { 'MyMod.esp': v }, types: { 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: {},
   });
   return {
     conflictAll: 'OnlyOne', hasVmad: true,
@@ -2742,13 +2833,13 @@ function vmadScalarArrayResult() {
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Test Name' }],
       pendingFields: {}, conflictThis: 'OnlyOne',
     }],
-    diffs: [{ fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' }, winnerPlugin: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {} }],
+    diffs: [{ fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' }, winnerColumn: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {} }],
     vmad: {
       scripts: [{
-        name: 'MyScript', flags: { 'MyMod.esp': 'Local' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+        name: 'MyScript', flags: { 'MyMod.esp': 'Local' }, winnerColumn: 'MyMod.esp', cellStates: {},
         properties: [{
           name: 'Levels', kind: 'array',
-          values: {}, types: { 'MyMod.esp': 'ArrayOfInt' }, winnerPlugin: 'MyMod.esp', cellStates: {},
+          values: {}, types: { 'MyMod.esp': 'ArrayOfInt' }, winnerColumn: 'MyMod.esp', cellStates: {},
           children: [elem(1), elem(2)],
         }],
       }],

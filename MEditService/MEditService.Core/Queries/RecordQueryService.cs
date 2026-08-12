@@ -121,11 +121,23 @@ public sealed class RecordQueryService(
             // never contributes to conflict classification.
             var pluginParticipates = sessionPlugins.ToDictionary(p => p.Name, p => p.Participates);
             var classification = _conflictClassifier.Classify(withPending, pluginMasters, resolveFormKey, pluginParticipates);
+            // #272 / ADR-0036: two live bugs fixed together here, both invisible on the
+            // pre-#272 suite because every fixture used the elided Data origin.
+            // (1) o.Origin was omitted from the CompareOverride constructor call entirely, so
+            //     every override silently defaulted to PluginOrigin.DataDirectory regardless of
+            //     its real origin — the wire's own `overrides[].origin` field was never correct
+            //     for a non-Data-origin plugin.
+            // (2) classification.PluginStates is keyed by ColumnKey.Of(o.Plugin, o.Origin) since
+            //     B3, but this looked it up by bare o.Plugin — a miss for any non-Data-origin
+            //     column, silently defaulting ConflictThis to OnlyOne. Elision only spares
+            //     Data-origin plugins, and #269 records the providing mod folder as origin for
+            //     nearly every plugin in a real session, so this was live for essentially every
+            //     conflicted record, not just a hypothetical two-origin case.
             var annotated = withPending
                 .ConvertAll(o => new CompareOverride(
                     o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields, o.PendingFields,
-                    classification.PluginStates.GetValueOrDefault(o.Plugin, ConflictThis.OnlyOne),
-                    o.RecordType));
+                    classification.PluginStates.GetValueOrDefault(ColumnKey.Of(o.Plugin, o.Origin), ConflictThis.OnlyOne),
+                    o.RecordType, o.Origin));
 
             // VMAD is outside the generic reflection pipeline, so classify it separately and fold
             // its conflict contribution into the record-level ConflictAll (computed on demand, never stored).

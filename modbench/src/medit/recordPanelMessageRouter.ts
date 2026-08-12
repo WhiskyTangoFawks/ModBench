@@ -331,7 +331,7 @@ async function replyExtendedEditorOpened(
   await openExtendedFieldEditor(
     {
       requestId: m.requestId, value: m.value, recordLabel: m.recordLabel, fieldName: m.fieldName,
-      plugin: m.plugin, readOnly: m.readOnly, column: m.column,
+      plugin: m.plugin, origin: m.origin, readOnly: m.readOnly, column: m.column,
     },
     deps,
   );

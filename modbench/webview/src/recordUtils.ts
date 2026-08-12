@@ -1,4 +1,5 @@
-import type { CompareOverride, ConflictAll, ConflictThis, FieldMetadata, PathSegment, RecordDetail } from './types';
+import type { ColumnKey, CompareOverride, ConflictAll, ConflictThis, FieldMetadata, PathSegment, RecordDetail } from './types';
+import { columnKey } from './types';
 import type {
   ArrayElementContext, ArrayParentContext, ColumnHeaderContext, PendingCellContext,
   VmadScriptsContext, VmadScriptContext, VmadPropertyContext,
@@ -46,10 +47,10 @@ export function currentMasters(o: RecordDetail): string[] {
 // back into the webview to ask (see ColumnHeaderContext's own doc comment for why that list is
 // NOT filtered to mutable plugins the way the copy actions' picker is).
 export function columnHeaderContext(
-  formKey: string, plugin: string, immutable: boolean, isHeaderRecord: boolean, masters: string[],
+  formKey: string, plugin: string, origin: string, immutable: boolean, isHeaderRecord: boolean, masters: string[],
 ): string {
   return JSON.stringify({
-    webviewSection: 'columnHeader', formKey, plugin, immutable, isHeaderRecord, masters,
+    webviewSection: 'columnHeader', formKey, plugin, origin, immutable, isHeaderRecord, masters,
     preventDefaultContextMenuItems: true,
   } satisfies ColumnHeaderContext);
 }
@@ -69,9 +70,11 @@ export function columnHeaderContext(
 // than one of these at once (e.g. a VMAD array-of-scalars property is both an array parent/
 // element *and* a VMAD property target), so building the final `data-vscode-context` string is
 // combineVscodeContexts' job below, not each builder's own.
-export function arrayElementContext(formKey: string, plugin: string, fieldName: string, index: number, arrayLength: number): ArrayElementContext {
+export function arrayElementContext(
+  formKey: string, plugin: string, origin: string, fieldName: string, index: number, arrayLength: number,
+): ArrayElementContext {
   return {
-    webviewSection: 'arrayElement', formKey, plugin, fieldName, index,
+    webviewSection: 'arrayElement', formKey, plugin, origin, fieldName, index,
     // Issue #168: `canMoveUp` must also check hasElementAt (this plugin's own real length), or
     // the menu offers Move Up on a row this plugin doesn't have an element in at all — canMoveDown
     // doesn't need the same explicit check since index < arrayLength - 1 already implies it.
@@ -86,24 +89,28 @@ export function arrayElementContext(formKey: string, plugin: string, fieldName: 
 // property's Add doesn't resolve via the right-click menu broadcast": the broadcast handler
 // (RecordPanel's resolveCurrentArrayFor) looks the row up by wire identity, and a display label
 // was never that for a VMAD property.
-export function arrayParentContext(formKey: string, plugin: string, fieldName: string): ArrayParentContext {
-  return { webviewSection: 'arrayParent', formKey, plugin, fieldName, preventDefaultContextMenuItems: true };
+export function arrayParentContext(formKey: string, plugin: string, origin: string, fieldName: string): ArrayParentContext {
+  return { webviewSection: 'arrayParent', formKey, plugin, origin, fieldName, preventDefaultContextMenuItems: true };
 }
 
 // Issue #231: same mechanism as arrayElementContext/arrayParentContext above, carried by VMAD's
 // own row kinds instead — see VmadScriptsContext/VmadScriptContext/VmadPropertyContext's own doc
 // comment (messages.ts) for why no extra identity travels beyond script/property name.
-export function vmadScriptsContext(formKey: string, plugin: string): VmadScriptsContext {
-  return { webviewSection: 'vmadScripts', formKey, plugin, preventDefaultContextMenuItems: true };
+export function vmadScriptsContext(formKey: string, plugin: string, origin: string): VmadScriptsContext {
+  return { webviewSection: 'vmadScripts', formKey, plugin, origin, preventDefaultContextMenuItems: true };
 }
 
-export function vmadScriptContext(formKey: string, plugin: string, scriptName: string, currentFlags: string | null): VmadScriptContext {
-  return { webviewSection: 'vmadScript', formKey, plugin, scriptName, currentFlags, preventDefaultContextMenuItems: true };
+export function vmadScriptContext(
+  formKey: string, plugin: string, origin: string, scriptName: string, currentFlags: string | null,
+): VmadScriptContext {
+  return { webviewSection: 'vmadScript', formKey, plugin, origin, scriptName, currentFlags, preventDefaultContextMenuItems: true };
 }
 
-export function vmadPropertyContext(formKey: string, plugin: string, scriptName: string, propName: string): VmadPropertyContext {
+export function vmadPropertyContext(
+  formKey: string, plugin: string, origin: string, scriptName: string, propName: string,
+): VmadPropertyContext {
   return {
-    webviewSection: 'vmadProperty', formKey, plugin, scriptName, propName, preventDefaultContextMenuItems: true,
+    webviewSection: 'vmadProperty', formKey, plugin, origin, scriptName, propName, preventDefaultContextMenuItems: true,
   };
 }
 
@@ -137,16 +144,24 @@ export function combineVscodeContexts(...contexts: (object | undefined)[]): stri
   return JSON.stringify({ ...merged, webviewSection: sections.join(' ') });
 }
 
+// #272 / ADR-0036: `key` is this column's compound identity, minted once here (buildColumns) via
+// columnKey() rather than re-derived at every render/lookup site — every consumer (DiffRow,
+// RecordPanel) reads `col.key` instead of `col.override.plugin`/`col.plugin`, which is what makes
+// two same-filename columns stop colliding on collapsedColumns/immutableSet/focusedCell/
+// overrideMap. `plugin`/`origin` stay present on the `pending` variant (mirroring
+// CompareOverride's own plugin+origin fields) only for display/decomposition, never parsed back
+// out of `key` itself.
 export type Column =
-  | { kind: 'disk'; override: CompareOverride }
-  | { kind: 'pending'; plugin: string };
+  | { kind: 'disk'; key: ColumnKey; override: CompareOverride }
+  | { kind: 'pending'; key: ColumnKey; plugin: string; origin?: string };
 
-export function buildColumns(overrides: CompareOverride[], immutableSet?: Set<string>): Column[] {
+export function buildColumns(overrides: CompareOverride[], immutableSet?: Set<ColumnKey>): Column[] {
   const cols: Column[] = [];
   for (const o of overrides) {
-    cols.push({ kind: 'disk', override: o });
-    if (o.pendingFields && Object.keys(o.pendingFields).length > 0 && !immutableSet?.has(o.plugin)) {
-      cols.push({ kind: 'pending', plugin: o.plugin });
+    const key = columnKey(o.plugin, o.origin);
+    cols.push({ kind: 'disk', key, override: o });
+    if (o.pendingFields && Object.keys(o.pendingFields).length > 0 && !immutableSet?.has(key)) {
+      cols.push({ kind: 'pending', key, plugin: o.plugin, origin: o.origin });
     }
   }
   return cols;

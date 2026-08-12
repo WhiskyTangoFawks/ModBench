@@ -16,7 +16,7 @@ import {
 } from './recordUtils';
 import type { Column, PathSegment } from './recordUtils';
 import type { ArrayElementContext, ArrayParentContext } from './messages';
-import type { CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
+import type { ColumnKey, CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
 
 // Issue #227 / ADR-0034: move-up/move-down/remove/add moved off #142's inline ▲▼✕/＋ buttons
 // onto xEdit's right-click menu + keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓) — the
@@ -27,9 +27,9 @@ import type { CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyRes
 // element's metadata reports `isSortable !== true` — DiffRow itself does no sortedness branching,
 // so "sorted arrays get neither the menu nor the keys" stays enforced in exactly one place.
 export interface ArrayEditControls {
-  currentArray: (plugin: string) => unknown[];
+  currentArray: (column: ColumnKey) => unknown[];
   index: number;
-  onArrayEdit: (plugin: string, value: unknown[]) => void;
+  onArrayEdit: (column: ColumnKey, value: unknown[]) => void;
 }
 
 const ROW_BG: Partial<Record<ConflictAll, string>> = {
@@ -95,18 +95,25 @@ function pendingResolutionPath(context: RowContext, rawPending: unknown): string
 // paths: the handler is `undefined` for the keyboard, and arrayElementContext's canMoveUp/
 // canMoveDown drive package.json's `when` clause for the menu, so a boundary element's dead
 // direction is absent from both, not merely a no-op behind a still-visible item.
+// #272 / ADR-0036: takes the column's real override `o` (plugin + origin as parallel fields), not
+// just its ColumnKey — arrayParentContext/arrayElementContext need the two separate strings to
+// build the wire message, and a ColumnKey is never parsed back apart to get them (see
+// columnKey()'s own doc comment). `key` (this column's compound identity) is what actually reaches
+// arrayEdit/onArrayAdd's own callbacks, since those resolve through overrideMap/rootDiff.values,
+// both keyed by ColumnKey.
 function computeArrayOps(
-  context: RowContext, plugin: string, formKey: string, immutable: boolean,
-  arrayEdit: ArrayEditControls | undefined, onArrayAdd: ((plugin: string) => void) | undefined,
+  context: RowContext, o: CompareOverride, formKey: string, immutable: boolean,
+  arrayEdit: ArrayEditControls | undefined, onArrayAdd: ((column: ColumnKey) => void) | undefined,
+  key: ColumnKey,
 ): { arrayOp: ArrayOpHandlers | undefined; arrayVscodeContext: ArrayParentContext | ArrayElementContext | undefined } {
   if (onArrayAdd && !immutable) {
     return {
-      arrayOp: { add: () => onArrayAdd(plugin) },
+      arrayOp: { add: () => onArrayAdd(key) },
       // Issue #231 (review): keyed on the row's own rootField (wire identity), mirroring
       // arrayElementContext below — was previously keyed on the display fieldName, which broke
       // the broadcast round trip for any row whose displayed label differs from its wire identity
       // (every VMAD array-of-scalars property, since those synthesize their own display name).
-      arrayVscodeContext: arrayParentContext(formKey, plugin, context.rootField),
+      arrayVscodeContext: arrayParentContext(formKey, o.plugin, o.origin ?? 'Data', context.rootField),
     };
   }
   // Issue #231: "is this row itself an array element" now reads the last hop of its own path
@@ -117,7 +124,7 @@ function computeArrayOps(
   const lastSeg = context.path.at(-1);
   const isArrayElementRow = lastSeg?.kind === 'index' || lastSeg?.kind === 'sortKey';
   if (arrayEdit && !immutable && isArrayElementRow) {
-    const arr = arrayEdit.currentArray(plugin);
+    const arr = arrayEdit.currentArray(key);
     const { index, onArrayEdit } = arrayEdit;
     // Issue #168: `index` is this row's position in the union-aligned tree across every plugin's
     // column (an ordinary array with differing per-plugin lengths, or VMAD/Condition's own
@@ -128,9 +135,9 @@ function computeArrayOps(
     const hasElement = hasElementAt(arr.length, index);
     return {
       arrayOp: {
-        remove: hasElement ? () => onArrayEdit(plugin, removeArrayElement(arr, index)) : undefined,
-        moveUp: hasElement && index > 0 ? () => onArrayEdit(plugin, moveArrayElement(arr, index, -1)) : undefined,
-        moveDown: index < arr.length - 1 ? () => onArrayEdit(plugin, moveArrayElement(arr, index, 1)) : undefined,
+        remove: hasElement ? () => onArrayEdit(key, removeArrayElement(arr, index)) : undefined,
+        moveUp: hasElement && index > 0 ? () => onArrayEdit(key, moveArrayElement(arr, index, -1)) : undefined,
+        moveDown: index < arr.length - 1 ? () => onArrayEdit(key, moveArrayElement(arr, index, 1)) : undefined,
       },
       // Issue #231: keyed on the row's own rootField, same value the old parentFieldName always
       // held for an array element (arrays previously only ever existed at depth 1, where the two
@@ -138,7 +145,7 @@ function computeArrayOps(
       // more than one hop below its own root would need `path` threaded through
       // ArrayElementContext too, which nothing in this codebase yet produces; noted, not solved
       // speculatively here).
-      arrayVscodeContext: arrayElementContext(formKey, plugin, context.rootField, index, arr.length),
+      arrayVscodeContext: arrayElementContext(formKey, o.plugin, o.origin ?? 'Data', context.rootField, index, arr.length),
     };
   }
   return { arrayOp: undefined, arrayVscodeContext: undefined };
@@ -325,9 +332,13 @@ export interface RowContext {
 // `undefined`) means the disk cell, `'pending'` means that plugin's pending companion — so every
 // pre-#232 `{ rowKey, plugin }` literal still means "the disk cell," unchanged, while a pending
 // cell gets its own independent focus identity rather than aliasing its disk sibling's.
+// #272 / ADR-0036: `plugin` is this column's compound identity (ColumnKey), not the bare filename
+// — two columns sharing a filename but differing in origin must not both read as focused off one
+// `setFocusedCell` call. Field name kept as `plugin` (not renamed to `column`, which already means
+// the disk/pending discriminant below) — only its type changed.
 export interface FocusedCell {
   rowKey: string;
-  plugin: string;
+  plugin: ColumnKey;
   column?: 'pending';
 }
 
@@ -335,25 +346,30 @@ export interface FocusedCell {
 // "is this exact row/plugin/column the panel's single focused cell" — pulled out so neither
 // re-derives FocusedCell's own three-field comparison inline. `column` defaults to `undefined`
 // (a disk cell), matching FocusedCell's own convention.
-function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: string, column?: 'pending'): boolean {
+function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: ColumnKey, column?: 'pending'): boolean {
   return focusedCell?.rowKey === rowKey && focusedCell.plugin === plugin && focusedCell.column === column;
 }
 
 interface DiffRowProps {
   diff: FieldDiff;
   columns: Column[];
+  // #272 / ADR-0036: keyed by ColumnKey (a mapped type over a non-literal string collapses to a
+  // plain index signature, so this isn't compiler-enforced — the protection is every builder
+  // using columnKey(), not this declared type; see types.ts' ColumnKey doc comment). Declared as
+  // Record<string, ...> since the brand is erased here regardless (matches RecordPanel.tsx's own
+  // overrideMap declaration, kept in sync for the same React Compiler reason documented there).
   overrideMap: Record<string, CompareOverride>;
   fieldMetaMap: Record<string, FieldMetadata>;
   // Issue #111: the set of plugins whose columns are read-only. Replaces the old `editMode`
   // flag: editability is per-column, so an immutable column never renders an input even
   // though the panel as a whole is always editable.
-  immutableSet: Set<string>;
+  immutableSet: Set<ColumnKey>;
   pendingChangeMap: Record<string, PendingChange>;
-  collapsedColumns: Set<string>;
+  collapsedColumns: Set<ColumnKey>;
   onOpen: (fk: string) => void;
-  onEdit: (plugin: string, fieldName: string, value: unknown) => void;
-  onCellDragStart: (fieldName: string, value: unknown, sourcePlugin: string) => void;
-  onCellDrop: (fieldName: string, targetPlugin: string, applyValue: (value: unknown) => void) => void;
+  onEdit: (column: ColumnKey, fieldName: string, value: unknown) => void;
+  onCellDragStart: (fieldName: string, value: unknown, source: ColumnKey) => void;
+  onCellDrop: (fieldName: string, target: ColumnKey, applyValue: (value: unknown) => void) => void;
   context: RowContext;
   hasChildren?: boolean;
   isExpanded?: boolean;
@@ -364,7 +380,7 @@ interface DiffRowProps {
   // Issue #142: present only for an unsorted array's parent (top-level) row — appends a
   // default-valued element to that plugin's array. Absent (not disabled) for sortable arrays,
   // same rule as arrayEdit above.
-  onArrayAdd?: (plugin: string) => void;
+  onArrayAdd?: (column: ColumnKey) => void;
   // Issue #222: this row's own identity (see FocusedCell above), the panel's current focused
   // cell (or none), and the callback that reports a click up to RecordPanel's single source of
   // truth. onFocusCell takes rowKey explicitly (rather than closing over it here) so RecordPanel
@@ -373,7 +389,7 @@ interface DiffRowProps {
   // call site below except the pending column's own.
   rowKey: string;
   focusedCell: FocusedCell | null;
-  onFocusCell: (rowKey: string, plugin: string, column?: 'pending') => void;
+  onFocusCell: (rowKey: string, plugin: ColumnKey, column?: 'pending') => void;
   // Issue #227: the record's own FormKey — needed to build the array-element/array-parent
   // data-vscode-context (RecordPanel's broadcast self-filter key, same role `formKey` plays in
   // ColumnHeaderContext). Threaded uniformly to every DiffRow instance (top-level/array-element/
@@ -392,8 +408,11 @@ interface DiffRowProps {
   // fieldName/wirePath into a `vmadScriptsContext`/`vmadScriptContext`/`vmadPropertyContext`
   // string (recordUtils.ts) — DiffRow only calls the function it's handed, gated on the same
   // per-column immutability check every other structural-op context already uses, so it stays as
-  // ignorant of "what VMAD is" as every other row it renders.
-  structOpContextFor?: (plugin: string) => object | undefined;
+  // ignorant of "what VMAD is" as every other row it renders. #272: takes the column's real
+  // override (plugin + origin as parallel fields), not a ColumnKey — the vmad*Context builders
+  // need the two separate strings to build the wire message, and a ColumnKey is never parsed
+  // back apart to get them.
+  structOpContextFor?: (o: CompareOverride) => object | undefined;
 }
 
 export function DiffRow({
@@ -453,39 +472,45 @@ export function DiffRow({
       </td>
       {columns.map(col => {
         if (col.kind === 'disk') {
-          const { override: o } = col;
+          const { override: o, key } = col;
           // Issue #201 / #226 / ADR-0034: no `userSelect: 'text'` here. It was always dead letter
           // — the cell is `draggable` at rest and `draggable` consumes the mousedown that would
           // start a selection — and post-#226 there is no in-cell surface left to ever own a
           // selection either. Leaving it would tell the next reader selection works here.
-          const cellStyle = { ...baseCell, ...getCellStyle(diff.cellStates?.[o.plugin]) };
-          if (collapsedColumns.has(o.plugin)) {
-            return <td key={`disk:${o.plugin}`} style={cellStyle} />;
+          // #272 / ADR-0036: every lookup below into a per-column wire dictionary (cellStates,
+          // values, resolutions, collapsedSummary) or panel state (collapsedColumns, immutableSet,
+          // overrideMap, focusedCell) is keyed by `key` (this column's ColumnKey), not `o.plugin`
+          // — the backend keys its own per-column dictionaries the same way (ColumnKey.Of), so
+          // `[o.plugin]` was already wrong the moment a non-Data-origin column existed, not merely
+          // ambiguous between two same-filename columns.
+          const cellStyle = { ...baseCell, ...getCellStyle(diff.cellStates?.[key]) };
+          if (collapsedColumns.has(key)) {
+            return <td key={`disk:${key}`} style={cellStyle} />;
           }
           const checkError = showActions
-            ? overrideMap[o.plugin]?.fields.find(f => f.metadata.name === pendingLookupField)?.checkError
+            ? overrideMap[key]?.fields.find(f => f.metadata.name === pendingLookupField)?.checkError
             : undefined;
           // Issue #231: a synthesized row (e.g. the Condition section's AND/OR gate) can mark
           // itself unconditionally read-only regardless of column mutability — `meta.readOnly` is
           // the one new per-row override on top of immutableSet's existing per-column rule, ORed
           // in wherever a column's mutability previously stood alone.
           const isReadOnlyRow = meta.readOnly === true;
-          const isImmutableColumn = immutableSet.has(o.plugin) || isReadOnlyRow;
+          const isImmutableColumn = immutableSet.has(key) || isReadOnlyRow;
           // Issue #232: `isCellFocused`'s default (no `column` arg, i.e. `undefined`) is the disk
           // cell's own identity — never matches a same-row, same-plugin *pending* focus record,
           // which carries `column: 'pending'` — see FocusedCell's own doc comment for why the two
           // need separate identities despite sharing `plugin`.
-          const isFocused = isCellFocused(focusedCell, rowKey, o.plugin);
+          const isFocused = isCellFocused(focusedCell, rowKey, key);
           // Issue #224 / ADR-0034: the string Ctrl+C copies for this cell — the same value used
-          // for display below (diff.values[o.plugin]), run through the one shared modelValue
+          // for display below (diff.values[key]), run through the one shared modelValue
           // function (AC6), computed once here so both the struct/array-summary branch and the
           // leaf branch below hand DiskCell the identical value a scalar/flag/formKey cell would
           // display and a struct/array cell would otherwise only show as "{…}"/"[3]" (AC5). Plain
           // disk value, no pending merge — a disk column's own display never merges pending (only
           // the separate Pending column does, out of scope here per #232).
-          const copyText = modelValue(diff.values[o.plugin], meta, diff.resolutions?.[o.plugin]);
+          const copyText = modelValue(diff.values[key], meta, diff.resolutions?.[key]);
           const { arrayOp, arrayVscodeContext } = computeArrayOps(
-            context, o.plugin, formKey, isImmutableColumn, arrayEdit, onArrayAdd,
+            context, o, formKey, isImmutableColumn, arrayEdit, onArrayAdd, key,
           );
           // Issue #231 (review): a VMAD structural-op row's context — gated on the same
           // per-column mutability check as every other structural-op context. Combined with
@@ -493,27 +518,27 @@ export function DiffRow({
           // VMAD-structural-op target (a VMAD array-of-scalars property) offers both menus —
           // combineVscodeContexts merges their `webviewSection` tokens rather than one silently
           // winning over the other.
-          const structOpVscodeContext = !isImmutableColumn ? structOpContextFor?.(o.plugin) : undefined;
+          const structOpVscodeContext = !isImmutableColumn ? structOpContextFor?.(o) : undefined;
           const combinedVscodeContext = combineVscodeContexts(arrayVscodeContext, structOpVscodeContext);
           if (hasChildren) {
-            const len = meta.type === 'array' && Array.isArray(diff.values[o.plugin])
-              ? (diff.values[o.plugin] as unknown[]).length
+            const len = meta.type === 'array' && Array.isArray(diff.values[key])
+              ? (diff.values[key] as unknown[]).length
               : '…';
             // Issue #231 (review, design call): a Condition row's own xEdit-style prose summary
             // (`diff.collapsedSummary`, conditionTreeAdapter.ts) replaces the generic "{…}" placeholder
             // when present — every other struct row (VMAD included) has none, so falls through unchanged.
-            const collapsedLabel = meta.type === 'array' ? `[${len}]` : (diff.collapsedSummary?.[o.plugin] ?? '{…}');
+            const collapsedLabel = meta.type === 'array' ? `[${len}]` : (diff.collapsedSummary?.[key] ?? '{…}');
             // Issue #204 / ADR-0033: a compound (struct/array) field's summary row is a drag
             // source for its whole value, exactly like a scalar leaf — every value-bearing cell,
             // expanded or collapsed, wired uniformly rather than branching on isExpanded.
             return (
               <DiskCell
-                key={`disk:${o.plugin}`}
+                key={`disk:${key}`}
                 style={cellStyle}
                 isFocused={isFocused}
-                onFocusCell={() => onFocusCell(rowKey, o.plugin)}
-                onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
-                onDrop={() => onCellDrop(diff.fieldName, o.plugin, v => onEdit(o.plugin, diff.fieldName, v))}
+                onFocusCell={() => onFocusCell(rowKey, key)}
+                onDragStart={() => onCellDragStart(diff.fieldName, diff.values[key], key)}
+                onDrop={() => onCellDrop(diff.fieldName, key, v => onEdit(key, diff.fieldName, v))}
                 onCopy={() => copyToClipboard(copyText)}
                 arrayOp={arrayOp}
                 dataVscodeContext={combinedVscodeContext}
@@ -533,44 +558,45 @@ export function DiffRow({
           // already carries the right merge semantics for this row's context (top-level/
           // array-element/struct-child/grandchild).
           {
-            const onCommit = (v: unknown) => onEdit(o.plugin, diff.fieldName, v);
+            const onCommit = (v: unknown) => onEdit(key, diff.fieldName, v);
             // Issue #225: Ctrl+X/Ctrl+V only ever apply to this leaf branch — the hasChildren
             // (struct/array summary) branch above has no onCommit at all today, since a compound
             // field is edited through its child rows, never as a unit.
             const { onCut, onPaste } = computeClipboardOps(
-              meta, !isImmutableColumn, copyText, diff.resolutions?.[o.plugin], onCommit,
+              meta, !isImmutableColumn, copyText, diff.resolutions?.[key], onCommit,
             );
             // Issue #230: built only for `string` — every other type's double click already
             // opens the same (inline) editor second-click/F2 does, so there's nothing to
             // redirect (spec, "By cell" gesture matrix). `readOnly` follows this specific
             // column's own mutability, independent of which column the cell that was
             // double-clicked lives in — an immutable column's extended editor is still reachable
-            // (ScalarCell's own immutable branch), just read-only.
+            // (ScalarCell's own immutable branch), just read-only. #272: plugin/origin (not `key`)
+            // — the extended-editor message needs the two real separate strings, not a compound key.
             const onOpenExtended = meta.type === 'string'
               ? () => openExtendedFieldEditor(
-                  { value: copyText, recordLabel, fieldName: diff.fieldName, plugin: o.plugin, readOnly: isImmutableColumn },
+                  { value: copyText, recordLabel, fieldName: diff.fieldName, plugin: o.plugin, origin: o.origin ?? 'Data', readOnly: isImmutableColumn },
                   next => onCommit(next),
                 )
               : undefined;
             return (
               <DiskCell
-                key={`disk:${o.plugin}`}
+                key={`disk:${key}`}
                 style={cellStyle}
                 isFocused={isFocused}
-                onFocusCell={() => onFocusCell(rowKey, o.plugin)}
-                onDragStart={() => onCellDragStart(diff.fieldName, diff.values[o.plugin], o.plugin)}
-                onDrop={() => onCellDrop(diff.fieldName, o.plugin, onCommit)}
+                onFocusCell={() => onFocusCell(rowKey, key)}
+                onDragStart={() => onCellDragStart(diff.fieldName, diff.values[key], key)}
+                onDrop={() => onCellDrop(diff.fieldName, key, onCommit)}
                 onCopy={() => copyToClipboard(copyText)}
                 onCut={onCut}
                 onPaste={onPaste}
                 arrayOp={arrayOp}
                 dataVscodeContext={combinedVscodeContext}
               >
-                {renderCell(diff.values[o.plugin], meta, !isImmutableColumn,
+                {renderCell(diff.values[key], meta, !isImmutableColumn,
                   isFocused, onOpen,
                   onCommit, {
-                    checkError, resolution: diff.resolutions?.[o.plugin], onOpenExtended,
-                    summaryLabel: diff.collapsedSummary?.[o.plugin],
+                    checkError, resolution: diff.resolutions?.[key], onOpenExtended,
+                    summaryLabel: diff.collapsedSummary?.[key],
                   })}
               </DiskCell>
             );
@@ -578,12 +604,16 @@ export function DiffRow({
         }
 
         // pending companion column
-        const override = overrideMap[col.plugin];
+        // #272 / ADR-0036: `col.key` is this column's ColumnKey — same reasoning as the disk
+        // branch above (overrideMap/diff.values/pendingChangeMap are all keyed by it, not the
+        // bare `col.plugin` filename). `col.plugin`/`col.origin` (real, separate strings) are used
+        // only where a wire message needs them apart (openExtendedFieldEditor below).
+        const override = overrideMap[col.key];
         const rawPending = override?.pendingFields?.[pendingLookupField];
         // Issue #231: pendingValueAtPath replaces the old top-level/array-element/struct-child/
         // grandchild switch — one path-based extraction for every depth (recordUtils.ts).
-        const pendingValue = pendingIfChanged(pendingValueAtPath(rawPending, context.path), diff.values[col.plugin]);
-        const change = pendingChangeMap[`${col.plugin}:${pendingLookupField}`];
+        const pendingValue = pendingIfChanged(pendingValueAtPath(rawPending, context.path), diff.values[col.key]);
+        const change = pendingChangeMap[`${col.key}:${pendingLookupField}`];
         const hasPending = pendingValue !== undefined;
         const resolutionPath = pendingResolutionPath(context, rawPending);
         const pendingResolution = resolutionPath !== undefined ? change?.resolutions?.[resolutionPath] : undefined;
@@ -603,13 +633,13 @@ export function DiffRow({
         // or copy — same "nothing to show" shape as a collapsed disk column above, kept as a bare
         // `<td>` rather than wrapping an empty cell in DiskCell's focus/drag machinery.
         if (!hasPending) {
-          return <td key={`pending:${col.plugin}`} style={pendingCellStyle} data-vscode-context={pendingVscodeContext} />;
+          return <td key={`pending:${col.key}`} style={pendingCellStyle} data-vscode-context={pendingVscodeContext} />;
         }
         // Issue #232: a pending cell is always mutable (buildColumns only ever creates a
         // 'pending' column for a plugin whose disk column already isn't immutable), so this
         // passes `true` outright rather than re-checking immutableSet — the same reasoning the
         // pre-#232 code's own comment gave for its unconditional `editable`.
-        const pendingOnCommit = (v: unknown) => onEdit(col.plugin, diff.fieldName, v);
+        const pendingOnCommit = (v: unknown) => onEdit(col.key, diff.fieldName, v);
         // Issue #232 / #224: the string Ctrl+C copies for this cell — same modelValue function
         // and shape the disk column's own copyText uses above, sourced from the pending value
         // rather than the disk one.
@@ -625,24 +655,24 @@ export function DiffRow({
         // cell is always mutable, same reasoning `pendingOnCommit` above already relies on.
         const pendingOnOpenExtended = meta.type === 'string'
           ? () => openExtendedFieldEditor(
-              { value: pendingCopyText, recordLabel, fieldName: diff.fieldName, plugin: col.plugin, readOnly: false, column: 'pending' },
+              { value: pendingCopyText, recordLabel, fieldName: diff.fieldName, plugin: col.plugin, origin: col.origin ?? 'Data', readOnly: false, column: 'pending' },
               next => pendingOnCommit(next),
             )
           : undefined;
         // Issue #232: this cell's own focus identity — `column: 'pending'` is required here (not
         // merely `plugin`) to stay distinct from the disk cell for the same plugin/row.
-        const isPendingFocused = isCellFocused(focusedCell, rowKey, col.plugin, 'pending');
+        const isPendingFocused = isCellFocused(focusedCell, rowKey, col.key, 'pending');
         return (
           <DiskCell
-            key={`pending:${col.plugin}`}
+            key={`pending:${col.key}`}
             style={pendingCellStyle}
             isFocused={isPendingFocused}
-            onFocusCell={() => onFocusCell(rowKey, col.plugin, 'pending')}
+            onFocusCell={() => onFocusCell(rowKey, col.key, 'pending')}
             // Issue #232: drag-to-copy on a pending cell carries the staged value, exactly like a
             // disk cell carries its disk value — same onCellDragStart/onCellDrop props DiffRow
             // already threads for disk columns, no new plumbing.
-            onDragStart={() => onCellDragStart(diff.fieldName, pendingValue, col.plugin)}
-            onDrop={() => onCellDrop(diff.fieldName, col.plugin, pendingOnCommit)}
+            onDragStart={() => onCellDragStart(diff.fieldName, pendingValue, col.key)}
+            onDrop={() => onCellDrop(diff.fieldName, col.key, pendingOnCommit)}
             onCopy={() => copyToClipboard(pendingCopyText)}
             onCut={pendingOnCut}
             onPaste={pendingOnPaste}

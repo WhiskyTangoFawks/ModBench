@@ -28,6 +28,7 @@ import { DiffRow } from './DiffRow';
 import type { Column, PathSegment } from './recordUtils';
 import { pendingCellContext } from './recordUtils';
 import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
+import { columnKey } from './types';
 
 const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
 const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
@@ -42,17 +43,17 @@ function override(plugin: string, partial: Partial<CompareOverride> = {}): Compa
 }
 
 function diskColumn(o: CompareOverride): Column {
-  return { kind: 'disk', override: o };
+  return { kind: 'disk', key: columnKey(o.plugin, o.origin), override: o };
 }
-function pendingColumn(plugin: string): Column {
-  return { kind: 'pending', plugin };
+function pendingColumn(plugin: string, origin?: string): Column {
+  return { kind: 'pending', key: columnKey(plugin, origin), plugin, origin };
 }
 
 function diff(partial: Partial<FieldDiff> = {}): FieldDiff {
   return {
     fieldName: 'Name',
     values: { 'Fallout4.esm': 'disk-value', 'MyMod.esp': 'disk-value' },
-    winnerPlugin: 'Fallout4.esm', winnerValue: 'disk-value',
+    winnerColumn: 'Fallout4.esm', winnerValue: 'disk-value',
     cellStates: {},
     ...partial,
   };
@@ -72,9 +73,9 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     recordLabel: 'TestNPC [000001:Fallout4.esm]',
     diff: effectiveDiff,
     columns: [diskColumn(master), diskColumn(mod)],
-    overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+    overrideMap: { [columnKey('Fallout4.esm')]: master, [columnKey('MyMod.esp')]: mod },
     fieldMetaMap: { Name: strMeta },
-    immutableSet: new Set(['Fallout4.esm']),
+    immutableSet: new Set([columnKey('Fallout4.esm')]),
     pendingChangeMap: {},
     collapsedColumns: new Set(),
     onOpen: vi.fn(),
@@ -121,7 +122,7 @@ describe('DiffRow — top-level scalar row', () => {
   });
 
   it('renders a blank cell for a collapsed column', () => {
-    renderRow({ collapsedColumns: new Set(['MyMod.esp']) });
+    renderRow({ collapsedColumns: new Set([columnKey('MyMod.esp')]) });
     // Only one 'disk-value' now shows — MyMod.esp's column is blanked.
     expect(screen.getAllByText('disk-value').length).toBe(1);
   });
@@ -181,7 +182,7 @@ describe('DiffRow — editability follows immutableSet', () => {
   // click on the already-focused cell does, so this test pre-seeds `focusedCell` to simulate the
   // cell already carrying focus (the state a first click would have produced).
   it('a click on the already-focused mutable column activates an editable input', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') } });
     const cells = screen.getAllByText('disk-value');
     fireEvent.click(cells[1]); // MyMod.esp — mutable, already focused
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
@@ -196,7 +197,7 @@ describe('DiffRow — editability follows immutableSet', () => {
 
   it('editing a mutable cell calls onEdit with plugin/fieldName/value', () => {
     const onEdit = vi.fn();
-    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') } });
     fireEvent.click(screen.getAllByText('disk-value')[1]);
     const input = screen.getByDisplayValue('disk-value');
     fireEvent.change(input, { target: { value: 'new-value' } });
@@ -215,7 +216,7 @@ describe('DiffRow — readOnly field metadata (issue #231)', () => {
   it('a second click on the already-focused mutable column opens nothing when the field is readOnly', () => {
     renderRow({
       fieldMetaMap: { Name: readOnlyMeta },
-      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' },
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') },
     });
     fireEvent.click(screen.getAllByText('disk-value')[1]); // MyMod.esp — mutable column, readOnly field
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
@@ -224,7 +225,7 @@ describe('DiffRow — readOnly field metadata (issue #231)', () => {
   it('F2 on the focused mutable column opens nothing when the field is readOnly', () => {
     renderRow({
       fieldMetaMap: { Name: readOnlyMeta },
-      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' },
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') },
     });
     const cell = screen.getAllByText('disk-value')[1].closest('td')!;
     fireEvent.keyDown(cell, { key: 'F2' });
@@ -232,7 +233,7 @@ describe('DiffRow — readOnly field metadata (issue #231)', () => {
   });
 
   it('a non-readOnly field on the same mutable column is unaffected (control case)', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') } });
     fireEvent.click(screen.getAllByText('disk-value')[1]);
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
   });
@@ -244,7 +245,7 @@ describe('DiffRow — readOnly field metadata (issue #231)', () => {
 // element/gate itself).
 describe('DiffRow — F2 opens the focused cell (#223)', () => {
   it('F2 on the focused mutable disk cell opens its editor', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') } });
     const cell = screen.getAllByText('disk-value')[1].closest('td')!;
     fireEvent.keyDown(cell, { key: 'F2' });
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
@@ -254,7 +255,7 @@ describe('DiffRow — F2 opens the focused cell (#223)', () => {
   // branch carries no `data-open-trigger` (there is no editor left to dispatch a click at), so
   // it still doesn't.
   it('F2 on the focused immutable disk cell opens nothing', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'Fallout4.esm' } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('Fallout4.esm') } });
     const cell = screen.getAllByText('disk-value')[0].closest('td')!;
     fireEvent.keyDown(cell, { key: 'F2' });
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
@@ -321,7 +322,7 @@ describe('DiffRow — string double click opens the extended editor (#230)', () 
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(openExtendedFieldEditor).toHaveBeenCalledTimes(1);
     expect(openExtendedFieldEditor).toHaveBeenCalledWith(
-      { value: 'disk-value', recordLabel: 'TestNPC [000001:Fallout4.esm]', fieldName: 'Name', plugin: 'MyMod.esp', readOnly: false },
+      { value: 'disk-value', recordLabel: 'TestNPC [000001:Fallout4.esm]', fieldName: 'Name', plugin: 'MyMod.esp', origin: 'Data', readOnly: false },
       expect.any(Function),
     );
   });
@@ -403,7 +404,7 @@ describe('DiffRow — Ctrl+C copies the focused cell (#224)', () => {
   beforeEach(() => { copyToClipboard.mockClear(); });
 
   it('Ctrl+C on a focused mutable disk cell copies its model value', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') } });
     const cell = screen.getAllByText('disk-value')[1].closest('td')!;
     fireEvent.keyDown(cell, { key: 'c', ctrlKey: true });
     expect(copyToClipboard).toHaveBeenCalledWith('disk-value');
@@ -412,7 +413,7 @@ describe('DiffRow — Ctrl+C copies the focused cell (#224)', () => {
   // AC3: works on an immutable column too, and without opening anything first — post-#226 there
   // is nothing left to open on that column at all, so this is the only copy path it has.
   it('Ctrl+C on a focused, unopened immutable disk cell also copies (AC3)', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'Fallout4.esm' } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('Fallout4.esm') } });
     const cell = screen.getAllByText('disk-value')[0].closest('td')!;
     fireEvent.keyDown(cell, { key: 'c', ctrlKey: true });
     expect(copyToClipboard).toHaveBeenCalledWith('disk-value');
@@ -424,7 +425,7 @@ describe('DiffRow — Ctrl+C copies the focused cell (#224)', () => {
   // "copy the current selection" must win instead — proven by actually opening the editor and
   // dispatching the keydown on the resulting <input>, not by asserting the gate exists.
   it('Ctrl+C is suppressed while the cell has an open editor — native selection copy applies instead', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') } });
     fireEvent.click(screen.getAllByText('disk-value')[1]); // second click on the focused cell opens it
     const input = screen.getByDisplayValue('disk-value');
     fireEvent.keyDown(input, { key: 'c', ctrlKey: true });
@@ -444,7 +445,7 @@ describe('DiffRow — Ctrl+C copies the focused cell (#224)', () => {
       rowKey: 'Factions',
       hasChildren: true,
       isExpanded: false,
-      focusedCell: { rowKey: 'Factions', plugin: 'MyMod.esp' },
+      focusedCell: { rowKey: 'Factions', plugin: columnKey('MyMod.esp') },
     });
     const cell = screen.getAllByText('[3]')[1].closest('td')!; // MyMod.esp — the focused column
     fireEvent.keyDown(cell, { key: 'c', ctrlKey: true });
@@ -471,7 +472,7 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
   it('Ctrl+V on a focused mutable cell sets its value from the clipboard and stages it (AC1)', async () => {
     const onEdit = vi.fn();
     readClipboardText.mockResolvedValue('pasted-value');
-    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') } });
     const cell = screen.getAllByText('disk-value')[1].closest('td')!;
 
     fireEvent.keyDown(cell, { key: 'v', ctrlKey: true });
@@ -482,7 +483,7 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
 
   it('Ctrl+X on a focused mutable cell copies the value and clears the field, staged the same way (AC2)', () => {
     const onEdit = vi.fn();
-    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') } });
     const cell = screen.getAllByText('disk-value')[1].closest('td')!;
 
     fireEvent.keyDown(cell, { key: 'x', ctrlKey: true });
@@ -498,7 +499,7 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
   it('Ctrl+X on an already-empty mutable cell does nothing — no clipboard write (xEdit parity)', () => {
     const onEdit = vi.fn();
     renderRow({
-      onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' },
+      onEdit, focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') },
       diff: diff({ values: { 'Fallout4.esm': 'disk-value', 'MyMod.esp': null } }),
     });
     const cell = screen.getByText('—').closest('td')!;
@@ -511,7 +512,7 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
 
   it('Ctrl+V does nothing on an immutable column — no clipboard read is even attempted (AC3)', () => {
     const onEdit = vi.fn();
-    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: 'Fallout4.esm' } }); // immutable
+    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: columnKey('Fallout4.esm') } }); // immutable
     const cell = screen.getAllByText('disk-value')[0].closest('td')!;
 
     fireEvent.keyDown(cell, { key: 'v', ctrlKey: true });
@@ -522,7 +523,7 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
 
   it('Ctrl+X does nothing on an immutable column — no copy, no clear (AC3)', () => {
     const onEdit = vi.fn();
-    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: 'Fallout4.esm' } }); // immutable
+    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: columnKey('Fallout4.esm') } }); // immutable
     const cell = screen.getAllByText('disk-value')[0].closest('td')!;
 
     fireEvent.keyDown(cell, { key: 'x', ctrlKey: true });
@@ -534,7 +535,7 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
   it('pasting a value identical to the current one stages nothing (AC4)', async () => {
     const onEdit = vi.fn();
     readClipboardText.mockResolvedValue('disk-value');
-    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    renderRow({ onEdit, focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') } });
     const cell = screen.getAllByText('disk-value')[1].closest('td')!;
 
     fireEvent.keyDown(cell, { key: 'v', ctrlKey: true });
@@ -548,7 +549,7 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
     const onEdit = vi.fn();
     readClipboardText.mockResolvedValue('not-a-number');
     renderRow({
-      onEdit, focusedCell: { rowKey: 'Level', plugin: 'MyMod.esp' },
+      onEdit, focusedCell: { rowKey: 'Level', plugin: columnKey('MyMod.esp') },
       diff: diff({ fieldName: 'Level', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }),
       fieldMetaMap: { Level: intMeta }, rowKey: 'Level',
     });
@@ -567,7 +568,7 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
   it("Ctrl+X on an int cell copies but leaves the value unchanged — '' does not coerce to an int (seam 1)", () => {
     const onEdit = vi.fn();
     renderRow({
-      onEdit, focusedCell: { rowKey: 'Level', plugin: 'MyMod.esp' },
+      onEdit, focusedCell: { rowKey: 'Level', plugin: columnKey('MyMod.esp') },
       diff: diff({ fieldName: 'Level', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }),
       fieldMetaMap: { Level: intMeta }, rowKey: 'Level',
     });
@@ -582,7 +583,7 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
   it('Ctrl+X on a flags cell copies the active names and clears every flag', () => {
     const onEdit = vi.fn();
     renderRow({
-      onEdit, focusedCell: { rowKey: 'Flags', plugin: 'MyMod.esp' },
+      onEdit, focusedCell: { rowKey: 'Flags', plugin: columnKey('MyMod.esp') },
       diff: diff({ fieldName: 'Flags', values: { 'Fallout4.esm': 0b0101, 'MyMod.esp': 0b0101 } }),
       fieldMetaMap: { Flags: flagMeta }, rowKey: 'Flags',
     });
@@ -599,7 +600,7 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
   it('Ctrl+V does nothing on a focused, unopened formKey cell (seam 2 — the QuickPick is the paste target)', () => {
     const onEdit = vi.fn();
     renderRow({
-      onEdit, focusedCell: { rowKey: 'Owner', plugin: 'MyMod.esp' },
+      onEdit, focusedCell: { rowKey: 'Owner', plugin: columnKey('MyMod.esp') },
       diff: diff({ fieldName: 'Owner', values: { 'Fallout4.esm': '000001:Fallout4.esm', 'MyMod.esp': '000001:Fallout4.esm' } }),
       fieldMetaMap: { Owner: fkMeta }, rowKey: 'Owner',
     });
@@ -615,7 +616,7 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
   it('Ctrl+X on a focused formKey cell copies the label and clears the reference', () => {
     const onEdit = vi.fn();
     renderRow({
-      onEdit, focusedCell: { rowKey: 'Owner', plugin: 'MyMod.esp' },
+      onEdit, focusedCell: { rowKey: 'Owner', plugin: columnKey('MyMod.esp') },
       diff: diff({ fieldName: 'Owner', values: { 'Fallout4.esm': '000001:Fallout4.esm', 'MyMod.esp': '000001:Fallout4.esm' } }),
       fieldMetaMap: { Owner: fkMeta }, rowKey: 'Owner',
     });
@@ -633,7 +634,7 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
   it('a value copied from one cell pastes into another of the same type and round-trips exactly (AC6, int)', async () => {
     const onEdit = vi.fn();
     renderRow({
-      onEdit, focusedCell: { rowKey: 'Level', plugin: 'Fallout4.esm' },
+      onEdit, focusedCell: { rowKey: 'Level', plugin: columnKey('Fallout4.esm') },
       diff: diff({ fieldName: 'Level', values: { 'Fallout4.esm': 42, 'MyMod.esp': 5 } }),
       fieldMetaMap: { Level: intMeta }, rowKey: 'Level',
     });
@@ -651,7 +652,7 @@ describe('DiffRow — Ctrl+V pastes, Ctrl+X cuts, on the focused cell (#225)', (
   it('a value copied from one cell pastes into another of the same type and round-trips exactly (AC6, flags)', async () => {
     const onEdit = vi.fn();
     renderRow({
-      onEdit, focusedCell: { rowKey: 'Flags', plugin: 'Fallout4.esm' },
+      onEdit, focusedCell: { rowKey: 'Flags', plugin: columnKey('Fallout4.esm') },
       diff: diff({ fieldName: 'Flags', values: { 'Fallout4.esm': 0b0101, 'MyMod.esp': 0b0010 } }),
       fieldMetaMap: { Flags: flagMeta }, rowKey: 'Flags',
     });
@@ -678,20 +679,20 @@ describe('DiffRow — cell focus', () => {
   });
 
   it('a disk cell matching focusedCell is tabbable and carries real DOM focus', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') } });
     const cell = screen.getAllByText('disk-value')[1].closest('td')!;
     expect(cell).toHaveAttribute('tabindex', '0');
     expect(cell).toHaveFocus();
   });
 
   it('a cell not matching focusedCell does not carry DOM focus', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') } });
     const cell = screen.getAllByText('disk-value')[0].closest('td')!; // Fallout4.esm, not the match
     expect(cell).not.toHaveFocus();
   });
 
   it('the row containing the focused cell is highlighted', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') } });
     const row = screen.getAllByText('disk-value')[1].closest('tr')!;
     expect(row.style.boxShadow).toContain('var(--vscode-focusBorder');
   });
@@ -703,7 +704,7 @@ describe('DiffRow — cell focus', () => {
   });
 
   it('the focused cell itself is visibly distinguished from the rest of its row', () => {
-    renderRow({ focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' } });
+    renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') } });
     const focusedTd = screen.getAllByText('disk-value')[1].closest('td')!;
     const otherTd = screen.getAllByText('disk-value')[0].closest('td')!;
     expect(focusedTd.style.boxShadow).toContain('var(--vscode-focusBorder');
@@ -717,6 +718,28 @@ describe('DiffRow — cell focus', () => {
   it('no cell carries DOM focus when focusedCell is null', () => {
     renderRow({ focusedCell: null });
     expect(document.body).toHaveFocus();
+  });
+
+  // #272 / ADR-0036: the genuinely red case — two columns sharing a filename ('Shared.esp') but
+  // differing in origin must focus independently. Pre-#272, FocusedCell.plugin was a bare string
+  // (both columns' own `.plugin` field is literally "Shared.esp" — display never changes), so
+  // isCellFocused's `focusedCell.plugin === plugin` comparison couldn't tell them apart: focusing
+  // ModA's cell would also have read ModB's cell (same row) as focused.
+  it('focusing one of two same-filename, different-origin columns does not focus the other (AC5)', () => {
+    const colA = override('Shared.esp', { origin: 'ModA' });
+    const colB = override('Shared.esp', { origin: 'ModB' });
+    renderRow({
+      columns: [diskColumn(colA), diskColumn(colB)],
+      overrideMap: { [columnKey('Shared.esp', 'ModA')]: colA, [columnKey('Shared.esp', 'ModB')]: colB },
+      immutableSet: new Set(),
+      diff: diff({ values: { [columnKey('Shared.esp', 'ModA')]: 'disk-value', [columnKey('Shared.esp', 'ModB')]: 'disk-value' } }),
+      focusedCell: { rowKey: 'Name', plugin: columnKey('Shared.esp', 'ModA') },
+    });
+    const cells = screen.getAllByText('disk-value');
+    const [cellA, cellB] = [cells[0].closest('td')!, cells[1].closest('td')!];
+
+    expect(cellA).toHaveFocus();
+    expect(cellB).not.toHaveFocus();
   });
 });
 
@@ -778,7 +801,7 @@ describe('DiffRow — pending companion column', () => {
     const mod = override('MyMod.esp', { pendingFields: { Name: 'pending-value' } });
     return baseProps({
       columns: [diskColumn(master), diskColumn(mod), pendingColumn('MyMod.esp')],
-      overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+      overrideMap: { [columnKey('Fallout4.esm')]: master, [columnKey('MyMod.esp')]: mod },
       pendingChangeMap: { 'MyMod.esp:Name': change },
       ...overrides,
     });
@@ -803,7 +826,7 @@ describe('DiffRow — pending companion column', () => {
 
   it('a click on the already-focused pending cell activates an editable input', () => {
     render(<table><tbody>{React.createElement(DiffRow, pendingProps({
-      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp'), column: 'pending' },
     }))}</tbody></table>);
     fireEvent.click(screen.getByText('pending-value'));
     expect(screen.getByDisplayValue('pending-value')).toBeInTheDocument();
@@ -811,7 +834,7 @@ describe('DiffRow — pending companion column', () => {
 
   it('F2 on the focused pending cell opens its editor', () => {
     render(<table><tbody>{React.createElement(DiffRow, pendingProps({
-      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp'), column: 'pending' },
     }))}</tbody></table>);
     const cell = screen.getByText('pending-value').closest('td')!;
     fireEvent.keyDown(cell, { key: 'F2' });
@@ -839,7 +862,7 @@ describe('DiffRow — pending companion column', () => {
     expect(openExtendedFieldEditor).toHaveBeenCalledWith(
       {
         value: 'pending-value', recordLabel: 'TestNPC [000001:Fallout4.esm]', fieldName: 'Name',
-        plugin: 'MyMod.esp', readOnly: false, column: 'pending',
+        plugin: 'MyMod.esp', origin: 'Data', readOnly: false, column: 'pending',
       },
       expect.any(Function),
     );
@@ -856,13 +879,13 @@ describe('DiffRow — pending companion column', () => {
 
     expect(openExtendedFieldEditor).toHaveBeenCalledTimes(2);
     expect(openExtendedFieldEditor).toHaveBeenNthCalledWith(1,
-      { value: 'disk-value', recordLabel: 'TestNPC [000001:Fallout4.esm]', fieldName: 'Name', plugin: 'MyMod.esp', readOnly: false },
+      { value: 'disk-value', recordLabel: 'TestNPC [000001:Fallout4.esm]', fieldName: 'Name', plugin: 'MyMod.esp', origin: 'Data', readOnly: false },
       expect.any(Function),
     );
     expect(openExtendedFieldEditor).toHaveBeenNthCalledWith(2,
       {
         value: 'pending-value', recordLabel: 'TestNPC [000001:Fallout4.esm]', fieldName: 'Name',
-        plugin: 'MyMod.esp', readOnly: false, column: 'pending',
+        plugin: 'MyMod.esp', origin: 'Data', readOnly: false, column: 'pending',
       },
       expect.any(Function),
     );
@@ -889,7 +912,7 @@ describe('DiffRow — pending companion column', () => {
   it('committing an edit on the pending cell via the inline editor calls onEdit with plugin/fieldName/value, the same shape a disk-cell edit uses', () => {
     const onEdit = vi.fn();
     render(<table><tbody>{React.createElement(DiffRow, pendingProps({
-      onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+      onEdit, focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp'), column: 'pending' },
     }))}</tbody></table>);
     fireEvent.click(screen.getByText('pending-value')); // second click on the already-focused cell
     const input = screen.getByDisplayValue('pending-value');
@@ -903,7 +926,7 @@ describe('DiffRow — pending companion column', () => {
   // row/plugin, and vice versa.
   it('the disk cell for the same field stays editable while the pending cell is also editable', () => {
     render(<table><tbody>{React.createElement(DiffRow, pendingProps({
-      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' },
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') },
     }))}</tbody></table>);
     // Both plugin columns render 'disk-value' (see override() default fixture); MyMod.esp's disk
     // cell is the second occurrence, same as the "editability follows immutableSet" tests above.
@@ -917,7 +940,7 @@ describe('DiffRow — pending companion column', () => {
   // than only inferred from the editability test above.
   it('a disk cell and its pending companion carry independent focus, even though they share a plugin', () => {
     render(<table><tbody>{React.createElement(DiffRow, pendingProps({
-      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp' }, // disk cell — no `column`
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp') }, // disk cell — no `column`
     }))}</tbody></table>);
     const diskCell = screen.getAllByText('disk-value')[1].closest('td')!;
     const pendingCell = screen.getByText('pending-value').closest('td')!;
@@ -927,7 +950,7 @@ describe('DiffRow — pending companion column', () => {
 
   it('focusing the pending cell does not also focus its disk companion', () => {
     render(<table><tbody>{React.createElement(DiffRow, pendingProps({
-      focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp'), column: 'pending' },
     }))}</tbody></table>);
     const diskCell = screen.getAllByText('disk-value')[1].closest('td')!;
     const pendingCell = screen.getByText('pending-value').closest('td')!;
@@ -950,7 +973,7 @@ describe('DiffRow — pending companion column', () => {
 
     it('Ctrl+C copies the pending cell\'s model value', () => {
       render(<table><tbody>{React.createElement(DiffRow, pendingProps({
-        focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+        focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp'), column: 'pending' },
       }))}</tbody></table>);
       const cell = screen.getByText('pending-value').closest('td')!;
       fireEvent.keyDown(cell, { key: 'c', ctrlKey: true });
@@ -960,7 +983,7 @@ describe('DiffRow — pending companion column', () => {
     it('Ctrl+X copies then clears the pending cell, staged through the same onEdit path', () => {
       const onEdit = vi.fn();
       render(<table><tbody>{React.createElement(DiffRow, pendingProps({
-        onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+        onEdit, focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp'), column: 'pending' },
       }))}</tbody></table>);
       const cell = screen.getByText('pending-value').closest('td')!;
       fireEvent.keyDown(cell, { key: 'x', ctrlKey: true });
@@ -972,7 +995,7 @@ describe('DiffRow — pending companion column', () => {
       const onEdit = vi.fn();
       readClipboardText.mockResolvedValue('pasted-value');
       render(<table><tbody>{React.createElement(DiffRow, pendingProps({
-        onEdit, focusedCell: { rowKey: 'Name', plugin: 'MyMod.esp', column: 'pending' },
+        onEdit, focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp'), column: 'pending' },
       }))}</tbody></table>);
       const cell = screen.getByText('pending-value').closest('td')!;
       fireEvent.keyDown(cell, { key: 'v', ctrlKey: true });
@@ -1037,7 +1060,7 @@ describe('DiffRow — pending companion column', () => {
         diff: diff({ fieldName: 'Reference', values: { 'Fallout4.esm': '000010:Fallout4.esm', 'MyMod.esp': '000010:Fallout4.esm' } }),
         fieldMetaMap: { Reference: fkMeta },
         columns: [diskColumn(master), diskColumn(mod), pendingColumn('MyMod.esp')],
-        overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+        overrideMap: { [columnKey('Fallout4.esm')]: master, [columnKey('MyMod.esp')]: mod },
         pendingChangeMap: { 'MyMod.esp:Reference': { ...fkChange, resolutions } },
       });
     }
@@ -1083,7 +1106,7 @@ describe('DiffRow — pending companion column', () => {
       render(<table><tbody>{React.createElement(DiffRow, baseProps({
         diff: diff({ fieldName: 'Target', values: { 'MyMod.esp': '000010:Fallout4.esm' } }),
         columns: [diskColumn(mod), pendingColumn('MyMod.esp')],
-        overrideMap: { 'MyMod.esp': mod },
+        overrideMap: { [columnKey('MyMod.esp')]: mod },
         pendingChangeMap: { 'MyMod.esp:LinkedRef': nestedChange('LinkedRef', {
           Target: { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'StructTarget' },
         }) },
@@ -1098,7 +1121,7 @@ describe('DiffRow — pending companion column', () => {
       render(<table><tbody>{React.createElement(DiffRow, baseProps({
         diff: diff({ fieldName: '[0]', values: { 'MyMod.esp': '000010:Fallout4.esm' } }),
         columns: [diskColumn(mod), pendingColumn('MyMod.esp')],
-        overrideMap: { 'MyMod.esp': mod },
+        overrideMap: { [columnKey('MyMod.esp')]: mod },
         pendingChangeMap: { 'MyMod.esp:Items': nestedChange('Items', {
           '[0]': { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'PositionalTarget' },
         }) },
@@ -1113,7 +1136,7 @@ describe('DiffRow — pending companion column', () => {
       render(<table><tbody>{React.createElement(DiffRow, baseProps({
         diff: diff({ fieldName: '000099:Fallout4.esm', values: { 'MyMod.esp': '000088:Fallout4.esm' } }),
         columns: [diskColumn(mod), pendingColumn('MyMod.esp')],
-        overrideMap: { 'MyMod.esp': mod },
+        overrideMap: { [columnKey('MyMod.esp')]: mod },
         pendingChangeMap: { 'MyMod.esp:Items': nestedChange('Items', {
           '[1]': { state: 'ResolvedValidType', recordType: 'kywd', editorId: 'SortedTarget' },
         }) },
@@ -1128,7 +1151,7 @@ describe('DiffRow — pending companion column', () => {
       render(<table><tbody>{React.createElement(DiffRow, baseProps({
         diff: diff({ fieldName: 'Target', values: { 'MyMod.esp': '000010:Fallout4.esm' } }),
         columns: [diskColumn(mod), pendingColumn('MyMod.esp')],
-        overrideMap: { 'MyMod.esp': mod },
+        overrideMap: { [columnKey('MyMod.esp')]: mod },
         pendingChangeMap: { 'MyMod.esp:Items': nestedChange('Items', {
           '[2].Target': { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'GrandchildTarget' },
         }) },
@@ -1143,7 +1166,7 @@ describe('DiffRow — pending companion column', () => {
     const mod = override('MyMod.esp'); // no pendingFields
     const { container } = render(<table><tbody>{React.createElement(DiffRow, baseProps({
       columns: [diskColumn(master), diskColumn(mod), pendingColumn('MyMod.esp')],
-      overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+      overrideMap: { [columnKey('Fallout4.esm')]: master, [columnKey('MyMod.esp')]: mod },
     }))}</tbody></table>);
     const pendingCell = container.querySelectorAll('td')[3];
     expect(pendingCell.textContent).toBe('');
@@ -1163,7 +1186,7 @@ describe('DiffRow — non-top-level contexts', () => {
     render(<table><tbody>{React.createElement(DiffRow, baseProps({
       diff: diff({ fieldName: '[1]', values: { 'Fallout4.esm': 'x', 'MyMod.esp': 'x' } }),
       columns: [diskColumn(master), diskColumn(mod), pendingColumn('MyMod.esp')],
-      overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+      overrideMap: { [columnKey('Fallout4.esm')]: master, [columnKey('MyMod.esp')]: mod },
       pendingChangeMap: { 'MyMod.esp:Items': change },
       context: { path: [{ kind: 'index', index: 1 }], overrideMeta: elementMeta, rootField: 'Items' },
     }))}</tbody></table>);
@@ -1208,7 +1231,7 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
     return baseProps({
       diff: diff({ fieldName: kind === 'array-element' ? '[1]' : 'Reference', values: { 'Fallout4.esm': value }, resolutions: { 'Fallout4.esm': resolution } }),
       columns: [diskColumn(master)],
-      overrideMap: { 'Fallout4.esm': master },
+      overrideMap: { [columnKey('Fallout4.esm')]: master },
       fieldMetaMap: { [parentFieldName]: fkMeta },
       immutableSet: new Set(),
       context: { path, overrideMeta: fkMeta, rootField: parentFieldName },
@@ -1286,7 +1309,7 @@ describe('DiffRow — array-parent row (Add, #227)', () => {
       diff: diff({ fieldName: 'Items', values: { 'Fallout4.esm': ['a', 'b'], 'MyMod.esp': ['a', 'b', 'c'] } }),
       fieldMetaMap: { Items: arrayMeta },
       columns: [diskColumn(master), diskColumn(mod)],
-      overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+      overrideMap: { [columnKey('Fallout4.esm')]: master, [columnKey('MyMod.esp')]: mod },
       context: { path: [], rootField: 'Items' },
       rowKey: 'Items',
       hasChildren: true,
@@ -1300,7 +1323,7 @@ describe('DiffRow — array-parent row (Add, #227)', () => {
     const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayParentProps())}</tbody></table>);
     const mutableCell = container.querySelectorAll('td')[2]; // 0 = label, 1 = Fallout4.esm, 2 = MyMod.esp
     expect(JSON.parse(mutableCell.getAttribute('data-vscode-context')!)).toEqual({
-      webviewSection: 'arrayParent', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fieldName: 'Items',
+      webviewSection: 'arrayParent', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', fieldName: 'Items',
       preventDefaultContextMenuItems: true,
     });
   });
@@ -1355,7 +1378,7 @@ describe('DiffRow — array-element row (Remove/Move Up/Move Down, #227)', () =>
       diff: diff({ fieldName: '[1]', values: { 'Fallout4.esm': 'a', 'MyMod.esp': 'y' } }),
       fieldMetaMap: { Items: elemMeta },
       columns: [diskColumn(master), diskColumn(mod)],
-      overrideMap: { 'Fallout4.esm': master, 'MyMod.esp': mod },
+      overrideMap: { [columnKey('Fallout4.esm')]: master, [columnKey('MyMod.esp')]: mod },
       context: { path: [{ kind: 'index', index: 1 }], overrideMeta: elemMeta, rootField: 'Items' },
       rowKey: 'Items.[1]',
       arrayEdit: { currentArray: plugin => (plugin === 'MyMod.esp' ? ['x', 'y', 'z'] : ['a']), index: 1, onArrayEdit },
@@ -1367,7 +1390,7 @@ describe('DiffRow — array-element row (Remove/Move Up/Move Down, #227)', () =>
     const { container } = render(<table><tbody>{React.createElement(DiffRow, arrayElementProps())}</tbody></table>);
     const mutableCell = container.querySelectorAll('td')[2];
     expect(JSON.parse(mutableCell.getAttribute('data-vscode-context')!)).toEqual({
-      webviewSection: 'arrayElement', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      webviewSection: 'arrayElement', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
       fieldName: 'Items', index: 1, canMoveUp: true, canMoveDown: true, preventDefaultContextMenuItems: true,
     });
   });

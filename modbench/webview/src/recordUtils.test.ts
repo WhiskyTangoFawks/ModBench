@@ -22,6 +22,7 @@ import {
   type PathSegment,
 } from './recordUtils';
 import type { FieldMetadata, CompareOverride } from './types';
+import { columnKey } from './types';
 
 function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): CompareOverride {
   return {
@@ -53,7 +54,7 @@ describe('buildColumns', () => {
   it('skips the pending column for immutable overrides even if they have pending fields', () => {
     const cols = buildColumns(
       [makeOverride('Fallout4.esm', { pendingFields: { Name: 'draft' } })],
-      new Set(['Fallout4.esm']),
+      new Set([columnKey('Fallout4.esm')]),
     );
     expect(cols).toHaveLength(1);
     expect(cols[0]).toMatchObject({ kind: 'disk' });
@@ -76,6 +77,25 @@ describe('buildColumns', () => {
     expect(cols[1]).toMatchObject({ kind: 'disk' });                       // MyMod.esp disk
     expect(cols[2]).toMatchObject({ kind: 'pending', plugin: 'MyMod.esp' }); // MyMod.esp pending
     expect(cols[3]).toMatchObject({ kind: 'disk' });                       // Other.esp disk
+  });
+
+  // #272 / ADR-0036: the genuinely red case — two overrides sharing a filename but differing in
+  // origin must produce two distinct column keys, and each column's own pending-column gate must
+  // be decided by its own origin's immutability, not the other column's. Pre-#272,
+  // immutableSet.has(o.plugin) collided on the bare filename, so ModB's pending column would be
+  // silently skipped too (or ModA's wrongly kept) depending on Set contents.
+  it('keys columns by (plugin, origin), so two same-filename different-origin overrides stay distinct', () => {
+    const overrides = [
+      makeOverride('Shared.esp', { origin: 'ModA', pendingFields: { Name: 'fromA' } }),
+      makeOverride('Shared.esp', { origin: 'ModB', pendingFields: { Name: 'fromB' } }),
+    ];
+    const cols = buildColumns(overrides, new Set([columnKey('Shared.esp', 'ModA')]));
+
+    // ModA is immutable → no pending column; ModB is mutable → keeps its pending column.
+    expect(cols).toHaveLength(3);
+    expect(cols[0]).toMatchObject({ kind: 'disk', key: columnKey('Shared.esp', 'ModA') });
+    expect(cols[1]).toMatchObject({ kind: 'disk', key: columnKey('Shared.esp', 'ModB') });
+    expect(cols[2]).toMatchObject({ kind: 'pending', key: columnKey('Shared.esp', 'ModB'), plugin: 'Shared.esp' });
   });
 });
 
@@ -260,10 +280,11 @@ describe('appendArrayElement', () => {
 
 describe('arrayElementContext', () => {
   it('produces the data-vscode-context object for a middle element (can move either way)', () => {
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'Items', 1, 3)).toEqual({
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 1, 3)).toEqual({
       webviewSection: 'arrayElement',
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
+      origin: 'ModA',
       fieldName: 'Items',
       index: 1,
       canMoveUp: true,
@@ -277,11 +298,11 @@ describe('arrayElementContext', () => {
   // nothing to move onto, so the menu item must be absent there, not merely a no-op when clicked
   // (matching the AC's "absent, not disabled" principle for sorted arrays).
   it('canMoveUp is false for the first element', () => {
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'Items', 0, 3).canMoveUp).toBe(false);
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 0, 3).canMoveUp).toBe(false);
   });
 
   it('canMoveDown is false for the last element', () => {
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'Items', 2, 3).canMoveDown).toBe(false);
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 2, 3).canMoveDown).toBe(false);
   });
 
   // Issue #168: a row's index comes from the union-aligned tree across every plugin's column, not
@@ -290,17 +311,18 @@ describe('arrayElementContext', () => {
   // doesn't have an element there at all. Move Up must be absent (not merely a no-op), same
   // "absent, not disabled" convention the first/last-element cases above already enforce.
   it('canMoveUp is false when index is at or past this plugin\'s own array length', () => {
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'Items', 1, 1).canMoveUp).toBe(false);
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'Items', 2, 1).canMoveUp).toBe(false);
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 1, 1).canMoveUp).toBe(false);
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 2, 1).canMoveUp).toBe(false);
   });
 });
 
 describe('arrayParentContext', () => {
   it('produces the data-vscode-context object for an array-parent cell', () => {
-    expect(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'Items')).toEqual({
+    expect(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items')).toEqual({
       webviewSection: 'arrayParent',
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
+      origin: 'ModA',
       fieldName: 'Items',
       preventDefaultContextMenuItems: true,
     });
@@ -309,29 +331,29 @@ describe('arrayParentContext', () => {
 
 describe('vmadScriptsContext / vmadScriptContext / vmadPropertyContext', () => {
   it('vmadScriptsContext identifies the "Scripts (VMAD)" wrapper row', () => {
-    expect(vmadScriptsContext('000001:Fallout4.esm', 'MyMod.esp')).toEqual({
-      webviewSection: 'vmadScripts', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+    expect(vmadScriptsContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA')).toEqual({
+      webviewSection: 'vmadScripts', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
       preventDefaultContextMenuItems: true,
     });
   });
 
   it('vmadScriptContext identifies a script row, carrying its current flags for the QuickPick seed', () => {
-    expect(vmadScriptContext('000001:Fallout4.esm', 'MyMod.esp', 'MyScript', 'Local')).toEqual({
-      webviewSection: 'vmadScript', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', scriptName: 'MyScript',
+    expect(vmadScriptContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'MyScript', 'Local')).toEqual({
+      webviewSection: 'vmadScript', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', scriptName: 'MyScript',
       currentFlags: 'Local', preventDefaultContextMenuItems: true,
     });
   });
 
   it('vmadScriptContext carries a null currentFlags when the column has no disk value', () => {
-    expect(vmadScriptContext('000001:Fallout4.esm', 'MyMod.esp', 'MyScript', null)).toEqual({
-      webviewSection: 'vmadScript', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', scriptName: 'MyScript',
+    expect(vmadScriptContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'MyScript', null)).toEqual({
+      webviewSection: 'vmadScript', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', scriptName: 'MyScript',
       currentFlags: null, preventDefaultContextMenuItems: true,
     });
   });
 
   it('vmadPropertyContext identifies a property row', () => {
-    expect(vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'MyScript', 'Health')).toEqual({
-      webviewSection: 'vmadProperty', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+    expect(vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'MyScript', 'Health')).toEqual({
+      webviewSection: 'vmadProperty', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
       scriptName: 'MyScript', propName: 'Health', preventDefaultContextMenuItems: true,
     });
   });
@@ -346,17 +368,17 @@ describe('combineVscodeContexts', () => {
   });
 
   it('passes a single context through, still as a JSON string (an unchanged call site contract)', () => {
-    const result = combineVscodeContexts(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'Items'));
+    const result = combineVscodeContexts(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items'));
     expect(JSON.parse(result!)).toEqual({
-      webviewSection: 'arrayParent', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', fieldName: 'Items',
+      webviewSection: 'arrayParent', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', fieldName: 'Items',
       preventDefaultContextMenuItems: true,
     });
   });
 
   it('combines two contexts\' webviewSection into one space-separated token list', () => {
     const result = combineVscodeContexts(
-      arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', String.raw`VMAD\S\Levels`),
-      vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'S', 'Levels'),
+      arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', String.raw`VMAD\S\Levels`),
+      vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'S', 'Levels'),
     );
     const parsed = JSON.parse(result!);
     expect(parsed.webviewSection).toBe('arrayParent vmadProperty');
@@ -364,8 +386,8 @@ describe('combineVscodeContexts', () => {
 
   it('merges every other key from both contexts (so package.json\'s when clauses can read either)', () => {
     const result = combineVscodeContexts(
-      arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', String.raw`VMAD\S\Levels`),
-      vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'S', 'Levels'),
+      arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', String.raw`VMAD\S\Levels`),
+      vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'S', 'Levels'),
     );
     const parsed = JSON.parse(result!);
     expect(parsed.scriptName).toBe('S');
@@ -374,7 +396,7 @@ describe('combineVscodeContexts', () => {
   });
 
   it('skips an absent context among present ones', () => {
-    const result = combineVscodeContexts(undefined, arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'Items'), undefined);
+    const result = combineVscodeContexts(undefined, arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items'), undefined);
     expect(JSON.parse(result!).webviewSection).toBe('arrayParent');
   });
 });

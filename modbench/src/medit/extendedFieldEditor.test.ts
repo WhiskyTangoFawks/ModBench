@@ -112,7 +112,7 @@ describe('openExtendedFieldEditor', () => {
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'a long description' });
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: false },
+      { requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       makeDeps(tempRoot),
     );
 
@@ -129,7 +129,7 @@ describe('openExtendedFieldEditor', () => {
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: false },
+      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       makeDeps(tempRoot),
     );
 
@@ -145,7 +145,7 @@ describe('openExtendedFieldEditor', () => {
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: true },
+      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: true },
       makeDeps(tempRoot),
     );
 
@@ -164,7 +164,7 @@ describe('openExtendedFieldEditor', () => {
     const deps = makeDeps(tempRoot);
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: false },
+      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       deps,
     );
     saveEvent.fire({ uri: { fsPath: path }, getText: () => 'first save' });
@@ -183,7 +183,7 @@ describe('openExtendedFieldEditor', () => {
     const deps = makeDeps(tempRoot);
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: false },
+      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       deps,
     );
     saveEvent.fire({ uri: { fsPath: '/some/other/file.txt' }, getText: () => 'unrelated' });
@@ -205,7 +205,7 @@ describe('openExtendedFieldEditor', () => {
     const deps = makeDeps(tempRoot);
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: false },
+      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       deps,
     );
     closeEvent.fire({ uri: { fsPath: path }, getText: () => 'x' });
@@ -230,7 +230,7 @@ describe('openExtendedFieldEditor', () => {
     const deps = makeDeps('/nonexistent-root-\0-invalid');
 
     await expect(openExtendedFieldEditor(
-      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: false },
+      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       deps,
     )).resolves.toBeUndefined();
 
@@ -248,7 +248,7 @@ describe('openExtendedFieldEditor', () => {
     const tempRoot = await makeTempRoot();
     const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm');
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
-    const params = { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: true };
+    const params = { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: true };
 
     const firstDeps = makeDeps(tempRoot);
     await openExtendedFieldEditor(params, firstDeps);
@@ -273,11 +273,11 @@ describe('openExtendedFieldEditor', () => {
     openTextDocument.mockImplementation((uri: { fsPath: string }) => Promise.resolve({ uri, getText: () => '' }));
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'disk value', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: false },
+      { requestId: 'r1', value: 'disk value', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       makeDeps(tempRoot),
     );
     await openExtendedFieldEditor(
-      { requestId: 'r2', value: 'pending value', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: false, column: 'pending' },
+      { requestId: 'r2', value: 'pending value', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false, column: 'pending' },
       makeDeps(tempRoot),
     );
 
@@ -302,7 +302,7 @@ describe('openExtendedFieldEditor', () => {
     const deps = makeDeps(tempRoot);
 
     await openExtendedFieldEditor(
-      { requestId: 'r1', value: multiline, recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', readOnly: false },
+      { requestId: 'r1', value: multiline, recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       deps,
     );
     // The initial write is what the tab opens showing — prove it round-trips before the save.

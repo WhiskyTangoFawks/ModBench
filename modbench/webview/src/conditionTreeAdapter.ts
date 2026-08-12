@@ -149,8 +149,8 @@ function buildCondition(
     return {
       fieldName: spec.name,
       values: spec.values,
-      winnerPlugin: condition.winnerPlugin,
-      winnerValue: spec.values[condition.winnerPlugin] ?? null,
+      winnerColumn: condition.winnerColumn,
+      winnerValue: spec.values[condition.winnerColumn] ?? null,
       cellStates,
       // Issue #114: a field leaf's own bottom-up conflictAll (no children of its own).
       conflictAll: aggregateConflictAll(cellStates),
@@ -169,7 +169,7 @@ function buildCondition(
   // every other compound field's "copy the real value, not the placeholder" rule (AC5/AC6
   // elsewhere in this grid; modelValue.ts's own struct branch is untouched by this design call).
   const wholeValues = fieldValues(condition.perPlugin, c => c);
-  // Issue #231 (review, design call): per-plugin, not fieldValues' single-`winnerPlugin` shortcut
+  // Issue #231 (review, design call): per-plugin, not fieldValues' single-`winnerColumn` shortcut
   // above — whether *this plugin's own* condition list ends here differs per plugin whenever
   // plugins disagree on how many conditions the list has (the same case wholeValues' own sparse
   // alignment already handles).
@@ -181,8 +181,8 @@ function buildCondition(
     diff: {
       fieldName: `[${condition.index}]`,
       values: wholeValues,
-      winnerPlugin: condition.winnerPlugin,
-      winnerValue: wholeValues[condition.winnerPlugin] ?? null,
+      winnerColumn: condition.winnerColumn,
+      winnerValue: wholeValues[condition.winnerColumn] ?? null,
       cellStates: condition.cellStates,
       // Issue #114: this condition's own bottom-up conflictAll — its own whole-condition
       // cellStates folded with the worst of its own field children (Function/Parameters/Run
@@ -216,7 +216,7 @@ function buildGroup(group: ConditionGroupDiff, runOnTargets: string[]): { diff: 
   const lastIndexForPlugin = lastIndexByPlugin(group.conditions);
   const conditionBuilds = group.conditions.map(c => buildCondition(c, group.fieldPath, lastIndexForPlugin, runOnTargets));
   const values = sparseArrayByPlugin(group.conditions.map(c => c.perPlugin));
-  const winnerPlugin = Object.keys(values)[0] ?? '';
+  const winnerColumn = Object.keys(values)[0] ?? '';
   const elementMeta = conditionBuilds[0]?.meta
     ?? { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: [] };
   const conditionDiffs = conditionBuilds.map(b => b.diff);
@@ -225,8 +225,8 @@ function buildGroup(group: ConditionGroupDiff, runOnTargets: string[]): { diff: 
       fieldName: group.fieldPath,
       wirePath: group.fieldPath,
       values,
-      winnerPlugin,
-      winnerValue: values[winnerPlugin] ?? null,
+      winnerColumn,
+      winnerValue: values[winnerColumn] ?? null,
       cellStates: {},
       // Issue #114: the group (array) row's own bottom-up conflictAll — it carries no cellStates
       // of its own, so this is purely the worst of its condition elements.

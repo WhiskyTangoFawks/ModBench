@@ -1,6 +1,7 @@
 import { createApiClient } from '../../src/medit/ApiClient';
 import type { components } from '../../src/medit/generated/api';
-import type { CompareResult, PatchRecordValidationError, PendingChange } from './types';
+import type { ColumnKey, CompareResult, PatchRecordValidationError, PendingChange } from './types';
+import { columnKey } from './types';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, type LogLevel } from './messages';
 
@@ -30,6 +31,10 @@ export interface PluginInfo {
   name: string;
   isImmutable: boolean;
   loadOrderIndex: number;
+  // #272 / ADR-0036: needed to key immutableSet by compound column identity — optional so a
+  // pre-#272 fixture (e.g. this file's own tests) still compiles; columnKey() itself already
+  // treats a missing origin as the elided Data origin.
+  origin?: string;
 }
 
 // Issue #122: the composite view for a single record. `load` fires compare + changes + plugins
@@ -43,7 +48,7 @@ export interface PluginInfo {
 // the column-header menu happens via a VS Code QuickPick in the extension host now, which asks
 // PluginRepository directly rather than through this webview-side client.
 export type LoadResult =
-  | { ok: true; result: CompareResult; changes: PendingChange[] | null; immutableSet: Set<string> | null }
+  | { ok: true; result: CompareResult; changes: PendingChange[] | null; immutableSet: Set<ColumnKey> | null }
   | { ok: false; error: string };
 
 // Issue #122: the webview-side typed backend client. Owns every backend call the record panel
@@ -125,7 +130,11 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
         ok: true,
         result: cmp.data as CompareResult,
         changes: chg.response.ok ? (chg.data as PendingChange[]) : null,
-        immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => p.name)) : null,
+        // #272 / ADR-0036: keyed by compound column identity, not bare plugin name — two
+        // PluginInfo entries sharing a filename but differing in origin must stay distinct
+        // Set members, or one origin's mutability silently wins for both (RecordPanel.tsx's
+        // immutableSet.has(...) checks).
+        immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin))) : null,
       };
     },
 

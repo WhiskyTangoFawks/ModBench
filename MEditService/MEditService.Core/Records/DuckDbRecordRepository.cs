@@ -85,8 +85,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         // Walk VMAD after the per-type loop so both generic and VMAD Object refs land in `refs`
         // before the single form_references flush below.
-        // #272 / ADR-0036: VMAD/conditions/form_lookup now carry origin too, scoped the same way as
-        // every other table above — closes the gap #271 left open (header was already done there).
+        // #272 / ADR-0036: VMAD/conditions/form_lookup/header now all carry origin too, scoped the
+        // same way as every other table above — closes the gap #271 left open. Header's own delete
+        // step is in IndexHeader below; its write side already carried origin since #271.
         DeleteVmadForPlugin(plugin, origin);
         IndexVmad(pluginMod, plugin, origin, refs);
 
@@ -845,20 +846,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             cmd.Parameters.Add(new DuckDBParameter { Value = v });
     }
 
-    // Filename-only scope — kept for form_lookup only, which stays out of #271's named scope
-    // (AC1/AC4 name record tables, plugins, placement, cell_location and form_references; VMAD,
-    // conditions, header and form_lookup are a known follow-up gap, see Index()'s comment above).
-    private void DeleteExisting(string tableName, string plugin)
-    {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"DELETE FROM \"{tableName}\" WHERE plugin = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        cmd.ExecuteNonQuery();
-    }
-
-    // #271 / ADR-0036: scoped to (plugin, origin) together — reindexing one origin's plugin must
-    // never delete another origin's rows for the same filename. Used everywhere in #271's named
-    // scope; DeleteExisting above stays filename-only for the tables this ticket doesn't touch.
+    // #271/#272 / ADR-0036: scoped to (plugin, origin) together — reindexing one origin's plugin
+    // must never delete another origin's rows for the same filename. Every reindexed table now
+    // goes through this (the filename-only `DeleteExisting` predecessor was deleted once header,
+    // #272's last holdout, moved to this method too — see IndexHeader below).
     private void DeleteExistingForOrigin(string tableName, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
@@ -951,17 +942,18 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     // Issue #1 slice A1: header rows never flow through IndexRecordTable (see the Index() skip
     // above), so they need their own delete-then-append step, matching every other side table.
-    // #271 / ADR-0036: the header table's DDL comes from the same generic CreateRecordTable as
-    // every reflected schema, so it carries the `origin` column too — HeaderIndexer.Index appends
-    // it for row-shape consistency, but the delete step below stays filename-only-scoped (header
-    // is out of this ticket's named scope, same known gap as VMAD/conditions/form_lookup).
+    // #271/#272 / ADR-0036: the header table's DDL comes from the same generic CreateRecordTable as
+    // every reflected schema, so it carries the `origin` column too — HeaderIndexer.Index has
+    // appended it since #271; the delete step below was #272's last remaining filename-only gap
+    // (VMAD/conditions/form_lookup were migrated to DeleteExistingForOrigin earlier in this same
+    // ticket) and is now scoped to (plugin, origin) here too.
     private void IndexHeader(
         IModGetter pluginMod, string plugin, string origin, int loadOrderIndex,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         if (!schemas.TryGetValue("header", out var headerSchema)) return;
 
-        DeleteExisting("header", plugin);
+        DeleteExistingForOrigin("header", plugin, origin);
         using var appender = Connection.CreateAppender("header");
         HeaderIndexer.Index(pluginMod, plugin, origin, loadOrderIndex, headerSchema, appender);
     }

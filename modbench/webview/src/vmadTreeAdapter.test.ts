@@ -8,7 +8,7 @@ function script(partial: Partial<VmadScriptDiff> = {}): VmadScriptDiff {
   return {
     name: 'ScriptA',
     flags: { 'Fallout4.esm': 'Local', 'MyMod.esp': 'Local' },
-    winnerPlugin: 'Fallout4.esm',
+    winnerColumn: 'Fallout4.esm',
     cellStates: {},
     properties: [],
     ...partial,
@@ -20,7 +20,7 @@ function scalarProp(partial: Partial<VmadPropertyDiff> = {}): VmadPropertyDiff {
     name: 'Health', kind: 'scalar',
     values: { 'Fallout4.esm': 10, 'MyMod.esp': 20 },
     types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' },
-    winnerPlugin: 'MyMod.esp',
+    winnerColumn: 'MyMod.esp',
     cellStates: { 'MyMod.esp': 'Override' },
     ...partial,
   };
@@ -109,7 +109,7 @@ describe('buildVmadRows — object property', () => {
     name: 'Target', kind: 'object',
     values: { 'Fallout4.esm': '000010:Fallout4.esm [-1]' },
     types: { 'Fallout4.esm': 'Object' },
-    winnerPlugin: 'Fallout4.esm',
+    winnerColumn: 'Fallout4.esm',
     cellStates: {},
     resolutions: { 'Fallout4.esm': { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'Someone' } },
   };
@@ -131,7 +131,7 @@ describe('buildVmadRows — variable property (never editable)', () => {
     name: 'SomeVar', kind: 'variable',
     values: { 'Fallout4.esm': 'anything' },
     types: { 'Fallout4.esm': 'Int' },
-    winnerPlugin: 'Fallout4.esm',
+    winnerColumn: 'Fallout4.esm',
     cellStates: {},
   };
   const { diff: scriptDiff, meta: scriptMeta } = scriptRowFor([script({ properties: [varProp] })]);
@@ -150,10 +150,10 @@ describe('buildVmadRows — variable property (never editable)', () => {
 describe('buildVmadRows — array of scalars (ArrayOfInt)', () => {
   const arrProp: VmadPropertyDiff = {
     name: 'Levels', kind: 'array',
-    values: {}, types: { 'Fallout4.esm': 'ArrayOfInt' }, winnerPlugin: 'Fallout4.esm', cellStates: {},
+    values: {}, types: { 'Fallout4.esm': 'ArrayOfInt' }, winnerColumn: 'Fallout4.esm', cellStates: {},
     children: [
-      { name: '', kind: 'scalar', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
-      { name: '', kind: 'scalar', values: { 'Fallout4.esm': 2, 'MyMod.esp': 9 }, types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' }, winnerPlugin: 'MyMod.esp', cellStates: { 'MyMod.esp': 'Override' } },
+      { name: '', kind: 'scalar', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
+      { name: '', kind: 'scalar', values: { 'Fallout4.esm': 2, 'MyMod.esp': 9 }, types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: { 'MyMod.esp': 'Override' } },
     ],
   };
   const { diff: scriptDiff, meta: scriptMeta } = scriptRowFor([script({ properties: [arrProp] })]);
@@ -187,11 +187,11 @@ describe('buildVmadRows — array of scalars (ArrayOfInt)', () => {
 describe('buildVmadRows — array of scalars, plugins with different real lengths (issue #168)', () => {
   const arrProp: VmadPropertyDiff = {
     name: 'Levels', kind: 'array',
-    values: {}, types: { 'Fallout4.esm': 'ArrayOfInt' }, winnerPlugin: 'Fallout4.esm', cellStates: {},
+    values: {}, types: { 'Fallout4.esm': 'ArrayOfInt' }, winnerColumn: 'Fallout4.esm', cellStates: {},
     children: [
-      { name: '', kind: 'scalar', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
-      { name: '', kind: 'scalar', values: { 'Fallout4.esm': 2, 'MyMod.esp': null }, types: { 'Fallout4.esm': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
-      { name: '', kind: 'scalar', values: { 'Fallout4.esm': 3, 'MyMod.esp': null }, types: { 'Fallout4.esm': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
+      { name: '', kind: 'scalar', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
+      { name: '', kind: 'scalar', values: { 'Fallout4.esm': 2, 'MyMod.esp': null }, types: { 'Fallout4.esm': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
+      { name: '', kind: 'scalar', values: { 'Fallout4.esm': 3, 'MyMod.esp': null }, types: { 'Fallout4.esm': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
     ],
   };
   const { diff: scriptDiff } = scriptRowFor([script({ properties: [arrProp] })]);
@@ -206,7 +206,7 @@ describe('buildVmadRows — array of scalars, plugins with different real length
 describe('buildVmadRows — struct property (raw-node commitOverride)', () => {
   const structProp: VmadPropertyDiff = {
     name: 'Bounds', kind: 'struct',
-    values: {}, types: { 'Fallout4.esm': 'Struct' }, winnerPlugin: 'Fallout4.esm', cellStates: {},
+    values: {}, types: { 'Fallout4.esm': 'Struct' }, winnerColumn: 'Fallout4.esm', cellStates: {},
     raw: {
       'Fallout4.esm': [
         { name: 'X', type: 'Int', intValue: 5 },
@@ -214,8 +214,8 @@ describe('buildVmadRows — struct property (raw-node commitOverride)', () => {
       ],
     },
     children: [
-      { name: 'X', kind: 'scalar', values: { 'Fallout4.esm': 5 }, types: { 'Fallout4.esm': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
-      { name: 'Y', kind: 'scalar', values: { 'Fallout4.esm': 10 }, types: { 'Fallout4.esm': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
+      { name: 'X', kind: 'scalar', values: { 'Fallout4.esm': 5 }, types: { 'Fallout4.esm': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
+      { name: 'Y', kind: 'scalar', values: { 'Fallout4.esm': 10 }, types: { 'Fallout4.esm': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
     ],
   };
   const { diff: scriptDiff, meta: scriptMeta } = scriptRowFor([script({ properties: [structProp] })]);
@@ -252,7 +252,7 @@ describe('buildVmadRows — struct property (raw-node commitOverride)', () => {
 describe('buildVmadRows — struct-in-struct property (nested member commitOverride, issue #231 review)', () => {
   const nestedStructProp: VmadPropertyDiff = {
     name: 'Bounds', kind: 'struct',
-    values: {}, types: { 'Fallout4.esm': 'Struct' }, winnerPlugin: 'Fallout4.esm', cellStates: {},
+    values: {}, types: { 'Fallout4.esm': 'Struct' }, winnerColumn: 'Fallout4.esm', cellStates: {},
     raw: {
       'Fallout4.esm': [
         { name: 'X', type: 'Int', intValue: 5 },
@@ -260,11 +260,11 @@ describe('buildVmadRows — struct-in-struct property (nested member commitOverr
       ],
     },
     children: [
-      { name: 'X', kind: 'scalar', values: { 'Fallout4.esm': 5 }, types: { 'Fallout4.esm': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
+      { name: 'X', kind: 'scalar', values: { 'Fallout4.esm': 5 }, types: { 'Fallout4.esm': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
       {
-        name: 'Inner', kind: 'struct', values: {}, types: {}, winnerPlugin: 'Fallout4.esm', cellStates: {},
+        name: 'Inner', kind: 'struct', values: {}, types: {}, winnerColumn: 'Fallout4.esm', cellStates: {},
         children: [
-          { name: 'Depth', kind: 'scalar', values: { 'Fallout4.esm': 7 }, types: { 'Fallout4.esm': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
+          { name: 'Depth', kind: 'scalar', values: { 'Fallout4.esm': 7 }, types: { 'Fallout4.esm': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
         ],
       },
     ],
@@ -303,21 +303,21 @@ describe('buildVmadRows — structList property (ArrayOfStruct)', () => {
   ];
   const structListProp: VmadPropertyDiff = {
     name: 'Points', kind: 'structList',
-    values: {}, types: { 'Fallout4.esm': 'ArrayOfStruct' }, winnerPlugin: 'Fallout4.esm', cellStates: {},
+    values: {}, types: { 'Fallout4.esm': 'ArrayOfStruct' }, winnerColumn: 'Fallout4.esm', cellStates: {},
     raw: { 'Fallout4.esm': [instanceMembers(1, 2), instanceMembers(3, 4)] },
     children: [
       {
-        name: '', kind: 'struct', values: {}, types: {}, winnerPlugin: 'Fallout4.esm', cellStates: {},
+        name: '', kind: 'struct', values: {}, types: {}, winnerColumn: 'Fallout4.esm', cellStates: {},
         children: [
-          { name: 'X', kind: 'scalar', values: { 'Fallout4.esm': 1 }, types: { 'Fallout4.esm': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
-          { name: 'Y', kind: 'scalar', values: { 'Fallout4.esm': 2 }, types: { 'Fallout4.esm': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
+          { name: 'X', kind: 'scalar', values: { 'Fallout4.esm': 1 }, types: { 'Fallout4.esm': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
+          { name: 'Y', kind: 'scalar', values: { 'Fallout4.esm': 2 }, types: { 'Fallout4.esm': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
         ],
       },
       {
-        name: '', kind: 'struct', values: {}, types: {}, winnerPlugin: 'Fallout4.esm', cellStates: {},
+        name: '', kind: 'struct', values: {}, types: {}, winnerColumn: 'Fallout4.esm', cellStates: {},
         children: [
-          { name: 'X', kind: 'scalar', values: { 'Fallout4.esm': 3 }, types: { 'Fallout4.esm': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
-          { name: 'Y', kind: 'scalar', values: { 'Fallout4.esm': 4 }, types: { 'Fallout4.esm': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
+          { name: 'X', kind: 'scalar', values: { 'Fallout4.esm': 3 }, types: { 'Fallout4.esm': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
+          { name: 'Y', kind: 'scalar', values: { 'Fallout4.esm': 4 }, types: { 'Fallout4.esm': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
         ],
       },
     ],
@@ -377,10 +377,10 @@ describe('buildVmadRows — per-node conflictAll (issue #114)', () => {
   it('an array property shows element-level isolation — a conflicting element does not contaminate its agreeing sibling', () => {
     const arrProp: VmadPropertyDiff = {
       name: 'Levels', kind: 'array',
-      values: {}, types: { 'Fallout4.esm': 'ArrayOfInt' }, winnerPlugin: 'Fallout4.esm', cellStates: {},
+      values: {}, types: { 'Fallout4.esm': 'ArrayOfInt' }, winnerColumn: 'Fallout4.esm', cellStates: {},
       children: [
-        { name: '', kind: 'scalar', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' }, winnerPlugin: 'Fallout4.esm', cellStates: {} },
-        { name: '', kind: 'scalar', values: { 'Fallout4.esm': 2, 'MyMod.esp': 9 }, types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' }, winnerPlugin: 'MyMod.esp', cellStates: { 'MyMod.esp': 'Override' } },
+        { name: '', kind: 'scalar', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
+        { name: '', kind: 'scalar', values: { 'Fallout4.esm': 2, 'MyMod.esp': 9 }, types: { 'Fallout4.esm': 'Int', 'MyMod.esp': 'Int' }, winnerColumn: 'MyMod.esp', cellStates: { 'MyMod.esp': 'Override' } },
       ],
     };
     const { diff: scriptDiff } = scriptRowFor([script({ properties: [arrProp] })]);

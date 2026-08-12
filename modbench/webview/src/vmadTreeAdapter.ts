@@ -42,7 +42,7 @@ function scalarMeta(kind: ScalarKind): FieldMetadata {
 const OBJECT_META: FieldMetadata = { name: '', type: 'vmadObject', isArray: false, validFormKeyTypes: [], enumValues: [] };
 
 function scalarKindOf(p: VmadPropertyDiff): ScalarKind {
-  return opScalarKind(p.types[p.winnerPlugin] ?? '') ?? 'string';
+  return opScalarKind(p.types[p.winnerColumn] ?? '') ?? 'string';
 }
 
 // A property's `values`/`cellStates`/`types` are each only ever keyed by the plugins that
@@ -63,8 +63,8 @@ function buildScalarOrObject(p: VmadPropertyDiff): Built {
     diff: {
       fieldName: p.name,
       values: p.values,
-      winnerPlugin: p.winnerPlugin,
-      winnerValue: p.values[p.winnerPlugin] ?? null,
+      winnerColumn: p.winnerColumn,
+      winnerValue: p.values[p.winnerColumn] ?? null,
       cellStates: p.cellStates,
       conflictAll: aggregateConflictAll(p.cellStates),
       resolutions: isObject ? p.resolutions : undefined,
@@ -88,8 +88,8 @@ function buildVariable(p: VmadPropertyDiff): Built {
   for (const plugin of allPluginsOf(p)) values[plugin] = variableText(p, plugin);
   return {
     diff: {
-      fieldName: p.name, values, winnerPlugin: p.winnerPlugin,
-      winnerValue: values[p.winnerPlugin] ?? null, cellStates: p.cellStates,
+      fieldName: p.name, values, winnerColumn: p.winnerColumn,
+      winnerValue: values[p.winnerColumn] ?? null, cellStates: p.cellStates,
       conflictAll: aggregateConflictAll(p.cellStates),
     },
     meta: { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [], readOnly: true },
@@ -120,7 +120,7 @@ function buildArray(p: VmadPropertyDiff): Built {
   const arrayChildren = elementBuilds.map((b, i) => ({ ...b.diff, fieldName: `[${i}]` }));
   return {
     diff: {
-      fieldName: p.name, values, winnerPlugin: p.winnerPlugin, winnerValue: values[p.winnerPlugin] ?? null,
+      fieldName: p.name, values, winnerColumn: p.winnerColumn, winnerValue: values[p.winnerColumn] ?? null,
       cellStates: p.cellStates,
       conflictAll: aggregateConflictAll(p.cellStates, arrayChildren),
       children: arrayChildren,
@@ -219,8 +219,8 @@ function buildStruct(p: VmadPropertyDiff): Built {
     diff: {
       fieldName: p.name,
       values: p.raw ?? {},
-      winnerPlugin: p.winnerPlugin,
-      winnerValue: p.raw?.[p.winnerPlugin] ?? null,
+      winnerColumn: p.winnerColumn,
+      winnerValue: p.raw?.[p.winnerColumn] ?? null,
       cellStates: p.cellStates,
       conflictAll: aggregateConflictAll(p.cellStates, memberDiffs),
       children: memberDiffs,
@@ -239,8 +239,8 @@ function buildStructList(p: VmadPropertyDiff): Built {
     diff: {
       fieldName: p.name,
       values,
-      winnerPlugin: p.winnerPlugin,
-      winnerValue: values[p.winnerPlugin] ?? null,
+      winnerColumn: p.winnerColumn,
+      winnerValue: values[p.winnerColumn] ?? null,
       cellStates: p.cellStates,
       conflictAll: aggregateConflictAll(p.cellStates, instanceChildren),
       children: instanceChildren,
@@ -269,8 +269,8 @@ function buildFlagsChild(s: VmadScriptDiff): FieldDiff {
   return {
     fieldName: 'Flags',
     values: s.flags,
-    winnerPlugin: s.winnerPlugin,
-    winnerValue: s.flags[s.winnerPlugin] ?? null,
+    winnerColumn: s.winnerColumn,
+    winnerValue: s.flags[s.winnerColumn] ?? null,
     cellStates: s.cellStates,
     conflictAll: aggregateConflictAll(s.cellStates),
   };
@@ -296,8 +296,8 @@ function buildScript(s: VmadScriptDiff): { diff: FieldDiff; meta: FieldMetadata 
     diff: {
       fieldName: s.name,
       values: s.flags,
-      winnerPlugin: s.winnerPlugin,
-      winnerValue: s.flags[s.winnerPlugin] ?? null,
+      winnerColumn: s.winnerColumn,
+      winnerValue: s.flags[s.winnerColumn] ?? null,
       cellStates: s.cellStates,
       conflictAll: aggregateConflictAll(s.cellStates, children),
       children,
@@ -334,7 +334,7 @@ export function buildVmadRows(vmad: VmadCompare | null | undefined): VmadTreeRow
   const wrapper: FieldDiff = {
     fieldName: WRAPPER_NAME,
     values: {},
-    winnerPlugin: '',
+    winnerColumn: '',
     winnerValue: null,
     cellStates: {},
     conflictAll: aggregateConflictAll({}, scriptDiffs),

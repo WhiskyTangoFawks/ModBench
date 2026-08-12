@@ -25,3 +25,18 @@ public static class ColumnKey
             ? plugin
             : $"{plugin}{Delimiter}{origin}";
 }
+
+// #272 review: marks a DTO property whose dictionary keys are `ColumnKey.Of(plugin, origin)`
+// values — the single source of truth `CompareResultColumnKeyIntegrityTests` reflects over,
+// instead of a hand-typed property-name allowlist (which drifted three times on this ticket alone:
+// missed `VmadPropertyDiff.Raw`, `ConditionDiff.FieldCellStates`, `ConditionDiff.FieldResolutions`,
+// and carried one dead entry, `ClassifyResult.PluginStates`, which is never itself serialized).
+// Sits next to the property it marks, so adding a new column-keyed dictionary means annotating it
+// here, not remembering to also update a test file elsewhere.
+//
+// A dictionary whose *values* are themselves column-keyed dictionaries (FieldCellStates/
+// FieldResolutions: outer key is a field id like "function"/"param:0", inner key is the column) is
+// marked the same way — the integrity test detects the nesting structurally (is TValue itself a
+// string-keyed dictionary?) rather than needing a second attribute flavor.
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class ColumnKeyedAttribute : Attribute;

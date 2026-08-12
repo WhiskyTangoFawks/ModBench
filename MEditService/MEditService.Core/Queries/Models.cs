@@ -97,13 +97,13 @@ public record CompareOverride(
 // collapsed, deferred to its children while expanded.
 public record FieldDiff(
     string FieldName,
-    Dictionary<string, object?> Values,
+    [property: ColumnKeyed] Dictionary<string, object?> Values,
     string WinnerColumn,
     object? WinnerValue,
-    IReadOnlyDictionary<string, ConflictThis> CellStates,
+    [property: ColumnKeyed] IReadOnlyDictionary<string, ConflictThis> CellStates,
     ConflictAll ConflictAll,
     IReadOnlyList<FieldDiff>? Children = null,
-    IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null);
+    [property: ColumnKeyed] IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null);
 
 public record ClassifyResult(
     ConflictAll ConflictAll,
@@ -114,26 +114,26 @@ public record ClassifyResult(
 public record VmadPropertyDiff(
     string Name,                                       // sort key = propertyName / member name / "[i]"
     string Kind,                                       // "scalar"|"object"|"array"|"struct"|"structList"|"variable"
-    Dictionary<string, object?> Values,                // per-plugin leaf value (scalar / "FormKey [Alias]" / null when absent or has children)
-    Dictionary<string, string> Types,                  // per-plugin property Type (types differing across plugins → a conflict)
+    [property: ColumnKeyed] Dictionary<string, object?> Values,                // per-plugin leaf value (scalar / "FormKey [Alias]" / null when absent or has children)
+    [property: ColumnKeyed] Dictionary<string, string> Types,                  // per-plugin property Type (types differing across plugins → a conflict)
     string WinnerColumn,
-    IReadOnlyDictionary<string, ConflictThis> CellStates,
+    [property: ColumnKeyed] IReadOnlyDictionary<string, ConflictThis> CellStates,
     IReadOnlyList<VmadPropertyDiff>? Children,          // struct members (by name) / array elements (by index), aligned & recursive
                                                         // Raw: per-plugin struct subtree in the editable node-tree shape — a struct carries a list of
                                                         // member nodes; a structList carries a list of per-instance member-node lists. Populated only
                                                         // for struct/structList. The frontend patches one member by path and restages the whole value
                                                         // (atomic column, ADR-0019).
-    Dictionary<string, object?>? Raw = null,
+    [property: ColumnKeyed] Dictionary<string, object?>? Raw = null,
     // ADR-0031: only populated on a Kind=="object" leaf, keyed by plugin like Values/CellStates —
     // never aggregated up from Children, so a dangling sibling Object can't hide a live
     // hyperlink/affordance on the leaf next to it.
-    IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null);
+    [property: ColumnKeyed] IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null);
 
 public record VmadScriptDiff(
     string Name,                                       // sort key = ScriptName
-    Dictionary<string, string?> Flags,                 // per-plugin script flags; null = script absent in that plugin
+    [property: ColumnKeyed] Dictionary<string, string?> Flags,                 // per-plugin script flags; null = script absent in that plugin
     string WinnerColumn,
-    IReadOnlyDictionary<string, ConflictThis> CellStates,
+    [property: ColumnKeyed] IReadOnlyDictionary<string, ConflictThis> CellStates,
     IReadOnlyList<VmadPropertyDiff> Properties);
 
 public record VmadCompare(IReadOnlyList<VmadScriptDiff> Scripts);
@@ -143,12 +143,15 @@ public record VmadCompare(IReadOnlyList<VmadScriptDiff> Scripts);
 // renders the summary and expands to typed fields from it. Two-axis coloring like ordinary fields.
 public record ConditionDiff(
     int Index,
-    Dictionary<string, Schema.ParsedCondition?> PerPlugin,
+    [property: ColumnKeyed] Dictionary<string, Schema.ParsedCondition?> PerPlugin,
     string WinnerColumn,
-    IReadOnlyDictionary<string, ConflictThis> CellStates,
+    [property: ColumnKeyed] IReadOnlyDictionary<string, ConflictThis> CellStates,
     // Per-field two-axis states for the expanded view, keyed by field id ("function", "operator",
     // "gate", "runOn", "comparison", "param:{i}"), so only fields that actually differ are colored.
-    IReadOnlyDictionary<string, IReadOnlyDictionary<string, ConflictThis>> FieldCellStates,
+    // #272 review: the outer key is a field id, not a column — [ColumnKeyed] here means "the
+    // *inner* dictionary's keys are columns" (CompareResultColumnKeyIntegrityTests detects this
+    // nesting structurally); the outer field-id keys are never checked against ColumnKey.Of.
+    [property: ColumnKeyed] IReadOnlyDictionary<string, IReadOnlyDictionary<string, ConflictThis>> FieldCellStates,
     // #166: FormKey→EditorID resolution (ADR-0031) for a condition's three FormKey-bearing slots —
     // keyed the same way as FieldCellStates ("runOn", "comparison", "param:{i}"; never "function" /
     // "operator" / "gate", which carry no FormKey), then by plugin. Unlike VmadPropertyDiff's single
@@ -156,7 +159,7 @@ public record ConditionDiff(
     // one shared per-leaf dictionary would collide them — this mirrors FieldCellStates' shape
     // instead. Null (not just empty) when no resolver was passed, matching VmadPropertyDiff's own
     // resolver-absent convention.
-    IReadOnlyDictionary<string, IReadOnlyDictionary<string, FormKeyResolution>>? FieldResolutions = null);
+    [property: ColumnKeyed] IReadOnlyDictionary<string, IReadOnlyDictionary<string, FormKeyResolution>>? FieldResolutions = null);
 
 public record ConditionGroupDiff(string FieldPath, IReadOnlyList<ConditionDiff> Conditions);
 

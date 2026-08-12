@@ -197,7 +197,15 @@ export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.READ_CLIPBOARD; requestId: string }
   | {
       type: typeof WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR; requestId: string; value: string;
-      recordLabel: string; fieldName: string; plugin: string; readOnly: boolean;
+      recordLabel: string; fieldName: string; plugin: string;
+      // #272 / ADR-0036: required alongside `plugin`, consistent with every other column-identity
+      // payload above. Not yet used to derive the temp-file path (that's path derivation, #34-
+      // shaped — see ADR-0036's own recorded path-collision consequence): two same-filename
+      // columns sharing a temp-file path is unreachable until #34, since nothing loads such a
+      // pair yet. Carrying `origin` now means #34 only has to change the path derivation, not
+      // this message's shape too.
+      origin: string;
+      readOnly: boolean;
       // Issue #242: FocusedCell's own disk/pending discriminant (#232), mirrored here so the
       // extension host's tab identity can tell a pending cell's request apart from its disk
       // companion's — see extendedFieldEditor.ts's extendedEditorPath comment.
@@ -223,6 +231,12 @@ export interface ArrayElementContext {
   webviewSection: 'arrayElement';
   formKey: string;
   plugin: string;
+  // #272 / ADR-0036: required, not optional — a register*Commands site (extension.ts) that
+  // forwards this context into its broadcast without also forwarding `origin` fails the
+  // type-check instead of silently producing `columnKey(plugin, undefined)`, which is the exact
+  // mis-targeting this ticket exists to prevent. Same reasoning on every context/message payload
+  // below that carries column identity.
+  origin: string;
   fieldName: string;
   index: number;
   canMoveUp: boolean;
@@ -234,6 +248,7 @@ export interface ArrayParentContext {
   webviewSection: 'arrayParent';
   formKey: string;
   plugin: string;
+  origin: string;
   fieldName: string;
   preventDefaultContextMenuItems: true;
 }
@@ -250,6 +265,7 @@ export interface VmadScriptsContext {
   webviewSection: 'vmadScripts';
   formKey: string;
   plugin: string;
+  origin: string;
   preventDefaultContextMenuItems: true;
 }
 
@@ -257,6 +273,7 @@ export interface VmadScriptContext {
   webviewSection: 'vmadScript';
   formKey: string;
   plugin: string;
+  origin: string;
   scriptName: string;
   // Issue #231 (review): Set Script Flags' own QuickPick seed — the script's current per-plugin
   // flag (`VmadScriptDiff.flags[plugin]`, already carried on the script row's own `diff.values`),
@@ -271,6 +288,7 @@ export interface VmadPropertyContext {
   webviewSection: 'vmadProperty';
   formKey: string;
   plugin: string;
+  origin: string;
   scriptName: string;
   propName: string;
   preventDefaultContextMenuItems: true;
@@ -280,29 +298,32 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP; changeId: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP; changeId: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD; formKey: string; sourcePlugin: string; targetPlugin: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD; formKey: string; sourcePlugin: string; sourceOrigin: string; targetPlugin: string }
   // #202: sourcePlugin is the right-clicked column — CopyRecordTo copies that plugin's own
   // version of the record, not necessarily the winner (see IEditOrchestrator.CopyRecordTo).
-  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE; formKey: string; sourcePlugin: string; targetPlugin: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE; formKey: string; plugin: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER; formKey: string; plugin: string; newMaster: string }
+  // #272: sourceOrigin identifies *which* column, same reasoning as sourcePlugin itself — no
+  // targetOrigin: the target is picked from a QuickPick over currently-loaded plugin names, which
+  // can't yet contain two same-name candidates (#34).
+  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE; formKey: string; sourcePlugin: string; sourceOrigin: string; targetPlugin: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE; formKey: string; plugin: string; origin: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER; formKey: string; plugin: string; origin: string; newMaster: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
   | { type: typeof EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED; requestId: string; functionName: string | null }
   | { type: typeof EXTENSION_TO_WEBVIEW.REVERT_GROUP_CONFIRMED; requestId: string; confirmed: boolean }
   | { type: typeof EXTENSION_TO_WEBVIEW.ADD_SCRIPT_NAME_PICKED; requestId: string; name: string | null }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_ADD; formKey: string; plugin: string; fieldName: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_REMOVE; formKey: string; plugin: string; fieldName: string; index: number }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP; formKey: string; plugin: string; fieldName: string; index: number }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; fieldName: string; index: number }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_ADD; formKey: string; plugin: string; origin: string; fieldName: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_REMOVE; formKey: string; plugin: string; origin: string; fieldName: string; index: number }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP; formKey: string; plugin: string; origin: string; fieldName: string; index: number }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; origin: string; fieldName: string; index: number }
   | { type: typeof EXTENSION_TO_WEBVIEW.CLIPBOARD_READ; requestId: string; value: string | null }
   | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED; requestId: string; value: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED; requestId: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_ADD_SCRIPT; formKey: string; plugin: string; name: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT; formKey: string; plugin: string; scriptName: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_REMOVE_PROPERTY; formKey: string; plugin: string; scriptName: string; propName: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY; formKey: string; plugin: string; scriptName: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_SET_SCRIPT_FLAGS; formKey: string; plugin: string; scriptName: string; flags: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS; formKey: string; plugin: string; scriptName: string; propName: string; flags: string };
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_ADD_SCRIPT; formKey: string; plugin: string; origin: string; name: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT; formKey: string; plugin: string; origin: string; scriptName: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_REMOVE_PROPERTY; formKey: string; plugin: string; origin: string; scriptName: string; propName: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY; formKey: string; plugin: string; origin: string; scriptName: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_SET_SCRIPT_FLAGS; formKey: string; plugin: string; origin: string; scriptName: string; flags: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS; formKey: string; plugin: string; origin: string; scriptName: string; propName: string; flags: string };
 
 // #208: the merged `data-vscode-context` object VS Code's webview preload forwards as a
 // `webview/context` command's sole argument — shared shape between the cell (recordUtils.ts'
@@ -327,6 +348,7 @@ export interface ColumnHeaderContext {
   webviewSection: 'columnHeader';
   formKey: string;
   plugin: string;
+  origin: string;
   immutable: boolean;
   isHeaderRecord: boolean;
   masters: string[];

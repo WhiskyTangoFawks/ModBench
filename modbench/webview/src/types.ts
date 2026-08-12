@@ -58,6 +58,66 @@ export interface FormKeyResolution {
 export type ConflictAll = 'OnlyOne' | 'NoConflict' | 'Override' | 'Conflict' | 'ConflictCritical';
 export type ConflictThis = 'OnlyOne' | 'Master' | 'IdenticalToMaster' | 'Override' | 'ConflictWins' | 'ConflictLoses';
 
+// #272 / ADR-0036: a compare-grid column is identified by (plugin, origin), not plugin alone —
+// two columns can share a filename once #34 lands shadowed copies. `ColumnKey` is a branded
+// string, minted only by `columnKey()` below, so every place that carries column identity
+// (focusedCell, collapsedColumns, immutableSet, overrideMap's key, the drag source,
+// addPropertyTarget — see DiffRow.tsx/RecordPanel.tsx) can be typed as `ColumnKey` rather than
+// `string`: comparing it against a bare `plugin` string becomes a compile error instead of a
+// silent same-filename collision. `Record<ColumnKey, T>`/`{ [k: string]: T }` still erase the
+// brand (a mapped type over a non-literal string collapses to an index signature) — the
+// per-column dictionaries on the wire (FieldDiff.values, VmadPropertyDiff.values, etc.) are not
+// type-protected by this and rely on the value actually being `ColumnKey.Of`'s output instead.
+export type ColumnKey = string & { readonly __col: unique symbol };
+
+// Mirrors the backend's ColumnKey.Of (MEditService.Core/Queries/ColumnKey.cs) exactly, so a key
+// minted here always agrees with one minted server-side for the same (plugin, origin) pair:
+// `|` delimiter (illegal in a Windows filename and an MO2 mod-folder name), and the
+// Data-directory origin is elided (a plugin resolved from the game's single Data/ is already
+// uniquely identified by its filename) so a plain-filename fixture never needs rekeying.
+//
+// Case: only the *Data-origin check* is case-folded here (`origin.toLowerCase() === 'data'`) —
+// plugin names compare OrdinalIgnoreCase in places and Windows filenames are case-insensitive, so
+// "Data"/"data"/"DATA" must all elide the same way regardless of which casing a given response
+// happens to use. The *returned* key otherwise preserves the caller's own casing verbatim (does
+// not lowercase plugin/origin into the output) — deliberately: pervasively folding the whole key
+// would mean the immutableSet/RecordSessionClient mismatch this guards against (two independently
+// -fetched responses disagreeing only in case) trades for making every ColumnKey unreadable and
+// disagreeing with the exact plugin string every existing caller already threads through
+// (onFocusCell/onEdit/onCellDragStart/onCellDrop's payloads, action broadcasts) for no case-
+// mismatch anyone has actually observed. The backend does not fold at all (see ColumnKey.Of's own
+// doc comment) — this key is only ever used as an opaque local lookup key against JSON the backend
+// produced, never sent back to it, so the two sides folding differently has no wire consequence.
+//
+// #272 review: `origin` accepts `null` as well as `undefined`, even though every hand type that
+// feeds this (RecordDetail.origin, PendingChange.origin, PluginInfo.origin — all `?: string`, not
+// `?: string | null`) claims it never will be. Investigated: it provably can't be, today — the
+// backend fields behind all four (`RecordDetail.Origin`/`CompareOverride.Origin`/
+// `PendingChange.Origin`/`PluginResponse.Origin`, MEditService.Core/Queries/Models.cs and
+// Session/PluginMetadata.cs) are non-nullable C# `string`s, always populated from
+// `PluginOrigin.DataDirectory` or an already-normalized value (`SessionEndpoints.cs`'s
+// `string.IsNullOrEmpty(p.Origin) ? PluginOrigin.DataDirectory : p.Origin` is the one place a
+// nullable origin — `ExplicitPlugin.Origin`, a *request* shape, never returned to a client —
+// exists at all, and it's resolved before touching any read-side DTO), and every one of those
+// origin columns is `NOT NULL` in DuckDB, read via an unguarded `reader.GetString(...)` that would
+// throw server-side rather than let a null through. The generated wire schema still types every
+// one of these fields `string | null` regardless (`api.ts`'s `origin?: string | null` — an
+// artifact of the OpenAPI generator not reading C# nullable-reference-type annotations, applied
+// uniformly to every string field on the wire, not something specific to origin), and
+// RecordSessionClient's `load()` casts that raw response straight into these hand types with an
+// unchecked `as` (its own comment: the generated per-operation types are "looser than this
+// webview's own hand-declared DTOs" by design — every call site already trusts a non-nullable
+// backend field stays non-null past that cast). `columnKey()` is the one place in the whole client
+// that actually dereferences `origin` (`.toLowerCase()`) rather than just storing/displaying it, so
+// it's the one call site where that trust being wrong would crash instead of silently doing
+// nothing — tolerating a literal `null` here the same as a missing field is cheap insurance against
+// the wire's own declared (if not actually reachable) shape, not a sign null is expected.
+export function columnKey(plugin: string, origin?: string | null): ColumnKey {
+  const resolvedOrigin = origin ?? 'Data';
+  const key = resolvedOrigin.toLowerCase() === 'data' ? plugin : `${plugin}|${resolvedOrigin}`;
+  return key as ColumnKey;
+}
+
 export interface RecordDetail {
   formKey: string;
   plugin: string;
@@ -70,6 +130,11 @@ export interface RecordDetail {
   // requires it up front. Optional (like pendingFields) so existing fixtures/callers don't break;
   // always populated by the real backend response.
   recordType?: string;
+  // #272 / ADR-0036: the mod folder (or reserved PluginOrigin value) this override was resolved
+  // from — parallel sibling to `plugin`, never parsed out of a ColumnKey (see columnKey()'s own
+  // doc comment). Optional so a pre-#272 fixture/direct construction still compiles; the real
+  // backend always populates it.
+  origin?: string;
 }
 
 export interface CompareOverride extends RecordDetail {
@@ -92,7 +157,7 @@ export type PathSegment =
 export interface FieldDiff {
   fieldName: string;
   values: Record<string, unknown>;
-  winnerPlugin: string;
+  winnerColumn: string;
   winnerValue: unknown;
   cellStates: Record<string, ConflictThis>;
   // Issue #114: this node's own bottom-up conflict classification (own cellStates folded with
@@ -151,7 +216,7 @@ export interface VmadPropertyDiff {
   kind: VmadKind;
   values: Record<string, unknown>;        // leaf; "FormKey [Alias]" for object; null when has children/absent
   types: Record<string, string>;          // per-plugin property Type (can differ → conflict)
-  winnerPlugin: string;
+  winnerColumn: string;
   cellStates: Record<string, ConflictThis>;
   children?: VmadPropertyDiff[] | null;    // struct members (by name) / array elements (by index)
   raw?: Record<string, unknown> | null;    // struct/structList only: per-plugin editable node subtree (atomic column)
@@ -164,7 +229,7 @@ export interface VmadPropertyDiff {
 export interface VmadScriptDiff {
   name: string;
   flags: Record<string, string | null>;   // per-plugin script flags; null = script absent in that plugin
-  winnerPlugin: string;
+  winnerColumn: string;
   cellStates: Record<string, ConflictThis>;
   properties: VmadPropertyDiff[];
 }
@@ -204,7 +269,7 @@ export interface ParsedCondition {
 export interface ConditionDiff {
   index: number;
   perPlugin: Record<string, ParsedCondition | null>;   // null = plugin lacks this condition row
-  winnerPlugin: string;
+  winnerColumn: string;
   cellStates: Record<string, ConflictThis>;            // whole-condition state (summary row)
   // Per-field two-axis states for the expanded view, keyed by field id ("function", "operator",
   // "gate", "runOn", "comparison", "param:{i}") — only the field that differs is colored.
@@ -256,6 +321,10 @@ export interface PendingChange {
   // from `resolutions` above, which is scoped to leaves inside newValue. Drives the Pending
   // Changes tree's `{RecordType} / {EditorID}` leaf label.
   recordResolution?: FormKeyResolution;
+  // #272 / ADR-0036: parallel sibling to `plugin`, mirroring RecordDetail.origin — a staged
+  // change is attributed to a column's compound identity end to end, not just its filename.
+  // Optional for the same pre-#272-fixture-compiles reason as RecordDetail.origin.
+  origin?: string;
 }
 
 export interface ReferenceValidationError {
