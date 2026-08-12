@@ -106,7 +106,10 @@ there is no separate load-session step.
    actual CTD-causing condition, not just "is the master present somewhere."
 7. As a user, I want that badge's message to make clear it's checking order, not just
    presence, so that I understand why it can disagree with the Mods tree's own (presence-only,
-   mod-granularity) missing-master badge on the same plugin.
+   mod-granularity) missing-master badge on the same plugin — and, once a session is running and
+   a richer session-derived verdict exists for the same master, I want the two merged into one
+   badge rather than shown as a second decoration that might contradict the first (see Missing-
+   master badge (order-aware) and session-derived master/load-failure decoration).
 8. As a user, I want to drag a plugin to a new position and have `plugins.txt` reordered
    immediately, so that fixing a load-order problem is a direct manipulation, not a form.
 9. As a user, I want to ctrl/shift-click to select multiple plugins and drag them together as
@@ -163,6 +166,12 @@ there is no separate load-session step.
     header is staged and reviewable like any other edit.
 25. As a user, I want to create and manage placed references (REFR/ACHR) inside a cell's
     persistent or temporary group, so that I can edit world placement spatially.
+26. As a user, I want a plugin whose master can't be resolved flagged and still fully browsable —
+    never deactivated, excluded or hidden — with the tooltip telling me whether the master is
+    missing entirely or is present but itself failed to load, so that I can inspect and fix the
+    problem instead of losing the plugin from the tree. If a plugin fails to open or parse
+    outright, I want its row to stay and show me why, rather than the load silently continuing
+    without it (#277 / [ADR-0037](../adr/0037-unresolvable-masters-are-indexed-and-flagged.md)).
 
 ## Implementation Decisions
 
@@ -171,7 +180,8 @@ there is no separate load-session step.
 - This spec covers the whole merged surface: the sidebar tree, checkbox, drag reorder, the
   order-aware missing-master badge, the name filter, Refresh, Reveal-in-Explorer, and —
   whenever a session is running — record browsing, the spatial hierarchy, the SQL record
-  filter, and record-authoring commands.
+  filter, record-authoring commands, and the session-derived master-issue and load-failure
+  decorations (#277 / ADR-0037).
 - **Auto-sort** (dependency-aware topological sort, LOOT parity) is **out of scope, deferred
   indefinitely** — a possible future initiative of its own, not scheduled. See Out of Scope.
 - **Cross-highlight with the Mods tree** (selecting a plugin highlights its providing mod(s)
@@ -323,10 +333,15 @@ there is no separate load-session step.
   template FormKey); a **placed reference** offers Copy as Override Into… and Delete (the same
   handlers as elsewhere). CELL nodes have no menu.
 
-### Missing-master badge (order-aware)
+### Missing-master badge (order-aware) and session-derived master/load-failure decoration
 
-Stronger than the Mods tree's badge, and deliberately so — this view has the one thing the
-Mods tree structurally lacks: an actual plugin sequence to check order against.
+Two independent signals can land on the same plugin row, from two different sources, and
+[ADR-0037](../adr/0037-unresolvable-masters-are-indexed-and-flagged.md) is what keeps them from
+reading as disagreeing decorations.
+
+**Order-aware (Mod Management, no session needed).** Stronger than the Mods tree's badge, and
+deliberately so — this view has the one thing the Mods tree structurally lacks: an actual plugin
+sequence to check order against.
 
 - For each plugin, read its declared masters via the existing `readMasters()`
   (`masterReader.ts`, TES4 header read — already used by `statusChecker.ts`).
@@ -341,6 +356,46 @@ Mods tree structurally lacks: an actual plugin sequence to check order against.
   audience understands presence-vs-order implicitly once the badge text says so.
 - Vanilla masters are ordinary rows in this list (per Row model above), so an order check
   against them works the same as for any mod-provided master — no special-casing needed.
+
+**Session-derived (Editing, once a session is running, #277 / ADR-0037).** Presence-only, never
+order-aware — Mutagen resolves a master by reading it from the plugin's own header, so it never
+needs that master positioned before the plugin, only present and loadable somewhere in the
+session. `GET /plugins`' `masterIssues` reports, per plugin, every one of its own declared masters
+that didn't resolve, classified two ways: `DirectlyMissing` (never part of the session at all —
+no `plugins.txt` line for it, or its file doesn't exist) renders "Missing master: `{name}`";
+`Unloadable` (it has a line and a file, but that file itself failed to open or parse) renders
+"Master `{name}` cannot be loaded". The declaring plugin is never deactivated, excluded or hidden
+for this — it stays indexed, browsable, and (if enabled) participating in winner computation
+exactly as it would without the flag; ADR-0037 is the deliberate, recorded divergence from
+xEdit's force-deactivate-and-cascade rule. There is no cascade: a plugin whose master merely has
+*its own* missing master is not itself flagged — `masterIssues` only ever describes a plugin's
+own declared masters, never a transitive fact about a master's masters.
+
+**Reconciliation (AC8): one decoration, not two that can disagree.** `PluginsTreeComposite`
+combines the two signals by master name. A master both signals name is reported once, in the
+session-derived wording — richer because it distinguishes directly-missing from unloadable, a
+distinction the order-aware check has no way to make from a plain-text read of `plugins.txt`. A
+master the order-aware check flags that the session-derived signal does *not* — present in the
+session, loaded successfully, but sequenced after this plugin's own line — is preserved and
+worded distinctly ("is not loaded before this plugin"), since that is a real CTD risk the
+session-derived signal structurally cannot see (order doesn't affect Mutagen's own resolution).
+When a session is not running, or the session-derived signal has nothing to say about a row, the
+order-aware badge renders exactly as it does today, untouched.
+
+**Neither signal, nor the reconciled decoration, nor the load-failure decoration below, ever
+touches the leading slot.** The checkbox/lock position is reserved for exactly one question —
+"can you change whether this loads?" (#276, see Row model above) — and every decoration in this
+section is icon, description and tooltip only.
+
+**Load-failure decoration (#277 / ADR-0037 AC7).** A plugin that fails to open or parse is
+skipped so the rest of the load order still loads (`GameSession.LoadFailures`), but its row is
+never dropped — Mod Management builds rows from `plugins.txt`, not from which plugins the session
+managed to index, so the row was already there. `PluginsTreeComposite` decorates it with its
+recorded failure reason ("Failed to load: `{reason}`") the same way it decorates a master issue;
+the row stays a leaf, since a plugin that never indexed has nothing to expand into. The existing
+session-load toast (`SessionController.loadExplicitSession`, one aggregated warning per load) is
+unchanged and is not duplicated by this decoration — the same failures reach both, from the same
+response, so there is exactly one notification and one persistent, per-row explanation of why.
 
 ### Selection & drag
 
@@ -435,9 +490,16 @@ overflow, then native **Collapse All** last.
 - **Missing-master order-check**: a pure function taking (a plugin's declared masters via
   `readMasters()`, the ordered plugin-name list, that plugin's own index) → a verdict. Lives
   alongside or extends `statusChecker.ts`.
+- **Session-derived master classification** (#277 / ADR-0037): `MasterResolution.Classify`
+  (`MEditService.Core/Queries/`), a pure function over data the session already has
+  (`GameSession.Plugins`, `GameSession.LoadFailures`) — no Mutagen re-read. Consulted once per
+  `GET /plugins` call and reported on `PluginResponse.MasterIssues`; distinguishes `DirectlyMissing`
+  from `Unloadable` and never cascades (only a plugin's own `Masters` list is consulted).
 - **`PluginListProvider`** (`TreeDataProvider`, `modmanager/`): rows only, a
   `TreeDragAndDropController` reusing the Mods tree's established controller shape, and the row
-  side of the Filter `InputBox` — none of this layer holds record-browsing logic.
+  side of the Filter `InputBox` — none of this layer holds record-browsing logic. Exposes
+  `orderIssueMastersOf(node)` (#277 AC8) so the composite can read the order-aware badge's flagged
+  master names structurally, without parsing rendered tooltip text.
 - **`PluginTreeProvider`** (`medit/`): a row's children — record types, records, spatial
   hierarchy — unchanged in ownership by the merge; its `getPluginChildren(name)` is the public
   entry point a row built elsewhere (by `PluginListProvider`) expands into, and it is unit-tested
@@ -445,7 +507,10 @@ overflow, then native **Collapse All** last.
 - **`PluginsTreeComposite`** (`modbench/src/`, composition root): joins the two above and does
   nothing else. Imports from neither bounded context; its whole knowledge of both domains is
   `pluginFileOf`, the boundary object `CONTEXT-MAP.md` already names. Enforced by
-  `src/test/contextBoundary.test.ts`, not by review.
+  `src/test/contextBoundary.test.ts`, not by review. `setSession` (#276/#277) also carries
+  `readOnlyFiles`, `masterIssues` and `loadFailures` — one hand-off, not several, since all of it
+  comes off the same session and changes together; the composite decorates icon/description/
+  tooltip only, never the leading slot.
 
 ## Testing Decisions
 
@@ -462,6 +527,14 @@ overflow, then native **Collapse All** last.
 - **Missing-master order-check unit tests**: master present-and-before → ok; master
   present-but-after → flagged; master absent → flagged; vanilla master present-and-before → ok
   (no special-casing needed, per Row model).
+- **Session-derived master classification unit tests** (`MEditService.Tests/Query/MasterResolutionTests.cs`):
+  master absent from both the loaded and failed sets → `DirectlyMissing`; master present in the
+  failed set → `Unloadable`; master successfully loaded → no issue; a plugin whose master's own
+  master is missing is not itself flagged (no cascade). The composite's reconciliation of this
+  with the order-aware badge, and its load-failure decoration, are covered by
+  `src/test/PluginsTreeComposite.test.ts` and `src/test/integration/extension.test.ts` — including
+  a case where the wire response omits `masterIssues` entirely, asserting the row renders
+  undecorated rather than throwing.
 - **Record-browsing unit seam**: `PluginTreeProvider` takes a `PluginRepository`, not an
   `ApiClient` — unit-tested without VS Code (Vitest, `npm run test:unit`). New data queries go
   on the `PluginRepository` interface and are implemented in `ApiPluginRepository`.
