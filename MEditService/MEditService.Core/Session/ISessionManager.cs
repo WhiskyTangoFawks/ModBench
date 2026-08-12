@@ -14,12 +14,14 @@ public interface ISessionManager
 
     /// <summary>
     /// Builds the single active session from an ordered list of scattered physical plugin paths
-    /// (an MO2-style instance's enabled plugins), with the game's implicit masters resolved from
-    /// <paramref name="gameDirectory"/>, then indexes it and computes winners. Replaces any prior
-    /// session (ADR-0015). Each plugin also carries the origin Mod Management resolved it from — a
-    /// mod folder name, or a reserved PluginOrigin value (#269 / ADR-0036).
+    /// (an MO2-style instance's plugins.txt lines, enabled and disabled alike), with the game's
+    /// implicit masters resolved from <paramref name="gameDirectory"/>, then indexes it and
+    /// computes winners. Replaces any prior session (ADR-0015). Each plugin also carries the
+    /// origin Mod Management resolved it from — a mod folder name, or a reserved PluginOrigin
+    /// value (#269 / ADR-0036) — and whether it participates in winner computation, i.e. its
+    /// plugins.txt `*` prefix (#270 / ADR-0035).
     /// </summary>
-    void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease);
+    void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> plugins, GameRelease gameRelease);
 
     void Unload();
 

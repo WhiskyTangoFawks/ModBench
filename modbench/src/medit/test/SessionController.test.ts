@@ -775,8 +775,8 @@ describe('SessionController.loadExplicitSession', () => {
   beforeEach(() => vi.resetAllMocks());
 
   const plugins = [
-    { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A' },
-    { name: 'Fallout4.esm', path: '/game/Data/Fallout4.esm', origin: 'Data' },
+    { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', participates: true },
+    { name: 'Fallout4.esm', path: '/game/Data/Fallout4.esm', origin: 'Data', participates: true },
   ];
 
   it('POSTs the ordered plugin list + dataFolder game directory and refreshes', async () => {
@@ -826,6 +826,35 @@ describe('SessionController.loadExplicitSession', () => {
 
     expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
     expect(deps.refreshTree).toHaveBeenCalledOnce();
+  });
+
+  // #270 / ADR-0035: every plugins.txt line is now sent, so a non-empty list no longer means the
+  // profile has anything enabled. A load order where nothing participates indexes fine and wins
+  // nothing — the same silently-empty conflict picture the zero-plugin warning exists to prevent.
+  it('warns when plugins were sent but none of them participate', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'loaded', failures: [] } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.loadExplicitSession(plugins.map(p => ({ ...p, participates: false })), '/game/Data');
+
+    expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
+  });
+
+  it('does not warn when at least one plugin participates', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'loaded', failures: [] } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.loadExplicitSession([{ ...plugins[0], participates: false }, plugins[1]], '/game/Data');
+
+    expect(deps.showWarning).not.toHaveBeenCalled();
   });
 
   it('shows an error and does not refresh when the load fails', async () => {

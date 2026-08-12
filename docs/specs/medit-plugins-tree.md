@@ -18,9 +18,23 @@ requires a spawned backend. It is distinct from the Mod-Management **Plugin List
 ([plugins.md](plugins.md)), which manages `plugins.txt` load order and runs without the
 backend. Both display as "Plugins" and are distinct views (`modbench.pluginTree` vs
 `modbench.pluginListTree`); since #268 they are simultaneously visible whenever a session is
-running, distinguished by this tree's runtime title ("mEdit — Plugins", #109), and stay fully
-distinct in code until [#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270) merges
-them ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)).
+running, distinguished by this tree's runtime title ("mEdit — Plugins", #109).
+
+**As of [#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270)** the Plugin load-order
+tree's rows expand into this tree's children: `PluginTreeProvider.getPluginChildren(name)` is
+public, and a composite at the composition root feeds it rows that Mod Management owns
+([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md), [plugins.md](plugins.md) §
+Row children). Everything below still describes this view, which is unchanged and still
+registered; the record-scope context menus and the Delete keybinding now apply to both views.
+Retiring this one is [#273](https://github.com/WhiskyTangoFawks/ModBench/issues/273), at which
+point the two specs merge into one.
+
+**Known spec drift (recorded, not introduced, by #270):** user stories 7 and 8 below — the
+**Conflicts node** and the **conflict badge** on record nodes — describe behaviour that does not
+exist. There is no Conflicts node in `PluginTreeProvider`, no conflict badge on any tree node, and
+no endpoint serving either. #270's acceptance criteria referred to both; parity with this tree was
+taken to be the operative requirement, so neither was built. Tracked for correction with the rest
+of the doc pass in [#285](https://github.com/WhiskyTangoFawks/ModBench/issues/285).
 
 ## Problem Statement
 
@@ -42,7 +56,8 @@ browses each plugin's records by type, spatially by worldspace and cell, and by 
 narrows on two independent axes: a plugin-name filter and a SQL record filter. Every path
 through it ends at the [Record editor panel](medit-record-editor.md).
 
-The session is constructed on entry from the active modlist's enabled plugins plus vanilla
+The session is constructed on entry from every line of the active profile's `plugins.txt` —
+  disabled entries included, carrying their participation (#270 / ADR-0035) — plus vanilla
 masters; there is no separate load-session step.
 
 ## User Stories

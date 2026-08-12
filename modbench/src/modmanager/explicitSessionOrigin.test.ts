@@ -32,6 +32,7 @@ describe('buildExplicitPluginsWithOrigin', () => {
     instanceRoot = await makeInstanceRoot();
     const dataFolder = join(instanceRoot, 'game', 'Data');
     const source = {
+      readPluginOrder: () => Promise.resolve(['Foo.esp']),
       readEnabledPlugins: () => Promise.resolve(['Foo.esp']),
       readModlist: () => Promise.resolve([]),
     };
@@ -39,13 +40,14 @@ describe('buildExplicitPluginsWithOrigin', () => {
 
     const result = await buildExplicitPluginsWithOrigin(source, instanceRoot, dataFolder, () => Promise.resolve(fakeIndex));
 
-    expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A' }]);
+    expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', participates: true }]);
   });
 
   it('a vanilla/DLC/CC plugin no mod provides records the reserved Data-directory origin', async () => {
     instanceRoot = await makeInstanceRoot();
     const dataFolder = join(instanceRoot, 'game', 'Data');
     const source = {
+      readPluginOrder: () => Promise.resolve(['Fallout4.esm']),
       readEnabledPlugins: () => Promise.resolve(['Fallout4.esm']),
       readModlist: () => Promise.resolve([]),
     };
@@ -53,7 +55,7 @@ describe('buildExplicitPluginsWithOrigin', () => {
 
     const result = await buildExplicitPluginsWithOrigin(source, instanceRoot, dataFolder, () => Promise.resolve(fakeIndex));
 
-    expect(result).toEqual([{ name: 'Fallout4.esm', path: join(dataFolder, 'Fallout4.esm'), origin: DATA_DIRECTORY_ORIGIN }]);
+    expect(result).toEqual([{ name: 'Fallout4.esm', path: join(dataFolder, 'Fallout4.esm'), origin: DATA_DIRECTORY_ORIGIN, participates: true }]);
   });
 
   it('a plugin resolved from MO2\'s overwrite folder records the reserved overwrite origin and wins the path over a mod-provided copy', async () => {
@@ -62,6 +64,7 @@ describe('buildExplicitPluginsWithOrigin', () => {
     await mkdir(join(instanceRoot, 'overwrite'));
     await writeFile(join(instanceRoot, 'overwrite', 'Foo.esp'), 'overwrite-copy');
     const source = {
+      readPluginOrder: () => Promise.resolve(['Foo.esp']),
       readEnabledPlugins: () => Promise.resolve(['Foo.esp']),
       readModlist: () => Promise.resolve([]),
     };
@@ -70,13 +73,14 @@ describe('buildExplicitPluginsWithOrigin', () => {
 
     const result = await buildExplicitPluginsWithOrigin(source, instanceRoot, dataFolder, () => Promise.resolve(fakeIndex));
 
-    expect(result).toEqual([{ name: 'Foo.esp', path: join(instanceRoot, 'overwrite', 'Foo.esp'), origin: OVERWRITE_ORIGIN }]);
+    expect(result).toEqual([{ name: 'Foo.esp', path: join(instanceRoot, 'overwrite', 'Foo.esp'), origin: OVERWRITE_ORIGIN, participates: true }]);
   });
 
   it('no overwrite folder present at all falls through to mod/Data resolution unaffected', async () => {
     instanceRoot = await makeInstanceRoot(); // overwrite/ never created
     const dataFolder = join(instanceRoot, 'game', 'Data');
     const source = {
+      readPluginOrder: () => Promise.resolve(['Foo.esp']),
       readEnabledPlugins: () => Promise.resolve(['Foo.esp']),
       readModlist: () => Promise.resolve([]),
     };
@@ -84,13 +88,14 @@ describe('buildExplicitPluginsWithOrigin', () => {
 
     const result = await buildExplicitPluginsWithOrigin(source, instanceRoot, dataFolder, () => Promise.resolve(fakeIndex));
 
-    expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A' }]);
+    expect(result).toEqual([{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', participates: true }]);
   });
 
   it('maps enabled plugins in load order to winner paths and origins (case-insensitive), falling back to Data for an unprovided plugin', async () => {
     instanceRoot = await makeInstanceRoot();
     const dataFolder = join(instanceRoot, 'game', 'Data');
     const source = {
+      readPluginOrder: () => Promise.resolve(['Foo.esp', 'Bar.esp', 'Fallout4.esm']),
       readEnabledPlugins: () => Promise.resolve(['Foo.esp', 'Bar.esp', 'Fallout4.esm']),
       readModlist: () => Promise.resolve([]),
     };
@@ -105,9 +110,9 @@ describe('buildExplicitPluginsWithOrigin', () => {
     const result = await buildExplicitPluginsWithOrigin(source, instanceRoot, dataFolder, () => Promise.resolve(fakeIndex));
 
     expect(result).toEqual([
-      { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A' },
-      { name: 'Bar.esp', path: '/mods/B/bar.esp', origin: 'B' },
-      { name: 'Fallout4.esm', path: join(dataFolder, 'Fallout4.esm'), origin: DATA_DIRECTORY_ORIGIN },
+      { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', participates: true },
+      { name: 'Bar.esp', path: '/mods/B/bar.esp', origin: 'B', participates: true },
+      { name: 'Fallout4.esm', path: join(dataFolder, 'Fallout4.esm'), origin: DATA_DIRECTORY_ORIGIN, participates: true },
     ]);
   });
 });

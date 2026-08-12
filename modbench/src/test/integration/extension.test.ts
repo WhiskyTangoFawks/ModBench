@@ -13,10 +13,14 @@ let ext: vscode.Extension<unknown> | undefined;
 // Mock backend state, controlled by the launch suite. Models the real backend:
 // GET /plugins fails with 503 "No session loaded" until POST /session/load-explicit
 // is received, then serves the loaded plugins (issue #75).
+// #270: the session holds every plugins.txt line, so a disabled one is present and browsable —
+// it just never participates in winner computation.
 const MOCK_PLUGINS = [
-  { name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data' },
-  { name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data' },
+  { name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', participates: true },
+  { name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data', participates: true },
+  { name: 'Other.esp', path: '/data/Other.esp', origin: 'Data', participates: false },
 ];
+const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let sessionLoaded = false;
 const requestLog: string[] = [];
 
@@ -57,6 +61,12 @@ function createMockBackend(): http.Server {
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(MOCK_PLUGINS));
+      return;
+    }
+    // #270: a plugin row's children come from here once a session is running.
+    if (/^\/plugins\/[^/]+\/record-types$/.test(url)) {
+      res.writeHead(sessionLoaded ? 200 : 503, { 'Content-Type': 'application/json' });
+      res.end(sessionLoaded ? JSON.stringify(MOCK_RECORD_TYPES) : 'No session loaded.');
       return;
     }
     res.writeHead(404);
@@ -636,5 +646,132 @@ describe('Loadout stays visible through an editing session (#268)', () => {
     );
 
     await vscode.commands.executeCommand('modbench.closeMedit');
+  });
+});
+
+// ── #270: the Plugin load-order rows expand into records ──────────────────────
+// The merged Plugins tree, exercised through the same seam the view uses: the composite's own
+// getChildren/getTreeItem. Chevrons appearing across the tree are the whole "editing is available
+// now" signal (ADR-0035), so that transition is what these assert — with no session the rows are
+// leaves, a session makes them collapsible without disturbing the load order, and closing it puts
+// them back.
+
+interface PluginsTreeLike {
+  getChildren(element?: unknown): Promise<unknown[]>;
+  getTreeItem(element: unknown): vscode.TreeItem;
+}
+
+/** A row's plugin file, however the row spells it: plugins.txt lines carry `plugin.name`, the
+ *  game's implicitly-loaded masters carry `name`. The tree renders both — the implicit rows come
+ *  from the resolved Data folder, so how many there are depends on the fixture instance. */
+const rowName = (row: unknown): string | undefined =>
+  (row as PluginListNodeLike).plugin?.name ?? (row as { name?: string }).name;
+const findRow = (rows: unknown[], name: string): unknown => {
+  const row = rows.find((r) => rowName(r) === name);
+  assert.ok(row, `expected a row for ${name}`);
+  return row;
+};
+
+describe('Plugin load-order rows expand into records (#270)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
+  const pluginListProviderOf = () =>
+    (ext?.exports as { pluginListProvider?: PluginListProviderLike } | undefined)?.pluginListProvider;
+  let gameDir = '';
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-expand-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\nOther.esp\n');
+    pluginListProviderOf()?.invalidate();
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.commands.executeCommand('modbench.closeMedit');
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '');
+    fs.rmSync(gameDir, { recursive: true, force: true });
+  });
+
+  it('exposes the merged Plugins tree from activate()', () => {
+    assert.ok(pluginsTree(), 'activate() should return { pluginsTree } for the open workspace');
+  });
+
+  it('renders the load order as leaves with no session', async () => {
+    const tree = pluginsTree()!;
+    const rows = await tree.getChildren();
+
+    assert.deepStrictEqual(
+      rows.map(rowName).filter((n) => n === 'TestMod.esp' || n === 'Other.esp'), ['TestMod.esp', 'Other.esp'],
+      'the rows include both plugins.txt lines, the disabled one too, in file order',
+    );
+    for (const row of rows) {
+      assert.strictEqual(
+        tree.getTreeItem(row).collapsibleState, vscode.TreeItemCollapsibleState.None,
+        'with no session every row is a leaf',
+      );
+    }
+  });
+
+  it('makes rows collapsible when a session starts, without reordering the load order', async () => {
+    const tree = pluginsTree()!;
+    const before = await tree.getChildren();
+
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+
+    const after = await tree.getChildren();
+    assert.deepStrictEqual(
+      after.map(rowName), before.map(rowName),
+      'starting a session must not rebuild or reorder the rows',
+    );
+    assert.strictEqual(
+      tree.getTreeItem(findRow(after, 'TestMod.esp')).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
+      'a row whose plugin is in the session gains a chevron',
+    );
+  });
+
+  it('expands a plugin row into its record types', async () => {
+    const tree = pluginsTree()!;
+    const testMod = findRow(await tree.getChildren(), 'TestMod.esp');
+
+    const children = await tree.getChildren(testMod);
+
+    assert.deepStrictEqual(
+      children.map((c) => (c as vscode.TreeItem).label), ['Weapon'],
+      'expanding a row shows the record types the backend reports, with xEdit display names',
+    );
+  });
+
+  it('a disabled plugin browses like any other', async () => {
+    const tree = pluginsTree()!;
+    const other = findRow(await tree.getChildren(), 'Other.esp'); // the prefix-less plugins.txt line
+
+    assert.strictEqual(
+      tree.getTreeItem(other).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
+      'a disabled plugin is indexed and browsable, just non-participating',
+    );
+    assert.deepStrictEqual((await tree.getChildren(other)).map((c) => (c as vscode.TreeItem).label), ['Weapon']);
+  });
+
+  it('returns every row to a leaf when the session closes, keeping the load order', async () => {
+    const tree = pluginsTree()!;
+
+    await vscode.commands.executeCommand('modbench.closeMedit');
+
+    const rows = await tree.getChildren();
+    assert.deepStrictEqual(
+      rows.map(rowName).filter((n) => n === 'TestMod.esp' || n === 'Other.esp'), ['TestMod.esp', 'Other.esp'],
+      'closing the session leaves the load order untouched',
+    );
+    for (const row of rows) {
+      assert.strictEqual(tree.getTreeItem(row).collapsibleState, vscode.TreeItemCollapsibleState.None);
+    }
   });
 });

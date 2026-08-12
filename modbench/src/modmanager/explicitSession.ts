@@ -1,9 +1,10 @@
-// Assembles the ordered { name, path, origin } list for the backend's `load-explicit`
-// session (POST /session/load-explicit) from the active profile's enabled
-// plugins. Plugin *order* comes from plugins.txt; each name resolves to its
-// winning physical path via the MO2-priority FileConflictIndex, falling back to
-// the game's Data folder for a base-game plugin no mod provides. Vanilla masters
-// are NOT listed here — the backend prepends them from the game directory.
+// Assembles the ordered { name, path, origin, participates } list for the backend's
+// `load-explicit` session (POST /session/load-explicit) from the active profile's
+// plugins.txt — every line, enabled and disabled alike (#270 / ADR-0035). Plugin
+// *order* comes from plugins.txt; each name resolves to its winning physical path
+// via the MO2-priority FileConflictIndex, falling back to the game's Data folder for
+// a base-game plugin no mod provides. Vanilla masters are NOT listed here — the
+// backend prepends them from the game directory.
 
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -22,6 +23,10 @@ export interface ExplicitPlugin {
   path: string;
   /** The mod folder that provided this plugin, or a reserved origin value above (#269 / ADR-0036). */
   origin: string;
+  /** The plugins.txt `*` prefix: whether this plugin loads in the game and so competes for winner
+   *  (#270 / ADR-0035). A non-participating plugin is still indexed and fully browsable — it just
+   *  can never win a FormKey or take part in conflict classification. */
+  participates: boolean;
 }
 
 /** Resolve each plugin name to its winning physical path: the MO2-priority
@@ -57,13 +62,15 @@ async function overwritePluginFiles(instanceRoot: string): Promise<Map<string, s
   }
 }
 
-type Source = Pick<IModlistSource, 'readEnabledPlugins' | 'readModlist'>;
+type Source = Pick<IModlistSource, 'readPluginOrder' | 'readEnabledPlugins' | 'readModlist'>;
 type BuildIndex = (
   entries: Awaited<ReturnType<IModlistSource['readModlist']>>,
   instanceRoot: string,
 ) => Promise<FileConflictIndex>;
 
-/** Builds the { name, path, origin } list for the backend's `load-explicit` session — each plugin
+/** Builds the { name, path, origin, participates } list for the backend's `load-explicit` session.
+ *  Every plugins.txt line is sent, disabled ones included (#270 / ADR-0035) — the `*` prefix
+ *  becomes each plugin's participation rather than deciding whether it is sent at all. Each plugin
  *  also carries the origin Mod Management resolved it from (#269 / ADR-0036). Sole caller is the
  *  "enter editing" call site in extension.ts. */
 export async function buildExplicitPluginsWithOrigin(
@@ -72,7 +79,8 @@ export async function buildExplicitPluginsWithOrigin(
   dataFolder: string,
   buildIndex: BuildIndex = buildFileConflictIndex,
 ): Promise<ExplicitPlugin[]> {
-  const [names, index, overwriteFiles] = await Promise.all([
+  const [names, enabled, index, overwriteFiles] = await Promise.all([
+    source.readPluginOrder(),
     source.readEnabledPlugins(),
     source.readModlist().then((entries) => buildIndex(entries, instanceRoot)),
     overwritePluginFiles(instanceRoot),
@@ -80,16 +88,21 @@ export async function buildExplicitPluginsWithOrigin(
 
   const pathByName = resolvePluginPaths(names, index, dataFolder);
   const winnerModByName = rootLevelWinnerMods(index);
+  // Case-folded, like every other name comparison here: plugins.txt casing is not authoritative,
+  // and a case difference must not read as "disabled".
+  const participatingNames = new Set(enabled.map((n) => n.toLowerCase()));
 
   return names.map((name) => {
+    const participates = participatingNames.has(name.toLowerCase());
     const overwriteFile = overwriteFiles.get(foldPath(name));
     if (overwriteFile !== undefined) {
-      return { name, path: join(instanceRoot, 'overwrite', overwriteFile), origin: OVERWRITE_ORIGIN };
+      return { name, path: join(instanceRoot, 'overwrite', overwriteFile), origin: OVERWRITE_ORIGIN, participates };
     }
     return {
       name,
       path: pathByName.get(name)!,
       origin: winnerModByName.get(name.toLowerCase()) ?? DATA_DIRECTORY_ORIGIN,
+      participates,
     };
   });
 }

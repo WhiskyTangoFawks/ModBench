@@ -44,23 +44,25 @@ public sealed class GameSession : IGameSession
     /// <paramref name="gameDirectory"/>. Implicit masters are ordered first and treated as immutable;
     /// each explicit entry whose name is not an implicit master follows in the given order. Each
     /// explicit plugin also carries the origin Mod Management resolved it from — a mod folder name,
-    /// or a PluginOrigin reserved value (#269 / ADR-0036).
+    /// or a PluginOrigin reserved value (#269 / ADR-0036) — and whether it participates in winner
+    /// computation, i.e. its plugins.txt `*` prefix (#270 / ADR-0035).
     /// </summary>
     public static GameSession LoadExplicit(
-        string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease, ILogger? logger = null)
+        string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> plugins, GameRelease gameRelease, ILogger? logger = null)
     {
         var implicitKeys = ResolveImplicitKeys(gameDirectory, gameRelease);
 
-        // LoadExplicit takes an already-enabled list (an MO2 profile's active plugins) — there is
-        // no plugins.txt here to carry a disabled entry, so every resolved plugin participates.
-        // Implicit masters are always resolved from the game directory itself, never a mod, so
-        // their origin is always the reserved Data-directory value regardless of what the caller
-        // supplied for the explicit list.
+        // The explicit list is every plugins.txt line, enabled and disabled alike (#270 /
+        // ADR-0035) — the caller states participation per plugin, because the `*` prefix is the
+        // only thing that carries it and there is no plugins.txt on this path to read it from.
+        // Implicit masters are forced on: they have no line to be disabled by. They are also
+        // always resolved from the game directory itself, never a mod, so their origin is always
+        // the reserved Data-directory value regardless of what the caller supplied.
         var ordered = implicitKeys
             .Select(name => new ResolvedPlugin(name, Path.Combine(gameDirectory, name), IsImmutable: true, Participates: true, Origin: PluginOrigin.DataDirectory))
             .Concat(plugins
                 .Where(p => !implicitKeys.Contains(p.Name))
-                .Select(p => new ResolvedPlugin(p.Name, p.Path, IsImmutable: false, Participates: true, Origin: p.Origin)))
+                .Select(p => new ResolvedPlugin(p.Name, p.Path, IsImmutable: false, Participates: p.Participates, Origin: p.Origin)))
             .ToList();
 
         return new GameSession(gameDirectory, gameRelease, ordered, logger);

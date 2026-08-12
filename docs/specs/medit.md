@@ -52,7 +52,8 @@ session over the active loadout:
 | **Status bar item** | Backend/session state | This document |
 
 **Launch mEdit** (from the Loadout header) enters editing mode, spawns the backend, and builds
-the session from the active modlist's enabled plugins plus vanilla masters (`load-explicit`);
+the session from every line of the active profile's `plugins.txt` — disabled entries included,
+carrying their participation (#270 / ADR-0035) — plus vanilla masters (`load-explicit`);
 **Close mEdit** exits it and tears the session down. Since #268, entering editing mode adds the
 mEdit surfaces *alongside* the Mods tree, Plugin load order and Downloads rather than replacing
 them — the Loadout stays visible while a session is running. Editing writes records straight to

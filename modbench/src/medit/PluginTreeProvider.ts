@@ -242,7 +242,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   async getChildren(element?: PluginTreeNode): Promise<PluginTreeNode[]> {
     if (!element) return this.fetchPlugins();
-    if (element instanceof PluginNode) return this.fetchPluginChildren(element);
+    if (element instanceof PluginNode) return this.getPluginChildren(element.plugin.name);
     if (element instanceof RecordTypeNode) return this.fetchRecords(element);
     return this.getSpatialChildren(element);
   }
@@ -315,21 +315,26 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     }
   }
 
-  private async fetchPluginChildren(node: PluginNode): Promise<PluginTreeNode[]> {
+  /** A plugin's children — its spatial group nodes and flat record-type nodes — keyed by filename
+   *  rather than by a node this provider built. Public because the merged Plugins tree (#270 /
+   *  ADR-0035) expands rows built elsewhere, by a composite at the composition root that knows a
+   *  plugin filename and nothing else. `getChildren` routes its own PluginNode here too, so both
+   *  trees browse through exactly one implementation. */
+  async getPluginChildren(pluginName: string): Promise<PluginTreeNode[]> {
     try {
-      const types = await this.repository.getRecordTypes(node.plugin.name);
+      const types = await this.repository.getRecordTypes(pluginName);
       const typesPresent = new Set(types.map(t => t.type));
       const nodes: PluginTreeNode[] = [];
       for (const [type, makeNode] of Object.entries(SPATIAL_NODE_FACTORIES)) {
-        if (typesPresent.has(type)) nodes.push(makeNode(node.plugin.name));
+        if (typesPresent.has(type)) nodes.push(makeNode(pluginName));
       }
       for (const t of types) {
-        if (!SPATIAL_TYPES.has(t.type)) nodes.push(new RecordTypeNode(node.plugin.name, t.type, t.count, t.displayName));
+        if (!SPATIAL_TYPES.has(t.type)) nodes.push(new RecordTypeNode(pluginName, t.type, t.count, t.displayName));
       }
       return nodes;
     } catch (e) {
       const message = this.err(e);
-      this.log(`[PluginTreeProvider] fetchPluginChildren(${node.plugin.name}) failed: ${message}`);
+      this.log(`[PluginTreeProvider] getPluginChildren(${pluginName}) failed: ${message}`);
       return [new ErrorNode(message)];
     }
   }

@@ -191,7 +191,12 @@ public record SessionLoadExplicitRequest(
 // file, or one of the reserved values (PluginOrigin.DataDirectory / MO2's overwrite). Required —
 // the one production caller (modbench/src/modmanager/explicitSession.ts) already resolves it, so
 // there is nothing left to default (#275).
-public record ExplicitPlugin(string Name, string Path, string Origin);
+// Participates (#270 / ADR-0035): the plugins.txt `*` prefix — whether this plugin loads in the
+// game and so competes for winner. Nullable purely to make an omitted field detectable: a plain
+// bool would bind a missing property to false, quietly making every plugin non-participating, so
+// nothing would win any FormKey and the conflict picture would be empty but well-formed. The
+// endpoint rejects null (400) rather than choosing a value on the caller's behalf.
+public record ExplicitPlugin(string Name, string Path, string Origin, bool? Participates);
 
 public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId);
 

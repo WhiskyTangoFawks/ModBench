@@ -58,7 +58,7 @@ public sealed class SessionApiTests(LoadedApiFixture<TestPluginFixture> loaded) 
         var response = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
             gameDirectory = fx.GameDirectory,
-            plugins = fx.Plugins.Select(p => new { name = p.Name, path = p.Path, origin = p.Origin }),
+            plugins = fx.Plugins.Select(p => new { name = p.Name, path = p.Path, origin = p.Origin, participates = p.Participates }),
             gameRelease = "Fallout4",
         });
 
@@ -77,8 +77,8 @@ public sealed class SessionApiTests(LoadedApiFixture<TestPluginFixture> loaded) 
         var badPath = System.IO.Path.Combine(fx.Root, "Bad.esp");
         await System.IO.File.WriteAllTextAsync(badPath, "this is not a plugin");
 
-        var plugins = fx.Plugins.Append((Name: "Bad.esp", Path: badPath, Origin: PluginOrigin.DataDirectory))
-            .Select(p => new { name = p.Name, path = p.Path, origin = p.Origin });
+        var plugins = fx.Plugins.Append((Name: "Bad.esp", Path: badPath, Origin: PluginOrigin.DataDirectory, Participates: true))
+            .Select(p => new { name = p.Name, path = p.Path, origin = p.Origin, participates = p.Participates });
 
         var response = await _client.PostAsJsonAsync("/session/load-explicit", new
         {

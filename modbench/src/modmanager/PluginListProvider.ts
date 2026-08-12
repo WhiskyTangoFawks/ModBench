@@ -89,6 +89,21 @@ export class EmptyNode extends vscode.TreeItem {
 
 export type PluginListNode = PluginNode | ImplicitMasterNode | ErrorNode | EmptyNode;
 
+/** The `kind`s this provider produces — see `handleDrop`, which has to tell its own rows from a
+ *  row some other provider contributed to the same view (#270). */
+const OWN_ROW_KINDS = new Set<string>(['plugin', 'implicitMaster', 'error', 'empty']);
+
+/** The plugin file a row stands for, or undefined when the row stands for no file (the error and
+ *  empty-state rows). #270: this is what the merged Plugins tree's composite asks a row for — the
+ *  boundary object CONTEXT-MAP.md names, and the only thing about these rows anything outside
+ *  Mod Management needs to know. Kept here, next to the node classes, so no caller has to
+ *  destructure them. */
+export function pluginFileOf(node: PluginListNode): string | undefined {
+  if (node.kind === 'plugin') return node.plugin.name;
+  if (node.kind === 'implicitMaster') return node.name;
+  return undefined;
+}
+
 /** Sidebar Plugin List (Loadout) tree: one row per plugins.txt line, in Plugin
  *  load order (top = loads first). Toggling a row's checkbox writes plugins.txt
  *  immediately via `setPluginEnabled`. */
@@ -312,8 +327,8 @@ export class PluginListProvider
     if (!payload) return;
     const { names } = payload.value as { names: string[] };
     if (names.length === 0) return;
-    const targetName = target?.kind === 'plugin' ? target.plugin.name : undefined;
-    const toIndex = target?.kind === 'implicitMaster' ? 0 : dropIndexForMove(this.lastOrder, names, targetName);
+    const toIndex = this.dropIndexFor(target, names);
+    if (toIndex === undefined) return;
     try {
       await this.source.reorderPlugins(names, toIndex);
     } catch (e) {
@@ -324,5 +339,21 @@ export class PluginListProvider
       this.reporter?.report('error', 'Failed to reorder plugins.', message);
     }
     this.invalidate();
+  }
+
+  /** The plugins.txt index the dragged block should land at, or undefined when the drop is not a
+   *  position at all and must be refused.
+   *
+   *  #270 makes that distinction load-bearing. This view's rows have children now, so VS Code can
+   *  hand the drop a row this controller never produced, and "not one of my rows" is not the same
+   *  as "past the last row" — the latter legitimately means the end of the load order, so letting
+   *  a foreign row fall through to it would silently move the dragged plugins to the bottom of
+   *  plugins.txt. The provider stays ignorant of what those other rows *are*; it only knows which
+   *  kinds are its own. */
+  private dropIndexFor(target: PluginListNode | undefined, names: string[]): number | undefined {
+    if (target !== undefined && !OWN_ROW_KINDS.has(target.kind)) return undefined;
+    if (target?.kind === 'implicitMaster') return 0;
+    const targetName = target?.kind === 'plugin' ? target.plugin.name : undefined;
+    return dropIndexForMove(this.lastOrder, names, targetName);
   }
 }

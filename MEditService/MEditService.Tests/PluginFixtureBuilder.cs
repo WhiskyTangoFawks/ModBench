@@ -50,7 +50,10 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
     /// Builds the plugins into <em>scattered</em> physical locations to mirror an MO2 instance:
     /// implicit masters (e.g. Fallout4.esm) land in a single game directory; every other plugin
     /// gets its own folder. Returns the game directory plus the ordered explicit
-    /// <c>{Name, Path}</c> list (non-implicit plugins, in declared order) for <c>LoadExplicit</c>.
+    /// <c>{Name, Path, Origin, Participates}</c> list (non-implicit plugins, in declared order)
+    /// for <c>LoadExplicit</c>. <c>WithPlugin(enabled: false)</c> — the same flag that writes a
+    /// prefix-less plugins.txt line in <see cref="Build"/> — becomes <c>Participates: false</c>
+    /// here, since the explicit list is what carries the `*` prefix on this path (#270).
     /// </summary>
     public ScatteredFixtureData BuildScattered()
     {
@@ -63,9 +66,9 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         Directory.CreateDirectory(gameDir);
 
         var builtMods = new List<Fallout4Mod>();
-        var explicitPlugins = new List<(string Name, string Path, string Origin)>();
+        var explicitPlugins = new List<(string Name, string Path, string Origin, bool Participates)>();
         var i = 0;
-        foreach (var (name, _, _, configure, writeParams, origin) in _plugins)
+        foreach (var (name, _, enabled, configure, writeParams, origin) in _plugins)
         {
             var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
             configure?.Invoke(mod, builtMods.AsReadOnly());
@@ -80,7 +83,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
                 var folder = Path.Combine(root, $"mod-{i:D2}-{Path.GetFileNameWithoutExtension(name)}");
                 Directory.CreateDirectory(folder);
                 targetPath = Path.Combine(folder, name);
-                explicitPlugins.Add((name, targetPath, origin));
+                explicitPlugins.Add((name, targetPath, origin, enabled));
             }
 
             mod.WriteToBinary(targetPath, writeParams);
@@ -110,7 +113,7 @@ public interface IApiPluginFixture<TSelf> : IDisposable where TSelf : IApiPlugin
 }
 
 public sealed record ScatteredFixtureData(
-    string Root, string GameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> Plugins) : IDisposable
+    string Root, string GameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> Plugins) : IDisposable
 {
     public void Dispose() => Directory.Delete(Root, recursive: true);
 }

@@ -62,8 +62,8 @@ public sealed class SessionManager(
     }
 
     // #269 / ADR-0036: real (MO2-backed) session loads carry each plugin's origin through to
-    // GameSession.
-    public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease) =>
+    // GameSession — and since #270 / ADR-0035, its participation too.
+    public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> plugins, GameRelease gameRelease) =>
         LoadExplicitCore(gameDirectory, plugins.Count, gameRelease,
             logger => GameSession.LoadExplicit(gameDirectory, plugins, gameRelease, logger));
 

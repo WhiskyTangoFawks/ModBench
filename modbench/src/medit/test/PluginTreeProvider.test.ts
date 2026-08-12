@@ -652,6 +652,48 @@ describe('PluginTreeProvider fetch failures', () => {
     expect(children[0].tooltip).toContain('boom');
   });
 
+  // #270: the merged Plugins tree's rows are Mod Management's, not this provider's, so it needs a
+  // way in that starts from a plugin filename rather than from a PluginNode this provider built.
+  it('getPluginChildren: builds a plugin\'s children from its filename alone', async () => {
+    const repo = makeRepository({
+      recordTypes: [
+        { type: 'wrld', count: 1 },
+        { type: 'cell', count: 4 },
+        { type: 'refr', count: 99 },
+        { type: 'WEAP', count: 5 },
+      ],
+    });
+    const provider = new PluginTreeProvider(repo);
+
+    const children = await provider.getPluginChildren('Plugin0.esp');
+
+    expect(repo.getRecordTypes).toHaveBeenCalledWith('Plugin0.esp');
+    expect(children.map(c => c.label)).toEqual(['Worldspaces', 'cell - Interior', 'WEAP']);
+  });
+
+  // #270 AC4: a record reached by expanding a load-order row opens the editor the same way one
+  // reached through this tree does — it is the same node, carrying its own command, so the
+  // merged tree inherits the behaviour rather than re-implementing it.
+  it('getPluginChildren: records below it carry the open-editor command', async () => {
+    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
+    const provider = new PluginTreeProvider(repo);
+    const [recordType] = await provider.getPluginChildren('Plugin0.esp');
+
+    const [record] = await provider.getChildren(recordType);
+
+    expect((record as RecordNode).command).toMatchObject({ command: 'modbench.openEditor' });
+  });
+
+  it('getPluginChildren: renders an error node when getRecordTypes fails', async () => {
+    const repo = { ...makeRepository(), getRecordTypes: vi.fn().mockRejectedValue(new Error('boom')) };
+    const provider = new PluginTreeProvider(repo);
+
+    const children = await provider.getPluginChildren('Plugin0.esp');
+
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ErrorNode);
+  });
+
   it('fetchPluginChildren: renders an error node when getRecordTypes fails', async () => {
     const repo = { ...makeRepository(), getRecordTypes: vi.fn().mockRejectedValue(new Error('boom')) };
     const provider = new PluginTreeProvider(repo);
