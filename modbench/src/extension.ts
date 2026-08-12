@@ -36,7 +36,7 @@ import { PluginListProvider, type PluginListNode } from './modmanager/PluginList
 import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './modmanager/gameDirectory';
 import { deploy, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
-import { buildExplicitPlugins } from './modmanager/explicitSession';
+import { buildExplicitPluginsWithOrigin } from './modmanager/explicitSession';
 import { detectRoot } from './modmanager/install/detectRoot';
 import { extractArchive } from './modmanager/install/extractArchive';
 import {
@@ -1339,7 +1339,7 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
       outputChannel.info('[extension] entering editing: starting backend and building plugin list');
       const [, plugins] = await Promise.all([
         backendManager!.start(),
-        buildExplicitPlugins(modlistSource, instanceRoot, gd.dataFolder),
+        buildExplicitPluginsWithOrigin(modlistSource, instanceRoot, gd.dataFolder),
       ]);
       if (!backendManager!.isHealthy) {
         exitToLoadout(); // tear down the half-started backend and reset the view

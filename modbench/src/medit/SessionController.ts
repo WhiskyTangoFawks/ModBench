@@ -48,11 +48,14 @@ export class SessionController {
     this.deps.refreshTree();
   }
 
-  /** Load the editing session from an ordered { name, path } list built from the
+  /** Load the editing session from an ordered { name, path, origin } list built from the
    *  active modlist (POST /session/load-explicit). `gameDirectory` must be the
-   *  resolved Data folder — the backend prepends implicit masters from it. */
+   *  resolved Data folder — the backend prepends implicit masters from it. `origin` is
+   *  optional here (#269 / ADR-0036) — a caller that doesn't resolve it (or a pre-existing
+   *  test fixture) still type-checks; the backend defaults a missing origin to the reserved
+   *  Data-directory value rather than reject the request. */
   async loadExplicitSession(
-    plugins: { name: string; path: string }[],
+    plugins: { name: string; path: string; origin?: string }[],
     gameDirectory: string,
     gameRelease = 'Fallout4',
   ): Promise<void> {

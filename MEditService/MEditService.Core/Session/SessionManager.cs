@@ -61,10 +61,22 @@ public sealed class SessionManager(
         }
     }
 
-    public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path)> plugins, GameRelease gameRelease)
+    public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path)> plugins, GameRelease gameRelease) =>
+        LoadExplicitCore(gameDirectory, plugins.Count, gameRelease,
+            logger => GameSession.LoadExplicit(gameDirectory, plugins, gameRelease, logger));
+
+    // #269 / ADR-0036: real (MO2-backed) session loads go through this overload — SessionManager's
+    // own override of the ISessionManager default interface method — carrying each plugin's origin
+    // through to GameSession. Shares LoadExplicitCore with the origin-less overload above so the
+    // pipeline logging (asserted verbatim by SessionLoadLoggingTests) doesn't drift between them.
+    public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease) =>
+        LoadExplicitCore(gameDirectory, plugins.Count, gameRelease,
+            logger => GameSession.LoadExplicit(gameDirectory, plugins, gameRelease, logger));
+
+    private void LoadExplicitCore(string gameDirectory, int pluginCount, GameRelease gameRelease, Func<ILogger?, GameSession> buildSession)
     {
         _logger.LogDebug("Explicit session load starting. GameDir={GameDir} Plugins={Count} Game={Game}",
-            gameDirectory, plugins.Count, gameRelease);
+            gameDirectory, pluginCount, gameRelease);
 
         try
         {
@@ -73,7 +85,7 @@ public sealed class SessionManager(
                 DisposeCurrentSession();
 
                 _logger.LogDebug("Creating explicit game session from scattered paths");
-                var session = GameSession.LoadExplicit(gameDirectory, plugins, gameRelease, _logger);
+                var session = buildSession(_logger);
                 // No plugins.txt for an explicit session; the game directory is the implicit-master root.
                 try { IndexAndStore(session, gameRelease, gameDirectory, pluginsTxtPath: null); }
                 catch { session.Dispose(); throw; }

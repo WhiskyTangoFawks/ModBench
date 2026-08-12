@@ -96,7 +96,12 @@ public static class SessionEndpoints
 
         try
         {
-            var explicitPlugins = req.Plugins.Select(p => (p.Name, p.Path)).ToList();
+            // #269 / ADR-0036: Origin is Mod Management's to resolve; a missing/empty value (an
+            // older client, or a base-game plugin no mod provides) defaults to the reserved
+            // Data-directory origin rather than reaching GameSession as null.
+            var explicitPlugins = req.Plugins
+                .Select(p => (p.Name, p.Path, Origin: string.IsNullOrEmpty(p.Origin) ? PluginOrigin.DataDirectory : p.Origin))
+                .ToList();
             sessionManager.LoadExplicit(req.GameDirectory, explicitPlugins, gameRelease);
             return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? []));
         }

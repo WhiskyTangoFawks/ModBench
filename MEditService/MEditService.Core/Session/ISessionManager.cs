@@ -20,6 +20,18 @@ public interface ISessionManager
     /// </summary>
     void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path)> plugins, GameRelease gameRelease);
 
+    /// <summary>
+    /// Same contract as the (Name, Path) overload above, but each plugin also carries the origin
+    /// Mod Management resolved it from — a mod folder name, or a reserved PluginOrigin value
+    /// (#269 / ADR-0036). Declared as a default interface method rather than a plain abstract
+    /// member on purpose: adding a required interface member would force every ISessionManager
+    /// test double across the suite (none of which exercise origin) to implement it too. The
+    /// default just forwards to the origin-less overload above, dropping origin, so those fakes
+    /// keep compiling unmodified; SessionManager overrides this one with the real implementation.
+    /// </summary>
+    void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease) =>
+        LoadExplicit(gameDirectory, plugins.Select(p => (p.Name, p.Path)).ToList(), gameRelease);
+
     void Unload();
 
     /// <summary>
