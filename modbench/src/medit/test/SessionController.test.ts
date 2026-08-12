@@ -30,6 +30,7 @@ function makePlugins(count: number): PluginMetadata[] {
     recordCount: 10,
     isImmutable: false,
     origin: 'Data',
+    masterIssues: [],
   }));
 }
 
@@ -812,6 +813,37 @@ describe('SessionController.loadExplicitSession', () => {
 
     expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('Lunar-UniqueCreatures.esp'));
     expect(deps.refreshTree).toHaveBeenCalledOnce();
+  });
+
+  // #277 / ADR-0037 AC7: the tree decoration needs the same failures the toast already
+  // consumes — the caller reads them off the return value rather than a second read of state.
+  it('resolves with the load-explicit failures so the caller can decorate the tree with them', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({
+        response: { ok: true },
+        data: { status: 'loaded', failures: [{ name: 'Bad.esp', reason: 'Malformed record' }] },
+      }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    const failures = await ctrl.loadExplicitSession(plugins, '/game/Data');
+
+    expect(failures).toEqual([{ name: 'Bad.esp', reason: 'Malformed record' }]);
+  });
+
+  it('resolves with an empty array when nothing failed to load', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'loaded', failures: [] } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    const failures = await ctrl.loadExplicitSession(plugins, '/game/Data');
+
+    expect(failures).toEqual([]);
   });
 
   it('warns when the active profile has zero enabled plugins (never silently empty)', async () => {

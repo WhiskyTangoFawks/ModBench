@@ -5,10 +5,15 @@ vi.mock('vscode', () => ({
     label: string;
     collapsibleState: number;
     tooltip?: string;
+    description?: string;
+    iconPath?: unknown;
     constructor(label: string, collapsibleState = 0) {
       this.label = label;
       this.collapsibleState = collapsibleState;
     }
+  },
+  ThemeIcon: class {
+    constructor(public id: string) {}
   },
   TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
   EventEmitter: class {
@@ -32,7 +37,7 @@ import { PluginsTreeComposite } from '../PluginsTreeComposite';
 // is whatever the record provider hands back. Both fakes are structural — the real providers
 // satisfy the same shapes without an adapter.
 
-interface FakeRow { file?: string; kind: string }
+interface FakeRow { file?: string; kind: string; orderIssueMasters?: string[] }
 interface FakeChild { id: string }
 
 class FakeRows {
@@ -80,6 +85,7 @@ function make(rows: FakeRow[], children = new FakeChildren()) {
     rows: rowSource,
     children,
     pluginFileOf: (row) => row.file,
+    orderIssueMastersOf: (row) => row.orderIssueMasters,
   });
   // The composite tells rows from children by having handed the rows out, so every test renders
   // the root first — which is what VS Code does, and what its TreeDataProvider contract
@@ -347,5 +353,241 @@ describe('PluginsTreeComposite — read-only tooltip (#276 AC4/AC5)', () => {
     composite.setSession(new Set(['A.esp']), new Set());
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toBe('Master A.esp is not loaded before this plugin');
+  });
+});
+
+// #277 / ADR-0037 AC1/AC2/AC4: a plugin declaring a master absent from the session is flagged
+// with an error decoration and stays fully browsable — never deactivated, excluded or hidden.
+// The wording distinguishes a directly-missing master from one that is itself unloadable, per
+// ADR-0037's own examples ("Missing master: X.esm" vs. "Master Foo.esp cannot be loaded").
+describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/AC2/AC4)', () => {
+  it('flags a row with a directly-missing master', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+
+    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    ]));
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
+    expect(item.tooltip).toContain('Missing master: Ghost.esm');
+  });
+
+  it('flags a row whose master is itself unloadable, worded distinctly from directly-missing', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+
+    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+      ['a.esp', [{ masterName: 'Broken.esm', kind: 'Unloadable' as const }]],
+    ]));
+
+    const tooltip = composite.getTreeItem(PLUGIN_ROW).tooltip as string;
+    expect(tooltip).toContain('Master Broken.esm cannot be loaded');
+    expect(tooltip).not.toContain('Missing master');
+  });
+
+  it('matches the plugin key case-insensitively, like the session set itself', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+
+    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+      ['A.ESP', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    ]));
+
+    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Missing master');
+  });
+
+  // AC2: never deactivated, excluded or hidden. The leading slot (checkbox/lock, #276) and the
+  // row's expandability are both untouched by this decoration.
+  it('never touches collapsibleState — AC2, and the leading slot stays the checkbox\'s alone', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    ]));
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+
+    expect(item.collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+    expect('checkboxState' in item).toBe(false);
+  });
+
+  it('leaves an unaffected plugin\'s row undecorated', async () => {
+    const { composite, render } = make([PLUGIN_ROW, OTHER_ROW]);
+    await render();
+
+    composite.setSession(new Set(['A.esp', 'B.esp']), new Set(), new Map([
+      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    ]));
+
+    const item = composite.getTreeItem(OTHER_ROW);
+    expect(item.tooltip).toBeUndefined();
+    expect(item.iconPath).toBeUndefined();
+  });
+
+  // #276 hit exactly this bug once with tooltip alone; AC1/AC8's decoration also touches icon and
+  // description, so the same reused-row hazard applies to both — restore, not just tooltip.
+  it('clears icon, description and tooltip once the master resolves (reused-row hazard)', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    ]));
+    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Missing master');
+
+    composite.setSession(new Set(['A.esp']), new Set(), new Map());
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.tooltip).toBeUndefined();
+    expect(item.iconPath).toBeUndefined();
+    expect(item.description).toBeUndefined();
+  });
+
+  // The generated wire type is `masterIssues?: MasterIssue[] | null` — optional and nullable —
+  // even though the backend always emits an array once #277 ships; a backend predating this
+  // field must degrade to "no issues", not throw. A fixture built from our own PluginMetadata
+  // type can never produce this shape (it's non-optional there), so this bypasses the type at
+  // the call site directly, the way a stale-backend response actually would.
+  it('degrades to undecorated, without throwing, when a plugin\'s issue list is absent', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+
+    expect(() => composite.setSession(new Set(['A.esp']), new Set(), new Map([
+      ['a.esp', undefined as unknown as { masterName: string; kind: 'DirectlyMissing' | 'Unloadable' }[]],
+    ]))).not.toThrow();
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.tooltip).toBeUndefined();
+    expect(item.iconPath).toBeUndefined();
+  });
+});
+
+// #277 / ADR-0037 AC7: a plugin that fails to open or parse still has a row — Mod Management
+// builds rows from plugins.txt, not from the session — so this decorates an existing row with
+// its recorded reason rather than synthesising a missing one. Data already crosses the wire via
+// SessionLoadResponse.failures (no new endpoint); this covers the tree receiving it.
+describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)', () => {
+  it('flags a row whose plugin failed to load, with the reason', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+
+    composite.setSession(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
+    expect(item.tooltip).toContain('Failed to load: Malformed record');
+  });
+
+  // AC2: the row stays put — plugins.txt still lists it — but it never got indexed, so it's
+  // honestly a leaf, the same non-expandable state a row not yet in the session always has.
+  it('never abandons the row, but it stays a leaf — it was never indexed', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+
+    composite.setSession(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+
+    expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
+  });
+
+  it('matches the plugin key case-insensitively', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+
+    composite.setSession(new Set(), new Set(), new Map(), new Map([['A.ESP', 'Malformed record']]));
+
+    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Failed to load');
+  });
+
+  it('clears once the plugin is no longer reported failed', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+    composite.setSession(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Failed to load');
+
+    composite.setSession(new Set(['A.esp']), new Set(), new Map(), new Map());
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.tooltip).toBeUndefined();
+    expect(item.iconPath).toBeUndefined();
+  });
+
+  it('leaves an unaffected plugin\'s row undecorated', async () => {
+    const { composite, render } = make([PLUGIN_ROW, OTHER_ROW]);
+    await render();
+
+    composite.setSession(new Set(['B.esp']), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+
+    const item = composite.getTreeItem(OTHER_ROW);
+    expect(item.tooltip).toBeUndefined();
+    expect(item.iconPath).toBeUndefined();
+  });
+});
+
+// #277 / ADR-0037 AC8: the order-aware missing-master badge (issue #67, Mod Management, no
+// session needed) and this session-derived state are one concept in the merged tree, never two
+// decorations that can disagree.
+describe('PluginsTreeComposite — reconciling the order-aware badge with session state (#277 AC8)', () => {
+  it('reports a master both signals flag only once, in the backend\'s richer wording', async () => {
+    const row: FakeRow = { file: 'A.esp', kind: 'plugin', orderIssueMasters: ['Ghost.esm'] };
+    const { composite, render } = make([row]);
+    await render();
+
+    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    ]));
+
+    const tooltip = composite.getTreeItem(row).tooltip as string;
+    expect(tooltip).toContain('Missing master: Ghost.esm');
+    expect(tooltip).not.toContain('is not loaded before this plugin');
+  });
+
+  it('preserves the frontend-only signal for a master that loaded fine but is merely mis-sequenced', async () => {
+    // The backend flags a different master; the order-aware badge separately flags "Late.esp",
+    // which the backend has nothing to say about — it loaded, Mutagen resolves it regardless of
+    // position, so MasterResolution.Classify never reports it.
+    const row: FakeRow = { file: 'A.esp', kind: 'plugin', orderIssueMasters: ['Late.esp'] };
+    const { composite, render } = make([row]);
+    await render();
+
+    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    ]));
+
+    const tooltip = composite.getTreeItem(row).tooltip as string;
+    expect(tooltip).toContain('Missing master: Ghost.esm');
+    expect(tooltip).toContain('Master Late.esp is not loaded before this plugin');
+  });
+
+  it('leaves a frontend-only order badge completely untouched when the backend has nothing to add', async () => {
+    const rowSource = new FakeRows([PLUGIN_ROW]);
+    const original = rowSource.getTreeItem(PLUGIN_ROW);
+    original.tooltip = 'A.esp\nMaster Ghost.esm is not loaded before this plugin';
+    original.description = '✗ Master not loaded before this plugin';
+    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
+      rows: rowSource, children: new FakeChildren(), pluginFileOf: (row) => row.file,
+      orderIssueMastersOf: () => ['Ghost.esm'],
+    });
+    await composite.getChildren();
+
+    composite.setSession(new Set(['A.esp']), new Set(), new Map());
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.tooltip).toBe('A.esp\nMaster Ghost.esm is not loaded before this plugin');
+    expect(item.description).toBe('✗ Master not loaded before this plugin');
+  });
+
+  it('works without a wired orderIssueMastersOf — the backend\'s own wording stands alone', async () => {
+    const rowSource = new FakeRows([PLUGIN_ROW]);
+    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
+      rows: rowSource, children: new FakeChildren(), pluginFileOf: (row) => row.file,
+    });
+    await composite.getChildren();
+
+    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    ]));
+
+    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Missing master: Ghost.esm');
   });
 });

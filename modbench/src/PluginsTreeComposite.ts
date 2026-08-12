@@ -32,7 +32,20 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
   /** The filename a row stands for, or undefined for a row that stands for no plugin file at all
    *  (an error or empty-state row). The composite's only knowledge of either side's node shapes. */
   pluginFileOf(row: TRow): string | undefined;
+  /** #277 / ADR-0037 AC8: the master names this row's own order-aware badge flagged (issue #67,
+   *  `PluginListProvider.orderIssueMastersOf`), or undefined/empty for a row that carries none.
+   *  Optional — omitted in tests that don't exercise AC8's reconciliation — so a row with a
+   *  backend master issue and no wired accessor just gets the backend's own wording, unreconciled. */
+  orderIssueMastersOf?(row: TRow): string[] | undefined;
 }
+
+/** A plugin's own declared master, absent from the session (#277 / ADR-0037). Structurally
+ *  matches `medit/ApiClient.ts`'s `MasterIssue` without importing it — the composite imports
+ *  from neither bounded context (`src/test/contextBoundary.test.ts`). `DirectlyMissing`: never
+ *  attempted at all. `Unloadable`: attempted, but itself failed to open or parse — not a
+ *  transitive fact about a further master; see MasterResolution.Classify (backend) for why
+ *  there is nothing to cascade. */
+type MasterIssue = { masterName: string; kind: 'DirectlyMissing' | 'Unloadable' };
 
 export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvider<TRow | TChild> {
   private readonly emitter = new vscode.EventEmitter<TRow | TChild | undefined | null>();
@@ -80,41 +93,112 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     item.collapsibleState = this.expandableFile(element as TRow) === undefined
       ? vscode.TreeItemCollapsibleState.None
       : vscode.TreeItemCollapsibleState.Collapsed;
-    // #276 / ADR-0035: read-only-for-editing (Editing's "Immutable plugin") is decided here for
-    // the same reason the chevron is — this is the one place allowed to know both what the row
-    // provider built and what the session says, so neither side has to learn the other's
-    // vocabulary. Tooltip only, never a contextValue: no per-row editing command exists yet to
-    // gate off one (see plugins.md) — inventing that plumbing ahead of a consumer is exactly the
-    // "boilerplate for later" the project's conventions rule out.
-    //
-    // Both real row providers return the row *as* its own TreeItem (getTreeItem(el) { return el;
-    // }), so `item` here is the same mutable object the tree keeps handing back on every render —
-    // unlike collapsibleState (an idempotent assignment either way), naively appending a note to
-    // `item.tooltip` would accumulate it permanently the first time a plugin is read-only, with no
-    // way back to the row provider's own tooltip (e.g. PluginNode's missing-master badge) once it
-    // stops being read-only. `originalTooltip` captures each row's own tooltip the first time this
-    // sees it, so every render recomputes read-only-or-not from that fixed base instead of from
-    // whatever the previous render left behind.
-    if (!this.originalTooltip.has(element as object)) this.originalTooltip.set(element as object, item.tooltip);
-    const base = this.originalTooltip.get(element as object);
+    // #276 / ADR-0035, extended by #277 / ADR-0037: read-only-for-editing, the load-failure
+    // decoration and the master-issue decoration are all decided here for the same reason the
+    // chevron is — this is the one place allowed to know both what the row provider built and
+    // what the session says, so neither side has to learn the other's vocabulary. Tooltip and (for
+    // the error decorations only) icon/description — never a contextValue and never the leading
+    // slot (checkbox/lock, #276): no per-row editing command exists yet to gate off one (see
+    // plugins.md), and the leading slot answers exactly one question ("can you change whether
+    // this loads?") that none of this is part of.
+    const base = this.captureOriginalDecoration(element as object, item);
+    item.tooltip = base.tooltip;
+    item.description = base.description;
+    item.iconPath = base.iconPath;
+
     const file = this.deps.pluginFileOf(element as TRow)?.toLowerCase();
-    const readOnly = file !== undefined && (this.readOnlyFiles?.has(file) ?? false);
-    if (readOnly) {
-      const note = `This plugin is read-only — its records can't be edited.`;
-      // A MarkdownString base would be replaced here, not appended to — no row provider produces
-      // one today, so this is a documented assumption, not a bug to handle.
-      item.tooltip = typeof base === 'string' ? `${base}\n${note}` : note;
-    } else {
-      item.tooltip = base;
-    }
+    this.applyReadOnlyNote(item, file);
+    this.applyBackendDecoration(item, element as TRow, file);
+
     return item;
   }
 
-  /** Each row's own tooltip, captured the first time this composite renders it — the base
-   *  `getTreeItem` above restores to (or builds on top of) on every subsequent render, since the
-   *  row it decorates is the same mutable object the tree keeps reusing. Weak for the same reason
-   *  as `rowsSeen`. */
-  private readonly originalTooltip = new WeakMap<object, string | vscode.MarkdownString | undefined>();
+  /** Each row's own tooltip, description and icon, captured the first time this composite
+   *  renders it — `getTreeItem` restores to (or builds on top of) this on every subsequent
+   *  render, since the row it decorates is the same mutable object the tree keeps reusing.
+   *  Both real row providers return the row *as* its own TreeItem (`getTreeItem(el) { return el;
+   *  }`), so naively appending a note would accumulate it permanently the first time a plugin is
+   *  decorated, with no way back to the row provider's own tooltip/icon/description (e.g.
+   *  `PluginNode`'s own missing-master badge) once the condition clears. #276 hit exactly this
+   *  bug for tooltip alone; the error decorations below touch icon and description too, so all
+   *  three are captured and restored together. Weak for the same reason as `rowsSeen`. */
+  private captureOriginalDecoration(key: object, item: vscode.TreeItem): {
+    tooltip: string | vscode.MarkdownString | undefined;
+    description: vscode.TreeItem['description'];
+    iconPath: vscode.TreeItem['iconPath'];
+  } {
+    if (!this.originalDecoration.has(key)) {
+      this.originalDecoration.set(key, { tooltip: item.tooltip, description: item.description, iconPath: item.iconPath });
+    }
+    return this.originalDecoration.get(key)!;
+  }
+
+  /** #276 / ADR-0035 AC4/AC5: appends a note to whatever tooltip `item` already carries — never
+   *  replaces it, so a row's own badge (e.g. `PluginNode`'s missing-master one) survives. */
+  private applyReadOnlyNote(item: vscode.TreeItem, file: string | undefined): void {
+    const readOnly = file !== undefined && (this.readOnlyFiles?.has(file) ?? false);
+    if (!readOnly) return;
+    const note = `This plugin is read-only — its records can't be edited.`;
+    // A MarkdownString base would be replaced here, not appended to — no row provider produces
+    // one today, so this is a documented assumption, not a bug to handle.
+    item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
+  }
+
+  /** #277 / ADR-0037: the backend-derived error decorations — AC7's load failure and AC1/AC2/AC4's
+   *  master issues — take decoration authority for a row only when the backend actually has
+   *  something to say about it; otherwise `item` is left exactly as `captureOriginalDecoration`
+   *  restored it (including a frontend-only order-aware badge, untouched — see AC8 below). Both
+   *  branches read their session maps with `?? []`/an explicit undefined check rather than a bare
+   *  `.get(...).x` — the wire's `masterIssues` is `MasterIssue[] | undefined | null` even though
+   *  the backend always emits an array once #277 ships, and a response from a backend predating
+   *  the field must degrade to "no issues", not throw. */
+  private applyBackendDecoration(item: vscode.TreeItem, row: TRow, file: string | undefined): void {
+    // AC7: a plugin that failed to open or parse never has a MasterMetadata to derive an issue
+    // list from (MasterResolution.Classify only iterates the successfully-loaded set), so this
+    // and the master-issue decoration below are mutually exclusive per plugin — checked first as
+    // the more fundamental fact: nothing about a plugin's own masters could even be evaluated.
+    const failureReason = file !== undefined ? this.loadFailures?.get(file) : undefined;
+    if (failureReason !== undefined) {
+      item.iconPath = new vscode.ThemeIcon('error');
+      item.description = '✗ Failed to load';
+      const note = `Failed to load: ${failureReason}`;
+      item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
+      return;
+    }
+
+    const issues = file !== undefined ? (this.masterIssues?.get(file) ?? []) : [];
+    if (issues.length > 0) this.applyMasterIssueDecoration(item, row, issues);
+  }
+
+  /** AC1/AC2/AC4/AC8: one decoration, not two that can disagree. A master name the backend also
+   *  flags is reported once, in the backend's richer session-aware wording; a master the
+   *  frontend's order-only check (issue #67) flagged that the backend does *not* — present,
+   *  loaded, merely sequenced too late, a fact Mutagen's own FormKey resolution has no way to see
+   *  — is preserved, worded distinctly. Built structurally from `issues` and
+   *  `orderIssueMastersOf`, never by editing the row's own pre-rendered text, so there is nothing
+   *  to double up or corrupt. */
+  private applyMasterIssueDecoration(item: vscode.TreeItem, row: TRow, issues: MasterIssue[]): void {
+    const backendCovered = new Set(issues.map((i) => i.masterName.toLowerCase()));
+    const orderOnly = (this.deps.orderIssueMastersOf?.(row) ?? []).filter((m) => !backendCovered.has(m.toLowerCase()));
+    const lines = [
+      ...issues.map((i) => i.kind === 'DirectlyMissing' ? `Missing master: ${i.masterName}` : `Master ${i.masterName} cannot be loaded`),
+      ...orderOnly.map((m) => `Master ${m} is not loaded before this plugin`),
+    ];
+    item.iconPath = new vscode.ThemeIcon('error');
+    item.description = lines.length === 1 ? '✗ Master issue' : `✗ ${lines.length} master issues`;
+    const note = lines.join('\n');
+    item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
+  }
+
+  /** Each row's own tooltip, description and icon, captured the first time this composite
+   *  renders it — `captureOriginalDecoration` restores to (or builds on top of) this on every
+   *  subsequent render, since the row it decorates is the same mutable object the tree keeps
+   *  reusing. Weak for the same reason as `rowsSeen`. */
+  private readonly originalDecoration = new WeakMap<object, {
+    tooltip: string | vscode.MarkdownString | undefined;
+    description: vscode.TreeItem['description'];
+    iconPath: vscode.TreeItem['iconPath'];
+  }>();
 
   private isRow(element: TRow | TChild): boolean {
     return this.rowsSeen.has(element as object);
@@ -132,23 +216,37 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
 
   private sessionFiles?: Set<string>;
   private readOnlyFiles?: Set<string>;
+  private masterIssues?: Map<string, MasterIssue[]>;
+  private loadFailures?: Map<string, string>;
 
   /** The plugin files the editing session holds, or undefined when there is no session, plus
    *  (#276 / ADR-0035) the subset that's read-only for editing — Editing's "Immutable plugin"
-   *  (`medit/ApiClient.ts` `PluginMetadata.isImmutable`). One setter, not two: the two facts are a
-   *  single hand-off from the same session and never change independently — every call site in
-   *  `extension.ts` either sets both (session start) or clears both (session close, backend gone),
-   *  so two separately-callable setters would only be a coupling something could call apart by
-   *  mistake. `readOnlyFiles` defaults to empty, so existing single-argument callers are unaffected.
+   *  (`medit/ApiClient.ts` `PluginMetadata.isImmutable`) — and (#277 / ADR-0037) each plugin's own
+   *  master issues, keyed by plugin filename (`medit/ApiClient.ts` `PluginMetadata.masterIssues`),
+   *  plus (also #277 / ADR-0037 AC7) the reason for every plugin the session tried and failed to
+   *  load at all (`SessionLoadResponse.failures`, already crossed the wire — no new endpoint).
+   *  One setter, not four: these facts are a single hand-off from the same session and never
+   *  change independently — every call site in `extension.ts` either sets all of them (session
+   *  start) or clears all of them (session close, backend gone), so separately-callable setters
+   *  would only be a coupling something could call apart by mistake. `readOnlyFiles`,
+   *  `masterIssues` and `loadFailures` all default to empty, so existing shorter-argument callers
+   *  are unaffected.
    *
    *  This is the whole of the composite's own state: chevrons appear across the tree when a
    *  session is set and come off when it is cleared, which ADR-0035 makes the entire "editing is
    *  available now" signal — no banner, no mode. Re-renders what is already built; it never
    *  re-reads the load order, so filter state, expansion and scroll position survive a session
    *  starting or closing. */
-  setSession(pluginFiles: Set<string> | undefined, readOnlyFiles: Set<string> = new Set()): void {
+  setSession(
+    pluginFiles: Set<string> | undefined,
+    readOnlyFiles: Set<string> = new Set(),
+    masterIssues: Map<string, MasterIssue[]> = new Map(),
+    loadFailures: Map<string, string> = new Map(),
+  ): void {
     this.sessionFiles = pluginFiles && new Set([...pluginFiles].map((f) => f.toLowerCase()));
     this.readOnlyFiles = pluginFiles && new Set([...readOnlyFiles].map((f) => f.toLowerCase()));
+    this.masterIssues = pluginFiles && new Map([...masterIssues].map(([name, issues]) => [name.toLowerCase(), issues]));
+    this.loadFailures = pluginFiles && new Map([...loadFailures].map(([name, reason]) => [name.toLowerCase(), reason]));
     this.emitter.fire(undefined);
   }
 

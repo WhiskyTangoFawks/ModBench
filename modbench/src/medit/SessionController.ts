@@ -53,12 +53,17 @@ export class SessionController {
    *  resolved Data folder — the backend prepends implicit masters from it. `origin` is
    *  required (#269 / ADR-0036, #275) — the caller resolves it before this point; the
    *  backend no longer defaults a missing origin. So is `participates` (#270 / ADR-0035): the
-   *  list is every plugins.txt line, and the `*` prefix rides along rather than filtering it. */
+   *  list is every plugins.txt line, and the `*` prefix rides along rather than filtering it.
+   *
+   *  Resolves with the load's own `failures` (#277 / ADR-0037 AC7) — the same data the toast
+   *  below already consumes, so the caller (the Plugins tree's session hand-off) can decorate
+   *  those rows with their reason instead of re-deriving the fact a second way. Empty, never
+   *  undefined, on success; empty on a failed POST too, since there is no session to report on. */
   async loadExplicitSession(
     plugins: { name: string; path: string; origin: string; participates: boolean }[],
     gameDirectory: string,
     gameRelease = 'Fallout4',
-  ): Promise<void> {
+  ): Promise<{ name?: string | null; reason?: string | null }[]> {
     const { data, error, response } = await this.deps.client.POST('/session/load-explicit', {
       body: { plugins, gameDirectory, gameRelease },
     });
@@ -66,7 +71,7 @@ export class SessionController {
       const text = errorText(error);
       this.log(`[SessionController] loadExplicitSession failed (${response.status}): ${text}`);
       this.deps.showError(`mEdit: Failed to load session — ${text}`);
-      return;
+      return [];
     }
     reportSkippedPlugins(data?.failures, {
       log: (m) => this.log(`[SessionController] ${m}`),
@@ -84,6 +89,7 @@ export class SessionController {
     }
     this.deps.setStatusText(`$(check) mEdit: Ready (${plugins.length} plugins)`);
     this.deps.refreshTree();
+    return data?.failures ?? [];
   }
 
   async setFilter(sql: string): Promise<boolean> {
