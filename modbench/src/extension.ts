@@ -94,11 +94,25 @@ function makePendingStateHandler(
   };
 }
 
-/** #270: which plugin files the running session actually holds — the session's own list, not the
- *  one we sent it, because the backend prepends the game's implicit masters and those are rows in
- *  the Plugins tree too. Only the filenames are needed: the tree asks "can this row expand?". */
-function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Set<string>> {
-  return async () => new Set((await repository.getPlugins()).map((p) => p.name));
+/** #270 / #276: which plugin files the running session actually holds — the session's own list,
+ *  not the one we sent it, because the backend prepends the game's implicit masters and those are
+ *  rows in the Plugins tree too — plus, of that set, which are read-only for editing (Editing's
+ *  "Immutable plugin", `PluginMetadata.isImmutable`). Bundled as one fact, not two separate reads:
+ *  both come off the same `getPlugins()` call and are handed to `PluginsTreeComposite.setSession`
+ *  together, so there is never a moment where a caller could have one without the other. */
+interface SessionPluginFiles {
+  files: Set<string>;
+  readOnly: Set<string>;
+}
+
+function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<SessionPluginFiles> {
+  return async () => {
+    const plugins = await repository.getPlugins();
+    return {
+      files: new Set(plugins.map((p) => p.name)),
+      readOnly: new Set(plugins.filter((p) => p.isImmutable).map((p) => p.name)),
+    };
+  };
 }
 
 /** Leave editing: tear down the editing backend. #273: there is no separate loadout view mode
@@ -1294,7 +1308,7 @@ interface LoadoutViewDeps {
   recordBrowser: PluginTreeProvider;
   /** #270: the plugin files the running session holds, for deciding which rows can expand.
    *  Injected as a getter so the composite's own wiring stays at the composition root. */
-  sessionPluginFiles: () => Promise<Set<string>>;
+  sessionPluginFiles: () => Promise<SessionPluginFiles>;
 }
 /** Register the Loadout (Mod List) view and its commands. Returns the live
  *  ModListProvider and DownloadsProvider (exposed via activate() for integration
@@ -1512,7 +1526,7 @@ interface EnterEditingDeps {
   outputChannel: vscode.LogOutputChannel;
   /** #270: the plugin files the loaded session holds — read once the session is up, to decide
    *  which rows can expand. */
-  sessionPluginFiles: () => Promise<Set<string>>;
+  sessionPluginFiles: () => Promise<SessionPluginFiles>;
   /** Surface the Modbench output channel so the user can watch the launch steps. */
   revealLog: () => void;
 }
@@ -1556,7 +1570,8 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
       // #270 / ADR-0035: rows gain chevrons here and nowhere else — this is the moment records
       // become queryable, the same moment #75 gates the editing tree's first fetch on.
       try {
-        pluginsTree?.setSession(await sessionPluginFiles());
+        const session = await sessionPluginFiles();
+        pluginsTree?.setSession(session.files, session.readOnly);
       } catch (err) {
         // Leaving every row a leaf is a safe *render*, but it is not an honest one: the session
         // did load, so the tree would be telling the user editing is unavailable when it is

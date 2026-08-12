@@ -4,6 +4,7 @@ vi.mock('vscode', () => ({
   TreeItem: class {
     label: string;
     collapsibleState: number;
+    tooltip?: string;
     constructor(label: string, collapsibleState = 0) {
       this.label = label;
       this.collapsibleState = collapsibleState;
@@ -261,5 +262,90 @@ describe('PluginsTreeComposite when the session closes', () => {
 
     expect(rowSource.getChildrenCalls).toBe(readsBefore);
     expect(await composite.getChildren()).toEqual([PLUGIN_ROW, OTHER_ROW]);
+  });
+});
+
+// #276 / ADR-0035: read-only-for-editing (Editing's "Immutable plugin", medit/ApiClient.ts
+// PluginMetadata.isImmutable) is decided and rendered here — the one place already exempted from
+// contextBoundary.test.ts's import scan because it has to be able to say in prose what it joins —
+// so that neither PluginListProvider.ts (Mod Management) nor PluginTreeProvider.ts (Editing) has
+// to learn the other's vocabulary. One setter carries both facts a session hands off (which files
+// it holds, which of those are read-only), since the two never change independently: nothing in
+// extension.ts calls one without the other. AC5's other half — hiding editing actions from a
+// read-only plugin's context menu — has no command to gate yet (no per-row editing command is
+// contributed in package.json today), so it isn't tested here; see plugins.md.
+describe('PluginsTreeComposite — read-only tooltip (#276 AC4/AC5)', () => {
+  it('tags a read-only plugin\'s tooltip once the session says so', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+
+    composite.setSession(new Set(['A.esp']), new Set(['A.esp']));
+
+    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('read-only');
+  });
+
+  it('matches read-only case-insensitively, like the session set itself', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+
+    composite.setSession(new Set(['A.esp']), new Set(['a.ESP']));
+
+    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('read-only');
+  });
+
+  it('leaves an editable plugin\'s tooltip untouched', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+
+    composite.setSession(new Set(['A.esp']), new Set());
+
+    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toBeUndefined();
+  });
+
+  it('defaults to no read-only plugins when the second argument is omitted', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+
+    composite.setSession(new Set(['A.esp']));
+
+    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toBeUndefined();
+  });
+
+  it('clears on session close along with everything else', async () => {
+    // Both real row providers return the row itself as its own TreeItem (getTreeItem(el) { return
+    // el; }), so decorating it mutates the one object the tree keeps reusing across renders —
+    // reading the tooltip *while* read-only, before it clears, is what makes this a real
+    // regression test for accumulate-instead-of-reset, not just "never decorated in the first
+    // place" (which the previous, pre-fix version of this test could not have told apart).
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+    composite.setSession(new Set(['A.esp']), new Set(['A.esp']));
+    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('read-only');
+
+    composite.setSession(undefined);
+
+    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toBeUndefined();
+  });
+
+  it('appends to, rather than replacing, a tooltip the row provider already set', async () => {
+    const rowSource = new FakeRows([PLUGIN_ROW]);
+    const original = rowSource.getTreeItem(PLUGIN_ROW);
+    original.tooltip = 'Master A.esp is not loaded before this plugin';
+    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
+      rows: rowSource, children: new FakeChildren(), pluginFileOf: (row) => row.file,
+    });
+    await composite.getChildren();
+
+    composite.setSession(new Set(['A.esp']), new Set(['A.esp']));
+
+    const tooltip = composite.getTreeItem(PLUGIN_ROW).tooltip as string;
+    expect(tooltip).toContain('Master A.esp is not loaded before this plugin');
+    expect(tooltip).toContain('read-only');
+
+    // Going read-only → editable on the same (reused) row object must restore exactly the row
+    // provider's own tooltip, not leave the read-only note stuck on top of it.
+    composite.setSession(new Set(['A.esp']), new Set());
+
+    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toBe('Master A.esp is not loaded before this plugin');
   });
 });

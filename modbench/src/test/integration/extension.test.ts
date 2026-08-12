@@ -19,6 +19,10 @@ const MOCK_PLUGINS = [
   { name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', participates: true },
   { name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data', participates: true },
   { name: 'Other.esp', path: '/data/Other.esp', origin: 'Data', participates: false },
+  // #276: a plugins.txt line (not an implicit master) the backend reports read-only for editing
+  // (Editing's "Immutable plugin") — exercises the composite's tooltip decoration end-to-end,
+  // distinct from ImplicitMasterNode's own (Mod-Management-only, no session needed) lock icon.
+  { name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', participates: true, isImmutable: true },
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let sessionLoaded = false;
@@ -800,5 +804,63 @@ describe('Plugin load-order rows expand into records (#270)', () => {
     for (const row of rows) {
       assert.strictEqual(tree.getTreeItem(row).collapsibleState, vscode.TreeItemCollapsibleState.None);
     }
+  });
+});
+
+// #276 / ADR-0035: read-only-for-editing is a tooltip, never an icon, and only ever known once a
+// session says so — before launch (or after close) a plugin row carries no opinion about it at
+// all, matching AC4/AC5 and this wiring's own real seam (extension.ts's sessionPluginFilesFrom →
+// PluginsTreeComposite.setSession), not just the composite's own unit seam already covered by
+// PluginsTreeComposite.test.ts.
+describe('A read-only plugin\'s tooltip says so once a session is running (#276)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
+  const pluginListProviderOf = () =>
+    (ext?.exports as { pluginListProvider?: PluginListProviderLike } | undefined)?.pluginListProvider;
+  let gameDir = '';
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-readonly-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '*Immutable.esm\n');
+    pluginListProviderOf()?.invalidate();
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.commands.executeCommand('modbench.closeMedit');
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '');
+    fs.rmSync(gameDir, { recursive: true, force: true });
+  });
+
+  it('carries no read-only tooltip before a session exists', async () => {
+    const tree = pluginsTree()!;
+    const row = findRow(await tree.getChildren(), 'Immutable.esm');
+    assert.strictEqual(tree.getTreeItem(row).tooltip, undefined);
+  });
+
+  it('gains a read-only tooltip once the session reports it immutable', async () => {
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    const tree = pluginsTree()!;
+    const row = findRow(await tree.getChildren(), 'Immutable.esm');
+
+    const tooltip = tree.getTreeItem(row).tooltip;
+
+    assert.ok(typeof tooltip === 'string' && tooltip.includes('read-only'), `expected a read-only tooltip, got: ${String(tooltip)}`);
+  });
+
+  it('loses the tooltip again once the session closes', async () => {
+    await vscode.commands.executeCommand('modbench.closeMedit');
+    const tree = pluginsTree()!;
+    const row = findRow(await tree.getChildren(), 'Immutable.esm');
+
+    assert.strictEqual(tree.getTreeItem(row).tooltip, undefined);
   });
 });
