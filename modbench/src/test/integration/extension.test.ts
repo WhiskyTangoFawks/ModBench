@@ -495,7 +495,6 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
     if (!root) return;
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
-    await vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
     fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '');
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
@@ -528,76 +527,12 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
   });
 });
 
-// ── mEdit plugin tree title reflects view mode (#109) ───────────────────────────
-// The activity-bar container title ("Modbench") is fixed by VS Code; the mEdit
-// context instead lives on the editing plugin tree's own writable `title`.
-
-interface TitledTreeView { title?: string }
-
-describe('mEdit plugin tree title reflects view mode (#109)', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const exportsOf = () => ext?.exports as {
-    treeView?: TitledTreeView;
-    changeGroupTreeView?: TitledTreeView;
-    modListProvider?: unknown;
-  } | undefined;
-  let gameDir = '';
-
-  // The committed test workspace fixture (#192) already supplies a valid MO2
-  // instance (empty plugins.txt) — only the suite-scoped plugins.txt content
-  // and game dir are set up here.
-  before(async () => {
-    if (!root) return;
-    resetMockBackend();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-
-    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n');
-  });
-
-  after(async () => {
-    if (!root) return;
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
-    await vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
-    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '');
-    // This suite's own Launch Game test deploys against gameDir before the
-    // (failing, fake) launch — that writes mods/.medit-manifest.json. purge()
-    // never runs since the spawn errors rather than exits, so clean the manifest
-    // up by hand to keep the committed fixture pristine across runs.
-    fs.rmSync(path.join(root, 'mods', '.medit-manifest.json'), { force: true });
-    fs.rmSync(gameDir, { recursive: true, force: true });
-  });
-
-  it('sets the mEdit plugin tree title when Launch mEdit enters editing mode', async () => {
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
-    assert.strictEqual(
-      exportsOf()?.treeView?.title, 'mEdit — Plugins',
-      'the editing plugin tree title should convey the mEdit context after Launch mEdit',
-    );
-  });
-
-  it('leaves the Pending Changes view title untouched entering editing mode', () => {
-    assert.strictEqual(
-      exportsOf()?.changeGroupTreeView?.title, 'Plugins - Pending Changes',
-      'only the editing plugin tree title should change — Pending Changes keeps its declared default',
-    );
-  });
-
-  it('restores the default plugin tree title when Close mEdit exits editing mode', async () => {
-    await vscode.commands.executeCommand('modbench.closeMedit');
-    assert.strictEqual(
-      exportsOf()?.treeView?.title, 'Plugins',
-      'closing mEdit should restore the plugin tree title to its declared default',
-    );
-  });
-
-  // #247 deleted the Launch-Game-enters-editing-mode case along with the command. Launching
-  // and editing are separate operations: the replacement (modbench.launch) runs a contributed
-  // task and touches no view mode, so there is no longer a title to assert.
-});
+// #273 AC6: the #109 runtime view-title swap ("mEdit plugin tree title reflects view mode") is
+// removed outright, not adapted — modbench.pluginTree (the view whose title it swapped) and
+// modbench.viewMode (the key it swapped on) are both gone, so there is no mode left to reflect
+// and nothing left to assert. This comment is the suite's own tombstone; the merged tree's own
+// identity is covered by the #270 suite below, and Pending Changes' title is covered by Slice B's
+// packageJson.test.ts assertion (its declared name never changes at runtime).
 
 // ── Loadout stays visible through an editing session (#268) ────────────────────
 // The declarative view-mode gate itself is proven statically in packageJson.test.ts. These
@@ -635,7 +570,6 @@ describe('Loadout stays visible through an editing session (#268)', () => {
     if (!root) return;
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
-    await vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
     fs.writeFileSync(pluginsTxtPath, '');
     fs.rmSync(gameDir, { recursive: true, force: true });
   });

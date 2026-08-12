@@ -53,21 +53,14 @@ import { makeReporter } from './reporter';
 import { LoadoutHeaderProvider } from './LoadoutHeaderProvider';
 
 let backendManager: BackendManager | undefined;
-let pluginTreeView: vscode.TreeView<PluginTreeNode> | undefined;
 // #247: the Loadout header re-reads its rows whenever workspace-scope state moves. Module
-// level for the same reason pluginTreeView is — the choke points that move that state
+// level for the same reason pluginsTree below is — the choke points that move that state
 // (exitToLoadout, switchProfile) are module-level functions too.
 let loadoutHeaderProvider: LoadoutHeaderProvider | undefined;
-// #270: the merged Plugins tree. Module level for the same reason as the two above — the session
+// #270: the merged Plugins tree. Module level for the same reason as the above — the session
 // starting and stopping is what puts chevrons on its rows, and both choke points for that
 // (enterEditing, exitToLoadout) are module-level.
 let pluginsTree: PluginsTreeComposite<PluginListNode, PluginTreeNode> | undefined;
-
-// #109: the activity-bar container title ("Modbench") is fixed by VS Code — no
-// `when` clause or API retargets it. The mEdit context instead lives on the
-// writable title of the editing plugin tree itself.
-const DEFAULT_PLUGIN_TREE_TITLE = 'Plugins'; // must match package.json's declared view name
-const EDITING_PLUGIN_TREE_TITLE = 'mEdit — Plugins';
 
 const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
@@ -100,16 +93,6 @@ function makePendingStateHandler(
   };
 }
 
-/** Single choke point for `modbench.viewMode` transitions (#109) — every entry/exit
- *  path calls this instead of `setContext` directly, so the editing plugin tree's
- *  title can never drift out of sync with the mode. */
-function setViewMode(mode: 'loadout' | 'editing'): void {
-  void vscode.commands.executeCommand('setContext', 'modbench.viewMode', mode);
-  if (pluginTreeView) {
-    pluginTreeView.title = mode === 'editing' ? EDITING_PLUGIN_TREE_TITLE : DEFAULT_PLUGIN_TREE_TITLE;
-  }
-}
-
 /** #270: which plugin files the running session actually holds — the session's own list, not the
  *  one we sent it, because the backend prepends the game's implicit masters and those are rows in
  *  the Plugins tree too. Only the filenames are needed: the tree asks "can this row expand?". */
@@ -117,9 +100,10 @@ function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<
   return async () => new Set((await repository.getPlugins()).map((p) => p.name));
 }
 
-/** Leave editing: show the Loadout view and tear down the editing backend. */
+/** Leave editing: tear down the editing backend. #273: there is no separate loadout view mode
+ *  to switch back to any more — the loadout views were never hidden (#268), and Pending Changes /
+ *  Referenced By govern their own visibility (staged work, always-present respectively). */
 function exitToLoadout(): void {
-  setViewMode('loadout');
   // #270: the chevrons go with the session. Cleared before the backend stops, so no row can be
   // expanded into a backend that is on its way down.
   pluginsTree?.setSession(undefined);
@@ -253,15 +237,6 @@ export function activate(context: vscode.ExtensionContext) {
     setFilterActive,
   });
 
-  const treeView = vscode.window.createTreeView('modbench.pluginTree', {
-    treeDataProvider: treeProvider,
-    canSelectMany: true,
-    // #247 rule 7: Collapse All belongs on a hierarchy. This tree is deeper than the Mods
-    // tree that had it — plugin → record type → record — and was the one view missing it.
-    showCollapseAll: true,
-  });
-  pluginTreeView = treeView;
-
   const changeGroupTreeView: vscode.TreeView<PendingTreeNode> = vscode.window.createTreeView('modbench.changeGroupTree', {
     treeDataProvider: changeGroupTreeProvider,
     canSelectMany: true,
@@ -272,13 +247,12 @@ export function activate(context: vscode.ExtensionContext) {
   const { modListProvider, downloadsProvider, pluginListProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, changeGroupTreeProvider, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository) });
 
   context.subscriptions.push(
-    treeView,
     changeGroupTreeView,
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, treeView, controller, repository, scriptsPath, changeGroupTreeProvider, changeGroupTreeView, referencedByTreeView, log, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, changeGroupTreeProvider, changeGroupTreeView, referencedByTreeView, log, outputChannel,
     }),
   );
 
@@ -289,9 +263,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Exposed for integration tests (pinned Overwrite row #82; editing tree after launch #75;
   // leveled output channel #198; Downloads tree #233; merged Plugins tree #270;
-  // modbench.hasPendingChanges toggles both ways #273) — unused in production.
+  // modbench.hasPendingChanges toggles both ways #273) — unused in production. #273: treeView
+  // (the old modbench.pluginTree's own TreeView) is gone along with that view — treeProvider
+  // itself stays, since it still supplies the merged tree's children.
   return {
-    modListProvider, downloadsProvider, pluginListProvider, pluginsTree, treeProvider, treeView,
+    modListProvider, downloadsProvider, pluginListProvider, pluginsTree, treeProvider,
     changeGroupTreeProvider, changeGroupTreeView, outputChannel,
   };
 }
@@ -308,7 +284,6 @@ interface EditorCommandDeps {
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
   port: number;
   treeProvider: PluginTreeProvider;
-  treeView: vscode.TreeView<PluginTreeNode>;
   controller: SessionController;
   repository: ApiPluginRepository;
   scriptsPath: string;
@@ -539,9 +514,9 @@ function trackRecordSelection(view: vscode.TreeView<PluginTreeNode | PluginListN
 function registerChangeGroupCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const { controller } = deps;
   return [
-    // Feeds `lastRecordSelection` above; lives here because deleteRecord's keybinding fallback is
-    // its only reader. The merged Plugins tree feeds the same tracker from its own registration.
-    trackRecordSelection(deps.treeView),
+    // #273: the old modbench.pluginTree that fed `lastRecordSelection` here is gone — the merged
+    // Plugins tree (modbench.pluginListTree) already feeds the same tracker from its own
+    // registration (registerPluginListView), so nothing here needs to re-register it.
     vscode.commands.registerCommand('modbench.deleteRecord', async (item?: RecordNode | PlacedNode, allSelected?: (RecordNode | PlacedNode)[]) => {
       const toTarget = (n: RecordNode | PlacedNode) =>
         n instanceof PlacedNode
@@ -1273,9 +1248,9 @@ async function onModCheckboxChanged(
   }
 }
 
-/** The Loadout half of activation, as one step: view mode, deployment-mode context key, the
+/** The Loadout half of activation, as one step: deployment-mode context key, the
  *  Mods/Plugins/Downloads views, and the header that sits above them. Split out of `activate`
- *  because these four are one wiring concern — and because the header must register even on
+ *  because these three are one wiring concern — and because the header must register even on
  *  the paths where `registerLoadoutView` bails (no workspace, or not an MO2 instance): it is
  *  the container's first view and must never be a hole. Returns what the integration tests
  *  read off `activate`'s exports. */
@@ -1283,8 +1258,6 @@ function registerLoadoutSurfaces(deps: Omit<LoadoutViewDeps, 'revealLog'>): {
   modListProvider?: ModListProvider; downloadsProvider?: DownloadsProvider; pluginListProvider?: PluginListProvider;
 } {
   const { context, outputChannel } = deps;
-  // The open workspace root IS the MO2 instance (see modbench/CLAUDE.md).
-  setViewMode('loadout');
   registerDeploymentModeContext(context);
   const loadout = registerLoadoutView({ ...deps, revealLog: () => outputChannel.show(true) });
   registerLoadoutHeaderView({ context, outputChannel, ...loadout });
@@ -1581,9 +1554,6 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
           'Modbench: The editing session loaded, but its plugin list could not be read — plugin rows will not expand into records. Reload the session to retry.',
         );
       }
-      // Reveal the editing views only now — the pluginTree's first GET /plugins must
-      // not fire before the session is loaded, or it renders empty (issue #75).
-      setViewMode('editing');
       outputChannel.info('[extension] editing session ready');
   };
 }

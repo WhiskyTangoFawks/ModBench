@@ -95,23 +95,11 @@ describe('package.json Loadout views stay visible through an editing session (#2
   const welcome = () => pkg.contributes.viewsWelcome as { view: string; when: string }[];
 
   // ADR-0035's "valid first step": Launch mEdit must no longer hide the loadout it's editing
-  // against. The Mods tree, the Plugin load order and Downloads carry no view-mode gate at
-  // all now — #273, not this ticket, retires modbench.viewMode itself.
+  // against. The Mods tree, the Plugin load order and Downloads carry no view-mode gate at all.
   it.each(['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads'])(
     '%s carries no view-mode gate, so it survives entering editing mode', (id) => {
       const view = sidebarViews().find((v) => v.id === id);
       expect(view!.when ?? '').not.toMatch(/modbench\.viewMode/);
-    });
-
-  // The editing Plugins tree stays gated — it browses a session that doesn't exist until
-  // Launch mEdit creates one, so "appear in addition to, not instead of" still means gated on
-  // 'editing', just no longer exclusive with the loadout trio above.
-  // #273 Slice A: modbench.changeGroupTree no longer belongs in this list — it moved off the
-  // view-mode gate onto modbench.hasPendingChanges (see the dedicated Slice A describe block).
-  it.each(['modbench.pluginTree'])(
-    '%s keeps its editing-mode gate — it has nothing to show before a session exists', (id) => {
-      const view = sidebarViews().find((v) => v.id === id);
-      expect(view!.when).toBe("modbench.viewMode == 'editing'");
     });
 
   it('drops the now-redundant view-mode clause from the "not an MO2 instance" welcome message', () => {
@@ -119,6 +107,41 @@ describe('package.json Loadout views stay visible through an editing session (#2
     expect(entry, 'expected the not-an-MO2-instance welcome entry').toBeTruthy();
     expect(entry!.when).not.toMatch(/modbench\.viewMode/);
   });
+});
+
+describe('package.json retires modbench.viewMode and the second Plugins view (#273 Slice C)', () => {
+  const allViews = () => [
+    ...(pkg.contributes.views.modbench as { id: string; name: string; when?: string }[]),
+    ...(pkg.contributes.views.modbenchReferencedBy as { id: string; name: string; when?: string }[]),
+  ];
+  const allMenuEntries = () =>
+    Object.values(pkg.contributes.menus as Record<string, { when?: string }[]>).flat();
+
+  it('there is only one view named for plugins — modbench.pluginTree is gone', () => {
+    expect(allViews().find((v) => v.id === 'modbench.pluginTree')).toBeUndefined();
+    expect(allViews().filter((v) => v.name === 'Plugins')).toHaveLength(1);
+    expect(allViews().filter((v) => v.name === 'Plugins')[0].id).toBe('modbench.pluginListTree');
+  });
+
+  it('Referenced By carries no gate at all — always present, like Mods/Plugins/Downloads', () => {
+    const view = allViews().find((v) => v.id === 'modbench.referencedByTree');
+    expect(view!.when).toBeUndefined();
+  });
+
+  it('no view, menu entry or keybinding references modbench.viewMode anywhere', () => {
+    const offendingViews = allViews().filter((v) => (v.when ?? '').includes('modbench.viewMode'));
+    const offendingMenus = allMenuEntries().filter((e) => (e.when ?? '').includes('modbench.viewMode'));
+    const offendingKeybindings = (pkg.contributes.keybindings as { when?: string }[])
+      .filter((k) => (k.when ?? '').includes('modbench.viewMode'));
+    expect(offendingViews).toEqual([]);
+    expect(offendingMenus).toEqual([]);
+    expect(offendingKeybindings).toEqual([]);
+  });
+
+  // The remaining modbench.pluginTree when-clauses (filterPluginTree/newPlugin/setFilter/
+  // clearFilter/openHeader title-bar and context-menu entries) are retargeted in Slices D/E —
+  // see 'package.json retargets every modbench.pluginTree command onto modbench.pluginListTree'
+  // below for the assertion that no when clause references it anywhere once those land.
 });
 
 describe('package.json filtering is one UX (#247)', () => {
@@ -245,10 +268,12 @@ describe('package.json title-bar rubric (#247)', () => {
   // Rule 7: Collapse All belongs on a hierarchy and nowhere else — on a flat list it is an
   // icon that does nothing. `showCollapseAll` is a createTreeView option, so the assertion
   // lives with the wiring; here we only pin which views are hierarchical.
-  it('the Mods tree and the editing Plugins tree are the hierarchical ones', () => {
+  // #273: the merged Plugins tree (modbench.pluginListTree) is the one that became hierarchical
+  // under #270 — the standalone editing Plugins tree it superseded is gone.
+  it('the Mods tree and the merged Plugins tree are the hierarchical ones', () => {
     const sidebar = (pkg.contributes.views.modbench as { id: string }[]).map((v) => v.id);
     expect(sidebar).toContain('modbench.modList');
-    expect(sidebar).toContain('modbench.pluginTree');
+    expect(sidebar).toContain('modbench.pluginListTree');
   });
 });
 
