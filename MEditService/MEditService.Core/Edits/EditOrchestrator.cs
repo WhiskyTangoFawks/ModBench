@@ -51,7 +51,6 @@ public sealed partial class EditOrchestrator(
         var conditionFields = fields.Keys.Where(ConditionPath.IsConditionPath).ToList();
         IReadOnlyList<ConditionOwner>? conditionOwners =
             conditionFields.Count > 0 ? _query.GetConditions(formKey, plugin, ResolveOrigin(plugin)) : null;
-        CollectConditionReadOnlyFields(conditionFields, readOnlyFields);
 
         if (readOnlyFields.Count > 0)
             return new StageEditResult.ReadOnlyFields(readOnlyFields);
@@ -116,7 +115,7 @@ public sealed partial class EditOrchestrator(
 
     private static bool IsRestageableConditionListField(string field, Type recordType, IConditionCodec codec) =>
         codec.IsConditionListField(recordType, field)
-        || (field.Contains('[') && codec.IsNestedConditionListField(recordType, field));
+        || codec.IsNestedConditionListField(recordType, field);
 
     // #183/#184 AC4: restaging any *ancestor* array invalidates every staged condition row keyed
     // beneath it — both a per-field CTDA\ nested edit and a nested list's own restage — since the
@@ -258,17 +257,6 @@ public sealed partial class EditOrchestrator(
             }
 
             oldValues[path] = SerializeVmadOldValue(prop.Value);
-        }
-    }
-
-    // A malformed condition path (fails ConditionPath.TryParse) is rejected the same way a
-    // malformed VMAD path is — surfaced as read-only rather than silently mis-staged.
-    private static void CollectConditionReadOnlyFields(List<string> conditionFields, List<string> readOnlyFields)
-    {
-        foreach (var path in conditionFields)
-        {
-            if (!ConditionPath.TryParse(path, out _, out _, out _))
-                readOnlyFields.Add(path);
         }
     }
 

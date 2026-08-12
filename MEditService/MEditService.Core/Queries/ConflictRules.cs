@@ -10,6 +10,16 @@ public static class ConflictRules
     // non-master plugins are IdenticalToMaster, ConflictLoses (differ from the winner), or Override.
     // Callers supply `valuesEqual` so generic fields can use sorted-array-aware comparison while VMAD
     // compares pre-canonicalized strings.
+    // #267 / ADR-0035: a non-participating plugin's override/input never contributes to conflict
+    // classification — filtered out before any diff/winner/cell-state computation, not just masked
+    // in the result. Shared by ConflictClassifier/VmadConflictClassifier/ConditionConflictClassifier
+    // so the "what does an absent key mean" default (fail-open: true) can't drift between the three.
+    // Null pluginParticipates (the default) means every plugin participates, preserving prior
+    // behavior for existing callers.
+    public static IReadOnlyList<T> FilterParticipating<T>(
+        IReadOnlyList<T> items, Func<T, string> plugin, IReadOnlyDictionary<string, bool>? pluginParticipates) =>
+        pluginParticipates == null ? items : [.. items.Where(i => pluginParticipates.GetValueOrDefault(plugin(i), true))];
+
     // The winning plugin for a cell: highest load-order plugin that has a value. Callers only align
     // over the union of plugins that carry the value, so at least one is always present.
     public static string PickWinner(

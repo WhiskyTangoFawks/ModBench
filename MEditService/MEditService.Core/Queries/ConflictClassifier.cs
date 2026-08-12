@@ -18,8 +18,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         // #267 / ADR-0035: a non-participating plugin's override never contributes to conflict
         // classification — filtered out before OnlyOne/winner/diff computation below, not just
         // masked in the result, so it can't leak into pluginMasters/IsInjectedRecord either.
-        if (pluginParticipates != null)
-            conflictingRecords = [.. conflictingRecords.Where(r => pluginParticipates.GetValueOrDefault(r.Plugin, true))];
+        conflictingRecords = ConflictRules.FilterParticipating(conflictingRecords, r => r.Plugin, pluginParticipates);
 
         if (conflictingRecords.Count == 0)
             return new ClassifyResult(ConflictAll.OnlyOne, new Dictionary<string, ConflictThis>(), []);

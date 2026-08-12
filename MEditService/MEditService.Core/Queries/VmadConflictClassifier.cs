@@ -36,8 +36,7 @@ public static class VmadConflictClassifier
         Func<string, RecordLookupEntry?>? resolveFormKey = null,
         IReadOnlyDictionary<string, bool>? pluginParticipates = null)
     {
-        if (pluginParticipates != null)
-            inputs = [.. inputs.Where(i => pluginParticipates.GetValueOrDefault(i.Plugin, true))];
+        inputs = ConflictRules.FilterParticipating(inputs, i => i.Plugin, pluginParticipates);
 
         var present = inputs.Where(i => i.Vmad != null).ToList();
         if (present.Count == 0)

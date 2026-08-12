@@ -28,8 +28,7 @@ public static class ConditionConflictClassifier
         Func<string, RecordLookupEntry?>? resolveFormKey = null,
         IReadOnlyDictionary<string, bool>? pluginParticipates = null)
     {
-        if (pluginParticipates != null)
-            inputs = [.. inputs.Where(i => pluginParticipates.GetValueOrDefault(i.Plugin, true))];
+        inputs = ConflictRules.FilterParticipating(inputs, i => i.Plugin, pluginParticipates);
 
         var present = inputs.Where(i => i.Owners.Count > 0).ToList();
         if (present.Count == 0)
@@ -202,11 +201,10 @@ public static class ConditionConflictClassifier
 
             var xRuns = SplitRuns(x);
             var yRuns = SplitRuns(y);
-            var count = Math.Min(xRuns.Count, yRuns.Count);
 
-            for (var i = 0; i < count; i++)
+            foreach (var (a, b) in xRuns.Zip(yRuns))
             {
-                var cmp = CompareRun(xRuns[i], yRuns[i]);
+                var cmp = CompareRun(a, b);
                 if (cmp != 0) return cmp;
             }
 
@@ -215,9 +213,7 @@ public static class ConditionConflictClassifier
 
         private static int CompareRun(string a, string b)
         {
-            var aIsDigits = a.Length > 0 && char.IsDigit(a[0]);
-            var bIsDigits = b.Length > 0 && char.IsDigit(b[0]);
-            if (aIsDigits && bIsDigits && long.TryParse(a, out var an) && long.TryParse(b, out var bn))
+            if (long.TryParse(a, out var an) && long.TryParse(b, out var bn))
                 return an.CompareTo(bn);
             return string.CompareOrdinal(a, b);
         }

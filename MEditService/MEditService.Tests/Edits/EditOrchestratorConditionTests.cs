@@ -130,7 +130,7 @@ public sealed class EditOrchestratorConditionTests
             var result = orchestrator.StageEdit(cobjFk.ToString(), "TestPlugin.esp", fields, "user", null);
 
             var ro = Assert.IsType<StageEditResult.ReadOnlyFields>(result);
-            Assert.Contains(@"CTDA\Conditions", ro.Fields);
+            Assert.Single(ro.Fields, f => f == @"CTDA\Conditions");
         }
     }
 
