@@ -646,6 +646,7 @@ function registerCopyCreateCommands(deps: EditorCommandDeps): vscode.Disposable[
     vscode.commands.registerCommand('modbench.copyAsOverrideInto', async (arg?: RecordNode | PlacedNode | ColumnHeaderContext) => {
       let formKey: string | undefined;
       let excludePlugin: string | undefined;
+      let excludeOrigin: string | undefined;
       let fromColumnHeader = false;
       if (arg instanceof PlacedNode) {
         formKey = arg.placed.formKey;
@@ -654,6 +655,7 @@ function registerCopyCreateCommands(deps: EditorCommandDeps): vscode.Disposable[
       } else if (arg) {
         formKey = arg.formKey;
         excludePlugin = arg.plugin;
+        excludeOrigin = arg.origin;
         fromColumnHeader = true;
       }
       if (!formKey) {
@@ -667,8 +669,10 @@ function registerCopyCreateCommands(deps: EditorCommandDeps): vscode.Disposable[
       if (fromColumnHeader) {
         // #202: sourcePlugin (the right-clicked column, `excludePlugin` above) is forwarded so
         // the backend copies that plugin's own version of the record, not necessarily the winner.
+        // #272: sourceOrigin identifies *which* column alongside it.
         broadcastToRecordPanels(recordPanels, {
-          type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE, formKey, sourcePlugin: excludePlugin!, targetPlugin,
+          type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE, formKey,
+          sourcePlugin: excludePlugin!, sourceOrigin: excludeOrigin!, targetPlugin,
         });
       } else {
         await controller.copyRecordTo(formKey, targetPlugin);
@@ -707,7 +711,8 @@ function registerColumnHeaderCommands(deps: EditorCommandDeps): vscode.Disposabl
       const targetPlugin = await pickTargetPlugin(repository, controller, ctx.plugin);
       if (!targetPlugin) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD, formKey: ctx.formKey, sourcePlugin: ctx.plugin, targetPlugin,
+        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD, formKey: ctx.formKey,
+        sourcePlugin: ctx.plugin, sourceOrigin: ctx.origin, targetPlugin,
       });
     }),
     // No target plugin needed — the `when` clause on this command's webview/context contribution
@@ -716,7 +721,7 @@ function registerColumnHeaderCommands(deps: EditorCommandDeps): vscode.Disposabl
     vscode.commands.registerCommand('modbench.columnHeader.removeOverride', (ctx?: ColumnHeaderContext) => {
       if (!ctx) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: ctx.formKey, plugin: ctx.plugin,
+        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
       });
     }),
     vscode.commands.registerCommand('modbench.columnHeader.addMaster', async (ctx?: ColumnHeaderContext) => {
@@ -724,7 +729,7 @@ function registerColumnHeaderCommands(deps: EditorCommandDeps): vscode.Disposabl
       const newMaster = await pickAddMasterCandidate(repository, ctx.plugin, ctx.masters);
       if (!newMaster) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER, formKey: ctx.formKey, plugin: ctx.plugin, newMaster,
+        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, newMaster,
       });
     }),
   ];
@@ -746,25 +751,25 @@ function registerArrayOpCommands(deps: EditorCommandDeps): vscode.Disposable[] {
     vscode.commands.registerCommand('modbench.array.add', (ctx?: ArrayParentContext) => {
       if (!ctx) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_ADD, formKey: ctx.formKey, plugin: ctx.plugin, fieldName: ctx.fieldName,
+        type: EXTENSION_TO_WEBVIEW.ARRAY_ADD, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName,
       });
     }),
     vscode.commands.registerCommand('modbench.array.remove', (ctx?: ArrayElementContext) => {
       if (!ctx) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: ctx.formKey, plugin: ctx.plugin, fieldName: ctx.fieldName, index: ctx.index,
+        type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName, index: ctx.index,
       });
     }),
     vscode.commands.registerCommand('modbench.array.moveUp', (ctx?: ArrayElementContext) => {
       if (!ctx) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP, formKey: ctx.formKey, plugin: ctx.plugin, fieldName: ctx.fieldName, index: ctx.index,
+        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName, index: ctx.index,
       });
     }),
     vscode.commands.registerCommand('modbench.array.moveDown', (ctx?: ArrayElementContext) => {
       if (!ctx) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN, formKey: ctx.formKey, plugin: ctx.plugin, fieldName: ctx.fieldName, index: ctx.index,
+        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName, index: ctx.index,
       });
     }),
   ];
@@ -798,25 +803,25 @@ function registerVmadOpCommands(deps: EditorCommandDeps): vscode.Disposable[] {
       const name = await pickScriptNameViaInputBox();
       if (name == null) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_ADD_SCRIPT, formKey: ctx.formKey, plugin: ctx.plugin, name,
+        type: EXTENSION_TO_WEBVIEW.VMAD_ADD_SCRIPT, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, name,
       });
     }),
     vscode.commands.registerCommand('modbench.vmad.removeScript', (ctx?: VmadScriptContext) => {
       if (!ctx) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT, formKey: ctx.formKey, plugin: ctx.plugin, scriptName: ctx.scriptName,
+        type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, scriptName: ctx.scriptName,
       });
     }),
     vscode.commands.registerCommand('modbench.vmad.addProperty', (ctx?: VmadScriptContext) => {
       if (!ctx) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY, formKey: ctx.formKey, plugin: ctx.plugin, scriptName: ctx.scriptName,
+        type: EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, scriptName: ctx.scriptName,
       });
     }),
     vscode.commands.registerCommand('modbench.vmad.removeProperty', (ctx?: VmadPropertyContext) => {
       if (!ctx) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_PROPERTY, formKey: ctx.formKey, plugin: ctx.plugin,
+        type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_PROPERTY, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
         scriptName: ctx.scriptName, propName: ctx.propName,
       });
     }),
@@ -832,7 +837,7 @@ function registerVmadOpCommands(deps: EditorCommandDeps): vscode.Disposable[] {
       const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Script flags' });
       if (!picked) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_SET_SCRIPT_FLAGS, formKey: ctx.formKey, plugin: ctx.plugin,
+        type: EXTENSION_TO_WEBVIEW.VMAD_SET_SCRIPT_FLAGS, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
         scriptName: ctx.scriptName, flags: picked,
       });
     }),
@@ -844,7 +849,7 @@ function registerVmadOpCommands(deps: EditorCommandDeps): vscode.Disposable[] {
       const picked = await vscode.window.showQuickPick([...VMAD_PROP_FLAGS], { placeHolder: 'Property flags' });
       if (!picked) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS, formKey: ctx.formKey, plugin: ctx.plugin,
+        type: EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
         scriptName: ctx.scriptName, propName: ctx.propName, flags: picked,
       });
     }),

@@ -57,13 +57,13 @@ public sealed class EditOrchestratorVmadTests
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => inner.GetPluginRecordTypes(plugin);
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
-        public VmadData? GetVmad(string formKey, string plugin) =>
+        public VmadData? GetVmad(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
             throw new InvalidOperationException("GetVmad must not be called for non-VMAD edits");
-        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin) =>
-            inner.GetConditions(formKey, plugin);
+        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+            inner.GetConditions(formKey, plugin, origin);
         public IReadOnlyList<string> GetConditionFunctions() => inner.GetConditionFunctions();
         public IReadOnlyList<string> GetConditionRunOnTargets() => inner.GetConditionRunOnTargets();
-        public PlacementRow? GetPlacement(string formKey, string plugin) => inner.GetPlacement(formKey, plugin);
+        public PlacementRow? GetPlacement(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => inner.GetPlacement(formKey, plugin, origin);
         public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
             inner.GetChanges(plugin, formKey, memberChangeId);
     }
@@ -119,19 +119,19 @@ public sealed class EditOrchestratorVmadTests
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => inner.GetPluginRecordTypes(plugin);
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
-        public VmadData? GetVmad(string formKey, string plugin) =>
+        public VmadData? GetVmad(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
             !formKey.Equals(vmadFormKey, StringComparison.OrdinalIgnoreCase)
-                ? inner.GetVmad(formKey, plugin)
+                ? inner.GetVmad(formKey, plugin, origin)
                 : new VmadData([
                     new VmadScriptData("TestScript", "Local", [
                         new VmadNamedValue("VarProp", new VmadPropertyValue("Variable", "", null))
                     ])
                 ]);
-        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin) =>
-            inner.GetConditions(formKey, plugin);
+        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+            inner.GetConditions(formKey, plugin, origin);
         public IReadOnlyList<string> GetConditionFunctions() => inner.GetConditionFunctions();
         public IReadOnlyList<string> GetConditionRunOnTargets() => inner.GetConditionRunOnTargets();
-        public PlacementRow? GetPlacement(string formKey, string plugin) => inner.GetPlacement(formKey, plugin);
+        public PlacementRow? GetPlacement(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => inner.GetPlacement(formKey, plugin, origin);
         public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
             inner.GetChanges(plugin, formKey, memberChangeId);
     }

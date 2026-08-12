@@ -13,6 +13,25 @@ public class ConditionConflictClassifierTests
     private static ConditionPluginInput Input(string plugin, int lo, params ParsedCondition[] conditions) =>
         new(plugin, lo, conditions.Length == 0 ? [] : [new ConditionOwner("Conditions", conditions)]);
 
+    private static ConditionPluginInput InputWithOrigin(string plugin, string origin, int lo, params ParsedCondition[] conditions) =>
+        new(plugin, lo, conditions.Length == 0 ? [] : [new ConditionOwner("Conditions", conditions)], origin);
+
+    // #272 / ADR-0036 (AC5): two columns sharing a filename, differing in origin — bare-plugin
+    // dictionary keys would collide here even though nothing loads such a pair yet (#34).
+    [Fact]
+    public void Classify_SameFilenameDifferentOrigin_DoesNotCollide()
+    {
+        var modA = InputWithOrigin("Shared.esp", "ModA", 0, Condition("GetIsID", 1.0f));
+        var modB = InputWithOrigin("Shared.esp", "ModB", 1, Condition("GetIsID", 2.0f));
+
+        var result = ConditionConflictClassifier.Classify([modA, modB]);
+
+        var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
+        Assert.Equal("Shared.esp|ModB", diff.WinnerColumn);
+        Assert.Equal(1.0f, diff.PerPlugin["Shared.esp|ModA"]!.ComparisonFloat);
+        Assert.Equal(2.0f, diff.PerPlugin["Shared.esp|ModB"]!.ComparisonFloat);
+    }
+
     [Fact]
     public void Classify_IdenticalAcrossPlugins_NoConflict_IdenticalToMaster()
     {
@@ -22,7 +41,7 @@ public class ConditionConflictClassifierTests
         ]);
 
         var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
-        Assert.Equal("Override.esp", diff.WinnerPlugin);
+        Assert.Equal("Override.esp", diff.WinnerColumn);
         Assert.Equal(ConflictThis.IdenticalToMaster, diff.CellStates["Override.esp"]);
         Assert.Equal(ConflictAll.NoConflict, result.ConflictContribution);
         Assert.DoesNotContain("Master.esp", diff.CellStates.Keys); // master omitted from cell states
@@ -70,7 +89,7 @@ public class ConditionConflictClassifierTests
         ]);
 
         var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
-        Assert.Equal("B.esp", diff.WinnerPlugin);
+        Assert.Equal("B.esp", diff.WinnerColumn);
         Assert.Equal(ConflictThis.ConflictWins, diff.CellStates["B.esp"]);
         Assert.Equal(ConflictThis.ConflictLoses, diff.CellStates["A.esp"]);
         Assert.Equal(ConflictAll.Conflict, result.ConflictContribution);
@@ -106,7 +125,7 @@ public class ConditionConflictClassifierTests
         Assert.Equal(2, conditions.Count);
         Assert.Null(conditions[1].PerPlugin["Master.esp"]);       // master has no row 1
         Assert.NotNull(conditions[1].PerPlugin["Override.esp"]);
-        Assert.Equal("Override.esp", conditions[1].WinnerPlugin);
+        Assert.Equal("Override.esp", conditions[1].WinnerColumn);
     }
 
     // ---- Nested-group ordering and alignment (#181) ----
@@ -153,7 +172,7 @@ public class ConditionConflictClassifierTests
         var diff = Assert.Single(group1.Conditions);
         Assert.Null(diff.PerPlugin["Master.esp"]);
         Assert.NotNull(diff.PerPlugin["Override.esp"]);
-        Assert.Equal("Override.esp", diff.WinnerPlugin);
+        Assert.Equal("Override.esp", diff.WinnerColumn);
     }
 
     // Confirmation, not a production change (#184): NaturalFieldPathComparer already splits the

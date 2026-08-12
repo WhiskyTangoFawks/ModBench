@@ -15,7 +15,7 @@ function conditionDiff(partial: Partial<ConditionDiff> = {}): ConditionDiff {
   return {
     index: 0,
     perPlugin: { 'Fallout4.esm': condition(), 'MyMod.esp': condition() },
-    winnerPlugin: 'Fallout4.esm',
+    winnerColumn: 'Fallout4.esm',
     cellStates: {},
     fieldCellStates: {},
     ...partial,

@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { createRecordSessionClient } from './RecordSessionClient';
+import { columnKey } from './types';
 import { vscode } from './vscode';
 
 // The client is the record panel's single backend seam. `fetch` is the genuine external
@@ -65,8 +66,35 @@ describe('RecordSessionClient.load', () => {
     // Immutable-set resolution lives behind the client (issue #122 AC). #209: the raw plugin
     // list itself is no longer exposed on LoadResult — it fetches /plugins internally only to
     // derive this set, since its only consumer (the deleted PluginTargetPicker/Add Master
-    // dropdown) is gone.
-    expect(r.immutableSet).toEqual(new Set(['A.esp']));
+    // dropdown) is gone. #272: keyed by compound column identity (ColumnKey), not the bare
+    // plugin name — this fixture has no `origin`, which columnKey() treats as the elided Data
+    // origin, same as every pre-#272 fixture.
+    expect(r.immutableSet).toEqual(new Set([columnKey('A.esp')]));
+  });
+
+  // #272 / ADR-0036: the genuinely red case — two PluginInfo entries sharing a filename but
+  // differing in origin must produce two distinct Set members, or one origin's mutability
+  // silently wins for both columns (RecordPanel.tsx's immutableSet.has(...) checks). Pre-#272,
+  // `.map(p => p.name)` collapsed both into one entry.
+  it('keys immutableSet by compound identity, so two same-filename different-origin plugins stay distinct', async () => {
+    fetchMock.mockImplementation((input: Request | string) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.includes('/compare')) return Promise.resolve(jsonResponse({ overrides: [], diffs: [], conflictAll: 'OnlyOne' }));
+      if (url.includes('/changes')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/plugins')) {
+        return Promise.resolve(jsonResponse([
+          { name: 'Shared.esp', isImmutable: true, loadOrderIndex: 0, origin: 'ModA' },
+          { name: 'Shared.esp', isImmutable: false, loadOrderIndex: 1, origin: 'ModB' },
+        ]));
+      }
+      return Promise.resolve(jsonResponse({}, 404));
+    });
+
+    const r = await createRecordSessionClient(5172).load('000001:A.esm');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.immutableSet).toEqual(new Set([columnKey('Shared.esp', 'ModA')]));
+    expect(r.immutableSet?.has(columnKey('Shared.esp', 'ModB'))).toBe(false);
   });
 
   it('fails the whole load when compare fails', async () => {

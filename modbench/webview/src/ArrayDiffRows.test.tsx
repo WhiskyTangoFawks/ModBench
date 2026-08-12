@@ -72,26 +72,26 @@ const sortedArrayCompareResult = {
   diffs: [{
     fieldName: 'Keywords',
     values: { 'Fallout4.esm': ['KwdA', 'KwdB'], 'MyMod.esp': ['KwdA', 'KwdC'] },
-    winnerPlugin: 'MyMod.esp',
+    winnerColumn: 'MyMod.esp',
     winnerValue: ['KwdA', 'KwdC'],
     cellStates: { 'MyMod.esp': 'Override' },
     children: [
       {
         fieldName: 'KwdA',
         values: { 'Fallout4.esm': 'KwdA', 'MyMod.esp': 'KwdA' },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 'KwdA',
+        winnerColumn: 'Fallout4.esm', winnerValue: 'KwdA',
         cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
       },
       {
         fieldName: 'KwdB',
         values: { 'Fallout4.esm': 'KwdB', 'MyMod.esp': null },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 'KwdB',
+        winnerColumn: 'Fallout4.esm', winnerValue: 'KwdB',
         cellStates: {},
       },
       {
         fieldName: 'KwdC',
         values: { 'Fallout4.esm': null, 'MyMod.esp': 'KwdC' },
-        winnerPlugin: 'MyMod.esp', winnerValue: 'KwdC',
+        winnerColumn: 'MyMod.esp', winnerValue: 'KwdC',
         cellStates: { 'MyMod.esp': 'Override' },
       },
     ],
@@ -122,19 +122,19 @@ const unsortedArrayWithPendingResult = {
   diffs: [{
     fieldName: 'Items',
     values: { 'Fallout4.esm': ['alpha', 'beta'], 'MyMod.esp': ['alpha', 'gamma'] },
-    winnerPlugin: 'MyMod.esp', winnerValue: ['alpha', 'gamma'],
+    winnerColumn: 'MyMod.esp', winnerValue: ['alpha', 'gamma'],
     cellStates: { 'MyMod.esp': 'ConflictWins' },
     children: [
       {
         fieldName: '[0]',
         values: { 'Fallout4.esm': 'alpha', 'MyMod.esp': 'alpha' },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 'alpha',
+        winnerColumn: 'Fallout4.esm', winnerValue: 'alpha',
         cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
       },
       {
         fieldName: '[1]',
         values: { 'Fallout4.esm': 'beta', 'MyMod.esp': 'gamma' },
-        winnerPlugin: 'MyMod.esp', winnerValue: 'gamma',
+        winnerColumn: 'MyMod.esp', winnerValue: 'gamma',
         cellStates: { 'MyMod.esp': 'ConflictWins' },
       },
     ],
@@ -172,25 +172,25 @@ const unsortedArrayControlsResult = {
   diffs: [{
     fieldName: 'Items',
     values: { 'Fallout4.esm': ['alpha', 'beta', 'gamma'], 'MyMod.esp': ['alpha', 'beta', 'gamma'] },
-    winnerPlugin: 'Fallout4.esm', winnerValue: ['alpha', 'beta', 'gamma'],
+    winnerColumn: 'Fallout4.esm', winnerValue: ['alpha', 'beta', 'gamma'],
     cellStates: {},
     children: [
       {
         fieldName: '[0]',
         values: { 'Fallout4.esm': 'alpha', 'MyMod.esp': 'alpha' },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 'alpha',
+        winnerColumn: 'Fallout4.esm', winnerValue: 'alpha',
         cellStates: {},
       },
       {
         fieldName: '[1]',
         values: { 'Fallout4.esm': 'beta', 'MyMod.esp': 'beta' },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 'beta',
+        winnerColumn: 'Fallout4.esm', winnerValue: 'beta',
         cellStates: {},
       },
       {
         fieldName: '[2]',
         values: { 'Fallout4.esm': 'gamma', 'MyMod.esp': 'gamma' },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 'gamma',
+        winnerColumn: 'Fallout4.esm', winnerValue: 'gamma',
         cellStates: {},
       },
     ],
@@ -223,25 +223,25 @@ const unsortedArrayMismatchedLengthResult = {
   diffs: [{
     fieldName: 'Items',
     values: { 'Fallout4.esm': ['alpha', 'beta', 'gamma'], 'MyMod.esp': ['x'] },
-    winnerPlugin: 'Fallout4.esm', winnerValue: ['alpha', 'beta', 'gamma'],
+    winnerColumn: 'Fallout4.esm', winnerValue: ['alpha', 'beta', 'gamma'],
     cellStates: { 'MyMod.esp': 'Conflict' },
     children: [
       {
         fieldName: '[0]',
         values: { 'Fallout4.esm': 'alpha', 'MyMod.esp': 'x' },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 'alpha',
+        winnerColumn: 'Fallout4.esm', winnerValue: 'alpha',
         cellStates: { 'MyMod.esp': 'Conflict' },
       },
       {
         fieldName: '[1]',
         values: { 'Fallout4.esm': 'beta', 'MyMod.esp': null },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 'beta',
+        winnerColumn: 'Fallout4.esm', winnerValue: 'beta',
         cellStates: {},
       },
       {
         fieldName: '[2]',
         values: { 'Fallout4.esm': 'gamma', 'MyMod.esp': null },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 'gamma',
+        winnerColumn: 'Fallout4.esm', winnerValue: 'gamma',
         cellStates: {},
       },
     ],
@@ -284,19 +284,19 @@ const structWithPendingResult = {
   diffs: [{
     fieldName: 'ObjectBounds',
     values: { 'Fallout4.esm': { X1: 0, X2: 100 }, 'MyMod.esp': { X1: 0, X2: 100 } },
-    winnerPlugin: 'Fallout4.esm', winnerValue: { X1: 0, X2: 100 },
+    winnerColumn: 'Fallout4.esm', winnerValue: { X1: 0, X2: 100 },
     cellStates: { 'MyMod.esp': 'Override' },
     children: [
       {
         fieldName: 'X1',
         values: { 'Fallout4.esm': 0, 'MyMod.esp': 0 },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 0,
+        winnerColumn: 'Fallout4.esm', winnerValue: 0,
         cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
       },
       {
         fieldName: 'X2',
         values: { 'Fallout4.esm': 100, 'MyMod.esp': 100 },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 100,
+        winnerColumn: 'Fallout4.esm', winnerValue: 100,
         cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
       },
     ],
@@ -330,19 +330,19 @@ const structEditResult = {
   diffs: [{
     fieldName: 'ObjectBounds',
     values: { 'Fallout4.esm': { X1: 0, X2: 100 }, 'MyMod.esp': { X1: 5, X2: 200 } },
-    winnerPlugin: 'MyMod.esp', winnerValue: { X1: 5, X2: 200 },
+    winnerColumn: 'MyMod.esp', winnerValue: { X1: 5, X2: 200 },
     cellStates: { 'MyMod.esp': 'Override' },
     children: [
       {
         fieldName: 'X1',
         values: { 'Fallout4.esm': 0, 'MyMod.esp': 5 },
-        winnerPlugin: 'MyMod.esp', winnerValue: 5,
+        winnerColumn: 'MyMod.esp', winnerValue: 5,
         cellStates: { 'MyMod.esp': 'Override' },
       },
       {
         fieldName: 'X2',
         values: { 'Fallout4.esm': 100, 'MyMod.esp': 200 },
-        winnerPlugin: 'MyMod.esp', winnerValue: 200,
+        winnerColumn: 'MyMod.esp', winnerValue: 200,
         cellStates: { 'MyMod.esp': 'Override' },
       },
     ],
@@ -370,19 +370,19 @@ const structEditWithPriorPendingResult = {
   diffs: [{
     fieldName: 'ObjectBounds',
     values: { 'Fallout4.esm': { X1: 0, X2: 100 }, 'MyMod.esp': { X1: 5, X2: 200 } },
-    winnerPlugin: 'MyMod.esp', winnerValue: { X1: 5, X2: 200 },
+    winnerColumn: 'MyMod.esp', winnerValue: { X1: 5, X2: 200 },
     cellStates: { 'MyMod.esp': 'Override' },
     children: [
       {
         fieldName: 'X1',
         values: { 'Fallout4.esm': 0, 'MyMod.esp': 5 },
-        winnerPlugin: 'MyMod.esp', winnerValue: 5,
+        winnerColumn: 'MyMod.esp', winnerValue: 5,
         cellStates: { 'MyMod.esp': 'Override' },
       },
       {
         fieldName: 'X2',
         values: { 'Fallout4.esm': 100, 'MyMod.esp': 200 },
-        winnerPlugin: 'MyMod.esp', winnerValue: 200,
+        winnerColumn: 'MyMod.esp', winnerValue: 200,
         cellStates: { 'MyMod.esp': 'Override' },
       },
     ],
@@ -419,21 +419,21 @@ const structCollapseExpandResult = {
   diffs: [{
     fieldName: 'ObjectBounds',
     values: { 'Fallout4.esm': { X1: 0, X2: 100 }, 'MyMod.esp': { X1: 5, X2: 100 } },
-    winnerPlugin: 'MyMod.esp', winnerValue: { X1: 5, X2: 100 },
+    winnerColumn: 'MyMod.esp', winnerValue: { X1: 5, X2: 100 },
     cellStates: { 'MyMod.esp': 'Override' },
     conflictAll: 'Override',
     children: [
       {
         fieldName: 'X1',
         values: { 'Fallout4.esm': 0, 'MyMod.esp': 5 },
-        winnerPlugin: 'MyMod.esp', winnerValue: 5,
+        winnerColumn: 'MyMod.esp', winnerValue: 5,
         cellStates: { 'MyMod.esp': 'Override' },
         conflictAll: 'Override',
       },
       {
         fieldName: 'X2',
         values: { 'Fallout4.esm': 100, 'MyMod.esp': 100 },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 100,
+        winnerColumn: 'Fallout4.esm', winnerValue: 100,
         cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
         conflictAll: 'NoConflict',
       },
@@ -487,7 +487,7 @@ const structInArrayResult = {
       'Fallout4.esm': [{ PkgId: 'PkgA', Priority: 1 }],
       'MyMod.esp': [{ PkgId: 'PkgA', Priority: 1 }],
     },
-    winnerPlugin: 'Fallout4.esm', winnerValue: [{ PkgId: 'PkgA', Priority: 1 }],
+    winnerColumn: 'Fallout4.esm', winnerValue: [{ PkgId: 'PkgA', Priority: 1 }],
     cellStates: { 'MyMod.esp': 'Override' },
     children: [
       {
@@ -496,19 +496,19 @@ const structInArrayResult = {
           'Fallout4.esm': { PkgId: 'PkgA', Priority: 1 },
           'MyMod.esp': { PkgId: 'PkgA', Priority: 1 },
         },
-        winnerPlugin: 'Fallout4.esm', winnerValue: { PkgId: 'PkgA', Priority: 1 },
+        winnerColumn: 'Fallout4.esm', winnerValue: { PkgId: 'PkgA', Priority: 1 },
         cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
         children: [
           {
             fieldName: 'PkgId',
             values: { 'Fallout4.esm': 'PkgA', 'MyMod.esp': 'PkgA' },
-            winnerPlugin: 'Fallout4.esm', winnerValue: 'PkgA',
+            winnerColumn: 'Fallout4.esm', winnerValue: 'PkgA',
             cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
           },
           {
             fieldName: 'Priority',
             values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 },
-            winnerPlugin: 'Fallout4.esm', winnerValue: 1,
+            winnerColumn: 'Fallout4.esm', winnerValue: 1,
             cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
           },
         ],
@@ -1286,29 +1286,29 @@ const nestedStructArrayResult = {
       'Fallout4.esm': { Entries: [{ Id: 'A', Weight: 1 }] },
       'MyMod.esp': { Entries: [{ Id: 'A', Weight: 1 }] },
     },
-    winnerPlugin: 'Fallout4.esm', winnerValue: { Entries: [{ Id: 'A', Weight: 1 }] },
+    winnerColumn: 'Fallout4.esm', winnerValue: { Entries: [{ Id: 'A', Weight: 1 }] },
     cellStates: {},
     children: [{
       fieldName: 'Entries',
       values: { 'Fallout4.esm': [{ Id: 'A', Weight: 1 }], 'MyMod.esp': [{ Id: 'A', Weight: 1 }] },
-      winnerPlugin: 'Fallout4.esm', winnerValue: [{ Id: 'A', Weight: 1 }],
+      winnerColumn: 'Fallout4.esm', winnerValue: [{ Id: 'A', Weight: 1 }],
       cellStates: {},
       children: [{
         fieldName: '[0]',
         values: { 'Fallout4.esm': { Id: 'A', Weight: 1 }, 'MyMod.esp': { Id: 'A', Weight: 1 } },
-        winnerPlugin: 'Fallout4.esm', winnerValue: { Id: 'A', Weight: 1 },
+        winnerColumn: 'Fallout4.esm', winnerValue: { Id: 'A', Weight: 1 },
         cellStates: {},
         children: [
           {
             fieldName: 'Id',
             values: { 'Fallout4.esm': 'A', 'MyMod.esp': 'A' },
-            winnerPlugin: 'Fallout4.esm', winnerValue: 'A',
+            winnerColumn: 'Fallout4.esm', winnerValue: 'A',
             cellStates: {},
           },
           {
             fieldName: 'Weight',
             values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 },
-            winnerPlugin: 'Fallout4.esm', winnerValue: 1,
+            winnerColumn: 'Fallout4.esm', winnerValue: 1,
             cellStates: {},
           },
         ],
@@ -1405,13 +1405,13 @@ const wirePathResult = {
   diffs: [{
     fieldName: 'Container',
     values: { 'Fallout4.esm': { Ordinary: 'a', Independent: 'b' }, 'MyMod.esp': { Ordinary: 'a', Independent: 'b' } },
-    winnerPlugin: 'Fallout4.esm', winnerValue: { Ordinary: 'a', Independent: 'b' },
+    winnerColumn: 'Fallout4.esm', winnerValue: { Ordinary: 'a', Independent: 'b' },
     cellStates: {},
     children: [
       {
         fieldName: 'Ordinary',
         values: { 'Fallout4.esm': 'a', 'MyMod.esp': 'a' },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 'a',
+        winnerColumn: 'Fallout4.esm', winnerValue: 'a',
         cellStates: {},
       },
       {
@@ -1420,7 +1420,7 @@ const wirePathResult = {
         // — RecordPanel must restage it there directly, not merged into Container's own value.
         wirePath: 'VMAD\\ScriptA\\Independent',
         values: { 'Fallout4.esm': 'b', 'MyMod.esp': 'b' },
-        winnerPlugin: 'Fallout4.esm', winnerValue: 'b',
+        winnerColumn: 'Fallout4.esm', winnerValue: 'b',
         cellStates: {},
       },
     ],

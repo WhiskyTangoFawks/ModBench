@@ -62,6 +62,31 @@ public sealed class PluginSaverSaveGroupTests
         Assert.IsType<SaveGroupResult.NoChanges>(result);
     }
 
+    // #272 / ADR-0036: SaveGroupResponse.ByPlugin is keyed by the compound column identity, but the
+    // physical write/reindex target must still be the real plugin filename — never the compound
+    // key itself, which would break both the on-disk write path and ReindexPlugins.
+    [Fact]
+    public async Task Save_NonDataOrigin_KeysByColumnButReindexesRealPluginFilename()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        var members = new[]
+        {
+            new GroupMember("000001:Test.esp", "A.esp", "npc_", "field_edit",
+                "aggression", J("\"Unaggressive\""), J("\"Frenzied\""), Origin: "ModA"),
+        };
+        var group = changes.StageChanges(members);
+        var session = new StubSession();
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+
+        var result = await saver.Save(group.Id);
+
+        var saved = Assert.IsType<SaveGroupResult.Saved>(result);
+        Assert.Contains("A.esp|ModA", saved.ByPlugin.Keys);
+        Assert.Contains(session.BatchReindexCalls, batch => batch.Contains("A.esp"));
+        Assert.DoesNotContain(session.BatchReindexCalls, batch => batch.Any(p => p.Contains('|')));
+        File.Delete(session.LastDestPath!);
+    }
+
     // C2
     [Fact]
     public async Task Save_GroupWithChanges_ReturnsSaved()

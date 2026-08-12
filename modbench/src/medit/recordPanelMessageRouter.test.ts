@@ -848,7 +848,7 @@ describe('routeRecordPanelMessage — OPEN_EXTENDED_EDITOR (issue #230)', () => 
 
   it('with extendedFieldEditor deps undefined is a no-op', async () => {
     await expect(routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'MyMod.esp', readOnly: false },
+      { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'Data', readOnly: false },
       makeDeps(),
     )).resolves.toBeUndefined();
     expect(openExtendedFieldEditorMock).not.toHaveBeenCalled();
@@ -859,12 +859,29 @@ describe('routeRecordPanelMessage — OPEN_EXTENDED_EDITOR (issue #230)', () => 
     const extendedFieldEditorDeps = { tempRoot: '/tmp/x', reply, log: vi.fn(), reporter: fakeReporter };
 
     await routeRecordPanelMessage(
-      { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', readOnly: true },
+      { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'ModA', readOnly: true },
       makeDeps({ extendedFieldEditor: extendedFieldEditorDeps }),
     );
 
     expect(openExtendedFieldEditorMock).toHaveBeenCalledWith(
-      { requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', readOnly: true },
+      { requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'ModA', readOnly: true },
+      extendedFieldEditorDeps,
+    );
+  });
+
+  // #272 / ADR-0036: origin is forwarded even though extendedEditorPath doesn't use it yet
+  // (unreachable path collision until #34) — the router's own job is just faithful forwarding.
+  it('forwards origin through to openExtendedFieldEditor', async () => {
+    const reply = vi.fn();
+    const extendedFieldEditorDeps = { tempRoot: '/tmp/x', reply, log: vi.fn(), reporter: fakeReporter };
+
+    await routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Shared.esp', origin: 'ModB', readOnly: false },
+      makeDeps({ extendedFieldEditor: extendedFieldEditorDeps }),
+    );
+
+    expect(openExtendedFieldEditorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ plugin: 'Shared.esp', origin: 'ModB' }),
       extendedFieldEditorDeps,
     );
   });
@@ -878,7 +895,7 @@ describe('routeRecordPanelMessage — OPEN_EXTENDED_EDITOR (issue #230)', () => 
     await routeRecordPanelMessage(
       {
         type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'staged value',
-        recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp',
+        recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'Data',
         readOnly: false, column: 'pending',
       },
       makeDeps({ extendedFieldEditor: extendedFieldEditorDeps }),

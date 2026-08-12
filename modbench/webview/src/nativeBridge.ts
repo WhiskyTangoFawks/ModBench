@@ -150,7 +150,11 @@ export function readClipboardText(): Promise<string | null> {
 // editor, so this is a second *trigger* onto the identical commit path, not a second path.
 export function openExtendedFieldEditor(
   params: {
-    value: string; recordLabel: string; fieldName: string; plugin: string; readOnly: boolean;
+    value: string; recordLabel: string; fieldName: string; plugin: string;
+    // #272 / ADR-0036: required alongside `plugin` — see messages.ts' OPEN_EXTENDED_EDITOR doc
+    // comment for why this isn't yet used for path derivation.
+    origin: string;
+    readOnly: boolean;
     // Issue #242: FocusedCell's own disk/pending discriminant (#232) — absent (disk cell) is
     // every pre-#242 call site's own meaning, unchanged; the pending column's own call site is
     // the one place that passes 'pending'.

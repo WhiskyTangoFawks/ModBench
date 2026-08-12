@@ -27,9 +27,9 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         if (conflictingRecords.Count == 1)
         {
             var single = conflictingRecords[0];
-            var pluginState = new Dictionary<string, ConflictThis> { [single.Plugin] = ConflictThis.OnlyOne };
+            var pluginState = new Dictionary<string, ConflictThis> { [ColumnKey.Of(single.Plugin, single.Origin)] = ConflictThis.OnlyOne };
             var fieldNames = single.Fields.Select(f => f.Metadata.Name).ToList();
-            var singleCtx = new DiffContext(single.Plugin, conflictingRecords, _logger, resolveFormKey);
+            var singleCtx = new DiffContext(ColumnKey.Of(single.Plugin, single.Origin), conflictingRecords, _logger, resolveFormKey);
             return new ClassifyResult(ConflictAll.OnlyOne, pluginState, BuildDiffs(fieldNames, conflictingRecords, single, singleCtx, []));
         }
 
@@ -42,14 +42,18 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             .Where(f => f.Metadata.ElementType?.IsSortable == true)
             .Select(f => f.Metadata.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var ctx = new DiffContext(master.Plugin, conflictingRecords, _logger, resolveFormKey);
+        var masterColumn = ColumnKey.Of(master.Plugin, master.Origin);
+        var ctx = new DiffContext(masterColumn, conflictingRecords, _logger, resolveFormKey);
         var diffs = BuildDiffs([.. master.Fields.Select(f => f.Metadata.Name)], conflictingRecords, winner, ctx, sortedArrays);
 
         var conflictAll = ConflictRules.Reduce(diffs.SelectMany(d => d.CellStates.Values));
 
+        // #272 / ADR-0036: keyed by the compound column identity, not the bare plugin — two
+        // overrides sharing a filename but differing in origin must land as two independent entries
+        // here, not collide (ToDictionary would throw on a literal duplicate key).
         var pluginConflictThis = conflictingRecords.ToDictionary(
-            o => o.Plugin,
-            o => AggregateConflictThis(o.Plugin, master.Plugin, diffs));
+            o => ColumnKey.Of(o.Plugin, o.Origin),
+            o => AggregateConflictThis(ColumnKey.Of(o.Plugin, o.Origin), masterColumn, diffs));
 
         // Escalates an existing Override/Conflict to Critical; never overrides a NoConflict result
         // (a content-identical injected record isn't a real conflict — see xeMainForm.pas ConflictLevelForNodeDatas).
@@ -60,15 +64,15 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     }
 
     private static ConflictThis AggregateConflictThis(
-        string plugin,
-        string masterPlugin,
+        string column,
+        string masterColumn,
         IReadOnlyList<FieldDiff> diffs)
     {
-        if (plugin == masterPlugin) return ConflictThis.Master;
+        if (column == masterColumn) return ConflictThis.Master;
 
         var states = diffs
-            .Where(d => d.CellStates.ContainsKey(plugin))
-            .Select(d => d.CellStates[plugin])
+            .Where(d => d.CellStates.ContainsKey(column))
+            .Select(d => d.CellStates[column])
             .ToList();
 
         return states switch
@@ -98,8 +102,11 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     // Bundles the per-Classify-call context (master plugin, all overrides, logger, and the ADR-0031
     // resolver) that every recursive Build*Children/MakeChild step needs, so adding the resolver
     // didn't push any method over the parameter-count limit.
+    // MasterColumn (#272 / ADR-0036): the compound (plugin, origin) identity of the master record,
+    // pre-computed by the caller via ColumnKey.Of — every dictionary/lookup below is keyed the same
+    // way, so a plain-plugin comparison never accidentally matches the wrong column.
     private sealed record DiffContext(
-        string MasterPlugin,
+        string MasterColumn,
         IReadOnlyList<RecordDetail> Records,
         ILogger Logger,
         Func<string, RecordLookupEntry?>? ResolveFormKey);
@@ -111,16 +118,17 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         DiffContext ctx,
         HashSet<string> sortedArrays)
     {
+        var winnerColumn = ColumnKey.Of(winner.Plugin, winner.Origin);
         var masterFieldMeta = records[0].Fields
             .ToDictionary(f => f.Metadata.Name, f => f.Metadata);
         return [.. fieldNames
             .Select(fieldName =>
             {
                 var values = records.ToDictionary(
-                    o => o.Plugin,
+                    o => ColumnKey.Of(o.Plugin, o.Origin),
                     o => o.Fields.FirstOrDefault(f => f.Metadata.Name == fieldName)?.Value);
-                var winnerValue = values.GetValueOrDefault(winner.Plugin);
-                var cellStates = ComputeCellStates(fieldName, values, ctx.MasterPlugin, records, sortedArrays);
+                var winnerValue = values.GetValueOrDefault(winnerColumn);
+                var cellStates = ComputeCellStates(fieldName, values, ctx.MasterColumn, records, sortedArrays);
                 var meta = masterFieldMeta.GetValueOrDefault(fieldName);
                 List<FieldDiff>? children = null;
                 if (meta?.Fields != null)
@@ -129,7 +137,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                     children = BuildArrayChildren(meta.ElementType, values, ctx, MaxArrayChildCount, fieldName);
                 var resolutions = BuildResolutions(meta, values, ctx.ResolveFormKey);
                 var conflictAll = AggregateConflictAll(cellStates, children);
-                return new FieldDiff(fieldName, values, winner.Plugin, winnerValue, cellStates, conflictAll, children, resolutions);
+                return new FieldDiff(fieldName, values, winnerColumn, winnerValue, cellStates, conflictAll, children, resolutions);
             })
             .Where(d => d.Values.Values.Any(v => v != null))];
     }
@@ -184,14 +192,14 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         string parentFieldName)
     {
         private readonly IReadOnlyList<RecordDetail> _records = ctx.Records;
-        private readonly string _masterPlugin = ctx.MasterPlugin;
+        private readonly string _masterColumn = ctx.MasterColumn;
         private readonly ILogger _logger = ctx.Logger;
 
         public List<FieldDiff>? BuildSorted()
         {
             var union = _records
-                .Where(r => arrays.GetValueOrDefault(r.Plugin) != null)
-                .SelectMany(r => arrays[r.Plugin]!.Value.EnumerateArray()
+                .Where(r => arrays.GetValueOrDefault(ColumnKey.Of(r.Plugin, r.Origin)) != null)
+                .SelectMany(r => arrays[ColumnKey.Of(r.Plugin, r.Origin)]!.Value.EnumerateArray()
                     .Select(e => e.GetString()).OfType<string>())
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
@@ -269,16 +277,17 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         private FieldDiff MakeChild(string label, Dictionary<string, object?> subValues)
         {
             var fieldWinner = _records
-                .Where(r => subValues.GetValueOrDefault(r.Plugin) != null)
+                .Where(r => subValues.GetValueOrDefault(ColumnKey.Of(r.Plugin, r.Origin)) != null)
                 .MaxBy(r => r.LoadOrderIndex)!;
-            var winnerValue = subValues[fieldWinner.Plugin];
-            var cellStates = ComputeCellStates(label, subValues, _masterPlugin, _records, []);
+            var winnerColumn = ColumnKey.Of(fieldWinner.Plugin, fieldWinner.Origin);
+            var winnerValue = subValues[winnerColumn];
+            var cellStates = ComputeCellStates(label, subValues, _masterColumn, _records, []);
             var childChildren = elementMeta.Fields != null
                 ? BuildStructChildren(elementMeta.Fields, subValues, ctx)
                 : null;
             var resolutions = BuildResolutions(elementMeta, subValues, ctx.ResolveFormKey);
             var conflictAll = AggregateConflictAll(cellStates, childChildren);
-            return new FieldDiff(label, subValues, fieldWinner.Plugin, winnerValue, cellStates, conflictAll, childChildren, resolutions);
+            return new FieldDiff(label, subValues, winnerColumn, winnerValue, cellStates, conflictAll, childChildren, resolutions);
         }
 
         private void WarnTooLarge(int count) => _logger.LogWarning(
@@ -307,14 +316,15 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                 subChildren = BuildStructChildren(subField.Fields, subValues, ctx);
 
             var fieldWinner = ctx.Records
-                .Where(r => subValues.GetValueOrDefault(r.Plugin) != null)
+                .Where(r => subValues.GetValueOrDefault(ColumnKey.Of(r.Plugin, r.Origin)) != null)
                 .MaxBy(r => r.LoadOrderIndex)!;
 
-            var winnerValue = subValues[fieldWinner.Plugin];
-            var cellStates = ComputeCellStates(subField.Name, subValues, ctx.MasterPlugin, ctx.Records, []);
+            var winnerColumn = ColumnKey.Of(fieldWinner.Plugin, fieldWinner.Origin);
+            var winnerValue = subValues[winnerColumn];
+            var cellStates = ComputeCellStates(subField.Name, subValues, ctx.MasterColumn, ctx.Records, []);
             var resolutions = BuildResolutions(subField, subValues, ctx.ResolveFormKey);
             var conflictAll = AggregateConflictAll(cellStates, subChildren);
-            children.Add(new FieldDiff(subField.Name, subValues, fieldWinner.Plugin, winnerValue, cellStates, conflictAll, subChildren, resolutions));
+            children.Add(new FieldDiff(subField.Name, subValues, winnerColumn, winnerValue, cellStates, conflictAll, subChildren, resolutions));
         }
         return children.Count > 0 ? children : null;
     }
@@ -350,13 +360,13 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     private static Dictionary<string, ConflictThis> ComputeCellStates(
         string fieldName,
         Dictionary<string, object?> values,
-        string masterPlugin,
+        string masterColumn,
         IReadOnlyList<RecordDetail> records,
         HashSet<string> sortedArrays)
     {
         var isSorted = sortedArrays.Contains(fieldName);
-        var pluginOrder = records.Select(r => (r.Plugin, r.LoadOrderIndex)).ToList();
-        return ConflictRules.ComputeCellStates(values, masterPlugin, pluginOrder, (a, b) => ValuesEqual(a, b, isSorted));
+        var columnOrder = records.Select(r => (ColumnKey.Of(r.Plugin, r.Origin), r.LoadOrderIndex)).ToList();
+        return ConflictRules.ComputeCellStates(values, masterColumn, columnOrder, (a, b) => ValuesEqual(a, b, isSorted));
     }
 
     // JsonElement doesn't override Equals() — compare by raw JSON text to handle array/struct fields.

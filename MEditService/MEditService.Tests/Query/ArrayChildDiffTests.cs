@@ -54,7 +54,7 @@ public class ArrayChildDiffTests
         var kwdA = kwdDiff.Children.First(c => c.FieldName == "KwdA");
         Assert.NotNull(kwdA.Values["A.esp"]);
         Assert.NotNull(kwdA.Values["B.esp"]);
-        Assert.Equal("B.esp", kwdA.WinnerPlugin); // B.esp has higher load order (1 > 0)
+        Assert.Equal("B.esp", kwdA.WinnerColumn); // B.esp has higher load order (1 > 0)
 
         var kwdB = kwdDiff.Children.First(c => c.FieldName == "KwdB");
         Assert.NotNull(kwdB.Values["A.esp"]);

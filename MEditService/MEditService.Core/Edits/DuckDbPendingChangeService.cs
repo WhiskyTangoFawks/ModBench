@@ -1,6 +1,7 @@
 using System.Data;
 using System.Text.Json;
 using DuckDB.NET.Data;
+using MEditService.Core.Queries;
 
 namespace MEditService.Core.Edits;
 
@@ -64,6 +65,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             CREATE TABLE IF NOT EXISTS pending_form_references (
                 source_form_key VARCHAR NOT NULL,
                 source_plugin   VARCHAR NOT NULL,
+                source_origin   VARCHAR NOT NULL DEFAULT '{Session.PluginOrigin.DataDirectory}',
                 target_form_key VARCHAR NOT NULL,
                 field_path      VARCHAR NOT NULL,
                 staged_field    VARCHAR NOT NULL,
@@ -83,11 +85,17 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
     private DuckDBConnection RequireConnection() =>
         _connection ?? throw new InvalidOperationException("No session loaded.");
 
-    private static (string Where, List<object> Params) BuildFilter(string? plugin, string? formKey)
+    // origin (#272 / ADR-0036): nullable and independent of plugin/formKey, unlike every other
+    // origin parameter in this file — this one is a *filter*, not an identity field, so it must
+    // default to "no filter" (preserving today's exact filename-only behavior for every existing
+    // caller) rather than to PluginOrigin.DataDirectory, which would wrongly exclude every row for a
+    // mod-provided (non-Data) origin plugin the moment a caller upgraded to pass a plugin filter.
+    private static (string Where, List<object> Params) BuildFilter(string? plugin, string? formKey, string? origin = null)
     {
         var conditions = new List<string>();
         var paramValues = new List<object>();
         if (plugin != null) { conditions.Add($"plugin = ${paramValues.Count + 1}"); paramValues.Add(plugin); }
+        if (origin != null) { conditions.Add($"origin = ${paramValues.Count + 1}"); paramValues.Add(origin); }
         if (formKey != null) { conditions.Add($"form_key = ${paramValues.Count + 1}"); paramValues.Add(formKey); }
         var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
         return (where, paramValues);
@@ -135,7 +143,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 source      = excluded.source,
                 description = excluded.description,
                 change_type = excluded.change_type
-            RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group
+            RETURNING id, form_key, plugin, origin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = id });
         cmd.Parameters.Add(new DuckDBParameter { Value = change.FormKey });
@@ -160,13 +168,16 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
     private static void ReplacePendingFormRefs(
         DuckDBConnection conn, PendingChangeUpsert change, string field, IEnumerable<PendingFormRef> fieldRefs)
     {
+        // #272 / ADR-0036: scoped to (source_plugin, source_origin) together — replacing one origin's
+        // staged refs for this field must never delete another origin's rows for the same filename.
         using var del = conn.CreateCommand();
         del.CommandText = """
             DELETE FROM pending_form_references
-            WHERE source_form_key = $1 AND source_plugin = $2 AND staged_field = $3
+            WHERE source_form_key = $1 AND source_plugin = $2 AND source_origin = $3 AND staged_field = $4
             """;
         del.Parameters.Add(new DuckDBParameter { Value = change.FormKey });
         del.Parameters.Add(new DuckDBParameter { Value = change.Plugin });
+        del.Parameters.Add(new DuckDBParameter { Value = change.Origin });
         del.Parameters.Add(new DuckDBParameter { Value = field });
         del.ExecuteNonQuery();
 
@@ -175,11 +186,12 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             using var ins = conn.CreateCommand();
             ins.CommandText = """
                 INSERT INTO pending_form_references
-                    (source_form_key, source_plugin, target_form_key, field_path, staged_field, record_type)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                    (source_form_key, source_plugin, source_origin, target_form_key, field_path, staged_field, record_type)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 """;
             ins.Parameters.Add(new DuckDBParameter { Value = change.FormKey });
             ins.Parameters.Add(new DuckDBParameter { Value = change.Plugin });
+            ins.Parameters.Add(new DuckDBParameter { Value = change.Origin });
             ins.Parameters.Add(new DuckDBParameter { Value = r.TargetFormKey });
             ins.Parameters.Add(new DuckDBParameter { Value = r.FieldPath });
             ins.Parameters.Add(new DuckDBParameter { Value = field });
@@ -188,13 +200,13 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         }
     }
 
-    public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null)
+    public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null, string? origin = null)
     {
         _sem.Wait();
         try
         {
             var conn = RequireConnection();
-            var (where, paramValues) = BuildFilter(plugin, formKey);
+            var (where, paramValues) = BuildFilter(plugin, formKey, origin);
             var changes = DoSelectChanges(conn, where, paramValues);
 
             // memberChangeId selects the whole component the named change belongs to (ADR-0028),
@@ -213,7 +225,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"""
-            SELECT id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group
+            SELECT id, form_key, plugin, origin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group
             FROM pending_changes{where}
             ORDER BY changed_at
             """;
@@ -226,7 +238,8 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         return result;
     }
 
-    public Dictionary<string, JsonElement>? GetPendingFields(string formKey, string plugin)
+    // origin nullable, defaulting to no filter — same reasoning as BuildFilter's (#272 / ADR-0036).
+    public Dictionary<string, JsonElement>? GetPendingFields(string formKey, string plugin, string? origin = null)
     {
         _sem.Wait();
         try
@@ -236,10 +249,11 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             cmd.CommandText = """
                 SELECT field_path, new_value
                 FROM pending_changes
-                WHERE form_key = $1 AND plugin = $2
+                WHERE form_key = $1 AND plugin = $2 AND ($3 IS NULL OR origin = $3)
                 """;
             cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+            cmd.Parameters.Add(new DuckDBParameter { Value = (object?)origin });
 
             var result = new Dictionary<string, JsonElement>();
             using var reader = cmd.ExecuteReader();
@@ -255,7 +269,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         finally { _sem.Release(); }
     }
 
-    public int RemoveFieldsWithPrefix(string formKey, string plugin, string prefix)
+    public int RemoveFieldsWithPrefix(string formKey, string plugin, string prefix, string? origin = null)
     {
         _sem.Wait();
         try
@@ -267,20 +281,24 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             delRefs.CommandText = """
                 DELETE FROM pending_form_references
                 WHERE source_form_key = $1 AND source_plugin = $2 AND staged_field LIKE $3
+                  AND ($4 IS NULL OR source_origin = $4)
                 """;
             delRefs.Parameters.Add(new DuckDBParameter { Value = formKey });
             delRefs.Parameters.Add(new DuckDBParameter { Value = plugin });
             delRefs.Parameters.Add(new DuckDBParameter { Value = prefix + "%" });
+            delRefs.Parameters.Add(new DuckDBParameter { Value = (object?)origin });
             delRefs.ExecuteNonQuery();
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = """
                 DELETE FROM pending_changes
                 WHERE form_key = $1 AND plugin = $2 AND field_path LIKE $3
+                  AND ($4 IS NULL OR origin = $4)
                 """;
             cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
             cmd.Parameters.Add(new DuckDBParameter { Value = prefix + "%" });
+            cmd.Parameters.Add(new DuckDBParameter { Value = (object?)origin });
             var count = cmd.ExecuteNonQuery();
 
             txn.Commit();
@@ -289,16 +307,20 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         finally { _sem.Release(); }
     }
 
-    public IReadOnlyList<(string FormKey, string RecordType)> GetStagedFormKeys(string plugin, string? recordType = null)
+    public IReadOnlyList<(string FormKey, string RecordType)> GetStagedFormKeys(string plugin, string? recordType = null, string? origin = null)
     {
         _sem.Wait();
         try
         {
             var conn = RequireConnection();
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT DISTINCT form_key, record_type FROM pending_changes WHERE plugin = $1 AND ($2 IS NULL OR record_type = $2)";
+            cmd.CommandText = """
+                SELECT DISTINCT form_key, record_type FROM pending_changes
+                WHERE plugin = $1 AND ($2 IS NULL OR record_type = $2) AND ($3 IS NULL OR origin = $3)
+                """;
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
             cmd.Parameters.Add(new DuckDBParameter { Value = (object?)recordType });
+            cmd.Parameters.Add(new DuckDBParameter { Value = (object?)origin });
 
             var result = new List<(string, string)>();
             using var reader = cmd.ExecuteReader();
@@ -309,7 +331,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         finally { _sem.Release(); }
     }
 
-    public (IReadOnlyList<string> Added, IReadOnlyList<string> Removed) GetPendingNativeFormKeyChanges(string plugin)
+    public (IReadOnlyList<string> Added, IReadOnlyList<string> Removed) GetPendingNativeFormKeyChanges(string plugin, string? origin = null)
     {
         _sem.Wait();
         try
@@ -320,10 +342,12 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 SELECT form_key, change_type, new_value
                 FROM pending_changes
                 WHERE plugin = $1
+                  AND ($2 IS NULL OR origin = $2)
                   AND ((change_type = '{PendingChangeConstants.CreateChangeType}' AND field_path = '{PendingChangeConstants.CreateFieldPath}')
                     OR (change_type = '{PendingChangeConstants.RenumberChangeType}' AND field_path = '{PendingChangeConstants.RenumberFieldPath}'))
                 """;
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+            cmd.Parameters.Add(new DuckDBParameter { Value = (object?)origin });
 
             var added = new List<string>();
             var removed = new List<string>();
@@ -377,14 +401,14 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         finally { _sem.Release(); }
     }
 
-    public int Revert(string? plugin, string? formKey)
+    public int Revert(string? plugin, string? formKey, string? origin = null)
     {
         _sem.Wait();
         try
         {
             var conn = RequireConnection();
-            var (where, paramValues) = BuildFilter(plugin, formKey);
-            var (refWhere, refParams) = BuildPendingRefFilter(plugin, formKey);
+            var (where, paramValues) = BuildFilter(plugin, formKey, origin);
+            var (refWhere, refParams) = BuildPendingRefFilter(plugin, formKey, origin);
 
             using var txn = conn.BeginTransaction();
 
@@ -406,17 +430,18 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         finally { _sem.Release(); }
     }
 
-    private static (string Where, List<object> Params) BuildPendingRefFilter(string? plugin, string? formKey)
+    private static (string Where, List<object> Params) BuildPendingRefFilter(string? plugin, string? formKey, string? origin = null)
     {
         var conditions = new List<string>();
         var paramValues = new List<object>();
         if (plugin != null) { conditions.Add($"source_plugin = ${paramValues.Count + 1}"); paramValues.Add(plugin); }
+        if (origin != null) { conditions.Add($"source_origin = ${paramValues.Count + 1}"); paramValues.Add(origin); }
         if (formKey != null) { conditions.Add($"source_form_key = ${paramValues.Count + 1}"); paramValues.Add(formKey); }
         var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
         return (where, paramValues);
     }
 
-    public DrainResult DrainForPlugin(string plugin)
+    public DrainResult DrainForPlugin(string plugin, string? origin = null)
     {
         _sem.Wait();
         try
@@ -430,9 +455,10 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 refCmd.CommandText = """
                     SELECT source_form_key, staged_field, field_path, target_form_key
                     FROM pending_form_references
-                    WHERE source_plugin = $1
+                    WHERE source_plugin = $1 AND ($2 IS NULL OR source_origin = $2)
                     """;
                 refCmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+                refCmd.Parameters.Add(new DuckDBParameter { Value = (object?)origin });
                 using var refReader = refCmd.ExecuteReader();
                 while (refReader.Read())
                 {
@@ -445,17 +471,19 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             using var txn = conn.BeginTransaction();
 
             using var del = conn.CreateCommand();
-            del.CommandText = "DELETE FROM pending_form_references WHERE source_plugin = $1";
+            del.CommandText = "DELETE FROM pending_form_references WHERE source_plugin = $1 AND ($2 IS NULL OR source_origin = $2)";
             del.Parameters.Add(new DuckDBParameter { Value = plugin });
+            del.Parameters.Add(new DuckDBParameter { Value = (object?)origin });
             del.ExecuteNonQuery();
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = """
                 DELETE FROM pending_changes
-                WHERE plugin = $1
-                RETURNING id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group
+                WHERE plugin = $1 AND ($2 IS NULL OR origin = $2)
+                RETURNING id, form_key, plugin, origin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group
                 """;
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+            cmd.Parameters.Add(new DuckDBParameter { Value = (object?)origin });
 
             var drained = new List<PendingChange>();
             using var reader = cmd.ExecuteReader();
@@ -538,13 +566,16 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
     {
         foreach (var change in component)
         {
+            // #272 / ADR-0036: scoped to (source_plugin, source_origin) together — reverting one
+            // origin's component must never delete another origin's staged refs for the same field.
             using var delRef = conn.CreateCommand();
             delRef.CommandText = """
                 DELETE FROM pending_form_references
-                WHERE source_form_key = $1 AND source_plugin = $2 AND staged_field = $3
+                WHERE source_form_key = $1 AND source_plugin = $2 AND source_origin = $3 AND staged_field = $4
                 """;
             delRef.Parameters.Add(new DuckDBParameter { Value = change.FormKey });
             delRef.Parameters.Add(new DuckDBParameter { Value = change.Plugin });
+            delRef.Parameters.Add(new DuckDBParameter { Value = change.Origin });
             delRef.Parameters.Add(new DuckDBParameter { Value = change.FieldPath });
             delRef.ExecuteNonQuery();
 
@@ -632,7 +663,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
 
     public async Task<SaveGroupResult> ExecuteGroupSaveAsync(
         Guid memberChangeId,
-        Func<IReadOnlyDictionary<string, IReadOnlyList<PendingChange>>, Task<IReadOnlyList<(string Plugin, PreparedPluginSave Prepared)>>> prepareAll)
+        Func<IReadOnlyDictionary<string, IReadOnlyList<PendingChange>>, Task<IReadOnlyList<(string Column, PreparedPluginSave Prepared)>>> prepareAll)
     {
         await _sem.WaitAsync();
         try
@@ -641,8 +672,12 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
             var pending = ComponentOf(conn, memberChangeId);
             if (pending == null || pending.Count == 0) return new SaveGroupResult.NoChanges();
 
+            // #272 / ADR-0036: keyed by the compound column identity, not the bare plugin — two
+            // groups sharing a filename but differing in origin must land as two independent write
+            // targets, not collide. prepareAll (PluginSaver.Save) recovers the real plugin filename
+            // from each group's own PendingChange.Plugin, never by parsing the key.
             var byPlugin = pending
-                .GroupBy(c => c.Plugin)
+                .GroupBy(c => ColumnKey.Of(c.Plugin, c.Origin))
                 .ToDictionary(g => g.Key, g => (IReadOnlyList<PendingChange>)[.. g]);
 
             await using var txn = await conn.BeginTransactionAsync();
@@ -676,22 +711,25 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         var id = Guid.Parse(reader.GetString(0));
         var formKey = reader.GetString(1);
         var plugin = reader.GetString(2);
-        var fieldPath = reader.GetString(3);
-        var recordType = reader.GetString(4);
-        var oldValueJson = reader.GetString(5);
-        var newValueJson = reader.GetString(6);
-        var source = reader.GetString(7);
-        var description = reader.IsDBNull(8) ? null : reader.GetString(8);
-        var changedAt = reader.GetDateTime(9);
-        var changeType = reader.GetString(10);
-        var parentCell = reader.IsDBNull(11) ? null : reader.GetString(11);
-        var placementGroup = reader.IsDBNull(12) ? null : reader.GetString(12);
+        var origin = reader.GetString(3);
+        var fieldPath = reader.GetString(4);
+        var recordType = reader.GetString(5);
+        var oldValueJson = reader.GetString(6);
+        var newValueJson = reader.GetString(7);
+        var source = reader.GetString(8);
+        var description = reader.IsDBNull(9) ? null : reader.GetString(9);
+        var changedAt = reader.GetDateTime(10);
+        var changeType = reader.GetString(11);
+        var parentCell = reader.IsDBNull(12) ? null : reader.GetString(12);
+        var placementGroup = reader.IsDBNull(13) ? null : reader.GetString(13);
 
         using var oldDoc = JsonDocument.Parse(oldValueJson);
         var oldValue = oldDoc.RootElement.Clone();
         using var newDoc = JsonDocument.Parse(newValueJson);
         var newValue = newDoc.RootElement.Clone();
 
-        return new PendingChange(id, formKey, plugin, fieldPath, recordType, oldValue, newValue, source, description, changedAt, changeType, parentCell, placementGroup);
+        return new PendingChange(
+            id, formKey, plugin, fieldPath, recordType, oldValue, newValue, source, description, changedAt, changeType,
+            parentCell, placementGroup, Origin: origin);
     }
 }

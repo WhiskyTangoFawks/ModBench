@@ -497,6 +497,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             recordType?: string | null;
+            origin?: string | null;
             conflictThis?: components["schemas"]["ConflictThis"];
         };
         CompareResult: {
@@ -516,7 +517,7 @@ export interface components {
             perPlugin?: {
                 [key: string]: components["schemas"]["ParsedCondition"];
             } | null;
-            winnerPlugin?: string | null;
+            winnerColumn?: string | null;
             cellStates?: {
                 [key: string]: components["schemas"]["ConflictThis"];
             } | null;
@@ -593,7 +594,7 @@ export interface components {
             values?: {
                 [key: string]: unknown;
             } | null;
-            winnerPlugin?: string | null;
+            winnerColumn?: string | null;
             winnerValue?: unknown;
             cellStates?: {
                 [key: string]: components["schemas"]["ConflictThis"];
@@ -684,6 +685,7 @@ export interface components {
             } | null;
             recordResolution?: components["schemas"]["FormKeyResolution"] | null;
             recordTypeDisplayName?: string | null;
+            origin?: string | null;
         };
         PlacedSummary: {
             formKey?: string | null;
@@ -737,6 +739,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             recordType?: string | null;
+            origin?: string | null;
         };
         RecordSummary: {
             formKey?: string | null;
@@ -819,7 +822,7 @@ export interface components {
             types?: {
                 [key: string]: string;
             } | null;
-            winnerPlugin?: string | null;
+            winnerColumn?: string | null;
             cellStates?: {
                 [key: string]: components["schemas"]["ConflictThis"];
             } | null;
@@ -836,7 +839,7 @@ export interface components {
             flags?: {
                 [key: string]: string | null;
             } | null;
-            winnerPlugin?: string | null;
+            winnerColumn?: string | null;
             cellStates?: {
                 [key: string]: components["schemas"]["ConflictThis"];
             } | null;

@@ -85,15 +85,14 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         // Walk VMAD after the per-type loop so both generic and VMAD Object refs land in `refs`
         // before the single form_references flush below.
-        // #271 / ADR-0036: VMAD/conditions/header/form_lookup stay filename-only-keyed for now —
-        // out of this ticket's named scope (AC1/AC4 name record tables, plugins, placement,
-        // cell_location and form_references only). A second origin sharing a filename would still
-        // collide on these four; left as a known gap for a follow-up.
-        DeleteVmadForPlugin(plugin);
-        IndexVmad(pluginMod, plugin, refs);
+        // #272 / ADR-0036: VMAD/conditions/form_lookup/header now all carry origin too, scoped the
+        // same way as every other table above — closes the gap #271 left open. Header's own delete
+        // step is in IndexHeader below; its write side already carried origin since #271.
+        DeleteVmadForPlugin(plugin, origin);
+        IndexVmad(pluginMod, plugin, origin, refs);
 
-        DeleteConditionsForPlugin(plugin);
-        IndexConditions(pluginMod, plugin, refs);
+        DeleteConditionsForPlugin(plugin, origin);
+        IndexConditions(pluginMod, plugin, origin, refs);
 
         IndexPlacement(pluginMod, plugin, origin);
 
@@ -123,7 +122,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         // ADR-0031: one form_lookup row per indexed record, populated in this same pass — no
         // second indexing pass over the plugin.
-        DeleteExisting("form_lookup", plugin);
+        DeleteExistingForOrigin("form_lookup", plugin, origin);
         if (lookupRows.Count > 0)
         {
             using var lookupAppender = Connection.CreateAppender("form_lookup");
@@ -132,6 +131,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 var row = lookupAppender.CreateRow();
                 row.AppendValue(formKey);
                 row.AppendValue(plugin);
+                row.AppendValue(origin);
                 row.AppendValue(recordType);
                 if (editorId is { } eid)
                     row.AppendValue(eid);
@@ -256,17 +256,19 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         // form_lookup isn't a reflected schema table, so it needs its own winner sweep — same
         // shape as every other table's, so ResolveFormKey's EditorID reflects the winning override
         // like every other resolved field, not a winner-agnostic special case (ADR-0031).
+        // #272 / ADR-0036: joined on (plugin, origin) together, same as the reflected-table sweep
+        // above — two plugins sharing a filename but differing in origin are distinct participants.
         Execute("""
             UPDATE form_lookup
             SET is_winner = (
                 load_order_idx = (
                     SELECT MAX(t2.load_order_idx) FROM form_lookup t2
-                    JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.participates
+                    JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
                     WHERE t2.form_key = form_lookup.form_key
                 )
                 AND EXISTS (
                     SELECT 1 FROM plugins p1
-                    WHERE p1.plugin = form_lookup.plugin AND p1.participates
+                    WHERE p1.plugin = form_lookup.plugin AND p1.origin = form_lookup.origin AND p1.participates
                 )
             )
             """);
@@ -317,7 +319,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         var where = " WHERE " + string.Join(" AND ", conditions);
         var sql = $"""
-            SELECT form_key, plugin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
+            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
             FROM "{tableName}"{where}
             LIMIT 1
             """;
@@ -341,7 +343,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     {
         var schema = RequireSchemas()[tableName];
         var sql = $"""
-            SELECT form_key, plugin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
+            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
             FROM "{tableName}"
             WHERE form_key = $1
             ORDER BY load_order_idx
@@ -367,17 +369,18 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return list;
     }
 
-    public VmadData? GetVmad(string formKey, string plugin)
+    // origin defaulted (like GetPlacement's) so pre-existing single-origin callers keep compiling — #272 / ADR-0036.
+    public VmadData? GetVmad(string formKey, string plugin, string origin = PluginOrigin.DataDirectory)
     {
-        var scripts = ReadVmadScriptRows(formKey, plugin);
+        var scripts = ReadVmadScriptRows(formKey, plugin, origin);
         if (scripts.Count == 0) return null;
 
-        var propRows = ReadVmadPropertyRows(formKey, plugin);
+        var propRows = ReadVmadPropertyRows(formKey, plugin, origin);
         var propsByScript = propRows
             .GroupBy(r => r.ScriptName, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.OrderBy(r => r.PropertyIndex).ToList(), StringComparer.Ordinal);
 
-        var itemRows = ReadVmadListItemRows(formKey, plugin);
+        var itemRows = ReadVmadListItemRows(formKey, plugin, origin);
         var itemsByProp = itemRows
             .GroupBy(r => (r.ScriptName, r.PropertyIndex))
             .ToDictionary(g => g.Key, g => g.OrderBy(r => r.ListItemIndex).ToList());
@@ -398,12 +401,13 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return new VmadData(scriptData);
     }
 
-    public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin)
+    // origin defaulted (like GetPlacement's) so pre-existing single-origin callers keep compiling — #272 / ADR-0036.
+    public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = PluginOrigin.DataDirectory)
     {
-        var conditionRows = ReadConditionRows(formKey, plugin);
+        var conditionRows = ReadConditionRows(formKey, plugin, origin);
         if (conditionRows.Count == 0) return [];
 
-        var paramsByCondition = ReadConditionParamRows(formKey, plugin)
+        var paramsByCondition = ReadConditionParamRows(formKey, plugin, origin)
             .GroupBy(p => (p.FieldPath, p.ConditionIndex))
             .ToDictionary(g => g.Key, g => g.OrderBy(p => p.ParamIndex)
                 .Select(p => new ParsedConditionParam(
@@ -436,18 +440,19 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             ? _conditionCodec?.DecodeParamValue(typeName, n)
             : null;
 
-    private List<ConditionRow> ReadConditionRows(string formKey, string plugin)
+    private List<ConditionRow> ReadConditionRows(string formKey, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
             SELECT owner_field_path, condition_index, function, operator, is_or,
                    run_on_target, run_on_reference, use_global, comparison_float, comparison_global
             FROM conditions
-            WHERE form_key = $1 AND plugin = $2
+            WHERE form_key = $1 AND plugin = $2 AND origin = $3
             ORDER BY owner_field_path, condition_index
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         using var reader = cmd.ExecuteReader();
 
         var rows = new List<ConditionRow>();
@@ -469,18 +474,19 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return rows;
     }
 
-    private List<ConditionParamRow> ReadConditionParamRows(string formKey, string plugin)
+    private List<ConditionParamRow> ReadConditionParamRows(string formKey, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
             SELECT owner_field_path, condition_index, param_index, category, type_name,
                    number_value, formkey_value, text_value
             FROM condition_parameters
-            WHERE form_key = $1 AND plugin = $2
+            WHERE form_key = $1 AND plugin = $2 AND origin = $3
             ORDER BY owner_field_path, condition_index, param_index
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         using var reader = cmd.ExecuteReader();
 
         var rows = new List<ConditionParamRow>();
@@ -518,16 +524,17 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         string ScriptName, int PropertyIndex, int ListItemIndex, string Type,
         bool? Bool, int? Int, float? Float, string? String, string? FormKey, short? Alias);
 
-    private List<VmadScriptRow> ReadVmadScriptRows(string formKey, string plugin)
+    private List<VmadScriptRow> ReadVmadScriptRows(string formKey, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
             SELECT script_name, flags FROM vmad_scripts
-            WHERE form_key = $1 AND plugin = $2
+            WHERE form_key = $1 AND plugin = $2 AND origin = $3
             ORDER BY script_index
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         using var reader = cmd.ExecuteReader();
 
         var rows = new List<VmadScriptRow>();
@@ -536,18 +543,19 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return rows;
     }
 
-    private List<VmadPropertyRow> ReadVmadPropertyRows(string formKey, string plugin)
+    private List<VmadPropertyRow> ReadVmadPropertyRows(string formKey, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
             SELECT script_name, property_name, property_index, type, flags,
                    bool_value, int_value, float_value, string_value, form_key_value, alias_value, struct_json
             FROM vmad_properties
-            WHERE form_key = $1 AND plugin = $2
+            WHERE form_key = $1 AND plugin = $2 AND origin = $3
             ORDER BY property_index
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         using var reader = cmd.ExecuteReader();
 
         var rows = new List<VmadPropertyRow>();
@@ -567,18 +575,19 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return rows;
     }
 
-    private List<VmadListItemRow> ReadVmadListItemRows(string formKey, string plugin)
+    private List<VmadListItemRow> ReadVmadListItemRows(string formKey, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
             SELECT script_name, property_index, list_item_index, type,
                    bool_value, int_value, float_value, string_value, form_key_value, alias_value
             FROM vmad_property_list_items
-            WHERE form_key = $1 AND plugin = $2
+            WHERE form_key = $1 AND plugin = $2 AND origin = $3
             ORDER BY property_index, list_item_index
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         using var reader = cmd.ExecuteReader();
 
         var rows = new List<VmadListItemRow>();
@@ -759,20 +768,21 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     {
         var formKey = reader.GetString(0);
         var plugin = reader.GetString(1);
-        var loadOrderIndex = reader.GetInt32(2);
-        var isWinner = reader.GetBoolean(3);
-        var editorId = reader.IsDBNull(4) ? null : reader.GetString(4);
+        var origin = reader.GetString(2);
+        var loadOrderIndex = reader.GetInt32(3);
+        var isWinner = reader.GetBoolean(4);
+        var editorId = reader.IsDBNull(5) ? null : reader.GetString(5);
 
         var fields = new List<FieldValue>();
         for (int i = 0; i < schema.RecordColumns.Count; i++)
         {
             var col = schema.RecordColumns[i];
-            var isDbNull = reader.IsDBNull(5 + i);
+            var isDbNull = reader.IsDBNull(6 + i);
             object? value = (isDbNull, col.IsArray || col.SubFields != null) switch
             {
                 (true, _) => null,
-                (false, true) => JsonSerializer.Deserialize<JsonElement>(reader.GetString(5 + i)),
-                _ => reader.GetValue(5 + i),
+                (false, true) => JsonSerializer.Deserialize<JsonElement>(reader.GetString(6 + i)),
+                _ => reader.GetValue(6 + i),
             };
             // Bitmask flag values can exceed 2^53 (e.g. FO4 Race.Flag bits 53/54). Surface them as
             // decimal strings so they survive JSON round-tripping without IEEE 754 precision loss.
@@ -782,7 +792,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey)));
         }
 
-        return new RecordDetail(formKey, plugin, loadOrderIndex, isWinner, editorId, fields, RecordType: schema.TableName);
+        return new RecordDetail(formKey, plugin, loadOrderIndex, isWinner, editorId, fields, RecordType: schema.TableName, Origin: origin);
     }
 
     internal static string ColumnList(RecordTableSchema schema) =>
@@ -836,20 +846,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             cmd.Parameters.Add(new DuckDBParameter { Value = v });
     }
 
-    // Filename-only scope — kept for form_lookup only, which stays out of #271's named scope
-    // (AC1/AC4 name record tables, plugins, placement, cell_location and form_references; VMAD,
-    // conditions, header and form_lookup are a known follow-up gap, see Index()'s comment above).
-    private void DeleteExisting(string tableName, string plugin)
-    {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"DELETE FROM \"{tableName}\" WHERE plugin = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        cmd.ExecuteNonQuery();
-    }
-
-    // #271 / ADR-0036: scoped to (plugin, origin) together — reindexing one origin's plugin must
-    // never delete another origin's rows for the same filename. Used everywhere in #271's named
-    // scope; DeleteExisting above stays filename-only for the tables this ticket doesn't touch.
+    // #271/#272 / ADR-0036: scoped to (plugin, origin) together — reindexing one origin's plugin
+    // must never delete another origin's rows for the same filename. Every reindexed table now
+    // goes through this (the filename-only `DeleteExisting` predecessor was deleted once header,
+    // #272's last holdout, moved to this method too — see IndexHeader below).
     private void DeleteExistingForOrigin(string tableName, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
@@ -868,7 +868,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.ExecuteNonQuery();
     }
 
-    private void IndexVmad(IModGetter pluginMod, string plugin, List<FormRef> refs)
+    private void IndexVmad(IModGetter pluginMod, string plugin, string origin, List<FormRef> refs)
     {
         using var scriptAppender = Connection.CreateAppender("vmad_scripts");
         using var propAppender = Connection.CreateAppender("vmad_properties");
@@ -883,7 +883,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             var recordType = ResolveRecordType(record);
             try
             {
-                indexer.IndexRecord(record.FormKey.ToString(), plugin, recordType, vmad);
+                indexer.IndexRecord(record.FormKey.ToString(), plugin, origin, recordType, vmad);
                 vmadCount++;
                 _logger.LogTrace("Indexed VMAD for {FormKey} ({RecordType}) in {Plugin}",
                     record.FormKey, recordType, plugin);
@@ -942,31 +942,32 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     // Issue #1 slice A1: header rows never flow through IndexRecordTable (see the Index() skip
     // above), so they need their own delete-then-append step, matching every other side table.
-    // #271 / ADR-0036: the header table's DDL comes from the same generic CreateRecordTable as
-    // every reflected schema, so it carries the `origin` column too — HeaderIndexer.Index appends
-    // it for row-shape consistency, but the delete step below stays filename-only-scoped (header
-    // is out of this ticket's named scope, same known gap as VMAD/conditions/form_lookup).
+    // #271/#272 / ADR-0036: the header table's DDL comes from the same generic CreateRecordTable as
+    // every reflected schema, so it carries the `origin` column too — HeaderIndexer.Index has
+    // appended it since #271; the delete step below was #272's last remaining filename-only gap
+    // (VMAD/conditions/form_lookup were migrated to DeleteExistingForOrigin earlier in this same
+    // ticket) and is now scoped to (plugin, origin) here too.
     private void IndexHeader(
         IModGetter pluginMod, string plugin, string origin, int loadOrderIndex,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         if (!schemas.TryGetValue("header", out var headerSchema)) return;
 
-        DeleteExisting("header", plugin);
+        DeleteExistingForOrigin("header", plugin, origin);
         using var appender = Connection.CreateAppender("header");
         HeaderIndexer.Index(pluginMod, plugin, origin, loadOrderIndex, headerSchema, appender);
     }
 
-    private void DeleteVmadForPlugin(string plugin)
+    private void DeleteVmadForPlugin(string plugin, string origin)
     {
         foreach (var table in (string[])["vmad_scripts", "vmad_properties", "vmad_property_list_items"])
-            DeleteExisting(table, plugin);
+            DeleteExistingForOrigin(table, plugin, origin);
     }
 
-    private void DeleteConditionsForPlugin(string plugin)
+    private void DeleteConditionsForPlugin(string plugin, string origin)
     {
         foreach (var table in (string[])["conditions", "condition_parameters"])
-            DeleteExisting(table, plugin);
+            DeleteExistingForOrigin(table, plugin, origin);
     }
 
     // Walks every major record through the per-game condition codec (ADR-0032). No aspect interface
@@ -976,7 +977,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     // refs: the same shared list IndexVmad appends to, both flushed to form_references in one pass
     // after Index()'s per-type loop (#166 — ConditionIndexer now feeds it too, closing the gap where
     // a record referenced only by a condition never appeared in form_references).
-    private void IndexConditions(IModGetter pluginMod, string plugin, List<FormRef> refs)
+    private void IndexConditions(IModGetter pluginMod, string plugin, string origin, List<FormRef> refs)
     {
         var codec = ConditionCodecRegistry.For(pluginMod.GameRelease.ToCategory());
         if (codec == null)
@@ -996,7 +997,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             var owners = codec.Extract(record);
             if (!owners.Any()) continue;
             var recordType = ResolveRecordType(record);
-            indexer.IndexRecord(record.FormKey.ToString(), plugin, recordType, owners);
+            indexer.IndexRecord(record.FormKey.ToString(), plugin, origin, recordType, owners);
             count++;
             _logger.LogTrace("Indexed conditions for {FormKey} ({RecordType}) in {Plugin}",
                 record.FormKey, recordType, plugin);
@@ -1200,15 +1201,16 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return new CellReferences(persistent, temporary);
     }
 
-    public PlacementRow? GetPlacement(string formKey, string plugin)
+    // origin defaulted (like Index's) so pre-existing single-origin callers keep compiling — #272 / ADR-0036.
+    public PlacementRow? GetPlacement(string formKey, string plugin, string origin = PluginOrigin.DataDirectory)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
             SELECT parent_cell, placement_group, pos_x, pos_y, pos_z
             FROM placement
-            WHERE form_key = $1 AND plugin = $2
+            WHERE form_key = $1 AND plugin = $2 AND origin = $3
             """;
-        AddParams(cmd, [formKey, plugin]);
+        AddParams(cmd, [formKey, plugin, origin]);
         using var reader = cmd.ExecuteReader();
 
         // Local function so the merged conditional expression below doesn't nest a ternary per

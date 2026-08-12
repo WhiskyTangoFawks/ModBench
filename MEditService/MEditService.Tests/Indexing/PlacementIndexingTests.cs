@@ -348,6 +348,30 @@ public class PlacementIndexingTests
         Assert.Null(b.Repo.GetPlacement("FFFFFF:TestWorld.esp", "TestWorld.esp"));
     }
 
+    // #272 / ADR-0036: two origins loading the same physical file — the `placement` table already
+    // carries `origin` (#271) and IndexPlacement already scopes its delete by it; GetPlacement's own
+    // read side was the remaining filename-only-keyed gap.
+    [Fact]
+    public void GetPlacement_SameFilenameDifferentOrigin_ScopesToOrigin()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Placed.esp"), Fallout4Release.Fallout4);
+        var wrld = mod.Worldspaces.AddNew("PlacedTestWorld");
+        var cell = new Cell(mod) { EditorID = "PlacedCell" };
+        wrld.TopCell = cell;
+        var barrel = new PlacedObject(mod) { EditorID = "barrelRef", Position = new P3Float(1f, 2f, 3f) };
+        cell.Persistent.Add(barrel);
+
+        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        repo.Index((IModGetter)mod, 0, origin: "ModA");
+        repo.Index((IModGetter)mod, 1, origin: "ModB");
+
+        var formKey = barrel.FormKey.ToString();
+        Assert.NotNull(repo.GetPlacement(formKey, "Placed.esp", "ModA"));
+        Assert.NotNull(repo.GetPlacement(formKey, "Placed.esp", "ModB"));
+        Assert.Null(repo.GetPlacement(formKey, "Placed.esp", "ModC"));
+    }
+
     [Fact]
     public void GetInteriorCells_ReturnsInteriorCellsWithNullVariants()
     {

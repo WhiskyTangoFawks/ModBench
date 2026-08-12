@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Records;
+using MEditService.Core.Session;
 
 namespace MEditService.Core.Edits;
 
@@ -36,5 +37,11 @@ public record PendingChange(
     // "npc_"), populated unconditionally by PendingChangeResolver from the schema's DisplayName.
     // Additive — RecordType (the signature) is unchanged and still the field everything else
     // keys off. Falls back to RecordType itself when the type isn't a known schema.
-    string? RecordTypeDisplayName = null
+    string? RecordTypeDisplayName = null,
+    // Origin (#272 / ADR-0036): paired with Plugin, never encoded into it — mirrors RecordDetail.
+    // #271 already stores a real origin on every pending_changes row (via PendingChangeUpsert.Origin/
+    // GroupMember.Origin) and keys the table's PK on it; this is the response DTO catching up to
+    // read it back out. Defaulted so every pre-existing direct construction (test fixtures) keeps
+    // compiling.
+    string Origin = PluginOrigin.DataDirectory
 );

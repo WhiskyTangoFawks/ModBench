@@ -3,8 +3,10 @@ using MEditService.Core.Schema;
 
 namespace MEditService.Core.Queries;
 
-// Per-plugin conditions for one record, ordered by load order (master = first).
-public sealed record ConditionPluginInput(string Plugin, int LoadOrderIndex, IReadOnlyList<ConditionOwner> Owners);
+// Per-plugin conditions for one record, ordered by load order (master = first). Origin defaulted
+// (#272 / ADR-0036) so pre-existing single-origin call sites keep compiling.
+public sealed record ConditionPluginInput(
+    string Plugin, int LoadOrderIndex, IReadOnlyList<ConditionOwner> Owners, string Origin = Session.PluginOrigin.DataDirectory);
 
 public sealed record ConditionClassifyResult(ConditionCompare Compare, ConflictAll ConflictContribution);
 
@@ -33,8 +35,10 @@ public static class ConditionConflictClassifier
         if (present.Count == 0)
             return new ConditionClassifyResult(new ConditionCompare([]), ConflictAll.NoConflict);
 
-        var masterPlugin = inputs[0].Plugin;
-        var pluginOrder = inputs.Select(i => (i.Plugin, i.LoadOrderIndex)).ToList();
+        // #272 / ADR-0036: keyed by the compound column identity — two inputs sharing a filename but
+        // differing in origin must land as two independent entries, not collide.
+        var masterColumn = ColumnKey.Of(inputs[0].Plugin, inputs[0].Origin);
+        var columnOrder = inputs.Select(i => (ColumnKey.Of(i.Plugin, i.Origin), i.LoadOrderIndex)).ToList();
         var allStates = new List<ConflictThis>();
 
         var fieldPaths = present
@@ -46,13 +50,13 @@ public static class ConditionConflictClassifier
         var groups = fieldPaths.ConvertAll(fieldPath =>
         {
             var perPluginConditions = inputs.ToDictionary(
-                i => i.Plugin,
+                i => ColumnKey.Of(i.Plugin, i.Origin),
                 i => i.Owners.FirstOrDefault(o => o.FieldPath == fieldPath)?.Conditions ?? []);
 
             var maxLen = perPluginConditions.Values.Select(c => c.Count).DefaultIfEmpty(0).Max();
 
             var diffs = Enumerable.Range(0, maxLen)
-                .Select(idx => BuildDiff(idx, inputs, perPluginConditions, masterPlugin, pluginOrder, allStates, resolveFormKey))
+                .Select(idx => BuildDiff(idx, inputs, perPluginConditions, masterColumn, columnOrder, allStates, resolveFormKey))
                 .ToList();
 
             return new ConditionGroupDiff(fieldPath, diffs);
@@ -65,21 +69,25 @@ public static class ConditionConflictClassifier
         int idx,
         IReadOnlyList<ConditionPluginInput> inputs,
         Dictionary<string, IReadOnlyList<ParsedCondition>> perPluginConditions,
-        string masterPlugin,
-        IReadOnlyList<(string Plugin, int LoadOrderIndex)> pluginOrder,
+        string masterColumn,
+        IReadOnlyList<(string Plugin, int LoadOrderIndex)> columnOrder,
         List<ConflictThis> allStates,
         Func<string, RecordLookupEntry?>? resolveFormKey)
     {
         var perPlugin = inputs.ToDictionary(
-            i => i.Plugin,
-            i => idx < perPluginConditions[i.Plugin].Count ? perPluginConditions[i.Plugin][idx] : null);
+            i => ColumnKey.Of(i.Plugin, i.Origin),
+            i =>
+            {
+                var column = ColumnKey.Of(i.Plugin, i.Origin);
+                return idx < perPluginConditions[column].Count ? perPluginConditions[column][idx] : null;
+            });
 
         var canon = perPlugin.ToDictionary(kv => kv.Key, kv => (object?)Canon(kv.Value));
-        var cellStates = ConflictRules.ComputeCellStates(canon, masterPlugin, pluginOrder, Equals);
+        var cellStates = ConflictRules.ComputeCellStates(canon, masterColumn, columnOrder, Equals);
         allStates.AddRange(cellStates.Values);
 
-        var winner = ConflictRules.PickWinner(pluginOrder, p => perPlugin[p] != null);
-        var fieldCellStates = FieldCellStates(perPlugin, masterPlugin, pluginOrder);
+        var winner = ConflictRules.PickWinner(columnOrder, p => perPlugin[p] != null);
+        var fieldCellStates = FieldCellStates(perPlugin, masterColumn, columnOrder);
         var fieldResolutions = FieldResolutions(perPlugin, resolveFormKey);
 
         return new ConditionDiff(idx, perPlugin, winner, cellStates, fieldCellStates, fieldResolutions);

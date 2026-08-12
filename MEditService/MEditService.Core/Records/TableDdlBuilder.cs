@@ -80,10 +80,11 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // resolve a FormKey in O(1) instead of scanning every per-type table.
     internal static void CreateFormLookupTable(DuckDBConnection connection)
     {
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS form_lookup (
                 form_key       VARCHAR NOT NULL,
                 plugin         VARCHAR NOT NULL,
+                origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 record_type    VARCHAR NOT NULL,
                 editor_id      VARCHAR,
                 load_order_idx INTEGER NOT NULL,
@@ -98,10 +99,11 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
 
     internal static void CreateVmadTables(DuckDBConnection connection)
     {
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS vmad_scripts (
                 form_key     VARCHAR NOT NULL,
                 plugin       VARCHAR NOT NULL,
+                origin       VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 script_name  VARCHAR NOT NULL,
                 script_index INTEGER NOT NULL,
                 flags        VARCHAR NOT NULL,
@@ -110,13 +112,14 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
         Execute(connection, """
             CREATE INDEX IF NOT EXISTS idx_vmad_scripts_fk
-                ON vmad_scripts(form_key, plugin)
+                ON vmad_scripts(form_key, plugin, origin)
             """);
 
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS vmad_properties (
                 form_key       VARCHAR NOT NULL,
                 plugin         VARCHAR NOT NULL,
+                origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 script_name    VARCHAR NOT NULL,
                 property_name  VARCHAR NOT NULL,
                 property_index INTEGER NOT NULL,
@@ -134,13 +137,14 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
         Execute(connection, """
             CREATE INDEX IF NOT EXISTS idx_vmad_props_fk
-                ON vmad_properties(form_key, plugin)
+                ON vmad_properties(form_key, plugin, origin)
             """);
 
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS vmad_property_list_items (
                 form_key        VARCHAR NOT NULL,
                 plugin          VARCHAR NOT NULL,
+                origin          VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 script_name     VARCHAR NOT NULL,
                 property_name   VARCHAR NOT NULL,
                 property_index  INTEGER NOT NULL,
@@ -157,7 +161,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
         Execute(connection, """
             CREATE INDEX IF NOT EXISTS idx_vmad_items_fk
-                ON vmad_property_list_items(form_key, plugin)
+                ON vmad_property_list_items(form_key, plugin, origin)
             """);
     }
 
@@ -167,10 +171,11 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // has per-condition / per-parameter addressing without a migration. [ADR-0032]
     internal static void CreateConditionTables(DuckDBConnection connection)
     {
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS conditions (
                 form_key         VARCHAR NOT NULL,
                 plugin           VARCHAR NOT NULL,
+                origin           VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 owner_field_path VARCHAR NOT NULL,
                 condition_index  INTEGER NOT NULL,
                 record_type      VARCHAR NOT NULL,
@@ -186,13 +191,14 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
         Execute(connection, """
             CREATE INDEX IF NOT EXISTS idx_conditions_fk
-                ON conditions(form_key, plugin)
+                ON conditions(form_key, plugin, origin)
             """);
 
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS condition_parameters (
                 form_key         VARCHAR NOT NULL,
                 plugin           VARCHAR NOT NULL,
+                origin           VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 owner_field_path VARCHAR NOT NULL,
                 condition_index  INTEGER NOT NULL,
                 param_index      INTEGER NOT NULL,
@@ -206,7 +212,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
         Execute(connection, """
             CREATE INDEX IF NOT EXISTS idx_condition_params_fk
-                ON condition_parameters(form_key, plugin)
+                ON condition_parameters(form_key, plugin, origin)
             """);
     }
 

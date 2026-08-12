@@ -135,9 +135,9 @@ public sealed class SessionManagerLoadExplicitTests
             inner.GetRecord(tableName, formKey, plugin, winnerOnly);
         public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey) =>
             inner.GetAllOverrides(tableName, formKey);
-        public VmadData? GetVmad(string formKey, string plugin) => inner.GetVmad(formKey, plugin);
-        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin) =>
-            inner.GetConditions(formKey, plugin);
+        public VmadData? GetVmad(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => inner.GetVmad(formKey, plugin, origin);
+        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+            inner.GetConditions(formKey, plugin, origin);
         public int CountRecordsForPlugin(string tableName, string plugin) =>
             inner.CountRecordsForPlugin(tableName, plugin);
         public string? FindRecordType(string formKey) => inner.FindRecordType(formKey);
@@ -154,6 +154,6 @@ public sealed class SessionManagerLoadExplicitTests
             inner.GetInteriorCells(plugin, limit, offset);
         public CellReferences GetCellReferences(string plugin, string cellFormKey) =>
             inner.GetCellReferences(plugin, cellFormKey);
-        public PlacementRow? GetPlacement(string formKey, string plugin) => inner.GetPlacement(formKey, plugin);
+        public PlacementRow? GetPlacement(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => inner.GetPlacement(formKey, plugin, origin);
     }
 }

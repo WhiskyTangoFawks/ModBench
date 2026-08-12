@@ -15,7 +15,8 @@ import { buildVmadRows } from './vmadTreeAdapter';
 import { buildConditionRows } from './conditionTreeAdapter';
 import { parseVmadPath } from './vmadOps';
 import { AddPropertyDialog } from './VmadPropertyOps';
-import type { CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, PatchRecordValidationError, PendingChange } from './types';
+import type { ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, PatchRecordValidationError, PendingChange } from './types';
+import { columnKey } from './types';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type LogLevel } from './messages';
 import type { RecordSessionClient } from './RecordSessionClient';
@@ -132,7 +133,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   const [runOnTargets, setRunOnTargets] = useState<string[]>([]);
   useEffect(() => { void client.conditionRunOnTargets().then(setRunOnTargets); }, [client]);
   const [allChanges, setAllChanges] = useState<PendingChange[]>([]);
-  const [immutableSet, setImmutableSet] = useState<Set<string>>(new Set());
+  const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
@@ -146,18 +147,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // cell too now, disambiguated from its same-plugin disk companion by FocusedCell's own
   // `column` discriminant — handleFocusCell just forwards whatever DiffRow passes.
   const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
-  function handleFocusCell(rowKey: string, plugin: string, column?: 'pending') {
+  function handleFocusCell(rowKey: string, plugin: ColumnKey, column?: 'pending') {
     setFocusedCell({ rowKey, plugin, column });
   }
-  // Issue #3: collapsed plugin columns, keyed by plugin name. Deliberately NOT reset by the
-  // LOAD_RECORD handler below — collapse state is meant to persist across record-to-record
+  // Issue #3: collapsed plugin columns, keyed by column identity (#272: ColumnKey, not the bare
+  // plugin name — two same-filename columns must collapse independently). Deliberately NOT reset
+  // by the LOAD_RECORD handler below — collapse state is meant to persist across record-to-record
   // navigation within the same panel session.
-  const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
+  const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
   // Issue #3: transient drag payload — doesn't need to trigger a re-render, so a ref rather
   // than state. Cleared on drop (successful or rejected). Issue #206: carries sourcePlugin too —
   // without it, handleCellDrop has no way to tell a drop back onto the same cell it came from
-  // apart from a real cross-column copy.
-  const dragPayloadRef = useRef<{ fieldName: string; value: unknown; sourcePlugin: string } | null>(null);
+  // apart from a real cross-column copy. #272: sourcePlugin is a ColumnKey.
+  const dragPayloadRef = useRef<{ fieldName: string; value: unknown; sourcePlugin: ColumnKey } | null>(null);
 
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
@@ -199,12 +201,17 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // that used to own it (PluginHeader) is gone — see currentMasters below.
   // Issue #202: copyAllToPending deleted — Copy as Override now carries the right-clicked column
   // (sourcePlugin) through to the backend instead of a separate shallow-copy action.
+  // #272 / ADR-0036: copyAsNewRecord/addMaster take a ColumnKey — both resolve through
+  // overrideMap (Copy as New Record's field source, Add Master's current-masters read) before
+  // ever reaching a real plugin filename. copyAsOverride/removeOverride stay bare plugin
+  // filenames — neither does a local overrideMap lookup, and their write-target DTOs
+  // deliberately don't carry origin (the server resolves it, ruling Q4/#6).
   const columnHeaderActionsRef = useRef<{
     formKey: string;
-    copyAsNewRecord: (sourcePlugin: string, targetPlugin: string) => void;
+    copyAsNewRecord: (sourceKey: ColumnKey, targetPlugin: string) => void;
     copyAsOverride: (sourcePlugin: string, targetPlugin: string) => void;
     removeOverride: (plugin: string) => void;
-    addMaster: (plugin: string, newMaster: string) => void;
+    addMaster: (key: ColumnKey, newMaster: string) => void;
   }>({
     formKey: '', copyAsNewRecord: () => {}, copyAsOverride: () => {},
     removeOverride: () => {}, addMaster: () => {},
@@ -213,26 +220,30 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // Issue #227: same staleness problem as pendingCellActionsRef/columnHeaderActionsRef above, for
   // the array-element/array-parent menu's four native commands. Self-filtered on `formKey` like
   // columnHeaderActionsRef (there's no changeId concept for an array op) rather than forced
-  // through the changeId pattern where it doesn't fit.
+  // through the changeId pattern where it doesn't fit. #272: keyed by ColumnKey — every one of
+  // these resolves its current array through overrideMap/the synthesized diff tree.
   const arrayOpActionsRef = useRef<{
     formKey: string;
-    add: (plugin: string, fieldName: string) => void;
-    remove: (plugin: string, fieldName: string, index: number) => void;
-    moveUp: (plugin: string, fieldName: string, index: number) => void;
-    moveDown: (plugin: string, fieldName: string, index: number) => void;
+    add: (key: ColumnKey, fieldName: string) => void;
+    remove: (key: ColumnKey, fieldName: string, index: number) => void;
+    moveUp: (key: ColumnKey, fieldName: string, index: number) => void;
+    moveDown: (key: ColumnKey, fieldName: string, index: number) => void;
   }>({
     formKey: '', add: () => {}, remove: () => {}, moveUp: () => {}, moveDown: () => {},
   });
 
   // Issue #231: same staleness problem as arrayOpActionsRef above, for VMAD's own structural-op
   // menu commands (Add/Remove Script, Remove Property, Add Property). Self-filtered on `formKey`,
-  // no changeId concept here either.
+  // no changeId concept here either. #272: only openAddProperty takes a ColumnKey — it seeds
+  // addPropertyTarget (react state carrying column identity across renders, per ADR-0036's own
+  // ruling); the other five forward straight through to handleVmadStructOp with no local lookup,
+  // so a bare plugin filename (write-target DTOs don't carry origin) is correct as-is.
   const vmadOpActionsRef = useRef<{
     formKey: string;
     addScript: (plugin: string, name: string) => void;
     removeScript: (plugin: string, scriptName: string) => void;
     removeProperty: (plugin: string, scriptName: string, propName: string) => void;
-    openAddProperty: (plugin: string, scriptName: string) => void;
+    openAddProperty: (key: ColumnKey, scriptName: string) => void;
     setScriptFlags: (plugin: string, scriptName: string, flags: string) => void;
     setPropertyFlags: (plugin: string, scriptName: string, propName: string, flags: string) => void;
   }>({
@@ -244,7 +255,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // "one deliberate exception", a webview-rendered dialog rather than a QuickPick chain. The
   // right-click command has nothing to collect itself, so it only broadcasts "open the dialog for
   // this script/plugin" (VMAD_OPEN_ADD_PROPERTY) — this is that dialog's own open/closed state.
-  const [addPropertyTarget, setAddPropertyTarget] = useState<{ plugin: string; scriptName: string } | null>(null);
+  const [addPropertyTarget, setAddPropertyTarget] = useState<{ plugin: ColumnKey; scriptName: string } | null>(null);
 
   // When the handler drives a new-formKey navigation it calls refresh directly,
   // so the [formKey] effect must skip to avoid a double request.
@@ -263,13 +274,20 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       const actions = columnHeaderActionsRef.current;
       if (!('formKey' in msg) || msg.formKey !== actions.formKey) return;
       if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD) {
-        actions.copyAsNewRecord(msg.sourcePlugin, msg.targetPlugin);
+        // #272: copyAsNewRecord resolves through overrideMap (its own field source has no
+        // backend endpoint to ask), so the right-clicked column's real identity — not just its
+        // plugin name — is what must reach it.
+        actions.copyAsNewRecord(columnKey(msg.sourcePlugin, msg.sourceOrigin), msg.targetPlugin);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE) {
+        // #272: copyAsOverride never looks anything up locally — CopyRecordTo's own write-target
+        // DTO deliberately doesn't carry origin (the server resolves it), so the bare plugin
+        // filename is correct as-is.
         actions.copyAsOverride(msg.sourcePlugin, msg.targetPlugin);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE) {
         actions.removeOverride(msg.plugin);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER) {
-        actions.addMaster(msg.plugin, msg.newMaster);
+        // #272: addMaster resolves through overrideMap (the live pending-aware masters list).
+        actions.addMaster(columnKey(msg.plugin, msg.origin), msg.newMaster);
       }
     };
     // Issue #227: the array-element/array-parent menu's four broadcasts — same self-filter
@@ -283,14 +301,16 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       if (!isArrayOpMessage(msg)) { handleColumnHeaderMessage(msg); return; }
       const actions = arrayOpActionsRef.current;
       if (msg.formKey !== actions.formKey) return;
+      // #272: every array op resolves its current array through overrideMap/the synthesized
+      // diff tree (both ColumnKey-keyed), so the broadcast's plugin+origin are combined here.
       if (msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD) {
-        actions.add(msg.plugin, msg.fieldName);
+        actions.add(columnKey(msg.plugin, msg.origin), msg.fieldName);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.ARRAY_REMOVE) {
-        actions.remove(msg.plugin, msg.fieldName, msg.index);
+        actions.remove(columnKey(msg.plugin, msg.origin), msg.fieldName, msg.index);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP) {
-        actions.moveUp(msg.plugin, msg.fieldName, msg.index);
+        actions.moveUp(columnKey(msg.plugin, msg.origin), msg.fieldName, msg.index);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN) {
-        actions.moveDown(msg.plugin, msg.fieldName, msg.index);
+        actions.moveDown(columnKey(msg.plugin, msg.origin), msg.fieldName, msg.index);
       }
     };
     // Issue #231: VMAD's own structural-op menu broadcasts — same self-filter shape as
@@ -311,7 +331,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_REMOVE_PROPERTY) {
         actions.removeProperty(msg.plugin, msg.scriptName, msg.propName);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY) {
-        actions.openAddProperty(msg.plugin, msg.scriptName);
+        // #272: openAddProperty seeds addPropertyTarget, react state carrying column identity
+        // across renders (per ADR-0036's own ruling) — the other five VMAD ops below forward
+        // straight through to handleVmadStructOp with no local lookup, so their bare plugin
+        // filename is correct as-is (write-target DTOs don't carry origin).
+        actions.openAddProperty(columnKey(msg.plugin, msg.origin), msg.scriptName);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_SET_SCRIPT_FLAGS) {
         actions.setScriptFlags(msg.plugin, msg.scriptName, msg.flags);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS) {
@@ -535,7 +559,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: fk });
   }
 
-  function handleCellDragStart(fieldName: string, value: unknown, sourcePlugin: string) {
+  function handleCellDragStart(fieldName: string, value: unknown, sourcePlugin: ColumnKey) {
     dragPayloadRef.current = { fieldName, value, sourcePlugin };
   }
 
@@ -543,7 +567,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // silent no-op (no PATCH attempt), distinct from typed edits into a read-only cell, which are
   // attempted and surfaced as a 409 by stageChange. Also guards against dropping onto an
   // unrelated field's row (payload fieldName must match the row it's dropped on).
-  function handleCellDrop(fieldName: string, targetPlugin: string, applyValue: (value: unknown) => void) {
+  function handleCellDrop(fieldName: string, targetPlugin: ColumnKey, applyValue: (value: unknown) => void) {
     const payload = dragPayloadRef.current;
     dragPayloadRef.current = null;
     if (!payload || payload.fieldName !== fieldName) return;
@@ -554,17 +578,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     if (payload.sourcePlugin === targetPlugin) return;
     if (immutableSet.has(targetPlugin)) {
       // Issue #200: was a silent no-op — the system correctly refused this, so it's a WARN,
-      // not silence (#198's policy).
+      // not silence (#198's policy). Logs the ColumnKey, not a decomposed real filename — this
+      // function is declared before overrideMap's own useMemo in source order, and closing over
+      // it here purely for a log string isn't worth the forward reference.
       logAction('warn', `Rejected drop of '${fieldName}' onto immutable plugin ${targetPlugin}`);
       return;
     }
     applyValue(payload.value);
   }
 
-  function toggleColumnCollapse(plugin: string) {
+  function toggleColumnCollapse(key: ColumnKey) {
     setCollapsedColumns(prev => {
       const next = new Set(prev);
-      if (next.has(plugin)) next.delete(plugin); else next.add(plugin);
+      if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
   }
@@ -600,9 +626,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     return map;
   }, [result, vmadTree, conditionTree]);
 
+  // #272 / ADR-0036: keyed by ColumnKey, not the bare plugin filename — pre-#272, two overrides
+  // sharing a filename but differing in origin collided here, and the second silently discarded
+  // the first (this is the concrete data-loss bug named in the plan). Every consumer of this map
+  // (Copy as New Record's field source, Add Master's current-masters read, array/VMAD op
+  // resolution, DiffRow's own render loop) reads it by ColumnKey now. Declared as
+  // Record<string, ...> rather than Record<ColumnKey, ...> — a mapped type over a non-literal
+  // string collapses to a plain index signature either way (ColumnKey's brand is erased on a
+  // dictionary regardless, see types.ts' own doc comment), so this loses no real protection and
+  // keeps the React Compiler's manual-memoization check happy (it couldn't preserve the
+  // ColumnKey-typed version's memoization).
   const overrideMap = useMemo((): Record<string, CompareOverride> => {
     const map: Record<string, CompareOverride> = {};
-    for (const o of result?.overrides ?? []) map[o.plugin] = o;
+    for (const o of result?.overrides ?? []) map[columnKey(o.plugin, o.origin)] = o;
     return map;
   }, [result]);
 
@@ -611,9 +647,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // .CreateRecordCore calls _query.GetRecord(formKey), winner-only), which isn't necessarily this
   // source column's plugin — so instead of relying on TemplateFormKey, create a blank record of the
   // right type, then PATCH every source-column field onto it.
-  async function handleCopyAsNewRecord(sourcePlugin: string, targetPlugin: string) {
-    const source = overrideMap[sourcePlugin];
+  async function handleCopyAsNewRecord(sourceKey: ColumnKey, targetPlugin: string) {
+    const source = overrideMap[sourceKey];
     if (!source) return;
+    const sourcePlugin = source.plugin;
     setActionError(null);
     try {
       const createResult = await client.createRecord(targetPlugin, source.recordType);
@@ -643,10 +680,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // `onAddMaster` lambda) lives here now instead, using the live (pending-aware) masters list at
   // broadcast-receipt time rather than whatever the extension host's QuickPick candidate list
   // was built from (it can only have seen a snapshot carried in data-vscode-context).
-  function handleAddMaster(plugin: string, newMaster: string) {
-    const override = overrideMap[plugin];
+  function handleAddMaster(key: ColumnKey, newMaster: string) {
+    const override = overrideMap[key];
     if (!override) return;
-    void handleEdit(plugin, 'masters', [...currentMasters(override), newMaster]);
+    void handleEdit(override.plugin, 'masters', [...currentMasters(override), newMaster]);
   }
 
   // Issue #209: keeps columnHeaderActionsRef current every render, mirroring
@@ -677,13 +714,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // lives in the synthesized diff tree instead (`vmadTree.diffs`/`conditionTree.diffs`, keyed by
   // `wirePath`), which `findDiffByWirePath` searches. Getting this wrong silently replaces the
   // *whole* array with the new/edited element alone — the pre-fix bug this comment replaces.
-  function resolveCurrentArrayFor(plugin: string, fieldName: string): unknown[] {
-    const ordinaryDisk = overrideMap[plugin]?.fields.find(f => f.metadata.name === fieldName)?.value as unknown[] | undefined;
+  function resolveCurrentArrayFor(key: ColumnKey, fieldName: string): unknown[] {
+    const ordinaryDisk = overrideMap[key]?.fields.find(f => f.metadata.name === fieldName)?.value as unknown[] | undefined;
     const synthesizedDisk = ordinaryDisk === undefined
-      ? findDiffByWirePath([...vmadTree.diffs, ...conditionTree.diffs], fieldName)?.values[plugin] as unknown[] | undefined
+      ? findDiffByWirePath([...vmadTree.diffs, ...conditionTree.diffs], fieldName)?.values[key] as unknown[] | undefined
       : undefined;
     const disk = ordinaryDisk ?? synthesizedDisk;
-    const pending = overrideMap[plugin]?.pendingFields?.[fieldName] as unknown[] | undefined;
+    const pending = overrideMap[key]?.pendingFields?.[fieldName] as unknown[] | undefined;
     return pending ?? disk ?? [];
   }
 
@@ -696,12 +733,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // top-level) — but not a VMAD array-of-scalars property nested below a script, which has no flat
   // entry of its own. findMetaByWirePath falls back to walking down from vmadTree's/
   // conditionTree's own top-level nodes for that case.
-  function handleArrayAdd(plugin: string, fieldName: string) {
+  // #272 / ADR-0036: `key` resolves this row's own array via overrideMap/the synthesized diff
+  // tree (both ColumnKey-keyed); the actual PATCH still needs the real plugin filename
+  // (write-target DTOs deliberately don't carry origin — the server resolves it), decomposed via
+  // overrideMap[key].plugin right here rather than ever parsed out of `key` itself. A key that no
+  // longer resolves (a stale broadcast racing a record navigation) is a no-op, same convention
+  // the reference-equality skips below already use.
+  function handleArrayAdd(key: ColumnKey, fieldName: string) {
     const meta = fieldMetaMap[fieldName]
       ?? findMetaByWirePath([...vmadTree.diffs, ...conditionTree.diffs], { ...vmadTree.metaMap, ...conditionTree.metaMap }, fieldName);
     const elementType = meta?.type === 'array' ? meta.elementType : undefined;
-    if (!elementType) return;
-    void handleEdit(plugin, fieldName, appendArrayElement(resolveCurrentArrayFor(plugin, fieldName), defaultElementValue(elementType)));
+    const realPlugin = overrideMap[key]?.plugin;
+    if (!elementType || realPlugin === undefined) return;
+    void handleEdit(realPlugin, fieldName, appendArrayElement(resolveCurrentArrayFor(key, fieldName), defaultElementValue(elementType)));
   }
 
   // Issue #168 (review): mirrors handleArrayMove's own reference-equality skip below —
@@ -709,20 +753,22 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // (this plugin doesn't have an element at that position at all, e.g. a stale broadcast or a row
   // that only exists because a sibling plugin has more elements) — restaging is skipped rather
   // than firing a no-op save.
-  function handleArrayRemove(plugin: string, fieldName: string, index: number) {
-    const current = resolveCurrentArrayFor(plugin, fieldName);
+  function handleArrayRemove(key: ColumnKey, fieldName: string, index: number) {
+    const current = resolveCurrentArrayFor(key, fieldName);
     const next = removeArrayElement(current, index);
-    if (next !== current) void handleEdit(plugin, fieldName, next);
+    const realPlugin = overrideMap[key]?.plugin;
+    if (next !== current && realPlugin !== undefined) void handleEdit(realPlugin, fieldName, next);
   }
 
   // Issue #227: shared by Move Up/Move Down — moveArrayElement itself already no-ops (returns
   // the same array reference) at a boundary, so restaging is skipped rather than firing a no-op
   // save when a stale broadcast (or a race with a concurrent edit shrinking the array) lands on
   // an element that can no longer move that direction.
-  function handleArrayMove(plugin: string, fieldName: string, index: number, direction: -1 | 1) {
-    const current = resolveCurrentArrayFor(plugin, fieldName);
+  function handleArrayMove(key: ColumnKey, fieldName: string, index: number, direction: -1 | 1) {
+    const current = resolveCurrentArrayFor(key, fieldName);
     const next = moveArrayElement(current, index, direction);
-    if (next !== current) void handleEdit(plugin, fieldName, next);
+    const realPlugin = overrideMap[key]?.plugin;
+    if (next !== current && realPlugin !== undefined) void handleEdit(realPlugin, fieldName, next);
   }
 
   // Issue #227: keeps arrayOpActionsRef current every render, mirroring columnHeaderActionsRef
@@ -780,9 +826,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     [result, immutableSet],
   );
 
+  // #272 / ADR-0036: the plugin half of this compound key is built via columnKey(), not the bare
+  // `c.plugin` — a staged change is attributed to its column's compound identity end to end, from
+  // cell to pending change. The key as a whole (`${ColumnKey}:${fieldPath}`) isn't itself a pure
+  // ColumnKey, so this map's declared type stays Record<string, PendingChange>.
   const pendingChangeMap = useMemo((): Record<string, PendingChange> => {
     const map: Record<string, PendingChange> = {};
-    for (const c of allChanges) map[`${c.plugin}:${c.fieldPath}`] = c;
+    for (const c of allChanges) map[`${columnKey(c.plugin, c.origin)}:${c.fieldPath}`] = c;
     return map;
   }, [allChanges]);
 
@@ -847,9 +897,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     // Issue #142/#231: pending-over-disk value of the *root* this row restages into, generalized
     // from resolveCurrentArr/the struct-child merge above to any depth — setAtPath/getAtPath
     // handle walking from here down to this row's own path themselves.
-    const currentRootValue = (plugin: string): unknown => {
-      const pending = overrideMap[plugin]?.pendingFields?.[rootField];
-      return pending !== undefined ? pending : rootDiff.values[plugin];
+    // #272 / ADR-0036: keyed by ColumnKey — overrideMap and rootDiff.values (the wire's own
+    // per-column dictionary, ColumnKey.Of-keyed since the backend's B3) both require it.
+    const currentRootValue = (key: ColumnKey): unknown => {
+      const pending = overrideMap[key]?.pendingFields?.[rootField];
+      return pending !== undefined ? pending : rootDiff.values[key];
     };
     // Issue #231: `rootDiff.commitOverride`, when present, replaces the generic setAtPath for
     // this whole subtree — the one escape hatch for a wire value whose shape isn't a plain nested
@@ -857,14 +909,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     // raw node tree, unchanged by this issue). Absent for every ordinary field, every Condition
     // field, and VMAD's own scalar/object/array-of-scalar properties — all of those produce the
     // right shape via setAtPath already, so this is a no-op fallback for them, not a new branch
-    // they have to reason about.
-    const commitHere = (plugin: string, value: unknown) => {
-      const current = currentRootValue(plugin);
+    // they have to reason about. #272: decomposes to the real plugin filename (overrideMap[key]
+    // .plugin) right before handleEdit — write-target DTOs don't carry origin (the server
+    // resolves it), and a ColumnKey is never parsed back apart to get one out.
+    const commitHere = (key: ColumnKey, value: unknown) => {
+      const current = currentRootValue(key);
       const next = rootDiff.commitOverride ? rootDiff.commitOverride(current, path, value) : setAtPath(current, path, value);
-      void handleEdit(plugin, rootField, next);
+      const realPlugin = overrideMap[key]?.plugin;
+      if (realPlugin === undefined) return;
+      void handleEdit(realPlugin, rootField, next);
     };
-    const currentArrayHere = (plugin: string): unknown[] => {
-      const v = getAtPath(currentRootValue(plugin), path);
+    const currentArrayHere = (key: ColumnKey): unknown[] => {
+      const v = getAtPath(currentRootValue(key), path);
       return Array.isArray(v) ? v : [];
     };
 
@@ -880,7 +936,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     // (`defaultCondition()`), so its own Add stays fully enabled.
     const onArrayAdd = meta?.type === 'array' && meta.elementType != null && meta.elementType.isSortable !== true
       && (!rootDiff.commitOverride || meta.elementType.defaultValue !== undefined)
-      ? (plugin: string) => commitHere(plugin, appendArrayElement(currentArrayHere(plugin), defaultElementValue(meta.elementType!)))
+      ? (key: ColumnKey) => commitHere(key, appendArrayElement(currentArrayHere(key), defaultElementValue(meta.elementType!)))
       : undefined;
 
     // Issue #231: builds this row's own VMAD structural-op data-vscode-context per plugin —
@@ -888,18 +944,23 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     // itself comes from this row's own fieldName ("scripts"/"script") or its wirePath
     // (parseVmadPath, "property" — its own wirePath is always `VMAD\Script\Prop`, set by the same
     // adapter). Absent for every non-VMAD row, so DiffRow's own gate (structOpContextFor?.(...))
-    // simply has nothing to call.
-    const structOpContextFor = ((): ((plugin: string) => object | undefined) | undefined => {
-      if (diff.vmadOpKind === 'scripts') return plugin => vmadScriptsContext(formKey, plugin);
+    // simply has nothing to call. #272: takes the column's real override `o` (plugin + origin as
+    // parallel fields) — the vmad*Context builders need the two separate strings, and
+    // diff.values' own per-column lookup below needs the ColumnKey derived from them.
+    const structOpContextFor = ((): ((o: CompareOverride) => object | undefined) | undefined => {
+      if (diff.vmadOpKind === 'scripts') return o => vmadScriptsContext(formKey, o.plugin, o.origin ?? 'Data');
       // Issue #231 (review): Set Script Flags' own QuickPick seed — this script row's own
-      // `values[plugin]` (buildScript sets it to `s.flags`, VmadScriptDiff's per-plugin flag).
+      // `values[key]` (buildScript sets it to `s.flags`, VmadScriptDiff's per-column flag).
       if (diff.vmadOpKind === 'script') {
-        return plugin => vmadScriptContext(formKey, plugin, diff.fieldName, (diff.values[plugin] as string | undefined) ?? null);
+        return o => vmadScriptContext(
+          formKey, o.plugin, o.origin ?? 'Data', diff.fieldName,
+          (diff.values[columnKey(o.plugin, o.origin)] as string | undefined) ?? null,
+        );
       }
       if (diff.vmadOpKind === 'property') {
         const parsed = parseVmadPath(rootField);
         if (!parsed) return undefined;
-        return plugin => vmadPropertyContext(formKey, plugin, parsed.script, parsed.prop);
+        return o => vmadPropertyContext(formKey, o.plugin, o.origin ?? 'Data', parsed.script, parsed.prop);
       }
       return undefined;
     })();
@@ -959,7 +1020,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
 
   function buildArrayElementRows(
     child: FieldDiff, elementMeta: FieldMetadata, arrayPath: PathSegment[], rootField: string, rootDiff: FieldDiff,
-    childRowKey: string, arrayOps: { currentArray: (plugin: string) => unknown[]; commit: (plugin: string, value: unknown) => void },
+    childRowKey: string, arrayOps: { currentArray: (key: ColumnKey) => unknown[]; commit: (key: ColumnKey, value: unknown) => void },
   ): React.ReactNode[] {
     const seg: PathSegment = elementMeta.isSortable
       ? { kind: 'sortKey', key: child.fieldName }
@@ -986,9 +1047,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         <AddPropertyDialog
           onCancel={() => setAddPropertyTarget(null)}
           onConfirm={({ name, type, value }) => {
-            const { plugin, scriptName } = addPropertyTarget;
+            const { plugin: key, scriptName } = addPropertyTarget;
             setAddPropertyTarget(null);
-            void handleVmadStructOp(plugin, `VMAD\\${scriptName}\\${name}`, { op: 'add_property', type, name, flags: 'Edited', value });
+            const realPlugin = overrideMap[key]?.plugin;
+            if (realPlugin === undefined) return;
+            void handleVmadStructOp(realPlugin, `VMAD\\${scriptName}\\${name}`, { op: 'add_property', type, name, flags: 'Edited', value });
           }}
         />
       )}
@@ -1010,31 +1073,35 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
               <th style={{ ...headerCell, textAlign: 'left', minWidth: '160px' }}>Field</th>
               {columns.map(col => {
                 if (col.kind === 'disk') {
-                  const isCollapsed = collapsedColumns.has(col.override.plugin);
-                  const isImmutable = immutableSet.has(col.override.plugin);
+                  // #272 / ADR-0036: collapsedColumns/immutableSet are keyed by col.key
+                  // (ColumnKey), not the bare plugin filename — two same-filename columns must
+                  // collapse/read-only independently. columnHeaderContext still gets the real
+                  // plugin+origin pair (col.override.plugin/.origin), never the compound key.
+                  const isCollapsed = collapsedColumns.has(col.key);
+                  const isImmutable = immutableSet.has(col.key);
                   return (
                     <th
-                      key={`disk:${col.override.plugin}`}
+                      key={`disk:${col.key}`}
                       style={{ ...headerCell, textAlign: 'left', minWidth: isCollapsed ? '48px' : '200px', backgroundColor: getHeaderBg(col.override.conflictThis) }}
                       // Issue #209: the column-header menu (Copy as Override… / Copy as New
                       // Record / Remove / Add Master) is VS Code's own `webview/context` menu
                       // now — no `onContextMenu`/`preventDefault()` here any more, same
                       // migration switch as #208's pending cells.
                       data-vscode-context={columnHeaderContext(
-                        formKey, col.override.plugin, isImmutable, isHeaderRecord, currentMasters(col.override),
+                        formKey, col.override.plugin, col.override.origin ?? 'Data', isImmutable, isHeaderRecord, currentMasters(col.override),
                       )}
                     >
                       <PluginHeader
                         override={col.override}
                         isImmutable={isImmutable}
                         collapsed={isCollapsed}
-                        onToggleCollapse={() => toggleColumnCollapse(col.override.plugin)}
+                        onToggleCollapse={() => toggleColumnCollapse(col.key)}
                       />
                     </th>
                   );
                 }
                 return (
-                  <th key={`pending:${col.plugin}`} style={{ ...baseCell, fontWeight: 400, textAlign: 'left', minWidth: '160px', fontStyle: 'italic', opacity: 0.7 }}>
+                  <th key={`pending:${col.key}`} style={{ ...baseCell, fontWeight: 400, textAlign: 'left', minWidth: '160px', fontStyle: 'italic', opacity: 0.7 }}>
                     <div>Pending</div>
                     <div style={{ fontSize: '11px', opacity: 0.6 }}>{col.plugin}</div>
                   </th>

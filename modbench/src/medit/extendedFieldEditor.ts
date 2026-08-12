@@ -45,6 +45,13 @@ export interface OpenExtendedFieldEditorParams {
   recordLabel: string;
   fieldName: string;
   plugin: string;
+  // #272 / ADR-0036: required alongside `plugin`, consistent with every other column-identity
+  // message in this ticket — but deliberately NOT threaded into extendedEditorPath below. Two
+  // same-filename columns sharing a temp-file path (right target, wrong content) is unreachable
+  // until #34 (nothing loads such a pair yet); the fix is path derivation, which is #34-shaped.
+  // Carrying `origin` on the message now means #34 only has to change extendedEditorPath, not
+  // this message's shape too.
+  origin: string;
   readOnly: boolean;
   // Issue #242: FocusedCell's own disk/pending discriminant (#232), mirrored here — absent means
   // the disk cell, `'pending'` its independent companion. See extendedEditorPath's own comment for

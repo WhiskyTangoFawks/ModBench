@@ -30,6 +30,24 @@ public sealed class VmadConflictClassifierTests
     private static VmadPluginInput Input(string plugin, int loadOrder, params VmadScriptData[] scripts) =>
         new(plugin, loadOrder, new VmadData(scripts));
 
+    private static VmadPluginInput InputWithOrigin(string plugin, string origin, int loadOrder, params VmadScriptData[] scripts) =>
+        new(plugin, loadOrder, new VmadData(scripts), origin);
+
+    // #272 / ADR-0036 (AC5): two columns sharing a filename, differing in origin — bare-plugin
+    // dictionary keys would collide here even though nothing loads such a pair yet (#34).
+    [Fact]
+    public void Classify_SameFilenameDifferentOrigin_DoesNotCollide()
+    {
+        var modA = InputWithOrigin("Shared.esp", "ModA", 0, Script("S", "Local", Prop("Power", Scalar("Int", 10))));
+        var modB = InputWithOrigin("Shared.esp", "ModB", 1, Script("S", "Local", Prop("Power", Scalar("Int", 20))));
+
+        var result = VmadConflictClassifier.Classify([modA, modB]);
+
+        var prop = result.Compare.Scripts[0].Properties[0];
+        Assert.Equal(10, prop.Values["Shared.esp|ModA"]);
+        Assert.Equal(20, prop.Values["Shared.esp|ModB"]);
+    }
+
     [Fact]
     public void Classify_DifferingScalarProperty_MarksWinnerAndLoserConflicted()
     {
@@ -43,7 +61,7 @@ public sealed class VmadConflictClassifierTests
         Assert.Equal("S", script.Name);
         var power = Assert.Single(script.Properties);
         Assert.Equal("Power", power.Name);
-        Assert.Equal("C.esp", power.WinnerPlugin);
+        Assert.Equal("C.esp", power.WinnerColumn);
 
         Assert.Equal(ConflictThis.ConflictWins, power.CellStates["C.esp"]);
         Assert.Equal(ConflictThis.ConflictLoses, power.CellStates["B.esp"]);
@@ -80,7 +98,7 @@ public sealed class VmadConflictClassifierTests
         var added = result.Compare.Scripts.First(s => s.Name == "Added");
         Assert.Null(added.Flags["A.esp"]);          // absent column reflected
         Assert.Equal("Local", added.Flags["B.esp"]);
-        Assert.Equal("B.esp", added.WinnerPlugin);
+        Assert.Equal("B.esp", added.WinnerColumn);
         Assert.Equal(ConflictThis.Override, added.CellStates["B.esp"]);
         Assert.False(added.CellStates.ContainsKey("A.esp"));
     }

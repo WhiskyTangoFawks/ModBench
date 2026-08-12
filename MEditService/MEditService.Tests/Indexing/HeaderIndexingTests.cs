@@ -134,4 +134,30 @@ public class HeaderIndexingTests
         Assert.Equal("PluginA.esp", overridesA[0].Plugin);
         Assert.Equal("PluginB.esp", overridesB[0].Plugin);
     }
+
+    // #272 / ADR-0036: two origins loading the same physical filename — the header table's write
+    // side already carried origin since #271 (HeaderIndexer.Index), but IndexHeader's delete step
+    // stayed filename-only until this fix, so indexing ModB's copy of a shared-filename plugin
+    // silently deleted ModA's header row (masters, ESL flag, load-order fields) before inserting
+    // ModB's, even though every other table (records/VMAD/conditions/placement) already survived
+    // the same scenario. Mirrors PlacementIndexingTests.GetPlacement_SameFilenameDifferentOrigin_
+    // ScopesToOrigin's origin: "ModA"/"ModB" pattern.
+    [Fact]
+    public void Index_TwoOrigins_SameFilename_EachGetsOwnHeaderRow_NeitherOverridesTheOther()
+    {
+        var modA = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
+        modA.ModHeader.Author = "Author A";
+        var modB = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
+        modB.ModHeader.Author = "Author B";
+
+        using var repo = NewRepo();
+        repo.Index((IModGetter)modA, 0, origin: "ModA");
+        repo.Index((IModGetter)modB, 1, origin: "ModB");
+
+        var overrides = repo.GetAllOverrides("header", "000000:Shared.esp");
+
+        Assert.Equal(2, overrides.Count);
+        Assert.Contains(overrides, o => o.Origin == "ModA");
+        Assert.Contains(overrides, o => o.Origin == "ModB");
+    }
 }

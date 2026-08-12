@@ -377,7 +377,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             Assert.NotNull(compare.Vmad);
             var script = Assert.Single(compare.Vmad!.Scripts);
             var prop = script.Properties.First(p => p.Name == "Power");
-            Assert.Equal("Top.esp", prop.WinnerPlugin);
+            Assert.Equal("Top.esp", prop.WinnerColumn);
         }
     }
 
@@ -585,7 +585,7 @@ public sealed class RecordQueryServiceTests : IDisposable
                 Assert.Equal("Conditions", group.FieldPath);
                 var diff = Assert.Single(group.Conditions);
                 Assert.Equal("GetIsID", diff.PerPlugin["Base.esp"]!.Function);
-                Assert.Equal("Base.esp", diff.WinnerPlugin);
+                Assert.Equal("Base.esp", diff.WinnerColumn);
             });
     }
 
@@ -1284,11 +1284,11 @@ public sealed class RecordQueryServiceTests : IDisposable
         public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey) =>
             inner.GetAllOverrides(tableName, formKey);
 
-        public VmadData? GetVmad(string formKey, string plugin) =>
-            inner.GetVmad(formKey, plugin);
+        public VmadData? GetVmad(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+            inner.GetVmad(formKey, plugin, origin);
 
-        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin) =>
-            inner.GetConditions(formKey, plugin);
+        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+            inner.GetConditions(formKey, plugin, origin);
 
         public int CountRecordsForPlugin(string tableName, string plugin) =>
             inner.CountRecordsForPlugin(tableName, plugin);
@@ -1311,8 +1311,8 @@ public sealed class RecordQueryServiceTests : IDisposable
             inner.GetInteriorCells(plugin, limit, offset);
         public CellReferences GetCellReferences(string plugin, string cellFormKey) =>
             inner.GetCellReferences(plugin, cellFormKey);
-        public PlacementRow? GetPlacement(string formKey, string plugin) =>
-            inner.GetPlacement(formKey, plugin);
+        public PlacementRow? GetPlacement(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+            inner.GetPlacement(formKey, plugin, origin);
     }
 
     private sealed class StubSessionManager(IRecordReader repository, GameRelease release) : ISessionManager
