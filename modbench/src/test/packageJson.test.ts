@@ -64,6 +64,35 @@ describe('package.json Loadout header view (#247)', () => {
   });
 });
 
+describe('package.json Loadout views stay visible through an editing session (#268)', () => {
+  const sidebarViews = () => pkg.contributes.views.modbench as { id: string; name: string; when?: string }[];
+  const welcome = () => pkg.contributes.viewsWelcome as { view: string; when: string }[];
+
+  // ADR-0035's "valid first step": Launch mEdit must no longer hide the loadout it's editing
+  // against. The Mods tree, the Plugin load order and Downloads carry no view-mode gate at
+  // all now — #273, not this ticket, retires modbench.viewMode itself.
+  it.each(['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads'])(
+    '%s carries no view-mode gate, so it survives entering editing mode', (id) => {
+      const view = sidebarViews().find((v) => v.id === id);
+      expect(view!.when ?? '').not.toMatch(/modbench\.viewMode/);
+    });
+
+  // The editing views stay gated — they browse a session that doesn't exist until Launch
+  // mEdit creates one, so "appear in addition to, not instead of" still means gated on
+  // 'editing' for these three, just no longer exclusive with the loadout trio above.
+  it.each(['modbench.pluginTree', 'modbench.changeGroupTree'])(
+    '%s keeps its editing-mode gate — it has nothing to show before a session exists', (id) => {
+      const view = sidebarViews().find((v) => v.id === id);
+      expect(view!.when).toBe("modbench.viewMode == 'editing'");
+    });
+
+  it('drops the now-redundant view-mode clause from the "not an MO2 instance" welcome message', () => {
+    const entry = welcome().find((w) => w.view === 'modbench.modList' && w.when.includes('workspaceIsMo2Instance'));
+    expect(entry, 'expected the not-an-MO2-instance welcome entry').toBeTruthy();
+    expect(entry!.when).not.toMatch(/modbench\.viewMode/);
+  });
+});
+
 describe('package.json filtering is one UX (#247)', () => {
   const titleMenus = () => pkg.contributes.menus['view/title'] as { command: string; when: string; group: string }[];
   const commandTitle = (id: string) =>

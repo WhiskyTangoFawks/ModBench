@@ -20,8 +20,11 @@ load-order tree — a *different* "Plugins" surface — in [plugins.md](plugins.
 **Vocabulary note:** the mEdit "Plugins tree" is the entry point into per-record browsing and
 requires a spawned backend; it is distinct from the Mod-Management **Plugin List**
 ([plugins.md](plugins.md)), which manages `plugins.txt` load order and runs without the
-backend. Both display as "Plugins" but are visible in mutually exclusive view modes and stay
-fully distinct in code.
+backend. Both display as "Plugins" and, since #268, are simultaneously visible whenever a
+session is running — the editing tree's runtime title ("mEdit — Plugins", #109) is what tells
+them apart until [#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270) merges them
+into one tree ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)). Not merged
+yet: the two stay fully distinct in code, each owning its own rows.
 
 ## Problem Statement
 
@@ -48,10 +51,12 @@ session over the active loadout:
 | **Referenced By tree** | Sidebar tree, hidden until invoked from a record; what points at this record | [medit-referenced-by.md](medit-referenced-by.md) |
 | **Status bar item** | Backend/session state | This document |
 
-**Launch mEdit** (from the Loadout header) switches into editing mode, spawns the backend, and
-builds the session from the active modlist's enabled plugins plus vanilla masters
-(`load-explicit`); **Close mEdit** switches back and tears the session down. Editing writes
-records straight to their physical plugin files and never requires a deploy.
+**Launch mEdit** (from the Loadout header) enters editing mode, spawns the backend, and builds
+the session from the active modlist's enabled plugins plus vanilla masters (`load-explicit`);
+**Close mEdit** exits it and tears the session down. Since #268, entering editing mode adds the
+mEdit surfaces *alongside* the Mods tree, Plugin load order and Downloads rather than replacing
+them — the Loadout stays visible while a session is running. Editing writes records straight to
+their physical plugin files and never requires a deploy.
 
 ## User Stories
 
@@ -80,13 +85,17 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   behavior they present. The backend endpoint contract that drives them is governed by
   `MEditService/CLAUDE.md` and the generated API client, not restated here.
 - Modbench is a single activity-bar container (`modbench`). A `modbench.viewMode` context key
-  toggles the sidebar between the Loadout surface and the mEdit surfaces. **Launch mEdit**
-  switches to editing mode, lazily spawning the backend and loading the active modlist as the
-  session; **Close mEdit** switches back and tears the session down. Both are reached from the
-  **mEdit row of the [Loadout header](loadout-header.md)** (#247) — one row carrying whichever
-  direction applies — and neither appears on any tree's title bar: starting and stopping a
-  session is workspace-scope, and once #268 makes the loadout and editing views co-visible
-  there is no single tree it could sensibly belong to.
+  marks whether editing is entered. **Launch mEdit** flips it to `'editing'`, lazily spawning
+  the backend and loading the active modlist as the session; **Close mEdit** flips it back to
+  `'loadout'` and tears the session down. Since #268 the mEdit surfaces this adds are additive,
+  not exclusive: the Loadout tree, Plugin load order and Downloads carry no `viewMode` gate at
+  all and stay visible and interactive throughout — only the mEdit surfaces themselves (and
+  Referenced By) are gated on `'editing'`. `modbench.viewMode` itself is not retired by #268;
+  that is [#273](https://github.com/WhiskyTangoFawks/ModBench/issues/273). Both Launch and
+  Close are reached from the **mEdit row of the [Loadout header](loadout-header.md)** (#247) —
+  one row carrying whichever direction applies — and neither appears on any tree's title bar:
+  starting and stopping a session is workspace-scope, and with the loadout and editing views
+  co-visible there is no single tree it could sensibly belong to.
 - The mEdit view is composed of the five surfaces listed above. There is no toolbar or
   top-level menu bar — every action is reachable from a tree context menu, the command palette,
   or the record editor panel itself.
@@ -165,5 +174,5 @@ Per-surface testing decisions live in the surface specs. Shared:
   side in [mods.md](mods.md).
 - The Editing "Plugins tree" and the Mod-Management "Plugin List" ([plugins.md](plugins.md))
   both display as "Plugins" but are distinct views (`modbench.pluginTree` vs
-  `modbench.pluginListTree`), visible in mutually exclusive view modes — see the Vocabulary
-  note at the top and [CONTEXT-MAP.md](../../CONTEXT-MAP.md).
+  `modbench.pluginListTree`); since #268 they are co-visible, not mutually exclusive — see the
+  Vocabulary note at the top and [CONTEXT-MAP.md](../../CONTEXT-MAP.md).

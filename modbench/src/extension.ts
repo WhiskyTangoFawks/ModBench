@@ -251,7 +251,7 @@ export function activate(context: vscode.ExtensionContext) {
     showCollapseAll: true,
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
-  const { modListProvider, downloadsProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, changeGroupTreeProvider });
+  const { modListProvider, downloadsProvider, pluginListProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, changeGroupTreeProvider });
 
   context.subscriptions.push(
     treeView,
@@ -272,7 +272,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Exposed for integration tests (pinned Overwrite row #82; editing tree after launch #75;
   // editing tree title follows view mode #109; leveled output channel #198; Downloads tree
   // #233) — unused in production.
-  return { modListProvider, downloadsProvider, treeProvider, treeView, changeGroupTreeView, outputChannel };
+  return { modListProvider, downloadsProvider, pluginListProvider, treeProvider, treeView, changeGroupTreeView, outputChannel };
 }
 
 
@@ -1212,7 +1212,7 @@ async function onModCheckboxChanged(
  *  the container's first view and must never be a hole. Returns what the integration tests
  *  read off `activate`'s exports. */
 function registerLoadoutSurfaces(deps: Omit<LoadoutViewDeps, 'revealLog'>): {
-  modListProvider?: ModListProvider; downloadsProvider?: DownloadsProvider;
+  modListProvider?: ModListProvider; downloadsProvider?: DownloadsProvider; pluginListProvider?: PluginListProvider;
 } {
   const { context, outputChannel } = deps;
   // The open workspace root IS the MO2 instance (see modbench/CLAUDE.md).
@@ -1220,7 +1220,11 @@ function registerLoadoutSurfaces(deps: Omit<LoadoutViewDeps, 'revealLog'>): {
   registerDeploymentModeContext(context);
   const loadout = registerLoadoutView({ ...deps, revealLog: () => outputChannel.show(true) });
   registerLoadoutHeaderView({ context, outputChannel, ...loadout });
-  return { modListProvider: loadout?.modListProvider, downloadsProvider: loadout?.downloadsProvider };
+  return {
+    modListProvider: loadout?.modListProvider,
+    downloadsProvider: loadout?.downloadsProvider,
+    pluginListProvider: loadout?.pluginListProvider,
+  };
 }
 
 interface LoadoutViewDeps {
@@ -1235,7 +1239,7 @@ interface LoadoutViewDeps {
  *  ModListProvider and DownloadsProvider (exposed via activate() for integration
  *  tests), or undefined with a neutral log when no workspace is open, or when the
  *  workspace isn't an MO2 instance (#192 — the Mods view shows welcome content instead). */
-function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void } | undefined {
+function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void } | undefined {
   const { context, log, outputChannel, revealLog, controller, changeGroupTreeProvider } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
@@ -1333,7 +1337,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, log);
     context.subscriptions.push(...downloadsDisposables);
     const refreshAll = makeRefreshAll(modListProvider, pluginListProvider, downloadsProvider, updateProfileDescription);
-    return { modListProvider, downloadsProvider, modlistSource, instanceRoot, refreshAll };
+    return { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, refreshAll };
 }
 
 /** #247: Refresh is one need, not three. Every Mod-Management source re-reads from disk
