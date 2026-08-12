@@ -191,7 +191,10 @@ function createReferencedByTree(
   client: ApiClient, log: (msg: string) => void, activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
 ) {
   const referencedByTreeProvider = new ReferencedByTreeProvider(client, log, (count) => {
-    referencedByTreeView.title = count === undefined ? 'Referenced By' : `Referenced By (${count})`;
+    // #273 Slice B: the declared name is "Plugins - Referenced By" — its own sub-functionality
+    // naming convention (ADR-0035) — and the runtime count badge carries the same prefix so the
+    // title never reverts to the pre-rename text once a count is known.
+    referencedByTreeView.title = count === undefined ? 'Plugins - Referenced By' : `Plugins - Referenced By (${count})`;
   });
   const referencedByTreeView = vscode.window.createTreeView('modbench.referencedByTree', {
     treeDataProvider: referencedByTreeProvider,

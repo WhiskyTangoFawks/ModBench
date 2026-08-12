@@ -581,7 +581,7 @@ describe('mEdit plugin tree title reflects view mode (#109)', () => {
 
   it('leaves the Pending Changes view title untouched entering editing mode', () => {
     assert.strictEqual(
-      exportsOf()?.changeGroupTreeView?.title, 'Pending Changes',
+      exportsOf()?.changeGroupTreeView?.title, 'Plugins - Pending Changes',
       'only the editing plugin tree title should change — Pending Changes keeps its declared default',
     );
   });

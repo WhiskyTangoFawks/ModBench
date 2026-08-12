@@ -73,6 +73,23 @@ describe('package.json Pending Changes gates on staged work, not view mode (#273
   });
 });
 
+// VS Code has no view nesting/grouping within a container, so a "Plugins - " title prefix is the
+// only available way to say Pending Changes and Referenced By are sub-functionality of the one
+// Plugins tree, not siblings of equal standing (ADR-0035).
+describe('package.json "Plugins - …" naming for Pending Changes and Referenced By (#273 Slice B)', () => {
+  it('names the Pending Changes view "Plugins - Pending Changes"', () => {
+    const sidebarViews = pkg.contributes.views.modbench as { id: string; name: string }[];
+    const view = sidebarViews.find((v) => v.id === 'modbench.changeGroupTree');
+    expect(view!.name).toBe('Plugins - Pending Changes');
+  });
+
+  it('names the Referenced By view "Plugins - Referenced By"', () => {
+    const referencedByViews = pkg.contributes.views.modbenchReferencedBy as { id: string; name: string }[];
+    const view = referencedByViews.find((v) => v.id === 'modbench.referencedByTree');
+    expect(view!.name).toBe('Plugins - Referenced By');
+  });
+});
+
 describe('package.json Loadout views stay visible through an editing session (#268)', () => {
   const sidebarViews = () => pkg.contributes.views.modbench as { id: string; name: string; when?: string }[];
   const welcome = () => pkg.contributes.viewsWelcome as { view: string; when: string }[];

@@ -108,14 +108,14 @@
         },
         {
           "id": "modbench.changeGroupTree",
-          "name": "Pending Changes",
+          "name": "Plugins - Pending Changes",
           "when": "modbench.hasPendingChanges"
         }
       ],
       "modbenchReferencedBy": [
         {
           "id": "modbench.referencedByTree",
-          "name": "Referenced By",
+          "name": "Plugins - Referenced By",
           "when": "modbench.viewMode == 'editing'"
         }
       ]
