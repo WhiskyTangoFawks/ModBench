@@ -3,10 +3,10 @@ using MEditService.Core.Schema;
 
 namespace MEditService.Core.Queries;
 
-// Per-plugin conditions for one record, ordered by load order (master = first). Origin defaulted
-// (#272 / ADR-0036) so pre-existing single-origin call sites keep compiling.
+// Per-plugin conditions for one record, ordered by load order (master = first). Origin (#272 /
+// ADR-0036) is required since #275 — every input must say which origin, not fall back to one.
 public sealed record ConditionPluginInput(
-    string Plugin, int LoadOrderIndex, IReadOnlyList<ConditionOwner> Owners, string Origin = Session.PluginOrigin.DataDirectory);
+    string Plugin, int LoadOrderIndex, IReadOnlyList<ConditionOwner> Owners, string Origin);
 
 public sealed record ConditionClassifyResult(ConditionCompare Compare, ConflictAll ConflictContribution);
 

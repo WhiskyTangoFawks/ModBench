@@ -12,6 +12,9 @@ export interface PluginMetadata {
   masters: string[];
   recordCount: number;
   isImmutable: boolean;
+  // #275 / ADR-0036: the mod folder (or reserved PluginOrigin value) this plugin was resolved
+  // from — on the wire since #269 (PluginResponse.Origin) but dropped here until now.
+  origin: string;
 }
 
 export interface RecordSummary {

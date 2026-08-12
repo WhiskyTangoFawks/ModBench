@@ -786,7 +786,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         changes.Upsert(new PendingChangeUpsert(fk, TestPluginFixture.PluginName, "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = newVal },
             "test", null,
-            []));
+            [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
 
         var svcWithChanges = new RecordQueryService(_manager, changes, SharedSchemaReflector.Instance, new ConflictClassifier());
         var compare = svcWithChanges.GetCompare(fk);
@@ -955,7 +955,7 @@ public sealed class RecordQueryServiceTests : IDisposable
                 Mutagen.Bethesda.Plugins.ModKey.FromFileName(TestPluginFixture.PluginName),
                 Path.Combine(_manager.Session!.DataFolderPath, TestPluginFixture.PluginName)),
             Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        inner.Index(mod, 0);
+        inner.Index(mod, 0, participates: true, origin: "Data");
         inner.UpdateWinners();
         var spy = new SpyRecordReader(inner);
         var stubSession = new StubSessionManager(spy, GameRelease.Fallout4);
@@ -1048,7 +1048,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var changes = DuckDbTestFactory.MakePendingChangeService();
             changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, []));
+                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetPluginRecordTypes("Override.esp");
@@ -1082,7 +1082,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             // stage npcKey2 into Override.esp (not yet committed)
             changes.Upsert(new PendingChangeUpsert(npcKey2.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, []));
+                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetPluginRecordTypes("Override.esp");
@@ -1112,7 +1112,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var changes = DuckDbTestFactory.MakePendingChangeService();
             changes.Upsert(new PendingChangeUpsert(baseNpcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, []));
+                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetPluginRecordTypes("Override.esp");
@@ -1141,7 +1141,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var changes = DuckDbTestFactory.MakePendingChangeService();
             changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, []));
+                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetRecords(type: "npc_", plugin: "Override.esp", search: null, limit: 100, offset: 0);
@@ -1172,7 +1172,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var changes = DuckDbTestFactory.MakePendingChangeService();
             changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
                 new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, []));
+                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
             var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
 
             var result = svc.GetRecords(type: "npc_", plugin: "Override.esp", search: null, limit: 100, offset: 1);
@@ -1189,7 +1189,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var changes = DuckDbTestFactory.MakePendingChangeService();
         changes.Upsert(new PendingChangeUpsert(fk.ToString(), "Unknown.esp", "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-            "user", null, []));
+            "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
         var svc = new RecordQueryService(_manager, changes, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var result = svc.GetRecords(type: "npc_", plugin: "Unknown.esp", search: null, limit: 100, offset: 0);
@@ -1209,7 +1209,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var changes = DuckDbTestFactory.MakePendingChangeService();
         changes.Upsert(new PendingChangeUpsert(fk, TestPluginFixture.PluginName, "npc_",
             new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-            "user", null, []));
+            "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
         var svc = new RecordQueryService(_manager, changes, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var result = svc.GetRecords(type: "npc_", plugin: TestPluginFixture.PluginName, search: null, limit: 100, offset: 0);
@@ -1284,10 +1284,10 @@ public sealed class RecordQueryServiceTests : IDisposable
         public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey) =>
             inner.GetAllOverrides(tableName, formKey);
 
-        public VmadData? GetVmad(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+        public VmadData? GetVmad(string formKey, string plugin, string origin) =>
             inner.GetVmad(formKey, plugin, origin);
 
-        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) =>
             inner.GetConditions(formKey, plugin, origin);
 
         public int CountRecordsForPlugin(string tableName, string plugin) =>
@@ -1311,7 +1311,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             inner.GetInteriorCells(plugin, limit, offset);
         public CellReferences GetCellReferences(string plugin, string cellFormKey) =>
             inner.GetCellReferences(plugin, cellFormKey);
-        public PlacementRow? GetPlacement(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+        public PlacementRow? GetPlacement(string formKey, string plugin, string origin) =>
             inner.GetPlacement(formKey, plugin, origin);
     }
 
@@ -1321,7 +1321,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         public IRecordReader? Repository => repository;
 
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) => throw new NotSupportedException();
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
+        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
         public string ReserveFormKey(string plugin) => throw new NotSupportedException();

@@ -31,7 +31,7 @@ public sealed class DerivedChangeGroupTests : IDisposable
             formKey, plugin, "npc_",
             new Dictionary<string, JsonElement> { [field] = J(newValue) },
             "user", null,
-            new Dictionary<string, JsonElement> { [field] = J("\"old\"") }));
+            new Dictionary<string, JsonElement> { [field] = J("\"old\"") }, FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
 
     // Issue #112: an ordinary field edit stages with group_id = NULL, so under the stored model it
     // had no change_groups row and was unreachable — invisible in the tree and impossible to save.
@@ -106,7 +106,7 @@ public sealed class DerivedChangeGroupTests : IDisposable
         _svc.Upsert(new PendingChangeUpsert(
             "000001:A.esp", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["$create"] = J("null") },
-            "user", null, [], FormRefs: null, ChangeType: "create"));
+            "user", null, [], FormRefs: null, ChangeType: "create", ParentCell: null, PlacementGroup: null, Origin: "Data"));
         StageEdit("000001:A.esp", "A.esp", "name");
 
         var group = Assert.Single(_svc.GetChangeGroups());

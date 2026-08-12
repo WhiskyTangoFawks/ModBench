@@ -24,7 +24,8 @@ public sealed class PluginWriterHeaderTests
 
     private static PendingChange HeaderChange(string fieldPath, string json) =>
         new(Guid.NewGuid(), HeaderFormKey, Plugin, fieldPath, "header",
-            J("null"), J(json), "user", null, DateTime.UtcNow, "field_edit", null);
+            J("null"), J(json), "user", null, DateTime.UtcNow, "field_edit", null,
+            null, null, null, null, "Data");
 
     private static (string pluginPath, ModPath modPath) BuildFixture(
         string dir,

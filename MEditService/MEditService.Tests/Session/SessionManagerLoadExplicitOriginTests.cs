@@ -9,9 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Session;
 
 // #269 / ADR-0036: the SessionManager-level LoadExplicit overload that carries a caller-supplied
-// origin per plugin — the real, end-to-end path an MO2-backed session load uses. The origin-less
-// overload (SessionManagerLoadExplicitTests) stays the only one every other ISessionManager test
-// double implements; this exercises SessionManager's own override of the new one directly.
+// origin per plugin — the real, end-to-end path an MO2-backed session load uses.
 public sealed class SessionManagerLoadExplicitOriginTests
 {
     private static SessionManager MakeManager()

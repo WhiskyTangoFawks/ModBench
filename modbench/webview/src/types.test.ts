@@ -58,9 +58,9 @@ describe('columnKey', () => {
     expect(columnKey('Shared.esp', 'Data')).toBe('Shared.esp');
   });
 
-  it('treats a missing origin the same as the Data origin', () => {
-    expect(columnKey('Shared.esp')).toBe(columnKey('Shared.esp', 'Data'));
-  });
+  // #275 / ADR-0036: origin is no longer omittable (the contract step removed the default that
+  // let a caller skip it) — a literal `null` is the only way left to reach the elided-Data path,
+  // covered by 'treats a literal null origin the same as a missing one' below.
 
   // Case-folding is scoped to the Data-origin check only (unlike the backend, which doesn't fold
   // at all — see columnKey()'s doc comment): "Data"/"data"/"DATA" must all elide the same way
@@ -78,10 +78,10 @@ describe('columnKey', () => {
   // carries it (CompareOverride/PendingChange/PluginResponse in generated/api.ts) even though the
   // backend can't actually produce a null there (see columnKey()'s own doc comment) — a `null`
   // makes it through RecordSessionClient's unchecked `as` cast into these hand types regardless of
-  // what they claim, so `columnKey` must tolerate it exactly like a missing origin rather than
-  // throwing inside `.toLowerCase()`.
-  it('treats a literal null origin the same as a missing one, not a crash', () => {
-    expect(columnKey('Shared.esp', null)).toBe(columnKey('Shared.esp'));
+  // what they claim, so `columnKey` must tolerate it exactly like the elided Data origin rather
+  // than throwing inside `.toLowerCase()`.
+  it('treats a literal null origin the same as the Data origin, not a crash', () => {
+    expect(columnKey('Shared.esp', null)).toBe(columnKey('Shared.esp', 'Data'));
     expect(columnKey('Shared.esp', null)).toBe('Shared.esp');
   });
 });

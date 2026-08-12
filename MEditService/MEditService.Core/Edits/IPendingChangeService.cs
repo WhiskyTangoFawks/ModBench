@@ -14,9 +14,15 @@ public sealed record DrainResult(
 /// Input command only — never serialized to the wire; the response type is <see cref="PendingChange"/>.
 /// </summary>
 // Origin (#271 / ADR-0036): binds the staged edit to the compound identity, same as the committed
-// record index — EditOrchestrator resolves it from the session's PluginMetadata before construction.
-// Defaulted to PluginOrigin.DataDirectory so every pre-existing direct construction (test fixtures)
-// keeps compiling unchanged.
+// record index — EditOrchestrator resolves it from the session's PluginMetadata before
+// construction. Required (#275): every construction must say which origin. Kept in its original
+// trailing position rather than reordered before FormRefs/ChangeType/ParentCell/PlacementGroup —
+// FormRefs and ChangeType are usually passed positionally right after OldValues by existing
+// callers, and ChangeType shares Origin's own `string` type, so moving Origin earlier would let an
+// existing positional caller's argument silently land in the wrong slot instead of failing to
+// compile. Those four lose their own defaults as a consequence (C# requires every required
+// parameter to precede every optional one) — a small, safe widening: existing callers relying on
+// those defaults now name them explicitly with the same value the default used to supply.
 public sealed record PendingChangeUpsert(
     string FormKey,
     string Plugin,
@@ -25,11 +31,11 @@ public sealed record PendingChangeUpsert(
     string Source,
     string? Description,
     Dictionary<string, JsonElement> OldValues,
-    IReadOnlyList<PendingFormRef>? FormRefs = null,
-    string ChangeType = PendingChangeConstants.FieldEditChangeType,
-    string? ParentCell = null,
-    string? PlacementGroup = null,
-    string Origin = PluginOrigin.DataDirectory);
+    IReadOnlyList<PendingFormRef>? FormRefs,
+    string ChangeType,
+    string? ParentCell,
+    string? PlacementGroup,
+    string Origin);
 
 public interface IPendingChangeService
 {

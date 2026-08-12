@@ -22,7 +22,8 @@ public class SessionManagerTests(TestPluginFixture fixture)
 
     private static PendingChange MakePendingChange(string formKey, string plugin, string fieldPath, string recordType, string json) =>
         new(Guid.NewGuid(), formKey, plugin, fieldPath, recordType,
-            J("null"), J(json), "user", null, DateTime.UtcNow, "field_edit", null);
+            J("null"), J(json), "user", null, DateTime.UtcNow, "field_edit", null,
+            null, null, null, null, "Data");
 
     private static SessionManager MakeManager(IModImporter? modImporter = null)
     {
@@ -360,7 +361,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
             var createChange = new PendingChange(
                 Guid.NewGuid(), newRefFk, "Active.esp", "$create", "refr",
                 J("null"), J("null"), "user", null, DateTime.UtcNow, "create",
-                ParentCell: cellFk.ToString(), PlacementGroup: "persistent");
+                ParentCell: cellFk.ToString(), PlacementGroup: "persistent", Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
 
             await manager.SavePlugin("Active.esp", [createChange]);
 
@@ -388,7 +389,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
 
             var createChange = new PendingChange(
                 Guid.NewGuid(), reservedFk, "TestPlugin.esp", "$create", "npc_",
-                J("null"), J("null"), "user", null, DateTime.UtcNow, "create", null);
+                J("null"), J("null"), "user", null, DateTime.UtcNow, "create", null, PlacementGroup: null, Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
 
             await manager.SavePlugin("TestPlugin.esp", [createChange]);
 

@@ -122,7 +122,7 @@ public class PluginWriterPlacedTests
             Guid.NewGuid(), fx.RefAFk.ToString(), "Active.esp",
             "scale", "refr", J("null"), J("2.0"),
             "user", null, DateTime.UtcNow, "field_edit",
-            ParentCell: fx.CellFk.ToString(), PlacementGroup: "persistent");
+            ParentCell: fx.CellFk.ToString(), PlacementGroup: "persistent", Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
 
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(fx.ActivePath, [change], GameRelease.Fallout4, fx.LinkCache);
@@ -168,7 +168,7 @@ public class PluginWriterPlacedTests
             Guid.NewGuid(), refAFk.ToString(), "Active.esp",
             "$delete", "refr", J("null"), J("null"),
             "user", null, DateTime.UtcNow, "delete",
-            ParentCell: cellFk.ToString(), PlacementGroup: "persistent");
+            ParentCell: cellFk.ToString(), PlacementGroup: "persistent", Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
 
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(activePath, [change], GameRelease.Fallout4, linkCache);

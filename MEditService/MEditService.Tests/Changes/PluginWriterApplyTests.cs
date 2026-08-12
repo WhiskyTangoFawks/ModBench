@@ -141,11 +141,13 @@ public class PluginWriterApplyTests
 
     private static PendingChange MakeChange(FormKey formKey, string fieldPath, string json) =>
         new(Guid.NewGuid(), formKey.ToString(), "TestPlugin.esp", fieldPath, "npc_",
-            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null);
+            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null,
+            null, null, null, null, "Data");
 
     private static PendingChange MakeChangeRaw(string rawFormKey, string fieldPath, string json) =>
         new(Guid.NewGuid(), rawFormKey, "TestPlugin.esp", fieldPath, "npc_",
-            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null);
+            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null,
+            null, null, null, null, "Data");
 
     private static (string pluginPath, FormKey npcKey) BuildFixture()
     {
@@ -409,7 +411,7 @@ public class PluginWriterApplyTests
             Guid.NewGuid(), newFormKey.ToString(), "TestPlugin.esp",
             "$create", "npc_",
             J("null"), J("null"),
-            "user", null, DateTime.UtcNow, "create", null);
+            "user", null, DateTime.UtcNow, "create", null, PlacementGroup: null, Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
 
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var result = await writer.SaveAsync(pluginPath, [createChange], GameRelease.Fallout4);
@@ -434,7 +436,7 @@ public class PluginWriterApplyTests
             Guid.NewGuid(), fakeFormKey.ToString(), "TestPlugin.esp",
             "$create", "not_a_real_type",
             J("null"), J("null"),
-            "user", null, DateTime.UtcNow, "create", null);
+            "user", null, DateTime.UtcNow, "create", null, PlacementGroup: null, Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
 
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var result = await writer.SaveAsync(pluginPath, [createChange], GameRelease.Fallout4);
@@ -462,13 +464,13 @@ public class PluginWriterApplyTests
             Guid.NewGuid(), newFormKey.ToString(), "TestPlugin.esp",
             "$create", "npc_",
             J("null"), J("null"),
-            "user", null, DateTime.UtcNow, "create");
+            "user", null, DateTime.UtcNow, "create", ParentCell: null, PlacementGroup: null, Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
 
         var fieldChange = new PendingChange(
             Guid.NewGuid(), newFormKey.ToString(), "TestPlugin.esp",
             "aggression", "npc_",
             J("null"), J("\"Frenzied\""),
-            "user", null, DateTime.UtcNow, "field_edit");
+            "user", null, DateTime.UtcNow, "field_edit", ParentCell: null, PlacementGroup: null, Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
 
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(pluginPath, [createChange, fieldChange], GameRelease.Fallout4);
@@ -493,7 +495,7 @@ public class PluginWriterApplyTests
             Guid.NewGuid(), "NOT_A_VALID_FORMKEY", "TestPlugin.esp",
             "$create", "npc_",
             J("null"), J("null"),
-            "user", null, DateTime.UtcNow, "create", null);
+            "user", null, DateTime.UtcNow, "create", null, PlacementGroup: null, Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
 
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         var result = await writer.SaveAsync(pluginPath, [createChange], GameRelease.Fallout4);
@@ -523,7 +525,7 @@ public class PluginWriterApplyTests
             Guid.NewGuid(), newFormKey.ToString(), "TestPlugin.esp",
             "$create", "npc_",
             J("null"), J("null"),
-            "user", null, DateTime.UtcNow, "create", null);
+            "user", null, DateTime.UtcNow, "create", null, PlacementGroup: null, Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
 
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(pluginPath, [createChange], GameRelease.Fallout4);
@@ -554,7 +556,7 @@ public class PluginWriterApplyTests
             Guid.NewGuid(), lowFormKey.ToString(), "TestPlugin.esp",
             "$create", "npc_",
             J("null"), J("null"),
-            "user", null, DateTime.UtcNow, "create", null);
+            "user", null, DateTime.UtcNow, "create", null, PlacementGroup: null, Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
 
         var writer = new PluginWriter(Reflector, NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(pluginPath, [createChange], GameRelease.Fallout4);
@@ -569,7 +571,7 @@ public class PluginWriterApplyTests
         new(Guid.NewGuid(), formKey.ToString(), "TestPlugin.esp",
             "$delete", "npc_",
             JsonDocument.Parse("null").RootElement, JsonDocument.Parse("null").RootElement,
-            "user", null, DateTime.UtcNow, "delete", null);
+            "user", null, DateTime.UtcNow, "delete", null, null, null, null, null, "Data");
 
     [Fact]
     public async Task SaveAsync_DeleteChange_RecordRemovedAndApplied()
@@ -648,7 +650,7 @@ public class PluginWriterApplyTests
             Guid.NewGuid(), oldStr, plugin, "$renumber", recordType,
             JsonSerializer.SerializeToElement(oldStr),
             JsonSerializer.SerializeToElement(newStr),
-            "user", null, DateTime.UtcNow, "renumber", null);
+            "user", null, DateTime.UtcNow, "renumber", null, null, null, null, null, "Data");
     }
 
     [Fact]

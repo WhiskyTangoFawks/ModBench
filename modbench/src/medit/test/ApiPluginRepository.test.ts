@@ -12,6 +12,7 @@ function makePlugin(i: number): PluginMetadata {
     masters: [],
     recordCount: 10,
     isImmutable: false,
+    origin: 'Data',
   };
 }
 
@@ -79,6 +80,18 @@ describe('ApiPluginRepository.getPlugins', () => {
     // Pin the exact message: it is the user-visible #75 ErrorNode text and must not
     // drift (e.g. to a method-signature label) when the error path is refactored.
     await expect(repo.getPlugins()).rejects.toThrow(/GET \/plugins failed \(503\)/);
+  });
+
+  it('maps origin from the wire PluginResponse (#275 / ADR-0036) instead of dropping it', async () => {
+    // #272 review flagged this: PluginResponse.Origin has been on the wire since #269, but
+    // toPluginMetadata() never carried it into the frontend's PluginMetadata.
+    const raw = [{ ...makePlugin(0), origin: 'SomeMod' }];
+    const client = { GET: vi.fn().mockResolvedValue({ data: raw, response: { ok: true } }) } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const result = await repo.getPlugins();
+
+    expect(result[0].origin).toBe('SomeMod');
   });
 });
 

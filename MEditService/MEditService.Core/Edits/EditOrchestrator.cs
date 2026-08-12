@@ -45,12 +45,12 @@ public sealed partial class EditOrchestrator(
             .ToList();
 
         var vmadFields = fields.Keys.Where(VmadPath.IsVmadPath).ToList();
-        VmadData? vmadData = vmadFields.Count > 0 ? _query.GetVmad(formKey, plugin) : null;
+        VmadData? vmadData = vmadFields.Count > 0 ? _query.GetVmad(formKey, plugin, ResolveOrigin(plugin)) : null;
         CollectVmadReadOnlyFields(vmadFields, vmadData, readOnlyFields);
 
         var conditionFields = fields.Keys.Where(ConditionPath.IsConditionPath).ToList();
         IReadOnlyList<ConditionOwner>? conditionOwners =
-            conditionFields.Count > 0 ? _query.GetConditions(formKey, plugin) : null;
+            conditionFields.Count > 0 ? _query.GetConditions(formKey, plugin, ResolveOrigin(plugin)) : null;
         CollectConditionReadOnlyFields(conditionFields, readOnlyFields);
 
         if (readOnlyFields.Count > 0)
@@ -92,7 +92,9 @@ public sealed partial class EditOrchestrator(
         // No group is assigned here (#134): an edit that references a pending-created record is
         // grouped with that create by the edge rules (ADR-0028), not by a group id stamped at stage
         // time. The pending_form_references written by this upsert are the edge the rules read.
-        var staged = _changes.Upsert(new PendingChangeUpsert(formKey, plugin, recordType!, fields, source, description, oldValues, formRefs, Origin: ResolveOrigin(plugin)));
+        var staged = _changes.Upsert(new PendingChangeUpsert(formKey, plugin, recordType!, fields, source, description, oldValues,
+            Origin: ResolveOrigin(plugin), FormRefs: formRefs, ChangeType: PendingChangeConstants.FieldEditChangeType,
+            ParentCell: null, PlacementGroup: null));
         return new StageEditResult.Staged(staged);
     }
 
@@ -165,7 +167,7 @@ public sealed partial class EditOrchestrator(
         string formKey, string plugin, string recordType,
         Dictionary<string, JsonElement> fields, string source, string? description)
     {
-        var vmadData = _query.GetVmad(formKey, plugin);
+        var vmadData = _query.GetVmad(formKey, plugin, ResolveOrigin(plugin));
         var oldValues = new Dictionary<string, JsonElement>();
         var formRefs = new List<PendingFormRef>();
 
@@ -176,8 +178,9 @@ public sealed partial class EditOrchestrator(
         }
 
         var staged = _changes.Upsert(new PendingChangeUpsert(
-            formKey, plugin, recordType, fields, source, description,
-            oldValues, formRefs, ChangeType: PendingChangeConstants.VmadStructOpChangeType, Origin: ResolveOrigin(plugin)));
+            formKey, plugin, recordType, fields, source, description, oldValues,
+            Origin: ResolveOrigin(plugin), FormRefs: formRefs, ChangeType: PendingChangeConstants.VmadStructOpChangeType,
+            ParentCell: null, PlacementGroup: null));
         return new StageEditResult.Staged(staged);
     }
 
@@ -374,8 +377,9 @@ public sealed partial class EditOrchestrator(
         // plugin referenced by a FormLink inside the copied content (already-extracted formRefs).
         StageMissingMasters(formKey, targetPlugin, formRefs, source);
 
-        var staged = _changes.Upsert(new PendingChangeUpsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues, formRefs,
-            ParentCell: placement?.ParentCell, PlacementGroup: placement?.PlacementGroup, Origin: ResolveOrigin(targetPlugin)));
+        var staged = _changes.Upsert(new PendingChangeUpsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues,
+            Origin: ResolveOrigin(targetPlugin), FormRefs: formRefs, ChangeType: PendingChangeConstants.FieldEditChangeType,
+            ParentCell: placement?.ParentCell, PlacementGroup: placement?.PlacementGroup));
         return new StageEditResult.Staged(staged);
     }
 
@@ -412,7 +416,8 @@ public sealed partial class EditOrchestrator(
             new Dictionary<string, JsonElement> { [HeaderMastersField] = JsonSerializer.SerializeToElement(newMasters) },
             source, null,
             new Dictionary<string, JsonElement> { [HeaderMastersField] = JsonSerializer.SerializeToElement(currentMasters) },
-            Origin: ResolveOrigin(targetPlugin)));
+            Origin: ResolveOrigin(targetPlugin), FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
+            ParentCell: null, PlacementGroup: null));
     }
 
     // The plugin substring of a "FormID:Plugin" FormKey string; null when malformed (no colon, or
@@ -430,7 +435,7 @@ public sealed partial class EditOrchestrator(
     // is the semantic reason those operations block, replacing the old "record has any group" guard
     // (#134): every change has a group now (ADR-0028), so group membership no longer distinguishes.
     private string? PendingLifecycleChangeType(string formKey, string plugin) =>
-        _changes.GetChanges(plugin: plugin, formKey: formKey)
+        _changes.GetChanges(plugin: plugin, formKey: formKey, origin: ResolveOrigin(plugin))
             .FirstOrDefault(c => c.ChangeType is PendingChangeConstants.DeleteChangeType
                                             or PendingChangeConstants.RenumberChangeType)
             ?.ChangeType;
@@ -511,9 +516,10 @@ public sealed partial class EditOrchestrator(
                 reservedFormKey, plugin, recordType,
                 templateFields, source, null,
                 [],
-                templateRefs,
+                Origin: ResolveOrigin(plugin),
+                FormRefs: templateRefs,
                 ChangeType: PendingChangeConstants.FieldEditChangeType,
-                Origin: ResolveOrigin(plugin)));
+                ParentCell: null, PlacementGroup: null));
         }
 
         // The id callers get back names the $create change itself. Groups have no identity of their
@@ -698,7 +704,7 @@ public sealed partial class EditOrchestrator(
                 oldValue,
                 newValue,
                 source,
-                Origin: ResolveOrigin(sourcePlugin)));
+                ParentCell: null, PlacementGroup: null, Origin: ResolveOrigin(sourcePlugin)));
         }
     }
 
@@ -750,7 +756,7 @@ public sealed partial class EditOrchestrator(
                 JsonSerializer.SerializeToElement(formKey),
                 JsonSerializer.SerializeToElement(newFormKey),
                 source,
-                Origin: ResolveOrigin(plugin)),
+                ParentCell: null, PlacementGroup: null, Origin: ResolveOrigin(plugin)),
         };
 
         // FieldEdit changes for cross-plugin editable references only
@@ -774,7 +780,7 @@ public sealed partial class EditOrchestrator(
                 oldValue,
                 newValue,
                 source,
-                Origin: ResolveOrigin(sourcePlugin)));
+                ParentCell: null, PlacementGroup: null, Origin: ResolveOrigin(sourcePlugin)));
         }
 
         var group = _changes.StageChanges(members);

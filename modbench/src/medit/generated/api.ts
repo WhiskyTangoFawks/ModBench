@@ -493,11 +493,11 @@ export interface components {
             isWinner?: boolean;
             editorId?: string | null;
             fields?: components["schemas"]["FieldValue"][] | null;
+            origin?: string | null;
             pendingFields?: {
                 [key: string]: unknown;
             } | null;
             recordType?: string | null;
-            origin?: string | null;
             conflictThis?: components["schemas"]["ConflictThis"];
         };
         CompareResult: {
@@ -735,11 +735,11 @@ export interface components {
             isWinner?: boolean;
             editorId?: string | null;
             fields?: components["schemas"]["FieldValue"][] | null;
+            origin?: string | null;
             pendingFields?: {
                 [key: string]: unknown;
             } | null;
             recordType?: string | null;
-            origin?: string | null;
         };
         RecordSummary: {
             formKey?: string | null;

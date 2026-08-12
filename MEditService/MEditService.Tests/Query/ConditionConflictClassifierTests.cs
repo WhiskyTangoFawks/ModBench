@@ -11,7 +11,7 @@ public class ConditionConflictClassifierTests
             UseGlobal: false, ComparisonFloat: comparison, ComparisonGlobal: null, Parameters: []);
 
     private static ConditionPluginInput Input(string plugin, int lo, params ParsedCondition[] conditions) =>
-        new(plugin, lo, conditions.Length == 0 ? [] : [new ConditionOwner("Conditions", conditions)]);
+        new(plugin, lo, conditions.Length == 0 ? [] : [new ConditionOwner("Conditions", conditions)], "Data");
 
     private static ConditionPluginInput InputWithOrigin(string plugin, string origin, int lo, params ParsedCondition[] conditions) =>
         new(plugin, lo, conditions.Length == 0 ? [] : [new ConditionOwner("Conditions", conditions)], origin);
@@ -104,8 +104,8 @@ public class ConditionConflictClassifierTests
         var over = master with { Operator = ConditionOperator.NotEqualTo };
 
         var result = ConditionConflictClassifier.Classify([
-            new ConditionPluginInput("Master.esp", 0, [new ConditionOwner("Conditions", [master])]),
-            new ConditionPluginInput("Override.esp", 1, [new ConditionOwner("Conditions", [over])]),
+            new ConditionPluginInput("Master.esp", 0, [new ConditionOwner("Conditions", [master])], Origin: "Data"),
+            new ConditionPluginInput("Override.esp", 1, [new ConditionOwner("Conditions", [over])], Origin: "Data"),
         ]);
 
         var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
@@ -139,7 +139,7 @@ public class ConditionConflictClassifierTests
     {
         var owner10 = new ConditionOwner("Effects[10].Conditions", [Condition("GetIsID")]);
         var owner2 = new ConditionOwner("Effects[2].Conditions", [Condition("GetIsID")]);
-        var input = new ConditionPluginInput("Plugin.esp", 0, [owner10, owner2]);
+        var input = new ConditionPluginInput("Plugin.esp", 0, [owner10, owner2], Origin: "Data");
 
         var result = ConditionConflictClassifier.Classify([input]);
 
@@ -164,8 +164,8 @@ public class ConditionConflictClassifierTests
         ];
 
         var result = ConditionConflictClassifier.Classify([
-            new ConditionPluginInput("Master.esp", 0, [masterOwner]),
-            new ConditionPluginInput("Override.esp", 1, overrideOwners),
+            new ConditionPluginInput("Master.esp", 0, [masterOwner], Origin: "Data"),
+            new ConditionPluginInput("Override.esp", 1, overrideOwners, Origin: "Data"),
         ]);
 
         var group1 = result.Compare.Groups.Single(g => g.FieldPath == "Effects[1].Conditions");
@@ -185,7 +185,7 @@ public class ConditionConflictClassifierTests
     {
         var owner10 = new ConditionOwner("Effects[2].Conditions[10].Conditions", [Condition("GetIsID")]);
         var owner2 = new ConditionOwner("Effects[2].Conditions[2].Conditions", [Condition("GetIsID")]);
-        var input = new ConditionPluginInput("Plugin.esp", 0, [owner10, owner2]);
+        var input = new ConditionPluginInput("Plugin.esp", 0, [owner10, owner2], Origin: "Data");
 
         var result = ConditionConflictClassifier.Classify([input]);
 
@@ -202,7 +202,7 @@ public class ConditionConflictClassifierTests
         var param = new ParsedConditionParam(ConditionParamCategory.Form, "Quest", FormKey: "000800:Base.esp");
         var condition = new ParsedCondition("GetStageDone", ConditionOperator.EqualTo, false, "Subject", null,
             false, 1.0f, null, [param]);
-        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])]);
+        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])], Origin: "Data");
 
         static RecordLookupEntry? Resolve(string fk) =>
             fk == "000800:Base.esp" ? new RecordLookupEntry("quest", "SomeQuest") : null;
@@ -221,7 +221,7 @@ public class ConditionConflictClassifierTests
     {
         var condition = new ParsedCondition("GetIsID", ConditionOperator.EqualTo, false, "Reference",
             "000800:Base.esp", false, 1.0f, null, []);
-        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])]);
+        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])], Origin: "Data");
 
         static RecordLookupEntry? Resolve(string fk) =>
             fk == "000800:Base.esp" ? new RecordLookupEntry("npc_", "SomeActor") : null;
@@ -242,7 +242,7 @@ public class ConditionConflictClassifierTests
     {
         var condition = new ParsedCondition("GetIsID", ConditionOperator.EqualTo, false, "Subject", null,
             true, null, "000800:Base.esp", []);
-        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])]);
+        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])], Origin: "Data");
 
         static RecordLookupEntry? Resolve(string fk) =>
             fk == "000800:Base.esp" ? new RecordLookupEntry("kywd", "NotAGlobal") : null;
@@ -258,7 +258,7 @@ public class ConditionConflictClassifierTests
     {
         var condition = new ParsedCondition("GetIsID", ConditionOperator.EqualTo, false, "Subject", null,
             true, null, "000800:Base.esp", []);
-        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])]);
+        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])], Origin: "Data");
 
         static RecordLookupEntry? Resolve(string fk) =>
             fk == "000800:Base.esp" ? new RecordLookupEntry("glob", "SomeGlobal") : null;
@@ -274,7 +274,7 @@ public class ConditionConflictClassifierTests
     {
         var condition = new ParsedCondition("GetIsID", ConditionOperator.EqualTo, false, "Reference",
             "000800:Base.esp", false, 1.0f, null, []);
-        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])]);
+        var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])], Origin: "Data");
 
         var result = ConditionConflictClassifier.Classify([input]);
 

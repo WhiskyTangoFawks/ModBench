@@ -84,22 +84,6 @@ public sealed class GameSessionOriginTests
     }
 
     [Fact]
-    public void LoadExplicit_LegacyOverload_ExplicitPluginDefaultsToDataDirectory()
-    {
-        // The (Name, Path) overload has no way to know a real origin — every caller left on it
-        // (test fixtures only) gets the reserved Data-directory default rather than a null/empty
-        // origin, since every loaded plugin must have *some* origin (ADR-0036).
-        using var fx = new PluginFixtureBuilder("gs-origin-explicit-legacy")
-            .WithPlugin("Mod.esp")
-            .BuildScattered();
-
-        using var session = GameSession.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-
-        var mod = session.Plugins.Single(p => p.Name == "Mod.esp");
-        Assert.Equal(PluginOrigin.DataDirectory, mod.Origin);
-    }
-
-    [Fact]
     public void LoadExplicit_WithOrigin_ExplicitPluginCarriesCallerSuppliedOrigin()
     {
         using var fx = new PluginFixtureBuilder("gs-origin-explicit-real")

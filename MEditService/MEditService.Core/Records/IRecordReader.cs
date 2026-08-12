@@ -10,13 +10,14 @@ public interface IRecordReader
     RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly);
     IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey);
 
-    // origin defaulted (like GetPlacement's) so pre-existing single-origin callers keep compiling — #272 / ADR-0036.
-    VmadData? GetVmad(string formKey, string plugin, string origin = PluginOrigin.DataDirectory);
+    // origin (#272 / ADR-0036, required since #275): the mod folder that provided this plugin's
+    // physical file, or a reserved PluginOrigin value — paired with plugin, never encoded into it.
+    VmadData? GetVmad(string formKey, string plugin, string origin);
 
     // Conditions (CTDA) for one plugin's copy of a record, grouped by owning field path, in stored
     // order. Empty when the record carries none. Reconstructs the neutral ParsedCondition the codec
-    // produced at index time (ADR-0032). origin defaulted, same reasoning as GetVmad.
-    IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = PluginOrigin.DataDirectory);
+    // produced at index time (ADR-0032). origin: same reasoning as GetVmad's.
+    IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin);
     int CountRecordsForPlugin(string tableName, string plugin);
     string? FindRecordType(string formKey);
 
@@ -42,6 +43,6 @@ public interface IRecordReader
 
     // Phase 16.2 — a placed ref's structural parentage (which cell, persistent/temporary, position),
     // used by EditOrchestrator to stamp placement onto copy/delete changes. Null when not placed.
-    // origin defaulted so pre-existing single-origin callers keep compiling — #272 / ADR-0036.
-    PlacementRow? GetPlacement(string formKey, string plugin, string origin = PluginOrigin.DataDirectory);
+    // origin: same reasoning as GetVmad's (#272 / ADR-0036, required since #275).
+    PlacementRow? GetPlacement(string formKey, string plugin, string origin);
 }

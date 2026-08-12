@@ -89,9 +89,12 @@ export type ColumnKey = string & { readonly __col: unique symbol };
 // doc comment) — this key is only ever used as an opaque local lookup key against JSON the backend
 // produced, never sent back to it, so the two sides folding differently has no wire consequence.
 //
-// #272 review: `origin` accepts `null` as well as `undefined`, even though every hand type that
-// feeds this (RecordDetail.origin, PendingChange.origin, PluginInfo.origin — all `?: string`, not
-// `?: string | null`) claims it never will be. Investigated: it provably can't be, today — the
+// #275 / ADR-0036: `origin` is required (no longer omittable) — every hand type that feeds this
+// (RecordDetail.origin, PendingChange.origin, PluginInfo.origin) is a required `string` too, so a
+// caller can no longer skip specifying it and silently collapse onto the elided Data origin.
+//
+// #272 review: `origin` still accepts a literal `null` value, even though every one of those hand
+// types claims it never will be. Investigated: it provably can't be, today — the
 // backend fields behind all four (`RecordDetail.Origin`/`CompareOverride.Origin`/
 // `PendingChange.Origin`/`PluginResponse.Origin`, MEditService.Core/Queries/Models.cs and
 // Session/PluginMetadata.cs) are non-nullable C# `string`s, always populated from
@@ -112,7 +115,7 @@ export type ColumnKey = string & { readonly __col: unique symbol };
 // it's the one call site where that trust being wrong would crash instead of silently doing
 // nothing — tolerating a literal `null` here the same as a missing field is cheap insurance against
 // the wire's own declared (if not actually reachable) shape, not a sign null is expected.
-export function columnKey(plugin: string, origin?: string | null): ColumnKey {
+export function columnKey(plugin: string, origin: string | null): ColumnKey {
   const resolvedOrigin = origin ?? 'Data';
   const key = resolvedOrigin.toLowerCase() === 'data' ? plugin : `${plugin}|${resolvedOrigin}`;
   return key as ColumnKey;
@@ -132,9 +135,8 @@ export interface RecordDetail {
   recordType?: string;
   // #272 / ADR-0036: the mod folder (or reserved PluginOrigin value) this override was resolved
   // from — parallel sibling to `plugin`, never parsed out of a ColumnKey (see columnKey()'s own
-  // doc comment). Optional so a pre-#272 fixture/direct construction still compiles; the real
-  // backend always populates it.
-  origin?: string;
+  // doc comment). Required (#275) — every construction must say which origin.
+  origin: string;
 }
 
 export interface CompareOverride extends RecordDetail {
@@ -323,8 +325,8 @@ export interface PendingChange {
   recordResolution?: FormKeyResolution;
   // #272 / ADR-0036: parallel sibling to `plugin`, mirroring RecordDetail.origin — a staged
   // change is attributed to a column's compound identity end to end, not just its filename.
-  // Optional for the same pre-#272-fixture-compiles reason as RecordDetail.origin.
-  origin?: string;
+  // Required (#275), same reasoning as RecordDetail.origin.
+  origin: string;
 }
 
 export interface ReferenceValidationError {

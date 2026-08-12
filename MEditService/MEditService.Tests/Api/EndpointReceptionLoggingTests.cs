@@ -140,11 +140,11 @@ public sealed class EndpointReceptionLoggingTests
         public IGameSession? Session => null;
         public IRecordReader? Repository => null;
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) => LoadCalled = true;
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path)> plugins, GameRelease gameRelease) =>
+        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease) =>
             throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) =>
-            new(name, name, 0, false, false, [], 0, false, true);
+            new(name, name, 0, false, false, [], 0, false, true, "Data");
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
@@ -191,11 +191,11 @@ public sealed class EndpointReceptionLoggingTests
         public CompareResult? GetCompare(string formKey) => throw new NotSupportedException();
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => throw new NotSupportedException();
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => [];
-        public VmadData? GetVmad(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => throw new NotSupportedException();
-        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => throw new NotSupportedException();
+        public VmadData? GetVmad(string formKey, string plugin, string origin) => throw new NotSupportedException();
+        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) => throw new NotSupportedException();
         public IReadOnlyList<string> GetConditionFunctions() => throw new NotSupportedException();
         public IReadOnlyList<string> GetConditionRunOnTargets() => throw new NotSupportedException();
-        public PlacementRow? GetPlacement(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => throw new NotSupportedException();
+        public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => throw new NotSupportedException();
         public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
             throw new NotSupportedException();
     }

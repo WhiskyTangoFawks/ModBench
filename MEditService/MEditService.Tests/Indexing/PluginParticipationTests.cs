@@ -56,8 +56,8 @@ public class PluginParticipationTests
         using var repo = OpenRepo();
         // PluginB sits last in the load order (highest load_order_idx) but is disabled — a bare
         // MAX(load_order_idx) sweep would incorrectly make it the winner.
-        repo.Index(modA, 0, participates: true);
-        repo.Index(modB, 1, participates: false);
+        repo.Index(modA, 0, participates: true, origin: "Data");
+        repo.Index(modB, 1, participates: false, origin: "Data");
         repo.UpdateWinners();
 
         var overrides = repo.GetAllOverrides("npc_", npcKey.ToString());
@@ -78,15 +78,15 @@ public class PluginParticipationTests
         using var _y = fixtureY;
 
         using var repoFlipped = OpenRepo();
-        repoFlipped.Index(modAX, 0, participates: true);
-        repoFlipped.Index(modBX, 1, participates: true);
+        repoFlipped.Index(modAX, 0, participates: true, origin: "Data");
+        repoFlipped.Index(modBX, 1, participates: true, origin: "Data");
         repoFlipped.UpdateWinners();
-        repoFlipped.SetPluginParticipation("PluginB.esp", false);
+        repoFlipped.SetPluginParticipation("PluginB.esp", false, origin: "Data");
         repoFlipped.UpdateWinners();
 
         using var repoFromStart = OpenRepo();
-        repoFromStart.Index(modAY, 0, participates: true);
-        repoFromStart.Index(modBY, 1, participates: false);
+        repoFromStart.Index(modAY, 0, participates: true, origin: "Data");
+        repoFromStart.Index(modBY, 1, participates: false, origin: "Data");
         repoFromStart.UpdateWinners();
 
         var flipped = WinnersByPlugin(repoFlipped, npcKeyX.ToString());
@@ -104,15 +104,15 @@ public class PluginParticipationTests
         using var _ = fixture;
 
         using var repo = OpenRepo();
-        repo.Index(modA, 0, participates: true);
-        repo.Index(modB, 1, participates: true);
+        repo.Index(modA, 0, participates: true, origin: "Data");
+        repo.Index(modB, 1, participates: true, origin: "Data");
         repo.UpdateWinners();
 
-        repo.SetPluginParticipation("PluginB.esp", false);
+        repo.SetPluginParticipation("PluginB.esp", false, origin: "Data");
         repo.UpdateWinners();
         var afterFirstFlip = WinnersByPlugin(repo, npcKey.ToString());
 
-        repo.SetPluginParticipation("PluginB.esp", false);
+        repo.SetPluginParticipation("PluginB.esp", false, origin: "Data");
         repo.UpdateWinners();
         var afterSecondFlip = WinnersByPlugin(repo, npcKey.ToString());
 
@@ -132,7 +132,7 @@ public class PluginParticipationTests
         var npcKey = mod.EnumerateMajorRecords<INpcGetter>().First().FormKey;
 
         using var repo = OpenRepo();
-        repo.Index(mod, 0, participates: false);
+        repo.Index(mod, 0, participates: false, origin: "Data");
         repo.UpdateWinners();
 
         var record = repo.GetRecord("npc_", npcKey.ToString(), plugin: "Disabled.esp", winnerOnly: false);
@@ -154,7 +154,7 @@ public class PluginParticipationTests
         var npcKey = mod.EnumerateMajorRecords<INpcGetter>().First().FormKey;
 
         using var repo = OpenRepo();
-        repo.Index(mod, 0, participates: false);
+        repo.Index(mod, 0, participates: false, origin: "Data");
         repo.UpdateWinners();
 
         Assert.Null(repo.ResolveFormKey(npcKey.ToString()));

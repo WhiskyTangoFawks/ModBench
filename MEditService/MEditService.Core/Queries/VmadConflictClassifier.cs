@@ -2,9 +2,9 @@ using MEditService.Core.Records;
 
 namespace MEditService.Core.Queries;
 
-// Per-plugin VMAD tree for one record, ordered by load order (master = first). Origin defaulted
-// (#272 / ADR-0036) so pre-existing single-origin call sites keep compiling.
-public sealed record VmadPluginInput(string Plugin, int LoadOrderIndex, VmadData? Vmad, string Origin = Session.PluginOrigin.DataDirectory);
+// Per-plugin VMAD tree for one record, ordered by load order (master = first). Origin (#272 /
+// ADR-0036) is required since #275 — every input must say which origin, not fall back to one.
+public sealed record VmadPluginInput(string Plugin, int LoadOrderIndex, VmadData? Vmad, string Origin);
 
 public sealed record VmadClassifyResult(VmadCompare Compare, ConflictAll ConflictContribution);
 

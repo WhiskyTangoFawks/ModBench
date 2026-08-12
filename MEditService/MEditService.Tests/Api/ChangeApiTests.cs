@@ -28,7 +28,8 @@ public sealed class ChangeApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
     private static GroupMember ApiMember(string formKey, string plugin, string fieldPath) =>
         new(formKey, plugin, "npc_", "create", fieldPath,
             JsonDocument.Parse("null").RootElement.Clone(),
-            JsonDocument.Parse("\"x\"").RootElement.Clone());
+            JsonDocument.Parse("\"x\"").RootElement.Clone(),
+            "system", null, null, "Data");
 
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
@@ -163,12 +164,12 @@ public sealed class ChangeApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
         var svc = GetService();
         svc.Upsert(new PendingChangeUpsert("FK-PC1", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["$create"] = J("null") },
-            "user", null, [], FormRefs: null, ChangeType: "create"));
+            "user", null, [], FormRefs: null, ChangeType: "create", ParentCell: null, PlacementGroup: null, Origin: "Data"));
         svc.Upsert(new PendingChangeUpsert("FK-PC2", "B.esp", "npc_",
             new Dictionary<string, JsonElement> { ["leader"] = J("\"FK-PC1\"") },
             "user", null,
             new Dictionary<string, JsonElement> { ["leader"] = J("null") },
-            [new PendingFormRef("leader", "leader", "FK-PC1")]));
+            [new PendingFormRef("leader", "leader", "FK-PC1")], ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
 
         var groups = await _client.GetFromJsonAsync<JsonElement[]>("/change-groups");
         Assert.NotNull(groups);

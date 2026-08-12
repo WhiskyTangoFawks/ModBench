@@ -42,20 +42,9 @@ public sealed class GameSession : IGameSession
     /// Builds a session from an ordered list of scattered physical plugin paths (an MO2-style
     /// instance's enabled plugins), with the game's implicit masters resolved from
     /// <paramref name="gameDirectory"/>. Implicit masters are ordered first and treated as immutable;
-    /// each explicit entry whose name is not an implicit master follows in the given order.
-    /// </summary>
-    public static GameSession LoadExplicit(
-        string gameDirectory, IReadOnlyList<(string Name, string Path)> plugins, GameRelease gameRelease, ILogger? logger = null) =>
-        // This overload has no way to know a real origin for its scattered paths — every remaining
-        // caller is a test fixture that asserts nothing about Origin (#269 / ADR-0036), so default
-        // to the reserved Data-directory value rather than leave it null. Real (MO2-backed) session
-        // loads go through the overload below instead.
-        LoadExplicit(gameDirectory, plugins.Select(p => (p.Name, p.Path, PluginOrigin.DataDirectory)).ToList(), gameRelease, logger);
-
-    /// <summary>
-    /// Same contract as the (Name, Path) overload above, but each explicit plugin also carries the
-    /// origin Mod Management resolved it from — a mod folder name, or a PluginOrigin reserved value
-    /// (#269 / ADR-0036).
+    /// each explicit entry whose name is not an implicit master follows in the given order. Each
+    /// explicit plugin also carries the origin Mod Management resolved it from — a mod folder name,
+    /// or a PluginOrigin reserved value (#269 / ADR-0036).
     /// </summary>
     public static GameSession LoadExplicit(
         string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease, ILogger? logger = null)

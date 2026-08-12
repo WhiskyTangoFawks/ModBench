@@ -28,7 +28,7 @@ public sealed class VmadConflictClassifierTests
         new(name, flags, props);
 
     private static VmadPluginInput Input(string plugin, int loadOrder, params VmadScriptData[] scripts) =>
-        new(plugin, loadOrder, new VmadData(scripts));
+        new(plugin, loadOrder, new VmadData(scripts), "Data");
 
     private static VmadPluginInput InputWithOrigin(string plugin, string origin, int loadOrder, params VmadScriptData[] scripts) =>
         new(plugin, loadOrder, new VmadData(scripts), origin);

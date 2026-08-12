@@ -31,10 +31,10 @@ export interface PluginInfo {
   name: string;
   isImmutable: boolean;
   loadOrderIndex: number;
-  // #272 / ADR-0036: needed to key immutableSet by compound column identity — optional so a
-  // pre-#272 fixture (e.g. this file's own tests) still compiles; columnKey() itself already
-  // treats a missing origin as the elided Data origin.
-  origin?: string;
+  // #272 / ADR-0036: needed to key immutableSet by compound column identity. Required (#275) —
+  // every construction must say which origin, not rely on columnKey() eliding a missing one to
+  // the Data origin.
+  origin: string;
 }
 
 // Issue #122: the composite view for a single record. `load` fires compare + changes + plugins

@@ -93,7 +93,7 @@ public class PlacementIndexingTests
 
         var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, 0);
+        repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
 
         return new Built(repo, wrld.FormKey.ToString(), topCell.FormKey.ToString(),
@@ -151,7 +151,7 @@ public class PlacementIndexingTests
 
             using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
-            repo.Index(overlay, 0);
+            repo.Index(overlay, 0, participates: true, origin: "Data");
             repo.UpdateWinners();
 
             var rows = Query(repo,
@@ -189,8 +189,8 @@ public class PlacementIndexingTests
 
         using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, 0);
-        repo.Index((IModGetter)mod, 0);  // re-index same plugin
+        repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
+        repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");  // re-index same plugin
         repo.UpdateWinners();
 
         var cellRows = Query(repo,
@@ -324,7 +324,7 @@ public class PlacementIndexingTests
     public void GetPlacement_PlacedRef_ReturnsParentCellGroupAndPosition()
     {
         using var b = IndexFixture();
-        var placement = b.Repo.GetPlacement(b.BarrelFk, "TestWorld.esp");
+        var placement = b.Repo.GetPlacement(b.BarrelFk, "TestWorld.esp", origin: "Data");
 
         Assert.NotNull(placement);
         Assert.Equal(b.ExtCellFk, placement.Value.ParentCell);
@@ -338,14 +338,14 @@ public class PlacementIndexingTests
     public void GetPlacement_NonPlacedRecord_ReturnsNull()
     {
         using var b = IndexFixture();
-        Assert.Null(b.Repo.GetPlacement(b.ExtCellFk, "TestWorld.esp"));
+        Assert.Null(b.Repo.GetPlacement(b.ExtCellFk, "TestWorld.esp", origin: "Data"));
     }
 
     [Fact]
     public void GetPlacement_AbsentFormKey_ReturnsNull()
     {
         using var b = IndexFixture();
-        Assert.Null(b.Repo.GetPlacement("FFFFFF:TestWorld.esp", "TestWorld.esp"));
+        Assert.Null(b.Repo.GetPlacement("FFFFFF:TestWorld.esp", "TestWorld.esp", origin: "Data"));
     }
 
     // #272 / ADR-0036: two origins loading the same physical file — the `placement` table already
@@ -363,8 +363,8 @@ public class PlacementIndexingTests
 
         using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, 0, origin: "ModA");
-        repo.Index((IModGetter)mod, 1, origin: "ModB");
+        repo.Index((IModGetter)mod, 0, origin: "ModA", participates: true);
+        repo.Index((IModGetter)mod, 1, origin: "ModB", participates: true);
 
         var formKey = barrel.FormKey.ToString();
         Assert.NotNull(repo.GetPlacement(formKey, "Placed.esp", "ModA"));

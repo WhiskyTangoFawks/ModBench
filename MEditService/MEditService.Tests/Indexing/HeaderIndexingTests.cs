@@ -52,7 +52,7 @@ public class HeaderIndexingTests
         var mod = new Fallout4Mod(ModKey.FromFileName("HeaderTest.esp"), Fallout4Release.Fallout4);
 
         using var repo = NewRepo();
-        repo.Index((IModGetter)mod, 0);
+        repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
 
         var rows = Query(repo, "SELECT form_key FROM header WHERE plugin = $1", "HeaderTest.esp");
         var row = Assert.Single(rows);
@@ -66,7 +66,7 @@ public class HeaderIndexingTests
         mod.ModHeader.Author = "Vault Dweller";
 
         using var repo = NewRepo();
-        repo.Index((IModGetter)mod, 0);
+        repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
 
         var rows = Query(repo, "SELECT author FROM header WHERE plugin = $1", "AuthorTest.esp");
         Assert.Equal("Vault Dweller", Assert.Single(rows)["author"]);
@@ -79,7 +79,7 @@ public class HeaderIndexingTests
         mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small;
 
         using var repo = NewRepo();
-        repo.Index((IModGetter)mod, 0);
+        repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
 
         var rows = Query(repo, "SELECT flags FROM header WHERE plugin = $1", "EslTest.esp");
         Assert.Equal((long)Fallout4ModHeader.HeaderFlag.Small, ToLong(Assert.Single(rows)["flags"]));
@@ -93,7 +93,7 @@ public class HeaderIndexingTests
         mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("DLCRobot.esm") });
 
         using var repo = NewRepo();
-        repo.Index((IModGetter)mod, 0);
+        repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
 
         var rows = Query(repo, "SELECT masters FROM header WHERE plugin = $1", "MastersTest.esp");
         var json = Assert.Single(rows)["masters"] as string;
@@ -108,8 +108,8 @@ public class HeaderIndexingTests
         var mod = new Fallout4Mod(ModKey.FromFileName("ReindexHeader.esp"), Fallout4Release.Fallout4);
 
         using var repo = NewRepo();
-        repo.Index((IModGetter)mod, 0);
-        repo.Index((IModGetter)mod, 0);
+        repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
+        repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
 
         var rows = Query(repo, "SELECT COUNT(*) AS c FROM header WHERE plugin = $1", "ReindexHeader.esp");
         Assert.Equal(1L, rows[0]["c"]);
@@ -122,8 +122,8 @@ public class HeaderIndexingTests
         var modB = new Fallout4Mod(ModKey.FromFileName("PluginB.esp"), Fallout4Release.Fallout4);
 
         using var repo = NewRepo();
-        repo.Index((IModGetter)modA, 0);
-        repo.Index((IModGetter)modB, 1);
+        repo.Index((IModGetter)modA, 0, participates: true, origin: "Data");
+        repo.Index((IModGetter)modB, 1, participates: true, origin: "Data");
         repo.UpdateWinners();
 
         var overridesA = repo.GetAllOverrides("header", "000000:PluginA.esp");
@@ -151,8 +151,8 @@ public class HeaderIndexingTests
         modB.ModHeader.Author = "Author B";
 
         using var repo = NewRepo();
-        repo.Index((IModGetter)modA, 0, origin: "ModA");
-        repo.Index((IModGetter)modB, 1, origin: "ModB");
+        repo.Index((IModGetter)modA, 0, origin: "ModA", participates: true);
+        repo.Index((IModGetter)modB, 1, origin: "ModB", participates: true);
 
         var overrides = repo.GetAllOverrides("header", "000000:Shared.esp");
 

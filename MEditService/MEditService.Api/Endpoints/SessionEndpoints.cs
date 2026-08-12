@@ -87,8 +87,8 @@ public static class SessionEndpoints
 
         if (ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
-        if (req.Plugins?.Any(p => string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path)) != false)
-            return Results.Problem("Each plugin entry must have a non-empty Name and Path.", statusCode: 400);
+        if (req.Plugins?.Any(p => string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path) || string.IsNullOrEmpty(p.Origin)) != false)
+            return Results.Problem("Each plugin entry must have a non-empty Name, Path, and Origin.", statusCode: 400);
 
         var missing = req.Plugins.Where(p => !File.Exists(p.Path)).Select(p => p.Path).ToList();
         if (missing.Count > 0)
@@ -96,11 +96,10 @@ public static class SessionEndpoints
 
         try
         {
-            // #269 / ADR-0036: Origin is Mod Management's to resolve; a missing/empty value (an
-            // older client, or a base-game plugin no mod provides) defaults to the reserved
-            // Data-directory origin rather than reaching GameSession as null.
+            // #269 / ADR-0036: Origin is Mod Management's to resolve — required, not defaulted
+            // (#275).
             var explicitPlugins = req.Plugins
-                .Select(p => (p.Name, p.Path, Origin: string.IsNullOrEmpty(p.Origin) ? PluginOrigin.DataDirectory : p.Origin))
+                .Select(p => (p.Name, p.Path, p.Origin))
                 .ToList();
             sessionManager.LoadExplicit(req.GameDirectory, explicitPlugins, gameRelease);
             return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? []));

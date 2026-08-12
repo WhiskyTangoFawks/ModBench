@@ -159,11 +159,13 @@ public class PluginWriterConditionTests
 
     private static PendingChange MakeConditionChange(FormKey formKey, string fieldPath, string json) =>
         new(Guid.NewGuid(), formKey.ToString(), "ConditionWrite.esp", fieldPath, "cobj",
-            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null);
+            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null,
+            null, null, null, null, "Data");
 
     private static PendingChange MakeConditionChange(FormKey formKey, string recordType, string fieldPath, string json) =>
         new(Guid.NewGuid(), formKey.ToString(), "ConditionWrite.esp", fieldPath, recordType,
-            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null);
+            JsonDocument.Parse("null").RootElement, J(json), "user", null, DateTime.UtcNow, "field_edit", null,
+            null, null, null, null, "Data");
 
     private static IConstructibleObjectGetter ReloadCobj(string pluginPath, FormKey cobjKey)
     {
@@ -426,7 +428,7 @@ public class PluginWriterConditionTests
             """;
         var change = new PendingChange(Guid.NewGuid(), questFk.ToString(), "ConditionWrite.esp",
             "DialogConditions", "qust", JsonDocument.Parse("null").RootElement, J(newDialogList),
-            "user", null, DateTime.UtcNow, "field_edit", null);
+            "user", null, DateTime.UtcNow, "field_edit", null, PlacementGroup: null, Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
 
         var result = await writer.SaveAsync(path, [change], GameRelease.Fallout4);
 

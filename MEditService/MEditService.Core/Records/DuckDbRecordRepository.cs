@@ -52,12 +52,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     // --- Indexing (absorbed from RecordIndexer) ---
 
     // origin (#271 / ADR-0036): the mod folder that provided this physical file, or a reserved
-    // PluginOrigin value. Defaulted so the many existing single-origin call sites (real sessions
-    // today only ever resolve PluginOrigin.DataDirectory or a caller-supplied origin threaded by
-    // SessionManager) keep compiling — see IRecordIndexer.Index. Threaded into every per-plugin
-    // delete/upsert/append below so a plugin is identified by (origin, plugin) together, not
-    // filename alone: two plugins sharing a filename but differing in origin no longer collide.
-    public void Index(IModGetter pluginMod, int loadOrderIndex, bool participates = true, string origin = PluginOrigin.DataDirectory)
+    // PluginOrigin value. Required (#275) — threaded into every per-plugin delete/upsert/append
+    // below so a plugin is identified by (origin, plugin) together, not filename alone: two
+    // plugins sharing a filename but differing in origin no longer collide.
+    public void Index(IModGetter pluginMod, int loadOrderIndex, bool participates, string origin)
     {
         var schemas = RequireSchemas();
         var plugin = pluginMod.ModKey.FileName.ToString();
@@ -218,8 +216,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.ExecuteNonQuery();
     }
 
-    // origin defaulted (like Index's) so existing single-origin callers keep compiling — #271 / ADR-0036.
-    public void SetPluginParticipation(string plugin, bool participates, string origin = PluginOrigin.DataDirectory)
+    public void SetPluginParticipation(string plugin, bool participates, string origin)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = "UPDATE plugins SET participates = $3 WHERE plugin = $1 AND origin = $2";
@@ -369,8 +366,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return list;
     }
 
-    // origin defaulted (like GetPlacement's) so pre-existing single-origin callers keep compiling — #272 / ADR-0036.
-    public VmadData? GetVmad(string formKey, string plugin, string origin = PluginOrigin.DataDirectory)
+    // origin (#272 / ADR-0036, required since #275): the mod folder that provided this plugin's
+    // physical file, or a reserved PluginOrigin value — paired with plugin, never encoded into it.
+    public VmadData? GetVmad(string formKey, string plugin, string origin)
     {
         var scripts = ReadVmadScriptRows(formKey, plugin, origin);
         if (scripts.Count == 0) return null;
@@ -401,8 +399,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return new VmadData(scriptData);
     }
 
-    // origin defaulted (like GetPlacement's) so pre-existing single-origin callers keep compiling — #272 / ADR-0036.
-    public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = PluginOrigin.DataDirectory)
+    // origin (#272 / ADR-0036, required since #275): the mod folder that provided this plugin's
+    // physical file, or a reserved PluginOrigin value — paired with plugin, never encoded into it.
+    public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin)
     {
         var conditionRows = ReadConditionRows(formKey, plugin, origin);
         if (conditionRows.Count == 0) return [];
@@ -1201,8 +1200,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return new CellReferences(persistent, temporary);
     }
 
-    // origin defaulted (like Index's) so pre-existing single-origin callers keep compiling — #272 / ADR-0036.
-    public PlacementRow? GetPlacement(string formKey, string plugin, string origin = PluginOrigin.DataDirectory)
+    // origin (#272 / ADR-0036, required since #275): same reasoning as GetVmad's/Index's.
+    public PlacementRow? GetPlacement(string formKey, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = """

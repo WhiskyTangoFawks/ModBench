@@ -148,7 +148,7 @@ public sealed class ConditionIndexerTests : IDisposable
             ModKey.FromFileName("CtdaTest.esp"),
             Path.Combine(_fixture.DataFolder, "CtdaTest.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0);
+        repo.Index(mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
         return repo;
     }
@@ -166,8 +166,8 @@ public sealed class ConditionIndexerTests : IDisposable
             Path.Combine(_fixture.DataFolder, "CtdaTest.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
 
-        repo.Index(mod, 0, origin: "ModA");
-        repo.Index(mod, 1, origin: "ModB");
+        repo.Index(mod, 0, origin: "ModA", participates: true);
+        repo.Index(mod, 1, origin: "ModB", participates: true);
         repo.UpdateWinners();
 
         Assert.NotEmpty(repo.GetConditions(_cobjFormKey.ToString(), "CtdaTest.esp", "ModA"));
@@ -180,7 +180,7 @@ public sealed class ConditionIndexerTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var owners = repo.GetConditions(_cobjFormKey.ToString(), "CtdaTest.esp");
+        var owners = repo.GetConditions(_cobjFormKey.ToString(), "CtdaTest.esp", origin: "Data");
 
         var owner = Assert.Single(owners);
         Assert.Equal("Conditions", owner.FieldPath);
@@ -204,7 +204,7 @@ public sealed class ConditionIndexerTests : IDisposable
     public void GetConditions_RecordWithoutConditions_ReturnsEmpty()
     {
         using var repo = LoadedRepository();
-        Assert.Empty(repo.GetConditions(_questFormKey.ToString(), "CtdaTest.esp"));
+        Assert.Empty(repo.GetConditions(_questFormKey.ToString(), "CtdaTest.esp", origin: "Data"));
     }
 
     // #154: a record with more than one condition-carrying field (Quest.DialogConditions and
@@ -215,7 +215,7 @@ public sealed class ConditionIndexerTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var owners = repo.GetConditions(_multiListQuestFormKey.ToString(), "CtdaTest.esp");
+        var owners = repo.GetConditions(_multiListQuestFormKey.ToString(), "CtdaTest.esp", origin: "Data");
 
         Assert.Equal(2, owners.Count);
         var dialog = owners.Single(o => o.FieldPath == "DialogConditions");
@@ -238,7 +238,7 @@ public sealed class ConditionIndexerTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var owner = Assert.Single(repo.GetConditions(_sexCobjFormKey.ToString(), "CtdaTest.esp"));
+        var owner = Assert.Single(repo.GetConditions(_sexCobjFormKey.ToString(), "CtdaTest.esp", origin: "Data"));
         var condition = Assert.Single(owner.Conditions);
         var param = Assert.Single(condition.Parameters);
 
