@@ -4,6 +4,8 @@ using MEditService.Core.Session;
 
 namespace MEditService.Core.Queries;
 
+// Origin (#269 / ADR-0036): opaque here — the mod folder that provided this plugin, or a reserved
+// PluginOrigin value. Nothing keys on it yet; see PluginMetadata.
 public record PluginResponse(
     string Name,
     string Path,
@@ -13,10 +15,11 @@ public record PluginResponse(
     IReadOnlyList<string> Masters,
     int RecordCount,
     bool IsImmutable,
-    bool Participates)
+    bool Participates,
+    string Origin = PluginOrigin.DataDirectory)
 {
     public static PluginResponse FromMetadata(PluginMetadata m) =>
-        new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates);
+        new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates, m.Origin);
 }
 
 public record RecordSummary(
@@ -174,7 +177,11 @@ public record SessionFilterResponse(string? Sql);
 public record SessionLoadResponse(string Status, IReadOnlyList<PluginLoadFailure> Failures);
 public record SessionLoadExplicitRequest(
     IReadOnlyList<ExplicitPlugin> Plugins, string GameDirectory, string GameRelease = "Fallout4");
-public record ExplicitPlugin(string Name, string Path);
+// Origin (#269 / ADR-0036): Mod Management resolves this — the mod folder that provided the
+// file, or one of the reserved values (PluginOrigin.DataDirectory / MO2's overwrite). Optional so
+// an older client omitting it doesn't fail binding; SessionEndpoints defaults a missing/empty
+// value to PluginOrigin.DataDirectory rather than letting a null origin reach GameSession.
+public record ExplicitPlugin(string Name, string Path, string? Origin = null);
 
 public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId);
 

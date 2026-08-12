@@ -586,6 +586,7 @@ export interface components {
         ExplicitPlugin: {
             name?: string | null;
             path?: string | null;
+            origin?: string | null;
         };
         FieldDiff: {
             fieldName?: string | null;
@@ -711,6 +712,8 @@ export interface components {
             /** Format: int32 */
             recordCount?: number;
             isImmutable?: boolean;
+            participates?: boolean;
+            origin?: string | null;
         };
         ProblemDetails: {
             type?: string | null;

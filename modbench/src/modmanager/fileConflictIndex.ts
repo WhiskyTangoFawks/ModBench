@@ -85,6 +85,18 @@ export function rootLevelWinners(index: FileConflictIndex): Map<string, string> 
   return winnerByName;
 }
 
+/** Winning mod's folder name for every root-level plugin the index knows, keyed by lowercased
+ *  basename — the origin-resolution twin of rootLevelWinners above (#269 / ADR-0036). Same
+ *  root-level-only reasoning: a nested file sharing a plugin's basename must not shadow the real
+ *  plugin. Used by explicitSession.ts to record a mod-provided plugin's origin. */
+export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, string> {
+  const winnerModByName = new Map<string, string>();
+  for (const entry of index.files) {
+    if (!entry.relativePath.includes('/')) winnerModByName.set(foldPath(entry.relativePath), entry.winnerMod);
+  }
+  return winnerModByName;
+}
+
 async function walk(dir: string, root = dir): Promise<{ relativePath: string; absolutePath: string }[]> {
   const dirents = await readdir(dir, { withFileTypes: true });
   const results: { relativePath: string; absolutePath: string }[] = [];

@@ -4,6 +4,12 @@ namespace MEditService.Core.Session;
 // game and competes for winner. An indexed-but-non-participating row can never be a winner and
 // never contributes to conflict classification; see DuckDbRecordRepository.UpdateWinners and
 // ConflictClassifier.Classify. Implicit masters and freshly created plugins always participate.
+//
+// Origin (#269 / ADR-0036): the mod folder that provided this physical file, or one of the
+// reserved values in PluginOrigin — opaque here, never interpreted. Nothing keys on it yet.
+// Defaulted (like Participates) so pre-existing test fixtures that construct a PluginMetadata
+// positionally without naming every field keep compiling; every real construction site
+// (GameSession.BuildPluginMetadata) always passes it explicitly.
 public record PluginMetadata(
     string Name,
     string Path,
@@ -13,6 +19,7 @@ public record PluginMetadata(
     IReadOnlyList<string> Masters,
     int RecordCount,
     bool IsImmutable,
+    string Origin = PluginOrigin.DataDirectory,
     bool Participates = true
 );
 
