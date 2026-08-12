@@ -33,14 +33,14 @@ export interface PluginListProviderOptions {
  *  distinctly from the Mods tree's presence-only "Missing master:" badge. */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
-  constructor(public readonly plugin: PluginEntry, status?: PluginOrderStatus) {
+  constructor(public readonly plugin: PluginEntry, public readonly orderStatus?: PluginOrderStatus) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'plugin';
     this.checkboxState = plugin.enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
-    if (status?.kind === 'masterNotLoadedBefore') {
-      const { masters } = status;
+    if (orderStatus?.kind === 'masterNotLoadedBefore') {
+      const { masters } = orderStatus;
       this.iconPath = new vscode.ThemeIcon('error');
       this.description = masters.length === 1
         ? '✗ Master not loaded before this plugin'
@@ -48,6 +48,16 @@ export class PluginNode extends vscode.TreeItem {
       this.tooltip = [plugin.name, ...masters.map((m) => `Master ${m} is not loaded before this plugin`)].join('\n');
     }
   }
+}
+
+/** This row's order-aware badge's flagged master names, or undefined when it carries none
+ *  (#277 / ADR-0037 AC8) — the composite's structured access to what `PluginNode`'s constructor
+ *  above otherwise only bakes into rendered icon/description/tooltip text, so the session-aware
+ *  reconciliation there can dedupe by master name without parsing that text. */
+export function orderIssueMastersOf(node: PluginListNode): string[] | undefined {
+  return node.kind === 'plugin' && node.orderStatus?.kind === 'masterNotLoadedBefore'
+    ? node.orderStatus.masters
+    : undefined;
 }
 
 /** A synthetic row for one of the game's implicitly-loaded vanilla/DLC masters
