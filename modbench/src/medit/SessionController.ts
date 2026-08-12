@@ -48,13 +48,14 @@ export class SessionController {
     this.deps.refreshTree();
   }
 
-  /** Load the editing session from an ordered { name, path, origin } list built from the
-   *  active modlist (POST /session/load-explicit). `gameDirectory` must be the
+  /** Load the editing session from an ordered { name, path, origin, participates } list built
+   *  from the active modlist (POST /session/load-explicit). `gameDirectory` must be the
    *  resolved Data folder — the backend prepends implicit masters from it. `origin` is
    *  required (#269 / ADR-0036, #275) — the caller resolves it before this point; the
-   *  backend no longer defaults a missing origin. */
+   *  backend no longer defaults a missing origin. So is `participates` (#270 / ADR-0035): the
+   *  list is every plugins.txt line, and the `*` prefix rides along rather than filtering it. */
   async loadExplicitSession(
-    plugins: { name: string; path: string; origin: string }[],
+    plugins: { name: string; path: string; origin: string; participates: boolean }[],
     gameDirectory: string,
     gameRelease = 'Fallout4',
   ): Promise<void> {
@@ -71,9 +72,11 @@ export class SessionController {
       log: (m) => this.log(`[SessionController] ${m}`),
       warn: this.deps.showWarning,
     });
-    if (plugins.length === 0) {
-      // Only base-game masters loaded — the user's mental model ("my mods are
-      // loaded") would be silently wrong (ADR-0026 integrity tier).
+    // Counted, not `plugins.length === 0`: since #270 the list is every plugins.txt line, so a
+    // non-empty one can still have nothing enabled. Either way only base-game masters actually
+    // load in the game, nothing else can win a FormKey, and the user's mental model ("my mods are
+    // loaded") would be silently wrong (ADR-0026 integrity tier).
+    if (!plugins.some((p) => p.participates)) {
       this.deps.showWarning(
         'mEdit: The active profile has no enabled plugins — only base-game masters were loaded. ' +
           'Enable plugins in the mod list (or check the profile\'s plugins.txt).',

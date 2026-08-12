@@ -929,7 +929,7 @@ public sealed class EditOrchestratorConditionTests
                 });
             })
             .BuildScattered();
-        var withOrigin = fx.Plugins.Select(p => (p.Name, p.Path, Origin: "SomeMod")).ToList();
+        var withOrigin = fx.Plugins.Select(p => (p.Name, p.Path, Origin: "SomeMod", p.Participates)).ToList();
 
         var (orchestrator, manager, _) = MakeOrchestrator();
         using (manager)

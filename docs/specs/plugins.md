@@ -5,10 +5,14 @@ confirmed in a `/grill-with-docs` session (2026-07-10). Tracked as issue
 [#7](https://github.com/WhiskyTangoFawks/ModBench/issues/7) (Modbench-9).
 
 Mod Management context — operates on physical plugin files (`.esm`/`.esp`/`.esl`) and
-`plugins.txt`; never on records or FormKeys. Distinct from the Editing-context Plugins tree
-([medit-plugins-tree.md](medit-plugins-tree.md)), which lists plugins as the entry point into per-record browsing and
-requires a spawned backend — this surface manages **Plugin load order**, not record content,
-and works without the editing backend running.
+`plugins.txt`; never on records or FormKeys. The rows are this surface's; **since
+[#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270) they gain children** supplied by
+the Editing context's record browser whenever a session is running, so the view is a composite of
+two providers rather than this one alone (see Row children below). Managing the **Plugin load
+order** still needs no backend: with none running the rows are leaves and this surface behaves
+exactly as it always has. The Editing-context Plugins tree
+([medit-plugins-tree.md](medit-plugins-tree.md)) still exists alongside it; retiring it is
+[#273](https://github.com/WhiskyTangoFawks/ModBench/issues/273), after which the two specs merge.
 
 **Vocabulary note:** "load order" is ambiguous across Modbench's two contexts and this spec
 uses the disambiguated terms throughout — see [CONTEXT-MAP.md](../../CONTEXT-MAP.md) and each
@@ -117,7 +121,8 @@ Plugins tab closely enough to alternate between the two on the same instance.
   API limitation, not a priority call. See Out of Scope.
 - **No "Mod" column.** Which mod provides a plugin is surfaced only via the (deferred)
   cross-highlight, matching MO2's own implicit-link design — see #62.
-- **No "Open in mEdit"** jump from a plugin row into the Editing per-record tree in v1.
+- **No "Open in mEdit"** jump from a plugin row into the Editing per-record tree in v1. Superseded
+  by #270: the rows expand into records in place, so there is nothing to jump to.
 
 ### Row model
 
@@ -132,6 +137,31 @@ Plugins tab closely enough to alternate between the two on the same instance.
 - No lock/immutable icon on vanilla/DLC/CC rows (unlike the Editing tree's immutable-plugin
   lock, `medit-plugins-tree.md`) — that icon means "read-only," and these rows are deliberately
   toggleable, so borrowing that icon would misrepresent them.
+
+### Row children ([#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
+
+- **With no editing session every row is a leaf** and nothing on this surface changes. Starting a
+  session makes rows collapsible; **chevrons appearing across the tree are the whole "editing is
+  available now" signal** — there is no banner and no mode. Closing the session returns every row
+  to a leaf. Neither transition re-reads `plugins.txt`, so the load order, the name filter, row
+  expansion and scroll position all survive it.
+- **Expanding a row browses that plugin's records** — record types, the spatial
+  worldspace/interior-cell hierarchy, and paginated record nodes — with the same labels,
+  pagination and context menus as the editing tree, because they are literally the same nodes from
+  the same provider.
+- **A row expands only if the session actually holds its plugin.** A row whose plugin is not in
+  the session stays a leaf rather than opening onto an empty list, which would read as "this
+  plugin has no records" (ADR-0026).
+- **Disabled plugins expand and browse like any other.** The session indexes every `plugins.txt`
+  line, enabled or disabled; the `*` prefix is *participation* — whether the plugin competes for
+  winner — not whether it is loaded. A disabled plugin can never be the winning record for a
+  FormKey and never takes part in conflict classification.
+- **The seam is a thin composite at the composition root** (`PluginsTreeComposite`), not a change
+  to either provider: Mod Management owns the rows, the record browser owns the children, and
+  neither imports the other's vocabulary. That structural split is what answers ADR-0027's
+  original objection to merging these views. A drop onto a child row is refused rather than
+  treated as "past the last row", which would silently move the dragged plugins to the end of the
+  load order.
 
 ### Missing-master badge (order-aware)
 

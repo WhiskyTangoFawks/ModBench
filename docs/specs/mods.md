@@ -278,8 +278,9 @@ The extension owns the editing backend process
 - **Spawn** — lazily, on **Launch mEdit** (first entry into editing mode for the active
   modlist).
 - **Session** — built via the backend's `load-explicit` source: an ordered
-  `{name, physicalPath}` list of the active modlist's enabled plugins plus vanilla masters.
-  One backend, one session (ADR-0015).
+  `{name, physicalPath, origin, participates}` list of every `plugins.txt` line — disabled
+  entries included since #270 / ADR-0035, with the `*` prefix carried as `participates` — plus
+  vanilla masters. One backend, one session (ADR-0015).
 - **Teardown** — explicit **Close mEdit**, switching profile/modlist, or closing the
   workspace. Restarted on crash; re-entering editing re-spawns and re-indexes.
 

@@ -588,6 +588,7 @@ export interface components {
             name?: string | null;
             path?: string | null;
             origin?: string | null;
+            participates?: boolean | null;
         };
         FieldDiff: {
             fieldName?: string | null;

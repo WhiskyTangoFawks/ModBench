@@ -36,7 +36,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { PluginListProvider, PluginNode, ImplicitMasterNode, ErrorNode, EmptyNode } from './PluginListProvider';
+import { PluginListProvider, PluginNode, ImplicitMasterNode, ErrorNode, EmptyNode, pluginFileOf } from './PluginListProvider';
 
 /** Minimal IModlistSource stub: only the two plugin read methods matter here;
  *  everything else throws to prove PluginListProvider never touches them. */
@@ -342,6 +342,29 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
     provider.handleDrag([node('A.esp')], dt as never, NONE);
     await provider.handleDrop(new EmptyNode(), dt as never, NONE);
     expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], toIndex: 0 }]);
+  });
+
+  // #270: rows have children now, so VS Code can hand this controller a drop target that is not
+  // one of its rows at all. "Not my row" is not the same as "past the last row" — that reads as
+  // the end of the load order, so a drop into an expanded plugin's records would silently move
+  // the dragged plugins to the bottom of plugins.txt.
+  it('pluginFileOf names the file a row stands for, and nothing for the rows that stand for none', () => {
+    expect(pluginFileOf(node('A.esp'))).toBe('A.esp');
+    expect(pluginFileOf(new ImplicitMasterNode('Fallout4.esm'))).toBe('Fallout4.esm');
+    expect(pluginFileOf(new EmptyNode())).toBeUndefined();
+    expect(pluginFileOf(new ErrorNode('boom'))).toBeUndefined();
+  });
+
+  it('drop onto a row this tree does not own is refused, not treated as the end of the list', async () => {
+    const source = new FakeSource(ORDER);
+    const provider = new PluginListProvider({ source });
+    await provider.getChildren();
+    const dt = new FakeDataTransfer();
+    provider.handleDrag([node('A.esp')], dt as never, NONE);
+
+    await provider.handleDrop({ kind: 'record' } as never, dt as never, NONE);
+
+    expect(source.reorderPluginsCalls).toEqual([]);
   });
 
   it('contiguous multi-selection moves as a block to the target index', async () => {

@@ -324,7 +324,7 @@ public sealed class PluginSaverSaveGroupTests
         public IGameSession? Session { get; private set; } = new StubGameSession([]);
         public IRecordReader? Repository => throw new NotSupportedException();
         public void Load(string d, string p, GameRelease g) => throw new NotSupportedException();
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
+        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
         public string ReserveFormKey(string plugin) => throw new NotSupportedException();

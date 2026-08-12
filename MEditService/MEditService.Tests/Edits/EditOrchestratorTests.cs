@@ -1276,7 +1276,7 @@ public sealed class EditOrchestratorTests
 
             using (manager)
             {
-                var withOrigin = data.Plugins.Select(p => (p.Name, p.Path, Origin: "ModB")).ToList();
+                var withOrigin = data.Plugins.Select(p => (p.Name, p.Path, Origin: "ModB", p.Participates)).ToList();
                 manager.LoadExplicit(data.GameDirectory, withOrigin, GameRelease.Fallout4);
 
                 // Phantom pending delete against "Shared.esp" but a *different* origin ("ModA")
@@ -1634,7 +1634,7 @@ public sealed class EditOrchestratorTests
 
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) =>
             throw new NotSupportedException();
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin)> plugins, GameRelease gameRelease) =>
+        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> plugins, GameRelease gameRelease) =>
             throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
