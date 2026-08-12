@@ -117,6 +117,25 @@ describe('ImplicitMasterNode — leading slot (#276)', () => {
   });
 });
 
+// AC3: a row that stands for no plugin file in the load order at all — today that's only the
+// sentinel ErrorNode/EmptyNode rows, since #34's non-participating rows don't exist yet — renders
+// neither a checkbox nor a lock. Guards against exactly the mistake Slice A could make: giving the
+// lock icon too broadly (e.g. to every non-PluginNode row) instead of scoping it to
+// ImplicitMasterNode specifically.
+describe('leading slot — rows outside the load order render neither checkbox nor lock (#276 AC3)', () => {
+  it('ErrorNode has no checkbox and no lock', () => {
+    const node = new ErrorNode('boom');
+    expect(node.checkboxState).toBeUndefined();
+    expect(node.iconPath).not.toEqual({ id: 'lock' });
+  });
+
+  it('EmptyNode has no checkbox and no lock', () => {
+    const node = new EmptyNode();
+    expect(node.checkboxState).toBeUndefined();
+    expect(node.iconPath).not.toEqual({ id: 'lock' });
+  });
+});
+
 describe('PluginListProvider', () => {
   it('builds one row per plugins.txt line, in Plugin load order, with the enabled checkbox', async () => {
     const provider = new PluginListProvider({ source: new FakeSource(['A.esp', 'B.esp'], ['B.esp']) });
