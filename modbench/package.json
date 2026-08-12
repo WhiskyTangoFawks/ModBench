@@ -568,12 +568,12 @@
       "view/item/context": [
         {
           "command": "modbench.openHeader",
-          "when": "view == modbench.pluginTree && (viewItem == plugin || viewItem == pluginImmutable)",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)",
           "group": "modbench@1"
         },
         {
           "command": "modbench.openHeader",
-          "when": "view == modbench.pluginTree && (viewItem == plugin || viewItem == pluginImmutable)",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)",
           "group": "inline"
         },
         {

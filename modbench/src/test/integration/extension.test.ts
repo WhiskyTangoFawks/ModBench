@@ -316,6 +316,34 @@ describe('modbench.openEditor', () => {
   });
 });
 
+// ── modbench.openHeader reachable from every plugin-bearing row (#273 Slice E) ──
+// The gap this closes: the old modbench.pluginTree's Open Header reached both 'plugin' and
+// 'pluginImmutable' rows (medit's own read-only-master contextValue). The merged tree's rows
+// come from modmanager/PluginListProvider.ts instead, whose implicit-master row is a *different*
+// class with a *different* contextValue ('pluginImplicit', not 'pluginImmutable') and no `.plugin`
+// field at all — so the handler's own node-shape assumption, not just the package.json `when`,
+// had to change for this row kind to keep working. Reconciling the two contextValues is #276's,
+// not this ticket's.
+import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../modmanager/PluginListProvider';
+
+describe('modbench.openHeader reachable from every plugin-bearing row of the merged tree (#273 Slice E)', () => {
+  it('opens a header tab from an ordinary plugin row (PluginListProvider.PluginNode)', async () => {
+    const node = new PluginListPluginNode({ name: 'TestMod.esp', path: '/data/TestMod.esp', enabled: true } as any);
+    await vscode.commands.executeCommand('modbench.openHeader', node);
+    await new Promise(r => setTimeout(r, 300));
+    const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
+    assert.ok(tabs.some(t => t.label === 'TestMod.esp'), 'expected a header tab titled after the plugin');
+  });
+
+  it('opens a header tab from an implicit-master row (PluginListProvider.ImplicitMasterNode) — the gap #273 closes', async () => {
+    const node = new ImplicitMasterNode('Fallout4.esm');
+    await vscode.commands.executeCommand('modbench.openHeader', node);
+    await new Promise(r => setTimeout(r, 300));
+    const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
+    assert.ok(tabs.some(t => t.label === 'Fallout4.esm'), 'expected a header tab titled after the implicit master');
+  });
+});
+
 // ── modbench.downloads tree (#233) ──────────────────────────────────────────
 
 interface DownloadsProviderLike {

@@ -166,6 +166,38 @@ describe('package.json New Plugin / record filter reachable from the merged tree
   });
 });
 
+// Old modbench.pluginTree reached Open Header on 'plugin' and 'pluginImmutable' (medit's own
+// read-only-master contextValue) rows. The merged tree's rows are modmanager/PluginListProvider's
+// instead, whose two plugin-bearing contextValues are 'plugin' and 'pluginImplicit' — not the
+// same string as 'pluginImmutable', and deliberately not reconciled with it here (#276's job).
+describe('package.json Open Header reachable from every plugin-bearing row (#273 Slice E)', () => {
+  const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
+
+  it.each(['modbench@1', 'inline'])('targets the merged tree, both plugin row kinds, group %s', (group) => {
+    const entry = contextMenus().find((e) => e.command === 'modbench.openHeader' && e.group === group);
+    expect(entry, `expected an openHeader entry in group ${group}`).toBeTruthy();
+    expect(entry!.when).toBe('view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)');
+  });
+});
+
+describe('package.json every modbench.pluginTree reference is gone (#273 AC5 closure)', () => {
+  // Slices C–E together retarget or delete every command the old view carried. This is the
+  // full closure check condition 4 asked for: nothing left anywhere references the deleted id.
+  it('no view, menu entry or keybinding references modbench.pluginTree anywhere', () => {
+    const allMenuEntries = Object.values(pkg.contributes.menus as Record<string, { when?: string }[]>).flat();
+    const offendingMenus = allMenuEntries.filter((e) => (e.when ?? '').includes('modbench.pluginTree'));
+    const offendingKeybindings = (pkg.contributes.keybindings as { when?: string }[])
+      .filter((k) => (k.when ?? '').includes('modbench.pluginTree'));
+    const offendingViews = [
+      ...(pkg.contributes.views.modbench as { id: string }[]),
+      ...(pkg.contributes.views.modbenchReferencedBy as { id: string }[]),
+    ].filter((v) => v.id === 'modbench.pluginTree');
+    expect(offendingMenus).toEqual([]);
+    expect(offendingKeybindings).toEqual([]);
+    expect(offendingViews).toEqual([]);
+  });
+});
+
 describe('package.json filtering is one UX (#247)', () => {
   const titleMenus = () => pkg.contributes.menus['view/title'] as { command: string; when: string; group: string }[];
   const commandTitle = (id: string) =>

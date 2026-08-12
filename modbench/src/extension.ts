@@ -8,7 +8,7 @@ import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog
 import { createApiClient, type ApiClient } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController } from './medit/SessionController';
-import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
+import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
 import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type PendingTreeNode } from './medit/PendingChangesTreeProvider';
 import {
   ReferencedByTreeProvider, ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode,
@@ -386,9 +386,13 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       await controller.setFilter(sql);
     }),
     vscode.commands.registerCommand('modbench.clearFilter', () => controller.clearFilter()),
-    vscode.commands.registerCommand('modbench.openHeader', (node?: PluginNode) => {
-      if (!node?.plugin?.name) return;
-      const pluginName = node.plugin.name;
+    // #273: reaches every plugin-bearing merged-tree row (modmanager's PluginListNode, not
+    // medit's own PluginNode) via pluginFileOf() — the same row-agnostic adapter the composite
+    // already uses. Not an immutability decision: reconciling 'pluginImplicit' with medit's
+    // 'pluginImmutable' is #276's, not this ticket's.
+    vscode.commands.registerCommand('modbench.openHeader', (node?: PluginListNode) => {
+      const pluginName = node && pluginFileOf(node);
+      if (!pluginName) return;
       void vscode.commands.executeCommand('modbench.openEditor', {
         formKey: headerFormKeyFor(pluginName), label: pluginName,
       });
