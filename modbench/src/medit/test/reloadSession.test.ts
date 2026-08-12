@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { makeReloadSession } from '../reloadSession';
+import { reloadSession } from '../reloadSession';
 
 function makeDeps(overrides: { hasPendingChanges?: boolean; confirmed?: boolean } = {}) {
   return {
@@ -9,11 +9,11 @@ function makeDeps(overrides: { hasPendingChanges?: boolean; confirmed?: boolean 
   };
 }
 
-describe('makeReloadSession', () => {
+describe('reloadSession', () => {
   it('reloads without prompting when nothing is staged (AC3)', async () => {
     const deps = makeDeps({ hasPendingChanges: false });
 
-    await makeReloadSession(deps)();
+    await reloadSession(deps);
 
     expect(deps.confirm).not.toHaveBeenCalled();
     expect(deps.reload).toHaveBeenCalledOnce();
@@ -22,7 +22,7 @@ describe('makeReloadSession', () => {
   it('confirms modally, then reloads, when pending changes exist and the user confirms (AC2)', async () => {
     const deps = makeDeps({ hasPendingChanges: true, confirmed: true });
 
-    await makeReloadSession(deps)();
+    await reloadSession(deps);
 
     expect(deps.confirm).toHaveBeenCalledOnce();
     expect(deps.reload).toHaveBeenCalledOnce();
@@ -34,7 +34,7 @@ describe('makeReloadSession', () => {
   it('leaves the session untouched when pending changes exist and the user cancels (AC2)', async () => {
     const deps = makeDeps({ hasPendingChanges: true, confirmed: false });
 
-    await makeReloadSession(deps)();
+    await reloadSession(deps);
 
     expect(deps.confirm).toHaveBeenCalledOnce();
     expect(deps.reload).not.toHaveBeenCalled();
@@ -48,7 +48,7 @@ describe('makeReloadSession', () => {
       reload: vi.fn().mockImplementation(() => { order.push('reload'); return Promise.resolve(); }),
     };
 
-    await makeReloadSession(deps)();
+    await reloadSession(deps);
 
     expect(order).toEqual(['hasPendingChanges', 'confirm', 'reload']);
   });

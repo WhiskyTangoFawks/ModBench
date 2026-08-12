@@ -114,8 +114,11 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
 - All `modbench.*` commands are available in the palette; `package.json`'s
   `contributes.commands` is the canonical registry. Navigation/workflow commands include Launch
   mEdit (enter editing; spawn backend; load the session), Close mEdit (return to Loadout; tear
-  down), Reload Session (re-reads the tree; deliberately *not* the same command as Refresh, and
-  in the Loadout header's overflow rather than its navigation group — #247, #295), Open Editor (internal; also bound to tree click),
+  down), Reload Session (re-runs the session load — re-resolves the game directory, rebuilds
+  the explicit plugin set, reloads it into the backend, the same path Launch mEdit and the
+  crash-restart handler take; confirms modally only when there's staged work to lose;
+  deliberately *not* the same command as Refresh, and in the Loadout header's overflow rather
+  than its navigation group — #247, #295), Open Editor (internal; also bound to tree click),
   New Plugin…, Copy as Override Into…, and Run Script… (planned; context = the active record if
   a panel is open, else global).
 - A new end-to-end command is four touch points, or it is half-wired: backend endpoint →

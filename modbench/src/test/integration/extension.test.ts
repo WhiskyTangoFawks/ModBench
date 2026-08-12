@@ -1047,6 +1047,37 @@ describe('Reload Session actually reloads (#295)', () => {
     assert.strictEqual(tree.getTreeItem(after).collapsibleState, vscode.TreeItemCollapsibleState.None,
       'a failed reload must not leave rows claiming an expandable session that no longer exists');
   });
+
+  // Code-review finding: AC4 must hold for every way enterEditing can fail, not only
+  // loadExplicitSession resolving undefined — resolveGameDirectory throwing (an explicit
+  // gameDirectory config with no Data/ subfolder) is uncaught by any of enterEditing's own
+  // internal branches, so this exercises registerReloadSessionCommand's own try/catch, the
+  // same one modbench.modList.launchMedit already has.
+  it('tears the session down, without throwing, when the reload fails for a reason other than a rejected load-explicit', async () => {
+    // The previous test's failed load-explicit already tore the session down — re-establish one.
+    resetMockBackend();
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    const tree = pluginsTree()!;
+    const before = findRow(await tree.getChildren(), 'TestMod.esp');
+    assert.strictEqual(tree.getTreeItem(before).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
+      'sanity: the row is expandable before the failing reload');
+
+    // resolveGameDirectory's very first branch: an explicit config directory with no Data/
+    // subfolder throws, not something loadExplicitSession's undefined-failures handling covers.
+    const brokenDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-reload-nodatafolder-'));
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', brokenDir, vscode.ConfigurationTarget.Workspace);
+
+    await vscode.commands.executeCommand('modbench.reloadSession');
+
+    const after = findRow(await tree.getChildren(), 'TestMod.esp');
+    assert.strictEqual(tree.getTreeItem(after).collapsibleState, vscode.TreeItemCollapsibleState.None,
+      'an unhandled reload failure must still tear the session down, not leave the tree claiming a session that is gone');
+
+    fs.rmSync(brokenDir, { recursive: true, force: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+  });
 });
 
 // #295 AC5: Refresh (#247's single Mod-Management refresh) must remain distinct and never

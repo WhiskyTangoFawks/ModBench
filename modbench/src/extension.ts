@@ -8,7 +8,7 @@ import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog
 import { createApiClient, type ApiClient, type MasterIssue } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController } from './medit/SessionController';
-import { makeReloadSession } from './medit/reloadSession';
+import { reloadSession } from './medit/reloadSession';
 import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
 import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type PendingTreeNode } from './medit/PendingChangesTreeProvider';
 import {
@@ -63,14 +63,14 @@ let loadoutHeaderProvider: LoadoutHeaderProvider | undefined;
 // starting and stopping is what puts chevrons on its rows, and both choke points for that
 // (enterEditing, exitToLoadout) are module-level.
 let pluginsTree: PluginsTreeComposite<PluginListNode, PluginTreeNode> | undefined;
-// #295: `enterEditing` itself, built once inside `registerLoadoutView` (absent with no
-// workspace, or one that isn't an MO2 instance — see that function's own early returns).
-// Module level for the same reason as the above: `modbench.reloadSession` is registered
-// earlier in `activate()` (inside `registerEditorCommands`) than `registerLoadoutView` builds
-// this closure, so it can't be threaded in as a constructor argument — only reached by both
-// sides holding the one module-level reference. Assigned exactly once, where `enterEditing` is
-// built; every reader treats it as possibly-absent (activation still finishing, or no
-// workspace) rather than assuming it exists.
+// #295: `enterEditing` itself, built once inside `registerLoadoutView`. Module level for the
+// same reason as the above — not a registration-order race (registerLoadoutSurfaces, which
+// calls registerLoadoutView, already runs before registerEditorCommands registers
+// modbench.reloadSession), but because registerLoadoutView returns *before* ever building this
+// closure when there is no workspace, or the workspace isn't an MO2 instance (see that
+// function's own early returns), leaving it permanently unset for the lifetime of that
+// activation. Assigned exactly once, where `enterEditing` is built; every reader treats it as
+// possibly-absent for that reason, not as a race to guard against.
 let enterEditingFn: ((progress?: vscode.Progress<{ message?: string }>) => Promise<void>) | undefined;
 
 const meditConfig = () => vscode.workspace.getConfiguration('modbench');
@@ -442,11 +442,13 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
 // #295: modbench.reloadSession — pulled out of registerRecordViewCommands purely for its line
 // budget, same reasoning as registerReferencedByCopyCommand below. Re-runs the session load
 // (makeEnterEditing — the same path Launch mEdit and the crash-restart handler take), not a
-// tree re-read; confirms modally first only when there's staged work to lose
-// (makeReloadSession). Guarded on enterEditingFn: registration order means this command exists
-// before registerLoadoutView builds it (no workspace, or one that isn't an MO2 instance, leaves
-// it permanently unset) — invoking it too early must fail visibly, not throw a TypeError at
-// the user.
+// tree re-read; confirms modally first only when there's staged work to lose (reloadSession).
+// Guarded on enterEditingFn: registerLoadoutView (which builds it) runs before this command is
+// even registered, so a set-but-not-yet-assigned race isn't the risk — the guard covers
+// enterEditingFn staying permanently unset, which happens when registerLoadoutView returns
+// early because there is no workspace, or the workspace isn't an MO2 instance (see that
+// function's own early returns). Invoking the command in that state must fail visibly, not
+// throw a TypeError at the user.
 function registerReloadSessionCommand(controller: SessionController, outputChannel: vscode.LogOutputChannel): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.reloadSession', async () => {
     const enter = enterEditingFn;
@@ -455,17 +457,30 @@ function registerReloadSessionCommand(controller: SessionController, outputChann
       void vscode.window.showErrorMessage('Modbench: There is no editing session to reload.');
       return;
     }
-    await makeReloadSession({
+    await reloadSession({
       hasPendingChanges: () => controller.hasPendingChanges(),
       confirm: async () => (await vscode.window.showWarningMessage(
         'Modbench: Reload the session? Backend state is rebuilt from the current modlist — any staged changes not yet saved will be discarded.',
         { modal: true }, 'Reload',
       )) === 'Reload',
-      reload: () => Promise.resolve(vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: 'mEdit' },
-        (progress) => enter(progress),
-      )),
-    })();
+      // #295 AC4: matches modbench.modList.launchMedit's own try/catch — enterEditing's own
+      // undefined-failures branch (loadExplicitSession) already calls exitToLoadout() itself,
+      // but every *other* way it can fail (buildExplicitPluginsWithOrigin rethrowing a non-ENOENT
+      // readdir error, backendManager.start() rejecting, …) would otherwise propagate unhandled,
+      // leaving the tree claiming a session that either never came up or is now half-torn-down.
+      reload: async () => {
+        try {
+          await vscode.window.withProgress(
+            { location: vscode.ProgressLocation.Notification, title: 'mEdit' },
+            (progress) => enter(progress),
+          );
+        } catch (err) {
+          outputChannel.error(`[extension] reloadSession failed: ${err instanceof Error ? err.message : String(err)}`);
+          exitToLoadout();
+          void vscode.window.showErrorMessage('Modbench: Failed to reload the session.');
+        }
+      },
+    });
   });
 }
 
