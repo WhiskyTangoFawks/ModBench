@@ -546,13 +546,21 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
     const prematurePlugins = duringLaunch.slice(0, load).includes('GET /plugins');
     assert.ok(!prematurePlugins, 'GET /plugins must not fire before POST /session/load-explicit');
 
-    const nodes = await treeProvider()!.getChildren();
-    assert.ok(nodes.length > 0, 'the plugin tree should not be empty after a successful launch');
-    assert.ok(!nodes.some((n) => n.kind === 'error'), 'the plugin tree should not show an ErrorNode');
-    assert.deepStrictEqual(
-      nodes.map((n) => n.plugin?.name),
-      MOCK_PLUGINS.map((p) => p.name),
-      'the tree should list the plugins the backend returned',
+    // #273: the standalone editing tree's own root listing (what this assertion read before) is
+    // gone — nothing in production calls treeProvider.getChildren(undefined) any more. The merged
+    // Plugins tree (modbench.pluginListTree / pluginsTree export) is what actually reflects a
+    // successful launch now: its TestMod.esp row only becomes expandable once
+    // PluginsTreeComposite.setSession() has run, which only happens after the session's own
+    // GET /plugins lands — so an expandable row here proves both halves of the #75 regression
+    // this test guards: the fetch happened, and it happened after load, not before.
+    const pluginsTreeExport = (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
+    assert.ok(pluginsTreeExport, 'activate() should return { pluginsTree } for the merged view');
+    const rows = await pluginsTreeExport.getChildren();
+    assert.ok(rows.length > 0, 'the merged plugins tree should not be empty after a successful launch');
+    const testMod = findRow(rows, 'TestMod.esp');
+    assert.strictEqual(
+      pluginsTreeExport.getTreeItem(testMod).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
+      'TestMod.esp should be expandable once the session has loaded and GET /plugins has landed',
     );
   });
 });

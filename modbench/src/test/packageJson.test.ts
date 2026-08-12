@@ -140,8 +140,8 @@ describe('package.json retires modbench.viewMode and the second Plugins view (#2
 
   // The remaining modbench.pluginTree when-clauses (filterPluginTree/newPlugin/setFilter/
   // clearFilter/openHeader title-bar and context-menu entries) are retargeted in Slices D/E —
-  // see 'package.json retargets every modbench.pluginTree command onto modbench.pluginListTree'
-  // below for the assertion that no when clause references it anywhere once those land.
+  // see 'package.json every modbench.pluginTree reference is gone (#273 AC5 closure)' below for
+  // the assertion that no when clause references it anywhere once those land.
 });
 
 describe('package.json New Plugin / record filter reachable from the merged tree (#273 Slice D)', () => {

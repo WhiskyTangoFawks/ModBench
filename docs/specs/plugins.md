@@ -9,10 +9,10 @@ tree (`modbench.pluginListTree`). Its shape was confirmed in a `/grill-with-docs
 [#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270).
 
 **Two bounded contexts, one view, structurally.** Mod Management owns the rows — identity, Plugin
-load order, checkbox, origin, drift — operating on physical plugin files (`.esm`/`.esp`/`.esl`)
-and `plugins.txt`, never on records or FormKeys. The Editing context owns a row's children —
-record types, records, the spatial worldspace/cell hierarchy, conflicts — whenever a backend
-session is running. Neither side imports the other's vocabulary
+load order, checkbox — operating on physical plugin files (`.esm`/`.esp`/`.esl`) and
+`plugins.txt`, never on records or FormKeys. The Editing context owns a row's children — record
+types, records, the spatial worldspace/cell hierarchy — whenever a backend session is running.
+Neither side imports the other's vocabulary
 ([CONTEXT-MAP.md](../../CONTEXT-MAP.md), each context's own `CONTEXT.md`); the join is a thin
 composite at the composition root (`PluginsTreeComposite`, `modbench/src/extension.ts`), not a
 change to either provider. This structural split is what let ADR-0035 overturn ADR-0027's original
@@ -191,13 +191,20 @@ there is no separate load-session step.
   between same-named plugins from different mods is a Mod-Management concern the row model
   doesn't compute or care about — it only manages the sequence of names.
 - Checkbox reflects the line's `*` prefix (MO2's own enabled marker).
-- **The leading slot answers exactly one question — "can you change whether this loads?"**
-  (ADR-0035): a checkbox where the user decides (`contextValue: "plugin"`), or nothing at all
-  on a row that isn't in the load order. Read-only-for-editing is never conveyed by an icon
-  here — it is conveyed by absent actions and the tooltip, which resolved the standing
-  contradiction between this spec's earlier no-lock stance and the pre-merge Editing tree's
-  lock icon by giving the lock exactly one meaning (see Row children below for the
-  implicit-master row, which is a distinct concept from a lock).
+- **Current leading-slot behavior**: a checkbox on an ordinary `plugins.txt` line
+  (`contextValue: "plugin"`), and no icon at all — no checkbox, no lock, nothing — on an implicit
+  master (`contextValue: "pluginImplicit"`, discovered from the game's Data folder rather than a
+  `plugins.txt` line). Read-only-for-editing is conveyed only by which context-menu actions are
+  absent, never by an icon, for either row kind today.
+- **ADR-0035's design is not yet built and this spec does not silently override it.**
+  [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md) states the leading slot
+  should answer exactly one question — "can you change whether this loads?" — with a lock icon
+  on the implicit-master case specifically (forced-on, not a checkbox), resolving a contradiction
+  between this surface's pre-merge no-lock stance and the pre-merge Editing tree's own lock icon
+  by giving the lock one meaning. That reconciliation has not happened in code: there is no lock
+  anywhere on the merged tree today, `pluginImplicit` carries no icon, and deciding what (if
+  anything) should render there is [#276](https://github.com/WhiskyTangoFawks/ModBench/issues/276)'s
+  question, not this document's to answer.
 
 ### Row children ([#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
 
@@ -215,9 +222,11 @@ there is no separate load-session step.
   line, enabled or disabled; the `*` prefix is *participation* — whether the plugin competes for
   winner — not whether it is loaded. A disabled plugin can never be the winning record for a
   FormKey and never takes part in conflict classification.
-- **A plugin file `plugins.txt` never names** (never-listed, or a copy shadowed by a
-  higher-priority mod) is indexed lazily, on demand, behind the non-participating-visibility
-  toggle — never eagerly, and never counted toward winner computation.
+- **Not yet built.** ADR-0035 also describes lazily indexing a plugin file `plugins.txt` never
+  names (never-listed, or a copy shadowed by a higher-priority mod) on demand, behind a
+  non-participating-visibility toggle. No such toggle is contributed anywhere in `package.json`
+  and `PluginListProvider` reads only `plugins.txt`'s own line set — this is the ADR's design for
+  that case, not current behavior.
 - **The seam is a thin composite at the composition root** (`PluginsTreeComposite`), not a change
   to either provider: Mod Management owns the rows, the record browser owns the children, and
   neither imports the other's vocabulary — enforced by `src/test/contextBoundary.test.ts`, not by
@@ -278,9 +287,10 @@ there is no separate load-session step.
   `modbench.scriptsPath` on first use. That preset is how staged edits are browsed by plugin
   and record; the [Pending Changes tree](medit-pending-changes-tree.md) is organized by
   ChangeGroup and deliberately does not duplicate it (ADR-0029).
-- **Narrowing to a single plugin for authoring** is `Apply Filter to Selected`, adopted from
-  xEdit's `mniNavFilterApplySelected` — the ordinary record filter invoked against the tree
-  selection. It is not a mode, and it introduces no new term (ADR-0035).
+- **Not yet built.** ADR-0035 proposes narrowing to a single plugin for authoring as `Apply
+  Filter to Selected`, adopted from xEdit's `mniNavFilterApplySelected` — the ordinary record
+  filter invoked against the tree selection, not a mode, introducing no new term. No such
+  command is contributed anywhere in `package.json` today.
 
 ### Worldspace / interior-cell tree
 
@@ -369,10 +379,16 @@ overflow, then native **Collapse All** last.
 - `IModlistSource` gains the write-side counterparts to its read-only `readPluginOrder()`/
   `readEnabledPlugins()`: toggle a line's `*` prefix, and reorder lines — mirroring the shape of
   the existing `modlist.txt` mutators (`moveModToSeparator`, `reorderSeparatorBlock`).
-- **Live mutation** (ADR-0035): reorder, enable and disable apply immediately and unprompted,
-  with a view-header progress indicator as the only feedback — an `UPDATE` of `load_order_idx`
-  or of the participation flag, plus a winner re-sweep, never a re-read of the file and never a
-  session reload. Staged edits survive every one of these mutations.
+- **Current mutation path**: reorder, enable and disable apply immediately and unprompted via
+  the surgical splice write above — a direct `plugins.txt` edit, nothing else. `PluginListProvider`
+  makes no backend call to do this (root `CLAUDE.md`: Mod Management never calls the C# backend),
+  so there is no session reload and no server round trip to wait on.
+- **Not yet built.** ADR-0035 describes a *different*, backend-driven mutation model for later —
+  reorder/enable/disable as a SQL `UPDATE` of `load_order_idx`/the participation flag plus a
+  winner re-sweep, with a view-header progress indicator as the only feedback, once the
+  participation predicate lands (#97/#279). None of that exists yet: no code path calls the
+  backend for a Plugin load order mutation, and no progress indicator is wired to the checkbox or
+  the drag handler. Stated here as the destination, not as current behavior.
 
 ### Entry point
 
