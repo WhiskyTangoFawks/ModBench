@@ -13,6 +13,7 @@ function makePlugin(i: number): PluginMetadata {
     recordCount: 10,
     isImmutable: false,
     origin: 'Data',
+    masterIssues: [],
   };
 }
 
@@ -92,6 +93,37 @@ describe('ApiPluginRepository.getPlugins', () => {
     const result = await repo.getPlugins();
 
     expect(result[0].origin).toBe('SomeMod');
+  });
+
+  // #277 / ADR-0037 AC1/AC4: this is what lets the composite decorate a row without a
+  // second read — the classification is already attached to the plugin it describes.
+  it('maps masterIssues from the wire PluginResponse, distinguishing direct from unloadable', async () => {
+    const raw = [{
+      ...makePlugin(0),
+      masterIssues: [
+        { masterName: 'Ghost.esm', kind: 'DirectlyMissing' },
+        { masterName: 'Broken.esm', kind: 'Unloadable' },
+      ],
+    }];
+    const client = { GET: vi.fn().mockResolvedValue({ data: raw, response: { ok: true } }) } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const result = await repo.getPlugins();
+
+    expect(result[0].masterIssues).toEqual([
+      { masterName: 'Ghost.esm', kind: 'DirectlyMissing' },
+      { masterName: 'Broken.esm', kind: 'Unloadable' },
+    ]);
+  });
+
+  it('defaults masterIssues to empty when the wire omits it', async () => {
+    const raw = [{ name: 'Plugin0.esp', path: '/data/Plugin0.esp', loadOrderIndex: 0, origin: 'Data' }];
+    const client = { GET: vi.fn().mockResolvedValue({ data: raw, response: { ok: true } }) } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const result = await repo.getPlugins();
+
+    expect(result[0].masterIssues).toEqual([]);
   });
 });
 

@@ -1,13 +1,18 @@
 import type { components } from './generated/api';
 import type {
-  ApiClient, PluginMetadata, RecordSummary,
+  ApiClient, PluginMetadata, MasterIssue, RecordSummary,
   WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 
 type PluginResponse = components['schemas']['PluginResponse'];
+type GeneratedMasterIssue = components['schemas']['MasterIssue'];
 type GeneratedRecordSummary = components['schemas']['RecordSummary'];
 type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
+
+function toMasterIssue(i: GeneratedMasterIssue): MasterIssue {
+  return { masterName: i.masterName ?? '', kind: i.kind ?? 'DirectlyMissing' };
+}
 
 // #275 / ADR-0036: the backend always populates PluginResponse.Origin with a real, non-empty
 // value — the generated type still shows `origin?: string | null` only because this backend's
@@ -32,6 +37,7 @@ function toPluginMetadata(r: PluginResponse): PluginMetadata {
     recordCount: r.recordCount ?? 0,
     isImmutable: r.isImmutable ?? false,
     origin: requireOrigin(r),
+    masterIssues: (r.masterIssues ?? []).map(toMasterIssue),
   };
 }
 

@@ -15,6 +15,14 @@ export interface PluginMetadata {
   // #275 / ADR-0036: the mod folder (or reserved PluginOrigin value) this plugin was resolved
   // from — on the wire since #269 (PluginResponse.Origin) but dropped here until now.
   origin: string;
+  // #277 / ADR-0037: this plugin's own declared masters that don't resolve in the session —
+  // never a transitive fact about a master's own masters. Empty for a plugin with none.
+  masterIssues: MasterIssue[];
+}
+
+export interface MasterIssue {
+  masterName: string;
+  kind: 'DirectlyMissing' | 'Unloadable';
 }
 
 export interface RecordSummary {
