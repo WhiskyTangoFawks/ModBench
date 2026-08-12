@@ -333,30 +333,36 @@ describe('PendingChangesTreeProvider — resolveChange', () => {
   });
 });
 
-// ── Save All / Revert All gating: report staged state on every root render ───
+// ── Save All / Revert All gating + the view badge: staged count on every root render ──
+// #247: one signal, not two. The count drives both the modbench.hasPendingChanges context key
+// (count > 0) and the TreeView badge, so the badge can never disagree with the gating — and the
+// badge is what surfaces staged work on the activity-bar icon while the view is collapsed.
 describe('PendingChangesTreeProvider — pending-state signal', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('reports hasPending=true when there are groups', async () => {
+  it('reports the staged group count when there are groups', async () => {
     const onPendingState = vi.fn();
-    const client = makeClient({ groups: [group({ id: 'c1' })], changes: [change({ id: 'c1' })] });
+    const client = makeClient({
+      groups: [group({ id: 'c1' }), group({ id: 'c2' })],
+      changes: [change({ id: 'c1' }), change({ id: 'c2' })],
+    });
     const provider = new PendingChangesTreeProvider(client, vi.fn(), onPendingState);
     await provider.getChildren();
-    expect(onPendingState).toHaveBeenLastCalledWith(true);
+    expect(onPendingState).toHaveBeenLastCalledWith(2);
   });
 
-  it('reports hasPending=false when nothing is staged', async () => {
+  it('reports zero when nothing is staged', async () => {
     const onPendingState = vi.fn();
     const provider = new PendingChangesTreeProvider(makeClient({ groups: [] }), vi.fn(), onPendingState);
     await provider.getChildren();
-    expect(onPendingState).toHaveBeenLastCalledWith(false);
+    expect(onPendingState).toHaveBeenLastCalledWith(0);
   });
 
-  it('reports hasPending=false when the fetch fails', async () => {
+  it('reports zero when the fetch fails — an unknown count must not read as staged work', async () => {
     const onPendingState = vi.fn();
     const provider = new PendingChangesTreeProvider(makeClient({ groupsOk: false }), vi.fn(), onPendingState);
     await provider.getChildren();
-    expect(onPendingState).toHaveBeenLastCalledWith(false);
+    expect(onPendingState).toHaveBeenLastCalledWith(0);
   });
 });
 

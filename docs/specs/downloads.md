@@ -123,9 +123,10 @@ bookkeeping.
     auto-generates a "Focus on Downloads View" command for any contributed view) and
     always present — collapsed, not hidden — in the sidebar stack, so that I can get to
     my downloads without a bespoke open command or toolbar button anywhere else.
-33. As a user with a long downloads folder, I want to use VS Code's native tree Find to
-    narrow to matching rows by name, so that I can find one without scrolling, and
-    without Modbench reinventing a filter box the platform already gives every tree.
+33. As a user with a long downloads folder, I want to narrow to matching rows by name with
+    the same filter I use on every other Modbench list, so that I can find one without
+    scrolling and without learning a second way to search (#247; VS Code's native tree Find
+    remains available on this tree as it is on every tree).
 
 ## Implementation Decisions
 
@@ -209,23 +210,28 @@ Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeIte
 - **Sort by…** — a command in the view's `…` overflow menu (no icon, so it doesn't
   compete for title-bar space): a `showQuickPick` over the four sortable fields (Name,
   Status, Size, Filetime) in both directions. Default remains Filetime descending.
-- **No name-filter box.** VS Code's **native tree Find** (`list.find`, `Ctrl+F` with the
-  tree focused) replaces it outright — there is no bespoke Downloads filter input at
-  all, unlike the old webview tab. This is a **deliberate divergence** from the
-  cross-surface filter/grouping-toggle convention documented in
-  [mods.md](mods.md)'s "UI — the Mods tree" section: that convention exists there specifically because
-  Mods rows sit inside separators, so a name filter needs a structural-vs-flat choice
-  (keep matching sections in context, or collapse to a flat list of matches). Downloads
-  rows are flat leaves with no grouping concept at all — there is nothing for a
-  structural/flat toggle to decide — so native Find, with no toggle needed, is the
-  better native fit rather than a smaller copy of the Mods convention.
-- **No manual Refresh.** Unlike the Mods tree's title-bar Refresh (a safety-net for
-  filesystems with unreliable watch events), the Downloads tree ships with no Refresh
-  command or button at all: `downloadsWatcher.ts` debounces filesystem events on
-  `downloads/` and invalidates the provider automatically, so every mutation and every
-  external file-manager drop is picked up without user action. This is a documented
-  decision, not a gap left for a later slice — the surface has been fully watcher-driven
-  since it first shipped (#233).
+- **Filter** (`modbench.downloads.filter`, slot 1) — the shared Modbench filter widget,
+  narrowing to rows whose filename contains what the user types, case-insensitively.
+  Render-only: a keystroke never re-scans `downloads/`. An error row survives every filter,
+  since hiding the reason the list is wrong behind a name match is exactly the
+  silently-wrong state ADR-0026 forbids.
+
+  **This reverses #233's call**, which sent Downloads to VS Code's **native tree Find**
+  (`list.find`) on the grounds that the Mods filter's structural-vs-flat toggle has nothing
+  to decide on a flat list of leaf rows. That reasoning was sound about the *toggle* and wrong
+  about the *filter*: the toggle is an option on the shared widget, not the widget, and the
+  cost of the divergence was that "narrow this list by name" meant three different things
+  across five title bars (#247). Downloads now reuses the one widget, with no toggle.
+
+  The widget clears on losing focus, which makes it usable only while typing —
+  [#255](https://github.com/WhiskyTangoFawks/ModBench/issues/255), inherited knowingly. It is
+  now a single fix that lands on all four list views at once.
+- **No manual Refresh** — and since #247, no view has one. Refresh is a single workspace-scope
+  command on the [Loadout header](loadout-header.md) that re-reads every Mod-Management source
+  together. It remains only a safety net for filesystems with unreliable watch events:
+  `downloadsWatcher.ts` debounces filesystem events on `downloads/` and invalidates the
+  provider automatically, so every mutation and every external file-manager drop is picked up
+  without user action.
 
 ### Live updates
 

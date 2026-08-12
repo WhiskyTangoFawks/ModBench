@@ -102,12 +102,12 @@ export class PendingChangesTreeProvider implements vscode.TreeDataProvider<Pendi
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private readonly log: (msg: string) => void;
-  private readonly onPendingState: (hasPending: boolean) => void;
+  private readonly onPendingState: (stagedGroups: number) => void;
 
   constructor(
     private readonly client: ApiClient,
     log?: (msg: string) => void,
-    onPendingState?: (hasPending: boolean) => void,
+    onPendingState?: (stagedGroups: number) => void,
   ) {
     this.log = log ?? (() => {});
     this.onPendingState = onPendingState ?? (() => {});
@@ -157,12 +157,13 @@ export class PendingChangesTreeProvider implements vscode.TreeDataProvider<Pendi
     const groupsRes = await this.client.GET('/change-groups', {});
     if (!groupsRes.response.ok || !Array.isArray(groupsRes.data)) {
       this.log(`[PendingChangesTreeProvider] /change-groups fetch failed (${groupsRes.response.status})`);
-      this.onPendingState(false);
+      this.onPendingState(0);
       return [new ErrorNode()];
     }
     const groups = groupsRes.data;
-    // Drives the title-bar Save All / Revert All gating (spec: hidden when nothing staged).
-    this.onPendingState(groups.length > 0);
+    // Drives the title-bar Save All / Revert All gating (spec: hidden when nothing staged) and,
+    // since #247, the view's numeric badge — one number, so the two can never disagree.
+    this.onPendingState(groups.length);
     if (groups.length === 0) return [new EmptyStateNode()];
 
     const changesRes = await this.client.GET('/changes', {});

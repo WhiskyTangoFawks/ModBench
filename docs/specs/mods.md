@@ -131,7 +131,8 @@ requires a deploy.**
 31. As a user, I want every write Modbench makes to `modlist.txt` and `ModOrganizer.ini` to
     change only the bytes that need changing, so that my comments, CRLF line endings,
     unmanaged (`*`) lines, and separators survive verbatim and MO2 still reads the files.
-32. As a user, I want a "Launch mEdit" action in the Loadout header that switches to the
+32. As a user, I want a "Launch mEdit" action in the Loadout header (its own view since
+    #247 — see [loadout-header.md](loadout-header.md)) that switches to the
     editing views and spins up the record editor against my active loadout, so that I can
     move from managing mods to editing records without a manual setup step.
 33. As a user, I want an "update available" indicator on mods (planned) once Nexus
@@ -285,9 +286,12 @@ The extension owns the editing backend process
 ### UI — the Mods tree
 
 - **Header**: title "MODS"; description = current profile name; a first non-interactive
-  count node ("N active / M installed"); title-bar icon buttons for Filter, Switch Profile,
-  Launch mEdit, Collapse All, Refresh, Sort Direction, plus Deploy and Purge in standalone
-  mode only.
+  count node ("N active / M installed"); title-bar icon buttons for Filter, Sort Direction
+  and Collapse All — three, and nothing else. Switch Profile, Launch mEdit, Refresh, Deploy
+  and Purge all moved to the [Loadout header](loadout-header.md) in #247: none of them are
+  about *this tree*, and the nine icons this bar had grown were past the point where VS Code
+  keeps them visible in a narrow sidebar. Launch Game is superseded outright (see
+  *Deploy / purge* below).
 - **Structure**: separator nodes (each grouping the mods that follow it in `modlist.txt`)
   render first; ungrouped mods (before the first separator — the **winning end**) render as
   root-level items at the bottom, below every separator — no synthetic container. Separator
@@ -309,12 +313,13 @@ The extension owns the editing backend process
   (case-insensitive substring). A toggle beside it controls separator behavior — **on**
   (default): sections with matches auto-expand, empty ones hide, matches show in section
   context; **off**: a flat list of matching mods, separators hidden. The toggle resets to on
-  when the filter clears and is not persisted. The structural/flat choice exists because
-  Mods rows sit inside separators; Downloads has no grouping concept (a flat list of leaf
-  rows), so it uses VS Code's native tree Find instead of this filter box — see
-  [downloads.md](downloads.md)'s Toolbar section.
-- **Profile selector**: "Switch Profile" opens a quick pick of directories under
-  `profiles/`; selecting one persists `selected_profile` and refreshes the tree (a new
+  when the filter clears and is not persisted. This is the **shared filter widget** every
+  Modbench list view uses (#247) — the separator toggle is an option on it, not a second
+  implementation, and Downloads reuses the same widget rather than VS Code's native tree Find.
+- **Profile selector**: reached from the [Loadout header](loadout-header.md)'s Profile row,
+  not this tree — switching profile swaps the modlist *and* `plugins.txt` *and* invalidates
+  any running session, so its scope is the workspace. It opens a quick pick of directories
+  under `profiles/`; selecting one persists `selected_profile` and refreshes the tree (a new
   session boundary — any editing session tears down).
 - **Context menus**: a **mod** offers Open in Explorer, Add Separator Below, Move to
   Separator (quick pick of separators + "Ungrouped", moving the mod to the end of the
@@ -365,7 +370,10 @@ The extension owns the editing backend process
   *state* of the game directory, not a per-launch transient. MO2 can treat it as transient
   because usvfs is a live VFS it holds up across however many tool runs; physical hardlinks
   have no such lifetime, so "deployed" is a mode the user is in.
-- **Superseded**: a Launch Game action that deployed, ran the game, and purged on child exit.
+- **Superseded and now removed** (#247): a Launch Game action that deployed, ran the game,
+  and purged on child exit. Its replacement is the [Loadout header](loadout-header.md)'s
+  **Launch…**, a task picker over the executables registry — one affordance that launches and
+  nothing else. The reasons it was withdrawn, recorded before it was:
   Withdrawn for three reasons, none of them cost: (1) *the launched process is not the game* — a script
   extender loader starts it, injects, and exits, so exit-on-child is a false signal, which is
   why MO2 tracks a whole process tree via a Job Object instead; (2) *purge mutates* — it

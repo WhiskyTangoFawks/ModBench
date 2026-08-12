@@ -80,9 +80,13 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   behavior they present. The backend endpoint contract that drives them is governed by
   `MEditService/CLAUDE.md` and the generated API client, not restated here.
 - Modbench is a single activity-bar container (`modbench`). A `modbench.viewMode` context key
-  toggles the sidebar between the Loadout surface and the mEdit surfaces. **Launch mEdit** (in
-  the Loadout header) switches to editing mode, lazily spawning the backend and loading the
-  active modlist as the session; **Close mEdit** switches back and tears the session down.
+  toggles the sidebar between the Loadout surface and the mEdit surfaces. **Launch mEdit**
+  switches to editing mode, lazily spawning the backend and loading the active modlist as the
+  session; **Close mEdit** switches back and tears the session down. Both are reached from the
+  **mEdit row of the [Loadout header](loadout-header.md)** (#247) — one row carrying whichever
+  direction applies — and neither appears on any tree's title bar: starting and stopping a
+  session is workspace-scope, and once #268 makes the loadout and editing views co-visible
+  there is no single tree it could sensibly belong to.
 - The mEdit view is composed of the five surfaces listed above. There is no toolbar or
   top-level menu bar — every action is reachable from a tree context menu, the command palette,
   or the record editor panel itself.
@@ -102,7 +106,8 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
 - All `modbench.*` commands are available in the palette; `package.json`'s
   `contributes.commands` is the canonical registry. Navigation/workflow commands include Launch
   mEdit (enter editing; spawn backend; load the session), Close mEdit (return to Loadout; tear
-  down), Reload Session (refresh the tree), Open Editor (internal; also bound to tree click),
+  down), Reload Session (re-reads the tree; deliberately *not* the same command as Refresh, and
+  in the Loadout header's overflow rather than its navigation group — #247, #295), Open Editor (internal; also bound to tree click),
   New Plugin…, Copy as Override Into…, and Run Script… (planned; context = the active record if
   a panel is open, else global).
 - A new end-to-end command is four touch points, or it is half-wired: backend endpoint →

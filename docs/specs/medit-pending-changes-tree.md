@@ -127,8 +127,16 @@ exactly what it will carry.
 - **Reverting a member of a multi-member group is offered as Revert Group**, with a
   confirmation listing the members — the UI does not offer an action it knows will fail. The
   backend's 409 on a partial group revert remains as the guard against API misuse.
-- Title-bar **Save All / Revert All** act on everything, hidden or disabled when nothing is
-  staged.
+- **Save All / Revert All** act on everything, hidden when nothing is staged. Save All is a
+  title-bar icon; **Revert All is in the `…` overflow behind a modal confirm** (#247 rule 4) —
+  discarding every staged edit is not undoable, and the two sat side by side as
+  identical-weight icons, one mis-click apart.
+- A **numeric badge** on the view carries the staged ChangeGroup count, which VS Code also
+  surfaces on the activity-bar icon — so staged work stays visible with the view collapsed.
+  No badge at zero: a "0" reads as a state worth looking at. The count is the same signal that
+  gates Save All / Revert All, so the badge cannot disagree with the buttons (#247).
+- **Collapse All** — present: a multi-member group expands into its member leaves, so this is a
+  hierarchy (#247 rule 7).
 - **Reveal**: the tree exposes the `getParent` seam so an arbitrary change can be revealed.
   A plain click on a pending value in the Record editor panel reveals and selects that change's
   node here, expanding the parent group for a multi-member change and showing the tree if it was

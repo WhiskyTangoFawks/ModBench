@@ -190,6 +190,38 @@ describe('DownloadsProvider', () => {
     expect(rowNames(children)).toEqual(['new.zip', 'old.zip']);
   });
 
+  // #247: Downloads narrows by name through the same widget as every other list view,
+  // replacing #233's native-tree-Find call — the filter is one UX or it is three.
+  it('narrows to rows whose name contains the filter text, case-insensitively', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'ArmorPack.zip');
+    await writeArchive(root, 'WeaponPack.zip');
+
+    const provider = new DownloadsProvider(root);
+    await provider.getChildren();
+    provider.setFilter('armor');
+
+    expect(rowNames(await provider.getChildren())).toEqual(['ArmorPack.zip']);
+  });
+
+  it('restores every row when the filter is cleared, without re-scanning downloads/', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'ArmorPack.zip');
+    await writeArchive(root, 'WeaponPack.zip');
+
+    const provider = new DownloadsProvider(root);
+    await provider.getChildren();
+    provider.setFilter('armor');
+    await provider.getChildren();
+    // Deleted behind the provider's back: a filter keystroke narrows what is already
+    // rendered and must never force a re-read, so the cached row survives (the
+    // render-vs-invalidate split PluginListProvider documents at #79).
+    await rm(join(root, 'downloads', 'WeaponPack.zip'));
+    provider.setFilter('');
+
+    expect(rowNames(await provider.getChildren()).sort()).toEqual(['ArmorPack.zip', 'WeaponPack.zip']);
+  });
+
   it('excludes hidden rows by default (Show hidden off)', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'hidden.zip', '[General]\r\nremoved=true\r\n');

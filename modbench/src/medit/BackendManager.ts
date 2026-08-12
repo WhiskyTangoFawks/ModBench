@@ -3,7 +3,7 @@ import * as http from 'node:http';
 import * as readline from 'node:readline';
 import type { BackendStream } from './backendLog';
 
-export type BackendStatus = 'starting' | 'attached' | 'disconnected';
+export type BackendStatus = 'starting' | 'attached' | 'disconnected' | 'stopped';
 
 export interface StatusBarAdapter {
   setText(text: string): void;
@@ -146,7 +146,10 @@ export class BackendManager extends EventEmitter {
       this.child = undefined;
     }
     this._isHealthy = false;
-    if (wasRunning) this.statusBar.setText('$(circle-slash) mEdit: Stopped');
+    // #247: emitted rather than written straight to the status bar, so a deliberate stop is
+    // observable — the Loadout header's session row subscribes to 'status' and would
+    // otherwise keep reading "running" until something else happened to fire.
+    if (wasRunning) this.emitStatus('stopped');
   }
 
   private handleExit(code: number | null): void {
@@ -214,6 +217,7 @@ export class BackendManager extends EventEmitter {
       starting:     '$(loading~spin) mEdit: Connecting…',
       attached:     '$(plug) mEdit: Attached',
       disconnected: '$(error) mEdit: Disconnected — start MEditService and reload',
+      stopped:      '$(circle-slash) mEdit: Stopped',
     };
     this.statusBar.setText(labels[status]);
     this.emit('status', status);
