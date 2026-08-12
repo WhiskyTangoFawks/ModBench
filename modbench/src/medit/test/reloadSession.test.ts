@@ -43,9 +43,9 @@ describe('makeReloadSession', () => {
   it('checks for pending changes before ever prompting or reloading', async () => {
     const order: string[] = [];
     const deps = {
-      hasPendingChanges: vi.fn().mockImplementation(async () => { order.push('hasPendingChanges'); return true; }),
-      confirm: vi.fn().mockImplementation(async () => { order.push('confirm'); return true; }),
-      reload: vi.fn().mockImplementation(async () => { order.push('reload'); }),
+      hasPendingChanges: vi.fn().mockImplementation(() => { order.push('hasPendingChanges'); return Promise.resolve(true); }),
+      confirm: vi.fn().mockImplementation(() => { order.push('confirm'); return Promise.resolve(true); }),
+      reload: vi.fn().mockImplementation(() => { order.push('reload'); return Promise.resolve(); }),
     };
 
     await makeReloadSession(deps)();

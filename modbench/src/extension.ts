@@ -8,6 +8,7 @@ import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog
 import { createApiClient, type ApiClient, type MasterIssue } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController } from './medit/SessionController';
+import { makeReloadSession } from './medit/reloadSession';
 import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
 import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type PendingTreeNode } from './medit/PendingChangesTreeProvider';
 import {
@@ -62,6 +63,15 @@ let loadoutHeaderProvider: LoadoutHeaderProvider | undefined;
 // starting and stopping is what puts chevrons on its rows, and both choke points for that
 // (enterEditing, exitToLoadout) are module-level.
 let pluginsTree: PluginsTreeComposite<PluginListNode, PluginTreeNode> | undefined;
+// #295: `enterEditing` itself, built once inside `registerLoadoutView` (absent with no
+// workspace, or one that isn't an MO2 instance — see that function's own early returns).
+// Module level for the same reason as the above: `modbench.reloadSession` is registered
+// earlier in `activate()` (inside `registerEditorCommands`) than `registerLoadoutView` builds
+// this closure, so it can't be threaded in as a constructor argument — only reached by both
+// sides holding the one module-level reference. Assigned exactly once, where `enterEditing` is
+// built; every reader treats it as possibly-absent (activation still finishing, or no
+// workspace) rather than assuming it exists.
+let enterEditingFn: ((progress?: vscode.Progress<{ message?: string }>) => Promise<void>) | undefined;
 
 const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
@@ -359,7 +369,7 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
   };
   return [
     vscode.commands.registerCommand('modbench.closeMedit', () => exitToLoadout()),
-    vscode.commands.registerCommand('modbench.reloadSession', () => treeProvider.refresh()),
+    registerReloadSessionCommand(controller, outputChannel),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, repository, activeRecordTracker });
@@ -427,6 +437,36 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       () => vscode.commands.executeCommand('modbench.referencedByTree.focus')),
     registerReferencedByCopyCommand(referencedByTreeView, outputChannel),
   ];
+}
+
+// #295: modbench.reloadSession — pulled out of registerRecordViewCommands purely for its line
+// budget, same reasoning as registerReferencedByCopyCommand below. Re-runs the session load
+// (makeEnterEditing — the same path Launch mEdit and the crash-restart handler take), not a
+// tree re-read; confirms modally first only when there's staged work to lose
+// (makeReloadSession). Guarded on enterEditingFn: registration order means this command exists
+// before registerLoadoutView builds it (no workspace, or one that isn't an MO2 instance, leaves
+// it permanently unset) — invoking it too early must fail visibly, not throw a TypeError at
+// the user.
+function registerReloadSessionCommand(controller: SessionController, outputChannel: vscode.LogOutputChannel): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.reloadSession', async () => {
+    const enter = enterEditingFn;
+    if (!enter) {
+      outputChannel.error('[extension] modbench.reloadSession: no editing session to reload (no workspace, or not an MO2 instance)');
+      void vscode.window.showErrorMessage('Modbench: There is no editing session to reload.');
+      return;
+    }
+    await makeReloadSession({
+      hasPendingChanges: () => controller.hasPendingChanges(),
+      confirm: async () => (await vscode.window.showWarningMessage(
+        'Modbench: Reload the session? Backend state is rebuilt from the current modlist — any staged changes not yet saved will be discarded.',
+        { modal: true }, 'Reload',
+      )) === 'Reload',
+      reload: () => Promise.resolve(vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: 'mEdit' },
+        (progress) => enter(progress),
+      )),
+    })();
+  });
 }
 
 // #282: the Referenced By view's own Copy — pulled out of registerRecordViewCommands purely for
@@ -1399,6 +1439,9 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
         );
     };
     const enterEditing = makeEnterEditing({ instanceRoot, modlistSource, controller, changeGroupTreeProvider, outputChannel, revealLog, sessionPluginFiles });
+    // #295: the one assignment — see the module-level declaration's comment for why this can't
+    // be threaded as a parameter instead.
+    enterEditingFn = enterEditing;
 
     backendManager!.on('restarted', () => {
       void enterEditing().catch((err: unknown) =>
@@ -1576,6 +1619,18 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
       progress?.report({ message: `indexing ${plugins.length} plugins… (this can take a while)` });
       outputChannel.info(`[extension] backend healthy; loading session (${plugins.length} plugins)`);
       const failures = await controller.loadExplicitSession(plugins, gd.dataFolder);
+      // #295 AC4: undefined (not `[]`) means the POST itself failed — loadExplicitSession
+      // already surfaced the error (ADR-0026 "explicit action failed" tier). The backend's own
+      // SessionManager disposes the previous session unconditionally before attempting the new
+      // one, so by this point there is truly no session left, not a stale one — the same
+      // treatment the two failure returns above give themselves, so this is the third symmetric
+      // case rather than a new partial-recovery path. Reading its plugin list or syncing its
+      // filter would either throw against a sessionless backend or silently render nothing,
+      // neither of which is "the tree honestly says editing is unavailable".
+      if (failures === undefined) {
+        exitToLoadout();
+        return;
+      }
       await controller.syncFilterState();
       changeGroupTreeProvider.refresh();
       // #270 / ADR-0035: rows gain chevrons here and nowhere else — this is the moment records
