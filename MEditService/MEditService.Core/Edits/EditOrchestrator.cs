@@ -109,7 +109,7 @@ public sealed partial class EditOrchestrator(
         // CTDA\<field>\... rows: never a sibling flat field's, and never a sibling index's on the
         // same enclosing array (the prefix includes this field's own index).
         foreach (var field in fields.Keys.Where(f => IsRestageableConditionListField(f, schema.RecordType, codec)))
-            _changes.RemoveFieldsWithPrefix(formKey, plugin, $@"{ConditionPath.Prefix}{field}\");
+            _changes.RemoveFieldsWithPrefix(formKey, plugin, $@"{ConditionPath.Prefix}{field}\", ResolveOrigin(plugin));
     }
 
     private static bool IsRestageableConditionListField(string field, Type recordType, IConditionCodec codec) =>
@@ -154,8 +154,8 @@ public sealed partial class EditOrchestrator(
         foreach (var field in fields.Keys.Where(f => !ConditionPath.IsConditionPath(f)))
         {
             var arrayProp = schema.RecordColumns.FirstOrDefault(c => c.Name == field)?.PropertyName ?? field;
-            _changes.RemoveFieldsWithPrefix(formKey, plugin, $"{arrayProp}[");
-            _changes.RemoveFieldsWithPrefix(formKey, plugin, $@"{ConditionPath.Prefix}{arrayProp}[");
+            _changes.RemoveFieldsWithPrefix(formKey, plugin, $"{arrayProp}[", ResolveOrigin(plugin));
+            _changes.RemoveFieldsWithPrefix(formKey, plugin, $@"{ConditionPath.Prefix}{arrayProp}[", ResolveOrigin(plugin));
         }
     }
 
@@ -362,7 +362,7 @@ public sealed partial class EditOrchestrator(
                 oldValues[fv.Metadata.Name] = JsonSerializer.SerializeToElement(fv.Value);
         }
 
-        var placement = _query.GetPlacement(formKey, sourceRecord.Plugin);
+        var placement = _query.GetPlacement(formKey, sourceRecord.Plugin, sourceRecord.Origin);
 
         var schemas = _schemaReflector.GetSchemas(session!.GameRelease);
         var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!, session!.GameRelease);
@@ -441,7 +441,7 @@ public sealed partial class EditOrchestrator(
     private List<string> GetEffectiveMasters(string plugin)
     {
         var headerFormKey = Records.HeaderIndexer.FormKeyFor(plugin);
-        var pending = _changes.GetPendingFields(headerFormKey, plugin);
+        var pending = _changes.GetPendingFields(headerFormKey, plugin, ResolveOrigin(plugin));
         if (pending != null && pending.TryGetValue(HeaderMastersField, out var pendingJson))
             return ReadStringArray(pendingJson);
 
@@ -616,7 +616,7 @@ public sealed partial class EditOrchestrator(
         foreach (var (formKey, plugin) in plainTargets)
         {
             var recordType = _query.GetRecordType(formKey) ?? "unknown";
-            var placement = _query.GetPlacement(formKey, plugin);
+            var placement = _query.GetPlacement(formKey, plugin, ResolveOrigin(plugin));
             members.Add(new GroupMember(
                 formKey, plugin, recordType,
                 PendingChangeConstants.DeleteChangeType,
@@ -924,7 +924,7 @@ public sealed partial class EditOrchestrator(
     private IReadOnlyList<string> GetEffectiveNativeFormKeys(string plugin)
     {
         var committed = _query.GetNativeFormKeys(plugin);
-        var (added, removed) = _changes.GetPendingNativeFormKeyChanges(plugin);
+        var (added, removed) = _changes.GetPendingNativeFormKeyChanges(plugin, ResolveOrigin(plugin));
         if (added.Count == 0 && removed.Count == 0) return committed;
 
         var removedSet = removed.ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -951,7 +951,7 @@ public sealed partial class EditOrchestrator(
 
         var headerFormKey = Records.HeaderIndexer.FormKeyFor(plugin);
 
-        var pending = _changes.GetPendingFields(headerFormKey, plugin);
+        var pending = _changes.GetPendingFields(headerFormKey, plugin, ResolveOrigin(plugin));
         if (pending != null && pending.TryGetValue(HeaderFlagsField, out var pendingFlags))
             return (ReadFlagsLong(pendingFlags) & eslBit) != 0;
 

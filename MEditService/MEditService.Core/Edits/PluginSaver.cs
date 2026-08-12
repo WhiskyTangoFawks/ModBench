@@ -37,13 +37,22 @@ public sealed class PluginSaver(IPendingChangeService changes, ISessionManager s
             }
         }
 
-        var result = await changes.ExecuteGroupSaveAsync(memberChangeId, async byPlugin =>
+        // #272 / ADR-0036: byColumn is keyed by the compound column identity, not the bare plugin —
+        // the real plugin filename to write/reindex is recovered from the group's own
+        // PendingChange.Plugin (never by parsing the compound key) and captured here as
+        // writtenPlugins, since saved.ByPlugin's own keys are compound from this point on.
+        var writtenPlugins = new List<string>();
+        var result = await changes.ExecuteGroupSaveAsync(memberChangeId, async byColumn =>
         {
-            var prepared = new List<(string Plugin, PreparedPluginSave Prepared)>();
+            var prepared = new List<(string Column, PreparedPluginSave Prepared)>();
             try
             {
-                foreach (var (plugin, pluginChanges) in byPlugin)
-                    prepared.Add((plugin, await session.PreparePluginSave(plugin, pluginChanges)));
+                foreach (var (column, columnChanges) in byColumn)
+                {
+                    var realPlugin = columnChanges[0].Plugin;
+                    writtenPlugins.Add(realPlugin);
+                    prepared.Add((column, await session.PreparePluginSave(realPlugin, columnChanges)));
+                }
             }
             catch
             {
@@ -56,7 +65,7 @@ public sealed class PluginSaver(IPendingChangeService changes, ISessionManager s
 
         if (result is SaveGroupResult.Saved saved)
         {
-            var plugins = saved.ByPlugin.Keys.ToArray();
+            var plugins = writtenPlugins.ToArray();
             try
             {
                 await session.ReindexPlugins(plugins);

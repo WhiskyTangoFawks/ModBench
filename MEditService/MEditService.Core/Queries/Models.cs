@@ -54,6 +54,10 @@ public record FieldValue(FieldMetadata Metadata, object? Value, string? CheckErr
 // EditOrchestrator.CreateRecordCore). Defaults to "" for the many pre-existing call sites (mostly
 // test fixtures) that don't need it — always populated for real reads (ReadDetail knows its own
 // schema's TableName).
+// Origin (#272 / ADR-0036): the mod folder that provided this row's physical file, or a reserved
+// PluginOrigin value — paired with Plugin, never encoded into it. Defaulted so every pre-existing
+// direct construction (test fixtures) keeps compiling; always populated with a real value by the
+// repository read path (DuckDbRecordRepository.ReadDetail).
 public record RecordDetail(
     string FormKey,
     string Plugin,
@@ -62,7 +66,8 @@ public record RecordDetail(
     string? EditorId,
     IReadOnlyList<FieldValue> Fields,
     Dictionary<string, object?>? PendingFields = null,
-    string RecordType = "");
+    string RecordType = "",
+    string Origin = PluginOrigin.DataDirectory);
 
 public record CompareOverride(
     string FormKey,
@@ -73,8 +78,9 @@ public record CompareOverride(
     IReadOnlyList<FieldValue> Fields,
     Dictionary<string, object?>? PendingFields,
     ConflictThis ConflictThis,
-    string RecordType = "")
-    : RecordDetail(FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, PendingFields, RecordType);
+    string RecordType = "",
+    string Origin = PluginOrigin.DataDirectory)
+    : RecordDetail(FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, PendingFields, RecordType, Origin);
 
 // Resolutions (ADR-0031): only populated for a scalar formKey-typed leaf, keyed by plugin like
 // Values/CellStates — one entry per plugin whose cell holds a FormKey value. Never populated on a
@@ -92,7 +98,7 @@ public record CompareOverride(
 public record FieldDiff(
     string FieldName,
     Dictionary<string, object?> Values,
-    string WinnerPlugin,
+    string WinnerColumn,
     object? WinnerValue,
     IReadOnlyDictionary<string, ConflictThis> CellStates,
     ConflictAll ConflictAll,
@@ -110,7 +116,7 @@ public record VmadPropertyDiff(
     string Kind,                                       // "scalar"|"object"|"array"|"struct"|"structList"|"variable"
     Dictionary<string, object?> Values,                // per-plugin leaf value (scalar / "FormKey [Alias]" / null when absent or has children)
     Dictionary<string, string> Types,                  // per-plugin property Type (types differing across plugins → a conflict)
-    string WinnerPlugin,
+    string WinnerColumn,
     IReadOnlyDictionary<string, ConflictThis> CellStates,
     IReadOnlyList<VmadPropertyDiff>? Children,          // struct members (by name) / array elements (by index), aligned & recursive
                                                         // Raw: per-plugin struct subtree in the editable node-tree shape — a struct carries a list of
@@ -126,7 +132,7 @@ public record VmadPropertyDiff(
 public record VmadScriptDiff(
     string Name,                                       // sort key = ScriptName
     Dictionary<string, string?> Flags,                 // per-plugin script flags; null = script absent in that plugin
-    string WinnerPlugin,
+    string WinnerColumn,
     IReadOnlyDictionary<string, ConflictThis> CellStates,
     IReadOnlyList<VmadPropertyDiff> Properties);
 
@@ -138,7 +144,7 @@ public record VmadCompare(IReadOnlyList<VmadScriptDiff> Scripts);
 public record ConditionDiff(
     int Index,
     Dictionary<string, Schema.ParsedCondition?> PerPlugin,
-    string WinnerPlugin,
+    string WinnerColumn,
     IReadOnlyDictionary<string, ConflictThis> CellStates,
     // Per-field two-axis states for the expanded view, keyed by field id ("function", "operator",
     // "gate", "runOn", "comparison", "param:{i}"), so only fields that actually differ are colored.

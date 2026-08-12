@@ -27,6 +27,11 @@ public class ConflictClassifierTests
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
             [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))]);
 
+    private static RecordDetail MakeOverrideWithOrigin(string plugin, string origin, int loadOrder, bool isWinner,
+        params (string name, object? value)[] fields) =>
+        new("000001:Test.esp", plugin, loadOrder, isWinner, null,
+            [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], Origin: origin);
+
     // --- OnlyOne ---
 
     [Fact]
@@ -59,7 +64,7 @@ public class ConflictClassifierTests
 
         var nameDiff = result.Diffs.First(d => d.FieldName == "Name");
         Assert.Equal("SomeNPC", nameDiff.Values["DLCRobot.esm"]);
-        Assert.Equal("DLCRobot.esm", nameDiff.WinnerPlugin);
+        Assert.Equal("DLCRobot.esm", nameDiff.WinnerColumn);
         Assert.Equal("SomeNPC", nameDiff.WinnerValue);
     }
 
@@ -72,6 +77,44 @@ public class ConflictClassifierTests
         // that swap FirstOrDefault→First (different generic message) or blank the string are killed.
         var ex = Assert.Throws<InvalidOperationException>(() => Classify([a, b]));
         Assert.Contains("000001:Test.esp", ex.Message);
+    }
+
+    // #272 / ADR-0036 (AC5): two columns sharing a filename, differing in origin. Bare-plugin
+    // dictionary keys (o.Plugin) would collide here — ToDictionary throws on the literal duplicate
+    // key "Shared.esp" — even though nothing loads such a pair through a real session yet (#34).
+    [Fact]
+    public void Classify_SameFilenameDifferentOrigin_DoesNotCollide()
+    {
+        var modA = MakeOverrideWithOrigin("Shared.esp", "ModA", 0, false, ("name", "FromModA"));
+        var modB = MakeOverrideWithOrigin("Shared.esp", "ModB", 1, true, ("name", "FromModB"));
+
+        var result = Classify([modA, modB]);
+
+        Assert.Equal(2, result.PluginStates.Count);
+        var nameDiff = Assert.Single(result.Diffs, d => d.FieldName == "name");
+        Assert.Equal("FromModA", nameDiff.Values["Shared.esp|ModA"]);
+        Assert.Equal("FromModB", nameDiff.Values["Shared.esp|ModB"]);
+    }
+
+    // A change to one column's value must never appear on the other column's diff entry — the
+    // "action on one never affects the other" half of AC5, exercised at the value level.
+    [Fact]
+    public void Classify_SameFilenameDifferentOrigin_ActionOnOneDoesNotAffectOther()
+    {
+        var modA = MakeOverrideWithOrigin("Shared.esp", "ModA", 0, false, ("name", "Original"));
+        var modB = MakeOverrideWithOrigin("Shared.esp", "ModB", 1, true, ("name", "Original"));
+        var baseline = Classify([modA, modB]);
+        var baselineDiff = Assert.Single(baseline.Diffs, d => d.FieldName == "name");
+        Assert.Equal(ConflictThis.IdenticalToMaster, baselineDiff.CellStates["Shared.esp|ModB"]);
+
+        // "Edit" only ModA's column.
+        var modAEdited = MakeOverrideWithOrigin("Shared.esp", "ModA", 0, false, ("name", "Edited"));
+        var after = Classify([modAEdited, modB]);
+
+        var afterDiff = Assert.Single(after.Diffs, d => d.FieldName == "name");
+        Assert.Equal("Edited", afterDiff.Values["Shared.esp|ModA"]);
+        // ModB's own value/state is untouched by the edit to ModA's column.
+        Assert.Equal("Original", afterDiff.Values["Shared.esp|ModB"]);
     }
 
     // --- NoConflict / Override / Conflict ---
@@ -804,7 +847,7 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_StructField_SubFieldWinnerIsHighestLoadOrder()
     {
-        // Kills the MaxBy → MinBy mutant: WinnerPlugin must be the highest load-order plugin with a value.
+        // Kills the MaxBy → MinBy mutant: WinnerColumn must be the highest load-order plugin with a value.
         var subX = Meta("X", "int");
         var structMeta = StructMeta("Pos", subX);
 
@@ -817,7 +860,7 @@ public class ConflictClassifierTests
         var result = Classify([master, override1]);
 
         var xChild = result.Diffs.First(d => d.FieldName == "Pos").Children!.First(c => c.FieldName == "X");
-        Assert.Equal("B.esp", xChild.WinnerPlugin);
+        Assert.Equal("B.esp", xChild.WinnerColumn);
         Assert.Equal(5, ((System.Text.Json.JsonElement)xChild.WinnerValue!).GetInt32());
     }
 

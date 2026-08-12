@@ -654,4 +654,81 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.NotEmpty(first);
         Assert.NotEmpty(second);
     }
+
+    // --- #272 / ADR-0036 (AC5): two columns sharing a filename, differing in origin — covered by a
+    // test even though nothing loads such a pair through a real session yet (#34). Origin is already
+    // a real, caller-supplied value on PendingChangeUpsert since #271, so these seams are exercisable
+    // directly. ---
+
+    [Fact]
+    public void Upsert_SameFilenameDifferentOrigin_GetChanges_ReturnsDistinctOriginPerRow()
+    {
+        _svc.Upsert(new PendingChangeUpsert("FK1", "Shared.esp", "npc_",
+            new() { ["name"] = J("\"FromModA\"") }, "user", null, [], Origin: "ModA"));
+        _svc.Upsert(new PendingChangeUpsert("FK1", "Shared.esp", "npc_",
+            new() { ["name"] = J("\"FromModB\"") }, "user", null, [], Origin: "ModB"));
+
+        var changes = _svc.GetChanges(formKey: "FK1");
+
+        Assert.Equal(2, changes.Count);
+        Assert.Contains(changes, c => c.Origin == "ModA" && c.NewValue.GetRawText() == "\"FromModA\"");
+        Assert.Contains(changes, c => c.Origin == "ModB" && c.NewValue.GetRawText() == "\"FromModB\"");
+    }
+
+    [Fact]
+    public void GetPendingFields_SameFilenameDifferentOrigin_ScopesToOrigin()
+    {
+        _svc.Upsert(new PendingChangeUpsert("FK1", "Shared.esp", "npc_",
+            new() { ["name"] = J("\"FromModA\"") }, "user", null, [], Origin: "ModA"));
+        _svc.Upsert(new PendingChangeUpsert("FK1", "Shared.esp", "npc_",
+            new() { ["name"] = J("\"FromModB\"") }, "user", null, [], Origin: "ModB"));
+
+        var modAFields = _svc.GetPendingFields("FK1", "Shared.esp", "ModA");
+        var modBFields = _svc.GetPendingFields("FK1", "Shared.esp", "ModB");
+
+        Assert.Equal("\"FromModA\"", modAFields!["name"].GetRawText());
+        Assert.Equal("\"FromModB\"", modBFields!["name"].GetRawText());
+    }
+
+    [Fact]
+    public void DrainForPlugin_SameFilenameDifferentOrigin_DrainsOnlyThatOrigin()
+    {
+        // Named consequence (issue #272 body): "DrainForPlugin('Shared.esp') would drain both
+        // origins' staged edits at once" if left filename-only-scoped.
+        _svc.Upsert(new PendingChangeUpsert("FK1", "Shared.esp", "npc_",
+            new() { ["name"] = J("\"FromModA\"") }, "user", null, [], Origin: "ModA"));
+        _svc.Upsert(new PendingChangeUpsert("FK2", "Shared.esp", "npc_",
+            new() { ["name"] = J("\"FromModB\"") }, "user", null, [], Origin: "ModB"));
+
+        var drainedA = _svc.DrainForPlugin("Shared.esp", "ModA");
+
+        Assert.Single(drainedA.Changes);
+        Assert.Equal("FK1", drainedA.Changes[0].FormKey);
+        // ModB's own change must survive ModA's drain — still fetchable afterward.
+        var remaining = _svc.GetChanges(formKey: "FK2");
+        Assert.Single(remaining);
+        Assert.Equal("ModB", remaining[0].Origin);
+    }
+
+    // A staged reference edge from one origin's copy must survive another origin's write to the
+    // *same* (formKey, plugin, field) — pending_form_references' delete-before-insert was
+    // filename-scoped only (no source_origin), so origin B's upsert would silently wipe origin A's
+    // row for the same field before this fix.
+    [Fact]
+    public void Upsert_SameFilenameDifferentOrigin_DoesNotClearOtherOriginsFormRefs()
+    {
+        var modARef = new PendingFormRef("race", "race", "000001:Fallout4.esm");
+        var modBRef = new PendingFormRef("race", "race", "000002:Fallout4.esm");
+
+        _svc.Upsert(new PendingChangeUpsert("FK1", "Shared.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, [], [modARef], Origin: "ModA"));
+        _svc.Upsert(new PendingChangeUpsert("FK1", "Shared.esp", "npc_",
+            new() { ["race"] = J("\"000002:Fallout4.esm\"") }, "user", null, [], [modBRef], Origin: "ModB"));
+
+        var drainedA = _svc.DrainForPlugin("Shared.esp", "ModA");
+
+        // ModA's own pending_form_references row for FK1/race must still be there — not deleted by
+        // ModB's later upsert to the same field.
+        Assert.Contains(drainedA.FormRefsByFormKey["FK1"], r => r.TargetFormKey == "000001:Fallout4.esm");
+    }
 }

@@ -42,13 +42,19 @@ public interface IPendingChangeService
     /// </summary>
     string? GetPendingCreateRecordType(string formKey);
 
+    // origin (#272 / ADR-0036) on every method below: nullable and independent of plugin/formKey,
+    // unlike every other origin parameter in this file — these are *filters*, not identity fields,
+    // so they default to "no filter" (preserving today's exact filename-only behavior for every
+    // existing caller) rather than to PluginOrigin.DataDirectory, which would wrongly exclude every
+    // row for a mod-provided (non-Data) origin plugin.
+
     /// <summary>
     /// Staged changes, optionally narrowed. <paramref name="memberChangeId"/> selects the whole
     /// component the named change belongs to (ADR-0028).
     /// </summary>
-    IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null);
+    IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null, string? origin = null);
 
-    Dictionary<string, JsonElement>? GetPendingFields(string formKey, string plugin);
+    Dictionary<string, JsonElement>? GetPendingFields(string formKey, string plugin, string? origin = null);
 
     /// <summary>
     /// Deletes pending changes (and their form references) on <paramref name="formKey"/>/
@@ -58,7 +64,7 @@ public interface IPendingChangeService
     /// edits whose indices are no longer trustworthy (#153, ADR-0019). Returns the number of rows
     /// removed.
     /// </summary>
-    int RemoveFieldsWithPrefix(string formKey, string plugin, string prefix);
+    int RemoveFieldsWithPrefix(string formKey, string plugin, string prefix, string? origin = null);
 
     /// <summary>
     /// Reverts one change on its own, refusing with <see cref="RevertChangeResult.GroupOwned"/> when
@@ -66,9 +72,9 @@ public interface IPendingChangeService
     /// </summary>
     RevertChangeResult Revert(Guid changeId);
 
-    int Revert(string? plugin, string? formKey);
+    int Revert(string? plugin, string? formKey, string? origin = null);
 
-    DrainResult DrainForPlugin(string plugin);
+    DrainResult DrainForPlugin(string plugin, string? origin = null);
 
     /// <summary>
     /// Atomically saves the component <paramref name="memberChangeId"/> belongs to: deletes its
@@ -77,11 +83,16 @@ public interface IPendingChangeService
     /// <paramref name="prepareAll"/> runs under the service's single writer lock — it must only prepare
     /// writes (no commit-side-effecting work) and must not call back into this service, or it will deadlock.
     /// </summary>
+    // #272 / ADR-0036: the dictionary prepareAll receives is keyed by the compound column identity
+    // derived via ColumnKey, not the bare plugin — a group sharing a filename with another but
+    // differing in origin lands as an independent entry. The returned tuple's Column mirrors that
+    // same identity; the real plugin filename to write is recovered from the group's own
+    // PendingChange.Plugin field.
     Task<SaveGroupResult> ExecuteGroupSaveAsync(
         Guid memberChangeId,
-        Func<IReadOnlyDictionary<string, IReadOnlyList<PendingChange>>, Task<IReadOnlyList<(string Plugin, PreparedPluginSave Prepared)>>> prepareAll);
+        Func<IReadOnlyDictionary<string, IReadOnlyList<PendingChange>>, Task<IReadOnlyList<(string Column, PreparedPluginSave Prepared)>>> prepareAll);
 
-    IReadOnlyList<(string FormKey, string RecordType)> GetStagedFormKeys(string plugin, string? recordType = null);
+    IReadOnlyList<(string FormKey, string RecordType)> GetStagedFormKeys(string plugin, string? recordType = null, string? origin = null);
 
     /// <summary>
     /// Returns how pending create/renumber changes modify <paramref name="plugin"/>'s native FormKey
@@ -91,7 +102,7 @@ public interface IPendingChangeService
     /// stale entry rather than double-counting it. Field-edit/delete/VMAD changes never affect
     /// membership.
     /// </summary>
-    (IReadOnlyList<string> Added, IReadOnlyList<string> Removed) GetPendingNativeFormKeyChanges(string plugin);
+    (IReadOnlyList<string> Added, IReadOnlyList<string> Removed) GetPendingNativeFormKeyChanges(string plugin, string? origin = null);
 
     /// <summary>
     /// One <see cref="ChangeGroup"/> per connected component of the pending-change dependency graph

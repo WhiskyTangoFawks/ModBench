@@ -18,19 +18,24 @@ namespace MEditService.Core.Records;
 // of importing Edits.VmadPath.
 internal sealed class ConditionIndexer(DuckDBAppender conditions, DuckDBAppender parameters, List<FormRef> refs)
 {
+    // Groups the 4 repeated identity fields shared by both conditions and condition_parameters rows
+    // — mirrors VmadIndexer's PropContext, and keeps AppendParameter under the parameter-count limit.
+    private readonly record struct Identity(string FormKey, string Plugin, string Origin, string RecordType);
+
     public void IndexRecord(
-        string formKey, string plugin, string recordType, IEnumerable<ConditionOwner> owners)
+        string formKey, string plugin, string origin, string recordType, IEnumerable<ConditionOwner> owners)
     {
+        var identity = new Identity(formKey, plugin, origin, recordType);
         foreach (var owner in owners)
         {
             for (var ci = 0; ci < owner.Conditions.Count; ci++)
             {
                 var condition = owner.Conditions[ci];
-                AppendCondition(formKey, plugin, recordType, owner.FieldPath, ci, condition);
+                AppendCondition(identity, owner.FieldPath, ci, condition);
                 CollectConditionRefs(formKey, recordType, owner.FieldPath, ci, condition);
 
                 for (var pi = 0; pi < condition.Parameters.Count; pi++)
-                    AppendParameter(formKey, plugin, recordType, owner.FieldPath, ci, pi, condition.Parameters[pi]);
+                    AppendParameter(identity, owner.FieldPath, ci, pi, condition.Parameters[pi]);
             }
         }
     }
@@ -60,15 +65,15 @@ internal sealed class ConditionIndexer(DuckDBAppender conditions, DuckDBAppender
     private static string ConditionSubFieldPath(string fieldPath, int index, string subField) =>
         $@"CTDA\{fieldPath}\{index}\{subField}";
 
-    private void AppendCondition(
-        string formKey, string plugin, string recordType, string fieldPath, int index, ParsedCondition c)
+    private void AppendCondition(Identity identity, string fieldPath, int index, ParsedCondition c)
     {
         var row = conditions.CreateRow();
-        row.AppendValue(formKey);
-        row.AppendValue(plugin);
+        row.AppendValue(identity.FormKey);
+        row.AppendValue(identity.Plugin);
+        row.AppendValue(identity.Origin);
         row.AppendValue(fieldPath);
         row.AppendValue((int?)index);
-        row.AppendValue(recordType);
+        row.AppendValue(identity.RecordType);
         row.AppendValue(c.Function);
         row.AppendValue(c.Operator.ToString());
         row.AppendValue((bool?)c.Or);
@@ -81,16 +86,16 @@ internal sealed class ConditionIndexer(DuckDBAppender conditions, DuckDBAppender
     }
 
     private void AppendParameter(
-        string formKey, string plugin, string recordType, string fieldPath,
-        int conditionIndex, int paramIndex, ParsedConditionParam p)
+        Identity identity, string fieldPath, int conditionIndex, int paramIndex, ParsedConditionParam p)
     {
         var row = parameters.CreateRow();
-        row.AppendValue(formKey);
-        row.AppendValue(plugin);
+        row.AppendValue(identity.FormKey);
+        row.AppendValue(identity.Plugin);
+        row.AppendValue(identity.Origin);
         row.AppendValue(fieldPath);
         row.AppendValue((int?)conditionIndex);
         row.AppendValue((int?)paramIndex);
-        row.AppendValue(recordType);
+        row.AppendValue(identity.RecordType);
         row.AppendValue(p.Category.ToString());
         row.AppendValue(p.TypeName);
         DuckDbAppend.Nullable(row, p.Number);

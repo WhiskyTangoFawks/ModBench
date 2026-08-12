@@ -23,8 +23,8 @@ public class WorldspaceQueryServiceTests
             new(records ?? [], (records ?? []).Count);
         public RecordDetail? GetRecord(string t, string fk, string? p, bool w) => null;
         public IReadOnlyList<RecordDetail> GetAllOverrides(string t, string fk) => [];
-        public VmadData? GetVmad(string fk, string p) => null;
-        public IReadOnlyList<ConditionOwner> GetConditions(string fk, string p) => [];
+        public VmadData? GetVmad(string fk, string p, string origin = "Data") => null;
+        public IReadOnlyList<ConditionOwner> GetConditions(string fk, string p, string origin = "Data") => [];
         public int CountRecordsForPlugin(string t, string p) => 0;
         public string? FindRecordType(string fk) => null;
         public RecordLookupEntry? ResolveFormKey(string fk) => null;
@@ -34,7 +34,7 @@ public class WorldspaceQueryServiceTests
         public IReadOnlyList<ReferenceResult> GetReferences(string fk) => [];
         public PagedResult<CellSummary> GetInteriorCells(string p, int l, int o) => new([], 0);
         public CellReferences GetCellReferences(string p, string fk) => cellRefs ?? new([], []);
-        public PlacementRow? GetPlacement(string formKey, string plugin) => null;
+        public PlacementRow? GetPlacement(string formKey, string plugin, string origin = "Data") => null;
     }
 
     private sealed class StubSession(IRecordReader repo) : ISessionManager

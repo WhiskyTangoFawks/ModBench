@@ -111,7 +111,7 @@ public sealed class RecordQueryService(
 
             var withPending = overrides.Select(o =>
             {
-                var pending = _changes.GetPendingFields(formKey, o.Plugin);
+                var pending = _changes.GetPendingFields(formKey, o.Plugin, o.Origin);
                 return pending == null ? o : (o with { PendingFields = pending.ToDictionary(kv => kv.Key, kv => (object?)kv.Value) });
             }).ToList();
 
@@ -130,7 +130,7 @@ public sealed class RecordQueryService(
             // VMAD is outside the generic reflection pipeline, so classify it separately and fold
             // its conflict contribution into the record-level ConflictAll (computed on demand, never stored).
             var vmadInputs = withPending
-                .ConvertAll(o => new VmadPluginInput(o.Plugin, o.LoadOrderIndex, repository.GetVmad(formKey, o.Plugin)));
+                .ConvertAll(o => new VmadPluginInput(o.Plugin, o.LoadOrderIndex, repository.GetVmad(formKey, o.Plugin, o.Origin), o.Origin));
             VmadCompare? vmad = null;
             var conflictAll = classification.ConflictAll;
             if (vmadInputs.Any(i => i.Vmad != null))
@@ -143,7 +143,7 @@ public sealed class RecordQueryService(
             // Conditions (CTDA) are outside the reflection pipeline too — classify separately and
             // fold their contribution into the record-level ConflictAll, mirroring VMAD. [ADR-0032]
             var conditionInputs = withPending
-                .ConvertAll(o => new ConditionPluginInput(o.Plugin, o.LoadOrderIndex, repository.GetConditions(formKey, o.Plugin)));
+                .ConvertAll(o => new ConditionPluginInput(o.Plugin, o.LoadOrderIndex, repository.GetConditions(formKey, o.Plugin, o.Origin), o.Origin));
             ConditionCompare? conditions = null;
             if (conditionInputs.Any(i => i.Owners.Count > 0))
             {
@@ -192,11 +192,11 @@ public sealed class RecordQueryService(
         return PendingChangeResolver.ResolveAll(pending, RequireSchemas(), resolveFormKey);
     }
 
-    public VmadData? GetVmad(string formKey, string plugin) =>
-        RequireRepository().GetVmad(formKey, plugin);
+    public VmadData? GetVmad(string formKey, string plugin, string origin = PluginOrigin.DataDirectory) =>
+        RequireRepository().GetVmad(formKey, plugin, origin);
 
-    public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin) =>
-        RequireRepository().GetConditions(formKey, plugin);
+    public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = PluginOrigin.DataDirectory) =>
+        RequireRepository().GetConditions(formKey, plugin, origin);
 
     public IReadOnlyList<string> GetConditionFunctions() =>
         ConditionCodecRegistry.For(RequireSession().GameRelease.ToCategory())?.AvailableFunctions().ToList() ?? [];
@@ -204,8 +204,8 @@ public sealed class RecordQueryService(
     public IReadOnlyList<string> GetConditionRunOnTargets() =>
         ConditionCodecRegistry.For(RequireSession().GameRelease.ToCategory())?.AvailableRunOnTargets().ToList() ?? [];
 
-    public PlacementRow? GetPlacement(string formKey, string plugin) =>
-        RequireRepository().GetPlacement(formKey, plugin);
+    public PlacementRow? GetPlacement(string formKey, string plugin, string origin = PluginOrigin.DataDirectory) =>
+        RequireRepository().GetPlacement(formKey, plugin, origin);
 
     private IGameSession RequireSession() =>
         _session.Session ?? throw new InvalidOperationException("No session loaded.");

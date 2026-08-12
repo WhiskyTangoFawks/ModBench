@@ -153,6 +153,28 @@ public sealed class ConditionIndexerTests : IDisposable
         return repo;
     }
 
+    // #272 / ADR-0036: two origins loading the same physical file — conditions/condition_parameters
+    // had no origin column at all before this ticket; GetConditions's read side must not collide
+    // once they do.
+    [Fact]
+    public void GetConditions_SameFilenameDifferentOrigin_ScopesToOrigin()
+    {
+        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        var modPath = new ModPath(
+            ModKey.FromFileName("CtdaTest.esp"),
+            Path.Combine(_fixture.DataFolder, "CtdaTest.esp"));
+        var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
+
+        repo.Index(mod, 0, origin: "ModA");
+        repo.Index(mod, 1, origin: "ModB");
+        repo.UpdateWinners();
+
+        Assert.NotEmpty(repo.GetConditions(_cobjFormKey.ToString(), "CtdaTest.esp", "ModA"));
+        Assert.NotEmpty(repo.GetConditions(_cobjFormKey.ToString(), "CtdaTest.esp", "ModB"));
+        Assert.Empty(repo.GetConditions(_cobjFormKey.ToString(), "CtdaTest.esp", "ModC"));
+    }
+
     [Fact]
     public void GetConditions_RoundTripsEnvelopeAndParameters()
     {

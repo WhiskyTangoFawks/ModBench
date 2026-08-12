@@ -191,11 +191,11 @@ public sealed class EndpointReceptionLoggingTests
         public CompareResult? GetCompare(string formKey) => throw new NotSupportedException();
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => throw new NotSupportedException();
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => [];
-        public VmadData? GetVmad(string formKey, string plugin) => throw new NotSupportedException();
-        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin) => throw new NotSupportedException();
+        public VmadData? GetVmad(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => throw new NotSupportedException();
+        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => throw new NotSupportedException();
         public IReadOnlyList<string> GetConditionFunctions() => throw new NotSupportedException();
         public IReadOnlyList<string> GetConditionRunOnTargets() => throw new NotSupportedException();
-        public PlacementRow? GetPlacement(string formKey, string plugin) => throw new NotSupportedException();
+        public PlacementRow? GetPlacement(string formKey, string plugin, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) => throw new NotSupportedException();
         public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
             throw new NotSupportedException();
     }

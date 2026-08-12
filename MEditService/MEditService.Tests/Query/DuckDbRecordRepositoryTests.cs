@@ -144,6 +144,31 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
         Assert.Equal(raceFormKey.ToString(), raceField.Value);
     }
 
+    // #272 / ADR-0036: two origins loading the same physical file under different origin values —
+    // nothing loads such a pair through a real session yet (that's #34), but Index() has already
+    // accepted a real `origin` since #271, so the repository seam itself can be exercised directly.
+    [Fact]
+    public void GetAllOverrides_SameFilenameDifferentOrigin_ReturnsDistinctOriginPerRow()
+    {
+        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        var modPath = new ModPath(
+            ModKey.FromFileName(TestPluginFixture.PluginName),
+            Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
+        var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
+
+        repo.Index(mod, 0, origin: "ModA");
+        repo.Index(mod, 1, origin: "ModB");
+        repo.UpdateWinners();
+
+        var formKey = _fixture.Npc1FormKey.ToString();
+        var overrides = repo.GetAllOverrides("npc_", formKey);
+
+        Assert.Equal(2, overrides.Count);
+        Assert.Contains(overrides, o => o.Origin == "ModA");
+        Assert.Contains(overrides, o => o.Origin == "ModB");
+    }
+
     [Fact]
     public void GetRecord_WithPlugin_ReturnsMatchingPlugin()
     {

@@ -14,13 +14,14 @@ internal sealed class VmadIndexer(
     List<FormRef> refs,
     ILogger logger)
 {
-    // Groups the 5 repeated identity fields shared by both vmad_properties and vmad_property_list_items rows.
+    // Groups the 6 repeated identity fields shared by both vmad_properties and vmad_property_list_items rows.
     private readonly record struct PropContext(
-        string FormKey, string Plugin, string RecordType, string ScriptName, int PropIndex);
+        string FormKey, string Plugin, string Origin, string RecordType, string ScriptName, int PropIndex);
 
     public void IndexRecord(
         string formKey,
         string plugin,
+        string origin,
         string recordType,
         IAVirtualMachineAdapterGetter vmad)
     {
@@ -28,21 +29,22 @@ internal sealed class VmadIndexer(
         for (int si = 0; si < scriptList.Count; si++)
         {
             var script = scriptList[si];
-            AppendScript(formKey, plugin, recordType, script, si);
+            AppendScript(formKey, plugin, origin, recordType, script, si);
 
             var properties = script.Properties;
             for (int pi = 0; pi < properties.Count; pi++)
-                AppendProperty(new PropContext(formKey, plugin, recordType, script.Name, pi), properties[pi]);
+                AppendProperty(new PropContext(formKey, plugin, origin, recordType, script.Name, pi), properties[pi]);
         }
     }
 
     private void AppendScript(
-        string formKey, string plugin, string recordType,
+        string formKey, string plugin, string origin, string recordType,
         IScriptEntryGetter script, int scriptIndex)
     {
         var row = scripts.CreateRow();
         row.AppendValue(formKey);
         row.AppendValue(plugin);
+        row.AppendValue(origin);
         row.AppendValue(script.Name);
         row.AppendValue((int?)scriptIndex);
         row.AppendValue(VmadCodec.FlagsString(script.Flags));
@@ -74,6 +76,7 @@ internal sealed class VmadIndexer(
         var row = props.CreateRow();
         row.AppendValue(ctx.FormKey);
         row.AppendValue(ctx.Plugin);
+        row.AppendValue(ctx.Origin);
         row.AppendValue(ctx.ScriptName);
         row.AppendValue(propName);
         row.AppendValue((int?)ctx.PropIndex);
@@ -92,6 +95,7 @@ internal sealed class VmadIndexer(
         var row = items.CreateRow();
         row.AppendValue(ctx.FormKey);
         row.AppendValue(ctx.Plugin);
+        row.AppendValue(ctx.Origin);
         row.AppendValue(ctx.ScriptName);
         row.AppendValue(propName);
         row.AppendValue((int?)ctx.PropIndex);

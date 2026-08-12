@@ -2,8 +2,9 @@ using MEditService.Core.Records;
 
 namespace MEditService.Core.Queries;
 
-// Per-plugin VMAD tree for one record, ordered by load order (master = first).
-public sealed record VmadPluginInput(string Plugin, int LoadOrderIndex, VmadData? Vmad);
+// Per-plugin VMAD tree for one record, ordered by load order (master = first). Origin defaulted
+// (#272 / ADR-0036) so pre-existing single-origin call sites keep compiling.
+public sealed record VmadPluginInput(string Plugin, int LoadOrderIndex, VmadData? Vmad, string Origin = Session.PluginOrigin.DataDirectory);
 
 public sealed record VmadClassifyResult(VmadCompare Compare, ConflictAll ConflictContribution);
 
@@ -17,7 +18,7 @@ public static class VmadConflictClassifier
     // mirrors ConflictClassifier.DiffContext so the two classifiers stay consistent within this PR.
     private sealed record VmadDiffContext(
         IReadOnlyList<VmadPluginInput> Inputs,
-        string MasterPlugin,
+        string MasterColumn,
         ConflictAccumulator Conflict,
         Func<string, RecordLookupEntry?>? ResolveFormKey);
 
@@ -42,9 +43,9 @@ public static class VmadConflictClassifier
         if (present.Count == 0)
             return new VmadClassifyResult(new VmadCompare([]), ConflictAll.NoConflict);
 
-        var masterPlugin = inputs[0].Plugin;
+        var masterColumn = ColumnKey.Of(inputs[0].Plugin, inputs[0].Origin);
         var conflict = new ConflictAccumulator();
-        var ctx = new VmadDiffContext(inputs, masterPlugin, conflict, resolveFormKey);
+        var ctx = new VmadDiffContext(inputs, masterColumn, conflict, resolveFormKey);
 
         var scriptNames = present
             .SelectMany(i => i.Vmad!.Scripts.Select(s => s.Name))
@@ -55,12 +56,14 @@ public static class VmadConflictClassifier
         var scriptDiffs = scriptNames
             .ConvertAll(scriptName =>
             {
+                // #272 / ADR-0036: keyed by the compound column identity — two inputs sharing a
+                // filename but differing in origin must land as two independent entries, not collide.
                 var perPlugin = inputs.ToDictionary(
-                    i => i.Plugin,
+                    i => ColumnKey.Of(i.Plugin, i.Origin),
                     i => i.Vmad?.Scripts.FirstOrDefault(s => s.Name == scriptName));
 
                 var flags = perPlugin.ToDictionary(kv => kv.Key, kv => kv.Value?.Flags);
-                var (cellStates, winner) = ComputeCellStates(inputs, masterPlugin, p => perPlugin[p]?.Flags);
+                var (cellStates, winner) = ComputeCellStates(inputs, masterColumn, p => perPlugin[p]?.Flags);
                 conflict.Add(cellStates);
 
                 var properties = BuildPropertyDiffs(perPlugin, ctx);
@@ -74,7 +77,7 @@ public static class VmadConflictClassifier
         Dictionary<string, VmadScriptData?> perPluginScript, VmadDiffContext ctx)
     {
         var propNames = ctx.Inputs
-            .Select(i => perPluginScript[i.Plugin])
+            .Select(i => perPluginScript[ColumnKey.Of(i.Plugin, i.Origin)])
             .Where(s => s != null)
             .SelectMany(s => s!.Properties.Select(p => p.Name))
             .Distinct(StringComparer.Ordinal)
@@ -85,8 +88,8 @@ public static class VmadConflictClassifier
             .Select(propName =>
             {
                 var perPlugin = ctx.Inputs.ToDictionary(
-                    i => i.Plugin,
-                    i => perPluginScript[i.Plugin]?.Properties.FirstOrDefault(p => p.Name == propName)?.Value);
+                    i => ColumnKey.Of(i.Plugin, i.Origin),
+                    i => perPluginScript[ColumnKey.Of(i.Plugin, i.Origin)]?.Properties.FirstOrDefault(p => p.Name == propName)?.Value);
                 return BuildDiff(propName, perPlugin, ctx);
             })];
     }
@@ -100,7 +103,7 @@ public static class VmadConflictClassifier
             .ToDictionary(kv => kv.Key, kv => kv.Value!.Type);
         var values = perPlugin.ToDictionary(kv => kv.Key, kv => LeafValue(kv.Value));
 
-        var (cellStates, winner) = ComputeCellStates(ctx.Inputs, ctx.MasterPlugin, p => Canon(perPlugin[p]));
+        var (cellStates, winner) = ComputeCellStates(ctx.Inputs, ctx.MasterColumn, p => Canon(perPlugin[p]));
         ctx.Conflict.Add(cellStates);
 
         var children = BuildChildren(kind, perPlugin, ctx);
@@ -217,15 +220,16 @@ public static class VmadConflictClassifier
     // align names drawn from the union of plugins that have the value, so at least one canonical
     // value is always non-null and a winner exists.
     private static (Dictionary<string, ConflictThis> States, string Winner) ComputeCellStates(
-        IReadOnlyList<VmadPluginInput> inputs, string masterPlugin, Func<string, string?> valueOf)
+        IReadOnlyList<VmadPluginInput> inputs, string masterColumn, Func<string, string?> valueOf)
     {
-        // Materialize each plugin's canonical value once — valueOf can recurse through a struct subtree.
-        var canon = inputs.ToDictionary(i => i.Plugin, i => (object?)valueOf(i.Plugin));
-        var pluginOrder = inputs.Select(i => (i.Plugin, i.LoadOrderIndex)).ToList();
+        // Materialize each plugin's canonical value once — valueOf can recurse through a struct
+        // subtree. Keyed by the compound column identity (#272 / ADR-0036), matching perPlugin.
+        var canon = inputs.ToDictionary(i => ColumnKey.Of(i.Plugin, i.Origin), i => (object?)valueOf(ColumnKey.Of(i.Plugin, i.Origin)));
+        var columnOrder = inputs.Select(i => (ColumnKey.Of(i.Plugin, i.Origin), i.LoadOrderIndex)).ToList();
 
-        var winner = ConflictRules.PickWinner(pluginOrder, p => canon[p] != null);
+        var winner = ConflictRules.PickWinner(columnOrder, p => canon[p] != null);
 
-        var states = ConflictRules.ComputeCellStates(canon, masterPlugin, pluginOrder, Equals);
+        var states = ConflictRules.ComputeCellStates(canon, masterColumn, columnOrder, Equals);
 
         return (states, winner);
     }
