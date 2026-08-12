@@ -16,9 +16,11 @@ status bar, command palette, and architecture seams. Siblings:
 **Vocabulary note:** this "Plugins tree" is the entry point into per-record browsing and
 requires a spawned backend. It is distinct from the Mod-Management **Plugin List**
 ([plugins.md](plugins.md)), which manages `plugins.txt` load order and runs without the
-backend. Both display as "Plugins" but are distinct views (`modbench.pluginTree` vs
-`modbench.pluginListTree`), visible in mutually exclusive view modes, and stay fully distinct
-in code.
+backend. Both display as "Plugins" and are distinct views (`modbench.pluginTree` vs
+`modbench.pluginListTree`); since #268 they are simultaneously visible whenever a session is
+running, distinguished by this tree's runtime title ("mEdit — Plugins", #109), and stay fully
+distinct in code until [#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270) merges
+them ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)).
 
 ## Problem Statement
 
@@ -99,11 +101,16 @@ masters; there is no separate load-session step.
 - A `TreeView` (`modbench.pluginTree`, "Plugins"), visible while
   `modbench.viewMode == 'editing'`. It is the primary navigation surface; there is no separate
   load-session step — the session is constructed on entry from the active modlist's enabled
-  plugins plus vanilla masters (`load-explicit`).
+  plugins plus vanilla masters (`load-explicit`). Since #268 this view appears *alongside* the
+  Mods tree, the Mod-Management Plugin List and Downloads rather than replacing them — only this
+  tree (and Pending Changes, Referenced By) carry the `'editing'` gate; the loadout views carry
+  none.
 - **Title reflects view mode** (#109): the activity-bar container title ("Modbench") is fixed by
   VS Code and cannot change at runtime, so the view's own writable title carries the mEdit
   context instead — it reads "Plugins" in loadout mode and "mEdit — Plugins" once
-  `modbench.viewMode` flips to `'editing'`, reverting on exit.
+  `modbench.viewMode` flips to `'editing'`, reverting on exit. With #268 this is also the
+  co-visibility signal: it is what distinguishes this tree from the Mod-Management Plugin List
+  (also named "Plugins") while both are on screen at once.
 - **Title bar** (#247): the name filter at slot 1, the record filter and its Clear at slot 2,
   New Plugin… at slot 3, and native **Collapse All** — added here because this is the deepest
   tree in the product (plugin → record type → record) and was the one view missing it. Close

@@ -533,3 +533,108 @@ describe('mEdit plugin tree title reflects view mode (#109)', () => {
   // and editing are separate operations: the replacement (modbench.launch) runs a contributed
   // task and touches no view mode, so there is no longer a title to assert.
 });
+
+// ── Loadout stays visible through an editing session (#268) ────────────────────
+// The declarative view-mode gate itself is proven statically in packageJson.test.ts. These
+// prove the two user-observable consequences only a live host can show: durable Plugin
+// load order state survives a Launch mEdit / Close mEdit round trip untouched (AC5), and its
+// write path (enable/disable) stays reachable while a session is running (AC4).
+
+interface PluginListNodeLike { plugin?: { name?: string } }
+interface PluginListProviderLike {
+  setFilter(text: string): void;
+  setPluginEnabled(name: string, enabled: boolean): Promise<void>;
+  handleDrop(target: unknown, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void>;
+  invalidate(): void;
+  getChildren(element?: unknown): Promise<PluginListNodeLike[]>;
+}
+
+describe('Loadout stays visible through an editing session (#268)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  const pluginListProvider = () =>
+    (ext?.exports as { pluginListProvider?: PluginListProviderLike } | undefined)?.pluginListProvider;
+  let gameDir = '';
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n');
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    await vscode.commands.executeCommand('setContext', 'modbench.viewMode', 'loadout');
+    fs.writeFileSync(pluginsTxtPath, '');
+    fs.rmSync(gameDir, { recursive: true, force: true });
+  });
+
+  it('exposes the live PluginListProvider from activate()', () => {
+    assert.ok(pluginListProvider(), 'activate() should return { pluginListProvider } for the open workspace');
+  });
+
+  it('keeps the Plugin load order filter applied across a Launch mEdit / Close mEdit round trip (AC5)', async () => {
+    const provider = pluginListProvider()!;
+    provider.setFilter('TestMod');
+    const before = await provider.getChildren();
+    assert.deepStrictEqual(
+      before.map((n) => n.plugin?.name), ['TestMod.esp'],
+      'the filter should narrow to the one matching row before entering editing',
+    );
+
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await vscode.commands.executeCommand('modbench.closeMedit');
+
+    const after = await provider.getChildren();
+    assert.deepStrictEqual(
+      after.map((n) => n.plugin?.name), ['TestMod.esp'],
+      'the filter set before Launch mEdit must still be applied after Close mEdit — the loadout view was never torn down',
+    );
+  });
+
+  it('still writes plugins.txt through the Plugin load order while a session is running (AC4)', async () => {
+    const provider = pluginListProvider()!;
+    provider.setFilter(''); // undo the previous test's filter so both rows are addressable
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+
+    await provider.setPluginEnabled('Other.esp', false);
+
+    const written = fs.readFileSync(pluginsTxtPath, 'utf8');
+    assert.ok(written.includes('Other.esp'), 'plugins.txt should still list Other.esp, just disabled');
+    assert.ok(!written.includes('*Other.esp'), 'disabling a plugin mid-session should still write plugins.txt');
+
+    await vscode.commands.executeCommand('modbench.closeMedit');
+  });
+
+  it('still writes plugins.txt through the Plugin load order drag-reorder while a session is running (AC4)', async () => {
+    const provider = pluginListProvider()!;
+    provider.setFilter('');
+    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n');
+    provider.invalidate();
+    await provider.getChildren(); // populate the cached order handleDrop's index math reads against
+
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+
+    // Same mime type PluginListProvider.ts's private DND_MIME constant uses — pinned here since
+    // it isn't exported; handleDrag/handleDrop only round-trip through it, never inspect it.
+    const dataTransfer = new vscode.DataTransfer();
+    dataTransfer.set('application/vnd.medit.pluginlist-node', new vscode.DataTransferItem({ names: ['TestMod.esp'] }));
+    // undefined target = drop past the last row: append.
+    await provider.handleDrop(undefined, dataTransfer, new vscode.CancellationTokenSource().token);
+
+    const written = fs.readFileSync(pluginsTxtPath, 'utf8');
+    const order = written.split('\n').map((l) => l.replace(/^\*/, '').trim()).filter(Boolean);
+    assert.deepStrictEqual(
+      order, ['Other.esp', 'TestMod.esp'],
+      'dragging TestMod.esp to the end mid-session should still write the reordered plugins.txt',
+    );
+
+    await vscode.commands.executeCommand('modbench.closeMedit');
+  });
+});

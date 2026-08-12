@@ -28,17 +28,22 @@ this surface, is **deferred indefinitely** — see Out of Scope.)
 
 ## Placement ([ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md))
 
-A sidebar `TreeView`, stacked below the Mods tree in the `modbench` view container, visible
-(`when: modbench.viewMode == 'loadout'`) alongside it — not a switchable tab, not folded into
-the mEdit Plugins tree. Reuses the `TreeDragAndDropController` pattern already built for the
-Mods tree ([mods.md](mods.md) §UI — Mods tree) for reorder.
+A sidebar `TreeView`, stacked below the Mods tree in the `modbench` view container, always
+visible — not a switchable tab, not folded into the mEdit Plugins tree. It carries no
+`modbench.viewMode` gate at all (#268): unlike the Mods tree and Downloads, it was never
+loadout-only to begin with in spirit, and now it isn't in code either, so it and the Mods tree
+stay on screen for the whole of an editing session. Reuses the `TreeDragAndDropController`
+pattern already built for the Mods tree ([mods.md](mods.md) §UI — Mods tree) for reorder.
 
 **Naming:** displays as **"Plugins"** in the UI — the same label as the Editing-context tree
-(`medit-plugins-tree.md`). The two are visible in mutually exclusive `viewMode`s, so this costs nothing
-at the UI layer (confirmed: VS Code's auto-generated "Focus on {view} View" palette entry is
-gated by the view's own `when` clause). At the code/spec level the two stay fully distinct:
-this view is `modbench.pluginListTree`, owned by `modmanager/`, with its own contextValues,
-separate from `medit/`'s `modbench.pluginTree`.
+(`medit-plugins-tree.md`). Since #268 the two are simultaneously visible whenever a session is
+running, distinguished by the Editing-context tree's runtime title ("mEdit — Plugins", #109) —
+this view's own name and title never change. At the code/spec level the two stay fully
+distinct: this view is `modbench.pluginListTree`, owned by `modmanager/`, with its own
+contextValues, separate from
+`medit/`'s `modbench.pluginTree`. They merge into one tree only under
+[#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270)
+([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)) — not built here.
 
 Freely relocatable by the user (e.g. to the auxiliary bar, to reconstruct MO2's literal
 side-by-side layout) via VS Code's native "Move View" — but never defaults there, per
@@ -196,8 +201,9 @@ Mods tree structurally lacks: an actual plugin sequence to check order against.
 
 ### Entry point
 
-- No open/launch command. The tree is simply present whenever `modbench.viewMode == 'loadout'`
-  — identical in spirit to the Mods tree itself, unlike Downloads' editor-tab-on-demand model.
+- No open/launch command. The tree is simply always present — identical in spirit to the Mods
+  tree itself, unlike Downloads' editor-tab-on-demand model — through a session as well as
+  outside one (#268).
 
 ### Empty / error states
 

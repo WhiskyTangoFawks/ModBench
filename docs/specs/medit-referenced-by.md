@@ -75,6 +75,8 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   answer to "a tab beside the thing it describes." Gated on `modbench.viewMode == 'editing'` only
   — there is no visibility context key anymore (the old `modbench.referencedByShown`, set by the
   first `modbench.showReferencedBy` invocation, is gone: the view exists whenever Editing does).
+  Since #268 that gate no longer implies the Loadout views are hidden — they carry no
+  `viewMode` gate at all and stay visible for the whole of the session.
 - **Retargeting is driven by `ActiveRecordTracker`** (`src/medit/ActiveRecordTracker.ts`), not by
   a command argument. `openRecordPanel` (the record editor's own panel-open/reuse/retarget choke
   point) reports each panel's currently displayed FormKey and which panel is active; the tracker

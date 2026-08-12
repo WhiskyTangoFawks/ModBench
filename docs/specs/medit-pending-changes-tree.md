@@ -89,7 +89,10 @@ exactly what it will carry.
 
 - A second sidebar `TreeView` (`modbench.changeGroupTree`, "Pending Changes") stacked below
   the Plugins tree in the `modbench` view container, visible while
-  `modbench.viewMode == 'editing'`. Sidebar placement follows
+  `modbench.viewMode == 'editing'`. Since #268 this sits alongside the Loadout views (Mods,
+  Plugin load order, Downloads), which carry no `viewMode` gate at all and stay visible and
+  interactive for the whole of the session — this tree, the mEdit Plugins tree, and Referenced
+  By are the only three still gated on `'editing'`. Sidebar placement follows
   [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s stacked-tree pattern;
   ADR-0017 §5's bottom-panel location is superseded (ADR-0029).
 - **Top-level nodes are ChangeGroups**, sorted with multi-member groups first, then single
