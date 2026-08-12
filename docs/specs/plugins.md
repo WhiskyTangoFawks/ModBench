@@ -220,8 +220,8 @@ there is no separate load-session step.
   carries (e.g. the missing-master badge below). It is never a `contextValue`: no per-row editing
   command exists yet to gate off one, and adding that plumbing before a command needs it would be
   exactly the speculative scaffolding this project's conventions rule out. **Open Header stays
-  reachable on a read-only plugin, ungated** — viewing a plugin's header is not an editing action,
-  only the fields inside it are (see Record navigation below); a read-only plugin's row otherwise
+  reachable on an immutable plugin, ungated** — viewing a plugin's header is not an editing action,
+  only the fields inside it are (see Record navigation below); an immutable plugin's row otherwise
   has no editing action to hide today, since none is contributed on a plugin row yet.
 
 ### Row children ([#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))

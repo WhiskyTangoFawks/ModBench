@@ -101,6 +101,8 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     const readOnly = file !== undefined && (this.readOnlyFiles?.has(file) ?? false);
     if (readOnly) {
       const note = `This plugin is read-only — its records can't be edited.`;
+      // A MarkdownString base would be replaced here, not appended to — no row provider produces
+      // one today, so this is a documented assumption, not a bug to handle.
       item.tooltip = typeof base === 'string' ? `${base}\n${note}` : note;
     } else {
       item.tooltip = base;
