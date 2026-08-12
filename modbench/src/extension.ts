@@ -356,7 +356,9 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       const name = await promptPluginName();
       if (name) await controller.createPlugin(name);
     }),
-    registerFilterBoxCommand('modbench.filterPluginTree', 'Filter plugins…', (text) => treeProvider.setFilter(text)),
+    // #273 Slice D: modbench.filterPluginTree (issue #70) is gone — it duplicated
+    // modbench.pluginListTree.filter over the same rows once the merged tree made this
+    // command's own view (modbench.pluginTree) unreachable.
     vscode.commands.registerCommand('modbench.setFilter', async () => {
       const files = fs.existsSync(scriptsPath)
         ? fs.readdirSync(scriptsPath).filter(f => f.endsWith('.sql'))

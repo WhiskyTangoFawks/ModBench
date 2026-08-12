@@ -168,11 +168,6 @@
         "title": "Modbench: Copy as Override Into…"
       },
       {
-        "command": "modbench.filterPluginTree",
-        "title": "Modbench: Filter Plugins by Name…",
-        "icon": "$(search)"
-      },
-      {
         "command": "modbench.setFilter",
         "title": "Modbench: Filter Records…",
         "icon": "$(filter)"
@@ -503,24 +498,19 @@
           "group": "navigation@1"
         },
         {
-          "command": "modbench.filterPluginTree",
-          "when": "view == modbench.pluginTree",
-          "group": "navigation@1"
-        },
-        {
-          "command": "modbench.newPlugin",
-          "when": "view == modbench.pluginTree",
-          "group": "navigation@3"
-        },
-        {
           "command": "modbench.setFilter",
-          "when": "view == modbench.pluginTree",
+          "when": "view == modbench.pluginListTree",
           "group": "navigation@2"
         },
         {
           "command": "modbench.clearFilter",
-          "when": "view == modbench.pluginTree && modbench.filterActive",
+          "when": "view == modbench.pluginListTree && modbench.filterActive",
           "group": "navigation@2"
+        },
+        {
+          "command": "modbench.newPlugin",
+          "when": "view == modbench.pluginListTree",
+          "group": "navigation@3"
         },
         {
           "command": "modbench.modList.filter",

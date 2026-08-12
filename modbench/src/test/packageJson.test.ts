@@ -144,6 +144,28 @@ describe('package.json retires modbench.viewMode and the second Plugins view (#2
   // below for the assertion that no when clause references it anywhere once those land.
 });
 
+describe('package.json New Plugin / record filter reachable from the merged tree (#273 Slice D)', () => {
+  const titleMenus = () => pkg.contributes.menus['view/title'] as { command: string; when: string; group: string }[];
+  const entryFor = (command: string) => titleMenus().find((e) => e.command === command && e.when.includes('modbench.pluginListTree'));
+
+  // Fixed slot order (modbench/CLAUDE.md rule 5): name filter, then the view's state affordance
+  // — the record filter is the merged tree's second narrowing axis — then domain actions.
+  it('keeps modbench.pluginListTree.filter at slot 1 (unchanged by this slice)', () => {
+    expect(entryFor('modbench.pluginListTree.filter')!.group).toBe('navigation@1');
+  });
+
+  it('places the record filter (setFilter/clearFilter) at slot 2', () => {
+    expect(entryFor('modbench.setFilter')!.group).toBe('navigation@2');
+    const clear = titleMenus().find((e) => e.command === 'modbench.clearFilter' && e.when.includes('modbench.pluginListTree'));
+    expect(clear!.group).toBe('navigation@2');
+    expect(clear!.when).toBe('view == modbench.pluginListTree && modbench.filterActive');
+  });
+
+  it('places New Plugin… at slot 3', () => {
+    expect(entryFor('modbench.newPlugin')!.group).toBe('navigation@3');
+  });
+});
+
 describe('package.json filtering is one UX (#247)', () => {
   const titleMenus = () => pkg.contributes.menus['view/title'] as { command: string; when: string; group: string }[];
   const commandTitle = (id: string) =>
@@ -152,10 +174,13 @@ describe('package.json filtering is one UX (#247)', () => {
   // Every list view narrows by name the same way, through the same widget. Downloads was the
   // odd one out (#233 sent it to VS Code's native tree Find), which made the filter three
   // different answers across five title bars; one widget also gives #255 a single fix site.
+  // #273 Slice D: modbench.pluginTree / modbench.filterPluginTree dropped out of this list —
+  // that command duplicated modbench.pluginListTree.filter over the same rows (both narrowed
+  // plugin rows by name) once the merged tree made the standalone editing Plugins tree
+  // unreachable, so it was deleted rather than retargeted.
   const FILTERED_VIEWS = [
     ['modbench.modList', 'modbench.modList.filter'],
     ['modbench.pluginListTree', 'modbench.pluginListTree.filter'],
-    ['modbench.pluginTree', 'modbench.filterPluginTree'],
     ['modbench.downloads', 'modbench.downloads.filter'],
   ] as const;
 

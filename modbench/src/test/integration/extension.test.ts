@@ -160,7 +160,9 @@ describe('modbench command registration', () => {
     'modbench.refresh',
     'modbench.newPlugin',
     'modbench.copyAsOverrideInto',
-    'modbench.filterPluginTree',
+    // #273 Slice D: modbench.filterPluginTree (issue #70) is gone — it duplicated
+    // modbench.pluginListTree.filter over the same rows once the merged tree made this
+    // command's own view (modbench.pluginTree) unreachable.
     'modbench.setFilter',
     'modbench.clearFilter',
     'modbench.setFilterFromDocument',
