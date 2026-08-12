@@ -56,6 +56,20 @@ function manifestPath(instanceRoot: string): string {
   return join(instanceRoot, 'mods', MANIFEST_NAME);
 }
 
+/** #247: is there a live deployment? The manifest's presence is already the answer purge
+ *  relies on, so the Loadout header's deployment readout asks the same question rather than
+ *  keeping a second notion of deployed-ness that could disagree with it. A corrupt manifest
+ *  reads as deployed — there is state out there needing a purge, which is exactly what the
+ *  row should say. */
+export async function isDeployed(instanceRoot: string): Promise<boolean> {
+  try {
+    await stat(manifestPath(instanceRoot));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Link one winner into Data/. Skips (returns 'skipped') when a vanilla/foreign
  *  file already occupies the target; leaves an unchanged prior link untouched;
  *  relinks only when the winner's inode changed. */

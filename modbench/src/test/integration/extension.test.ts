@@ -127,7 +127,9 @@ describe('modbench command registration', () => {
     'modbench.openHeader',
     'modbench.closeMedit',
     'modbench.reloadSession',
-    'modbench.refreshTree',
+    // #247: one Refresh for every Mod-Management source, replacing modbench.refreshTree,
+    // modbench.modList.refresh and modbench.pluginListTree.refresh — same need, three ids.
+    'modbench.refresh',
     'modbench.newPlugin',
     'modbench.copyAsOverrideInto',
     'modbench.filterPluginTree',
@@ -181,12 +183,11 @@ describe('modbench command registration', () => {
     'modbench.modList.filter',
     'modbench.modList.switchProfile',
     'modbench.modList.launchMedit',
-    'modbench.modList.refresh',
     'modbench.modList.sortDescending',
     'modbench.modList.sortAscending',
     'modbench.modList.deploy',
     'modbench.modList.purge',
-    'modbench.modList.launchGame',
+    'modbench.launch',
     'modbench.modList.installFromArchive',
     'modbench.modList.installFromFolder',
     'modbench.modList.mod.openInExplorer',
@@ -211,11 +212,13 @@ describe('modbench command registration', () => {
     'modbench.downloads.delete',
     'modbench.downloads.hide',
     'modbench.downloads.unhide',
+    // #247: Downloads narrows by name through the same widget as every other list view,
+    // superseding #233's native-tree-Find call.
+    'modbench.downloads.filter',
     // #238: the view/title Sort by… overflow command and the Show-hidden title-bar toggle.
     'modbench.downloads.sortBy',
     'modbench.downloads.showHidden',
     'modbench.downloads.hideHidden',
-    'modbench.pluginListTree.refresh',
     'modbench.pluginListTree.filter',
     'modbench.pluginListTree.revealInExplorer',
   ];
@@ -526,11 +529,7 @@ describe('mEdit plugin tree title reflects view mode (#109)', () => {
     );
   });
 
-  it('sets the mEdit plugin tree title when Launch Game enters editing mode', async () => {
-    await vscode.commands.executeCommand('modbench.modList.launchGame');
-    assert.strictEqual(
-      exportsOf()?.treeView?.title, 'mEdit — Plugins',
-      'Launch Game reuses the editing view while the game runs, so the title should convey mEdit too',
-    );
-  });
+  // #247 deleted the Launch-Game-enters-editing-mode case along with the command. Launching
+  // and editing are separate operations: the replacement (modbench.launch) runs a contributed
+  // task and touches no view mode, so there is no longer a title to assert.
 });

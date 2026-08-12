@@ -28,13 +28,13 @@ import {
 } from './medit/recordPanelMessageRouter';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
-import { ModListProvider, ModNode, OverwriteNode, SeparatorNode } from './modmanager/ModListProvider';
+import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './modmanager/ModListProvider';
 import { createOverwriteWatcher } from './modmanager/overwriteWatcher';
 import { createModsWatcher } from './modmanager/modsWatcher';
 import { OverwriteDecorationProvider } from './modmanager/OverwriteDecorationProvider';
 import { PluginListProvider, type PluginListNode } from './modmanager/PluginListProvider';
 import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './modmanager/gameDirectory';
-import { deploy, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
+import { deploy, isDeployed, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
 import { buildExplicitPluginsWithOrigin } from './modmanager/explicitSession';
 import { detectRoot } from './modmanager/install/detectRoot';
@@ -49,9 +49,14 @@ import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { createDownloadsWatcher } from './modmanager/downloadsWatcher';
 import { HiddenDownloadDecorationProvider } from './modmanager/HiddenDownloadDecorationProvider';
 import { makeReporter } from './reporter';
+import { LoadoutHeaderProvider } from './LoadoutHeaderProvider';
 
 let backendManager: BackendManager | undefined;
 let pluginTreeView: vscode.TreeView<PluginTreeNode> | undefined;
+// #247: the Loadout header re-reads its rows whenever workspace-scope state moves. Module
+// level for the same reason pluginTreeView is — the choke points that move that state
+// (exitToLoadout, switchProfile) are module-level functions too.
+let loadoutHeaderProvider: LoadoutHeaderProvider | undefined;
 
 // #109: the activity-bar container title ("Modbench") is fixed by VS Code — no
 // `when` clause or API retargets it. The mEdit context instead lives on the
@@ -70,6 +75,26 @@ const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
   getChildren: () => [],
 };
 
+/** The staged-work signal, applied to both surfaces that report it: the context key that
+ *  gates Save All / Revert All, and (#247) the view's numeric badge, which is how staged work
+ *  stays visible on the activity-bar icon while the view is collapsed. One number drives both,
+ *  so they cannot disagree. No badge at zero — a "0" reads as a state worth looking at.
+ *
+ *  The view is passed as a getter because it is constructed after the provider that reports
+ *  into it; by the time a count arrives, it exists (same ordering note as createReferencedByTree). */
+function makePendingStateHandler(
+  getView: () => vscode.TreeView<PendingTreeNode> | undefined,
+): (stagedGroups: number) => void {
+  return (stagedGroups) => {
+    void vscode.commands.executeCommand('setContext', 'modbench.hasPendingChanges', stagedGroups > 0);
+    const view = getView();
+    if (!view) return;
+    view.badge = stagedGroups === 0
+      ? undefined
+      : { value: stagedGroups, tooltip: `${stagedGroups} pending change group${stagedGroups === 1 ? '' : 's'}` };
+  };
+}
+
 /** Single choke point for `modbench.viewMode` transitions (#109) — every entry/exit
  *  path calls this instead of `setContext` directly, so the editing plugin tree's
  *  title can never drift out of sync with the mode. */
@@ -86,19 +111,41 @@ function exitToLoadout(): void {
   backendManager?.stop();
 }
 
-/** Shared cross-surface filter widget (Mods tree, Plugin List, Plugins tree):
- *  a transient InputBox that live-narrows a list as the user types and
- *  restores the unfiltered list on dismiss. Registers `commandId` to open it. */
+/** The filter widget — one implementation for every list view (Mods, Plugin List, Plugins
+ *  tree, Downloads): a transient InputBox that live-narrows as the user types and restores
+ *  the unfiltered list on dismiss. Registers `commandId` to open it.
+ *
+ *  #247: there used to be two of these, the second hand-rolled inside the Mods command body
+ *  purely to carry a toggle button — so "filter" meant three different things across five
+ *  title bars. `toggle` folds that case in as an option; it is also why `setFilter` takes the
+ *  toggle state as a second argument that the three plain call sites ignore.
+ *
+ *  The clear-on-dismiss below is the whole of #255: the filter does not survive losing focus,
+ *  which makes it usable only while typing. It is deliberately still here — fixing it is a
+ *  UX decision (a persistent chip and an explicit clear), and now that there is one widget
+ *  that fix lands on all four views at once. */
 function registerFilterBoxCommand(
   commandId: string,
   placeholder: string,
-  setFilter: (text: string) => void,
+  setFilter: (text: string, toggleOn: boolean) => void,
+  toggle?: { icon: string; label: string },
 ): vscode.Disposable {
   return vscode.commands.registerCommand(commandId, () => {
     const box = vscode.window.createInputBox();
     box.placeholder = placeholder;
-    box.onDidChangeValue(setFilter);
-    box.onDidHide(() => { setFilter(''); box.dispose(); });
+    let toggleOn = true;
+    const updateButtons = () => {
+      if (!toggle) return;
+      box.buttons = [{ iconPath: new vscode.ThemeIcon(toggle.icon), tooltip: `${toggle.label} (${toggleOn ? 'on' : 'off'})` }];
+    };
+    updateButtons();
+    box.onDidTriggerButton(() => {
+      toggleOn = !toggleOn;
+      updateButtons();
+      setFilter(box.value, toggleOn);
+    });
+    box.onDidChangeValue((text) => setFilter(text, toggleOn));
+    box.onDidHide(() => { setFilter('', true); box.dispose(); });
     box.show();
   });
 }
@@ -162,9 +209,8 @@ export function activate(context: vscode.ExtensionContext) {
   const client = createApiClient(port);
   const repository = new ApiPluginRepository(client, log);
   const treeProvider = new PluginTreeProvider(repository, log);
-  const changeGroupTreeProvider = new PendingChangesTreeProvider(client, log, (hasPending) => {
-    void vscode.commands.executeCommand('setContext', 'modbench.hasPendingChanges', hasPending);
-  });
+  const changeGroupTreeProvider = new PendingChangesTreeProvider(
+    client, log, makePendingStateHandler(() => changeGroupTreeView));
   const openPanels = new Map<string, vscode.WebviewPanel>();
   const recordPanels = new Set<vscode.WebviewPanel>();
   // #282: the Referenced By view's input — which record panel is active and what FormKey it
@@ -192,24 +238,20 @@ export function activate(context: vscode.ExtensionContext) {
   const treeView = vscode.window.createTreeView('modbench.pluginTree', {
     treeDataProvider: treeProvider,
     canSelectMany: true,
+    // #247 rule 7: Collapse All belongs on a hierarchy. This tree is deeper than the Mods
+    // tree that had it — plugin → record type → record — and was the one view missing it.
+    showCollapseAll: true,
   });
   pluginTreeView = treeView;
 
-  const changeGroupTreeView = vscode.window.createTreeView('modbench.changeGroupTree', {
+  const changeGroupTreeView: vscode.TreeView<PendingTreeNode> = vscode.window.createTreeView('modbench.changeGroupTree', {
     treeDataProvider: changeGroupTreeProvider,
     canSelectMany: true,
+    // #247 rule 7: hierarchical — a multi-member ChangeGroup expands into its member leaves.
+    showCollapseAll: true,
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
-  // ── Mod List (Loadout) view ──────────────────────────────────────────────────
-  // The open workspace root IS the MO2 instance (see modbench/CLAUDE.md). Until
-  // the Loadout↔Editing toggle lands (Modbench-5), Mod List is the only visible view.
-  setViewMode('loadout');
-
-  registerDeploymentModeContext(context);
-
-  const { modListProvider, downloadsProvider } = registerLoadoutView({
-    context, log, outputChannel, revealLog: () => outputChannel.show(true), controller, changeGroupTreeProvider,
-  }) ?? {};
+  const { modListProvider, downloadsProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, changeGroupTreeProvider });
 
   context.subscriptions.push(
     treeView,
@@ -297,7 +339,6 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     reporter: makeReporter(outputChannel, 'copyToClipboard'),
   };
   return [
-    vscode.commands.registerCommand('modbench.refreshTree', () => treeProvider.refresh()),
     vscode.commands.registerCommand('modbench.closeMedit', () => exitToLoadout()),
     vscode.commands.registerCommand('modbench.reloadSession', () => treeProvider.refresh()),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
@@ -526,6 +567,13 @@ function registerChangeGroupCommands(deps: EditorCommandDeps): vscode.Disposable
       await controller.saveAllGroups();
     }),
     vscode.commands.registerCommand('modbench.revertAllGroups', async () => {
+      // #247 rule 4: destructive, so it lives in the overflow menu behind a modal — the
+      // native confirm surface, not a rendered one. Discarding every staged edit is not
+      // undoable, and it sat one mis-click from Save All while both were title-bar icons.
+      const confirm = await vscode.window.showWarningMessage(
+        'Discard all pending changes?', { modal: true }, 'Revert All',
+      );
+      if (confirm !== 'Revert All') return;
       await controller.revertAllGroups();
     }),
   ];
@@ -814,10 +862,6 @@ interface ModListCoreDeps {
 function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[] {
   const { modListProvider, modlistSource, updateProfileDescription, enterEditing, outputChannel } = deps;
   return [
-      vscode.commands.registerCommand('modbench.modList.refresh', () => {
-        modListProvider.invalidate();
-        void updateProfileDescription();
-      }),
       vscode.commands.registerCommand('modbench.modList.sortDescending', () => {
         modListProvider.toggleSortOrder();
         void vscode.commands.executeCommand('setContext', 'modbench.modList.sortDescending', true);
@@ -841,24 +885,13 @@ function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[]
         exitToLoadout();
         await modListProvider.switchProfile(picked.label);
         void updateProfileDescription();
+        loadoutHeaderProvider?.refresh();
       }),
-      vscode.commands.registerCommand('modbench.modList.filter', () => {
-        const box = vscode.window.createInputBox();
-        box.placeholder = 'Filter mods…';
-        let grouping = true;
-        const updateBtn = () => {
-          box.buttons = [{ iconPath: new vscode.ThemeIcon('list-tree'), tooltip: `Group by separator (${grouping ? 'on' : 'off'})` }];
-        };
-        updateBtn();
-        box.onDidTriggerButton(() => {
-          grouping = !grouping;
-          updateBtn();
-          modListProvider.setFilter(box.value, grouping);
-        });
-        box.onDidChangeValue((text) => modListProvider.setFilter(text, grouping));
-        box.onDidHide(() => { modListProvider.setFilter('', true); box.dispose(); });
-        box.show();
-      }),
+      registerFilterBoxCommand(
+        'modbench.modList.filter', 'Filter mods…',
+        (text, grouping) => modListProvider.setFilter(text, grouping),
+        { icon: 'list-tree', label: 'Group by separator' },
+      ),
       vscode.commands.registerCommand('modbench.modList.launchMedit', async () => {
         // enterEditing reveals the editing view itself, only once the session is
         // loaded (issue #75) — don't flip viewMode here. Show progress while the
@@ -1042,7 +1075,7 @@ interface PluginListDeps {
  *  immediately); rows drag-and-drop to reorder (single or multi-select, writing
  *  plugins.txt immediately); a title-bar Refresh forces a re-read. `instanceRoot`
  *  enables the order-aware missing-master badge (issue #67). */
-function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
+function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
   const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder } = deps;
   const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
   const pluginListView = vscode.window.createTreeView('modbench.pluginListTree', {
@@ -1050,7 +1083,7 @@ function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
     canSelectMany: true,
     dragAndDropController: pluginListProvider,
   });
-  return [
+  return { pluginListProvider, disposables: [
     pluginListView,
     pluginListView.onDidChangeCheckboxState(async (e) => {
       for (const [node, state] of e.items) {
@@ -1083,9 +1116,8 @@ function registerPluginListView(deps: PluginListDeps): vscode.Disposable[] {
         void vscode.window.showErrorMessage(`Modbench: Failed to reveal "${name}" in Explorer.`);
       }
     }),
-    vscode.commands.registerCommand('modbench.pluginListTree.refresh', () => pluginListProvider.invalidate()),
     registerFilterBoxCommand('modbench.pluginListTree.filter', 'Filter plugins…', (text) => pluginListProvider.setFilter(text)),
-  ];
+  ] };
 }
 
 /** Overwrite-folder surface (#82): a live watcher that re-renders the Mods tree
@@ -1153,6 +1185,44 @@ function registerNotMo2InstanceWelcome(
   );
 }
 
+/** Enable/disable a mod from its row checkbox. ADR-0026: a failed toggle must surface, not
+ *  silently leave the checkbox out of sync with disk — log detail, notify, and invalidate so
+ *  the checkbox resyncs to what `modlist.txt` actually says. */
+async function onModCheckboxChanged(
+  e: vscode.TreeCheckboxChangeEvent<ModlistNode>,
+  modListProvider: ModListProvider,
+  outputChannel: vscode.LogOutputChannel,
+): Promise<void> {
+  for (const [node, state] of e.items) {
+    if (node.kind !== 'mod') continue;
+    try {
+      await modListProvider.setModEnabled(node.mod.name, state === vscode.TreeItemCheckboxState.Checked);
+    } catch (err) {
+      outputChannel.error(`[extension] toggling "${node.mod.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
+      void vscode.window.showErrorMessage(`Modbench: Failed to update "${node.mod.name}".`);
+      modListProvider.invalidate();
+    }
+  }
+}
+
+/** The Loadout half of activation, as one step: view mode, deployment-mode context key, the
+ *  Mods/Plugins/Downloads views, and the header that sits above them. Split out of `activate`
+ *  because these four are one wiring concern — and because the header must register even on
+ *  the paths where `registerLoadoutView` bails (no workspace, or not an MO2 instance): it is
+ *  the container's first view and must never be a hole. Returns what the integration tests
+ *  read off `activate`'s exports. */
+function registerLoadoutSurfaces(deps: Omit<LoadoutViewDeps, 'revealLog'>): {
+  modListProvider?: ModListProvider; downloadsProvider?: DownloadsProvider;
+} {
+  const { context, outputChannel } = deps;
+  // The open workspace root IS the MO2 instance (see modbench/CLAUDE.md).
+  setViewMode('loadout');
+  registerDeploymentModeContext(context);
+  const loadout = registerLoadoutView({ ...deps, revealLog: () => outputChannel.show(true) });
+  registerLoadoutHeaderView({ context, outputChannel, ...loadout });
+  return { modListProvider: loadout?.modListProvider, downloadsProvider: loadout?.downloadsProvider };
+}
+
 interface LoadoutViewDeps {
   context: vscode.ExtensionContext;
   log: (msg: string) => void;
@@ -1165,7 +1235,7 @@ interface LoadoutViewDeps {
  *  ModListProvider and DownloadsProvider (exposed via activate() for integration
  *  tests), or undefined with a neutral log when no workspace is open, or when the
  *  workspace isn't an MO2 instance (#192 — the Mods view shows welcome content instead). */
-function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider } | undefined {
+function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void } | undefined {
   const { context, log, outputChannel, revealLog, controller, changeGroupTreeProvider } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
@@ -1200,6 +1270,8 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
         return undefined;
       });
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
+    const { pluginListProvider, disposables: pluginListDisposables } =
+      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder });
     const modListView = vscode.window.createTreeView('modbench.modList', {
       treeDataProvider: modListProvider,
       showCollapseAll: true,
@@ -1246,33 +1318,92 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
 
     context.subscriptions.push(
       modListView,
-      modListView.onDidChangeCheckboxState(async (e) => {
-        for (const [node, state] of e.items) {
-          if (node.kind !== 'mod') continue;
-          try {
-            await modListProvider.setModEnabled(node.mod.name, state === vscode.TreeItemCheckboxState.Checked);
-          } catch (err) {
-            // ADR-0026: a failed user action must surface, not silently leave the checkbox
-            // out of sync with disk. Log detail, notify, and refresh to resync the checkbox.
-            outputChannel.error(`[extension] toggling "${node.mod.name}" failed: ${err instanceof Error ? err.message : String(err)}`);
-            void vscode.window.showErrorMessage(`Modbench: Failed to update "${node.mod.name}".`);
-            modListProvider.invalidate();
-          }
-        }
-      }),
+      modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)),
       ...registerModListCoreCommands({ modListProvider, modlistSource, updateProfileDescription, enterEditing, outputChannel }),
       ...registerDeployCommands(instanceRoot, modlistSource, outputChannel),
+      registerLaunchCommand(outputChannel),
       ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
       ...registerModContextCommands({ instanceRoot, modlistSource, outputChannel, runModAction }),
       ...registerSeparatorCommands({ modlistSource, runModAction }),
       ...registerOverwriteView(instanceRoot, modListProvider, outputChannel),
       registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, outputChannel),
-      ...registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder }),
+      ...pluginListDisposables,
     );
 
     const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, log);
     context.subscriptions.push(...downloadsDisposables);
-    return { modListProvider, downloadsProvider };
+    const refreshAll = makeRefreshAll(modListProvider, pluginListProvider, downloadsProvider, updateProfileDescription);
+    return { modListProvider, downloadsProvider, modlistSource, instanceRoot, refreshAll };
+}
+
+/** #247: Refresh is one need, not three. Every Mod-Management source re-reads from disk
+ *  together — a partial refresh is the state where the user believes they have resynced and
+ *  one tree still quietly disagrees with the others. */
+function makeRefreshAll(
+  modListProvider: ModListProvider,
+  pluginListProvider: PluginListProvider,
+  downloadsProvider: DownloadsProvider,
+  updateProfileDescription: () => Promise<void>,
+): () => void {
+  return () => {
+    modListProvider.invalidate();
+    pluginListProvider.invalidate();
+    downloadsProvider.invalidate();
+    void updateProfileDescription();
+  };
+}
+
+interface LoadoutHeaderDepsWiring {
+  context: vscode.ExtensionContext;
+  outputChannel: vscode.LogOutputChannel;
+  /** Absent when no workspace is open or it isn't an MO2 instance — the header still
+   *  registers (it is the container's first view and must never be a hole), it just has
+   *  no profile to read. */
+  modlistSource?: Mo2ModlistSource;
+  /** Absent for the same reason as `modlistSource`; without it there is nothing to be
+   *  deployed, so the deployment row stays absent regardless of the configured mode. */
+  instanceRoot?: string;
+  /** Re-reads every Mod-Management source. Absent when there is nothing to read. */
+  refreshAll?: () => void;
+}
+/** #247: the Loadout header view — workspace-scope readout and action home. Wired here, at
+ *  the composition root, because it spans both bounded contexts; the provider itself takes
+ *  only getters and knows about neither. */
+function registerLoadoutHeaderView(deps: LoadoutHeaderDepsWiring): void {
+  const { context, outputChannel, modlistSource, instanceRoot, refreshAll } = deps;
+  const provider = new LoadoutHeaderProvider({
+    hasLoadout: () => modlistSource !== undefined,
+    activeProfile: async () => {
+      if (!modlistSource) return undefined;
+      try {
+        return await modlistSource.getActiveProfile();
+      } catch (err) {
+        // ADR-0026 background tier: a readout blip degrades to an em-dash inline, not a toast —
+        // and WARN, not ERROR: the system is coping, nothing the user asked for has failed.
+        outputChannel.warn(`[extension] reading the active profile for the header failed: ${err instanceof Error ? err.message : String(err)}`);
+        return undefined;
+      }
+    },
+    sessionRunning: () => backendManager?.isHealthy ?? false,
+    deployment: async () => {
+      if (!isStandaloneDeployment() || !instanceRoot) return 'external';
+      return (await isDeployed(instanceRoot)) ? 'deployed' : 'notDeployed';
+    },
+  });
+  loadoutHeaderProvider = provider;
+  context.subscriptions.push(
+    vscode.window.createTreeView('modbench.loadoutHeader', { treeDataProvider: provider }),
+    // The one Refresh, replacing the three each tree had grown. Its scope is the workspace,
+    // so it lives here rather than on any single tree — and it is still only the safety net
+    // for a flaky watcher, never the primary path.
+    vscode.commands.registerCommand('modbench.refresh', () => {
+      refreshAll?.();
+      provider.refresh();
+    }),
+  );
+  // Every backend lifecycle transition — attach, disconnect, crash, and (since #247) a
+  // deliberate stop — moves the session row, so one subscription covers all of them.
+  backendManager?.on('status', () => provider.refresh());
 }
 
 /** Downloads sidebar tree (#233): a native TreeView over downloads/, replacing the editor-tab
@@ -1299,6 +1430,7 @@ function registerDownloadsView(
       vscode.window.registerFileDecorationProvider(
         new HiddenDownloadDecorationProvider(instanceRoot, () => downloadsProvider.hiddenNames()),
       ),
+      registerFilterBoxCommand('modbench.downloads.filter', 'Filter downloads…', (text) => downloadsProvider.setFilter(text)),
       registerDownloadsSortCommand(downloadsProvider),
       ...registerDownloadsHiddenToggleCommands(downloadsProvider),
       ...registerDownloadsSingleRowCommands(instanceRoot, log),
@@ -1406,19 +1538,28 @@ function setupScripts(cfg: vscode.WorkspaceConfiguration): { scriptsPath: string
   return { scriptsPath, filterProvider };
 }
 
+/** Is Modbench itself the deployer? One reading of the setting, shared by the context key that
+ *  gates the declarative `when` clauses and by the header's deployment row — two answers that
+ *  disagreed would put an icon and its readout in different states. */
+function isStandaloneDeployment(): boolean {
+  return (meditConfig().get('mods.deploymentMode') ?? 'external') !== 'external';
+}
+
 /** Seed and watch the deployment-mode context key (standalone vs external manager). */
 function registerDeploymentModeContext(context: vscode.ExtensionContext): void {
   // Deploy/Purge/Launch are standalone-only; hidden when an external manager owns
   // deployment. Default external for the alpha — MO2 stays the deployer/launcher
   // until standalone deploy ships post-alpha (#96, #186).
   const applyDeploymentMode = () => {
-    const mode = vscode.workspace.getConfiguration('modbench').get('mods.deploymentMode') ?? 'external';
-    void vscode.commands.executeCommand('setContext', 'modbench.deploymentStandalone', mode !== 'external');
+    void vscode.commands.executeCommand('setContext', 'modbench.deploymentStandalone', isStandaloneDeployment());
   };
   applyDeploymentMode();
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('modbench.mods.deploymentMode')) applyDeploymentMode();
+      if (e.affectsConfiguration('modbench.mods.deploymentMode')) {
+        applyDeploymentMode();
+        loadoutHeaderProvider?.refresh(); // the deployment row appears/disappears with the mode
+      }
     }),
   );
 }
@@ -1466,6 +1607,7 @@ function registerDeployCommands(
         const gd = await resolveGd();
         if (!gd) return;
         await runDeploy(gd);
+        loadoutHeaderProvider?.refresh();
         void vscode.window.showInformationMessage('Modbench: Mods deployed.');
       } catch (err) {
         reporter.report('error', 'Deploy failed.', err instanceof Error ? err.message : String(err));
@@ -1476,29 +1618,46 @@ function registerDeployCommands(
         const gd = await resolveGd();
         if (!gd) return;
         await purge(instanceRoot, gd, reporter);
+        loadoutHeaderProvider?.refresh();
         void vscode.window.showInformationMessage('Modbench: Deployed mods purged.');
       } catch (err) {
         reporter.report('error', 'Purge failed.', err instanceof Error ? err.message : String(err));
       }
     }),
-    vscode.commands.registerCommand('modbench.modList.launchGame', async () => {
-      try {
-        const gd = await resolveGd();
-        if (!gd) return;
-        await runDeploy(gd);
-        // Switch to the Plugin List view while the game runs (mirrors launchMedit).
-        setViewMode('editing');
-        const executable = path.join(gd.root, 'Fallout4.exe');
-        const child = cp.spawn(executable, { cwd: gd.root, detached: true, stdio: 'ignore' });
-        child.on('error', (e) => reporter.report('error', 'Failed to launch the game.', e.message));
-        child.on('exit', () => {
-          void purge(instanceRoot, gd, reporter).catch((e) => outputChannel.error(`[deploy] purge on exit failed: ${String(e)}`));
-        });
-      } catch (err) {
-        reporter.report('error', 'Launch Game failed.', err instanceof Error ? err.message : String(err));
-      }
-    }),
   ];
+}
+
+/** #188 contributes one task per entry in MO2's executables registry under this type; #247's
+ *  Launch… is the single affordance that runs one of them. Named here so the provider that
+ *  lands with #188 has one place to agree with. */
+const LAUNCH_TASK_TYPE = 'modbench';
+
+/** #247: Launch… — one affordance no matter how many executables exist, because the registry
+ *  decides what is launchable, not the title bar. It reads the contributed tasks at
+ *  invocation (so an executable added in MO2 appears without a reload) and executes the
+ *  selection; it never resolves a binary itself. The retired Launch Game did the opposite —
+ *  it deployed, then spawned a hardcoded `Fallout4.exe`, locking the command to one game and
+ *  conflating two separate operations.
+ *
+ *  Until #188 lands there are no such tasks, so this says so rather than guessing a path.
+ *  Wiring the picker to the registry is #293. */
+function registerLaunchCommand(outputChannel: vscode.LogOutputChannel): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.launch', async () => {
+    const tasks = await vscode.tasks.fetchTasks({ type: LAUNCH_TASK_TYPE });
+    if (tasks.length === 0) {
+      outputChannel.info('[extension] Launch…: no launchable tasks contributed yet (#188)');
+      void vscode.window.showInformationMessage(
+        'Modbench: No launch targets yet — the executables you configured in MO2 appear here once tool launching lands.',
+      );
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(
+      tasks.map((task) => ({ label: task.name, task })),
+      { placeHolder: 'Launch' },
+    );
+    if (!picked) return;
+    await vscode.tasks.executeTask(picked.task);
+  });
 }
 
 function promptPluginName(): Thenable<string | undefined> {

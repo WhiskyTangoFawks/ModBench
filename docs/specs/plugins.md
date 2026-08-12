@@ -85,8 +85,10 @@ Plugins tab closely enough to alternate between the two on the same instance.
    a block, so that reordering a cluster of related plugins doesn't take one drag per plugin.
 10. As a user, I want a Filter box that narrows the list to plugins whose filename matches
     what I type, so that I can find one without scrolling a 100+-entry load order.
-11. As a user, I want a Refresh button, so that I can force a re-read of `plugins.txt` if the
-    list ever looks stale (e.g. after an external MO2 edit).
+11. As a user, I want one Refresh, in one place, that re-reads every list at once if any of
+    them looks stale (e.g. after an external MO2 edit), so that I never have to remember
+    which tree owns which refresh (#247 — it lives on the
+    [Loadout header](loadout-header.md)).
 12. As a user, I want to right-click a plugin and Reveal it in my OS file manager, so that I
     can go inspect the actual file behind a badge without hunting for it myself.
 13. As a user, I want this list visible any time I'm in Loadout mode, with no separate
@@ -157,17 +159,20 @@ Mods tree structurally lacks: an actual plugin sequence to check order against.
 
 ### Toolbar / title bar
 
-- **Refresh** — forces a re-read of `plugins.txt` (safety valve). No live file-watcher: no
-  file-watcher exists anywhere in `modmanager/` today, not even for the Mods tree's own
-  `modlist.txt` (equally exposed to external MO2 edits) — this view matches that existing
-  precedent rather than introducing live-watch (which Downloads chose for a different reason:
-  files arriving from an external download client, not a hand-edited config file).
-- **Filter** — magnifier icon opens a transient `InputBox` (same widget/pattern as the Mods
-  tree's filter, `vscode.window.createInputBox()`), live-narrowing rows by case-insensitive
-  substring match against plugin filename. Dismissing the box (`onDidHide`) restores the full
-  list. This same pattern now spans every Modbench list surface: Mods tree (existing),
-  Downloads ([#61](https://github.com/WhiskyTangoFawks/ModBench/issues/61), retrofit), the
-  Editing Plugins tree (`medit-plugins-tree.md`, new), and here.
+- **Filter** — the only icon this view carries. The shared Modbench filter widget
+  (`registerFilterBoxCommand`, a transient `InputBox`), live-narrowing rows by case-insensitive
+  substring match against plugin filename; dismissing the box (`onDidHide`) restores the full
+  list. One widget spans every Modbench list surface: Mods, Downloads, the Editing Plugins
+  tree, and here (#247).
+- **No Refresh of its own** (#247). Re-reading `plugins.txt` is part of the single
+  workspace-scope Refresh on the [Loadout header](loadout-header.md), which re-reads every
+  Mod-Management source together — three views had grown three command ids for one need.
+  Still a safety valve, not the primary path: no live file-watcher exists anywhere in
+  `modmanager/` today, not even for the Mods tree's own `modlist.txt` (equally exposed to
+  external MO2 edits) — this view matches that precedent rather than introducing live-watch
+  (which Downloads chose for a different reason: files arriving from an external download
+  client, not a hand-edited config file).
+- **No Collapse All** — a flat list has nothing to collapse (#247 rule 7).
 
 ### Row context menu
 

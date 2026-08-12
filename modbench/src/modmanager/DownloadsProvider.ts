@@ -107,6 +107,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
   private showHidden = false;
   private sortColumn: DownloadSortColumn = 'mtimeMs';
   private sortDescending = true;
+  private filterLower = '';
 
   constructor(
     private readonly instanceRoot: string,
@@ -139,6 +140,15 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
     this.invalidate();
   }
 
+  /** Set the title-bar name filter (empty string clears it) and re-render. #247: the same
+   *  transient-InputBox widget every other list view uses, replacing #233's native tree Find.
+   *  Render-only — a filter keystroke narrows already-built rows and never re-scans
+   *  downloads/, matching PluginListProvider.setFilter's render-vs-invalidate split (#79). */
+  setFilter(text: string): void {
+    this.filterLower = text.toLowerCase();
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
   /** Names of rows currently rendered as hidden — feeds HiddenDownloadDecorationProvider's
    *  dimming. Empty before the first render, and empty whenever Show hidden is off, since
    *  filterHiddenRows has already dropped hidden rows from the cache entirely in that case. */
@@ -155,8 +165,12 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
 
   async getChildren(element?: DownloadsNode): Promise<DownloadsNode[]> {
     if (element) return []; // flat list — no row has children
-    if (!this.cache) this.cache = await this.load();
-    return this.cache;
+    this.cache ??= await this.load();
+    if (!this.filterLower) return this.cache;
+    // An ErrorNode survives every filter — hiding the reason the list is wrong behind a
+    // name match is exactly the silently-wrong state ADR-0026 forbids.
+    return this.cache.filter((n) =>
+      !(n instanceof DownloadNode) || n.row.name.toLowerCase().includes(this.filterLower));
   }
 
   /** Scans downloads/, builds and hidden-filters rows, and republishes

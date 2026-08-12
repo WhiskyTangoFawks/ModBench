@@ -104,15 +104,23 @@ masters; there is no separate load-session step.
   VS Code and cannot change at runtime, so the view's own writable title carries the mEdit
   context instead — it reads "Plugins" in loadout mode and "mEdit — Plugins" once
   `modbench.viewMode` flips to `'editing'`, reverting on exit.
+- **Title bar** (#247): the name filter at slot 1, the record filter and its Clear at slot 2,
+  New Plugin… at slot 3, and native **Collapse All** — added here because this is the deepest
+  tree in the product (plugin → record type → record) and was the one view missing it. Close
+  mEdit left this bar for the [Loadout header](loadout-header.md)'s mEdit row, and this tree no
+  longer carries a Refresh of its own: re-reading the tree is Reload Session, which is a
+  distinct, explicitly-named command in the header's overflow because it costs seconds and can
+  disturb staged work.
 - **Multi-select** (`canSelectMany`): Ctrl/Shift-click selects multiple nodes, possibly
   spanning plugins and record types; batch-capable context commands (currently Remove Record)
   receive the full selection.
 - **Plugin-name filter**: a title-bar magnifier opens a transient `InputBox` that live-filters
   the top-level plugin nodes by case-insensitive filename substring; dismissing it restores the
-  full list. This is the shared cross-surface filter convention (Mods tree, Downloads, Plugin
-  List, and here). It is a **distinct axis** from the record filter below: this narrows *which
-  plugins* appear; the record filter narrows *which records* appear under a plugin. The two
-  compose.
+  full list. This is the one shared filter widget, used by every Modbench list view (Mods,
+  Downloads, Plugin List, and here — #247). It is a **distinct axis** from the record filter
+  below: this narrows *which plugins* appear; the record filter narrows *which records* appear
+  under a plugin. The two compose, and their icons say which is which — `$(search)` narrows by
+  name, `$(filter)` narrows by condition.
 - **Top-level nodes**: one node per loaded plugin (children: Worldspaces + cell - Interior group
   nodes plus flat record-type nodes), and a lazy-counted **Conflicts** node listing conflict
   records. `WRLD`/`CELL`/`REFR`/`ACHR` are shown spatially (below) and hidden from the flat

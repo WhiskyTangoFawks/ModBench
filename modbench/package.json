@@ -85,6 +85,10 @@
     "views": {
       "modbench": [
         {
+          "id": "modbench.loadoutHeader",
+          "name": "Loadout"
+        },
+        {
           "id": "modbench.modList",
           "name": "Mods",
           "when": "modbench.viewMode == 'loadout'"
@@ -159,7 +163,7 @@
         "title": "Modbench: Reload Session"
       },
       {
-        "command": "modbench.refreshTree",
+        "command": "modbench.refresh",
         "title": "Modbench: Refresh",
         "icon": "$(refresh)"
       },
@@ -329,11 +333,6 @@
         "icon": "$(close)"
       },
       {
-        "command": "modbench.modList.refresh",
-        "title": "Modbench: Refresh Mod List",
-        "icon": "$(refresh)"
-      },
-      {
         "command": "modbench.modList.sortDescending",
         "title": "Modbench: Show Winning Mods at Top",
         "icon": "$(triangle-down)"
@@ -354,9 +353,9 @@
         "icon": "$(clear-all)"
       },
       {
-        "command": "modbench.modList.launchGame",
-        "title": "Modbench: Launch Game",
-        "icon": "$(run-all)"
+        "command": "modbench.launch",
+        "title": "Modbench: Launch…",
+        "icon": "$(play)"
       },
       {
         "command": "modbench.modList.installFromArchive",
@@ -438,6 +437,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.downloads.filter",
+        "title": "Modbench: Filter Downloads…",
+        "icon": "$(search)"
+      },
+      {
         "command": "modbench.downloads.sortBy",
         "title": "Modbench: Sort Downloads By…"
       },
@@ -450,11 +454,6 @@
         "command": "modbench.downloads.hideHidden",
         "title": "Modbench: Hide Hidden Downloads",
         "icon": "$(eye-closed)"
-      },
-      {
-        "command": "modbench.pluginListTree.refresh",
-        "title": "Modbench: Refresh Plugin List",
-        "icon": "$(refresh)"
       },
       {
         "command": "modbench.pluginListTree.filter",
@@ -470,57 +469,67 @@
       "commandPalette": [
         {
           "command": "modbench.modList.deploy",
-          "when": "modbench.deploymentStandalone"
+          "when": "modbench.workspaceIsMo2Instance && modbench.deploymentStandalone"
         },
         {
           "command": "modbench.modList.purge",
-          "when": "modbench.deploymentStandalone"
+          "when": "modbench.workspaceIsMo2Instance && modbench.deploymentStandalone"
         },
         {
-          "command": "modbench.modList.launchGame",
-          "when": "modbench.deploymentStandalone"
+          "command": "modbench.launch",
+          "when": "modbench.workspaceIsMo2Instance && modbench.deploymentStandalone"
         }
       ],
       "view/title": [
+        {
+          "command": "modbench.refresh",
+          "when": "view == modbench.loadoutHeader",
+          "group": "navigation@1"
+        },
+        {
+          "command": "modbench.launch",
+          "when": "view == modbench.loadoutHeader && modbench.workspaceIsMo2Instance && modbench.deploymentStandalone",
+          "group": "navigation@2"
+        },
+        {
+          "command": "modbench.modList.deploy",
+          "when": "view == modbench.loadoutHeader && modbench.workspaceIsMo2Instance && modbench.deploymentStandalone",
+          "group": "2_deployment"
+        },
+        {
+          "command": "modbench.modList.purge",
+          "when": "view == modbench.loadoutHeader && modbench.workspaceIsMo2Instance && modbench.deploymentStandalone",
+          "group": "2_deployment"
+        },
+        {
+          "command": "modbench.reloadSession",
+          "when": "view == modbench.loadoutHeader",
+          "group": "1_session"
+        },
         {
           "command": "modbench.pluginListTree.filter",
           "when": "view == modbench.pluginListTree",
           "group": "navigation@1"
         },
         {
-          "command": "modbench.pluginListTree.refresh",
-          "when": "view == modbench.pluginListTree",
-          "group": "navigation@2"
-        },
-        {
           "command": "modbench.filterPluginTree",
           "when": "view == modbench.pluginTree",
-          "group": "navigation"
-        },
-        {
-          "command": "modbench.refreshTree",
-          "when": "view == modbench.pluginTree",
-          "group": "navigation"
-        },
-        {
-          "command": "modbench.closeMedit",
-          "when": "view == modbench.pluginTree",
-          "group": "navigation@9"
+          "group": "navigation@1"
         },
         {
           "command": "modbench.newPlugin",
           "when": "view == modbench.pluginTree",
-          "group": "navigation"
+          "group": "navigation@3"
         },
         {
           "command": "modbench.setFilter",
           "when": "view == modbench.pluginTree",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "modbench.clearFilter",
           "when": "view == modbench.pluginTree && modbench.filterActive",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "modbench.modList.filter",
@@ -528,54 +537,29 @@
           "group": "navigation@1"
         },
         {
-          "command": "modbench.modList.switchProfile",
-          "when": "view == modbench.modList",
-          "group": "navigation@2"
-        },
-        {
-          "command": "modbench.modList.launchMedit",
-          "when": "view == modbench.modList",
-          "group": "navigation@3"
-        },
-        {
-          "command": "modbench.modList.refresh",
-          "when": "view == modbench.modList",
-          "group": "navigation@4"
-        },
-        {
-          "command": "modbench.modList.deploy",
-          "when": "view == modbench.modList && modbench.deploymentStandalone",
-          "group": "navigation@5"
-        },
-        {
-          "command": "modbench.modList.purge",
-          "when": "view == modbench.modList && modbench.deploymentStandalone",
-          "group": "navigation@6"
-        },
-        {
-          "command": "modbench.modList.launchGame",
-          "when": "view == modbench.modList && modbench.deploymentStandalone",
-          "group": "navigation@7"
-        },
-        {
           "command": "modbench.modList.sortDescending",
           "when": "view == modbench.modList && !modbench.modList.sortDescending",
-          "group": "navigation@9"
+          "group": "navigation@2"
         },
         {
           "command": "modbench.modList.sortAscending",
           "when": "view == modbench.modList && modbench.modList.sortDescending",
-          "group": "navigation@9"
+          "group": "navigation@2"
+        },
+        {
+          "command": "modbench.downloads.filter",
+          "when": "view == modbench.downloads",
+          "group": "navigation@1"
         },
         {
           "command": "modbench.downloads.showHidden",
           "when": "view == modbench.downloads && !modbench.downloads.showHidden",
-          "group": "navigation@1"
+          "group": "navigation@2"
         },
         {
           "command": "modbench.downloads.hideHidden",
           "when": "view == modbench.downloads && modbench.downloads.showHidden",
-          "group": "navigation@1"
+          "group": "navigation@2"
         },
         {
           "command": "modbench.downloads.sortBy",
@@ -585,12 +569,12 @@
         {
           "command": "modbench.saveAllGroups",
           "when": "view == modbench.changeGroupTree && modbench.hasPendingChanges",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "modbench.revertAllGroups",
           "when": "view == modbench.changeGroupTree && modbench.hasPendingChanges",
-          "group": "navigation"
+          "group": "1_revert"
         }
       ],
       "editor/title": [
