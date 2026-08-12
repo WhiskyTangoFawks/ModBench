@@ -191,20 +191,38 @@ there is no separate load-session step.
   between same-named plugins from different mods is a Mod-Management concern the row model
   doesn't compute or care about — it only manages the sequence of names.
 - Checkbox reflects the line's `*` prefix (MO2's own enabled marker).
-- **Current leading-slot behavior**: a checkbox on an ordinary `plugins.txt` line
-  (`contextValue: "plugin"`), and no icon at all — no checkbox, no lock, nothing — on an implicit
-  master (`contextValue: "pluginImplicit"`, discovered from the game's Data folder rather than a
-  `plugins.txt` line). Read-only-for-editing is conveyed only by which context-menu actions are
-  absent, never by an icon, for either row kind today.
-- **ADR-0035's design is not yet built and this spec does not silently override it.**
-  [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md) states the leading slot
-  should answer exactly one question — "can you change whether this loads?" — with a lock icon
-  on the implicit-master case specifically (forced-on, not a checkbox), resolving a contradiction
-  between this surface's pre-merge no-lock stance and the pre-merge Editing tree's own lock icon
-  by giving the lock one meaning. That reconciliation has not happened in code: there is no lock
-  anywhere on the merged tree today, `pluginImplicit` carries no icon, and deciding what (if
-  anything) should render there is [#276](https://github.com/WhiskyTangoFawks/ModBench/issues/276)'s
-  question, not this document's to answer.
+- **The leading slot answers exactly one question — "can you change whether this loads?"**
+  ([#276](https://github.com/WhiskyTangoFawks/ModBench/issues/276), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)):
+  a checkbox on a togglable `plugins.txt` line (`contextValue: "plugin"`); a lock icon on an
+  implicit master (`contextValue: "pluginImplicit"`, discovered from the game's Data folder rather
+  than a `plugins.txt` line) — forced on, neither toggled nor dragged; nothing at all on a row that
+  stands for no plugin file in the load order at all (today only the sentinel error/empty rows —
+  [#34](https://github.com/WhiskyTangoFawks/ModBench/issues/34)'s non-participating rows don't
+  exist yet). This resolves the contradiction this spec's pre-merge self and the pre-merge Editing
+  tree spec had — no lock because it misrepresented toggleability, vs. a lock for read-only-ness —
+  by giving the lock one meaning: it is never about record editability, only about this row's own
+  toggle/drag facts, which Mod Management already owns without needing the Editing session.
+  Read-only-for-editing is a separate fact and is never an icon on this tree, on any row kind — see
+  Record navigation below.
+- **MO2 itself doesn't render this as a lock.** `pluginlist.cpp`'s `forceLoaded` row (its own
+  equivalent of an implicit master) is a *checked, disabled* checkbox with grayed name text and a
+  tooltip — never a distinct icon. That pattern isn't reproducible here: `TreeItemCheckboxState`
+  is `Checked`/`Unchecked` only, with no non-interactive variant, so a rendered VS Code checkbox is
+  always clickable — a checked-but-forced-on row would invite a toggle the extension would have to
+  silently revert. The lock is the platform-forced substitute for the icon only; everything else
+  about MO2's presentation carries over unchanged: the row's label is grayed
+  (`ImplicitMasterDecorationProvider`, the same `resourceUri` + `FileDecorationProvider` pattern as
+  the Downloads tree's hidden-row dimming), it stays undraggable, and the tooltip uses MO2's own
+  wording ("This plugin can't be disabled or moved (enforced by the game)."), not invented copy.
+- **Read-only-for-editing** (Editing's "Immutable plugin", `PluginMetadata.isImmutable`) is decided
+  and rendered by `PluginsTreeComposite` — the one place already allowed to know both bounded
+  contexts — once a session reports it, as a tooltip appended to whatever tooltip the row already
+  carries (e.g. the missing-master badge below). It is never a `contextValue`: no per-row editing
+  command exists yet to gate off one, and adding that plumbing before a command needs it would be
+  exactly the speculative scaffolding this project's conventions rule out. **Open Header stays
+  reachable on a read-only plugin, ungated** — viewing a plugin's header is not an editing action,
+  only the fields inside it are (see Record navigation below); a read-only plugin's row otherwise
+  has no editing action to hide today, since none is contributed on a plugin row yet.
 
 ### Row children ([#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
 
@@ -236,9 +254,9 @@ there is no separate load-session step.
 ### Record navigation (Editing, once a session is running)
 
 - **Plugin nodes** (`contextValue: "plugin"`, or `"pluginImplicit"` for an implicitly-loaded
-  vanilla/DLC master not named in `plugins.txt` — see Row model above; reconciling this pair
-  with any future read-only marker is [#276](https://github.com/WhiskyTangoFawks/ModBench/issues/276),
-  not decided here). An **Open Header** action (context menu; also available inline) opens the
+  vanilla/DLC master not named in `plugins.txt` — see Row model above; read-only-for-editing is a
+  tooltip `PluginsTreeComposite` appends, never a third `contextValue`, per Row model above). An
+  **Open Header** action (context menu; also available inline) opens the
   plugin's **header record** — author, masters, flags — as a single-column record panel. A
   plugin's context menu also exposes New Plugin…, Copy as Override Into…, and — on editable
   plugins only — Add New Record…, Convert to ESL/ESM, Add Master…, and Run Script…. Each is a
@@ -490,10 +508,6 @@ overflow, then native **Collapse All** last.
   first-class feature — see User Story 24.
 - **What the record editor does with a record once opened** —
   [medit-record-editor.md](medit-record-editor.md).
-- **A read-only/immutable marker reconciled with `pluginImplicit`** —
-  [#276](https://github.com/WhiskyTangoFawks/ModBench/issues/276)'s job; this spec deliberately
-  encodes no immutability semantics on the merged tree's implicit-master row beyond the existing
-  `pluginImplicit` contextValue.
 
 ## Further Notes
 
