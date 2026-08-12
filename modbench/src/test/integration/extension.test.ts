@@ -23,6 +23,14 @@ const MOCK_PLUGINS = [
   // (Editing's "Immutable plugin") — exercises the composite's tooltip decoration end-to-end,
   // distinct from ImplicitMasterNode's own (Mod-Management-only, no session needed) lock icon.
   { name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', participates: true, isImmutable: true },
+  // #277 / ADR-0037: a plugin the backend flags with a directly-missing master — exercises the
+  // composite's error decoration end-to-end. Deliberately carries no `masterIssues` key on any
+  // *other* MOCK_PLUGINS entry (e.g. TestMod.esp above) so those rows double as the "wire omits
+  // the field entirely" case a hand-typed PluginMetadata fixture could never produce on its own.
+  {
+    name: 'MissingMaster.esp', path: '/data/MissingMaster.esp', origin: 'Data', participates: true,
+    masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' }],
+  },
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let sessionLoaded = false;
@@ -582,7 +590,7 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
 // load order state survives a Launch mEdit / Close mEdit round trip untouched (AC5), and its
 // write path (enable/disable) stays reachable while a session is running (AC4).
 
-interface PluginListNodeLike { plugin?: { name?: string } }
+interface PluginListNodeLike { plugin?: { name?: string; enabled?: boolean } }
 interface PluginListProviderLike {
   setFilter(text: string): void;
   setPluginEnabled(name: string, enabled: boolean): Promise<void>;
@@ -862,5 +870,66 @@ describe('A read-only plugin\'s tooltip says so once a session is running (#276)
     const row = findRow(await tree.getChildren(), 'Immutable.esm');
 
     assert.strictEqual(tree.getTreeItem(row).tooltip, undefined);
+  });
+});
+
+// #277 / ADR-0037 AC1/AC2/AC4/AC7: a plugin the backend flags with a missing master is decorated
+// through the real wiring (extension.ts's sessionPluginFilesFrom → PluginsTreeComposite.setSession),
+// not just the composite's own unit seam already covered by PluginsTreeComposite.test.ts. Also
+// covers the defensive-read requirement: MOCK_PLUGINS sends raw JSON no PluginMetadata-typed
+// fixture could produce, so TestMod.esp — which carries no `masterIssues` key at all — proves the
+// "field absent" case degrades to undecorated rather than throwing.
+describe('A plugin with a missing master is flagged, never deactivated (#277)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
+  const pluginListProviderOf = () =>
+    (ext?.exports as { pluginListProvider?: PluginListProviderLike } | undefined)?.pluginListProvider;
+  let gameDir = '';
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-missingmaster-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n');
+    pluginListProviderOf()?.invalidate();
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.commands.executeCommand('modbench.closeMedit');
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '');
+    fs.rmSync(gameDir, { recursive: true, force: true });
+  });
+
+  it('flags the row with an error decoration naming the missing master, and stays checked', async () => {
+    const tree = pluginsTree()!;
+    const row = findRow(await tree.getChildren(), 'MissingMaster.esp');
+    const item = tree.getTreeItem(row);
+
+    assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('Missing master: Ghost.esm'),
+      `expected a missing-master tooltip, got: ${String(item.tooltip)}`);
+    // AC2: never deactivated, excluded or hidden — still expandable (in the session) and checked.
+    assert.strictEqual(item.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
+    assert.strictEqual((row as PluginListNodeLike).plugin?.enabled, true);
+    // AC3: the leading slot (checkbox) is untouched by this decoration — a real TreeItemCheckboxState
+    // read, not just the underlying model's `enabled` flag, so a regression in the decoration
+    // logic itself (not just in plugins.txt writing) would be caught here.
+    assert.strictEqual(item.checkboxState, vscode.TreeItemCheckboxState.Checked);
+  });
+
+  it('degrades to undecorated, without throwing, for a plugin the wire sends no masterIssues for at all', async () => {
+    const tree = pluginsTree()!;
+    const row = findRow(await tree.getChildren(), 'TestMod.esp');
+
+    const item = tree.getTreeItem(row);
+
+    assert.strictEqual(item.tooltip, undefined);
   });
 });

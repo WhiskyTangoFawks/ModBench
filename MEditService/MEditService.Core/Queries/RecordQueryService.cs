@@ -20,13 +20,19 @@ public sealed class RecordQueryService(
     public IReadOnlyList<PluginResponse> GetPlugins()
     {
         var s = RequireSession();
+        // #277 / ADR-0037: one whole-session classification per call, not per plugin — Classify
+        // is already a single pass over every plugin's Masters list.
+        var masterIssues = MasterResolution.Classify(s.Plugins, s.LoadFailures);
+        PluginResponse ToResponse(PluginMetadata p) =>
+            PluginResponse.FromMetadata(p, masterIssues.GetValueOrDefault(p.Name));
+
         if (s.FilterSql is null)
-            return [.. s.Plugins.Select(PluginResponse.FromMetadata)];
+            return [.. s.Plugins.Select(ToResponse)];
 
         var matchingPlugins = RequireRepository().GetPluginsWithMatchingRecords(RequireSchemas().Keys);
         return [.. s.Plugins
             .Where(p => matchingPlugins.Contains(p.Name))
-            .Select(PluginResponse.FromMetadata)];
+            .Select(ToResponse)];
     }
 
     // The header isn't a browsable record type (User Story 7's "expand a plugin -> record types"

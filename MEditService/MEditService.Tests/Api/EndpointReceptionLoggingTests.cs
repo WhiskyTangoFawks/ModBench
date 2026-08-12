@@ -144,7 +144,7 @@ public sealed class EndpointReceptionLoggingTests
             throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) =>
-            new(name, name, 0, false, false, [], 0, false, true, "Data");
+            new(name, name, 0, false, false, [], 0, false, true, "Data", []);
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();

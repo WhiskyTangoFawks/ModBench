@@ -44,6 +44,7 @@ function makePlugin(i: number): PluginMetadata {
     recordCount: 100,
     isImmutable: false,
     origin: 'Data',
+    masterIssues: [],
   };
 }
 

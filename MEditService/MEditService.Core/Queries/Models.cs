@@ -6,6 +6,10 @@ namespace MEditService.Core.Queries;
 
 // Origin (#269 / ADR-0036): opaque here — the mod folder that provided this plugin, or a reserved
 // PluginOrigin value. Nothing keys on it yet; see PluginMetadata.
+//
+// MasterIssues (#277 / ADR-0037): this plugin's own declared masters that aren't resolvable in the
+// session — never a transitive/cascaded fact about a master's own masters. Empty, never null, for
+// a plugin whose masters all resolved. See MasterResolution.Classify.
 public record PluginResponse(
     string Name,
     string Path,
@@ -16,10 +20,12 @@ public record PluginResponse(
     int RecordCount,
     bool IsImmutable,
     bool Participates,
-    string Origin)
+    string Origin,
+    IReadOnlyList<MasterIssue> MasterIssues)
 {
-    public static PluginResponse FromMetadata(PluginMetadata m) =>
-        new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates, m.Origin);
+    public static PluginResponse FromMetadata(PluginMetadata m, IReadOnlyList<MasterIssue>? masterIssues = null) =>
+        new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates, m.Origin,
+            masterIssues ?? []);
 }
 
 public record RecordSummary(

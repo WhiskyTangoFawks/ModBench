@@ -38,7 +38,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { PluginListProvider, PluginNode, ImplicitMasterNode, ErrorNode, EmptyNode, pluginFileOf } from './PluginListProvider';
+import { PluginListProvider, PluginNode, ImplicitMasterNode, ErrorNode, EmptyNode, pluginFileOf, orderIssueMastersOf } from './PluginListProvider';
 
 /** Minimal IModlistSource stub: only the two plugin read methods matter here;
  *  everything else throws to prove PluginListProvider never touches them. */
@@ -325,6 +325,22 @@ describe('PluginNode — order-aware missing-master badge', () => {
     const ok = new PluginNode({ name: 'A.esp', enabled: true }, { kind: 'ok' });
     expect(ok.iconPath).toBeUndefined();
     expect(ok.description).toBeUndefined();
+  });
+});
+
+// #277 / ADR-0037 AC8: the composite's session-aware reconciliation needs the raw master names
+// this row's order-aware badge flagged, structurally — not by parsing the rendered tooltip text
+// (fragile, and out of reach for a composite that must import no Mod-Management vocabulary).
+describe('orderIssueMastersOf', () => {
+  it('returns the flagged master names for a masterNotLoadedBefore row', () => {
+    const node = new PluginNode({ name: 'Child.esp', enabled: true }, { kind: 'masterNotLoadedBefore', masters: ['Base.esp', 'Other.esp'] });
+    expect(orderIssueMastersOf(node)).toEqual(['Base.esp', 'Other.esp']);
+  });
+
+  it('returns undefined for a plain row, an ok status, or a non-plugin row', () => {
+    expect(orderIssueMastersOf(new PluginNode({ name: 'A.esp', enabled: true }))).toBeUndefined();
+    expect(orderIssueMastersOf(new PluginNode({ name: 'A.esp', enabled: true }, { kind: 'ok' }))).toBeUndefined();
+    expect(orderIssueMastersOf(new ImplicitMasterNode('Fallout4.esm'))).toBeUndefined();
   });
 });
 

@@ -631,6 +631,12 @@ export interface components {
         };
         /** @enum {string} */
         FormKeyResolutionState: "Unresolved" | "ResolvedWrongType" | "ResolvedValidType";
+        MasterIssue: {
+            masterName?: string | null;
+            kind?: components["schemas"]["MasterIssueKind"];
+        };
+        /** @enum {string} */
+        MasterIssueKind: "DirectlyMissing" | "Unloadable";
         ParsedCondition: {
             function?: string | null;
             operator?: components["schemas"]["ConditionOperator"];
@@ -717,6 +723,7 @@ export interface components {
             isImmutable?: boolean;
             participates?: boolean;
             origin?: string | null;
+            masterIssues?: components["schemas"]["MasterIssue"][] | null;
         };
         ProblemDetails: {
             type?: string | null;

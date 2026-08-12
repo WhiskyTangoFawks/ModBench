@@ -40,6 +40,73 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal(TestPluginFixture.RecordCount, plugins[0].RecordCount);
     }
 
+    // #277 / ADR-0037: a plugin whose master is absent from the whole session is flagged on the
+    // wire, not just detected in-memory — this is what lets the tree render it.
+    [Fact]
+    public void GetPlugins_PluginWithMissingMaster_ReportsItAsDirectlyMissing()
+    {
+        // ADR-0038: masters are lifecycle-derived from the live object graph, never
+        // user-declared — a bare ModHeader.MasterReferences.Add is discarded on write. A genuine
+        // reference into the (never-built) master is what makes Mutagen record it for real.
+        using var fx = new PluginFixtureBuilder("rqs-missing-master")
+            .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("PatchedNpc").Race.SetTo(
+                new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800)))
+            .Build();
+        using var manager = new SessionManager(
+            new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)),
+            new PluginWriter(SharedSchemaReflector.Instance, NullLogger<PluginWriter>.Instance));
+        manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
+        var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), SharedSchemaReflector.Instance, new ConflictClassifier());
+
+        var plugins = svc.GetPlugins();
+
+        var patch = Assert.Single(plugins, p => p.Name == "Patch.esp");
+        var issue = Assert.Single(patch.MasterIssues);
+        Assert.Equal("Ghost.esm", issue.MasterName);
+        Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
+    }
+
+    // #277 / ADR-0037 AC6: pinning, not new behavior — ADR-0037 states this already works
+    // (Mutagen builds FormKeys from a plugin's own header, so reading never requires a master to
+    // exist, and a FormLink into an absent one already resolves to nothing and already falls back
+    // to the raw FormKey). This is the true end-to-end version of that claim: a whole session
+    // built via GameSession/SessionManager (not a hand-fed DuckDbRecordRepository), where the
+    // referenced master is never part of the load order at all — no plugins.txt line, no file.
+    [Fact]
+    public void GetRecord_ReferenceIntoAbsentMaster_RendersUnresolvedRatherThanErroring()
+    {
+        FormKey npcFormKey = default;
+        using var fx = new PluginFixtureBuilder("rqs-absent-master-ref")
+            .WithPlugin("Patch.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("PatchedNpc");
+                npcFormKey = npc.FormKey;
+                npc.Race.SetTo(new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800));
+            })
+            .Build();
+        using var manager = new SessionManager(
+            new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)),
+            new PluginWriter(SharedSchemaReflector.Instance, NullLogger<PluginWriter>.Instance));
+        manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
+        var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), SharedSchemaReflector.Instance, new ConflictClassifier());
+
+        var detail = svc.GetRecord(npcFormKey.ToString());
+
+        Assert.NotNull(detail);
+        var raceField = Assert.Single(detail.Fields, f => f.Metadata.Name == "race");
+        Assert.NotNull(raceField.Value);
+        Assert.Contains("Ghost.esm", raceField.Value!.ToString());
+        Assert.Contains("Could not be resolved", raceField.CheckError);
+    }
+
+    [Fact]
+    public void GetPlugins_PluginWithNoMissingMasters_ReportsEmptyMasterIssues()
+    {
+        var plugins = _svc.GetPlugins();
+
+        Assert.Empty(plugins[0].MasterIssues);
+    }
+
     // --- GET /record-types ---
 
     [Fact]

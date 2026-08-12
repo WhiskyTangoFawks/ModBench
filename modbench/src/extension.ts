@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as cp from 'child_process';
 import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
-import { createApiClient, type ApiClient } from './medit/ApiClient';
+import { createApiClient, type ApiClient, type MasterIssue } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController } from './medit/SessionController';
 import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
@@ -32,7 +32,7 @@ import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNod
 import { createOverwriteWatcher } from './modmanager/overwriteWatcher';
 import { createModsWatcher } from './modmanager/modsWatcher';
 import { OverwriteDecorationProvider } from './modmanager/OverwriteDecorationProvider';
-import { PluginListProvider, pluginFileOf, type PluginListNode } from './modmanager/PluginListProvider';
+import { PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListNode } from './modmanager/PluginListProvider';
 import { PluginsTreeComposite } from './PluginsTreeComposite';
 import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './modmanager/gameDirectory';
 import { deploy, isDeployed, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
@@ -94,15 +94,18 @@ function makePendingStateHandler(
   };
 }
 
-/** #270 / #276: which plugin files the running session actually holds — the session's own list,
- *  not the one we sent it, because the backend prepends the game's implicit masters and those are
- *  rows in the Plugins tree too — plus, of that set, which are read-only for editing (Editing's
- *  "Immutable plugin", `PluginMetadata.isImmutable`). Bundled as one fact, not two separate reads:
- *  both come off the same `getPlugins()` call and are handed to `PluginsTreeComposite.setSession`
- *  together, so there is never a moment where a caller could have one without the other. */
+/** #270 / #276 / #277: which plugin files the running session actually holds — the session's own
+ *  list, not the one we sent it, because the backend prepends the game's implicit masters and
+ *  those are rows in the Plugins tree too — plus, of that set, which are read-only for editing
+ *  (Editing's "Immutable plugin", `PluginMetadata.isImmutable`) and each plugin's own master
+ *  issues (`PluginMetadata.masterIssues`, #277 / ADR-0037). Bundled as one fact, not three
+ *  separate reads: all three come off the same `getPlugins()` call and are handed to
+ *  `PluginsTreeComposite.setSession` together, so there is never a moment where a caller could
+ *  have one without the others. */
 interface SessionPluginFiles {
   files: Set<string>;
   readOnly: Set<string>;
+  masterIssues: Map<string, MasterIssue[]>;
 }
 
 function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<SessionPluginFiles> {
@@ -111,6 +114,11 @@ function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<
     return {
       files: new Set(plugins.map((p) => p.name)),
       readOnly: new Set(plugins.filter((p) => p.isImmutable).map((p) => p.name)),
+      // #277 / ADR-0037: the wire's `masterIssues` is optional/nullable even though the backend
+      // always emits an array — `PluginRepository.toPluginMetadata()` already normalizes this,
+      // but `?? []` here too rather than trusting that guarantee silently, per the field's own
+      // wire contract (`masterIssues?: MasterIssue[] | null`).
+      masterIssues: new Map(plugins.map((p) => [p.name, p.masterIssues ?? []] as const)),
     };
   };
 }
@@ -1127,6 +1135,9 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     rows: pluginListProvider,
     children: recordBrowser,
     pluginFileOf,
+    // #277 / ADR-0037 AC8: lets the composite reconcile the order-aware badge with session state
+    // by master name, instead of two decorations that can disagree.
+    orderIssueMastersOf,
   });
   pluginsTree = composite;
   // A backend that dies takes the session with it, and `exitToLoadout` is not on that path — a
@@ -1564,14 +1575,18 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
       // There's no progress stream, so name the count and warn it can take a while.
       progress?.report({ message: `indexing ${plugins.length} plugins… (this can take a while)` });
       outputChannel.info(`[extension] backend healthy; loading session (${plugins.length} plugins)`);
-      await controller.loadExplicitSession(plugins, gd.dataFolder);
+      const failures = await controller.loadExplicitSession(plugins, gd.dataFolder);
       await controller.syncFilterState();
       changeGroupTreeProvider.refresh();
       // #270 / ADR-0035: rows gain chevrons here and nowhere else — this is the moment records
       // become queryable, the same moment #75 gates the editing tree's first fetch on.
       try {
         const session = await sessionPluginFiles();
-        pluginsTree?.setSession(session.files, session.readOnly);
+        // #277 / ADR-0037 AC7: the same failures the toast inside loadExplicitSession already
+        // consumed — held here (not re-derived, not a second endpoint) and handed to the tree
+        // through the same setSession bundle as everything else the session reports.
+        const loadFailures = new Map(failures.map((f) => [f.name ?? '?', f.reason ?? 'Unknown error'] as const));
+        pluginsTree?.setSession(session.files, session.readOnly, session.masterIssues, loadFailures);
       } catch (err) {
         // Leaving every row a leaf is a safe *render*, but it is not an honest one: the session
         // did load, so the tree would be telling the user editing is unavailable when it is
