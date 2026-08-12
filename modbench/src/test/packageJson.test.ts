@@ -64,6 +64,15 @@ describe('package.json Loadout header view (#247)', () => {
   });
 });
 
+describe('package.json Pending Changes gates on staged work, not view mode (#273 Slice A)', () => {
+  const sidebarViews = () => pkg.contributes.views.modbench as { id: string; name: string; when?: string }[];
+
+  it('is visible exactly when modbench.hasPendingChanges is true, never on modbench.viewMode', () => {
+    const view = sidebarViews().find((v) => v.id === 'modbench.changeGroupTree');
+    expect(view!.when).toBe('modbench.hasPendingChanges');
+  });
+});
+
 describe('package.json Loadout views stay visible through an editing session (#268)', () => {
   const sidebarViews = () => pkg.contributes.views.modbench as { id: string; name: string; when?: string }[];
   const welcome = () => pkg.contributes.viewsWelcome as { view: string; when: string }[];
@@ -77,10 +86,12 @@ describe('package.json Loadout views stay visible through an editing session (#2
       expect(view!.when ?? '').not.toMatch(/modbench\.viewMode/);
     });
 
-  // The editing views stay gated — they browse a session that doesn't exist until Launch
-  // mEdit creates one, so "appear in addition to, not instead of" still means gated on
-  // 'editing' for these three, just no longer exclusive with the loadout trio above.
-  it.each(['modbench.pluginTree', 'modbench.changeGroupTree'])(
+  // The editing Plugins tree stays gated — it browses a session that doesn't exist until
+  // Launch mEdit creates one, so "appear in addition to, not instead of" still means gated on
+  // 'editing', just no longer exclusive with the loadout trio above.
+  // #273 Slice A: modbench.changeGroupTree no longer belongs in this list — it moved off the
+  // view-mode gate onto modbench.hasPendingChanges (see the dedicated Slice A describe block).
+  it.each(['modbench.pluginTree'])(
     '%s keeps its editing-mode gate — it has nothing to show before a session exists', (id) => {
       const view = sidebarViews().find((v) => v.id === id);
       expect(view!.when).toBe("modbench.viewMode == 'editing'");

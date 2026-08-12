@@ -285,9 +285,12 @@ export function activate(context: vscode.ExtensionContext) {
   statusBarItem.text = '$(plug) mEdit';
 
   // Exposed for integration tests (pinned Overwrite row #82; editing tree after launch #75;
-  // editing tree title follows view mode #109; leveled output channel #198; Downloads tree
-  // #233; merged Plugins tree #270) — unused in production.
-  return { modListProvider, downloadsProvider, pluginListProvider, pluginsTree, treeProvider, treeView, changeGroupTreeView, outputChannel };
+  // leveled output channel #198; Downloads tree #233; merged Plugins tree #270;
+  // modbench.hasPendingChanges toggles both ways #273) — unused in production.
+  return {
+    modListProvider, downloadsProvider, pluginListProvider, pluginsTree, treeProvider, treeView,
+    changeGroupTreeProvider, changeGroupTreeView, outputChannel,
+  };
 }
 
 

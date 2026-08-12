@@ -23,10 +23,15 @@ const MOCK_PLUGINS = [
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let sessionLoaded = false;
 const requestLog: string[] = [];
+// #273 Slice A: GET /change-groups' answer, mutable per-test so a suite can flip staged work
+// on and off and observe modbench.hasPendingChanges (via the badge, its same-signal proxy —
+// see the toggle test) react both directions, not just once.
+let pendingGroups: Array<{ id: string; operation: string; description: string | null; changeCount: number; pluginCount: number }> = [];
 
 function resetMockBackend(): void {
   sessionLoaded = false;
   requestLog.length = 0;
+  pendingGroups = [];
 }
 
 function createMockBackend(): http.Server {
@@ -67,6 +72,19 @@ function createMockBackend(): http.Server {
     if (/^\/plugins\/[^/]+\/record-types$/.test(url)) {
       res.writeHead(sessionLoaded ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(sessionLoaded ? JSON.stringify(MOCK_RECORD_TYPES) : 'No session loaded.');
+      return;
+    }
+    // #273 Slice A: PendingChangesTreeProvider.getChildren() reads both on every root render —
+    // /changes only matters when a group is expanded, which this suite never does, so it always
+    // answers empty.
+    if (url === '/change-groups') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(pendingGroups));
+      return;
+    }
+    if (url === '/changes') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify([]));
       return;
     }
     res.writeHead(404);
@@ -406,6 +424,43 @@ describe('Overwrite row (#82)', () => {
     p.invalidate();
     const roots = await p.getChildren();
     assert.ok(!roots.some((n) => n.kind === 'overwrite'), 'Overwrite row should disappear when the folder is empty');
+  });
+});
+
+// ── Pending Changes visible exactly when there is staged work (#273 Slice A) ────
+// The declarative gate itself (view.when === 'modbench.hasPendingChanges') is proven statically
+// in packageJson.test.ts. What only a live host can show is that the key actually toggles both
+// directions as staged work appears and clears — makePendingStateHandler sets the context key
+// and the view's badge from the same stagedGroups number in the same call, so the badge (public,
+// already exported on changeGroupTreeView) is the observable proxy for the key: they cannot
+// disagree by construction, and VS Code exposes no public API to read a context key's value
+// directly from a test.
+
+interface PendingChangesTreeProviderLike {
+  getChildren(element?: unknown): Promise<unknown[]>;
+}
+
+describe('Pending Changes visibility tracks staged work, both directions (#273 Slice A)', () => {
+  const exportsOf = () => ext?.exports as {
+    changeGroupTreeProvider?: PendingChangesTreeProviderLike;
+    changeGroupTreeView?: { badge?: { value: number } };
+  } | undefined;
+
+  before(() => resetMockBackend());
+  after(() => resetMockBackend());
+
+  it('sets the badge (and so modbench.hasPendingChanges) once a change group is staged', async () => {
+    pendingGroups = [{ id: 'g1', operation: 'field_edit', description: null, changeCount: 1, pluginCount: 1 }];
+    await exportsOf()!.changeGroupTreeProvider!.getChildren();
+    assert.strictEqual(exportsOf()?.changeGroupTreeView?.badge?.value, 1,
+      'badge should report 1 staged group once /change-groups returns one');
+  });
+
+  it('clears the badge (and so modbench.hasPendingChanges) once nothing is staged', async () => {
+    pendingGroups = [];
+    await exportsOf()!.changeGroupTreeProvider!.getChildren();
+    assert.strictEqual(exportsOf()?.changeGroupTreeView?.badge, undefined,
+      'badge should clear once /change-groups returns no groups — the same call path, run again, must undo itself');
   });
 });
 

@@ -109,7 +109,7 @@
         {
           "id": "modbench.changeGroupTree",
           "name": "Pending Changes",
-          "when": "modbench.viewMode == 'editing'"
+          "when": "modbench.hasPendingChanges"
         }
       ],
       "modbenchReferencedBy": [
