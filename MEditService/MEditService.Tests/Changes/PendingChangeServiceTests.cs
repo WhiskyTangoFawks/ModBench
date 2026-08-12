@@ -62,6 +62,26 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Equal(JsonValueKind.Null, changes[0].OldValue.ValueKind);
     }
 
+    // #271 / ADR-0036: the pending-change store binds a staged edit to the compound identity
+    // (form_key, origin, plugin, field_path), not filename alone — two plugins sharing a filename
+    // but differing in origin must persist as distinct staged edits rather than the second's
+    // ON CONFLICT silently overwriting the first.
+    [Fact]
+    public void Upsert_SameFieldSamePluginDifferentOrigin_BothPersist()
+    {
+        var old = new Dictionary<string, JsonElement> { ["name"] = J("\"Old\"") };
+        _svc.Upsert(new PendingChangeUpsert("FK", "P.esp", "npc_",
+            new Dictionary<string, JsonElement> { ["name"] = J("\"FromModA\"") }, "user", null, old, Origin: "ModA"));
+        _svc.Upsert(new PendingChangeUpsert("FK", "P.esp", "npc_",
+            new Dictionary<string, JsonElement> { ["name"] = J("\"FromModB\"") }, "user", null, old, Origin: "ModB"));
+
+        var result = _svc.GetChanges(plugin: "P.esp", formKey: "FK");
+
+        Assert.Equal(2, result.Count);
+        Assert.Contains(result, c => c.NewValue.GetRawText() == "\"FromModA\"");
+        Assert.Contains(result, c => c.NewValue.GetRawText() == "\"FromModB\"");
+    }
+
     [Fact]
     public void GetChanges_FiltersByPlugin()
     {

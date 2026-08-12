@@ -35,14 +35,20 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         finally { _sem.Release(); }
     }
 
+    // #271 / ADR-0036: `origin` binds a staged edit to the compound identity alongside `plugin` —
+    // the PK and every ON CONFLICT target below widen to (form_key, origin, plugin, field_path), so
+    // two edits sharing a filename but differing in origin persist as distinct rows instead of the
+    // second silently overwriting the first. Defaulted for the same reason as every other origin
+    // column introduced this ticket.
     internal static void EnsureTable(DuckDBConnection connection)
     {
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
+        cmd.CommandText = $"""
             CREATE TABLE IF NOT EXISTS pending_changes (
                 id          VARCHAR     NOT NULL,
                 form_key    VARCHAR     NOT NULL,
                 plugin      VARCHAR     NOT NULL,
+                origin      VARCHAR     NOT NULL DEFAULT '{Session.PluginOrigin.DataDirectory}',
                 field_path  VARCHAR     NOT NULL,
                 record_type VARCHAR     NOT NULL,
                 old_value   VARCHAR     NOT NULL,
@@ -53,7 +59,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 change_type VARCHAR     NOT NULL DEFAULT 'field_edit',
                 parent_cell     VARCHAR,
                 placement_group VARCHAR,
-                PRIMARY KEY (form_key, plugin, field_path)
+                PRIMARY KEY (form_key, origin, plugin, field_path)
             );
             CREATE TABLE IF NOT EXISTS pending_form_references (
                 source_form_key VARCHAR NOT NULL,
@@ -121,9 +127,9 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             INSERT INTO pending_changes
-                (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-            ON CONFLICT (form_key, plugin, field_path) DO UPDATE SET
+                (id, form_key, plugin, origin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            ON CONFLICT (form_key, origin, plugin, field_path) DO UPDATE SET
                 new_value   = excluded.new_value,
                 changed_at  = excluded.changed_at,
                 source      = excluded.source,
@@ -134,6 +140,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         cmd.Parameters.Add(new DuckDBParameter { Value = id });
         cmd.Parameters.Add(new DuckDBParameter { Value = change.FormKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = change.Plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = change.Origin });
         cmd.Parameters.Add(new DuckDBParameter { Value = field });
         cmd.Parameters.Add(new DuckDBParameter { Value = change.RecordType });
         cmd.Parameters.Add(new DuckDBParameter { Value = oldRaw });
@@ -583,9 +590,9 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 using var ins = conn.CreateCommand();
                 ins.CommandText = """
                     INSERT INTO pending_changes
-                        (id, form_key, plugin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, $10, $11, $12)
-                    ON CONFLICT (form_key, plugin, field_path) DO UPDATE SET
+                        (id, form_key, plugin, origin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, $10, $11, $12, $13)
+                    ON CONFLICT (form_key, origin, plugin, field_path) DO UPDATE SET
                         new_value   = excluded.new_value,
                         changed_at  = excluded.changed_at,
                         change_type = excluded.change_type,
@@ -594,6 +601,7 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
                 ins.Parameters.Add(new DuckDBParameter { Value = Guid.NewGuid().ToString() });
                 ins.Parameters.Add(new DuckDBParameter { Value = m.FormKey });
                 ins.Parameters.Add(new DuckDBParameter { Value = m.Plugin });
+                ins.Parameters.Add(new DuckDBParameter { Value = m.Origin });
                 ins.Parameters.Add(new DuckDBParameter { Value = m.FieldPath });
                 ins.Parameters.Add(new DuckDBParameter { Value = m.RecordType });
                 ins.Parameters.Add(new DuckDBParameter { Value = m.OldValue.GetRawText() });
@@ -610,17 +618,17 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
 
             // No group was declared; the grouping is derived from the staged rows (ADR-0028). Return
             // the component the first member landed in — its member change id is the group's id.
-            var anchor = FindChange(conn, members[0].FormKey, members[0].Plugin, members[0].FieldPath);
+            var anchor = FindChange(conn, members[0].FormKey, members[0].Origin, members[0].Plugin, members[0].FieldPath);
             return Describe(ComponentOf(conn, anchor.Id)!);
         }
         finally { _sem.Release(); }
     }
 
-    private static PendingChange FindChange(DuckDBConnection conn, string formKey, string plugin, string fieldPath) =>
+    private static PendingChange FindChange(DuckDBConnection conn, string formKey, string origin, string plugin, string fieldPath) =>
         DoSelectChanges(
             conn,
-            " WHERE form_key = $1 AND plugin = $2 AND field_path = $3",
-            [formKey, plugin, fieldPath]).Single();
+            " WHERE form_key = $1 AND origin = $2 AND plugin = $3 AND field_path = $4",
+            [formKey, origin, plugin, fieldPath]).Single();
 
     public async Task<SaveGroupResult> ExecuteGroupSaveAsync(
         Guid memberChangeId,

@@ -1,3 +1,4 @@
+using DuckDB.NET.Data;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -34,5 +35,30 @@ public sealed class SessionManagerLoadExplicitOriginTests
 
         var plugin = manager.Session!.Plugins.Single(p => p.Name == "A.esp");
         Assert.Equal("SomeMod", plugin.Origin);
+    }
+
+    // #271 / ADR-0036: PluginMetadata.Origin alone (asserted above, since #269) never reached the
+    // DuckDB index — SessionManager.IndexAndStore now threads it into Index(), so the indexed row
+    // itself carries the real origin rather than silently falling back to the reserved default.
+    [Fact]
+    public void LoadExplicit_WithOrigin_IndexedRecordCarriesRealOrigin()
+    {
+        using var fx = new PluginFixtureBuilder("sm-explicit-origin-indexed")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
+            .BuildScattered();
+        var withOrigin = fx.Plugins.Select(p => (p.Name, p.Path, Origin: "SomeMod")).ToList();
+
+        using var manager = MakeManager();
+        ISessionManager sessionManager = manager;
+        sessionManager.LoadExplicit(fx.GameDirectory, withOrigin, GameRelease.Fallout4);
+
+        var repository = (IRecordRepository)manager.Repository!;
+        using var cmd = repository.Connection.CreateCommand();
+        cmd.CommandText = "SELECT DISTINCT origin FROM npc_ WHERE plugin = $1";
+        cmd.Parameters.Add(new DuckDBParameter { Value = "A.esp" });
+        using var reader = cmd.ExecuteReader();
+
+        Assert.True(reader.Read());
+        Assert.Equal("SomeMod", reader.GetString(0));
     }
 }

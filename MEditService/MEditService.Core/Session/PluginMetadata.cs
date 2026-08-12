@@ -6,10 +6,11 @@ namespace MEditService.Core.Session;
 // ConflictClassifier.Classify. Implicit masters and freshly created plugins always participate.
 //
 // Origin (#269 / ADR-0036): the mod folder that provided this physical file, or one of the
-// reserved values in PluginOrigin — opaque here, never interpreted. Nothing keys on it yet.
-// Defaulted (like Participates) so pre-existing test fixtures that construct a PluginMetadata
-// positionally without naming every field keep compiling; every real construction site
-// (GameSession.BuildPluginMetadata) always passes it explicitly.
+// reserved values in PluginOrigin — opaque here, never interpreted. As of #271, SessionManager
+// threads this into DuckDbRecordRepository.Index, so record tables key on (form_key, origin,
+// plugin) — this is no longer inert. Defaulted (like Participates) so pre-existing test fixtures
+// that construct a PluginMetadata positionally without naming every field keep compiling; every
+// real construction site (GameSession.BuildPluginMetadata) always passes it explicitly.
 public record PluginMetadata(
     string Name,
     string Path,

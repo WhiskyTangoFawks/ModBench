@@ -117,15 +117,16 @@ public sealed class SessionManagerLoadExplicitTests
         public void SetFilter(string? sql) => inner.SetFilter(sql);
         public void Initialize(GameRelease release) => inner.Initialize(release);
 
-        public void Index(IModGetter pluginMod, int loadOrderIndex, bool participates = true)
+        public void Index(IModGetter pluginMod, int loadOrderIndex, bool participates = true, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory)
         {
             if (pluginMod.ModKey.FileName.ToString().Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"injected index failure for {poisonPlugin}");
-            inner.Index(pluginMod, loadOrderIndex, participates);
+            inner.Index(pluginMod, loadOrderIndex, participates, origin);
         }
 
         public void UpdateWinners() => inner.UpdateWinners();
-        public void SetPluginParticipation(string plugin, bool participates) => inner.SetPluginParticipation(plugin, participates);
+        public void SetPluginParticipation(string plugin, bool participates, string origin = MEditService.Core.Session.PluginOrigin.DataDirectory) =>
+            inner.SetPluginParticipation(plugin, participates, origin);
         public void Dispose() => inner.Dispose();
 
         public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset) =>
