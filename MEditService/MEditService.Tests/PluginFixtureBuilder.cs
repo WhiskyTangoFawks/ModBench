@@ -8,17 +8,17 @@ namespace MEditService.Tests;
 public sealed class PluginFixtureBuilder(string prefix = "medit")
 {
     private readonly string _prefix = prefix;
-    private readonly List<(string Name, bool Listed, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>>? Configure, BinaryWriteParameters? WriteParams)> _plugins = [];
+    private readonly List<(string Name, bool Listed, bool Enabled, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>>? Configure, BinaryWriteParameters? WriteParams)> _plugins = [];
 
-    public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, bool listed = true, BinaryWriteParameters? writeParams = null)
+    public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, bool listed = true, BinaryWriteParameters? writeParams = null, bool enabled = true)
     {
-        _plugins.Add((name, listed, configure is null ? null : (mod, _) => configure(mod), writeParams));
+        _plugins.Add((name, listed, enabled, configure is null ? null : (mod, _) => configure(mod), writeParams));
         return this;
     }
 
-    public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, bool listed = true)
+    public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, bool listed = true, bool enabled = true)
     {
-        _plugins.Add((name, listed, configure, null));
+        _plugins.Add((name, listed, enabled, configure, null));
         return this;
     }
 
@@ -28,7 +28,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         Directory.CreateDirectory(dataFolder);
 
         var builtMods = new List<Fallout4Mod>();
-        foreach (var (name, _, configure, writeParams) in _plugins)
+        foreach (var (name, _, _, configure, writeParams) in _plugins)
         {
             var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
             configure?.Invoke(mod, builtMods.AsReadOnly());
@@ -39,7 +39,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         var pluginsTxtPath = Path.Combine(dataFolder, "Plugins.txt");
         var lines = _plugins
             .Where(p => p.Listed)
-            .Select(p => $"*{p.Name}");
+            .Select(p => $"{(p.Enabled ? "*" : "")}{p.Name}");
         File.WriteAllText(pluginsTxtPath, string.Join("\n", lines) + "\n");
 
         return new PluginFixtureData(dataFolder, pluginsTxtPath);
@@ -64,7 +64,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         var builtMods = new List<Fallout4Mod>();
         var explicitPlugins = new List<(string Name, string Path)>();
         var i = 0;
-        foreach (var (name, _, configure, writeParams) in _plugins)
+        foreach (var (name, _, _, configure, writeParams) in _plugins)
         {
             var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
             configure?.Invoke(mod, builtMods.AsReadOnly());

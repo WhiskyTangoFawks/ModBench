@@ -41,6 +41,25 @@ public class ConditionConflictClassifierTests
         Assert.Equal(ConflictAll.Override, result.ConflictContribution);
     }
 
+    // #267 / ADR-0035: a non-participating plugin's conditions are excluded before classification —
+    // a differing condition between an enabled master and a disabled override is not a conflict.
+    [Fact]
+    public void Classify_DisabledPluginDiffers_ExcludedFromClassification_ReturnsNoConflict()
+    {
+        var participation = new Dictionary<string, bool> { ["Master.esp"] = true, ["Override.esp"] = false };
+
+        var result = ConditionConflictClassifier.Classify(
+            [
+                Input("Master.esp", 0, Condition("GetIsID", 1.0f)),
+                Input("Override.esp", 1, Condition("GetIsID", 2.0f)),
+            ],
+            pluginParticipates: participation);
+
+        Assert.Equal(ConflictAll.NoConflict, result.ConflictContribution);
+        var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
+        Assert.DoesNotContain("Override.esp", diff.CellStates.Keys);
+    }
+
     [Fact]
     public void Classify_ContestedWinner_IsConflict()
     {

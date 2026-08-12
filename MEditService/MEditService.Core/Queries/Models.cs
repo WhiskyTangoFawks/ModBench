@@ -12,10 +12,11 @@ public record PluginResponse(
     bool IsMaster,
     IReadOnlyList<string> Masters,
     int RecordCount,
-    bool IsImmutable)
+    bool IsImmutable,
+    bool Participates)
 {
     public static PluginResponse FromMetadata(PluginMetadata m) =>
-        new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable);
+        new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates);
 }
 
 public record RecordSummary(

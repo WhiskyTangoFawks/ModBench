@@ -23,6 +23,9 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             CreateRecordTable(connection, schema);
     }
 
+    // #267 / ADR-0035: `participates` is the plugins.txt `*` prefix — the one row per plugin that
+    // UpdateWinners()'s per-table sweep joins against so a disabled plugin's row can never win.
+    // Populated by DuckDbRecordRepository.Index (one row per indexed plugin), not hand-maintained.
     private static void CreatePluginsTable(DuckDBConnection connection) =>
         Execute(connection, """
             CREATE TABLE IF NOT EXISTS plugins (
@@ -33,7 +36,8 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 is_writable BOOLEAN NOT NULL DEFAULT FALSE,
                 masters VARCHAR[],
                 record_count INTEGER,
-                file_mtime TIMESTAMP
+                file_mtime TIMESTAMP,
+                participates BOOLEAN NOT NULL DEFAULT TRUE
             )
             """);
 

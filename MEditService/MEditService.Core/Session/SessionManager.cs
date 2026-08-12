@@ -105,7 +105,7 @@ public sealed class SessionManager(
             _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
             try
             {
-                repository.Index(mod, plugin.LoadOrderIndex);
+                repository.Index(mod, plugin.LoadOrderIndex, plugin.Participates);
             }
             catch (Exception ex)
             {
@@ -208,7 +208,7 @@ public sealed class SessionManager(
 
         lock (_lock)
         {
-            repository.Index(loaded.Getter, metadata.LoadOrderIndex);
+            repository.Index(loaded.Getter, metadata.LoadOrderIndex, metadata.Participates);
             repository.UpdateWinners();
         }
 
@@ -231,7 +231,7 @@ public sealed class SessionManager(
             lock (_lock)
             {
                 foreach (var (metadata, repository, item) in loaded)
-                    repository.Index(item.Getter, metadata.LoadOrderIndex);
+                    repository.Index(item.Getter, metadata.LoadOrderIndex, metadata.Participates);
                 if (loaded.Count > 0)
                     loaded[0].Repository.UpdateWinners();
             }

@@ -115,9 +115,12 @@ public sealed class RecordQueryService(
                 return pending == null ? o : (o with { PendingFields = pending.ToDictionary(kv => kv.Key, kv => (object?)kv.Value) });
             }).ToList();
 
-            var pluginMasters = RequireSession().Plugins
-                .ToDictionary(p => p.Name, p => p.Masters);
-            var classification = _conflictClassifier.Classify(withPending, pluginMasters, resolveFormKey);
+            var sessionPlugins = RequireSession().Plugins;
+            var pluginMasters = sessionPlugins.ToDictionary(p => p.Name, p => p.Masters);
+            // #267 / ADR-0035: a non-participating plugin's override is indexed and browsable but
+            // never contributes to conflict classification.
+            var pluginParticipates = sessionPlugins.ToDictionary(p => p.Name, p => p.Participates);
+            var classification = _conflictClassifier.Classify(withPending, pluginMasters, resolveFormKey, pluginParticipates);
             var annotated = withPending
                 .ConvertAll(o => new CompareOverride(
                     o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields, o.PendingFields,
@@ -132,7 +135,7 @@ public sealed class RecordQueryService(
             var conflictAll = classification.ConflictAll;
             if (vmadInputs.Any(i => i.Vmad != null))
             {
-                var vmadResult = VmadConflictClassifier.Classify(vmadInputs, resolveFormKey);
+                var vmadResult = VmadConflictClassifier.Classify(vmadInputs, resolveFormKey, pluginParticipates);
                 vmad = vmadResult.Compare;
                 conflictAll = ConflictRules.Escalate(conflictAll, vmadResult.ConflictContribution);
             }
@@ -144,7 +147,7 @@ public sealed class RecordQueryService(
             ConditionCompare? conditions = null;
             if (conditionInputs.Any(i => i.Owners.Count > 0))
             {
-                var conditionResult = ConditionConflictClassifier.Classify(conditionInputs, resolveFormKey);
+                var conditionResult = ConditionConflictClassifier.Classify(conditionInputs, resolveFormKey, pluginParticipates);
                 conditions = conditionResult.Compare;
                 conflictAll = ConflictRules.Escalate(conflictAll, conditionResult.ConflictContribution);
             }
