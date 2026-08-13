@@ -203,9 +203,16 @@ public static class ChangeEndpoints
         };
     }
 
-    private static IResult BulkDeleteChanges(
+    // #300 / ADR-0036: `plugin` alone doesn't identify which copy to revert once a session can hold
+    // two plugins sharing a filename (#34) — resolved server-side via the shared
+    // PluginOriginResolver, same as GetPluginRecordTypes/GetCellReferences (#296), since no wire
+    // caller has ever had an origin to supply on this route. Only meaningful when a plugin is
+    // named: a bare formKey-only bulk revert has no plugin to resolve an origin from and keeps
+    // reverting across every plugin/origin, as before.
+    internal static IResult BulkDeleteChanges(
         [FromQuery] string? plugin,
         [FromQuery] string? formKey,
+        ISessionManager session,
         IPendingChangeService changes,
         ILoggerFactory loggerFactory)
     {
@@ -215,7 +222,8 @@ public static class ChangeEndpoints
             return Results.Problem("At least one of 'plugin' or 'formKey' must be specified.", statusCode: 400);
         var decodedPlugin = plugin != null ? Uri.UnescapeDataString(plugin) : null;
         var decodedFormKey = formKey != null ? Uri.UnescapeDataString(formKey) : null;
-        return Results.Ok(changes.Revert(decodedPlugin, decodedFormKey));
+        var origin = decodedPlugin != null ? PluginOriginResolver.Resolve(session.Session, decodedPlugin) : null;
+        return Results.Ok(changes.Revert(decodedPlugin, decodedFormKey, origin));
     }
 
     private static IResult CreateRecord(
