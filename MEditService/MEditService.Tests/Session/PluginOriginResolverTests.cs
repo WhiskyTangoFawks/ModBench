@@ -55,6 +55,42 @@ public sealed class PluginOriginResolverTests
         Assert.Equal("SomeMod", PluginOriginResolver.Resolve(session, "Disabled.esp"));
     }
 
+    // #306: LoadOrderPlugin is Resolve's own building block, exposed directly for the six write-path
+    // guards that need the metadata itself (IsImmutable), not just the origin string. Same scoping,
+    // same reason: a plain first-match happens to return the right plugin today only because
+    // unlisted copies are appended after the load order is built, never because of any invariant.
+    [Fact]
+    public void LoadOrderPlugin_ShadowedCopyListedFirst_StillReturnsTheLoadOrderCopy()
+    {
+        var session = SessionWith(
+            Plugin("Shared.esp", "ModB", inLoadOrder: false),
+            Plugin("Shared.esp", "ModA", inLoadOrder: true));
+
+        var meta = session.LoadOrderPlugin("Shared.esp");
+
+        Assert.NotNull(meta);
+        Assert.Equal("ModA", meta.Origin);
+        Assert.False(meta.IsImmutable);
+    }
+
+    // Null is the answer for "no load-order member of this name" — callers must read it as a
+    // refusal, not as "not immutable" (that misreading is the bug #306 exists to remove).
+    [Fact]
+    public void LoadOrderPlugin_OnlyCopyIsOutsideTheLoadOrder_ReturnsNull()
+    {
+        var session = SessionWith(Plugin("Orphan.esp", "SomeMod", inLoadOrder: false));
+
+        Assert.Null(session.LoadOrderPlugin("Orphan.esp"));
+    }
+
+    [Fact]
+    public void LoadOrderPlugin_NoSession_ReturnsNull()
+    {
+        IGameSession? session = null;
+
+        Assert.Null(session.LoadOrderPlugin("Anything.esp"));
+    }
+
     private sealed class StubGameSession(IReadOnlyList<PluginMetadata> plugins) : IGameSession
     {
         public string DataFolderPath => throw new NotSupportedException();

@@ -561,13 +561,14 @@ public sealed partial class EditOrchestrator(
             : StagePlainDeletes(plainTargets, source, toNullify, revertedFormKeys);
     }
 
-    // The plugin name of the first target whose plugin is immutable, or null.
+    // The plugin name of the first target that isn't a legitimate write target, or null. #306: no
+    // load-order member of the name refuses here too, same as an immutable one — proceeding would
+    // only stage a delete that could later fail at save time instead of being refused up front.
     private static string? FindImmutablePluginTarget(
         IReadOnlyList<(string FormKey, string Plugin)> targets, IGameSession session) =>
         targets
             .Select(t => t.Plugin)
-            .FirstOrDefault(plugin => session.Plugins.FirstOrDefault(p =>
-                p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase))?.IsImmutable == true);
+            .FirstOrDefault(plugin => session.LoadOrderPlugin(plugin) is not { IsImmutable: false });
 
     // Reverts each pending-create target's whole dependency component (ADR-0028) via the same
     // RevertGroup path the revert-group endpoint uses — no new cascade logic. Returns the FormKeys
@@ -710,9 +711,9 @@ public sealed partial class EditOrchestrator(
         var session = _sessionManager.Session;
         if (session == null) return new RenumberResult.NoSession();
 
-        var pluginMeta = session.Plugins.FirstOrDefault(p =>
-            p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase));
-        if (pluginMeta?.IsImmutable == true)
+        // #306: null (no load-order member of this name) refuses here too — proceeding would only
+        // stage a renumber that could later fail at save time instead of being refused up front.
+        if (session.LoadOrderPlugin(plugin) is not { IsImmutable: false })
             return new RenumberResult.PluginImmutable(plugin);
 
         var recordType = _query.GetRecordType(formKey);
@@ -1128,9 +1129,9 @@ public sealed partial class EditOrchestrator(
         var session = _sessionManager.Session;
         if (session == null) return (new StageEditResult.NoSession(), null, null);
 
-        var pluginMeta = session.Plugins.FirstOrDefault(p =>
-            p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase));
-        if (pluginMeta?.IsImmutable == true)
+        // #306: null (no load-order member of this name) refuses here too — proceeding would only
+        // stage an edit that could later fail at save time instead of being refused up front.
+        if (session.LoadOrderPlugin(plugin) is not { IsImmutable: false })
             return (new StageEditResult.PluginImmutable(plugin), null, null);
 
         var recordType = _query.GetRecordType(formKey);
