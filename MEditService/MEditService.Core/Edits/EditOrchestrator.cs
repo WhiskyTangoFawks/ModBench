@@ -60,7 +60,7 @@ public sealed partial class EditOrchestrator(
         if (referenceErrors.Count > 0)
             return new StageEditResult.InvalidReferences(referenceErrors);
 
-        var currentRecord = _query.GetRecordForPlugin(formKey, plugin);
+        var currentRecord = _query.GetRecordForPlugin(formKey, plugin, ResolveOrigin(plugin));
         var oldValues = new Dictionary<string, JsonElement>();
         if (currentRecord != null)
         {
@@ -337,7 +337,7 @@ public sealed partial class EditOrchestrator(
         // Issue #202: an explicit sourcePlugin copies that plugin's own version of the record (the
         // column-header menu's right-clicked column) rather than the overall winner.
         var sourceRecord = sourcePlugin != null
-            ? _query.GetRecordForPlugin(formKey, sourcePlugin)
+            ? _query.GetRecordForPlugin(formKey, sourcePlugin, ResolveOrigin(sourcePlugin))
             : _query.GetRecord(formKey);
         if (sourceRecord == null) return new StageEditResult.RecordNotFound();
 
@@ -345,7 +345,7 @@ public sealed partial class EditOrchestrator(
             fv => fv.Metadata.Name,
             fv => JsonSerializer.SerializeToElement(fv.Value));
 
-        var currentTarget = _query.GetRecordForPlugin(formKey, targetPlugin);
+        var currentTarget = _query.GetRecordForPlugin(formKey, targetPlugin, ResolveOrigin(targetPlugin));
         var oldValues = new Dictionary<string, JsonElement>();
         if (currentTarget != null)
         {
@@ -438,7 +438,7 @@ public sealed partial class EditOrchestrator(
         if (pending != null && pending.TryGetValue(HeaderMastersField, out var pendingJson))
             return ReadStringArray(pendingJson);
 
-        var committed = _query.GetRecordForPlugin(headerFormKey, plugin)?.Fields
+        var committed = _query.GetRecordForPlugin(headerFormKey, plugin, ResolveOrigin(plugin))?.Fields
             .FirstOrDefault(fv => fv.Metadata.Name == HeaderMastersField);
         return committed != null ? ReadStringArray(JsonSerializer.SerializeToElement(committed.Value)) : [];
     }
@@ -676,7 +676,7 @@ public sealed partial class EditOrchestrator(
         foreach (var fieldGroup in toNullify.GroupBy(t => (t.SourceFormKey, t.SourcePlugin, TopLevelFieldName(t.FieldPath), t.RecordType)))
         {
             var (sourceFormKey, sourcePlugin, topLevelField, recordType) = fieldGroup.Key;
-            var currentRecord = _query.GetRecordForPlugin(sourceFormKey, sourcePlugin)!;
+            var currentRecord = _query.GetRecordForPlugin(sourceFormKey, sourcePlugin, ResolveOrigin(sourcePlugin))!;
             var fieldMap = currentRecord.Fields.ToDictionary(fv => fv.Metadata.Name, fv => fv.Value);
             var oldValue = JsonSerializer.SerializeToElement(fieldMap[topLevelField]);
 
@@ -756,7 +756,7 @@ public sealed partial class EditOrchestrator(
         foreach (var fieldGroup in crossPluginRefs.GroupBy(r => (r.FormKey, r.Plugin, TopLevelFieldName(r.FieldPath), r.RecordType)))
         {
             var (sourceFormKey, sourcePlugin, topLevelField, refRecordType) = fieldGroup.Key;
-            var currentRecord = _query.GetRecordForPlugin(sourceFormKey, sourcePlugin)!;
+            var currentRecord = _query.GetRecordForPlugin(sourceFormKey, sourcePlugin, ResolveOrigin(sourcePlugin))!;
             var fieldMap = currentRecord.Fields.ToDictionary(fv => fv.Metadata.Name, fv => fv.Value);
             var oldValue = JsonSerializer.SerializeToElement(fieldMap[topLevelField]);
             var newValue = ReplaceFormKey(oldValue, formKey, newFormKey);
@@ -949,7 +949,7 @@ public sealed partial class EditOrchestrator(
         if (pending != null && pending.TryGetValue(HeaderFlagsField, out var pendingFlags))
             return (ReadFlagsLong(pendingFlags) & eslBit) != 0;
 
-        var committedFlags = _query.GetRecordForPlugin(headerFormKey, plugin)?.Fields
+        var committedFlags = _query.GetRecordForPlugin(headerFormKey, plugin, ResolveOrigin(plugin))?.Fields
             .FirstOrDefault(fv => fv.Metadata.Name == HeaderFlagsField);
         return committedFlags != null
             && (ReadFlagsLong(JsonSerializer.SerializeToElement(committedFlags.Value)) & eslBit) != 0;

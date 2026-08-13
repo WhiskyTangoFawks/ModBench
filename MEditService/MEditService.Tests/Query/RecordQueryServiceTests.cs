@@ -792,7 +792,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
         var fk = all.Items[0].FormKey;
 
-        var detail = _svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName);
+        var detail = _svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName, "Data");
 
         Assert.NotNull(detail);
         Assert.Equal(fk, detail.FormKey);
@@ -802,7 +802,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetRecordForPlugin_UnknownFormKey_ReturnsNull()
     {
-        var detail = _svc.GetRecordForPlugin("FFFFFF:Unknown.esp", TestPluginFixture.PluginName);
+        var detail = _svc.GetRecordForPlugin("FFFFFF:Unknown.esp", TestPluginFixture.PluginName, "Data");
 
         Assert.Null(detail);
     }
@@ -813,7 +813,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
         var fk = all.Items[0].FormKey;
 
-        var detail = _svc.GetRecordForPlugin(fk, "NonExistent.esp");
+        var detail = _svc.GetRecordForPlugin(fk, "NonExistent.esp", "Data");
 
         Assert.Null(detail);
     }
@@ -1063,7 +1063,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         using (mod)
         {
             spy.Reset();
-            var detail = svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName);
+            var detail = svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName, "Data");
             Assert.NotNull(detail);
             Assert.Equal(1, spy.FindRecordTypeCalls);
             Assert.Equal(1, spy.GetRecordCalls);
@@ -1091,7 +1091,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var (svc, spy, mod) = MakeSpySvc();
         using (mod)
         {
-            svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName);
+            svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName, "Data");
             Assert.False(spy.LastWinnerOnly);
         }
     }
@@ -1338,11 +1338,11 @@ public sealed class RecordQueryServiceTests : IDisposable
 
         public RecordLookupEntry? ResolveFormKey(string formKey) => inner.ResolveFormKey(formKey);
 
-        public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly)
+        public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
         {
             GetRecordCalls++;
             LastWinnerOnly = winnerOnly;
-            return inner.GetRecord(tableName, formKey, plugin, winnerOnly);
+            return inner.GetRecord(tableName, formKey, plugin, origin, winnerOnly);
         }
 
         public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null) =>

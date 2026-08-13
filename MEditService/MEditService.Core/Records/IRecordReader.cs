@@ -13,7 +13,14 @@ public interface IRecordReader
     // "no additional constraint" (trailing, like BuildFilter's own origin) rather than forcing every
     // existing plugin/search/limit/offset call site to change just to keep compiling.
     PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null);
-    RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly);
+    // origin (#296 / ADR-0036, required): nullable — like plugin, since GetRecord(formKey) (the
+    // global-winner lookup) legitimately supplies neither — but no default, so every call site must
+    // say explicitly whether it has one rather than silently keeping the pre-#296 filename-only
+    // behavior. Every call site that supplies a non-null plugin already has a concrete origin in
+    // hand (GetRecordForPlugin, GetPluginRecordTypes's staged lookup), so this mirrors
+    // GetVmad/GetConditions/GetPlacement's required-parameter precedent, not GetRecords' own
+    // trailing-default filter.
+    RecordDetail? GetRecord(string tableName, string formKey, string? plugin, string? origin, bool winnerOnly);
     IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey);
 
     // origin (#272 / ADR-0036, required since #275): the mod folder that provided this plugin's

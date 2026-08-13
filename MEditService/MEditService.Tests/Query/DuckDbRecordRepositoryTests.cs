@@ -89,7 +89,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
         using var repo = LoadedRepository();
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var record = repo.GetRecord("npc_", formKey, null, winnerOnly: true);
+        var record = repo.GetRecord("npc_", formKey, null, null, winnerOnly: true);
 
         Assert.NotNull(record);
         Assert.True(record.IsWinner);
@@ -104,7 +104,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
         var formKey = _fixture.Npc1FormKey.ToString();
         var schema = Reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
 
-        var record = repo.GetRecord("npc_", formKey, null, winnerOnly: true);
+        var record = repo.GetRecord("npc_", formKey, null, null, winnerOnly: true);
 
         Assert.NotNull(record);
         Assert.NotEmpty(schema.RecordColumns);
@@ -136,7 +136,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
         repo.Index(loaded, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
 
-        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, winnerOnly: true);
+        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, null, winnerOnly: true);
 
         Assert.NotNull(record);
         var raceField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "race");
@@ -175,7 +175,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
         using var repo = LoadedRepository();
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var record = repo.GetRecord("npc_", formKey, TestPluginFixture.PluginName, winnerOnly: false);
+        var record = repo.GetRecord("npc_", formKey, TestPluginFixture.PluginName, "Data", winnerOnly: false);
 
         Assert.NotNull(record);
         Assert.Equal(TestPluginFixture.PluginName, record.Plugin);
@@ -207,7 +207,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
             repo.Index(loaded, 0, participates: true, origin: "Data");
             repo.UpdateWinners();
 
-            var record = repo.GetRecord("race", formKey, null, winnerOnly: false);
+            var record = repo.GetRecord("race", formKey, null, null, winnerOnly: false);
 
             Assert.NotNull(record);
             var flags = record.Fields.Single(f => f.Metadata.Name == "flags");
@@ -225,7 +225,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
     {
         using var repo = LoadedRepository();
 
-        var record = repo.GetRecord("npc_", "FFFFFF:Unknown.esp", null, winnerOnly: false);
+        var record = repo.GetRecord("npc_", "FFFFFF:Unknown.esp", null, null, winnerOnly: false);
 
         Assert.Null(record);
     }
@@ -255,7 +255,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
             repo.Index(modB, 1, participates: true, origin: "Data");
             repo.UpdateWinners();
 
-            var record = repo.GetRecord("npc_", npcKey.ToString(), null, winnerOnly: true);
+            var record = repo.GetRecord("npc_", npcKey.ToString(), null, null, winnerOnly: true);
 
             Assert.NotNull(record);
             Assert.True(record.IsWinner);
@@ -405,7 +405,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
         repo.Index(loaded, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
 
-        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, winnerOnly: true);
+        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, null, winnerOnly: true);
 
         Assert.NotNull(record);
         var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
@@ -495,7 +495,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
         var summary = repo.GetRecords("npc_", null, null, 100, 0).Items.Single();
         Assert.Null(summary.EditorId);
 
-        var detail = repo.GetRecord("npc_", npcFormKey.ToString(), null, winnerOnly: false);
+        var detail = repo.GetRecord("npc_", npcFormKey.ToString(), null, null, winnerOnly: false);
         Assert.NotNull(detail);
         Assert.Null(detail.EditorId);
     }
@@ -507,7 +507,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
     {
         var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            repo.GetRecord("npc_", "000001:Test.esp", null, winnerOnly: false));
+            repo.GetRecord("npc_", "000001:Test.esp", null, null, winnerOnly: false));
         Assert.Equal("Call Initialize before using the repository.", ex.Message);
         repo.Dispose();
     }
@@ -602,7 +602,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
         // Unset FormLink fields are appended as null → IsDBNull=true → must return C# null not DBNull.Value
         using var repo = LoadedRepository();
         var formKey = _fixture.Npc1FormKey.ToString();
-        var record = repo.GetRecord("npc_", formKey, null, winnerOnly: true);
+        var record = repo.GetRecord("npc_", formKey, null, null, winnerOnly: true);
         Assert.NotNull(record);
         var linkField = record.Fields.FirstOrDefault(f => f.Metadata.Type == "formKey" && f.Value == null);
         Assert.NotNull(linkField); // NPC has unset FormLink fields → null in DuckDB
@@ -614,7 +614,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
         // Float fields (height, weight) are value types — always non-null in DuckDB
         using var repo = LoadedRepository();
         var formKey = _fixture.Npc1FormKey.ToString();
-        var record = repo.GetRecord("npc_", formKey, null, winnerOnly: true);
+        var record = repo.GetRecord("npc_", formKey, null, null, winnerOnly: true);
         Assert.NotNull(record);
         var floatField = record.Fields.FirstOrDefault(f => f.Metadata.Type == "float");
         Assert.NotNull(floatField);
@@ -646,7 +646,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
         repo.Index(loaded, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
 
-        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, winnerOnly: true);
+        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, null, winnerOnly: true);
         Assert.NotNull(record);
         var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
         Assert.NotNull(keywordsField);
@@ -677,7 +677,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
         repo.Index(loaded, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
 
-        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, winnerOnly: true);
+        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, null, winnerOnly: true);
         Assert.NotNull(record);
         var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
         Assert.NotNull(keywordsField);

@@ -28,7 +28,7 @@ public class WorldspaceQueryServiceTests
             LastGetRecordsOrigin = origin;
             return new(records ?? [], (records ?? []).Count);
         }
-        public RecordDetail? GetRecord(string t, string fk, string? p, bool w) => null;
+        public RecordDetail? GetRecord(string t, string fk, string? p, string? origin, bool w) => null;
         public IReadOnlyList<RecordDetail> GetAllOverrides(string t, string fk) => [];
         public VmadData? GetVmad(string fk, string p, string origin) => null;
         public IReadOnlyList<ConditionOwner> GetConditions(string fk, string p, string origin) => [];

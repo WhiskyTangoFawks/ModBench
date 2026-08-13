@@ -51,7 +51,7 @@ public sealed class EditOrchestratorVmadTests
         public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset)
             => inner.GetRecords(type, plugin, search, limit, offset);
         public RecordDetail? GetRecord(string formKey) => inner.GetRecord(formKey);
-        public RecordDetail? GetRecordForPlugin(string formKey, string plugin) => inner.GetRecordForPlugin(formKey, plugin);
+        public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => inner.GetRecordForPlugin(formKey, plugin, origin);
         public string? GetRecordType(string formKey) => inner.GetRecordType(formKey);
         public IReadOnlyList<string> GetNativeFormKeys(string plugin) => inner.GetNativeFormKeys(plugin);
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
@@ -113,7 +113,7 @@ public sealed class EditOrchestratorVmadTests
         public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset)
             => inner.GetRecords(type, plugin, search, limit, offset);
         public RecordDetail? GetRecord(string formKey) => inner.GetRecord(formKey);
-        public RecordDetail? GetRecordForPlugin(string formKey, string plugin) => inner.GetRecordForPlugin(formKey, plugin);
+        public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => inner.GetRecordForPlugin(formKey, plugin, origin);
         public string? GetRecordType(string formKey) => inner.GetRecordType(formKey);
         public IReadOnlyList<string> GetNativeFormKeys(string plugin) => inner.GetNativeFormKeys(plugin);
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);

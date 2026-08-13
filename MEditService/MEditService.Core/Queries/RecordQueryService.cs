@@ -96,14 +96,14 @@ public sealed class RecordQueryService(
     {
         var repository = RequireRepository();
         var tableName = repository.FindRecordType(formKey);
-        return tableName == null ? null : repository.GetRecord(tableName, formKey, plugin: null, winnerOnly: true);
+        return tableName == null ? null : repository.GetRecord(tableName, formKey, plugin: null, origin: null, winnerOnly: true);
     }
 
-    public RecordDetail? GetRecordForPlugin(string formKey, string plugin)
+    public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin)
     {
         var repository = RequireRepository();
         var tableName = repository.FindRecordType(formKey);
-        return tableName == null ? null : repository.GetRecord(tableName, formKey, plugin, winnerOnly: false);
+        return tableName == null ? null : repository.GetRecord(tableName, formKey, plugin, origin, winnerOnly: false);
     }
 
     public string? GetRecordType(string formKey) =>
@@ -187,6 +187,10 @@ public sealed class RecordQueryService(
     public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin)
     {
         var repository = RequireRepository();
+        // #296: wire-facing (/plugins/{plugin}/record-types only ever supplies a bare plugin
+        // filename), so origin is resolved server-side rather than added as a new route parameter —
+        // same reasoning as GetRecords/GetWorldspaces.
+        var origin = PluginOriginResolver.Resolve(_session.Session, plugin);
         var counts = RequireSchemas().Keys
             .Where(t => t != HeaderTableName)
             .Select(t => (Type: t, Count: repository.CountRecordsForPlugin(t, plugin)))
@@ -195,7 +199,7 @@ public sealed class RecordQueryService(
 
         foreach (var recordType in _changes.GetStagedFormKeys(plugin)
             .Where(s => !counts.ContainsKey(s.RecordType)
-                || repository.GetRecord(s.RecordType, s.FormKey, plugin, winnerOnly: false) == null)
+                || repository.GetRecord(s.RecordType, s.FormKey, plugin, origin, winnerOnly: false) == null)
             .Select(s => s.RecordType))
         {
             counts.TryGetValue(recordType, out var existing);

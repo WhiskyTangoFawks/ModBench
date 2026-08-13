@@ -56,6 +56,28 @@ public class CompoundPluginIdentityTests
         Assert.Contains(overrides, o => o.EditorId == "FromModB");
     }
 
+    // #296 / ADR-0036: GetRecord's own plugin filter couldn't pick one origin's copy over another's
+    // even though the RecordDetail it returns has carried Origin since #272 — the one piece #272/#275
+    // left unclosed for this method. origin is required (not defaulted) here: every real caller
+    // (GetRecordForPlugin, GetPluginRecordTypes's staged-reconciliation lookup) already has plugin in
+    // hand as a concrete, non-optional value, so this mirrors GetVmad/GetConditions/GetPlacement's
+    // #275 precedent, not GetRecords' nullable filter — the compiler must enumerate every call site.
+    [Fact]
+    public void TwoOrigins_SameFilenameSameFormKey_GetRecord_ScopesToRequestedOrigin()
+    {
+        var (modA, modB, npcKey) = BuildSharedFilenameFixture();
+
+        using var repo = OpenRepo();
+        repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
+        repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
+
+        var record = repo.GetRecord("npc_", npcKey.ToString(), "Shared.esp", "ModA", winnerOnly: false);
+
+        Assert.NotNull(record);
+        Assert.Equal("FromModA", record.EditorId);
+        Assert.Equal("ModA", record.Origin);
+    }
+
     // #296 / ADR-0036: GetRecords' outer WHERE filtered by plugin filename alone, and RecordSummary
     // carried no Origin at all — so a listing scoped to one filename silently merged both origins'
     // rows with no way to tell them apart, the same class of bug the worldspace tree reads had.

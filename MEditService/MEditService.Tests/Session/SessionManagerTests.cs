@@ -458,7 +458,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
 
             await manager.SavePlugin("TestPlugin.esp", [change]);
 
-            var detail = manager.Repository!.GetRecord("npc_", npcKey.ToString(), "TestPlugin.esp", winnerOnly: false)!;
+            var detail = manager.Repository!.GetRecord("npc_", npcKey.ToString(), "TestPlugin.esp", "Data", winnerOnly: false)!;
             var aggressionValue = detail.Fields.First(f => f.Metadata.Name == "aggression").Value?.ToString();
             Assert.Equal("Frenzied", aggressionValue);
         }
@@ -677,7 +677,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
 
             await manager.ReindexPlugins(["Plugin.esp"]);
 
-            var detail = manager.Repository!.GetRecord("npc_", npcKey.ToString(), "Plugin.esp", winnerOnly: false)!;
+            var detail = manager.Repository!.GetRecord("npc_", npcKey.ToString(), "Plugin.esp", "Data", winnerOnly: false)!;
             var aggressionValue = detail.Fields.First(f => f.Metadata.Name == "aggression").Value?.ToString();
             Assert.Equal("Frenzied", aggressionValue);
             Assert.True(detail.IsWinner);

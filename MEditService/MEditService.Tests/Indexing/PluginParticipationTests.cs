@@ -135,7 +135,7 @@ public class PluginParticipationTests
         repo.Index(mod, 0, participates: false, origin: "Data");
         repo.UpdateWinners();
 
-        var record = repo.GetRecord("npc_", npcKey.ToString(), plugin: "Disabled.esp", winnerOnly: false);
+        var record = repo.GetRecord("npc_", npcKey.ToString(), plugin: "Disabled.esp", origin: "Data", winnerOnly: false);
 
         Assert.NotNull(record);
         Assert.False(record.IsWinner);

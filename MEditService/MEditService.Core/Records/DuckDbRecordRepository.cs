@@ -301,7 +301,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return new PagedResult<RecordSummary>(items, (int)total);
     }
 
-    public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly)
+    public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
     {
         var schema = RequireSchemas()[tableName];
         var conditions = new List<string> { "form_key = $1" };
@@ -312,6 +312,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         {
             conditions.Add($"plugin = ${values.Count + 1}");
             values.Add(plugin);
+        }
+        if (origin != null)
+        {
+            conditions.Add($"origin = ${values.Count + 1}");
+            values.Add(origin);
         }
 
         var where = " WHERE " + string.Join(" AND ", conditions);

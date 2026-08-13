@@ -55,7 +55,7 @@ public sealed class SessionManagerLoadExplicitTests
         using var manager = MakeManager();
         manager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var winner = manager.Repository!.GetRecord("npc_", shared.ToString(), null, winnerOnly: true);
+        var winner = manager.Repository!.GetRecord("npc_", shared.ToString(), null, null, winnerOnly: true);
         Assert.NotNull(winner);
         Assert.True(winner.IsWinner);
         Assert.Equal("Override.esp", winner.Plugin);
@@ -131,8 +131,8 @@ public sealed class SessionManagerLoadExplicitTests
 
         public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null) =>
             inner.GetRecords(tableName, plugin, search, limit, offset, origin);
-        public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly) =>
-            inner.GetRecord(tableName, formKey, plugin, winnerOnly);
+        public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, string? origin, bool winnerOnly) =>
+            inner.GetRecord(tableName, formKey, plugin, origin, winnerOnly);
         public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey) =>
             inner.GetAllOverrides(tableName, formKey);
         public VmadData? GetVmad(string formKey, string plugin, string origin) => inner.GetVmad(formKey, plugin, origin);
