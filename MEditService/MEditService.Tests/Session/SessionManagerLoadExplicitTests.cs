@@ -124,6 +124,7 @@ public sealed class SessionManagerLoadExplicitTests
             inner.Index(pluginMod, loadOrderIndex, participates, origin);
         }
 
+        public void Unindex(string plugin, string origin) => inner.Unindex(plugin, origin);
         public void UpdateWinners() => inner.UpdateWinners();
         public void SetPluginParticipation(string plugin, bool participates, string origin) =>
             inner.SetPluginParticipation(plugin, participates, origin);

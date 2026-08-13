@@ -176,6 +176,30 @@ public sealed class GameSession : IGameSession
     public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) =>
         Open(filePath, origin, loadOrderIndex, isImmutable: true, participates: false, inLoadOrder: false);
 
+    /// <summary>
+    /// Closes a plugin the load order does not name and forgets it (#34 / ADR-0035) — the inverse
+    /// of <see cref="AddUnlistedPlugin"/>. Load-order members are refused: dropping one would
+    /// change which file a filename resolves to underneath staged edits, which is a session reload,
+    /// not a visibility toggle. Returns false when no such copy is open.
+    /// </summary>
+    public bool RemoveUnlistedPlugin(string pluginName, string origin)
+    {
+        var metadata = _plugins.FirstOrDefault(p =>
+            !p.InLoadOrder
+            && p.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase)
+            && p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase));
+        if (metadata == null) return false;
+
+        if (_modsByKey.Remove(KeyOf(origin, metadata.Name), out var mod) && mod is IDisposable disposable)
+        {
+            _mods.Remove((IModDisposeGetter)mod);
+            disposable.Dispose();
+        }
+
+        _plugins.Remove(metadata);
+        return true;
+    }
+
     private PluginMetadata Open(
         string filePath, string origin, int loadOrderIndex, bool isImmutable, bool participates, bool inLoadOrder = true)
     {

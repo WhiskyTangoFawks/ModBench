@@ -45,6 +45,16 @@ public interface ISessionManager
     PluginResponse LoadUnlistedPlugin(string path, string origin);
 
     /// <summary>
+    /// Closes and unindexes a plugin loaded via <see cref="LoadUnlistedPlugin"/>, leaving no row,
+    /// column or record behind — ADR-0035's "hidden means absent" (#34).
+    /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
+    /// Throws <see cref="KeyNotFoundException"/> if no such copy is loaded, including when the
+    /// named copy is a load-order member: those are never unloadable, since dropping one would
+    /// change winners underneath staged edits.
+    /// </summary>
+    void UnloadUnlistedPlugin(string plugin, string origin);
+
+    /// <summary>
     /// Writes <paramref name="changes"/> to disk via the plugin writer, then re-indexes the updated plugin
     /// into the record repository and recomputes winners. Owns the full save lifecycle.
     /// Throws <see cref="InvalidOperationException"/> if no session is loaded.

@@ -80,6 +80,7 @@ public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposa
         public void Unload() => inner.Unload();
         public PluginResponse CreatePlugin(string name) => inner.CreatePlugin(name);
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => inner.LoadUnlistedPlugin(path, origin);
+        public void UnloadUnlistedPlugin(string plugin, string origin) => inner.UnloadUnlistedPlugin(plugin, origin);
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => inner.SavePlugin(plugin, changes);
         public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes) => inner.PreparePluginSave(plugin, changes);
         public string ReserveFormKey(string plugin) => inner.ReserveFormKey(plugin);

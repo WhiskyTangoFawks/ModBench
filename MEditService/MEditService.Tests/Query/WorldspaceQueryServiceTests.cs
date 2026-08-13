@@ -53,6 +53,7 @@ public class WorldspaceQueryServiceTests
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string n) => throw new NotSupportedException();
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
+        public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string p, IReadOnlyList<PendingChange> c) => throw new NotSupportedException();
         public Task<PreparedPluginSave> PreparePluginSave(string p, IReadOnlyList<PendingChange> c) => throw new NotSupportedException();
         public Task ReindexPlugin(string p) => throw new NotSupportedException();
@@ -74,6 +75,7 @@ public class WorldspaceQueryServiceTests
         public Mutagen.Bethesda.Plugins.Records.IModGetter? GetMod(string pluginName, string origin) => null;
         public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();
         public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) => throw new NotSupportedException();
+        public bool RemoveUnlistedPlugin(string pluginName, string origin) => throw new NotSupportedException();
         public void Dispose() { }
     }
 

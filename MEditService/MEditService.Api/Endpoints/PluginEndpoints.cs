@@ -5,6 +5,8 @@ namespace MEditService.Api.Endpoints;
 
 public static class PluginEndpoints
 {
+    private const string Tag = "Plugins";
+
     public static IEndpointRouteBuilder MapPluginEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/plugins", (IRecordQueryService svc, ILoggerFactory loggerFactory) =>
@@ -13,7 +15,7 @@ public static class PluginEndpoints
             return Results.Ok(svc.GetPlugins());
         })
             .WithName("GetPlugins")
-            .WithTags("Plugins")
+            .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>();
 
         MapCatalog(app, "/record-types", "GetRecordTypes", svc => svc.GetRecordTypes());
@@ -33,22 +35,30 @@ public static class PluginEndpoints
             return Results.Ok(svc.GetPluginRecordTypes(decoded));
         })
             .WithName("GetPluginRecordTypes")
-            .WithTags("Plugins")
+            .WithTags(Tag)
             .Produces<IReadOnlyList<PluginRecordTypeCount>>();
 
         app.MapPost("/plugins/create", CreatePlugin)
             .WithName("CreatePlugin")
-            .WithTags("Plugins")
+            .WithTags(Tag)
             .Produces<PluginResponse>()
             .ProducesProblem(400)
             .ProducesProblem(409);
 
         app.MapPost("/plugins/load", LoadUnlistedPlugin)
             .WithName("LoadUnlistedPlugin")
-            .WithTags("Plugins")
+            .WithTags(Tag)
             .Produces<PluginResponse>()
             .ProducesProblem(400)
             .ProducesProblem(404)
+            .ProducesProblem(503);
+
+        app.MapPost("/plugins/unload", UnloadUnlistedPlugin)
+            .WithName("UnloadUnlistedPlugin")
+            .WithTags(Tag)
+            .Produces(204)
+            .ProducesProblem(400)
+            .ProducesProblem(409)
             .ProducesProblem(503);
 
         return app;
@@ -109,6 +119,33 @@ public static class PluginEndpoints
         }
     }
 
+    internal static IResult UnloadUnlistedPlugin(UnloadPluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        logger.LogInformation("Received UnloadUnlistedPlugin for {Plugin} from {Origin}", req.Plugin, req.Origin);
+        if (string.IsNullOrWhiteSpace(req.Plugin) || string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("Plugin name and origin are required.", statusCode: 400);
+
+        try
+        {
+            sessionManager.UnloadUnlistedPlugin(req.Plugin, req.Origin);
+            return Results.NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            // 409, not 404: the common way to reach this is naming a plugin that *is* loaded but is
+            // a load-order member, which is a conflict with what that plugin is, not a missing
+            // resource. Only the toggle's own copies are unloadable.
+            logger.LogError(ex, "Refused to unload {Plugin} from {Origin}", req.Plugin, req.Origin);
+            return Results.Problem(ex.Message, statusCode: 409);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "No session when unloading {Plugin}", req.Plugin);
+            return Results.Problem(ex.Message, statusCode: 503);
+        }
+    }
+
     internal static IResult CreatePlugin(CreatePluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
@@ -142,3 +179,5 @@ public static class PluginEndpoints
 public record CreatePluginRequest(string Name);
 
 public record LoadPluginRequest(string Path, string Origin);
+
+public record UnloadPluginRequest(string Plugin, string Origin);

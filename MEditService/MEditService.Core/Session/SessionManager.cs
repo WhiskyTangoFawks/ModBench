@@ -211,6 +211,23 @@ public sealed class SessionManager(
         }
     }
 
+    public void UnloadUnlistedPlugin(string plugin, string origin)
+    {
+        lock (_lock)
+        {
+            if (_session is null)
+                throw new InvalidOperationException(NoSessionMessage);
+
+            // Session first: it owns the membership check (load-order members are refused there),
+            // so the index is only touched for a copy that was really unlisted and really open.
+            if (!_session.RemoveUnlistedPlugin(plugin, origin))
+                throw new KeyNotFoundException($"No unlisted plugin '{plugin}' from origin '{origin}' is loaded.");
+
+            _logger.LogInformation("Unloading unlisted plugin {Plugin} from {Origin}", plugin, origin);
+            _repository!.Unindex(plugin, origin);
+        }
+    }
+
     public async Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes)
     {
         var (metadata, _, gameRelease) = RequirePlugin(plugin);

@@ -328,6 +328,7 @@ public sealed class PluginSaverSaveGroupTests
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
+        public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
         public string ReserveFormKey(string plugin) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public void SetFilter(string sql) => throw new NotSupportedException();
@@ -344,6 +345,7 @@ public sealed class PluginSaverSaveGroupTests
         public IModGetter? GetMod(string pluginName, string origin) => throw new NotSupportedException();
         public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();
         public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) => throw new NotSupportedException();
+        public bool RemoveUnlistedPlugin(string pluginName, string origin) => throw new NotSupportedException();
         public void Dispose() { }
     }
 }

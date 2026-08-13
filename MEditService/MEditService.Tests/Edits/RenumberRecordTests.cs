@@ -273,6 +273,7 @@ public sealed class RenumberRecordTests
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
+        public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
         public string ReserveFormKey(string plugin) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) =>
             throw new NotSupportedException();
@@ -307,6 +308,7 @@ public sealed class RenumberRecordTests
         public Mutagen.Bethesda.Plugins.Records.IModGetter? GetMod(string pluginName, string origin) => _inner.GetMod(pluginName, origin);
         public PluginMetadata AddPlugin(string filePath) => _inner.AddPlugin(filePath);
         public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) => _inner.AddUnlistedPlugin(filePath, origin, loadOrderIndex);
+        public bool RemoveUnlistedPlugin(string pluginName, string origin) => _inner.RemoveUnlistedPlugin(pluginName, origin);
         public void Dispose() { }
     }
 }

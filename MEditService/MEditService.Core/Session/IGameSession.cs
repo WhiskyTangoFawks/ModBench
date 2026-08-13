@@ -15,4 +15,5 @@ public interface IGameSession : IDisposable
     IModGetter? GetMod(string pluginName, string origin);
     PluginMetadata AddPlugin(string filePath);
     PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex);
+    bool RemoveUnlistedPlugin(string pluginName, string origin);
 }

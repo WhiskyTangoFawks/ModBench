@@ -65,6 +65,7 @@ public sealed class PluginOriginResolverTests
         public IModGetter? GetMod(string pluginName, string origin) => throw new NotSupportedException();
         public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();
         public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) => throw new NotSupportedException();
+        public bool RemoveUnlistedPlugin(string pluginName, string origin) => throw new NotSupportedException();
         public void Dispose() { }
     }
 }

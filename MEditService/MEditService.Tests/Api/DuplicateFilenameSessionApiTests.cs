@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Mutagen.Bethesda;
@@ -162,6 +163,48 @@ public sealed class DuplicateFilenameSessionApiTests(LoadedApiFixture<TestPlugin
             .GetProperty("newValue").GetString();
 
         Assert.Equal("NameFromModB", name);
+    }
+
+    [Fact]
+    public async Task UnloadingTheShadowedCopy_LeavesNoRowNoColumnAndNoRecords()
+    {
+        using var fx = BuildTwoCopies();
+        await LoadWinningCopyThenShadowedCopy(fx);
+
+        var unload = await _client.PostAsJsonAsync("/plugins/unload", new { plugin = "Shared.esp", origin = "ModB" });
+        unload.EnsureSuccessStatusCode();
+
+        // ADR-0035: hidden means *absent*, not collapsed — to the user these files simply are not
+        // loaded. Unloading is how that is implemented, so nothing may survive it: not the session
+        // entry, not the compare column, not a single indexed record.
+        var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
+        Assert.DoesNotContain(plugins.EnumerateArray(), p => p.GetProperty("origin").GetString() == "ModB");
+
+        var compare = await _client.GetFromJsonAsync<JsonElement>(
+            $"/records/{Uri.EscapeDataString("000800:Shared.esp")}/compare");
+        Assert.DoesNotContain(compare.GetProperty("overrides").EnumerateArray(),
+            o => o.GetProperty("origin").GetString() == "ModB");
+
+        var records = await _client.GetFromJsonAsync<JsonElement>("/records?type=npc_&limit=50");
+        Assert.DoesNotContain(records.GetProperty("items").EnumerateArray(),
+            r => r.GetProperty("origin").GetString() == "ModB");
+
+        // The copy that shadows it is untouched — unload is not a session reload.
+        Assert.Contains(plugins.EnumerateArray(), p => p.GetProperty("origin").GetString() == "ModA");
+    }
+
+    [Fact]
+    public async Task UnloadingALoadOrderPlugin_IsRefused()
+    {
+        using var fx = BuildTwoCopies();
+        await LoadWinningCopyThenShadowedCopy(fx);
+
+        // The toggle only ever unloads what it loaded. Dropping a load-order plugin's index would
+        // silently change winners for every FormKey it carries, which is a session reload wearing
+        // a different name.
+        var unload = await _client.PostAsJsonAsync("/plugins/unload", new { plugin = "Shared.esp", origin = "ModA" });
+
+        Assert.Equal(HttpStatusCode.Conflict, unload.StatusCode);
     }
 
     [Fact]
