@@ -102,6 +102,18 @@ describe('sortDownloadRows', () => {
       'cherry',
     ]);
   });
+
+  // Stable sort: rows tied on the sorted column (e.g. two Downloaded entries) keep
+  // their relative order rather than being reshuffled against each other, while a
+  // genuinely different value (Installed) still sorts to its correct place.
+  it('is a stable sort: ties in the sorted column keep their relative order', () => {
+    const rows: DownloadRow[] = [
+      { ...row('a', 1), status: 'Downloaded' },
+      { ...row('b', 2), status: 'Downloaded' },
+      { ...row('c', 3), status: 'Installed' },
+    ];
+    expect(sortDownloadRows(rows, 'status', false).map((r) => r.name)).toEqual(['a', 'b', 'c']);
+  });
 });
 
 describe('filterHiddenRows', () => {
@@ -173,6 +185,14 @@ describe('setInstalledInText', () => {
   it('is a no-op when installed=true is already present', () => {
     const text = '[General]\r\ninstalled=true\r\nmodid=12345\r\n';
     expect(setInstalledInText(text)).toBe(text);
+  });
+
+  // MO2 (via Qt's QSettings) always writes CRLF on Windows, but mEdit is not
+  // Windows-only — a .meta produced on a platform that writes bare LF must keep
+  // its own convention rather than have CRLF forced onto it.
+  it('preserves LF-only line endings when inserting after an existing [General] header', () => {
+    const text = '[General]\ngameName=Fallout4\n';
+    expect(setInstalledInText(text)).toBe('[General]\ninstalled=true\ngameName=Fallout4\n');
   });
 });
 
@@ -280,9 +300,13 @@ describe('buildDownloadRows', () => {
     expect(rows.map((r) => r.name)).toEqual(['foo.zip']);
   });
 
+  // Entries are given out of mtimeMs order on purpose: if the default sort were a
+  // no-op (e.g. sorting by the wrong column), a 2-element already-ascending fixture
+  // would still pass by coincidence once reversed. This fixture only passes if the
+  // rows are genuinely re-sorted by mtimeMs.
   it('defaults to Filetime (mtimeMs) descending', () => {
-    const rows = buildDownloadRows([entry('old.zip', 1), entry('new.zip', 2)]);
-    expect(rows.map((r) => r.name)).toEqual(['new.zip', 'old.zip']);
+    const rows = buildDownloadRows([entry('b.zip', 2), entry('a.zip', 1), entry('c.zip', 3)]);
+    expect(rows.map((r) => r.name)).toEqual(['c.zip', 'b.zip', 'a.zip']);
   });
 
   it('carries the hidden flag through without filtering (filtering is a view concern)', () => {
