@@ -111,50 +111,16 @@ public sealed class SessionManagerLoadExplicitTests
             new ThrowingOnIndexRepository(inner.Create(gameRelease), poisonPlugin);
     }
 
-    private sealed class ThrowingOnIndexRepository(IRecordRepository inner, string poisonPlugin) : IRecordRepository
+    // Only Index is interesting here; DelegatingRecordRepository forwards the rest of the (wide)
+    // interface, which this class used to restate member for member.
+    private sealed class ThrowingOnIndexRepository(IRecordRepository inner, string poisonPlugin)
+        : DelegatingRecordRepository(inner)
     {
-        public DuckDBConnection Connection => inner.Connection;
-        public void SetFilter(string? sql) => inner.SetFilter(sql);
-        public void Initialize(GameRelease release) => inner.Initialize(release);
-
-        public void Index(IModGetter pluginMod, int loadOrderIndex, bool participates, string origin)
+        public override void Index(IModGetter pluginMod, int loadOrderIndex, bool participates, string origin)
         {
             if (pluginMod.ModKey.FileName.ToString().Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"injected index failure for {poisonPlugin}");
-            inner.Index(pluginMod, loadOrderIndex, participates, origin);
+            base.Index(pluginMod, loadOrderIndex, participates, origin);
         }
-
-        public void Unindex(string plugin, string origin) => inner.Unindex(plugin, origin);
-        public void UpdateWinners() => inner.UpdateWinners();
-        public void SetPluginParticipation(string plugin, bool participates, string origin) =>
-            inner.SetPluginParticipation(plugin, participates, origin);
-        public void Dispose() => inner.Dispose();
-
-        public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null) =>
-            inner.GetRecords(tableName, plugin, search, limit, offset, origin);
-        public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, string? origin, bool winnerOnly) =>
-            inner.GetRecord(tableName, formKey, plugin, origin, winnerOnly);
-        public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey) =>
-            inner.GetAllOverrides(tableName, formKey);
-        public VmadData? GetVmad(string formKey, string plugin, string origin) => inner.GetVmad(formKey, plugin, origin);
-        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) =>
-            inner.GetConditions(formKey, plugin, origin);
-        public int CountRecordsForPlugin(string tableName, string plugin, string origin) =>
-            inner.CountRecordsForPlugin(tableName, plugin, origin);
-        public string? FindRecordType(string formKey) => inner.FindRecordType(formKey);
-        public RecordLookupEntry? ResolveFormKey(string formKey) => inner.ResolveFormKey(formKey);
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => inner.GetNativeFormKeys(plugin, origin);
-        public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset, string? origin = null) =>
-            inner.SearchRecords(tableNames, plugin, search, limit, offset, origin);
-        public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
-            inner.GetPluginsWithMatchingRecords(tableNames);
-        public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin) =>
-            inner.GetWorldspaceCells(plugin, worldspaceFormKey, origin);
-        public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string origin) =>
-            inner.GetInteriorCells(plugin, limit, offset, origin);
-        public CellReferences GetCellReferences(string plugin, string cellFormKey, string origin) =>
-            inner.GetCellReferences(plugin, cellFormKey, origin);
-        public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => inner.GetPlacement(formKey, plugin, origin);
     }
 }

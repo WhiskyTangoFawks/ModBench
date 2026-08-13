@@ -20,21 +20,66 @@ public sealed class GameSession : IGameSession
     private static string KeyOf(string origin, string name) => $"{origin}\0{name}";
     private readonly List<PluginMetadata> _plugins = [];
     private readonly List<PluginLoadFailure> _loadFailures = [];
+    private readonly IReadOnlyList<ResolvedPlugin> _ordered;
+    private readonly ILogger _logger;
+
+    // #274: a session is now read while it is still being built, so everything a reader touches is
+    // published as an immutable snapshot rather than as the live collection. Copy-on-write, not
+    // copy-on-read: opening a plugin happens a few hundred times per load, while GetPlugins,
+    // PluginOriginResolver, RequirePlugin and BuildTypedLinkCache walk these lists on essentially
+    // every request. Without this, a read that merely coincided with a plugin landing threw
+    // "Collection was modified" — a load-order-sized race, not a rare one.
+    private readonly Lock _mutation = new();
+    private PluginMetadata[] _pluginsSnapshot = [];
+    private PluginLoadFailure[] _loadFailuresSnapshot = [];
 
     public string DataFolderPath { get; }
     public GameRelease GameRelease { get; }
-    public IReadOnlyList<PluginMetadata> Plugins => _plugins;
-    public IReadOnlyList<PluginLoadFailure> LoadFailures => _loadFailures;
+
+    /// <summary>How many plugins this session's resolved load order will attempt to open — the
+    /// denominator for load progress (#274), known before any of them has been opened. Plugins that
+    /// fail to open still count: the caller asked for them.</summary>
+    public int PlannedPluginCount => _ordered.Count;
+    public IReadOnlyList<PluginMetadata> Plugins => Volatile.Read(ref _pluginsSnapshot);
+    public IReadOnlyList<PluginLoadFailure> LoadFailures => Volatile.Read(ref _loadFailuresSnapshot);
 
     // Lets SessionManager report a post-open failure (e.g. an indexing throw from malformed
     // record data Mutagen can't parse) through the same partial-success channel as the
     // ImportGetter failures captured below, without re-opening the whole load order.
     internal void RecordIndexFailure(string pluginName, string reason) =>
-        _loadFailures.Add(new PluginLoadFailure(pluginName, reason));
+        AddLoadFailure(new PluginLoadFailure(pluginName, reason));
+
+    private void AddLoadFailure(PluginLoadFailure failure)
+    {
+        lock (_mutation)
+        {
+            _loadFailures.Add(failure);
+            Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures]);
+        }
+    }
+
+    /// <summary>Adds an opened plugin to the session and republishes the snapshot readers see, so a
+    /// plugin is never half-registered from a reader's point of view.</summary>
+    private void Register(IModDisposeGetter mod, string origin, string fileName, PluginMetadata metadata)
+    {
+        lock (_mutation)
+        {
+            _mods.Add(mod);
+            _modsByKey[KeyOf(origin, fileName)] = mod;
+            _plugins.Add(metadata);
+            Volatile.Write(ref _pluginsSnapshot, [.. _plugins]);
+        }
+    }
+
     public string? FilterSql { get; set; }
 
-    public IModGetter? GetMod(string pluginName, string origin) =>
-        _modsByKey.TryGetValue(KeyOf(origin, pluginName), out var mod) ? mod : null;
+    public IModGetter? GetMod(string pluginName, string origin)
+    {
+        // Under the same lock as the writes: a Dictionary read concurrent with a write is not merely
+        // stale, it can spin or throw. Cheap — this is per-save and per-index, not per-read.
+        lock (_mutation)
+            return _modsByKey.TryGetValue(KeyOf(origin, pluginName), out var mod) ? mod : null;
+    }
 
     private sealed record ResolvedPlugin(string FileName, string FilePath, bool IsImmutable, bool Participates, string Origin);
 
@@ -102,23 +147,39 @@ public sealed class GameSession : IGameSession
 
     private GameSession(string dataFolderPath, GameRelease gameRelease, IReadOnlyList<ResolvedPlugin> ordered, ILogger? logger)
     {
-        logger ??= NullLogger.Instance;
+        _logger = logger ?? NullLogger.Instance;
+        _ordered = ordered;
         DataFolderPath = dataFolderPath;
         GameRelease = gameRelease;
 
-        logger.LogDebug("Load order: {Count} plugin(s) ({Implicit} immutable)",
+        _logger.LogDebug("Load order: {Count} plugin(s) ({Implicit} immutable)",
             ordered.Count, ordered.Count(p => p.IsImmutable));
+    }
 
-        for (int i = 0; i < ordered.Count; i++)
+    /// <summary>
+    /// Opens the resolved load order one plugin at a time, yielding each as it becomes usable
+    /// (#274 / ADR-0035). Lazy on purpose: the caller indexes each plugin as it lands, so a plugin's
+    /// records become queryable while later plugins are still being opened, and a plugin that fails
+    /// to open is recorded in <see cref="LoadFailures"/> at that moment rather than at the end.
+    ///
+    /// Opening is not free — <see cref="BuildPluginMetadata"/> counts the plugin's records — which is
+    /// why this is interleaved with indexing rather than run to completion first.
+    ///
+    /// The construction/opening split is also what makes a load interruptible: abandoning the
+    /// enumeration stops the load, and nothing after the last yielded plugin is ever opened.
+    /// </summary>
+    public IEnumerable<PluginMetadata> OpenAll()
+    {
+        for (int i = 0; i < _ordered.Count; i++)
         {
-            var (fileName, filePath, isImmutable, participates, origin) = ordered[i];
+            var (fileName, filePath, isImmutable, participates, origin) = _ordered[i];
             if (!File.Exists(filePath))
             {
-                logger.LogWarning("Plugin file not found, skipping: {FilePath}", filePath);
+                _logger.LogWarning("Plugin file not found, skipping: {FilePath}", filePath);
                 continue;
             }
 
-            logger.LogInformation("[{Index}] Opening binary overlay: {FileName} (immutable={Immutable}, participates={Participates})",
+            _logger.LogInformation("[{Index}] Opening binary overlay: {FileName} (immutable={Immutable}, participates={Participates})",
                 i, fileName, isImmutable, participates);
 
             var modKey = ModKey.FromFileName(fileName);
@@ -128,27 +189,31 @@ public sealed class GameSession : IGameSession
             // abort the whole load order: skip it, record the failure, and carry on. Metadata is built
             // before the mod is registered so a parse failure leaves nothing partially loaded.
             IModDisposeGetter? mod = null;
+            PluginMetadata? metadata = null;
             try
             {
-                mod = ModFactory.ImportGetter(modPath, gameRelease);
-                var metadata = BuildPluginMetadata(mod, ordered[i], i);
+                mod = ModFactory.ImportGetter(modPath, GameRelease);
+                metadata = BuildPluginMetadata(mod, _ordered[i], i);
 
-                _mods.Add(mod);
-                _modsByKey[KeyOf(origin, fileName)] = mod;
-                _plugins.Add(metadata);
+                Register(mod, origin, fileName, metadata);
 
-                logger.LogInformation("[{Index}] {FileName}: {RecordCount} records, masters: [{Masters}]",
+                _logger.LogInformation("[{Index}] {FileName}: {RecordCount} records, masters: [{Masters}]",
                     i, fileName, metadata.RecordCount, string.Join(", ", metadata.Masters));
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "[{Index}] Failed to load plugin {FileName}; skipping", i, fileName);
-                _loadFailures.Add(new PluginLoadFailure(fileName, ex.Message));
+                _logger.LogWarning(ex, "[{Index}] Failed to load plugin {FileName}; skipping", i, fileName);
+                AddLoadFailure(new PluginLoadFailure(fileName, ex.Message));
                 mod?.Dispose();
             }
+
+            // Outside the try: a yield return cannot sit inside one, and the caller's own indexing
+            // failure is its to handle (SessionManager records it through RecordIndexFailure) —
+            // catching it here would file it as an *open* failure, which it is not.
+            if (metadata != null) yield return metadata;
         }
 
-        logger.LogDebug("GameSession ready: {Count} plugin(s) open", _plugins.Count);
+        _logger.LogDebug("GameSession ready: {Count} plugin(s) open", _plugins.Count);
     }
 
     public PluginMetadata AddPlugin(string filePath)
@@ -206,13 +271,17 @@ public sealed class GameSession : IGameSession
             && p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase));
         if (metadata == null) return false;
 
-        if (_modsByKey.Remove(KeyOf(origin, metadata.Name), out var mod) && mod is IDisposable disposable)
+        lock (_mutation)
         {
-            _mods.Remove((IModDisposeGetter)mod);
-            disposable.Dispose();
-        }
+            if (_modsByKey.Remove(KeyOf(origin, metadata.Name), out var mod) && mod is IDisposable disposable)
+            {
+                _mods.Remove((IModDisposeGetter)mod);
+                disposable.Dispose();
+            }
 
-        _plugins.Remove(metadata);
+            _plugins.Remove(metadata);
+            Volatile.Write(ref _pluginsSnapshot, [.. _plugins]);
+        }
         return true;
     }
 
@@ -224,9 +293,6 @@ public sealed class GameSession : IGameSession
         var modPath = new ModPath(modKey, filePath);
         var mod = ModFactory.ImportGetter(modPath, GameRelease);
 
-        _mods.Add(mod);
-        _modsByKey[KeyOf(origin, fileName)] = mod;
-
         // No Mutagen LoadOrder or link cache is built here or anywhere else in this class: reads
         // answer from the DuckDB index (ADR-0025), and the write path builds its own typed cache
         // per save from the load-order members only (SessionManager.BuildTypedLinkCache). That
@@ -234,7 +300,7 @@ public sealed class GameSession : IGameSession
         // refuses a second listing for a filename it already holds.
         var metadata = BuildPluginMetadata(
             mod, new ResolvedPlugin(fileName, filePath, isImmutable, participates, origin), loadOrderIndex, inLoadOrder);
-        _plugins.Add(metadata);
+        Register(mod, origin, fileName, metadata);
         return metadata;
     }
 
@@ -262,12 +328,22 @@ public sealed class GameSession : IGameSession
         );
     }
 
+    /// <summary>
+    /// Idempotent since #274: a cancelled or failed load tears the session down where it detects the
+    /// problem, and the load's own catch disposes it too, so both paths can reach here for one
+    /// session. Disposing a Mutagen overlay twice is not benign.
+    /// </summary>
     public void Dispose()
     {
-        foreach (var mod in _mods)
+        lock (_mutation)
         {
-            // Stryker disable once Statement : verifying per-mod disposal requires OS-level resource checks beyond the public API
-            mod.Dispose();
+            foreach (var mod in _mods)
+            {
+                // Stryker disable once Statement : verifying per-mod disposal requires OS-level resource checks beyond the public API
+                mod.Dispose();
+            }
+            _mods.Clear();
+            _modsByKey.Clear();
         }
     }
 }

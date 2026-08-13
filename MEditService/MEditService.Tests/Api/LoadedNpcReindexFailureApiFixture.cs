@@ -69,6 +69,8 @@ public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposa
     {
         public IGameSession? Session => inner.Session;
         public IRecordReader? Repository => inner.Repository;
+        // #274: these stubs never load, so they are always in the no-session state.
+        public SessionStatus Status => SessionStatus.None;
 
         public Task ReindexPlugin(string plugin) => throw new IOException("reindex failed (injected)");
         public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new IOException("reindex failed (injected)");

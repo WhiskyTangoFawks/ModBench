@@ -15,6 +15,7 @@ public static class SessionEndpoints
             .WithTags(Tag)
             .Produces<SessionLoadResponse>()
             .ProducesProblem(400)
+            .ProducesProblem(409)
             .ProducesProblem(500);
 
         app.MapPost("/session/load-explicit", LoadExplicitSession)
@@ -22,7 +23,16 @@ public static class SessionEndpoints
             .WithTags(Tag)
             .Produces<SessionLoadResponse>()
             .ProducesProblem(400)
+            .ProducesProblem(409)
             .ProducesProblem(500);
+
+        // #274 / ADR-0035: polled alongside an in-flight load, so it answers 200 in every state
+        // including "no session" — unlike the session-gated routes below, reporting the absence of a
+        // session *is* this endpoint's job, not a failure to do it.
+        app.MapGet("/session/status", GetStatus)
+            .WithName("GetSessionStatus")
+            .WithTags(Tag)
+            .Produces<SessionStatus>();
 
         app.MapPost("/session/filter", SetFilter)
             .WithName("SetFilter")
@@ -48,6 +58,16 @@ public static class SessionEndpoints
         return app;
     }
 
+    // #274: this load was cancelled because something replaced it — another load, or a session
+    // teardown. 409 rather than 500: nothing went wrong, and the caller must be able to tell "your
+    // load was superseded" (ignore it; the newer one owns the session) from "the load failed"
+    // (surface it). A warning, not an error, for the same reason.
+    private static IResult SupersededLoad(ILogger logger, OperationCanceledException ex)
+    {
+        logger.LogWarning(ex, "Session load was cancelled before it completed");
+        return Results.Problem("The session load was superseded by another load or by unloading the session.", statusCode: 409);
+    }
+
     private static IResult? ParseGameRelease(string? raw, out GameRelease release)
     {
         return Enum.TryParse(raw, out release)
@@ -70,6 +90,10 @@ public static class SessionEndpoints
         {
             sessionManager.Load(req.DataFolderPath, req.PluginsTxtPath, gameRelease);
             return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? []));
+        }
+        catch (OperationCanceledException ex)
+        {
+            return SupersededLoad(logger, ex);
         }
         catch (Exception ex)
         {
@@ -105,11 +129,24 @@ public static class SessionEndpoints
             sessionManager.LoadExplicit(req.GameDirectory, explicitPlugins, gameRelease);
             return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? []));
         }
+        catch (OperationCanceledException ex)
+        {
+            return SupersededLoad(logger, ex);
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to load explicit session from {GameDirectory}", req.GameDirectory);
             return Results.Problem(ex.Message, statusCode: 500);
         }
+    }
+
+    // Deliberately not logged at Information like its neighbours: the Plugins tree polls this every
+    // few hundred milliseconds for the duration of a load, and one reception line per poll would
+    // bury the per-plugin indexing lines it sits between.
+    private static IResult GetStatus(ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    {
+        loggerFactory.CreateLogger(nameof(SessionEndpoints)).LogTrace("Received GetSessionStatus");
+        return Results.Ok(sessionManager.Status);
     }
 
     private static IResult SetFilter(SessionFilterRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)

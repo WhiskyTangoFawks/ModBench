@@ -22,7 +22,17 @@ public sealed class RecordQueryService(
         var s = RequireSession();
         // #277 / ADR-0037: one whole-session classification per call, not per plugin — Classify
         // is already a single pass over every plugin's Masters list.
-        var masterIssues = MasterResolution.Classify(s.Plugins, s.LoadFailures);
+        //
+        // #274: only once the load is complete. Classify answers "is this master anywhere in the
+        // session", which a partial session cannot answer — a master that is present on disk and
+        // merely not opened yet is indistinguishable from one that is genuinely absent, and the
+        // wrong answer is the alarming one. Reported as "no issues" while loading rather than as a
+        // separate not-yet-computed value: the caller already knows the load is running (it is in
+        // the same status), and inventing a third state here would put that knowledge in two places.
+        IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> masterIssues =
+            _session.Status.State == SessionState.Ready
+                ? MasterResolution.Classify(s.Plugins, s.LoadFailures)
+                : new Dictionary<string, IReadOnlyList<MasterIssue>>();
         PluginResponse ToResponse(PluginMetadata p) =>
             PluginResponse.FromMetadata(p, masterIssues.GetValueOrDefault(p.Name));
 

@@ -16,7 +16,7 @@ public sealed class GameSessionOriginTests
             .WithPlugin("UserMod.esp")
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
 
         var plugin = session.Plugins.Single(p => p.Name == "UserMod.esp");
         Assert.Equal(PluginOrigin.DataDirectory, plugin.Origin);
@@ -30,7 +30,7 @@ public sealed class GameSessionOriginTests
             .WithPlugin("UserMod.esp")
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
 
         var fo4 = session.Plugins.Single(p => p.Name == "Fallout4.esm");
         Assert.Equal(PluginOrigin.DataDirectory, fo4.Origin);
@@ -43,7 +43,7 @@ public sealed class GameSessionOriginTests
             .WithPlugin("Existing.esp")
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
         var newPath = Path.Combine(session.DataFolderPath, "New.esp");
         var mod = Mutagen.Bethesda.Plugins.Records.ModFactory.Activator(
             Mutagen.Bethesda.Plugins.ModKey.FromFileName("New.esp"), GameRelease.Fallout4);
@@ -61,7 +61,7 @@ public sealed class GameSessionOriginTests
             .WithPlugin("UserMod.esp")
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
         var plugin = session.Plugins.Single(p => p.Name == "UserMod.esp");
 
         var response = PluginResponse.FromMetadata(plugin);
@@ -77,7 +77,7 @@ public sealed class GameSessionOriginTests
             .WithPlugin("Mod.esp")
             .BuildScattered();
 
-        using var session = GameSession.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        using var session = GameSession.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4).Opened();
 
         var master = session.Plugins.Single(p => p.Name == "Fallout4.esm");
         Assert.Equal(PluginOrigin.DataDirectory, master.Origin);
@@ -91,7 +91,7 @@ public sealed class GameSessionOriginTests
             .BuildScattered();
         var withOrigin = fx.Plugins.Select(p => (p.Name, p.Path, Origin: "SomeMod", p.Participates)).ToList();
 
-        using var session = GameSession.LoadExplicit(fx.GameDirectory, withOrigin, GameRelease.Fallout4);
+        using var session = GameSession.LoadExplicit(fx.GameDirectory, withOrigin, GameRelease.Fallout4).Opened();
 
         var mod = session.Plugins.Single(p => p.Name == "Mod.esp");
         Assert.Equal("SomeMod", mod.Origin);

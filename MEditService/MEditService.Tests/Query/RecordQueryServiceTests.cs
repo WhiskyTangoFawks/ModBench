@@ -1463,6 +1463,8 @@ public sealed class RecordQueryServiceTests : IDisposable
     {
         public IGameSession? Session { get; } = new StubGameSession(release);
         public IRecordReader? Repository => repository;
+        // #274: these stubs never load, so they are always in the no-session state.
+        public SessionStatus Status => SessionStatus.None;
 
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) => throw new NotSupportedException();
         public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> plugins, GameRelease gameRelease) => throw new NotSupportedException();

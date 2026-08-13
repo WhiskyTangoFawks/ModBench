@@ -10,6 +10,14 @@ public interface ISessionManager
     IGameSession? Session { get; }
     IRecordReader? Repository { get; }
 
+    /// <summary>
+    /// Where the load is and what it has established so far (#274 / ADR-0035). A session is readable
+    /// while it is still loading, so a caller needs a way to ask what is safe to conclude from what
+    /// it reads — above all, whether the winner sweep has run. Never null: no session is a state
+    /// (<see cref="SessionState.None"/>), not an error.
+    /// </summary>
+    SessionStatus Status { get; }
+
     void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease);
 
     /// <summary>

@@ -17,7 +17,7 @@ public sealed class GameSessionLoadExplicitTests
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .BuildScattered();
 
-        using var session = GameSession.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        using var session = GameSession.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4).Opened();
 
         // Implicit master (from game dir) + the two scattered explicit plugins.
         Assert.Equal(["Fallout4.esm", "A.esp", "B.esp"], session.Plugins.Select(p => p.Name));
@@ -33,7 +33,7 @@ public sealed class GameSessionLoadExplicitTests
             .WithPlugin("Mod.esp")
             .BuildScattered();
 
-        using var session = GameSession.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        using var session = GameSession.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4).Opened();
 
         var master = session.Plugins.Single(p => p.Name == "Fallout4.esm");
         var mod = session.Plugins.Single(p => p.Name == "Mod.esp");
@@ -50,7 +50,7 @@ public sealed class GameSessionLoadExplicitTests
 
         var plugins = fx.Plugins.Append(("Missing.esp", "/nonexistent/path/Missing.esp", PluginOrigin.DataDirectory, true)).ToList();
 
-        using var session = GameSession.LoadExplicit(fx.GameDirectory, plugins, GameRelease.Fallout4);
+        using var session = GameSession.LoadExplicit(fx.GameDirectory, plugins, GameRelease.Fallout4).Opened();
 
         Assert.Contains(session.Plugins, p => p.Name == "Good.esp");
         Assert.DoesNotContain(session.Plugins, p => p.Name == "Missing.esp");
@@ -69,7 +69,7 @@ public sealed class GameSessionLoadExplicitTests
         File.WriteAllText(badPath, "this is not a plugin");
         var plugins = fx.Plugins.Append(("Bad.esp", badPath, PluginOrigin.DataDirectory, true)).ToList();
 
-        using var session = GameSession.LoadExplicit(fx.GameDirectory, plugins, GameRelease.Fallout4);
+        using var session = GameSession.LoadExplicit(fx.GameDirectory, plugins, GameRelease.Fallout4).Opened();
 
         Assert.Contains(session.Plugins, p => p.Name == "Good.esp");
         Assert.DoesNotContain(session.Plugins, p => p.Name == "Bad.esp");

@@ -600,6 +600,8 @@ public sealed class DeleteRecordsTests
 
         public IGameSession? Session { get; }
         public IRecordReader? Repository => _inner.Repository;
+        // #274: these stubs never load, so they are always in the no-session state.
+        public SessionStatus Status => SessionStatus.None;
 
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) =>
             throw new NotSupportedException();
