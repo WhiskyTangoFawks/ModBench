@@ -26,3 +26,10 @@ export function* lineRanges(text: string): Generator<LineRange> {
   }
   if (start < text.length) yield { start, contentEnd: text.length, end: text.length };
 }
+
+/** Strip a single trailing EOL (CRLF, CR, or LF) from a line. Only ever reachable
+ *  with `lineRanges` output (or an equivalent one-line, ≤1-trailing-terminator
+ *  slice) — that guarantee is what makes the three-way alternation safe: such a
+ *  line never contains a `\r`/`\n` other than its own trailing terminator, so
+ *  anchoring each alternative is redundant, not load-bearing. */
+export const lineContent = (line: string): string => line.replace(/\r\n$|\r$|\n$/, '');

@@ -11,7 +11,7 @@
 // (comment/blank) survive untouched.
 
 import type { PluginEntry } from '../model';
-import { lineRanges } from './lineScan';
+import { lineContent, lineRanges } from './lineScan';
 
 const BOM = '﻿';
 
@@ -25,8 +25,6 @@ function withBomPreserved(text: string, edit: (bomless: string) => string): stri
   if (!text.startsWith(BOM)) return edit(text);
   return BOM + edit(stripBom(text));
 }
-
-const lineContent = (line: string): string => line.replace(/\r\n$|\r$|\n$/, '');
 
 /** An entry line is any non-blank, non-comment line; its `*` prefix (if any)
  *  marks it enabled. Comment (#) and blank lines carry no model meaning. */

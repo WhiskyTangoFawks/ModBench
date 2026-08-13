@@ -11,7 +11,7 @@
 // BOM, and every unmodelled line survive untouched.
 
 import type { ModlistEntry } from '../model';
-import { lineRanges } from './lineScan';
+import { lineContent, lineRanges } from './lineScan';
 
 const SEPARATOR_SUFFIX = '_separator';
 const BOM = '\uFEFF';
@@ -74,7 +74,6 @@ export function setEnabledInText(text: string, modName: string, enabled: boolean
 const splitLinesKeepEol = (text: string): string[] =>
   [...lineRanges(text)].map((r) => text.slice(r.start, r.end));
 
-const lineContent = (line: string): string => line.replace(/\r\n$|\r$|\n$/, '');
 const isEntryLine = (line: string): boolean => {
   const c = lineContent(line)[0];
   return c === '+' || c === '-';
@@ -152,7 +151,6 @@ export function insertModAtWinningEnd(text: string, modName: string): string {
   return withBomPreserved(text, (bomless) => {
     const eol = detectEol(bomless);
     const newLine = `-${modName}${eol}`;
-    if (bomless === '') return newLine;
     const lines = splitLinesKeepEol(bomless);
     const firstEntry = lines.findIndex(isEntryLine);
     const insertAt = firstEntry === -1 ? lines.length : firstEntry;
@@ -172,8 +170,17 @@ const RESERVED_DIR_NAMES = new Set(['overwrite']);
  *  on-disk record of a separator — already represented by a `separator`
  *  entry, never a mod). Sorted for deterministic registration order. */
 export function unlistedModNames(dirNames: string[], entries: ModlistEntry[]): string[] {
+  // Separators contribute nothing to `registered`, in either form. The suffixed
+  // form (`${name}${SEPARATOR_SUFFIX}`) is unreachable: any dirName that could
+  // match it already ends in SEPARATOR_SUFFIX, and the filter below excludes
+  // those unconditionally before `registered` is even consulted. But mapping a
+  // separator to its BARE name is wrong the other way — it would register that
+  // name as a mod, so a real `mods/<name>/` folder sharing a separator's name
+  // (an ordinary case: users name separators after what they group) silently
+  // stops being offered for registration. Excluding separator entries entirely
+  // is the only form consistent with both halves of that argument.
   const registered = new Set(
-    entries.map((e) => (e.kind === 'separator' ? `${e.name}${SEPARATOR_SUFFIX}` : e.name)),
+    entries.filter((e) => e.kind !== 'separator').map((e) => e.name),
   );
   return dirNames
     .filter(
