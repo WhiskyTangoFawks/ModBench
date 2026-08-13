@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
-import type { Mod, ModlistEntry } from './model';
+import type { Mod, Separator, ModlistEntry } from './model';
 import { buildFileConflictIndex, rootLevelWinners } from './fileConflictIndex';
 
 const fixture = join(__dirname, 'test', 'fixtures', 'conflict-instance');
 const caseFixture = join(__dirname, 'test', 'fixtures', 'case-conflict-instance');
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
+const separator = (name: string, enabled = true): Separator => ({ kind: 'separator', name, enabled });
 
 describe('buildFileConflictIndex', () => {
   it('resolves the winner for an overridden file to the topmost (winning) mod', async () => {
@@ -60,6 +61,12 @@ describe('buildFileConflictIndex', () => {
     const index = await buildFileConflictIndex([mod('ModA'), mod('ModB')], fixture);
     const modBFiles = index.filesByMod.get('ModB')?.map((f) => f.relativePath).sort();
     expect(modBFiles).toEqual(['meshes/onlyB.nif', 'textures/shared/foo.dds']);
+  });
+
+  it('excludes an enabled separator from the index — a separator is not a mod, even though it also carries `enabled`', async () => {
+    const index = await buildFileConflictIndex([separator('Unassigned'), mod('ModA'), mod('ModB')], fixture);
+    expect(index.filesByMod.has('Unassigned')).toBe(false);
+    expect(index.files.get('textures/shared/foo.dds')?.winnerMod).toBe('ModA');
   });
 });
 

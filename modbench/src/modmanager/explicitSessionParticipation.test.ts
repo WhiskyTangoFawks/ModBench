@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
-import { buildExplicitPluginsWithOrigin, DATA_DIRECTORY_ORIGIN } from './explicitSession';
+import { buildExplicitPluginsWithOrigin } from './explicitSession';
 
 // #270 / ADR-0035: the editing session indexes every plugins.txt line, enabled and disabled alike.
 // The `*` prefix stops being a filter on which plugins are sent and becomes participation — whether
@@ -38,8 +38,8 @@ describe('buildExplicitPluginsWithOrigin participation', () => {
 
     expect(result).toEqual([
       { name: 'On.esp', path: '/mods/A/On.esp', origin: 'A', participates: true },
-      { name: 'Off.esp', path: join(dataFolder, 'Off.esp'), origin: DATA_DIRECTORY_ORIGIN, participates: false },
-      { name: 'AlsoOn.esp', path: join(dataFolder, 'AlsoOn.esp'), origin: DATA_DIRECTORY_ORIGIN, participates: true },
+      { name: 'Off.esp', path: join(dataFolder, 'Off.esp'), origin: 'Data', participates: false },
+      { name: 'AlsoOn.esp', path: join(dataFolder, 'AlsoOn.esp'), origin: 'Data', participates: true },
     ]);
   });
 

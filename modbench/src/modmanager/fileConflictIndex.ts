@@ -73,28 +73,31 @@ export interface FileConflictIndex {
   filesByMod: Map<string, { relativePath: string; absolutePath: string }[]>;
 }
 
-/** Winning absolute path of every root-level plugin the index knows, keyed by
- *  lowercased basename. Root-level only: plugins live at a mod's root, so a
- *  nested file sharing a plugin's basename must not shadow the real plugin.
- *  Shared by the editing-session builder and the Plugin List's order check. */
+/** Every root-level entry the index knows — plugins live at a mod's root, so a nested file
+ *  sharing a plugin's basename must be excluded here. Shared by rootLevelWinners and
+ *  rootLevelWinnerMods below, which are otherwise identical apart from which field they read. */
+function rootLevelEntries(index: FileConflictIndex): ConflictEntry[] {
+  return [...index.files].filter((entry) => !entry.relativePath.includes('/'));
+}
+
+/** Winning absolute path of every root-level plugin the index knows, keyed by lowercased
+ *  basename. Shared by the editing-session builder and the Plugin List's order check.
+ *  Root-level-only is this function's own documented contract: every key it produces is a bare
+ *  basename (no `/`, since a root-level relativePath already is one), matching how both real
+ *  callers (resolvePluginPaths here, computePluginOrderStatuses in statusChecker.ts) query it —
+ *  by plain plugin filename, which never contains `/`. A slash-free query can never equal a
+ *  nested entry's slash-containing key, so rootLevelEntries' filter is what keeps this map's
+ *  keys within its own documented basename contract, not a defense against any specific caller. */
 export function rootLevelWinners(index: FileConflictIndex): Map<string, string> {
-  const winnerByName = new Map<string, string>();
-  for (const entry of index.files) {
-    if (!entry.relativePath.includes('/')) winnerByName.set(foldPath(entry.relativePath), entry.winner);
-  }
-  return winnerByName;
+  return new Map(rootLevelEntries(index).map((entry) => [foldPath(entry.relativePath), entry.winner]));
 }
 
 /** Winning mod's folder name for every root-level plugin the index knows, keyed by lowercased
  *  basename — the origin-resolution twin of rootLevelWinners above (#269 / ADR-0036). Same
- *  root-level-only reasoning: a nested file sharing a plugin's basename must not shadow the real
- *  plugin. Used by explicitSession.ts to record a mod-provided plugin's origin. */
+ *  root-level-only contract; used by explicitSession.ts to record a mod-provided plugin's
+ *  origin. */
 export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, string> {
-  const winnerModByName = new Map<string, string>();
-  for (const entry of index.files) {
-    if (!entry.relativePath.includes('/')) winnerModByName.set(foldPath(entry.relativePath), entry.winnerMod);
-  }
-  return winnerModByName;
+  return new Map(rootLevelEntries(index).map((entry) => [foldPath(entry.relativePath), entry.winnerMod]));
 }
 
 async function walk(dir: string, root = dir): Promise<{ relativePath: string; absolutePath: string }[]> {

@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveGameDirectory } from './gameDirectory';
+import { resolveGameDirectory, normalizeGamePath } from './gameDirectory';
 
 /** A minimal stand-in for vscode's WorkspaceConfiguration. */
 function fakeConfig(values: Record<string, string>) {
@@ -10,6 +10,19 @@ function fakeConfig(values: Record<string, string>) {
 }
 
 const noDetect = () => Promise.resolve(null);
+
+describe('normalizeGamePath', () => {
+  it('leaves a native Windows path untouched', () => {
+    expect(normalizeGamePath('C:\\Games\\Fallout4', 'win32')).toBe('C:\\Games\\Fallout4');
+  });
+
+  it('leaves a colon that is not a leading drive letter untouched (only the drive-letter prefix is stripped)', () => {
+    // Unlike Windows, a colon elsewhere in a path is legal on Linux (e.g. a mod folder someone
+    // named literally "A:B") — an unanchored strip would corrupt it.
+    const path = '/home/wayne/mods/A:B/Fallout4';
+    expect(normalizeGamePath(path, 'linux')).toBe(path);
+  });
+});
 
 describe('resolveGameDirectory', () => {
   let dir: string;
@@ -26,6 +39,20 @@ describe('resolveGameDirectory', () => {
     const resolved = await resolveGameDirectory(
       dir,
       fakeConfig({ 'mods.gameDirectory': gameRoot }),
+      noDetect,
+    );
+
+    expect(resolved).toEqual({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
+  });
+
+  it('trims whitespace accidentally pasted around an explicit setting value', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
+    const gameRoot = join(dir, 'Stock Game Folder');
+    await mkdir(join(gameRoot, 'Data'), { recursive: true });
+
+    const resolved = await resolveGameDirectory(
+      dir,
+      fakeConfig({ 'mods.gameDirectory': `  ${gameRoot}  ` }),
       noDetect,
     );
 
@@ -74,5 +101,26 @@ describe('resolveGameDirectory', () => {
     const resolved = await resolveGameDirectory(dir, fakeConfig({}), detect);
 
     expect(resolved).toEqual({ root: join(dir, 'Steam', 'Fallout 4'), dataFolder: detectedData });
+  });
+
+  it('falls through a resolved-but-invalid ini gamePath (no Data/) to autodetect, rather than trusting it', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
+    const staleGameRoot = join(dir, 'Stale Game Folder');
+    await mkdir(staleGameRoot, { recursive: true }); // no Data/ underneath — a broken/moved install
+    await writeFile(join(dir, 'ModOrganizer.ini'), `[General]\r\ngamePath=@ByteArray(${staleGameRoot})\r\n`);
+    const detectedData = join(dir, 'Steam', 'Fallout 4', 'Data');
+    const detect = () => Promise.resolve({ dataFolder: detectedData, pluginsTxt: 'ignored' });
+
+    const resolved = await resolveGameDirectory(dir, fakeConfig({}), detect);
+
+    expect(resolved).toEqual({ root: join(dir, 'Steam', 'Fallout 4'), dataFolder: detectedData });
+  });
+
+  it('returns null when nothing resolves — explicit unset, ini absent, autodetect finds nothing', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
+
+    const resolved = await resolveGameDirectory(dir, fakeConfig({}), noDetect);
+
+    expect(resolved).toBeNull();
   });
 });

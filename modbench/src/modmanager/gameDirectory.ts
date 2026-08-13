@@ -23,9 +23,11 @@ export type DetectPaths = () => Promise<{ dataFolder: string; pluginsTxt: string
 /** MO2 running under Proton/Wine stores gamePath as a Wine drive-mapped,
  *  backslash path (e.g. `Z:\home\wayne\...`), where the Z: drive maps to the
  *  filesystem root. On Linux/macOS that isn't a usable path, so translate it;
- *  on Windows the native `C:\...` form is left untouched. */
-export function normalizeGamePath(p: string): string {
-  if (process.platform === 'win32') return p;
+ *  on Windows the native `C:\...` form is left untouched. Takes `platform` explicitly (rather
+ *  than reading `process.platform` itself) so tests can exercise both branches directly instead
+ *  of stubbing global process state. */
+export function normalizeGamePath(p: string, platform: NodeJS.Platform): string {
+  if (platform === 'win32') return p;
   return p.replace(/^[A-Za-z]:/, '').replaceAll('\\', '/');
 }
 
@@ -72,7 +74,7 @@ export async function resolveGameDirectory(
  *  missing the key. */
 async function readIniGamePath(instanceRoot: string): Promise<string | null> {
   try {
-    return normalizeGamePath(readGamePath(await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8')));
+    return normalizeGamePath(readGamePath(await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8')), process.platform);
   } catch {
     return null;
   }
