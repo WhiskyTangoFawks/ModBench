@@ -26,6 +26,33 @@ public sealed class SessionManager(
     private GameSession? _session;
     private IRecordRepository? _repository;
     private readonly Dictionary<string, uint> _nextFormIds = new(StringComparer.OrdinalIgnoreCase);
+    // #274: the load's own progress. Guarded by _lock like _session/_repository — written by the
+    // loading thread as each plugin lands, read by whoever asks for Status meanwhile.
+    private readonly List<IndexedPlugin> _indexed = [];
+    private bool _conflictsComputed;
+
+    // #274: at most one load or teardown at a time, and an in-flight load stops promptly when
+    // another arrives. Two mechanisms, because one is not enough: the token *asks* the loop to stop,
+    // and the gate waits until it actually has. Cancelling without draining is the dangerous half —
+    // it would let a teardown dispose the DuckDB connection while the loop is still writing to it,
+    // which is a native crash rather than an exception, taking the backend and any staged edits with
+    // it. Deliberately not _lock: the loading thread takes _lock briefly on every plugin, so a
+    // waiter holding it could never be signalled.
+    private readonly SemaphoreSlim _loadGate = new(1, 1);
+    private CancellationTokenSource? _loadCancellation;
+    private bool _disposed;
+
+    /// <summary>Cancels any in-flight load, waits for it to stop, and takes the exclusive right to
+    /// load or tear down. Always paired with <see cref="ExitExclusive"/> in a finally.</summary>
+    private void EnterExclusive()
+    {
+        // Cancel and dispose both happen under _lock, so a token can never be cancelled after it has
+        // been disposed.
+        lock (_lock) _loadCancellation?.Cancel();
+        _loadGate.Wait();
+    }
+
+    private void ExitExclusive() => _loadGate.Release();
 
     private const string NoSessionMessage = "No session loaded.";
 
@@ -36,29 +63,40 @@ public sealed class SessionManager(
     public IGameSession? Session { get { lock (_lock) return _session; } }
     public IRecordReader? Repository { get { lock (_lock) return _repository; } }
 
+    /// <summary>
+    /// What the session can honestly say about itself right now (#274 / ADR-0035) — the read behind
+    /// <c>GET /session/status</c>. Assembled from live state rather than cached, so it cannot drift
+    /// from the load it describes; failures come straight off the session's own list rather than
+    /// being copied into a second place that could disagree with it.
+    /// </summary>
+    public SessionStatus Status
+    {
+        get
+        {
+            lock (_lock)
+            {
+                if (_session is null) return SessionStatus.None;
+                var state = _conflictsComputed ? SessionState.Ready : SessionState.Loading;
+                return new SessionStatus(
+                    state,
+                    _session.PlannedPluginCount,
+                    [.. _indexed],
+                    _conflictsComputed,
+                    _session.LoadFailures);
+            }
+        }
+    }
+
     public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease)
     {
         _logger.LogDebug("Session load starting. DataFolder={DataFolder} PluginsTxt={PluginsTxt} Game={Game}",
             dataFolderPath, pluginsTxtPath, gameRelease);
 
-        try
-        {
-            lock (_lock)
-            {
-                DisposeCurrentSession();
-
-                _logger.LogDebug("Creating game session (reading plugins list and opening binary overlays)");
-                var session = new GameSession(dataFolderPath, pluginsTxtPath, gameRelease, _logger);
-                try { IndexAndStore(session, gameRelease, dataFolderPath, pluginsTxtPath); }
-                catch { session.Dispose(); throw; }
-                _logger.LogDebug("Session load complete");
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Session load failed");
-            throw;
-        }
+        RunLoad(
+            dataFolderPath, pluginsTxtPath, gameRelease,
+            logger => new GameSession(dataFolderPath, pluginsTxtPath, gameRelease, logger),
+            "Creating game session (reading plugins list and opening binary overlays)",
+            "Session load complete", "Session load failed");
     }
 
     // #269 / ADR-0036: real (MO2-backed) session loads carry each plugin's origin through to
@@ -72,40 +110,139 @@ public sealed class SessionManager(
         _logger.LogDebug("Explicit session load starting. GameDir={GameDir} Plugins={Count} Game={Game}",
             gameDirectory, pluginCount, gameRelease);
 
+        // No plugins.txt for an explicit session; the game directory is the implicit-master root.
+        RunLoad(
+            gameDirectory, pluginsTxtPath: null, gameRelease, buildSession,
+            "Creating explicit game session from scattered paths",
+            "Explicit session load complete", "Explicit session load failed");
+    }
+
+    /// <summary>
+    /// The one load path: take the exclusive right, arm a cancellation token, build the session,
+    /// index it progressively, and release — the two public entry points differ only in how the
+    /// session is built and what they call it in the log.
+    /// <para>
+    /// Unified when #274's mutation review found the teardown-on-failure branch covered on the
+    /// explicit path and uncovered on the other: the same lifecycle written twice is one place for a
+    /// cancellation or disposal bug to hide, and the interesting failure modes (cancel mid-load,
+    /// supersede, drain before dispose) are only ever exercised through one of them.
+    /// </para>
+    /// </summary>
+    private void RunLoad(
+        string dataFolderPath, string? pluginsTxtPath, GameRelease gameRelease,
+        Func<ILogger?, GameSession> buildSession, string buildingMessage, string completeMessage, string failedMessage)
+    {
+        EnterExclusive();
         try
         {
-            lock (_lock)
-            {
-                DisposeCurrentSession();
+            var token = BeginLoad();
 
-                _logger.LogDebug("Creating explicit game session from scattered paths");
-                var session = buildSession(_logger);
-                // No plugins.txt for an explicit session; the game directory is the implicit-master root.
-                try { IndexAndStore(session, gameRelease, gameDirectory, pluginsTxtPath: null); }
-                catch { session.Dispose(); throw; }
-                _logger.LogDebug("Explicit session load complete");
-            }
+            _logger.LogDebug("{Step}", buildingMessage);
+            var session = buildSession(_logger);
+            // IndexAndStore tears down a session it has already published; this covers the window
+            // before that, where the failure belongs to nobody else.
+            try { IndexAndStore(session, gameRelease, dataFolderPath, pluginsTxtPath, token); }
+            catch { session.Dispose(); throw; }
+            _logger.LogDebug("{Step}", completeMessage);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Explicit session load failed");
+            _logger.LogError(ex, "{Step}", failedMessage);
+            throw;
+        }
+        finally
+        {
+            EndLoad();
+            ExitExclusive();
+        }
+    }
+
+    /// <summary>Drops the previous session and arms a fresh cancellation token for this load. Called
+    /// with the exclusive right held, so no other load can be in flight.</summary>
+    private CancellationToken BeginLoad()
+    {
+        var cts = new CancellationTokenSource();
+        lock (_lock)
+        {
+            DisposeCurrentSession();
+            _loadCancellation = cts;
+        }
+        return cts.Token;
+    }
+
+    private void EndLoad()
+    {
+        lock (_lock)
+        {
+            var cts = _loadCancellation;
+            _loadCancellation = null;
+            cts?.Dispose();
+        }
+    }
+
+    // Indexes the session's plugins into a fresh repository and computes winners, publishing it as
+    // the single active session (ADR-0015) *before* the indexing loop rather than after it (#274 /
+    // ADR-0035).
+    //
+    // Publishing first is what makes the load progressive: each plugin's records become queryable at
+    // the moment that plugin is indexed, instead of the whole load order being unreachable until the
+    // slowest plugin has landed. The trade it makes is that a published session is briefly
+    // incomplete, which is why the load reports its own state — a caller must be able to tell "no
+    // conflicts" from "not looked yet" (that reporting is Slice 7's `Status`).
+    //
+    // Deliberately NOT called under _lock: holding it across the loop is exactly what made every
+    // read wait for the whole load. The lock now covers only the publish/teardown transitions.
+    private void IndexAndStore(
+        GameSession session, GameRelease gameRelease, string dataFolderPath, string? pluginsTxtPath, CancellationToken token)
+    {
+        _logger.LogDebug("Initializing DuckDB record repository");
+        var repository = _repositoryFactory.Create(gameRelease);
+
+        lock (_lock)
+        {
+            _nextFormIds.Clear();
+            _indexed.Clear();
+            _conflictsComputed = false;
+            // Before the loop: pending changes rebind to this connection and ensure their table, and
+            // a read arriving mid-load must not find that table missing.
+            _changeLifecycle?.OnSessionLoaded(repository.Connection);
+            _session = session;
+            _repository = repository;
+            _dataFolderPath = dataFolderPath;
+            _pluginsTxtPath = pluginsTxtPath;
+            _gameRelease = gameRelease;
+        }
+
+        try
+        {
+            IndexProgressively(session, repository, token);
+        }
+        catch
+        {
+            // Anything that escapes the loop — a cancellation, or a failure the per-plugin handler
+            // did not absorb — leaves a session that is published but incomplete, and an incomplete
+            // session must not survive as if it were whole. Tearing it down here (rather than
+            // leaving it to the caller) is what makes "no partially-indexed session behind" true for
+            // every exit path, not just the cancelling one. Safe to dispose the published pair: the
+            // exclusive right is held, so nothing else can have replaced it.
+            lock (_lock) DisposeCurrentSession();
             throw;
         }
     }
 
-    // Indexes the session's plugins into a fresh repository, computes winners, and swaps it in as the
-    // single active session (ADR-0015). Must be called under _lock after DisposeCurrentSession.
-    private void IndexAndStore(GameSession session, GameRelease gameRelease, string dataFolderPath, string? pluginsTxtPath)
+    private void IndexProgressively(GameSession session, IRecordRepository repository, CancellationToken token)
     {
-        _logger.LogDebug("Game session created. {Count} plugin(s) loaded: {Names}",
-            session.Plugins.Count, string.Join(", ", session.Plugins.Select(p => p.Name)));
-
-        _logger.LogDebug("Initializing DuckDB record repository");
-        var repository = _repositoryFactory.Create(gameRelease);
-
-        _nextFormIds.Clear();
-        foreach (var plugin in session.Plugins)
+        // #274: open and index one plugin at a time. Opening the whole load order first cost the
+        // same total time but made every plugin wait on the slowest one before any of them could
+        // be indexed, and buried each open failure until the end.
+        foreach (var plugin in session.OpenAll())
         {
+            // At the top of each plugin rather than mid-plugin: a plugin is indexed in one
+            // transaction, and abandoning it partway would either roll back work already paid for or
+            // leave the half-written state this ticket exists to prevent. The cost of the coarser
+            // check is at most one plugin's indexing after the cancel.
+            token.ThrowIfCancellationRequested();
+
             var mod = session.GetMod(plugin.Name, plugin.Origin)!;
 
             _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
@@ -127,19 +264,28 @@ public sealed class SessionManager(
                 continue;
             }
 
-            if (!plugin.IsImmutable)
-                _nextFormIds[plugin.Name] = SafeNextFormId(mod);
+            lock (_lock)
+            {
+                // Recorded only once Index() has returned: Status promises a plugin here is wholly
+                // queryable, so listing it any earlier would be the partial-visibility lie in a
+                // different form.
+                _indexed.Add(new IndexedPlugin(plugin.Name, plugin.Origin));
+                // ReserveFormKey reads this dictionary, and it is now reachable mid-load like
+                // every other published read.
+                if (!plugin.IsImmutable) _nextFormIds[plugin.Name] = SafeNextFormId(mod);
+            }
         }
 
+        // #274: reported after the loop, not before it — the count is not knowable until the load
+        // order has been walked, because opening is now what discovers it.
+        _logger.LogDebug("Game session indexed. {Count} plugin(s) loaded: {Names}",
+            session.Plugins.Count, string.Join(", ", session.Plugins.Select(p => p.Name)));
+
+        // The whole-set sweep, and the moment conflict information becomes correct: a plugin that
+        // arrived earlier was browsable but its winner state was not yet decided (ADR-0035).
         _logger.LogDebug("Computing winners");
         repository.UpdateWinners();
-
-        _changeLifecycle?.OnSessionLoaded(repository.Connection);
-        _session = session;
-        _repository = repository;
-        _dataFolderPath = dataFolderPath;
-        _pluginsTxtPath = pluginsTxtPath;
-        _gameRelease = gameRelease;
+        lock (_lock) _conflictsComputed = true;
     }
 
     public PluginResponse CreatePlugin(string name)
@@ -367,14 +513,29 @@ public sealed class SessionManager(
 
     public void Unload()
     {
-        lock (_lock)
-            DisposeCurrentSession();
+        // Cancels an in-flight load and waits for it to stop *before* disposing anything — the
+        // teardown half of #274's cancellation. Disposing while the loop still holds the repository
+        // is a native crash, not a catchable one.
+        EnterExclusive();
+        try { lock (_lock) DisposeCurrentSession(); }
+        finally { ExitExclusive(); }
     }
 
     public void Dispose()
     {
+        // Guarded because Dispose now owns a semaphore as well as the session: a second call would
+        // otherwise wait on a disposed gate. Double disposal is a supported call pattern here
+        // (Dispose_CalledTwice_DoesNotThrow), not a defensive assumption.
         lock (_lock)
-            DisposeCurrentSession();
+        {
+            if (_disposed) return;
+            _disposed = true;
+        }
+
+        EnterExclusive();
+        try { lock (_lock) DisposeCurrentSession(); }
+        finally { ExitExclusive(); }
+        _loadGate.Dispose();
     }
 
     private void DisposeCurrentSession()

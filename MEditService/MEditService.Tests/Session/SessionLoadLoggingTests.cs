@@ -47,7 +47,7 @@ public sealed class SessionLoadLoggingTests
         using var _ = loggerFactory;
         var logger = loggerFactory.CreateLogger(nameof(GameSession));
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4, logger);
+        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4, logger).Opened();
 
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("A.esp"));
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("B.esp"));
@@ -79,7 +79,7 @@ public sealed class SessionLoadLoggingTests
         [
             "Session load starting",
             "Creating game session",
-            "Game session created",
+            "Game session indexed",
             "Initializing DuckDB record repository",
             "Computing winners",
             "Session load complete",
