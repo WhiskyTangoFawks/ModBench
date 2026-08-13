@@ -70,6 +70,26 @@ cd modbench && python3 ../.claude/skills/mutation-test/stryker/parse-report.py r
 Same guardrail as the .NET side: **never read `mutation.json` directly.** Only the parsed
 survivor list reaches context.
 
+> ⚠️ **Every run overwrites `mutation.json`. Snapshot a baseline before you scope a run.**
+> The json reporter writes one fixed path, so a one-file verification run destroys the
+> full-scope report it was measured against — silently, and the replacement looks like a
+> perfectly good report with almost no findings in it. This has already happened once: a
+> slice verified its own six files and took the 330-finding baseline with it.
+>
+> Stryker.**NET** has no such trap — it writes timestamped `StrykerOutput/<date>/`
+> directories — so this is one more piece of mechanics that must not be carried across.
+>
+> After any full-scope run, copy it before doing anything else:
+>
+> ```bash
+> cd modbench && npx stryker run && cp reports/mutation/mutation.json reports/mutation/baseline.json
+> ```
+>
+> `baseline.json` is the durable copy no scoped run touches; `parse-report.py` reads it the
+> same way. Re-establishing a lost baseline is only ~3 minutes, so this is a nuisance rather
+> than a disaster — but it costs the per-mutant `file:line` rows, which are exactly what a
+> triage agent reads, and their absence is not obvious from the file.
+
 ## Baseline
 
 The first full run scored **82.34%** — 1529 killed, 272 survived, 58 uncovered, 10 timeout;
