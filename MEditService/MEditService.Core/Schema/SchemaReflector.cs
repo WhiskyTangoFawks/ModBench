@@ -343,9 +343,21 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // them as plain array columns. Game-generic: the shape test lives behind the codec
         // (IsConditionListField), not a hardcoded field-name list, so a game with no registered
         // codec (conditionCodec == null) simply skips no extra fields here.
+        //
+        // #260: same rule for the virtual-machine-adapter property — it's already surfaced by
+        // the dedicated Scripts (VMAD) section (HasVmad below, RecordQueryService.GetVmad), so
+        // reflecting it again here would duplicate it as an opaque struct column. Type-scoped to
+        // match the section it defers to: HasVmad only renders for a getterType the interface is
+        // assignable to, so the exclusion only fires there too — a type that doesn't implement
+        // the interface must lose nothing. No hardcoded property name: the property is whatever
+        // vmadInterfaceType itself declares, so a game category with no such interface
+        // (vmadInterfaceType == null) skips nothing.
         var grouped = GetAllInterfaceProperties(getterType)
             .Where(p => !baseSkip.Contains(p.Name))
             .Where(p => conditionCodec == null || !conditionCodec.IsConditionListField(getterType, p.Name))
+            .Where(p => vmadInterfaceType == null
+                        || !vmadInterfaceType.IsAssignableFrom(getterType)
+                        || vmadInterfaceType.GetProperty(p.Name) == null)
             .GroupBy(p => ToSnakeCase(p.Name), StringComparer.OrdinalIgnoreCase);
 
         var columns = new List<ColumnSpec>();
