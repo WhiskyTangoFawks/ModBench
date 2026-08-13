@@ -100,6 +100,24 @@ public sealed class DuplicateFilenameSessionApiTests(LoadedApiFixture<TestPlugin
     }
 
     [Fact]
+    public async Task BrowsingByOrigin_ReturnsThatCopysOwnRecordsAndCounts()
+    {
+        using var fx = BuildTwoCopies();
+        await LoadWinningCopyThenShadowedCopy(fx);
+
+        // The tree row knows which copy it stands for, so it says so rather than leaving the server
+        // to guess from the filename — which is the one thing a filename can no longer answer.
+        var records = await _client.GetFromJsonAsync<JsonElement>("/records?plugin=Shared.esp&origin=ModB&type=npc_&limit=10");
+        var editorIds = records.GetProperty("items").EnumerateArray()
+            .Select(r => r.GetProperty("editorId").GetString())
+            .ToList();
+        Assert.Equal(["FromModB"], editorIds);
+
+        var types = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/record-types?origin=ModB");
+        Assert.Equal(1, types.EnumerateArray().Single(t => t.GetProperty("type").GetString() == "npc_").GetProperty("count").GetInt32());
+    }
+
+    [Fact]
     public async Task ShadowedCopyLoadedOnDemand_IsItsOwnCompareColumn()
     {
         using var fx = BuildTwoCopies();

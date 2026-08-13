@@ -28,11 +28,11 @@ public static class PluginEndpoints
         // game actually resolves (ConditionCodecRegistry), not a hardcoded frontend array.
         MapCatalog(app, "/condition-run-on-targets", "GetConditionRunOnTargets", svc => svc.GetConditionRunOnTargets());
 
-        app.MapGet("/plugins/{plugin}/record-types", (string plugin, IRecordQueryService svc, ILoggerFactory loggerFactory) =>
+        app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IRecordQueryService svc, ILoggerFactory loggerFactory) =>
         {
-            loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogInformation("Received GetPluginRecordTypes for {Plugin}", plugin);
+            loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogInformation("Received GetPluginRecordTypes for {Plugin} ({Origin})", plugin, origin);
             var decoded = Uri.UnescapeDataString(plugin);
-            return Results.Ok(svc.GetPluginRecordTypes(decoded));
+            return Results.Ok(svc.GetPluginRecordTypes(decoded, origin));
         })
             .WithName("GetPluginRecordTypes")
             .WithTags(Tag)

@@ -44,14 +44,14 @@ public sealed class RecordQueryService(
     public IReadOnlyList<string> GetRecordTypes() =>
         [.. RequireSchemas().Keys.Where(t => t != HeaderTableName).Order()];
 
-    public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset)
+    public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null)
     {
         var repository = RequireRepository();
         var schemas = RequireSchemas();
-        // #296: wire-facing (RecordEndpoints' /records only ever supplies a bare plugin filename),
-        // so origin is resolved server-side rather than added as a new query parameter — same
-        // reasoning as WorldspaceQueryService. Null when plugin itself is null (nothing to resolve).
-        var origin = plugin == null ? null : PluginOriginResolver.Resolve(_session.Session, plugin);
+        // #34: the caller states which copy when it knows (a tree row does; it was built from one).
+        // Otherwise the #296 behaviour stands — resolve server-side from the load order, since a
+        // bare filename is all most callers have. Null when plugin itself is null (nothing to resolve).
+        origin ??= plugin == null ? null : PluginOriginResolver.Resolve(_session.Session, plugin);
 
         PagedResult<RecordSummary> committed;
         if (type != null)
@@ -82,7 +82,8 @@ public sealed class RecordQueryService(
             return committed;
 
         var loadOrderIndex = RequireSession().Plugins
-            .FirstOrDefault(p => p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase))?.LoadOrderIndex ?? -1;
+            .FirstOrDefault(p => p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase)
+                && p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase))?.LoadOrderIndex ?? -1;
 
         // origin! : plugin is non-null past the guard above, and origin was resolved from that same
         // plugin nullability check at its declaration (line above), so it is non-null here too — the
@@ -193,13 +194,12 @@ public sealed class RecordQueryService(
         return null;
     }
 
-    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin)
+    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null)
     {
         var repository = RequireRepository();
-        // #296: wire-facing (/plugins/{plugin}/record-types only ever supplies a bare plugin
-        // filename), so origin is resolved server-side rather than added as a new route parameter —
-        // same reasoning as GetRecords/GetWorldspaces.
-        var origin = PluginOriginResolver.Resolve(_session.Session, plugin);
+        // #34: stated by the caller when it knows which copy it is browsing (a tree row does),
+        // else resolved server-side from the load order as it has been since #296.
+        origin ??= PluginOriginResolver.Resolve(_session.Session, plugin);
         var counts = RequireSchemas().Keys
             .Where(t => t != HeaderTableName)
             .Select(t => (Type: t, Count: repository.CountRecordsForPlugin(t, plugin, origin)))

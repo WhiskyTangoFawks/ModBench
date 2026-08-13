@@ -31,6 +31,9 @@ export class RecordTypeNode extends vscode.TreeItem {
     public readonly recordType: string,
     count: number,
     displayName: string = recordType,
+    /** #34 / ADR-0036: which copy of `plugin` this node browses, or undefined for an ordinary
+     *  load-order plugin (the backend resolves that case; a filename is unambiguous there). */
+    public readonly origin?: string,
   ) {
     // Issue #110: label is the xEdit-parity display name ("Activator"); recordType (the raw
     // 4-char signature, e.g. "acti") stays the internal id — cache key, contextValue, commands.
@@ -249,7 +252,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     const cacheKey = this.cacheKey(parent);
     const cached = this.pageCache.get(cacheKey) ?? { items: [], total: 0 };
     try {
-      const result = await this.repository.getRecords(parent.plugin, parent.recordType, cached.items.length, PAGE_SIZE);
+      const result = await this.repository.getRecords(parent.plugin, parent.recordType, cached.items.length, PAGE_SIZE, parent.origin);
       this.pageCache.set(cacheKey, { items: [...cached.items, ...result.items], total: result.total });
       this.loadMoreFailures.delete(cacheKey);
     } catch (e) {
@@ -275,8 +278,12 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this._onDidChangeTreeData.fire(parent);
   }
 
+  // #34: the origin is part of the key, not decoration — two copies of one filename have their
+  // own pages, and serving one copy's page under the other's node is the exact "right target,
+  // wrong content" failure this ticket exists to remove. Undefined origin keeps the pre-#34 key
+  // shape, so every existing load-order entry is untouched.
   private cacheKey(node: RecordTypeNode): string {
-    return `${node.plugin}::${node.recordType}`;
+    return `${node.plugin}|${node.origin ?? ''}::${node.recordType}`;
   }
 
   private err(e: unknown): string {
@@ -290,16 +297,22 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
    *  deleted this provider's own standalone root listing (`fetchPlugins`/`PluginNode`) once the
    *  standalone editing Plugins tree that was its only caller was retired — this is now the one
    *  way into a plugin's children. */
-  async getPluginChildren(pluginName: string): Promise<PluginTreeNode[]> {
+  async getPluginChildren(pluginName: string, origin?: string): Promise<PluginTreeNode[]> {
     try {
-      const types = await this.repository.getRecordTypes(pluginName);
+      const types = await this.repository.getRecordTypes(pluginName, origin);
       const typesPresent = new Set(types.map(t => t.type));
       const nodes: PluginTreeNode[] = [];
+      // #34: the spatial endpoints (/worldspaces, /interior-cells and their children) still
+      // resolve origin server-side from the filename, so for a copy the load order does not name
+      // they would answer with the *other* copy's worldspaces and cells. Silently showing one
+      // copy's spatial tree under another's row is ADR-0026's silent-wrong-state tier, so these
+      // group nodes are omitted there until those routes take an origin too. Record browsing —
+      // what this ticket's AC actually asks for — is unaffected.
       for (const [type, makeNode] of Object.entries(SPATIAL_NODE_FACTORIES)) {
-        if (typesPresent.has(type)) nodes.push(makeNode(pluginName));
+        if (origin === undefined && typesPresent.has(type)) nodes.push(makeNode(pluginName));
       }
       for (const t of types) {
-        if (!SPATIAL_TYPES.has(t.type)) nodes.push(new RecordTypeNode(pluginName, t.type, t.count, t.displayName));
+        if (!SPATIAL_TYPES.has(t.type)) nodes.push(new RecordTypeNode(pluginName, t.type, t.count, t.displayName, origin));
       }
       return nodes;
     } catch (e) {
@@ -379,7 +392,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     let cached = this.pageCache.get(cacheKey);
     if (!cached) {
       try {
-        cached = await this.repository.getRecords(node.plugin, node.recordType, 0, PAGE_SIZE);
+        cached = await this.repository.getRecords(node.plugin, node.recordType, 0, PAGE_SIZE, node.origin);
         this.pageCache.set(cacheKey, cached);
       } catch (e) {
         const message = this.err(e);

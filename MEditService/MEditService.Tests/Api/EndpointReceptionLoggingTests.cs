@@ -184,14 +184,14 @@ public sealed class EndpointReceptionLoggingTests
     {
         public IReadOnlyList<PluginResponse> GetPlugins() => throw new NotSupportedException();
         public IReadOnlyList<string> GetRecordTypes() => throw new NotSupportedException();
-        public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset) =>
+        public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null) =>
             throw new NotSupportedException();
         public RecordDetail? GetRecord(string formKey) => throw new NotSupportedException();
         public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => throw new NotSupportedException();
         public string? GetRecordType(string formKey) => throw new NotSupportedException();
         public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => throw new NotSupportedException();
         public CompareResult? GetCompare(string formKey) => throw new NotSupportedException();
-        public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => throw new NotSupportedException();
+        public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null) => throw new NotSupportedException();
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => [];
         public VmadData? GetVmad(string formKey, string plugin, string origin) => throw new NotSupportedException();
         public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) => throw new NotSupportedException();

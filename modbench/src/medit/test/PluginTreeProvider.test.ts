@@ -515,7 +515,9 @@ describe('PluginTreeProvider fetch failures', () => {
 
     const children = await provider.getPluginChildren('Plugin0.esp');
 
-    expect(repo.getRecordTypes).toHaveBeenCalledWith('Plugin0.esp');
+    // #34: origin rides along as undefined for an ordinary load-order row — the backend resolves
+    // it from the load order, where one filename names one plugin.
+    expect(repo.getRecordTypes).toHaveBeenCalledWith('Plugin0.esp', undefined);
     expect(children.map(c => c.label)).toEqual(['Worldspaces', 'cell - Interior', 'WEAP']);
   });
 
@@ -611,5 +613,74 @@ describe('headerFormKeyFor', () => {
 
   it('uses the plugin name verbatim, including its extension', () => {
     expect(headerFormKeyFor('MyPatch.esp')).toBe('000000:MyPatch.esp');
+  });
+});
+
+// ── browsing a specific copy of a filename (#34 / ADR-0036) ────────────────────
+
+describe('PluginTreeProvider.getPluginChildren (origin)', () => {
+  it('asks the repository for the copy the row stands for', async () => {
+    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
+    const provider = new PluginTreeProvider(repo);
+
+    await provider.getPluginChildren('Shared.esp', 'ModB');
+
+    expect(repo.getRecordTypes).toHaveBeenCalledWith('Shared.esp', 'ModB');
+  });
+
+  it('carries that copy through to its record pages', async () => {
+    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
+    const provider = new PluginTreeProvider(repo);
+
+    const [typeNode] = await provider.getPluginChildren('Shared.esp', 'ModB') as RecordTypeNode[];
+    await provider.getChildren(typeNode);
+
+    expect(repo.getRecords).toHaveBeenCalledWith('Shared.esp', 'WEAP', 0, expect.any(Number), 'ModB');
+  });
+
+  it('caches each copy separately, so one copy\'s page is never served for the other', async () => {
+    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
+    const provider = new PluginTreeProvider(repo);
+
+    const [fromA] = await provider.getPluginChildren('Shared.esp', 'ModA') as RecordTypeNode[];
+    const [fromB] = await provider.getPluginChildren('Shared.esp', 'ModB') as RecordTypeNode[];
+    await provider.getChildren(fromA);
+    await provider.getChildren(fromB);
+
+    // Two fetches, not one served from a shared "Shared.esp::WEAP" cache entry.
+    expect(repo.getRecords).toHaveBeenCalledTimes(2);
+  });
+
+  it('omits origin when the row is an ordinary load-order plugin', async () => {
+    // The server resolves it from the load order, which is unambiguous there — Mod Management's
+    // own rows have no origin to give.
+    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
+    const provider = new PluginTreeProvider(repo);
+
+    await provider.getPluginChildren('Plugin0.esp');
+
+    expect(repo.getRecordTypes).toHaveBeenCalledWith('Plugin0.esp', undefined);
+  });
+});
+
+describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific copy)', () => {
+  it('omits the spatial group nodes for a copy the load order does not name', async () => {
+    // Those routes resolve origin from the filename server-side, so they would answer for the
+    // other copy — no spatial node is better than one showing another file's cells (ADR-0026).
+    const repo = makeRepository({ recordTypes: [{ type: 'wrld', count: 1 }, { type: 'cell', count: 2 }, { type: 'WEAP', count: 1 }] });
+    const provider = new PluginTreeProvider(repo);
+
+    const children = await provider.getPluginChildren('Shared.esp', 'ModB');
+
+    expect(children.map(c => (c as RecordTypeNode).recordType)).toEqual(['WEAP']);
+  });
+
+  it('still builds them for an ordinary load-order plugin', async () => {
+    const repo = makeRepository({ recordTypes: [{ type: 'wrld', count: 1 }, { type: 'WEAP', count: 1 }] });
+    const provider = new PluginTreeProvider(repo);
+
+    const children = await provider.getPluginChildren('Plugin0.esp');
+
+    expect(children.some(c => c instanceof WorldspacesNode)).toBe(true);
   });
 });

@@ -90,8 +90,11 @@ export interface CellPage {
 
 export interface PluginRepository {
   getPlugins(): Promise<PluginMetadata[]>;
-  getRecordTypes(plugin: string): Promise<{ type: string; count: number; displayName: string }[]>;
-  getRecords(plugin: string, type: string, offset: number, limit: number): Promise<RecordPage>;
+  // origin (#34 / ADR-0036): which copy of `plugin` to read, when the session holds two files of
+  // one filename. Optional — an ordinary load-order row has no origin to give, and the backend
+  // resolves that case from the load order, where a filename is unambiguous.
+  getRecordTypes(plugin: string, origin?: string): Promise<{ type: string; count: number; displayName: string }[]>;
+  getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage>;
   // Issue #210: the FormKey picker's own search — free-text `query` matched against EditorID or
   // (as of #210) a FormKey-shaped string, scoped to `validTypes` only when there's exactly one
   // (an unscoped/multi-type field searches across every record type, same as the deleted
@@ -143,17 +146,17 @@ export class ApiPluginRepository implements PluginRepository {
     return (data ?? []).map(toPluginMetadata);
   }
 
-  async getRecordTypes(plugin: string): Promise<{ type: string; count: number; displayName: string }[]> {
+  async getRecordTypes(plugin: string, origin?: string): Promise<{ type: string; count: number; displayName: string }[]> {
     const { data, error, response } = await this.client.GET('/plugins/{plugin}/record-types', {
-      params: { path: { plugin } },
+      params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
     });
     this.ensureOk(`getRecordTypes(${plugin})`, response, error);
     return (data ?? []).map(toRecordTypeCount);
   }
 
-  async getRecords(plugin: string, type: string, offset: number, limit: number): Promise<RecordPage> {
+  async getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage> {
     const { data, error, response } = await this.client.GET('/records', {
-      params: { query: { plugin, type, offset, limit } },
+      params: { query: { plugin, type, offset, limit, ...(origin === undefined ? {} : { origin }) } },
     });
     this.ensureOk(`getRecords(${plugin}, ${type})`, response, error);
     return {

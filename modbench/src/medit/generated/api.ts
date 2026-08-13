@@ -244,6 +244,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/load": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["LoadUnlistedPlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plugins/unload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["UnloadUnlistedPlugin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/record-types": {
         parameters: {
             query?: never;
@@ -553,6 +585,7 @@ export interface components {
         CopyRecordRequest: {
             source?: string | null;
             sourcePlugin?: string | null;
+            sourceOrigin?: string | null;
         };
         CreatePlacedRecordRequest: {
             recordType?: string | null;
@@ -631,6 +664,10 @@ export interface components {
         };
         /** @enum {string} */
         FormKeyResolutionState: "Unresolved" | "ResolvedWrongType" | "ResolvedValidType";
+        LoadPluginRequest: {
+            path?: string | null;
+            origin?: string | null;
+        };
         MasterIssue: {
             masterName?: string | null;
             kind?: components["schemas"]["MasterIssueKind"];
@@ -724,6 +761,7 @@ export interface components {
             participates?: boolean;
             origin?: string | null;
             masterIssues?: components["schemas"]["MasterIssue"][] | null;
+            inLoadOrder?: boolean;
         };
         ProblemDetails: {
             type?: string | null;
@@ -819,6 +857,10 @@ export interface components {
         SessionLoadResponse: {
             status?: string | null;
             failures?: components["schemas"]["PluginLoadFailure"][] | null;
+        };
+        UnloadPluginRequest: {
+            plugin?: string | null;
+            origin?: string | null;
         };
         VmadCompare: {
             scripts?: components["schemas"]["VmadScriptDiff"][] | null;
@@ -1475,7 +1517,9 @@ export interface operations {
     };
     GetPluginRecordTypes: {
         parameters: {
-            query?: never;
+            query?: {
+                origin?: string;
+            };
             header?: never;
             path: {
                 plugin: string;
@@ -1528,6 +1572,106 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    LoadUnlistedPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoadPluginRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    UnloadUnlistedPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnloadPluginRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1630,6 +1774,7 @@ export interface operations {
                 plugin?: string;
                 type?: string;
                 search?: string;
+                origin?: string;
                 limit?: number;
                 offset?: number;
             };
