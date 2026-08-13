@@ -69,7 +69,7 @@ describe('deploy', () => {
     expect(manifest.loadOrder).toEqual([target, target2]);
 
     // target2 is already gone (e.g., manually removed) before purge runs — its rm(force:true)
-    // must tolerate this, not throw, and must not block target's (still-present) cleanup.
+    // must tolerate an already-absent path and not throw.
     await rm(target2, { force: true });
 
     await purge(fx.instanceRoot, fx.gameDirectory, fakeReporter());
