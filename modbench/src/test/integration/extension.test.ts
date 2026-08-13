@@ -170,6 +170,55 @@ describe('modbench activation', () => {
   });
 });
 
+// ── Build integrity (#299) ─────────────────────────────────────────────────────
+// The harness loads out/extension.js, a bundle produced by a separate esbuild step —
+// nothing about running this suite forces that bundle to be current. Assert the property
+// from inside the process that actually loaded it, rather than trust the npm script that
+// got us here (pretest:integration could be deleted, renamed, point at the wrong outfile,
+// or esbuild could silently stop emitting — every one of those goes red here).
+
+describe('the loaded extension bundle is not older than its sources (#299)', () => {
+  it('out/extension.js is at least as new as every file under src/', () => {
+    // Compiled location is out/test/integration/extension.test.js — three levels under
+    // the modbench package root.
+    const pkgRoot = path.join(__dirname, '..', '..', '..');
+    const srcDir = path.join(pkgRoot, 'src');
+    const bundlePath = path.join(pkgRoot, 'out', 'extension.js');
+    // The workspace fixture VS Code opens as the test workspace folder — it's live,
+    // written to mid-run by other suites (downloads/, overwrite/, plugins.txt edits), so
+    // its mtimes churn independently of any bundle-affecting source edit and would flake
+    // this comparison. It also isn't part of the bundle.
+    const excluded = path.join(srcDir, 'test', 'integration', 'workspace');
+
+    let newestMtimeMs = -Infinity;
+    let newestFile = '';
+    const walk = (dir: string): void => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (full === excluded) continue;
+        if (entry.isDirectory()) {
+          walk(full);
+        } else if (entry.isFile()) {
+          const mtimeMs = fs.statSync(full).mtimeMs;
+          if (mtimeMs > newestMtimeMs) {
+            newestMtimeMs = mtimeMs;
+            newestFile = full;
+          }
+        }
+      }
+    };
+    walk(srcDir);
+
+    const bundleMtimeMs = fs.statSync(bundlePath).mtimeMs;
+    assert.ok(
+      bundleMtimeMs >= newestMtimeMs,
+      `out/extension.js (mtime ${new Date(bundleMtimeMs).toISOString()}) is older than ` +
+      `${newestFile} (mtime ${new Date(newestMtimeMs).toISOString()}) — the harness ran ` +
+      `against a stale bundle`,
+    );
+  });
+});
+
 // ── Output channel (#198) ───────────────────────────────────────────────────────
 
 describe('Modbench output channel (#198)', () => {
