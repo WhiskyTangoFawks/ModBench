@@ -54,6 +54,29 @@ public sealed class ChangeEndpointsBulkDeleteOriginTests
         Assert.Equal("Data", OriginOf(changes, Assert.Single(remaining, c => c.FormKey == "FK3")));
     }
 
+    // #300 review: PluginOriginResolver.Resolve falls back to PluginOrigin.DataDirectory when given
+    // a null session, so resolving unconditionally would make "no session loaded" indistinguishable
+    // from "this plugin is at the Data origin" — pending_changes outlives its session (Unload never
+    // clears it; the service is a DI singleton), so a plugin staged under a real mod origin with no
+    // session loaded would silently filter to zero rows instead of reverting. With no session there
+    // is no load order to resolve an origin against, so origin must stay null and the bulk revert
+    // falls back to its pre-#300 filename-only scope exactly.
+    [Fact]
+    public void BulkDeleteChanges_NoSessionLoaded_StillRevertsByFilenameAlone()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        Stage(changes, "FK1", "Override.esp", "ModA"); // a real non-Data origin, staged before the session that loaded it was unloaded
+
+        var session = new StubSessionManager(plugin: null);
+
+        var result = ChangeEndpoints.BulkDeleteChanges(
+            plugin: "Override.esp", formKey: null, session: session, changes: changes, loggerFactory: NullLoggerFactory());
+
+        var count = Assert.IsType<Ok<int>>(result).Value;
+        Assert.Equal(1, count);
+        Assert.Empty(changes.GetChanges(plugin: "Override.esp"));
+    }
+
     private static void Stage(IPendingChangeService changes, string formKey, string plugin, string origin) =>
         changes.Upsert(new PendingChangeUpsert(
             formKey, plugin, "npc_",
@@ -67,9 +90,9 @@ public sealed class ChangeEndpointsBulkDeleteOriginTests
     private static string OriginOf(IPendingChangeService changes, PendingChange change) =>
         new[] { "Data", "ModA", "ModB" }.Single(o => changes.GetChanges(plugin: change.Plugin, formKey: change.FormKey, origin: o).Count > 0);
 
-    private sealed class StubSessionManager(PluginMetadata plugin) : ISessionManager
+    private sealed class StubSessionManager(PluginMetadata? plugin) : ISessionManager
     {
-        public IGameSession? Session { get; } = new StubGameSession(plugin);
+        public IGameSession? Session { get; } = plugin != null ? new StubGameSession(plugin) : null;
         public IRecordReader? Repository => null;
         public SessionStatus Status => SessionStatus.None;
 
