@@ -115,6 +115,16 @@ describe('moveModInText — byte-faithful reorder by entry index', () => {
     const out = moveModInText('\uFEFF+First\r\n+Second\r\n+Third\r\n', 'First', 2);
     expect(out).toBe('\uFEFF+Second\r\n+Third\r\n+First\r\n');
   });
+
+  it('finds and moves a mod that is currently disabled (-), not just enabled (+) ones', () => {
+    const out = moveModInText('+A\r\n-B\r\n+C\r\n', 'B', 0);
+    expect(out).toBe('-B\r\n+A\r\n+C\r\n');
+  });
+
+  it('re-lands correctly when the moved mod was the only entry left in the file', () => {
+    const out = moveModInText('# header\n+OnlyMod\n', 'OnlyMod', 0);
+    expect(out).toBe('# header\n+OnlyMod\n');
+  });
 });
 
 describe('parseModlist', () => {
@@ -205,6 +215,11 @@ describe('insertSeparatorAtIndexInText', () => {
     const out = insertSeparatorAtIndexInText(defaultModlist(), 'My Group', 3);
     const entry = parseModlist(out).find((e) => e.name === 'My Group');
     expect(entry?.kind).toBe('separator');
+  });
+
+  it('inserts the first separator into a profile with no existing entries yet', () => {
+    const out = insertSeparatorAtIndexInText('# header\n', 'FirstSep', 0);
+    expect(out).toBe('# header\n+FirstSep_separator\n');
   });
 });
 
@@ -382,6 +397,16 @@ describe('moveModToSeparatorEndInText', () => {
     );
     expect(out).toBe('\uFEFF+Second\r\n+First\r\n+Sep_separator\r\n+Third\r\n');
   });
+
+  it('finds and moves a mod that is currently disabled (-), not just enabled (+) ones', () => {
+    const out = moveModToSeparatorEndInText('-B\r\n+A\r\n+Sep_separator\r\n+C\r\n', 'B', 'Sep');
+    expect(out).toBe('+A\r\n-B\r\n+Sep_separator\r\n+C\r\n');
+  });
+
+  it('re-lands correctly when moving to ungrouped leaves the file with no entries but the moved one', () => {
+    const out = moveModToSeparatorEndInText('# header\r\n+OnlyMod\r\n', 'OnlyMod', null);
+    expect(out).toBe('# header\r\n+OnlyMod\r\n');
+  });
 });
 
 describe('moveSeparatorBlockInText', () => {
@@ -454,6 +479,33 @@ describe('moveSeparatorBlockInText', () => {
     );
     expect(out).toBe('\uFEFF+A\r\n+B_separator\r\n+Sep_separator\r\n+C\r\n');
   });
+
+  // The file header documents "# comment (preserved verbatim, not surfaced)" —
+  // a comment carries no model meaning under any circumstance, including as a
+  // separator, even when its own text coincides with the separator suffix (as
+  // it would for a stale separator a user commented out instead of deleting:
+  // "+Foo_separator" -> "#Foo_separator"). The backward scan for "the previous
+  // separator" walks raw, untyped lines, so it's the one place that guarantee
+  // has to hold structurally, not just by absence of a clashing fixture.
+  it('never mistakes a commented-out separator line for a live one, and finds an enabled (+) previous separator', () => {
+    const text = '+PrevSep_separator\r\n+B\r\n#fake_separator\r\n+C\r\n+TargetSep_separator\r\n+D\r\n';
+    const out = moveSeparatorBlockInText(text, 'TargetSep', 0);
+    // Block = everything back to (not including) PrevSep's own line: B, the
+    // commented-out line (rides along verbatim, per "preserved... not surfaced"),
+    // C, and TargetSep's own line. PrevSep itself must NOT be swept in.
+    expect(out).toBe('+B\r\n#fake_separator\r\n+C\r\n+TargetSep_separator\r\n+PrevSep_separator\r\n+D\r\n');
+  });
+
+  it('re-lands correctly when moving the sole block leaves the file with zero entries', () => {
+    const out = moveSeparatorBlockInText('# header\r\n+OnlyMod\r\n+OnlySep_separator\r\n', 'OnlySep', 0);
+    expect(out).toBe('# header\r\n+OnlyMod\r\n+OnlySep_separator\r\n');
+  });
+
+  it('clamps an out-of-range toIndex to land before the trailing */comment tail, not past it', () => {
+    const out = moveSeparatorBlockInText(defaultModlist(), 'Unassigned (Modlist Development)', 999);
+    expect(names(out).at(-1)).toBe('Unassigned (Modlist Development)');
+    expect(out.endsWith('*Unmanaged: ccSBJFO4003-Grenade\r\n')).toBe(true); // * block still trails
+  });
 });
 
 describe('insertModAtWinningEnd — add a disabled mod at the winning end (first entry)', () => {
@@ -479,6 +531,20 @@ describe('insertModAtWinningEnd — add a disabled mod at the winning end (first
 
   it('inserts into an empty file', () => {
     expect(insertModAtWinningEnd('', 'C')).toBe('-C\n');
+  });
+
+  it('EOL-terminates a header line that lacks its own trailing newline when there are no entries yet', () => {
+    // No +/- entry lines at all, so the new mod lands at the very end — right
+    // after the header, which itself has no trailing EOL to glue onto.
+    expect(insertModAtWinningEnd('# header', 'C')).toBe('# header\n-C\n');
+  });
+
+  it('does not add a spurious EOL to an unrelated line when inserting after an already-terminated one', () => {
+    // The header already ends in its own \r\n; only the file's own trailing
+    // line (here, the unmanaged * line) may lack one, and that's not the line
+    // being inserted after, so nothing about it may be touched.
+    const out = insertModAtWinningEnd('# header\r\n+A\r\n*DLC: Foo', 'New');
+    expect(out).toBe('# header\r\n-New\r\n+A\r\n*DLC: Foo');
   });
 });
 

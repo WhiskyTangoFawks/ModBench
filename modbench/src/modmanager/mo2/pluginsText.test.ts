@@ -118,6 +118,16 @@ describe('movePluginsInText — byte-faithful reorder', () => {
     expect(out.startsWith('# top\r\n')).toBe(true);
     expect(out).toContain('\r\n\r\n# mid\r\n');
   });
+
+  it('re-lands correctly when moving the only entry leaves the file with zero entries', () => {
+    const out = movePluginsInText('# only comment\r\n*OnlyPlugin.esp\r\n', ['OnlyPlugin.esp'], 0);
+    expect(out).toBe('# only comment\r\n*OnlyPlugin.esp\r\n');
+  });
+
+  it('clamps an out-of-range index to land before a trailing comment, not past it', () => {
+    const out = movePluginsInText('*A.esp\r\nB.esp\r\n# trailing comment\r\n', ['B.esp'], 99);
+    expect(out).toBe('*A.esp\r\nB.esp\r\n# trailing comment\r\n');
+  });
 });
 
 // The drop-target index a UI drag hands the user is a *pre-removal* row index
