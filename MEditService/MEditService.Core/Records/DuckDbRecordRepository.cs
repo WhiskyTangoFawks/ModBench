@@ -668,9 +668,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 _ => new VmadPropertyValue(i.Type, "", null),
             })];
 
-    public int CountRecordsForPlugin(string tableName, string plugin)
+    public int CountRecordsForPlugin(string tableName, string plugin, string origin)
     {
-        var (where, paramValues) = BuildWhere(plugin, null, _filterActive);
+        var (where, paramValues) = BuildWhere(plugin, null, _filterActive, origin);
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT COUNT(*) FROM \"{tableName}\"{where}";
         AddParams(cmd, paramValues);

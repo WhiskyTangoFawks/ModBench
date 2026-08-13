@@ -31,7 +31,10 @@ public interface IRecordReader
     // order. Empty when the record carries none. Reconstructs the neutral ParsedCondition the codec
     // produced at index time (ADR-0032). origin: same reasoning as GetVmad's.
     IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin);
-    int CountRecordsForPlugin(string tableName, string plugin);
+    // origin (#296 / ADR-0036, required): plugin is never optional at this method's one call site
+    // (GetPluginRecordTypes), so this mirrors GetRecord's required-parameter treatment, not
+    // GetRecords' nullable filter.
+    int CountRecordsForPlugin(string tableName, string plugin, string origin);
     string? FindRecordType(string formKey);
 
     // O(1) form_key -> (record type, EditorID) lookup against the winning override, backed by the

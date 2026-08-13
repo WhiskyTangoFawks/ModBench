@@ -35,8 +35,8 @@ public sealed class SessionManagerLoadExplicitTests
 
         Assert.NotNull(manager.Session);
         Assert.NotNull(manager.Repository);
-        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "A.esp"));
-        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "B.esp"));
+        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "A.esp", "Data"));
+        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "B.esp", "Data"));
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public sealed class SessionManagerLoadExplicitTests
         manager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.NotSame(firstRepo, manager.Repository);
-        Assert.ThrowsAny<Exception>(() => firstRepo!.CountRecordsForPlugin("npc_", "A.esp"));
+        Assert.ThrowsAny<Exception>(() => firstRepo!.CountRecordsForPlugin("npc_", "A.esp", "Data"));
     }
 
     // A single plugin whose binary data Mutagen can't parse (e.g. #<issue>: a malformed
@@ -100,8 +100,8 @@ public sealed class SessionManagerLoadExplicitTests
 
         Assert.NotNull(manager.Session);
         Assert.Contains(manager.Session!.LoadFailures, f => f.Name == "Bad.esp");
-        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "Good.esp"));
-        Assert.Equal(0, manager.Repository!.CountRecordsForPlugin("npc_", "Bad.esp"));
+        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "Good.esp", "Data"));
+        Assert.Equal(0, manager.Repository!.CountRecordsForPlugin("npc_", "Bad.esp", "Data"));
     }
 
     private sealed class ThrowingOnIndexRepositoryFactory(IRecordRepositoryFactory inner, string poisonPlugin)
@@ -138,8 +138,8 @@ public sealed class SessionManagerLoadExplicitTests
         public VmadData? GetVmad(string formKey, string plugin, string origin) => inner.GetVmad(formKey, plugin, origin);
         public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) =>
             inner.GetConditions(formKey, plugin, origin);
-        public int CountRecordsForPlugin(string tableName, string plugin) =>
-            inner.CountRecordsForPlugin(tableName, plugin);
+        public int CountRecordsForPlugin(string tableName, string plugin, string origin) =>
+            inner.CountRecordsForPlugin(tableName, plugin, origin);
         public string? FindRecordType(string formKey) => inner.FindRecordType(formKey);
         public RecordLookupEntry? ResolveFormKey(string formKey) => inner.ResolveFormKey(formKey);
         public IReadOnlyList<string> GetNativeFormKeys(string plugin) => inner.GetNativeFormKeys(plugin);

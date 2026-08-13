@@ -1357,8 +1357,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) =>
             inner.GetConditions(formKey, plugin, origin);
 
-        public int CountRecordsForPlugin(string tableName, string plugin) =>
-            inner.CountRecordsForPlugin(tableName, plugin);
+        public int CountRecordsForPlugin(string tableName, string plugin, string origin) =>
+            inner.CountRecordsForPlugin(tableName, plugin, origin);
 
         public IReadOnlyList<string> GetNativeFormKeys(string plugin) =>
             inner.GetNativeFormKeys(plugin);

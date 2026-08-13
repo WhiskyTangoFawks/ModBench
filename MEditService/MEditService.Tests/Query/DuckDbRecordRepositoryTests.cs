@@ -316,7 +316,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
     public void CountRecordsForPlugin_ReturnsCorrectCount()
     {
         using var repo = LoadedRepository();
-        var count = repo.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName);
+        var count = repo.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName, "Data");
         Assert.Equal(TestPluginFixture.RecordCount, count);
     }
 
@@ -324,7 +324,7 @@ public class DuckDbRecordRepositoryTests(TestPluginFixture fixture)
     public void CountRecordsForPlugin_UnknownPlugin_ReturnsZero()
     {
         using var repo = LoadedRepository();
-        var count = repo.CountRecordsForPlugin("npc_", "NonExistent.esp");
+        var count = repo.CountRecordsForPlugin("npc_", "NonExistent.esp", "Data");
         Assert.Equal(0, count);
     }
 

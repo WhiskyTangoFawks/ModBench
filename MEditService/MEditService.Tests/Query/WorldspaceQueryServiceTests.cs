@@ -32,7 +32,7 @@ public class WorldspaceQueryServiceTests
         public IReadOnlyList<RecordDetail> GetAllOverrides(string t, string fk) => [];
         public VmadData? GetVmad(string fk, string p, string origin) => null;
         public IReadOnlyList<ConditionOwner> GetConditions(string fk, string p, string origin) => [];
-        public int CountRecordsForPlugin(string t, string p) => 0;
+        public int CountRecordsForPlugin(string t, string p, string origin) => 0;
         public string? FindRecordType(string fk) => null;
         public RecordLookupEntry? ResolveFormKey(string fk) => null;
         public IReadOnlyList<string> GetNativeFormKeys(string plugin) => [];

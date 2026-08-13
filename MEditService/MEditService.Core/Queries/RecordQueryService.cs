@@ -193,7 +193,7 @@ public sealed class RecordQueryService(
         var origin = PluginOriginResolver.Resolve(_session.Session, plugin);
         var counts = RequireSchemas().Keys
             .Where(t => t != HeaderTableName)
-            .Select(t => (Type: t, Count: repository.CountRecordsForPlugin(t, plugin)))
+            .Select(t => (Type: t, Count: repository.CountRecordsForPlugin(t, plugin, origin)))
             .Where(x => x.Count > 0)
             .ToDictionary(x => x.Type, x => x.Count, StringComparer.OrdinalIgnoreCase);
 

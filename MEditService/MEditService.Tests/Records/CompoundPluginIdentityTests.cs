@@ -78,6 +78,23 @@ public class CompoundPluginIdentityTests
         Assert.Equal("ModA", record.Origin);
     }
 
+    // #296 / ADR-0036: CountRecordsForPlugin reused GetRecords' BuildWhere but only ever supplied
+    // plugin, so two same-filename origins' counts silently summed into one. origin is required here
+    // (not defaulted) for the same reason as GetRecord's — plugin is never optional at this call
+    // site (GetPluginRecordTypes always has a concrete plugin).
+    [Fact]
+    public void TwoOrigins_SameFilenameSameFormKey_CountRecordsForPlugin_CountsRequestedOriginOnly()
+    {
+        var (modA, modB, _) = BuildSharedFilenameFixture();
+
+        using var repo = OpenRepo();
+        repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
+        repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
+
+        Assert.Equal(1, repo.CountRecordsForPlugin("npc_", "Shared.esp", "ModA"));
+        Assert.Equal(1, repo.CountRecordsForPlugin("npc_", "Shared.esp", "ModB"));
+    }
+
     // #296 / ADR-0036: GetRecords' outer WHERE filtered by plugin filename alone, and RecordSummary
     // carried no Origin at all — so a listing scoped to one filename silently merged both origins'
     // rows with no way to tell them apart, the same class of bug the worldspace tree reads had.
