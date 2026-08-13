@@ -66,6 +66,14 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [InlineData("recordTypes", 503)]
     [InlineData("conditionFunctions", 503)]
     [InlineData("conditionRunOnTargets", 503)]
+    // #310: LoadUnlistedPlugin/UnloadUnlistedPlugin's own "no session" guards — the path/plugin
+    // check on each request body passes (real values below), so the request reaches
+    // SessionManager's `_session is null` branch and the 503 these routes declare via
+    // .ProducesProblem(503). The load case needs a path that actually exists on disk (File.Exists
+    // runs before the session check), hence the fixture's own already-written plugin file rather
+    // than a made-up one.
+    [InlineData("loadPlugin", 503)]
+    [InlineData("unloadPlugin", 503)]
     public async Task Endpoint_NoSession_ReturnsProblemDetails(string op, int expectedStatus)
     {
         await using var app = new WebApplicationFactory<Program>();
@@ -73,6 +81,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
 
         var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
         var plugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
+        var realPluginPath = Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName);
 
         var resp = op switch
         {
@@ -86,9 +95,30 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             "recordTypes" => await client.GetAsync("/record-types"),
             "conditionFunctions" => await client.GetAsync("/condition-functions"),
             "conditionRunOnTargets" => await client.GetAsync("/condition-run-on-targets"),
+            "loadPlugin" => await client.PostAsJsonAsync("/plugins/load", new { path = realPluginPath, origin = "ModA" }),
+            "unloadPlugin" => await client.PostAsJsonAsync("/plugins/unload", new { plugin = TestPluginFixture.PluginName, origin = "ModA" }),
             _ => await client.PostAsync($"/change-groups/{Guid.NewGuid()}/save", null),
         };
 
         AssertIsProblemDetails(resp, expectedStatus);
+    }
+
+    // --- POST /plugins/load, path not found (#310) ---
+
+    // Distinct from the no-session case above: a session *is* loaded here (the shared `loaded`
+    // fixture), so this exercises LoadUnlistedPlugin's other declared guard —
+    // FileNotFoundException -> 404 — rather than the "no session" one. File.Exists runs before the
+    // session check, so this path is reachable regardless of session state; asserting it here
+    // (session live) is the more realistic caller shape (the visibility toggle re-issuing load for
+    // a copy that has since been deleted from disk).
+    [Fact]
+    public async Task LoadUnlistedPlugin_PathNotFound_ReturnsProblemDetails404()
+    {
+        var missingPath = Path.Combine(_fixture.DataFolder, "DoesNotExist.esp");
+
+        var resp = await _client.PostAsJsonAsync("/plugins/load", new { path = missingPath, origin = "ModA" });
+
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+        AssertIsProblemDetails(resp, 404);
     }
 }

@@ -68,9 +68,12 @@ export class LoadMoreNode extends vscode.TreeItem {
 
 // ── Phase 16: worldspace / cell / placed-object nodes ─────────────────────────
 
+// #305 / ADR-0036: every node in the spatial chain carries the same optional `origin` RecordTypeNode
+// already does — a node built for a specific copy has to keep saying so all the way down to its
+// leaves, since each hop's own repository call needs it too.
 export class WorldspacesNode extends vscode.TreeItem {
   readonly kind = 'worldspaces' as const;
-  constructor(public readonly plugin: string) {
+  constructor(public readonly plugin: string, public readonly origin?: string) {
     super('Worldspaces', vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'worldspaces';
     this.iconPath = new vscode.ThemeIcon('globe');
@@ -79,7 +82,7 @@ export class WorldspacesNode extends vscode.TreeItem {
 
 export class WorldspaceNode extends vscode.TreeItem {
   readonly kind = 'worldspace' as const;
-  constructor(public readonly plugin: string, public readonly worldspace: WorldspaceSummary) {
+  constructor(public readonly plugin: string, public readonly worldspace: WorldspaceSummary, public readonly origin?: string) {
     const label = worldspace.editorId ?? worldspace.formKey;
     super(`${label} [WRLD:${formId(worldspace.formKey)}]`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'worldspace';
@@ -89,7 +92,7 @@ export class WorldspaceNode extends vscode.TreeItem {
 
 export class BlockNode extends vscode.TreeItem {
   readonly kind = 'block' as const;
-  constructor(public readonly plugin: string, public readonly block: WorldspaceBlock) {
+  constructor(public readonly plugin: string, public readonly block: WorldspaceBlock, public readonly origin?: string) {
     super(`Block (${block.x}, ${block.y})`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'block';
   }
@@ -97,7 +100,7 @@ export class BlockNode extends vscode.TreeItem {
 
 export class SubBlockNode extends vscode.TreeItem {
   readonly kind = 'subBlock' as const;
-  constructor(public readonly plugin: string, public readonly subBlock: WorldspaceSubBlock) {
+  constructor(public readonly plugin: string, public readonly subBlock: WorldspaceSubBlock, public readonly origin?: string) {
     super(`Sub-block (${subBlock.x}, ${subBlock.y})`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'subBlock';
   }
@@ -105,7 +108,7 @@ export class SubBlockNode extends vscode.TreeItem {
 
 export class CellNode extends vscode.TreeItem {
   readonly kind = 'cell' as const;
-  constructor(public readonly plugin: string, public readonly cell: CellSummary) {
+  constructor(public readonly plugin: string, public readonly cell: CellSummary, public readonly origin?: string) {
     const label = cell.editorId
       ?? (cell.cellX != null ? `Cell (${cell.cellX}, ${cell.cellY})` : cell.formKey);
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
@@ -121,6 +124,7 @@ export class PlacedGroupNode extends vscode.TreeItem {
     public readonly cellFormKey: string,
     public readonly group: 'persistent' | 'temporary',
     public readonly placed: PlacedSummary[],
+    public readonly origin?: string,
   ) {
     super(group === 'persistent' ? 'Persistent' : 'Temporary', vscode.TreeItemCollapsibleState.Collapsed);
     this.description = placed.length.toLocaleString();
@@ -130,7 +134,7 @@ export class PlacedGroupNode extends vscode.TreeItem {
 
 export class PlacedNode extends vscode.TreeItem {
   readonly kind = 'placed' as const;
-  constructor(public readonly plugin: string, public readonly placed: PlacedSummary) {
+  constructor(public readonly plugin: string, public readonly placed: PlacedSummary, public readonly origin?: string) {
     const name = placed.editorId ?? placed.baseFormKey ?? placed.formKey;
     const label = `${name} [${placed.recordType.toUpperCase()}:${formId(placed.formKey)}]`;
     super(label, vscode.TreeItemCollapsibleState.None);
@@ -141,7 +145,7 @@ export class PlacedNode extends vscode.TreeItem {
 
 export class InteriorCellsNode extends vscode.TreeItem {
   readonly kind = 'interiorCells' as const;
-  constructor(public readonly plugin: string) {
+  constructor(public readonly plugin: string, public readonly origin?: string) {
     super('cell - Interior', vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'interiorCells';
   }
@@ -177,9 +181,9 @@ export type PluginTreeNode =
 // signature — the single source of truth for which spatial type maps to which node
 // (issue #197: previously a set membership check and a separate equality check per type,
 // which could drift out of sync the way #173 did).
-const SPATIAL_NODE_FACTORIES: Record<string, (pluginName: string) => PluginTreeNode> = {
-  wrld: (pluginName) => new WorldspacesNode(pluginName),
-  cell: (pluginName) => new InteriorCellsNode(pluginName),
+const SPATIAL_NODE_FACTORIES: Record<string, (pluginName: string, origin?: string) => PluginTreeNode> = {
+  wrld: (pluginName, origin) => new WorldspacesNode(pluginName, origin),
+  cell: (pluginName, origin) => new InteriorCellsNode(pluginName, origin),
 };
 
 // Record types represented spatially in the worldspace tree — hidden from the flat type
@@ -198,7 +202,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private readonly interiorCache: CellPageCache = new Map();
   private readonly refCache = new Map<string, CellReferences>();
   // Last load-more failure per parent, keyed the same as pageCache/interiorCache
-  // ("plugin::recordType" / plugin). Cleared on a successful retry; renders as an
+  // (originKey + "::recordType" / originKey alone). Cleared on a successful retry; renders as an
   // ErrorNode alongside the still-clickable LoadMoreNode/InteriorLoadMoreNode.
   private readonly loadMoreFailures = new Map<string, string>();
   private readonly interiorLoadMoreFailures = new Map<string, string>();
@@ -237,10 +241,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private getSpatialChildren(element: PluginTreeNode): Promise<PluginTreeNode[]> | PluginTreeNode[] {
     if (element instanceof WorldspacesNode) return this.fetchWorldspaces(element);
     if (element instanceof WorldspaceNode) return this.fetchWorldspaceChildren(element);
-    if (element instanceof BlockNode) return element.block.subBlocks.map(s => new SubBlockNode(element.plugin, s));
-    if (element instanceof SubBlockNode) return element.subBlock.cells.map(c => new CellNode(element.plugin, c));
+    if (element instanceof BlockNode) return element.block.subBlocks.map(s => new SubBlockNode(element.plugin, s, element.origin));
+    if (element instanceof SubBlockNode) return element.subBlock.cells.map(c => new CellNode(element.plugin, c, element.origin));
     if (element instanceof CellNode) return this.fetchCellGroups(element);
-    if (element instanceof PlacedGroupNode) return element.placed.map(p => new PlacedNode(element.plugin, p));
+    if (element instanceof PlacedGroupNode) return element.placed.map(p => new PlacedNode(element.plugin, p, element.origin));
     if (element instanceof InteriorCellsNode) return this.fetchInteriorCells(element);
     return [];
   }
@@ -265,25 +269,31 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   private async loadMoreInterior(node: InteriorLoadMoreNode): Promise<void> {
     const parent = node.parentNode;
-    const cached = this.interiorCache.get(parent.plugin) ?? { items: [], total: 0 };
+    const cacheKey = this.originKey(parent.plugin, parent.origin);
+    const cached = this.interiorCache.get(cacheKey) ?? { items: [], total: 0 };
     try {
-      const result = await this.repository.getInteriorCells(parent.plugin, cached.items.length, PAGE_SIZE);
-      this.interiorCache.set(parent.plugin, { items: [...cached.items, ...result.items], total: result.total });
-      this.interiorLoadMoreFailures.delete(parent.plugin);
+      const result = await this.repository.getInteriorCells(parent.plugin, cached.items.length, PAGE_SIZE, parent.origin);
+      this.interiorCache.set(cacheKey, { items: [...cached.items, ...result.items], total: result.total });
+      this.interiorLoadMoreFailures.delete(cacheKey);
     } catch (e) {
       const message = this.err(e);
       this.log(`[PluginTreeProvider] loadMoreInterior(${parent.plugin}) failed: ${message}`);
-      this.interiorLoadMoreFailures.set(parent.plugin, message);
+      this.interiorLoadMoreFailures.set(cacheKey, message);
     }
     this._onDidChangeTreeData.fire(parent);
   }
 
-  // #34: the origin is part of the key, not decoration — two copies of one filename have their
-  // own pages, and serving one copy's page under the other's node is the exact "right target,
-  // wrong content" failure this ticket exists to remove. Undefined origin keeps the pre-#34 key
-  // shape, so every existing load-order entry is untouched.
+  // #34 / #305: the origin is part of every spatial/record cache key, not decoration — two copies
+  // of one filename have their own pages, and serving one copy's page (or interior-cell page, or
+  // cell's placed refs) under the other's node is the exact "right target, wrong content" failure
+  // #34 exists to remove and #305 extends to the rest of the spatial tree. Undefined origin keeps
+  // the pre-#34 key shape, so every existing load-order entry is untouched.
+  private originKey(plugin: string, origin?: string): string {
+    return `${plugin}|${origin ?? ''}`;
+  }
+
   private cacheKey(node: RecordTypeNode): string {
-    return `${node.plugin}|${node.origin ?? ''}::${node.recordType}`;
+    return `${this.originKey(node.plugin, node.origin)}::${node.recordType}`;
   }
 
   private err(e: unknown): string {
@@ -302,14 +312,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       const types = await this.repository.getRecordTypes(pluginName, origin);
       const typesPresent = new Set(types.map(t => t.type));
       const nodes: PluginTreeNode[] = [];
-      // #34: the spatial endpoints (/worldspaces, /interior-cells and their children) still
-      // resolve origin server-side from the filename, so for a copy the load order does not name
-      // they would answer with the *other* copy's worldspaces and cells. Silently showing one
-      // copy's spatial tree under another's row is ADR-0026's silent-wrong-state tier, so these
-      // group nodes are omitted there until those routes take an origin too. Record browsing —
-      // what this ticket's AC actually asks for — is unaffected.
+      // #305: the spatial endpoints now take the same optional origin the flat record routes do
+      // (RecordTypeNode below), so a copy the load order does not name browses its own worldspaces
+      // and cells instead of having them omitted entirely.
       for (const [type, makeNode] of Object.entries(SPATIAL_NODE_FACTORIES)) {
-        if (origin === undefined && typesPresent.has(type)) nodes.push(makeNode(pluginName));
+        if (typesPresent.has(type)) nodes.push(makeNode(pluginName, origin));
       }
       for (const t of types) {
         if (!SPATIAL_TYPES.has(t.type)) nodes.push(new RecordTypeNode(pluginName, t.type, t.count, t.displayName, origin));
@@ -324,8 +331,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   private async fetchWorldspaces(node: WorldspacesNode): Promise<PluginTreeNode[]> {
     try {
-      const worldspaces = await this.repository.getWorldspaces(node.plugin);
-      return worldspaces.map(w => new WorldspaceNode(node.plugin, w));
+      const worldspaces = await this.repository.getWorldspaces(node.plugin, node.origin);
+      return worldspaces.map(w => new WorldspaceNode(node.plugin, w, node.origin));
     } catch (e) {
       const message = this.err(e);
       this.log(`[PluginTreeProvider] fetchWorldspaces(${node.plugin}) failed: ${message}`);
@@ -335,10 +342,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   private async fetchWorldspaceChildren(node: WorldspaceNode): Promise<PluginTreeNode[]> {
     try {
-      const data = await this.repository.getWorldspaceBlocks(node.plugin, node.worldspace.formKey);
+      const data = await this.repository.getWorldspaceBlocks(node.plugin, node.worldspace.formKey, node.origin);
       const nodes: PluginTreeNode[] = [];
-      if (data.topCell) nodes.push(new CellNode(node.plugin, data.topCell));
-      nodes.push(...data.blocks.map(b => new BlockNode(node.plugin, b)));
+      if (data.topCell) nodes.push(new CellNode(node.plugin, data.topCell, node.origin));
+      nodes.push(...data.blocks.map(b => new BlockNode(node.plugin, b, node.origin)));
       return nodes;
     } catch (e) {
       const message = this.err(e);
@@ -348,11 +355,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   }
 
   private async fetchCellGroups(node: CellNode): Promise<PluginTreeNode[]> {
-    const cacheKey = `${node.plugin}::${node.cell.formKey}`;
+    const cacheKey = `${this.originKey(node.plugin, node.origin)}::${node.cell.formKey}`;
     let refs = this.refCache.get(cacheKey);
     if (!refs) {
       try {
-        refs = await this.repository.getCellReferences(node.plugin, node.cell.formKey);
+        refs = await this.repository.getCellReferences(node.plugin, node.cell.formKey, node.origin);
         this.refCache.set(cacheKey, refs);
       } catch (e) {
         const message = this.err(e);
@@ -361,28 +368,29 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       }
     }
     const groups: PlacedGroupNode[] = [];
-    if (refs.persistent.length) groups.push(new PlacedGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent));
-    if (refs.temporary.length) groups.push(new PlacedGroupNode(node.plugin, node.cell.formKey, 'temporary', refs.temporary));
+    if (refs.persistent.length) groups.push(new PlacedGroupNode(node.plugin, node.cell.formKey, 'persistent', refs.persistent, node.origin));
+    if (refs.temporary.length) groups.push(new PlacedGroupNode(node.plugin, node.cell.formKey, 'temporary', refs.temporary, node.origin));
     return groups;
   }
 
   private async fetchInteriorCells(node: InteriorCellsNode): Promise<PluginTreeNode[]> {
-    let cached = this.interiorCache.get(node.plugin);
+    const cacheKey = this.originKey(node.plugin, node.origin);
+    let cached = this.interiorCache.get(cacheKey);
     if (!cached) {
       try {
-        cached = await this.repository.getInteriorCells(node.plugin, 0, PAGE_SIZE);
-        this.interiorCache.set(node.plugin, cached);
+        cached = await this.repository.getInteriorCells(node.plugin, 0, PAGE_SIZE, node.origin);
+        this.interiorCache.set(cacheKey, cached);
       } catch (e) {
         const message = this.err(e);
         this.log(`[PluginTreeProvider] fetchInteriorCells(${node.plugin}) failed: ${message}`);
         return [new ErrorNode(message)];
       }
     }
-    const nodes: PluginTreeNode[] = cached.items.map(c => new CellNode(node.plugin, c));
+    const nodes: PluginTreeNode[] = cached.items.map(c => new CellNode(node.plugin, c, node.origin));
     if (cached.total > cached.items.length) {
       nodes.push(new InteriorLoadMoreNode(node, cached.total - cached.items.length));
     }
-    const failure = this.interiorLoadMoreFailures.get(node.plugin);
+    const failure = this.interiorLoadMoreFailures.get(cacheKey);
     if (failure) nodes.push(new ErrorNode(failure));
     return nodes;
   }

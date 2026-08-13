@@ -112,11 +112,12 @@ export interface PluginRepository {
   clearFilter(): Promise<void>;
   getActiveFilter(): Promise<string | null>;
 
-  // Phase 16: per-plugin worldspace tree.
-  getWorldspaces(plugin: string): Promise<WorldspaceSummary[]>;
-  getWorldspaceBlocks(plugin: string, worldspaceFormKey: string): Promise<WorldspaceBlocks>;
-  getCellReferences(plugin: string, cellFormKey: string): Promise<CellReferences>;
-  getInteriorCells(plugin: string, offset: number, limit: number): Promise<CellPage>;
+  // Phase 16: per-plugin worldspace tree. origin (#305 / ADR-0036): same optional shape as
+  // getRecordTypes/getRecords above — a row that stands for a specific copy states it.
+  getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]>;
+  getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;
+  getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences>;
+  getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage>;
 }
 
 export class ApiPluginRepository implements PluginRepository {
@@ -229,9 +230,9 @@ export class ApiPluginRepository implements PluginRepository {
     return data?.sql ?? null;
   }
 
-  async getWorldspaces(plugin: string): Promise<WorldspaceSummary[]> {
+  async getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]> {
     const { data, error, response } = await this.client.GET('/plugins/{plugin}/worldspaces', {
-      params: { path: { plugin } },
+      params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
     });
     this.ensureOk(`getWorldspaces(${plugin})`, response, error);
     return (data ?? []).map((w: GenWorldspace) => ({
@@ -240,9 +241,9 @@ export class ApiPluginRepository implements PluginRepository {
     }));
   }
 
-  async getWorldspaceBlocks(plugin: string, worldspaceFormKey: string): Promise<WorldspaceBlocks> {
+  async getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks> {
     const { data, error, response } = await this.client.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
-      params: { path: { plugin, formKey: worldspaceFormKey } },
+      params: { path: { plugin, formKey: worldspaceFormKey }, query: origin === undefined ? {} : { origin } },
     });
     this.ensureOk(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, response, error);
     return {
@@ -259,9 +260,9 @@ export class ApiPluginRepository implements PluginRepository {
     };
   }
 
-  async getCellReferences(plugin: string, cellFormKey: string): Promise<CellReferences> {
+  async getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences> {
     const { data, error, response } = await this.client.GET('/plugins/{plugin}/cells/{formKey}/references', {
-      params: { path: { plugin, formKey: cellFormKey } },
+      params: { path: { plugin, formKey: cellFormKey }, query: origin === undefined ? {} : { origin } },
     });
     this.ensureOk(`getCellReferences(${plugin}, ${cellFormKey})`, response, error);
     return {
@@ -270,9 +271,9 @@ export class ApiPluginRepository implements PluginRepository {
     };
   }
 
-  async getInteriorCells(plugin: string, offset: number, limit: number): Promise<CellPage> {
+  async getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage> {
     const { data, error, response } = await this.client.GET('/plugins/{plugin}/interior-cells', {
-      params: { path: { plugin }, query: { offset, limit } },
+      params: { path: { plugin }, query: { offset, limit, ...(origin === undefined ? {} : { origin }) } },
     });
     this.ensureOk(`getInteriorCells(${plugin})`, response, error);
     return {

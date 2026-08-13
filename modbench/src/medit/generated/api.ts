@@ -404,6 +404,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/session/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetSessionStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/session/filter": {
         parameters: {
             query?: never;
@@ -664,6 +680,10 @@ export interface components {
         };
         /** @enum {string} */
         FormKeyResolutionState: "Unresolved" | "ResolvedWrongType" | "ResolvedValidType";
+        IndexedPlugin: {
+            name?: string | null;
+            origin?: string | null;
+        };
         LoadPluginRequest: {
             path?: string | null;
             origin?: string | null;
@@ -856,6 +876,19 @@ export interface components {
         };
         SessionLoadResponse: {
             status?: string | null;
+            failures?: components["schemas"]["PluginLoadFailure"][] | null;
+        };
+        /**
+         * Format: int32
+         * @enum {integer}
+         */
+        SessionState: 0 | 1 | 2;
+        SessionStatus: {
+            state?: components["schemas"]["SessionState"];
+            /** Format: int32 */
+            totalPlugins?: number;
+            indexedPlugins?: components["schemas"]["IndexedPlugin"][] | null;
+            conflictsComputed?: boolean;
             failures?: components["schemas"]["PluginLoadFailure"][] | null;
         };
         UnloadPluginRequest: {
@@ -1888,6 +1921,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -1930,6 +1972,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -1937,6 +1988,26 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetSessionStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionStatus"];
                 };
             };
         };
@@ -2059,7 +2130,9 @@ export interface operations {
     };
     GetWorldspaces: {
         parameters: {
-            query?: never;
+            query?: {
+                origin?: string;
+            };
             header?: never;
             path: {
                 plugin: string;
@@ -2090,7 +2163,9 @@ export interface operations {
     };
     GetWorldspaceBlocks: {
         parameters: {
-            query?: never;
+            query?: {
+                origin?: string;
+            };
             header?: never;
             path: {
                 plugin: string;
@@ -2122,7 +2197,9 @@ export interface operations {
     };
     GetCellReferences: {
         parameters: {
-            query?: never;
+            query?: {
+                origin?: string;
+            };
             header?: never;
             path: {
                 plugin: string;
@@ -2155,6 +2232,7 @@ export interface operations {
     GetInteriorCells: {
         parameters: {
             query?: {
+                origin?: string;
                 limit?: number;
                 offset?: number;
             };

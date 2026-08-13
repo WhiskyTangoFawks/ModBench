@@ -28,8 +28,10 @@ vi.mock('vscode', () => ({
 import {
   PluginTreeProvider, RecordTypeNode, RecordNode, LoadMoreNode,
   CellNode, InteriorCellsNode, InteriorLoadMoreNode,
-  WorldspacesNode, WorldspaceNode, ErrorNode, headerFormKeyFor,
+  WorldspacesNode, WorldspaceNode, SubBlockNode, PlacedGroupNode, PlacedNode,
+  ErrorNode, headerFormKeyFor,
 } from '../PluginTreeProvider';
+import type { PluginTreeNode } from '../PluginTreeProvider';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -616,6 +618,121 @@ describe('headerFormKeyFor', () => {
   });
 });
 
+// ── spatial node chain carries origin (#305 / ADR-0036) ────────────────────────
+// The chain WorldspacesNode → WorldspaceNode → BlockNode → SubBlockNode → CellNode →
+// PlacedGroupNode → PlacedNode, plus InteriorCellsNode → CellNode, must carry the origin a
+// specific copy's row was built with all the way down — otherwise a node two hops from the root
+// silently reverts to browsing the load-order winner instead of the copy the user opened.
+
+describe('PluginTreeProvider spatial origin threading (#305)', () => {
+  it('fetchWorldspaces: asks the repository for the node\'s own copy, and the WorldspaceNodes it builds carry that origin forward', async () => {
+    const repo = makeRepository();
+    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World' }]);
+    const provider = new PluginTreeProvider(repo);
+    const node = new WorldspacesNode('Shared.esp', 'ModB');
+
+    const [wsNode] = await provider.getChildren(node) as WorldspaceNode[];
+
+    expect(repo.getWorldspaces).toHaveBeenCalledWith('Shared.esp', 'ModB');
+    expect(wsNode.origin).toBe('ModB');
+  });
+
+  it('fetchWorldspaceChildren: asks the repository for the node\'s own copy, and its TopCell/Block children carry that origin forward', async () => {
+    const repo = makeRepository();
+    (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
+      topCell: { formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null },
+      blocks: [{ x: 0, y: 0, subBlocks: [{ x: 0, y: 0, cells: [{ formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5 }] }] }],
+    });
+    const provider = new PluginTreeProvider(repo);
+    const node = new WorldspaceNode('Shared.esp', { formKey: 'wrld:M.esp', editorId: 'World' }, 'ModB');
+
+    const [topCellNode, blockNode] = await provider.getChildren(node) as [CellNode, PluginTreeNode];
+
+    expect(repo.getWorldspaceBlocks).toHaveBeenCalledWith('Shared.esp', 'wrld:M.esp', 'ModB');
+    expect(topCellNode.origin).toBe('ModB');
+
+    const [subBlockNode] = await provider.getChildren(blockNode);
+    const [cellNode] = await provider.getChildren(subBlockNode) as CellNode[];
+    expect((subBlockNode as SubBlockNode).origin).toBe('ModB');
+    expect(cellNode.origin).toBe('ModB');
+  });
+
+  it('fetchCellGroups: asks the repository for the node\'s own copy, and its PlacedGroup/Placed children carry that origin forward', async () => {
+    const repo = makeRepository();
+    (repo.getCellReferences as ReturnType<typeof vi.fn>).mockResolvedValue({
+      persistent: [{ formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr' }],
+      temporary: [],
+    });
+    const provider = new PluginTreeProvider(repo);
+    const node = new CellNode('Shared.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0 }, 'ModB');
+
+    const [groupNode] = await provider.getChildren(node) as PlacedGroupNode[];
+    expect(repo.getCellReferences).toHaveBeenCalledWith('Shared.esp', 'c:M.esp', 'ModB');
+    expect(groupNode.origin).toBe('ModB');
+
+    const [placedNode] = await provider.getChildren(groupNode) as PlacedNode[];
+    expect(placedNode.origin).toBe('ModB');
+  });
+
+  it('fetchInteriorCells: asks the repository for the node\'s own copy, and the CellNodes it builds carry that origin forward', async () => {
+    const repo = makeRepository();
+    (repo.getInteriorCells as ReturnType<typeof vi.fn>).mockResolvedValue({
+      items: [{ formKey: 'i:M.esp', editorId: 'IntCell', cellX: 0, cellY: 0 }],
+      total: 1,
+    });
+    const provider = new PluginTreeProvider(repo);
+    const node = new InteriorCellsNode('Shared.esp', 'ModB');
+
+    const [cellNode] = await provider.getChildren(node) as CellNode[];
+
+    expect(repo.getInteriorCells).toHaveBeenCalledWith('Shared.esp', 0, 50, 'ModB');
+    expect(cellNode.origin).toBe('ModB');
+  });
+
+  // #305: refCache/interiorCache must be keyed by (origin, plugin), the same reason pageCache
+  // already is (#34) — a cache keyed on plugin alone serves one copy's cell references / interior
+  // page under the other copy's node, invisible in any test that only loads one copy.
+  it('refCache: caches each copy\'s cell references separately, so one copy\'s page is never served for the other', async () => {
+    const repo = makeRepository();
+    const provider = new PluginTreeProvider(repo);
+    const cell = { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0 };
+    const fromA = new CellNode('Shared.esp', cell, 'ModA');
+    const fromB = new CellNode('Shared.esp', cell, 'ModB');
+
+    await provider.getChildren(fromA);
+    await provider.getChildren(fromB);
+
+    expect(repo.getCellReferences).toHaveBeenCalledTimes(2);
+  });
+
+  it('interiorCache: caches each copy\'s interior-cell page separately, so one copy\'s page is never served for the other', async () => {
+    const repo = makeRepository();
+    const provider = new PluginTreeProvider(repo);
+    const fromA = new InteriorCellsNode('Shared.esp', 'ModA');
+    const fromB = new InteriorCellsNode('Shared.esp', 'ModB');
+
+    await provider.getChildren(fromA);
+    await provider.getChildren(fromB);
+
+    expect(repo.getInteriorCells).toHaveBeenCalledTimes(2);
+  });
+
+  it('loadMoreInterior: keeps asking the repository for the node\'s own copy on the next page', async () => {
+    const repo = makeRepository();
+    (repo.getInteriorCells as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ items: [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0 }], total: 2 })
+      .mockResolvedValueOnce({ items: [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0 }], total: 2 });
+    const provider = new PluginTreeProvider(repo);
+    const node = new InteriorCellsNode('Shared.esp', 'ModB');
+    const firstChildren = await provider.getChildren(node);
+    const loadMoreNode = firstChildren.find(c => c instanceof InteriorLoadMoreNode) as InteriorLoadMoreNode;
+
+    await provider.loadMore(loadMoreNode);
+
+    expect(repo.getInteriorCells).toHaveBeenLastCalledWith('Shared.esp', 1, 50, 'ModB');
+  });
+});
+
 // ── browsing a specific copy of a filename (#34 / ADR-0036) ────────────────────
 
 describe('PluginTreeProvider.getPluginChildren (origin)', () => {
@@ -664,15 +781,22 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
 });
 
 describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific copy)', () => {
-  it('omits the spatial group nodes for a copy the load order does not name', async () => {
-    // Those routes resolve origin from the filename server-side, so they would answer for the
-    // other copy — no spatial node is better than one showing another file's cells (ADR-0026).
+  // #305: the spatial routes now take an explicit origin, so a copy the load order does not name
+  // is no longer omitted from spatial browsing (the ADR-0026 stopgap this replaces) — it gets its
+  // own Worldspaces/Interior-cells nodes, carrying that copy's origin down the chain.
+  it('still builds the spatial group nodes for a copy the load order does not name, carrying that copy\'s origin', async () => {
     const repo = makeRepository({ recordTypes: [{ type: 'wrld', count: 1 }, { type: 'cell', count: 2 }, { type: 'WEAP', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
 
     const children = await provider.getPluginChildren('Shared.esp', 'ModB');
 
-    expect(children.map(c => (c as RecordTypeNode).recordType)).toEqual(['WEAP']);
+    const worldspaces = children.find(c => c instanceof WorldspacesNode);
+    const interiorCells = children.find(c => c instanceof InteriorCellsNode);
+    expect(worldspaces?.origin).toBe('ModB');
+    expect(interiorCells?.origin).toBe('ModB');
+    expect(children.map(c => c.label)).toEqual(
+      expect.arrayContaining(['Worldspaces', 'cell - Interior', 'WEAP']),
+    );
   });
 
   it('still builds them for an ordinary load-order plugin', async () => {
