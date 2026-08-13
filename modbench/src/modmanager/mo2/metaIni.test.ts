@@ -30,6 +30,17 @@ describe('parseMetaIni', () => {
       archiveFilename: undefined,
     });
   });
+
+  it('does not let a line lacking "=" corrupt the parsed fields (#317)', () => {
+    // Under a mutated eq===-1 guard, "installationFilex" (no "=") would slice(0,-1)
+    // to exactly "installationFile" and wrongly set archiveFilename — real headers
+    // ([General]) already exercise this guard; this decoy is what discriminates it.
+    expect(parseMetaIni('[General]\r\ninstallationFilex\r\nversion=1.0\r\n')).toEqual({
+      version: '1.0',
+      nexusId: undefined,
+      archiveFilename: undefined,
+    });
+  });
 });
 
 describe('writeMetaIni', () => {

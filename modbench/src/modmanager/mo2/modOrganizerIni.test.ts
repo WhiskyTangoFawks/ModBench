@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { readGamePath, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
+import { readGameName, readGamePath, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
 
 const iniPath = join(__dirname, '..', 'test', 'fixtures', 'mo2-instance', 'ModOrganizer.ini');
 const ini = () => readFileSync(iniPath, 'utf8');
@@ -15,8 +15,25 @@ describe('readSelectedProfile', () => {
     expect(readSelectedProfile('[General]\r\nselected_profile=My Profile\r\n')).toBe('My Profile');
   });
 
-  it('throws when the key is absent', () => {
-    expect(() => readSelectedProfile('[General]\r\ngameName=Fallout 4\r\n')).toThrow();
+  it('throws a message naming the missing key when the key is absent', () => {
+    expect(() => readSelectedProfile('[General]\r\ngameName=Fallout 4\r\n')).toThrow(
+      /missing selected_profile/,
+    );
+  });
+
+  it('does not spuriously match a key-like line lacking "=" (#317)', () => {
+    // Under a mutated eq!==-1 guard, "selected_profileX" (no "=") would slice(0,-1)
+    // to exactly "selected_profile" and wrongly win — the real, later "=" line
+    // must be what's actually returned. Real files' own headers/blanks (eq===-1)
+    // already exercise this guard; this fixture is what actually discriminates it.
+    const text = '[General]\r\nselected_profileX\r\nselected_profile=Real Value\r\n';
+    expect(readSelectedProfile(text)).toBe('Real Value');
+  });
+});
+
+describe('readGameName', () => {
+  it('throws a message naming the missing key when gameName is absent (#317)', () => {
+    expect(() => readGameName('[General]\r\nselected_profile=Default\r\n')).toThrow(/missing gameName/);
   });
 });
 
@@ -30,8 +47,8 @@ describe('readGamePath', () => {
     expect(readGamePath(text)).toBe(String.raw`C:\Games\Fallout4`);
   });
 
-  it('throws when the key is absent', () => {
-    expect(() => readGamePath('[General]\r\ngameName=Fallout 4\r\n')).toThrow();
+  it('throws a message naming the missing key when the key is absent', () => {
+    expect(() => readGamePath('[General]\r\ngameName=Fallout 4\r\n')).toThrow(/missing gamePath/);
   });
 });
 
@@ -47,5 +64,11 @@ describe('setSelectedProfileInText — surgical, byte-faithful', () => {
 
   it('is a no-op (identical bytes) when setting the current profile', () => {
     expect(setSelectedProfileInText(ini(), 'Default')).toBe(ini());
+  });
+
+  it('throws a message naming the missing key when selected_profile is absent (#317)', () => {
+    expect(() => setSelectedProfileInText('[General]\r\ngameName=Fallout 4\r\n', 'X')).toThrow(
+      /missing selected_profile/,
+    );
   });
 });

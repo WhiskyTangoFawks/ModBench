@@ -51,6 +51,5 @@ export function setSelectedProfileInText(text: string, profile: string): string 
   const span = valueSpan(text, KEY);
   if (!span) throw new Error('ModOrganizer.ini: missing selected_profile');
   const next = `@ByteArray(${profile})`;
-  if (text.slice(span.start, span.end) === next) return text;
   return text.slice(0, span.start) + next + text.slice(span.end);
 }

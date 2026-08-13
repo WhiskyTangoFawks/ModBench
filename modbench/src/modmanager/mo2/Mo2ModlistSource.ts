@@ -158,7 +158,8 @@ export class Mo2ModlistSource implements IModlistSource {
       const metaIniText = await readFile(join(this.instanceRoot, 'mods', modName, 'meta.ini'), 'utf8');
       archiveFilename = parseMetaIni(metaIniText).archiveFilename;
     } catch {
-      return; // no meta.ini, or unreadable — nothing to look up, not an error
+      // no meta.ini, or unreadable — nothing to look up. archiveFilename stays
+      // undefined, and the guard right below already returns for that case.
     }
     if (!archiveFilename) return;
     const downloadPath = join(this.instanceRoot, 'downloads', archiveFilename);

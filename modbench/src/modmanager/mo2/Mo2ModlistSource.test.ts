@@ -5,6 +5,19 @@ import { join } from 'node:path';
 import { Mo2ModlistSource } from './Mo2ModlistSource';
 import type { Mod } from '../model';
 
+// Scoped to this file only (not a global test-setup mock): wraps readFile in a
+// real passthrough by default, so every existing real-fs test in this file is
+// unaffected; only the one test below that calls `.mockImplementation` on it
+// diverts a single path to a synthetic error, restoring the passthrough before
+// it returns. #317: this is how a real, non-ENOENT read failure on a download's
+// `.meta` is constructed deterministically — chmod-based permission denial is
+// silently bypassed when the test runner is root, which a real fs precondition
+// isn't (verified: this wrapper passes through all 37 pre-existing tests here).
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, readFile: vi.fn(actual.readFile) };
+});
+
 const fixture = join(__dirname, '..', 'test', 'fixtures', 'mo2-instance');
 
 describe('Mo2ModlistSource — reads (against the committed fixture)', () => {
@@ -76,6 +89,27 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
   });
   afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
+  });
+
+  it('readModlist rejects when a mod\'s meta.ini exists but is unreadable — not silently "no metadata" (#317)', async () => {
+    await rm(join(dir, 'mods', 'Harder VATS', 'meta.ini'), { force: true });
+    await mkdir(join(dir, 'mods', 'Harder VATS', 'meta.ini')); // present but unreadable (EISDIR, not ENOENT)
+    await expect(src.readModlist()).rejects.toThrow();
+  });
+
+  it('a separator entry never carries meta fields, even if a same-named mod folder exists (#317)', async () => {
+    // "Unassigned (Modlist Development)" is a separator; its on-disk marker folder
+    // is suffixed "_separator". A real mod folder could still be named identically
+    // to the separator's bare display name — that must never leak meta.ini fields
+    // onto the separator entry.
+    await mkdir(join(dir, 'mods', 'Unassigned (Modlist Development)'), { recursive: true });
+    await writeFile(
+      join(dir, 'mods', 'Unassigned (Modlist Development)', 'meta.ini'),
+      '[General]\r\nmodid=555\r\nversion=9.9.9\r\n',
+    );
+    const entries = await src.readModlist();
+    const sep = entries.find((e) => e.name === 'Unassigned (Modlist Development)');
+    expect(sep).toEqual({ kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false });
   });
 
   it('setEnabled flips only the target prefix on disk, preserving all other bytes', async () => {
@@ -162,6 +196,26 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     const entries = await src.readModlist();
     const idx = entries.findIndex((e) => e.name === 'After Unassigned');
     expect(entries[idx - 1].name).toBe('Unofficial Fallout 4 Patch');
+  });
+
+  it('insertSeparator after a mod not immediately followed by a separator lands right after it (#317)', async () => {
+    // ENBoost is followed by two more mods (Harder VATS, Cracked) with no
+    // separator until end of file — the walk-to-next-separator branch must not
+    // fire for a mod afterEntryName.
+    await src.insertSeparator('New Group', 'ENBoost - 12k');
+    const entries = await src.readModlist();
+    const idx = entries.findIndex((e) => e.name === 'New Group');
+    expect(entries[idx - 1].name).toBe('ENBoost - 12k');
+    expect(entries[idx + 1].name).toBe('Harder VATS');
+  });
+
+  it('insertSeparator after the last separator, whose block runs to true EOF, lands after the last mod (#317)', async () => {
+    // Radfall's separator has no separator after it — the last-child walk must
+    // run all the way to the real end of the entries array without an off-by-one.
+    await src.insertSeparator('Tail Group', 'Radfall - All-In-One Survival Overhaul');
+    const entries = await src.readModlist();
+    expect(entries.at(-1)?.name).toBe('Tail Group');
+    expect(entries.at(-2)?.name).toBe('Cracked and Smudged Pip-Boy Screen');
   });
 
   it('renameSeparator changes the separator name on disk', async () => {
@@ -286,12 +340,49 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
       expect(log).toHaveBeenCalledTimes(1);
       expect(log).toHaveBeenCalledWith(expect.stringContaining('Unofficial Fallout 4 Patch'));
     });
+
+    it('creates a fresh .meta silently when the archive has none yet (#317 — MO2 itself creates .meta lazily, see downloadmanager.cpp openMetaFile)', async () => {
+      await rm(downloadMetaPath(), { force: true });
+      const log = vi.fn();
+      const flagged = new Mo2ModlistSource(dir, log);
+
+      await flagged.removeMod('Unofficial Fallout 4 Patch');
+
+      expect(await readFile(downloadMetaPath(), 'utf8')).toBe('[General]\r\nuninstalled=true\r\n');
+      expect(log).not.toHaveBeenCalled();
+    });
+
+    it('propagates and logs when the existing .meta cannot be read — not silently "no metadata" (#317)', async () => {
+      const before = await readFile(downloadMetaPath(), 'utf8');
+      const log = vi.fn();
+      const flagged = new Mo2ModlistSource(dir, log);
+      const { readFile: actualReadFile } =
+        await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+      vi.mocked(readFile).mockImplementation(async (path, ...rest) => {
+        if (path === downloadMetaPath()) {
+          throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+        }
+        return actualReadFile(path, ...(rest as []));
+      });
+
+      try {
+        await expect(flagged.removeMod('Unofficial Fallout 4 Patch')).resolves.toBeUndefined();
+        expect(log).toHaveBeenCalledTimes(1);
+        expect(log).toHaveBeenCalledWith(
+          expect.stringContaining('Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z'),
+        );
+      } finally {
+        vi.mocked(readFile).mockImplementation(actualReadFile);
+      }
+      expect(await readFile(downloadMetaPath(), 'utf8')).toBe(before); // real error surfaced, not swallowed-and-overwritten
+    });
   });
 
   it('removeMod still de-lists the mod and reports a distinct warning when folder deletion fails', async () => {
     const report = vi.fn();
+    const log = vi.fn();
     const failingRm = vi.fn().mockRejectedValue(new Error('EBUSY: resource busy or locked'));
-    const flaky = new Mo2ModlistSource(dir, undefined, { report }, failingRm);
+    const flaky = new Mo2ModlistSource(dir, log, { report }, failingRm);
 
     await expect(flaky.removeMod('Harder VATS')).resolves.toBeUndefined();
 
@@ -303,6 +394,18 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
       expect.stringContaining('Harder VATS'),
       expect.stringContaining('EBUSY'),
     );
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('Harder VATS'));
+  });
+
+  it('removeMod completes without a reporter when folder deletion fails — reporter is optional (#317)', async () => {
+    const failingRm = vi.fn().mockRejectedValue(new Error('EBUSY: resource busy or locked'));
+    const noReporter = new Mo2ModlistSource(dir, undefined, undefined, failingRm);
+
+    await expect(noReporter.removeMod('Harder VATS')).resolves.toBeUndefined();
+
+    const entries = await noReporter.readModlist();
+    expect(entries.some((e) => e.name === 'Harder VATS')).toBe(false);
   });
 
   it('installMod copies files, writes meta.ini, and inserts a disabled winning-end line', async () => {
@@ -385,6 +488,33 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(added).toEqual(['Alpha Mod', 'Zeta Mod']);
     const entries = await src.readModlist();
     expect(entries.slice(0, 2).map((e) => e.name)).toEqual(['Alpha Mod', 'Zeta Mod']);
+  });
+
+  it('registerUnlistedMods returns [] when mods/ does not exist yet — a fresh instance before its first install (#317)', async () => {
+    await rm(join(dir, 'mods'), { recursive: true, force: true });
+    const added = await src.registerUnlistedMods();
+    expect(added).toEqual([]);
+  });
+
+  it('registerUnlistedMods rejects when mods/ exists but is not a directory — not silently "no mods yet" (#317)', async () => {
+    // Mirrors the readMeta/writebackUninstalledOnDownload "present but broken is a
+    // real failure, not absent" pattern elsewhere in this file: only ENOENT means
+    // "no mods/ folder yet"; any other readdir error (here ENOTDIR) must propagate.
+    await rm(join(dir, 'mods'), { recursive: true, force: true });
+    await writeFile(join(dir, 'mods'), 'not a directory');
+    await expect(src.registerUnlistedMods()).rejects.toThrow();
+  });
+
+  it('registerUnlistedMods ignores a stray file directly in mods/, not just directories (#317)', async () => {
+    await writeFile(join(dir, 'mods', 'Thumbs.db'), '');
+    const added = await src.registerUnlistedMods();
+    expect(added).toEqual([]);
+  });
+
+  it('listProfiles ignores a stray file directly in profiles/, not just directories (#317)', async () => {
+    await writeFile(join(dir, 'profiles', 'profiles.txt'), '');
+    const profiles = (await src.listProfiles()).sort((a, b) => a.localeCompare(b));
+    expect(profiles).toEqual(['Default', 'Secondary']);
   });
 
   it('getNexusSlug returns the Nexus game slug from ModOrganizer.ini', async () => {
