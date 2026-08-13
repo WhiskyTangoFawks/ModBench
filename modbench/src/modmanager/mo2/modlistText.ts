@@ -170,10 +170,18 @@ const RESERVED_DIR_NAMES = new Set(['overwrite']);
  *  on-disk record of a separator — already represented by a `separator`
  *  entry, never a mod). Sorted for deterministic registration order. */
 export function unlistedModNames(dirNames: string[], entries: ModlistEntry[]): string[] {
-  // Separator entries never need a `${name}${SEPARATOR_SUFFIX}` form here: any
-  // dirName that could match one already ends in SEPARATOR_SUFFIX, and the filter
-  // below excludes those unconditionally before `registered` is even consulted.
-  const registered = new Set(entries.map((e) => e.name));
+  // Separators contribute nothing to `registered`, in either form. The suffixed
+  // form (`${name}${SEPARATOR_SUFFIX}`) is unreachable: any dirName that could
+  // match it already ends in SEPARATOR_SUFFIX, and the filter below excludes
+  // those unconditionally before `registered` is even consulted. But mapping a
+  // separator to its BARE name is wrong the other way — it would register that
+  // name as a mod, so a real `mods/<name>/` folder sharing a separator's name
+  // (an ordinary case: users name separators after what they group) silently
+  // stops being offered for registration. Excluding separator entries entirely
+  // is the only form consistent with both halves of that argument.
+  const registered = new Set(
+    entries.filter((e) => e.kind !== 'separator').map((e) => e.name),
+  );
   return dirNames
     .filter(
       (name) =>

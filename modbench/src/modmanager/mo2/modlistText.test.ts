@@ -15,7 +15,7 @@ import {
   setEnabledInText,
   unlistedModNames,
 } from './modlistText';
-import type { Mod, Separator } from '../model';
+import type { Mod, ModlistEntry, Separator } from '../model';
 
 const fixtureDir = join(__dirname, '..', 'test', 'fixtures', 'mo2-instance');
 const defaultModlist = () =>
@@ -569,6 +569,14 @@ describe('unlistedModNames — which mods/ folders need a modlist.txt entry', ()
     // its on-disk marker folder is "Unassigned (Modlist Development)_separator".
     const entries = parseModlist(defaultModlist());
     expect(unlistedModNames(['Unassigned (Modlist Development)_separator'], entries)).toEqual([]);
+  });
+
+  it('still flags a real mods/ folder whose name collides with a separator\'s bare name', () => {
+    // Users name separators after what they group, so a mods/<name>/ folder
+    // sharing a separator's name is ordinary, not exotic — the separator entry
+    // must not register that bare name as if a mod already claimed it.
+    const entries: ModlistEntry[] = [{ kind: 'separator', name: 'Textures', enabled: true }];
+    expect(unlistedModNames(['Textures'], entries)).toEqual(['Textures']);
   });
 
   it('returns multiple new folders sorted', () => {
