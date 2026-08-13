@@ -5,13 +5,11 @@
 
 import { readdir, stat } from 'node:fs/promises';
 import { extname, join } from 'node:path';
-import { readMasters } from './masterReader';
-
-const PLUGIN_EXTENSIONS = new Set(['.esp', '.esm', '.esl']);
+import { PLUGIN_EXTENSIONS, readMasters } from './masterReader';
 
 export async function readVanillaMasters(
   dataFolder: string | undefined,
-  log?: (msg: string) => void,
+  log: (msg: string) => void,
 ): Promise<Set<string>> {
   if (!dataFolder) return new Set();
   try {
@@ -20,7 +18,7 @@ export async function readVanillaMasters(
       dataFiles.filter((f) => PLUGIN_EXTENSIONS.has(extname(f).toLowerCase())).map((f) => f.toLowerCase()),
     );
   } catch (e) {
-    log?.(`[vanillaMasters] could not resolve vanilla masters: ${e instanceof Error ? e.message : String(e)}`);
+    log(`[vanillaMasters] could not resolve vanilla masters: ${e instanceof Error ? e.message : String(e)}`);
     return new Set();
   }
 }
@@ -41,7 +39,7 @@ export async function readVanillaMasters(
  *  pre-sort discovery order (logged) rather than throwing. */
 export async function discoverImplicitMasters(
   dataFolder: string | undefined,
-  log?: (msg: string) => void,
+  log: (msg: string) => void,
 ): Promise<string[]> {
   if (!dataFolder) return [];
 
@@ -49,7 +47,7 @@ export async function discoverImplicitMasters(
   try {
     dataFiles = await readdir(dataFolder);
   } catch (e) {
-    log?.(`[vanillaMasters] could not resolve implicit masters: ${e instanceof Error ? e.message : String(e)}`);
+    log(`[vanillaMasters] could not resolve implicit masters: ${e instanceof Error ? e.message : String(e)}`);
     return [];
   }
   const candidates = dataFiles.filter((f) => PLUGIN_EXTENSIONS.has(extname(f).toLowerCase()));
@@ -63,7 +61,7 @@ export async function discoverImplicitMasters(
 async function filterNonHardlinked(
   dataFolder: string,
   candidates: string[],
-  log?: (msg: string) => void,
+  log: (msg: string) => void,
 ): Promise<string[]> {
   const vanilla: string[] = [];
   for (const name of candidates) {
@@ -71,7 +69,7 @@ async function filterNonHardlinked(
       const stats = await stat(join(dataFolder, name));
       if (stats.nlink === 1) vanilla.push(name);
     } catch (e) {
-      log?.(`[vanillaMasters] could not stat "${name}" — excluding it: ${e instanceof Error ? e.message : String(e)}`);
+      log(`[vanillaMasters] could not stat "${name}" — excluding it: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
   return vanilla;
@@ -81,30 +79,32 @@ async function filterNonHardlinked(
  *  graph for the topological sort. A per-file read failure excludes that one
  *  file (logged) rather than blanking the whole discovered set. An edge to a
  *  name outside the discovered set is ignored — e.g. a vanilla file mastering
- *  a mod-provided plugin isn't a discovery-order edge. */
+ *  a mod-provided plugin isn't a discovery-order edge.
+ *
+ *  `name` and its `masters` are read together and carried as one pair through
+ *  `entries` — never split into a name list plus a side-map re-fetched by key
+ *  (#318), so there is no lookup that could miss. */
 async function buildMasterDependencyGraph(
   dataFolder: string,
   vanilla: string[],
-  log?: (msg: string) => void,
+  log: (msg: string) => void,
 ): Promise<{ readable: string[]; edges: Map<string, string[]> }> {
-  const mastersByName = new Map<string, string[]>();
-  const readable: string[] = [];
+  const entries: { name: string; masters: string[] }[] = [];
   for (const name of vanilla) {
     try {
-      mastersByName.set(name, await readMasters(join(dataFolder, name)));
-      readable.push(name);
+      entries.push({ name, masters: await readMasters(join(dataFolder, name)) });
     } catch (e) {
-      log?.(`[vanillaMasters] could not read masters from "${name}" — excluding it: ${e instanceof Error ? e.message : String(e)}`);
+      log(`[vanillaMasters] could not read masters from "${name}" — excluding it: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
+  const readable = entries.map((e) => e.name);
   const byLower = new Map(readable.map((n) => [n.toLowerCase(), n]));
   const edges = new Map<string, string[]>();
-  for (const name of readable) {
-    const declared = mastersByName.get(name) ?? [];
+  for (const { name, masters } of entries) {
     edges.set(
       name,
-      declared.map((m) => byLower.get(m.toLowerCase())).filter((m): m is string => m !== undefined),
+      masters.map((m) => byLower.get(m.toLowerCase())).filter((m): m is string => m !== undefined),
     );
   }
   return { readable, edges };
@@ -118,7 +118,7 @@ async function buildMasterDependencyGraph(
 function topoSortImplicitMasters(
   candidates: string[],
   edges: Map<string, string[]>,
-  log?: (msg: string) => void,
+  log: (msg: string) => void,
 ): string[] {
   const result: string[] = [];
   const visited = new Set<string>();
@@ -132,6 +132,9 @@ function topoSortImplicitMasters(
       return;
     }
     inStack.add(name);
+    // `?? []` here guards a lookup that is unreachable by construction: every
+    // `dep` comes from `byLower`'s values, which are exactly `edges`'s own key
+    // set (#318 — traced, not asserted away with `!`; see buildMasterDependencyGraph).
     for (const dep of edges.get(name) ?? []) {
       visit(dep);
       if (cyclic) break;
@@ -147,7 +150,7 @@ function topoSortImplicitMasters(
   }
 
   if (cyclic) {
-    log?.('[vanillaMasters] cycle detected among implicit masters — falling back to discovery order');
+    log('[vanillaMasters] cycle detected among implicit masters — falling back to discovery order');
     return candidates;
   }
   return result;
