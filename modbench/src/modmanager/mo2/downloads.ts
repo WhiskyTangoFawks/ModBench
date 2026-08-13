@@ -119,7 +119,6 @@ function setMetaFlag(text: string, key: string, value: boolean): string {
   }
   let eol = '\r\n';
   if (!text.includes('\r\n') && text.includes('\n')) eol = '\n';
-  if (text.trim() === '') return `[General]${eol}${line}${eol}`;
   for (const { start, contentEnd, end } of lineRanges(text)) {
     if (text.slice(start, contentEnd).trim() === '[General]') {
       return text.slice(0, end) + `${line}${eol}` + text.slice(end);
