@@ -1104,22 +1104,11 @@ public sealed partial class EditOrchestrator(
         }
     }
 
-    // #271 / ADR-0036: resolves the real origin the session already knows for `plugin` (populated
-    // by GameSession/SessionManager since #269), so every staged edit binds to the compound
-    // identity rather than the reserved default. Falls back to the default when no session or no
-    // matching plugin is found (mirrors every other origin-default fallback introduced this ticket) —
-    // callers here always have a valid session by the time they stage, so this is a belt-and-braces
-    // fallback, not a real path. Safe today only because ValidateEditContext never rejects on a
-    // missing PluginMetadata (only on IsImmutable == true, and a null pluginMeta passes that check)
-    // and because every plugin filename currently maps to exactly one origin — a name absent from
-    // Session.Plugins can't yet mean "a second origin for a filename already staged elsewhere." Once
-    // #272 lets two same-filename origins coexist in a session, this fallback would silently
-    // misattribute such an edit to the reserved default origin instead of surfacing the lookup
-    // miss — revisit then.
+    // #296: the lookup itself, including its #34 fallback caveat, now lives in one place —
+    // PluginOriginResolver — shared with RecordQueryService and WorldspaceQueryService rather than
+    // reimplemented per caller.
     private string ResolveOrigin(string plugin) =>
-        _sessionManager.Session?.Plugins
-            .FirstOrDefault(p => p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase))?.Origin
-        ?? PluginOrigin.DataDirectory;
+        PluginOriginResolver.Resolve(_sessionManager.Session, plugin);
 
     private (StageEditResult? earlyOut, IGameSession? session, string? recordType) ValidateEditContext(
         string formKey, string plugin)
