@@ -1060,7 +1060,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey)
     {
         const string sql = """
-            SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id
+            SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
             FROM form_references fr
             WHERE fr.target_form_key = $1
               AND NOT EXISTS (
@@ -1076,7 +1076,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
             UNION ALL
 
-            SELECT pfr.source_form_key, pfr.source_plugin, pfr.field_path, pfr.record_type, NULL
+            SELECT pfr.source_form_key, pfr.source_plugin, pfr.field_path, pfr.record_type, NULL, pfr.source_origin
             FROM pending_form_references pfr
             WHERE pfr.target_form_key = $1
             """;
@@ -1094,7 +1094,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.GetString(3),
-                reader.IsDBNull(4) ? null : reader.GetString(4)));
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.GetString(5)));
         }
 
         return results;

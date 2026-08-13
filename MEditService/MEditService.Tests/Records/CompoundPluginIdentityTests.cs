@@ -1,4 +1,5 @@
 using DuckDB.NET.Data;
+using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -125,6 +126,33 @@ public class CompoundPluginIdentityTests
         refCmd.CommandText = "SELECT COUNT(*) FROM form_references WHERE source_form_key = $1 AND field_path = 'race'";
         refCmd.Parameters.Add(new DuckDBParameter { Value = npcKeyA.ToString() });
         Assert.Equal(2L, (long)refCmd.ExecuteScalar()!);
+    }
+
+    // #296 / ADR-0036: GetReferences never filtered by plugin, but its result rows carried no
+    // Origin either — so two same-filename sources referencing the same target (the exact scenario
+    // TwoOrigins_SameFilenameSameFormKeys_PlacementCellLocationAndFormReferencesBothPersist proves
+    // exists, at the form_references table) could not be told apart by any caller of GetReferences.
+    [Fact]
+    public void TwoOrigins_SameFilenameSameFormKeys_GetReferences_SurfacesOriginPerRow()
+    {
+        var (modA, _, _, npcKeyA) = BuildStructuralMod("A");
+        var (modB, _, _, npcKeyB) = BuildStructuralMod("B");
+        Assert.Equal(npcKeyA, npcKeyB);
+        var raceFormKey = modA.Races.First().FormKey.ToString();
+
+        using var repo = OpenRepo();
+        // GetReferences' NOT EXISTS subquery reads pending_changes, which only DuckDbPendingChangeService's
+        // own DDL creates — bind one to this repo's connection purely for that side effect, matching how
+        // production shares one connection between the repository and the pending-change service.
+        _ = new DuckDbPendingChangeService(repo.Connection);
+        repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
+        repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
+
+        var refs = repo.GetReferences(raceFormKey);
+
+        Assert.Equal(2, refs.Count);
+        Assert.Contains(refs, r => r.Origin == "ModA");
+        Assert.Contains(refs, r => r.Origin == "ModB");
     }
 
     private static long Count(DuckDbRecordRepository repo, string table, string column, string value)
