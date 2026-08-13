@@ -185,9 +185,9 @@ public sealed class EndpointReceptionLoggingTests
         public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset) =>
             throw new NotSupportedException();
         public RecordDetail? GetRecord(string formKey) => throw new NotSupportedException();
-        public RecordDetail? GetRecordForPlugin(string formKey, string plugin) => throw new NotSupportedException();
+        public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => throw new NotSupportedException();
         public string? GetRecordType(string formKey) => throw new NotSupportedException();
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin) => throw new NotSupportedException();
+        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => throw new NotSupportedException();
         public CompareResult? GetCompare(string formKey) => throw new NotSupportedException();
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => throw new NotSupportedException();
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => [];
@@ -196,7 +196,7 @@ public sealed class EndpointReceptionLoggingTests
         public IReadOnlyList<string> GetConditionFunctions() => throw new NotSupportedException();
         public IReadOnlyList<string> GetConditionRunOnTargets() => throw new NotSupportedException();
         public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => throw new NotSupportedException();
-        public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
+        public IReadOnlyList<PendingChange> GetChanges(string? formKey = null, Guid? memberChangeId = null) =>
             throw new NotSupportedException();
     }
 }

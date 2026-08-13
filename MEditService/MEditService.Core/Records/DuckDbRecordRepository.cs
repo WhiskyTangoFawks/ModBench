@@ -273,9 +273,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     // --- Queries (absorbed from RecordQueryService, with DuckDBParameter throughout) ---
 
-    public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset)
+    public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null)
     {
-        var (where, paramValues) = BuildWhere(plugin, search, _filterActive);
+        var (where, paramValues) = BuildWhere(plugin, search, _filterActive, origin);
 
         var countSql = $"SELECT COUNT(*) FROM \"{tableName}\"{where}";
         using var countCmd = Connection.CreateCommand();
@@ -284,7 +284,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         var total = (long)countCmd.ExecuteScalar()!;
 
         var dataSql = $"""
-            SELECT form_key, plugin, load_order_idx, is_winner, editor_id
+            SELECT form_key, plugin, load_order_idx, is_winner, editor_id, origin
             FROM "{tableName}"{where}
             ORDER BY editor_id
             LIMIT {limit} OFFSET {offset}
@@ -301,7 +301,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return new PagedResult<RecordSummary>(items, (int)total);
     }
 
-    public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly)
+    public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
     {
         var schema = RequireSchemas()[tableName];
         var conditions = new List<string> { "form_key = $1" };
@@ -312,6 +312,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         {
             conditions.Add($"plugin = ${values.Count + 1}");
             values.Add(plugin);
+        }
+        if (origin != null)
+        {
+            conditions.Add($"origin = ${values.Count + 1}");
+            values.Add(origin);
         }
 
         var where = " WHERE " + string.Join(" AND ", conditions);
@@ -663,9 +668,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 _ => new VmadPropertyValue(i.Type, "", null),
             })];
 
-    public int CountRecordsForPlugin(string tableName, string plugin)
+    public int CountRecordsForPlugin(string tableName, string plugin, string origin)
     {
-        var (where, paramValues) = BuildWhere(plugin, null, _filterActive);
+        var (where, paramValues) = BuildWhere(plugin, null, _filterActive, origin);
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT COUNT(*) FROM \"{tableName}\"{where}";
         AddParams(cmd, paramValues);
@@ -701,17 +706,18 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             : new RecordLookupEntry(reader.GetString(0), NullableEditorId());
     }
 
-    public IReadOnlyList<string> GetNativeFormKeys(string plugin)
+    public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin)
     {
         var tables = RequireSchemas().Keys.Where(t => t != HeaderIndexer.TableName).ToList();
         if (tables.Count == 0) return [];
 
         var union = string.Join("\nUNION ALL\n",
-            tables.Select(t => $"SELECT form_key FROM \"{t}\" WHERE plugin = $1"));
+            tables.Select(t => $"SELECT form_key FROM \"{t}\" WHERE plugin = $1 AND origin = $2"));
 
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT DISTINCT form_key FROM ({union})";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         using var reader = cmd.ExecuteReader();
 
         var result = new List<string>();
@@ -726,13 +732,13 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return result;
     }
 
-    public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset)
+    public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset, string? origin = null)
     {
         if (tableNames.Count == 0)
             return new PagedResult<RecordSummary>([], 0);
 
-        var (where, paramValues) = BuildWhere(plugin, search, _filterActive);
-        const string cols = "form_key, plugin, load_order_idx, is_winner, editor_id";
+        var (where, paramValues) = BuildWhere(plugin, search, _filterActive, origin);
+        const string cols = "form_key, plugin, load_order_idx, is_winner, editor_id, origin";
         var union = string.Join("\nUNION ALL\n",
             tableNames.Select(t => $"SELECT {cols} FROM \"{t}\"{where}"));
 
@@ -761,7 +767,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
         new(reader.GetString(0), reader.GetString(1), reader.GetInt32(2),
-            reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4));
+            reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5));
 
     private static RecordDetail ReadDetail(DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
     {
@@ -799,7 +805,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             ? ""
             : ", " + string.Join(", ", schema.RecordColumns.Select(c => $"\"{c.Name}\""));
 
-    private static (string where, List<string> paramValues) BuildWhere(string? plugin, string? search, bool filterActive = false)
+    // origin (#296 / ADR-0036): nullable and independent of plugin — a *filter*, not an identity
+    // field, mirroring DuckDbPendingChangeService.BuildFilter's own origin. Defaults to "no
+    // constraint" so a plugin-only or filter-less call keeps returning every origin's rows, same as
+    // before this parameter existed.
+    private static (string where, List<string> paramValues) BuildWhere(string? plugin, string? search, bool filterActive = false, string? origin = null)
     {
         var conditions = new List<string>();
         var values = new List<string>();
@@ -808,6 +818,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         {
             conditions.Add($"plugin = ${values.Count + 1}");
             values.Add(plugin);
+        }
+        if (origin != null)
+        {
+            conditions.Add($"origin = ${values.Count + 1}");
+            values.Add(origin);
         }
         if (search != null)
         {
@@ -1060,7 +1075,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey)
     {
         const string sql = """
-            SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id
+            SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
             FROM form_references fr
             WHERE fr.target_form_key = $1
               AND NOT EXISTS (
@@ -1076,7 +1091,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
             UNION ALL
 
-            SELECT pfr.source_form_key, pfr.source_plugin, pfr.field_path, pfr.record_type, NULL
+            SELECT pfr.source_form_key, pfr.source_plugin, pfr.field_path, pfr.record_type, NULL, pfr.source_origin
             FROM pending_form_references pfr
             WHERE pfr.target_form_key = $1
             """;
@@ -1094,7 +1109,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.GetString(3),
-                reader.IsDBNull(4) ? null : reader.GetString(4)));
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.GetString(5)));
         }
 
         return results;
@@ -1102,17 +1118,17 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     // ── Phase 16: worldspace tree reads ────────────────────────────────────────
 
-    public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey)
+    public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
             SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
             FROM cell_location cl
             LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
-            WHERE cl.parent_worldspace = $1 AND cl.plugin = $2
+            WHERE cl.parent_worldspace = $1 AND cl.plugin = $2 AND cl.origin = $3
             ORDER BY cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
             """;
-        AddParams(cmd, [worldspaceFormKey, plugin]);
+        AddParams(cmd, [worldspaceFormKey, plugin, origin]);
         using var reader = cmd.ExecuteReader();
 
         var rows = new List<CellLocationSummary>();
@@ -1132,11 +1148,12 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return rows;
     }
 
-    public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset)
+    public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string origin)
     {
         using var countCmd = Connection.CreateCommand();
-        countCmd.CommandText = "SELECT COUNT(*) FROM cell_location WHERE is_interior AND plugin = $1";
+        countCmd.CommandText = "SELECT COUNT(*) FROM cell_location WHERE is_interior AND plugin = $1 AND origin = $2";
         countCmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        countCmd.Parameters.Add(new DuckDBParameter { Value = origin });
         var total = (long)countCmd.ExecuteScalar()!;
 
         using var cmd = Connection.CreateCommand();
@@ -1144,11 +1161,12 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y
             FROM cell_location cl
             LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
-            WHERE cl.is_interior AND cl.plugin = $1
+            WHERE cl.is_interior AND cl.plugin = $1 AND cl.origin = $2
             ORDER BY c.editor_id
             LIMIT {limit} OFFSET {offset}
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         using var reader = cmd.ExecuteReader();
 
         var items = new List<CellSummary>();
@@ -1164,7 +1182,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return new PagedResult<CellSummary>(items, (int)total);
     }
 
-    public CellReferences GetCellReferences(string plugin, string cellFormKey)
+    public CellReferences GetCellReferences(string plugin, string cellFormKey, string origin)
     {
         var schemas = RequireSchemas();
         var placedTables = PlacedTableNames.Where(schemas.ContainsKey).ToList();
@@ -1179,10 +1197,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             SELECT p.placement_group, r.rt, p.form_key, r.editor_id, r.base
             FROM placement p
             JOIN ({union}) r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
-            WHERE p.parent_cell = $1 AND p.plugin = $2
+            WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3
             ORDER BY r.editor_id
             """;
-        AddParams(cmd, [cellFormKey, plugin]);
+        AddParams(cmd, [cellFormKey, plugin, origin]);
         using var reader = cmd.ExecuteReader();
 
         var persistent = new List<PlacedSummary>();

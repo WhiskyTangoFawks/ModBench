@@ -121,7 +121,7 @@ public class FilterTests(TestPluginFixture fixture)
 
         repo.SetFilter($"SELECT '{firstFormKey}' AS form_key");
 
-        var count = repo.CountRecordsForPlugin("NPC_", TestPluginFixture.PluginName);
+        var count = repo.CountRecordsForPlugin("NPC_", TestPluginFixture.PluginName, "Data");
         Assert.Equal(1, count);
     }
 

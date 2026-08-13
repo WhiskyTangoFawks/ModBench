@@ -1,4 +1,5 @@
 using DuckDB.NET.Data;
+using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -53,6 +54,96 @@ public class CompoundPluginIdentityTests
         Assert.Equal(2, overrides.Count);
         Assert.Contains(overrides, o => o.EditorId == "FromModA");
         Assert.Contains(overrides, o => o.EditorId == "FromModB");
+    }
+
+    // #296 / ADR-0036: GetRecord's own plugin filter couldn't pick one origin's copy over another's
+    // even though the RecordDetail it returns has carried Origin since #272 — the one piece #272/#275
+    // left unclosed for this method. origin is required (not defaulted) here: every real caller
+    // (GetRecordForPlugin, GetPluginRecordTypes's staged-reconciliation lookup) already has plugin in
+    // hand as a concrete, non-optional value, so this mirrors GetVmad/GetConditions/GetPlacement's
+    // #275 precedent, not GetRecords' nullable filter — the compiler must enumerate every call site.
+    [Fact]
+    public void TwoOrigins_SameFilenameSameFormKey_GetRecord_ScopesToRequestedOrigin()
+    {
+        var (modA, modB, npcKey) = BuildSharedFilenameFixture();
+
+        using var repo = OpenRepo();
+        repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
+        repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
+
+        var record = repo.GetRecord("npc_", npcKey.ToString(), "Shared.esp", "ModA", winnerOnly: false);
+
+        Assert.NotNull(record);
+        Assert.Equal("FromModA", record.EditorId);
+        Assert.Equal("ModA", record.Origin);
+    }
+
+    // #296 / ADR-0036: CountRecordsForPlugin reused GetRecords' BuildWhere but only ever supplied
+    // plugin, so two same-filename origins' counts silently summed into one. origin is required here
+    // (not defaulted) for the same reason as GetRecord's — plugin is never optional at this call
+    // site (GetPluginRecordTypes always has a concrete plugin).
+    [Fact]
+    public void TwoOrigins_SameFilenameSameFormKey_CountRecordsForPlugin_CountsRequestedOriginOnly()
+    {
+        var (modA, modB, _) = BuildSharedFilenameFixture();
+
+        using var repo = OpenRepo();
+        repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
+        repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
+
+        Assert.Equal(1, repo.CountRecordsForPlugin("npc_", "Shared.esp", "ModA"));
+        Assert.Equal(1, repo.CountRecordsForPlugin("npc_", "Shared.esp", "ModB"));
+    }
+
+    // #296 / ADR-0036: GetNativeFormKeys' per-table UNION filtered by plugin filename alone. Unlike
+    // the fixtures above, this needs the two origins to hold genuinely *different* native FormKey
+    // sets (BuildSharedFilenameFixture's single first-slot NPC lands both origins on the identical
+    // FormKey, which can't distinguish a filter bug from a working one) — ModA gets one NPC, ModB
+    // gets that same first NPC plus a second, so an origin-scoped read must see fewer FormKeys than
+    // an unscoped one.
+    [Fact]
+    public void TwoOrigins_SameFilenameDifferentNativeFormKeys_GetNativeFormKeys_ScopesToRequestedOrigin()
+    {
+        var modA = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
+        var sharedFirstKey = modA.Npcs.AddNew("First").FormKey;
+        var modB = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
+        modB.Npcs.AddNew("First");
+        var secondKey = modB.Npcs.AddNew("SecondOnlyInModB").FormKey;
+
+        using var repo = OpenRepo();
+        repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
+        repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
+
+        var modAKeys = repo.GetNativeFormKeys("Shared.esp", "ModA");
+        var modBKeys = repo.GetNativeFormKeys("Shared.esp", "ModB");
+
+        Assert.Single(modAKeys);
+        Assert.Equal(sharedFirstKey.ToString(), modAKeys[0]);
+        Assert.Equal(2, modBKeys.Count);
+        Assert.Contains(secondKey.ToString(), modBKeys);
+    }
+
+    // #296 / ADR-0036: GetRecords' outer WHERE filtered by plugin filename alone, and RecordSummary
+    // carried no Origin at all — so a listing scoped to one filename silently merged both origins'
+    // rows with no way to tell them apart, the same class of bug the worldspace tree reads had.
+    // origin is a nullable *filter* here (unlike the worldspace tree's required origin) because
+    // plugin itself is optional on GetRecords — browsing every plugin's records is a legitimate
+    // call with no origin to supply.
+    [Fact]
+    public void TwoOrigins_SameFilenameSameFormKey_GetRecords_FiltersToRequestedOriginAndSurfacesIt()
+    {
+        var (modA, modB, npcKey) = BuildSharedFilenameFixture();
+
+        using var repo = OpenRepo();
+        repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
+        repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
+
+        var modAResult = repo.GetRecords("npc_", "Shared.esp", null, 100, 0, origin: "ModA");
+
+        var item = Assert.Single(modAResult.Items);
+        Assert.Equal(npcKey.ToString(), item.FormKey);
+        Assert.Equal("FromModA", item.EditorId);
+        Assert.Equal("ModA", item.Origin);
     }
 
     [Fact]
@@ -125,6 +216,33 @@ public class CompoundPluginIdentityTests
         refCmd.CommandText = "SELECT COUNT(*) FROM form_references WHERE source_form_key = $1 AND field_path = 'race'";
         refCmd.Parameters.Add(new DuckDBParameter { Value = npcKeyA.ToString() });
         Assert.Equal(2L, (long)refCmd.ExecuteScalar()!);
+    }
+
+    // #296 / ADR-0036: GetReferences never filtered by plugin, but its result rows carried no
+    // Origin either — so two same-filename sources referencing the same target (the exact scenario
+    // TwoOrigins_SameFilenameSameFormKeys_PlacementCellLocationAndFormReferencesBothPersist proves
+    // exists, at the form_references table) could not be told apart by any caller of GetReferences.
+    [Fact]
+    public void TwoOrigins_SameFilenameSameFormKeys_GetReferences_SurfacesOriginPerRow()
+    {
+        var (modA, _, _, npcKeyA) = BuildStructuralMod("A");
+        var (modB, _, _, npcKeyB) = BuildStructuralMod("B");
+        Assert.Equal(npcKeyA, npcKeyB);
+        var raceFormKey = modA.Races.First().FormKey.ToString();
+
+        using var repo = OpenRepo();
+        // GetReferences' NOT EXISTS subquery reads pending_changes, which only DuckDbPendingChangeService's
+        // own DDL creates — bind one to this repo's connection purely for that side effect, matching how
+        // production shares one connection between the repository and the pending-change service.
+        _ = new DuckDbPendingChangeService(repo.Connection);
+        repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
+        repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
+
+        var refs = repo.GetReferences(raceFormKey);
+
+        Assert.Equal(2, refs.Count);
+        Assert.Contains(refs, r => r.Origin == "ModA");
+        Assert.Contains(refs, r => r.Origin == "ModB");
     }
 
     private static long Count(DuckDbRecordRepository repo, string table, string column, string value)

@@ -48,25 +48,33 @@ public sealed class RecordQueryService(
     {
         var repository = RequireRepository();
         var schemas = RequireSchemas();
+        // #296: wire-facing (RecordEndpoints' /records only ever supplies a bare plugin filename),
+        // so origin is resolved server-side rather than added as a new query parameter — same
+        // reasoning as WorldspaceQueryService. Null when plugin itself is null (nothing to resolve).
+        var origin = plugin == null ? null : PluginOriginResolver.Resolve(_session.Session, plugin);
 
         PagedResult<RecordSummary> committed;
         if (type != null)
         {
             if (!schemas.ContainsKey(type))
                 return new PagedResult<RecordSummary>([], 0);
-            committed = repository.GetRecords(type, plugin, search, limit, offset);
+            committed = repository.GetRecords(type, plugin, search, limit, offset, origin);
         }
         else
         {
             committed = repository.SearchRecords(
-                [.. schemas.Keys.Where(t => t != HeaderTableName)], plugin, search, limit, offset);
+                [.. schemas.Keys.Where(t => t != HeaderTableName)], plugin, search, limit, offset, origin);
         }
 
         if (plugin == null || offset > 0)
             return committed;
 
         var committedKeys = committed.Items.Select(r => r.FormKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var staged = _changes.GetStagedFormKeys(plugin, type)
+        // #296 review: staged-only records must scope to the same origin as the committed query
+        // above — GetStagedFormKeys has accepted an optional origin filter since #272; omitting it
+        // here (as this call originally did) let two same-filename origins' staged-only records
+        // merge through this path even though the committed side was already correctly scoped.
+        var staged = _changes.GetStagedFormKeys(plugin, type, origin)
             .Where(s => !committedKeys.Contains(s.FormKey))
             .ToList();
 
@@ -76,8 +84,13 @@ public sealed class RecordQueryService(
         var loadOrderIndex = RequireSession().Plugins
             .FirstOrDefault(p => p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase))?.LoadOrderIndex ?? -1;
 
+        // origin! : plugin is non-null past the guard above, and origin was resolved from that same
+        // plugin nullability check at its declaration (line above), so it is non-null here too — the
+        // compiler's flow analysis doesn't carry that correlation across the guard into this closure
+        // (confirmed: CS8604 without the forgiveness), hence this instead of a second
+        // PluginOriginResolver.Resolve call.
         var stagedSummaries = staged
-            .ConvertAll(s => new RecordSummary(s.FormKey, plugin, loadOrderIndex, IsWinner: false, EditorId: null));
+            .ConvertAll(s => new RecordSummary(s.FormKey, plugin, loadOrderIndex, IsWinner: false, EditorId: null, Origin: origin!));
 
         return new PagedResult<RecordSummary>(
             [.. committed.Items, .. stagedSummaries],
@@ -88,21 +101,21 @@ public sealed class RecordQueryService(
     {
         var repository = RequireRepository();
         var tableName = repository.FindRecordType(formKey);
-        return tableName == null ? null : repository.GetRecord(tableName, formKey, plugin: null, winnerOnly: true);
+        return tableName == null ? null : repository.GetRecord(tableName, formKey, plugin: null, origin: null, winnerOnly: true);
     }
 
-    public RecordDetail? GetRecordForPlugin(string formKey, string plugin)
+    public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin)
     {
         var repository = RequireRepository();
         var tableName = repository.FindRecordType(formKey);
-        return tableName == null ? null : repository.GetRecord(tableName, formKey, plugin, winnerOnly: false);
+        return tableName == null ? null : repository.GetRecord(tableName, formKey, plugin, origin, winnerOnly: false);
     }
 
     public string? GetRecordType(string formKey) =>
         RequireRepository().FindRecordType(formKey);
 
-    public IReadOnlyList<string> GetNativeFormKeys(string plugin) =>
-        RequireRepository().GetNativeFormKeys(plugin);
+    public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) =>
+        RequireRepository().GetNativeFormKeys(plugin, origin);
 
     public CompareResult? GetCompare(string formKey)
     {
@@ -179,15 +192,24 @@ public sealed class RecordQueryService(
     public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin)
     {
         var repository = RequireRepository();
+        // #296: wire-facing (/plugins/{plugin}/record-types only ever supplies a bare plugin
+        // filename), so origin is resolved server-side rather than added as a new route parameter —
+        // same reasoning as GetRecords/GetWorldspaces.
+        var origin = PluginOriginResolver.Resolve(_session.Session, plugin);
         var counts = RequireSchemas().Keys
             .Where(t => t != HeaderTableName)
-            .Select(t => (Type: t, Count: repository.CountRecordsForPlugin(t, plugin)))
+            .Select(t => (Type: t, Count: repository.CountRecordsForPlugin(t, plugin, origin)))
             .Where(x => x.Count > 0)
             .ToDictionary(x => x.Type, x => x.Count, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var recordType in _changes.GetStagedFormKeys(plugin)
+        // #296 review: scoped to the same resolved origin as the CountRecordsForPlugin loop above —
+        // GetStagedFormKeys has accepted an optional origin filter since #272; omitting it here (as
+        // this call originally did) let two same-filename origins' staged-only records merge into
+        // one plugin's record-type counts even though the committed side was already correctly
+        // scoped.
+        foreach (var recordType in _changes.GetStagedFormKeys(plugin, origin: origin)
             .Where(s => !counts.ContainsKey(s.RecordType)
-                || repository.GetRecord(s.RecordType, s.FormKey, plugin, winnerOnly: false) == null)
+                || repository.GetRecord(s.RecordType, s.FormKey, plugin, origin, winnerOnly: false) == null)
             .Select(s => s.RecordType))
         {
             counts.TryGetValue(recordType, out var existing);
@@ -203,9 +225,9 @@ public sealed class RecordQueryService(
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
         RequireRepository().GetReferences(targetFormKey);
 
-    public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null)
+    public IReadOnlyList<PendingChange> GetChanges(string? formKey = null, Guid? memberChangeId = null)
     {
-        var pending = _changes.GetChanges(plugin, formKey, memberChangeId);
+        var pending = _changes.GetChanges(formKey: formKey, memberChangeId: memberChangeId);
         var resolveFormKey = FormKeyResolutionCache.Memoize(RequireRepository().ResolveFormKey);
         return PendingChangeResolver.ResolveAll(pending, RequireSchemas(), resolveFormKey);
     }

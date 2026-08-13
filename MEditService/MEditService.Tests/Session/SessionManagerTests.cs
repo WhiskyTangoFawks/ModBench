@@ -65,7 +65,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using var manager = MakeManager();
         manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
 
-        var count = manager.Repository!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName);
+        var count = manager.Repository!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName, "Data");
 
         Assert.Equal(TestPluginFixture.RecordCount, count);
     }
@@ -93,7 +93,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         Assert.Null(manager.Session);
         Assert.Null(manager.Repository);
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName));
+            oldRepo!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName, "Data"));
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
 
             Assert.Same(repositoryBefore, manager.Repository);
             Assert.Contains(manager.Session!.Plugins, p => p.Name == "NewPlugin.esp");
-            Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "Base.esp"));
+            Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "Base.esp", "Data"));
             Assert.Contains("*NewPlugin.esp", File.ReadAllText(data.PluginsTxtPath));
         }
     }
@@ -458,7 +458,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
 
             await manager.SavePlugin("TestPlugin.esp", [change]);
 
-            var detail = manager.Repository!.GetRecord("npc_", npcKey.ToString(), "TestPlugin.esp", winnerOnly: false)!;
+            var detail = manager.Repository!.GetRecord("npc_", npcKey.ToString(), "TestPlugin.esp", "Data", winnerOnly: false)!;
             var aggressionValue = detail.Fields.First(f => f.Metadata.Name == "aggression").Value?.ToString();
             Assert.Equal("Frenzied", aggressionValue);
         }
@@ -611,7 +611,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
 
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName));
+            oldRepo!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName, "Data"));
     }
 
 
@@ -625,7 +625,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         manager.Dispose();
 
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName));
+            oldRepo!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName, "Data"));
     }
 
     // --- ReindexPlugins ---
@@ -677,7 +677,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
 
             await manager.ReindexPlugins(["Plugin.esp"]);
 
-            var detail = manager.Repository!.GetRecord("npc_", npcKey.ToString(), "Plugin.esp", winnerOnly: false)!;
+            var detail = manager.Repository!.GetRecord("npc_", npcKey.ToString(), "Plugin.esp", "Data", winnerOnly: false)!;
             var aggressionValue = detail.Fields.First(f => f.Metadata.Name == "aggression").Value?.ToString();
             Assert.Equal("Frenzied", aggressionValue);
             Assert.True(detail.IsWinner);

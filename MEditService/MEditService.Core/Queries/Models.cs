@@ -28,12 +28,17 @@ public record PluginResponse(
             masterIssues ?? []);
 }
 
+// Origin (#296 / ADR-0036): the mod folder that provided this row's physical file, or a reserved
+// PluginOrigin value — additive alongside Plugin, same shape as RecordDetail.Origin (#272). Without
+// it, two same-filename plugins listed together (GetRecords/SearchRecords never filtered origin,
+// only plugin) were indistinguishable rows.
 public record RecordSummary(
     string FormKey,
     string Plugin,
     int LoadOrderIndex,
     bool IsWinner,
-    string? EditorId);
+    string? EditorId,
+    string Origin);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
 
@@ -204,7 +209,11 @@ public record SessionLoadExplicitRequest(
 // endpoint rejects null (400) rather than choosing a value on the caller's behalf.
 public record ExplicitPlugin(string Name, string Path, string Origin, bool? Participates);
 
-public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId);
+// Origin (#296 / ADR-0036): the mod folder that provided the source row's physical file, or a
+// reserved PluginOrigin value — additive alongside Plugin, same shape as RecordDetail.Origin
+// (#272). GetReferences never filtered by plugin, so this isn't a filter gap; without Origin here,
+// two same-filename sources referencing the same target were indistinguishable in the result.
+public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId, string Origin);
 
 public record CreateRecordResult(string FormKey, Guid GroupId);
 

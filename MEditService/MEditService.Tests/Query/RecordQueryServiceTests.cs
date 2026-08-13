@@ -792,7 +792,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
         var fk = all.Items[0].FormKey;
 
-        var detail = _svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName);
+        var detail = _svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName, "Data");
 
         Assert.NotNull(detail);
         Assert.Equal(fk, detail.FormKey);
@@ -802,7 +802,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetRecordForPlugin_UnknownFormKey_ReturnsNull()
     {
-        var detail = _svc.GetRecordForPlugin("FFFFFF:Unknown.esp", TestPluginFixture.PluginName);
+        var detail = _svc.GetRecordForPlugin("FFFFFF:Unknown.esp", TestPluginFixture.PluginName, "Data");
 
         Assert.Null(detail);
     }
@@ -813,7 +813,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
         var fk = all.Items[0].FormKey;
 
-        var detail = _svc.GetRecordForPlugin(fk, "NonExistent.esp");
+        var detail = _svc.GetRecordForPlugin(fk, "NonExistent.esp", "Data");
 
         Assert.Null(detail);
     }
@@ -1063,7 +1063,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         using (mod)
         {
             spy.Reset();
-            var detail = svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName);
+            var detail = svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName, "Data");
             Assert.NotNull(detail);
             Assert.Equal(1, spy.FindRecordTypeCalls);
             Assert.Equal(1, spy.GetRecordCalls);
@@ -1091,7 +1091,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var (svc, spy, mod) = MakeSpySvc();
         using (mod)
         {
-            svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName);
+            svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName, "Data");
             Assert.False(spy.LastWinnerOnly);
         }
     }
@@ -1159,6 +1159,44 @@ public sealed class RecordQueryServiceTests : IDisposable
         }
     }
 
+    // #296 review: GetPluginRecordTypes' committed-side CountRecordsForPlugin call is correctly
+    // scoped to the resolved origin, but its staged-side GetStagedFormKeys call originally omitted
+    // origin entirely — every other staged-record fixture in this file (including the three above)
+    // stages at Origin: "Data", which is exactly the elided default the issue warns about, so none
+    // of them could tell a working filter from a missing one. This fixture stages a *second*,
+    // distinct FormKey under a real non-Data origin ("ModA") for the same plugin filename; the
+    // session's own resolved origin for "Override.esp" is "Data" (manager.Load's implicit path), so
+    // only the Data-origin staged record should count.
+    [Fact]
+    public void GetPluginRecordTypes_StagedRecord_ScopesToResolvedOrigin()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-staged-types-origin")
+            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
+            .WithPlugin("Override.esp")
+            .Build();
+        using (data)
+        {
+            var reflector = SharedSchemaReflector.Instance;
+            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var changes = DuckDbTestFactory.MakePendingChangeService();
+            changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
+                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
+                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
+            changes.Upsert(new PendingChangeUpsert("001234:Override.esp", "Override.esp", "npc_",
+                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
+                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "ModA"));
+            var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
+
+            var result = svc.GetPluginRecordTypes("Override.esp");
+
+            var npc = Assert.Single(result, r => r.Type == "npc_");
+            Assert.Equal(1, npc.Count);
+        }
+    }
+
     [Fact]
     public void GetPluginRecordTypes_StagedAlreadyCommittedRecordIsNotCounted()
     {
@@ -1219,6 +1257,45 @@ public sealed class RecordQueryServiceTests : IDisposable
             Assert.Equal("Override.esp", result.Items[0].Plugin);
             Assert.False(result.Items[0].IsWinner);
             Assert.Equal(1, result.Items[0].LoadOrderIndex); // Override.esp is second plugin (index 1)
+        }
+    }
+
+    // #296 review: GetRecords' committed-side repository call is correctly scoped to the resolved
+    // origin, but its staged-side GetStagedFormKeys call originally omitted origin entirely — every
+    // other staged-record fixture in this file (including the one above) stages at Origin: "Data",
+    // exactly the elided default the issue warns about, so none of them could tell a working filter
+    // from a missing one. This fixture stages a *second*, distinct FormKey under a real non-Data
+    // origin ("ModA") for the same plugin filename; the session's own resolved origin for
+    // "Override.esp" is "Data" (manager.Load's implicit path), so only the Data-origin staged record
+    // should surface.
+    [Fact]
+    public void GetRecords_ByPlugin_StagedRecord_ScopesToResolvedOrigin()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-staged-records-origin")
+            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
+            .WithPlugin("Override.esp")
+            .Build();
+        using (data)
+        {
+            var reflector = SharedSchemaReflector.Instance;
+            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var changes = DuckDbTestFactory.MakePendingChangeService();
+            changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
+                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
+                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
+            changes.Upsert(new PendingChangeUpsert("001234:Override.esp", "Override.esp", "npc_",
+                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
+                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "ModA"));
+            var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
+
+            var result = svc.GetRecords(type: "npc_", plugin: "Override.esp", search: null, limit: 100, offset: 0);
+
+            Assert.Equal(1, result.Total);
+            Assert.Single(result.Items);
+            Assert.Equal(npcKey.ToString(), result.Items[0].FormKey);
         }
     }
 
@@ -1338,15 +1415,15 @@ public sealed class RecordQueryServiceTests : IDisposable
 
         public RecordLookupEntry? ResolveFormKey(string formKey) => inner.ResolveFormKey(formKey);
 
-        public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly)
+        public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
         {
             GetRecordCalls++;
             LastWinnerOnly = winnerOnly;
-            return inner.GetRecord(tableName, formKey, plugin, winnerOnly);
+            return inner.GetRecord(tableName, formKey, plugin, origin, winnerOnly);
         }
 
-        public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset) =>
-            inner.GetRecords(tableName, plugin, search, limit, offset);
+        public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null) =>
+            inner.GetRecords(tableName, plugin, search, limit, offset, origin);
 
         public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey) =>
             inner.GetAllOverrides(tableName, formKey);
@@ -1357,14 +1434,14 @@ public sealed class RecordQueryServiceTests : IDisposable
         public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) =>
             inner.GetConditions(formKey, plugin, origin);
 
-        public int CountRecordsForPlugin(string tableName, string plugin) =>
-            inner.CountRecordsForPlugin(tableName, plugin);
+        public int CountRecordsForPlugin(string tableName, string plugin, string origin) =>
+            inner.CountRecordsForPlugin(tableName, plugin, origin);
 
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin) =>
-            inner.GetNativeFormKeys(plugin);
+        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) =>
+            inner.GetNativeFormKeys(plugin, origin);
 
-        public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset) =>
-            inner.SearchRecords(tableNames, plugin, search, limit, offset);
+        public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset, string? origin = null) =>
+            inner.SearchRecords(tableNames, plugin, search, limit, offset, origin);
 
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
             inner.GetPluginsWithMatchingRecords(tableNames);
@@ -1372,12 +1449,12 @@ public sealed class RecordQueryServiceTests : IDisposable
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
             inner.GetReferences(targetFormKey);
 
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey) =>
-            inner.GetWorldspaceCells(plugin, worldspaceFormKey);
-        public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset) =>
-            inner.GetInteriorCells(plugin, limit, offset);
-        public CellReferences GetCellReferences(string plugin, string cellFormKey) =>
-            inner.GetCellReferences(plugin, cellFormKey);
+        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin) =>
+            inner.GetWorldspaceCells(plugin, worldspaceFormKey, origin);
+        public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string origin) =>
+            inner.GetInteriorCells(plugin, limit, offset, origin);
+        public CellReferences GetCellReferences(string plugin, string cellFormKey, string origin) =>
+            inner.GetCellReferences(plugin, cellFormKey, origin);
         public PlacementRow? GetPlacement(string formKey, string plugin, string origin) =>
             inner.GetPlacement(formKey, plugin, origin);
     }

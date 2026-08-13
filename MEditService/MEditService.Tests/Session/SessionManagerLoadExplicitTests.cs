@@ -35,8 +35,8 @@ public sealed class SessionManagerLoadExplicitTests
 
         Assert.NotNull(manager.Session);
         Assert.NotNull(manager.Repository);
-        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "A.esp"));
-        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "B.esp"));
+        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "A.esp", "Data"));
+        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "B.esp", "Data"));
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public sealed class SessionManagerLoadExplicitTests
         using var manager = MakeManager();
         manager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var winner = manager.Repository!.GetRecord("npc_", shared.ToString(), null, winnerOnly: true);
+        var winner = manager.Repository!.GetRecord("npc_", shared.ToString(), null, null, winnerOnly: true);
         Assert.NotNull(winner);
         Assert.True(winner.IsWinner);
         Assert.Equal("Override.esp", winner.Plugin);
@@ -75,7 +75,7 @@ public sealed class SessionManagerLoadExplicitTests
         manager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.NotSame(firstRepo, manager.Repository);
-        Assert.ThrowsAny<Exception>(() => firstRepo!.CountRecordsForPlugin("npc_", "A.esp"));
+        Assert.ThrowsAny<Exception>(() => firstRepo!.CountRecordsForPlugin("npc_", "A.esp", "Data"));
     }
 
     // A single plugin whose binary data Mutagen can't parse (e.g. #<issue>: a malformed
@@ -100,8 +100,8 @@ public sealed class SessionManagerLoadExplicitTests
 
         Assert.NotNull(manager.Session);
         Assert.Contains(manager.Session!.LoadFailures, f => f.Name == "Bad.esp");
-        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "Good.esp"));
-        Assert.Equal(0, manager.Repository!.CountRecordsForPlugin("npc_", "Bad.esp"));
+        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "Good.esp", "Data"));
+        Assert.Equal(0, manager.Repository!.CountRecordsForPlugin("npc_", "Bad.esp", "Data"));
     }
 
     private sealed class ThrowingOnIndexRepositoryFactory(IRecordRepositoryFactory inner, string poisonPlugin)
@@ -129,31 +129,31 @@ public sealed class SessionManagerLoadExplicitTests
             inner.SetPluginParticipation(plugin, participates, origin);
         public void Dispose() => inner.Dispose();
 
-        public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset) =>
-            inner.GetRecords(tableName, plugin, search, limit, offset);
-        public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly) =>
-            inner.GetRecord(tableName, formKey, plugin, winnerOnly);
+        public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null) =>
+            inner.GetRecords(tableName, plugin, search, limit, offset, origin);
+        public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, string? origin, bool winnerOnly) =>
+            inner.GetRecord(tableName, formKey, plugin, origin, winnerOnly);
         public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey) =>
             inner.GetAllOverrides(tableName, formKey);
         public VmadData? GetVmad(string formKey, string plugin, string origin) => inner.GetVmad(formKey, plugin, origin);
         public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) =>
             inner.GetConditions(formKey, plugin, origin);
-        public int CountRecordsForPlugin(string tableName, string plugin) =>
-            inner.CountRecordsForPlugin(tableName, plugin);
+        public int CountRecordsForPlugin(string tableName, string plugin, string origin) =>
+            inner.CountRecordsForPlugin(tableName, plugin, origin);
         public string? FindRecordType(string formKey) => inner.FindRecordType(formKey);
         public RecordLookupEntry? ResolveFormKey(string formKey) => inner.ResolveFormKey(formKey);
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin) => inner.GetNativeFormKeys(plugin);
-        public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset) =>
-            inner.SearchRecords(tableNames, plugin, search, limit, offset);
+        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => inner.GetNativeFormKeys(plugin, origin);
+        public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset, string? origin = null) =>
+            inner.SearchRecords(tableNames, plugin, search, limit, offset, origin);
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
             inner.GetPluginsWithMatchingRecords(tableNames);
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey) =>
-            inner.GetWorldspaceCells(plugin, worldspaceFormKey);
-        public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset) =>
-            inner.GetInteriorCells(plugin, limit, offset);
-        public CellReferences GetCellReferences(string plugin, string cellFormKey) =>
-            inner.GetCellReferences(plugin, cellFormKey);
+        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin) =>
+            inner.GetWorldspaceCells(plugin, worldspaceFormKey, origin);
+        public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string origin) =>
+            inner.GetInteriorCells(plugin, limit, offset, origin);
+        public CellReferences GetCellReferences(string plugin, string cellFormKey, string origin) =>
+            inner.GetCellReferences(plugin, cellFormKey, origin);
         public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => inner.GetPlacement(formKey, plugin, origin);
     }
 }

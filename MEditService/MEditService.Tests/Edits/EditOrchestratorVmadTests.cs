@@ -51,9 +51,9 @@ public sealed class EditOrchestratorVmadTests
         public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset)
             => inner.GetRecords(type, plugin, search, limit, offset);
         public RecordDetail? GetRecord(string formKey) => inner.GetRecord(formKey);
-        public RecordDetail? GetRecordForPlugin(string formKey, string plugin) => inner.GetRecordForPlugin(formKey, plugin);
+        public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => inner.GetRecordForPlugin(formKey, plugin, origin);
         public string? GetRecordType(string formKey) => inner.GetRecordType(formKey);
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin) => inner.GetNativeFormKeys(plugin);
+        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => inner.GetNativeFormKeys(plugin, origin);
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => inner.GetPluginRecordTypes(plugin);
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
@@ -64,8 +64,8 @@ public sealed class EditOrchestratorVmadTests
         public IReadOnlyList<string> GetConditionFunctions() => inner.GetConditionFunctions();
         public IReadOnlyList<string> GetConditionRunOnTargets() => inner.GetConditionRunOnTargets();
         public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => inner.GetPlacement(formKey, plugin, origin);
-        public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
-            inner.GetChanges(plugin, formKey, memberChangeId);
+        public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? formKey = null, Guid? memberChangeId = null) =>
+            inner.GetChanges(formKey, memberChangeId);
     }
 
     // ---- Non-VMAD edit skips GetVmad ----
@@ -113,9 +113,9 @@ public sealed class EditOrchestratorVmadTests
         public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset)
             => inner.GetRecords(type, plugin, search, limit, offset);
         public RecordDetail? GetRecord(string formKey) => inner.GetRecord(formKey);
-        public RecordDetail? GetRecordForPlugin(string formKey, string plugin) => inner.GetRecordForPlugin(formKey, plugin);
+        public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => inner.GetRecordForPlugin(formKey, plugin, origin);
         public string? GetRecordType(string formKey) => inner.GetRecordType(formKey);
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin) => inner.GetNativeFormKeys(plugin);
+        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => inner.GetNativeFormKeys(plugin, origin);
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => inner.GetPluginRecordTypes(plugin);
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
@@ -132,8 +132,8 @@ public sealed class EditOrchestratorVmadTests
         public IReadOnlyList<string> GetConditionFunctions() => inner.GetConditionFunctions();
         public IReadOnlyList<string> GetConditionRunOnTargets() => inner.GetConditionRunOnTargets();
         public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => inner.GetPlacement(formKey, plugin, origin);
-        public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
-            inner.GetChanges(plugin, formKey, memberChangeId);
+        public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? formKey = null, Guid? memberChangeId = null) =>
+            inner.GetChanges(formKey, memberChangeId);
     }
 
     [Fact]

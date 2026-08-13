@@ -27,12 +27,15 @@ public sealed class WorldspaceQueryService(ISessionManager session, IPendingChan
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin)
     {
         var repo = RequireRepository();
-        return [.. repo.GetRecords("wrld", plugin, null, WorldspaceListLimit, 0).Items.Select(r => new WorldspaceSummary(r.FormKey, r.EditorId))];
+        // #296: same class of bug as the other worldspace-tree reads — without an origin filter, two
+        // same-filename plugins' worldspace lists silently merged into one under this plugin name.
+        return [.. repo.GetRecords("wrld", plugin, null, WorldspaceListLimit, 0, ResolveOrigin(plugin))
+            .Items.Select(r => new WorldspaceSummary(r.FormKey, r.EditorId))];
     }
 
     public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey)
     {
-        var cells = RequireRepository().GetWorldspaceCells(plugin, worldspaceFormKey);
+        var cells = RequireRepository().GetWorldspaceCells(plugin, worldspaceFormKey, ResolveOrigin(plugin));
 
         // A worldspace's TopCell (persistent interior cell) has no block/sub-block coordinates.
         var topCellRow = cells.FirstOrDefault(c => c.BlockX == null);
@@ -59,8 +62,9 @@ public sealed class WorldspaceQueryService(ISessionManager session, IPendingChan
 
     public CellReferences GetCellReferences(string plugin, string cellFormKey)
     {
-        var committed = RequireRepository().GetCellReferences(plugin, cellFormKey);
-        var pluginChanges = _changes.GetChanges(plugin);
+        var origin = ResolveOrigin(plugin);
+        var committed = RequireRepository().GetCellReferences(plugin, cellFormKey, origin);
+        var pluginChanges = _changes.GetChanges(plugin, origin: origin);
 
         if (pluginChanges.Count == 0)
             return committed;
@@ -110,8 +114,15 @@ public sealed class WorldspaceQueryService(ISessionManager session, IPendingChan
     }
 
     public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset) =>
-        RequireRepository().GetInteriorCells(plugin, limit, offset);
+        RequireRepository().GetInteriorCells(plugin, limit, offset, ResolveOrigin(plugin));
 
     private IRecordReader RequireRepository() =>
         _session.Repository ?? throw new InvalidOperationException("No session loaded.");
+
+    // #296: this query service is wire-facing (WorldspaceEndpoints) — the frontend has only ever
+    // supplied a bare plugin filename (PluginTreeProvider/PluginRepository never sends origin), so
+    // origin is resolved server-side via the shared PluginOriginResolver rather than added as a new
+    // query/route parameter.
+    private string ResolveOrigin(string plugin) =>
+        PluginOriginResolver.Resolve(_session.Session, plugin);
 }

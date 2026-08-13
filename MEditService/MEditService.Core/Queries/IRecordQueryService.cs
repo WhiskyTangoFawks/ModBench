@@ -11,9 +11,15 @@ public interface IRecordQueryService
     IReadOnlyList<string> GetRecordTypes();
     PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset);
     RecordDetail? GetRecord(string formKey);
-    RecordDetail? GetRecordForPlugin(string formKey, string plugin);
+    // origin (#296 / ADR-0036, required): same reasoning as GetVmad's — caller-supplied, since
+    // EditOrchestrator (the only caller) already resolves it via ResolveOrigin right alongside its
+    // neighboring GetVmad/GetConditions/GetPlacement calls.
+    RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin);
     string? GetRecordType(string formKey);
-    IReadOnlyList<string> GetNativeFormKeys(string plugin);
+    // origin (#296 / ADR-0036, required): caller-supplied, same reasoning as GetRecordForPlugin's —
+    // EditOrchestrator (the only caller) already resolves it via ResolveOrigin right alongside the
+    // neighboring GetPendingNativeFormKeyChanges call.
+    IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin);
     CompareResult? GetCompare(string formKey);
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
@@ -35,5 +41,10 @@ public interface IRecordQueryService
     // ADR-0031: the /changes read surface (Pending Changes tree, pending-column rendering) — each
     // PendingChange's NewValue gets its FormKey-typed leaves resolved in one batched pass via
     // PendingChangeResolver, same lookup as GetCompare's FieldDiff resolution.
-    IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null);
+    // #296: `plugin` is deliberately absent — no caller (frontend, MCP, or otherwise) ever filtered
+    // by it, so it was a filename-only-keyed parameter with no requirement behind it (the
+    // NOT-a-caller-so-not-a-gap distinction the issue itself draws for this endpoint). Deleting it
+    // removes the problem outright rather than threading an origin only this parameter would need.
+    // If a real caller needs plugin-filtered changes later, add it back with origin from the start.
+    IReadOnlyList<PendingChange> GetChanges(string? formKey = null, Guid? memberChangeId = null);
 }

@@ -60,7 +60,7 @@ public sealed partial class EditOrchestrator(
         if (referenceErrors.Count > 0)
             return new StageEditResult.InvalidReferences(referenceErrors);
 
-        var currentRecord = _query.GetRecordForPlugin(formKey, plugin);
+        var currentRecord = _query.GetRecordForPlugin(formKey, plugin, ResolveOrigin(plugin));
         var oldValues = new Dictionary<string, JsonElement>();
         if (currentRecord != null)
         {
@@ -337,7 +337,7 @@ public sealed partial class EditOrchestrator(
         // Issue #202: an explicit sourcePlugin copies that plugin's own version of the record (the
         // column-header menu's right-clicked column) rather than the overall winner.
         var sourceRecord = sourcePlugin != null
-            ? _query.GetRecordForPlugin(formKey, sourcePlugin)
+            ? _query.GetRecordForPlugin(formKey, sourcePlugin, ResolveOrigin(sourcePlugin))
             : _query.GetRecord(formKey);
         if (sourceRecord == null) return new StageEditResult.RecordNotFound();
 
@@ -345,7 +345,7 @@ public sealed partial class EditOrchestrator(
             fv => fv.Metadata.Name,
             fv => JsonSerializer.SerializeToElement(fv.Value));
 
-        var currentTarget = _query.GetRecordForPlugin(formKey, targetPlugin);
+        var currentTarget = _query.GetRecordForPlugin(formKey, targetPlugin, ResolveOrigin(targetPlugin));
         var oldValues = new Dictionary<string, JsonElement>();
         if (currentTarget != null)
         {
@@ -438,7 +438,7 @@ public sealed partial class EditOrchestrator(
         if (pending != null && pending.TryGetValue(HeaderMastersField, out var pendingJson))
             return ReadStringArray(pendingJson);
 
-        var committed = _query.GetRecordForPlugin(headerFormKey, plugin)?.Fields
+        var committed = _query.GetRecordForPlugin(headerFormKey, plugin, ResolveOrigin(plugin))?.Fields
             .FirstOrDefault(fv => fv.Metadata.Name == HeaderMastersField);
         return committed != null ? ReadStringArray(JsonSerializer.SerializeToElement(committed.Value)) : [];
     }
@@ -570,9 +570,13 @@ public sealed partial class EditOrchestrator(
     private List<string> RevertPendingCreateTargets(IReadOnlyList<(string FormKey, string Plugin)> createTargets)
     {
         var reverted = new List<string>();
-        foreach (var (formKey, _) in createTargets)
+        foreach (var (formKey, plugin) in createTargets)
         {
-            var createChangeId = _changes.GetChanges(formKey: formKey)
+            // #296 review: scoped to the target's own resolved origin — GetChanges' origin filter
+            // was silently unused here, so two same-filename origins' pending creates (once #34
+            // lets both exist in a session) would collide on formKey alone and this could revert
+            // the wrong origin's create.
+            var createChangeId = _changes.GetChanges(plugin: plugin, formKey: formKey, origin: ResolveOrigin(plugin))
                 .FirstOrDefault(c => c.ChangeType == PendingChangeConstants.CreateChangeType)?.Id;
             if (createChangeId == null) continue;
 
@@ -676,7 +680,7 @@ public sealed partial class EditOrchestrator(
         foreach (var fieldGroup in toNullify.GroupBy(t => (t.SourceFormKey, t.SourcePlugin, TopLevelFieldName(t.FieldPath), t.RecordType)))
         {
             var (sourceFormKey, sourcePlugin, topLevelField, recordType) = fieldGroup.Key;
-            var currentRecord = _query.GetRecordForPlugin(sourceFormKey, sourcePlugin)!;
+            var currentRecord = _query.GetRecordForPlugin(sourceFormKey, sourcePlugin, ResolveOrigin(sourcePlugin))!;
             var fieldMap = currentRecord.Fields.ToDictionary(fv => fv.Metadata.Name, fv => fv.Value);
             var oldValue = JsonSerializer.SerializeToElement(fieldMap[topLevelField]);
 
@@ -756,7 +760,7 @@ public sealed partial class EditOrchestrator(
         foreach (var fieldGroup in crossPluginRefs.GroupBy(r => (r.FormKey, r.Plugin, TopLevelFieldName(r.FieldPath), r.RecordType)))
         {
             var (sourceFormKey, sourcePlugin, topLevelField, refRecordType) = fieldGroup.Key;
-            var currentRecord = _query.GetRecordForPlugin(sourceFormKey, sourcePlugin)!;
+            var currentRecord = _query.GetRecordForPlugin(sourceFormKey, sourcePlugin, ResolveOrigin(sourcePlugin))!;
             var fieldMap = currentRecord.Fields.ToDictionary(fv => fv.Metadata.Name, fv => fv.Value);
             var oldValue = JsonSerializer.SerializeToElement(fieldMap[topLevelField]);
             var newValue = ReplaceFormKey(oldValue, formKey, newFormKey);
@@ -917,7 +921,7 @@ public sealed partial class EditOrchestrator(
     // would leave the stale high FormID counted against eligibility).
     private IReadOnlyList<string> GetEffectiveNativeFormKeys(string plugin)
     {
-        var committed = _query.GetNativeFormKeys(plugin);
+        var committed = _query.GetNativeFormKeys(plugin, ResolveOrigin(plugin));
         var (added, removed) = _changes.GetPendingNativeFormKeyChanges(plugin, ResolveOrigin(plugin));
         if (added.Count == 0 && removed.Count == 0) return committed;
 
@@ -949,7 +953,7 @@ public sealed partial class EditOrchestrator(
         if (pending != null && pending.TryGetValue(HeaderFlagsField, out var pendingFlags))
             return (ReadFlagsLong(pendingFlags) & eslBit) != 0;
 
-        var committedFlags = _query.GetRecordForPlugin(headerFormKey, plugin)?.Fields
+        var committedFlags = _query.GetRecordForPlugin(headerFormKey, plugin, ResolveOrigin(plugin))?.Fields
             .FirstOrDefault(fv => fv.Metadata.Name == HeaderFlagsField);
         return committedFlags != null
             && (ReadFlagsLong(JsonSerializer.SerializeToElement(committedFlags.Value)) & eslBit) != 0;
@@ -1104,22 +1108,11 @@ public sealed partial class EditOrchestrator(
         }
     }
 
-    // #271 / ADR-0036: resolves the real origin the session already knows for `plugin` (populated
-    // by GameSession/SessionManager since #269), so every staged edit binds to the compound
-    // identity rather than the reserved default. Falls back to the default when no session or no
-    // matching plugin is found (mirrors every other origin-default fallback introduced this ticket) —
-    // callers here always have a valid session by the time they stage, so this is a belt-and-braces
-    // fallback, not a real path. Safe today only because ValidateEditContext never rejects on a
-    // missing PluginMetadata (only on IsImmutable == true, and a null pluginMeta passes that check)
-    // and because every plugin filename currently maps to exactly one origin — a name absent from
-    // Session.Plugins can't yet mean "a second origin for a filename already staged elsewhere." Once
-    // #272 lets two same-filename origins coexist in a session, this fallback would silently
-    // misattribute such an edit to the reserved default origin instead of surfacing the lookup
-    // miss — revisit then.
+    // #296: the lookup itself, including its #34 fallback caveat, now lives in one place —
+    // PluginOriginResolver — shared with RecordQueryService and WorldspaceQueryService rather than
+    // reimplemented per caller.
     private string ResolveOrigin(string plugin) =>
-        _sessionManager.Session?.Plugins
-            .FirstOrDefault(p => p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase))?.Origin
-        ?? PluginOrigin.DataDirectory;
+        PluginOriginResolver.Resolve(_sessionManager.Session, plugin);
 
     private (StageEditResult? earlyOut, IGameSession? session, string? recordType) ValidateEditContext(
         string formKey, string plugin)

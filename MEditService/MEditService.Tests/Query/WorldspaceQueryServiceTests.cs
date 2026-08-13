@@ -17,29 +17,36 @@ public class WorldspaceQueryServiceTests
         IReadOnlyList<RecordSummary>? records = null,
         CellReferences? cellRefs = null) : IRecordReader
     {
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey) => cells;
+        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin) => cells;
 
-        public PagedResult<RecordSummary> GetRecords(string t, string? p, string? s, int l, int o) =>
-            new(records ?? [], (records ?? []).Count);
-        public RecordDetail? GetRecord(string t, string fk, string? p, bool w) => null;
+        // #296: captures the origin GetWorldspaces actually resolved and passed down, so the
+        // plumbing (not just the repository-level filter) is verified independently of DuckDB.
+        public string? LastGetRecordsOrigin { get; private set; }
+
+        public PagedResult<RecordSummary> GetRecords(string t, string? p, string? s, int l, int o, string? origin = null)
+        {
+            LastGetRecordsOrigin = origin;
+            return new(records ?? [], (records ?? []).Count);
+        }
+        public RecordDetail? GetRecord(string t, string fk, string? p, string? origin, bool w) => null;
         public IReadOnlyList<RecordDetail> GetAllOverrides(string t, string fk) => [];
         public VmadData? GetVmad(string fk, string p, string origin) => null;
         public IReadOnlyList<ConditionOwner> GetConditions(string fk, string p, string origin) => [];
-        public int CountRecordsForPlugin(string t, string p) => 0;
+        public int CountRecordsForPlugin(string t, string p, string origin) => 0;
         public string? FindRecordType(string fk) => null;
         public RecordLookupEntry? ResolveFormKey(string fk) => null;
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin) => [];
-        public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> t, string? p, string? s, int l, int o) => new([], 0);
+        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => [];
+        public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> t, string? p, string? s, int l, int o, string? origin = null) => new([], 0);
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferences(string fk) => [];
-        public PagedResult<CellSummary> GetInteriorCells(string p, int l, int o) => new([], 0);
-        public CellReferences GetCellReferences(string p, string fk) => cellRefs ?? new([], []);
+        public PagedResult<CellSummary> GetInteriorCells(string p, int l, int o, string origin) => new([], 0);
+        public CellReferences GetCellReferences(string p, string fk, string origin) => cellRefs ?? new([], []);
         public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => null;
     }
 
-    private sealed class StubSession(IRecordReader repo) : ISessionManager
+    private sealed class StubSession(IRecordReader repo, IGameSession? session = null) : ISessionManager
     {
-        public IGameSession? Session => null;
+        public IGameSession? Session => session;
         public IRecordReader? Repository => repo;
         public void Load(string d, string p, GameRelease g) => throw new NotSupportedException();
         public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
@@ -52,6 +59,21 @@ public class WorldspaceQueryServiceTests
         public string ReserveFormKey(string p) => throw new NotSupportedException();
         public void SetFilter(string s) => throw new NotSupportedException();
         public void ClearFilter() => throw new NotSupportedException();
+    }
+
+    // #296: a minimal fake session whose Plugins list is real enough to exercise
+    // PluginOriginResolver.Resolve — used only by the origin-resolution plumbing test below.
+    private sealed class StubGameSession(IReadOnlyList<PluginMetadata> plugins) : IGameSession
+    {
+        public string DataFolderPath => "";
+        public GameRelease GameRelease => GameRelease.Fallout4;
+        public IReadOnlyList<PluginMetadata> Plugins => plugins;
+        public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
+        public Mutagen.Bethesda.Plugins.Cache.ILinkCache LinkCache => throw new NotSupportedException();
+        public string? FilterSql { get; set; }
+        public Mutagen.Bethesda.Plugins.Records.IModGetter? GetMod(string pluginName) => null;
+        public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();
+        public void Dispose() { }
     }
 
     private static WorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) =>
@@ -138,8 +160,8 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaces_MapsRecordsToSummaries()
     {
         var reader = new StubReader([], [
-            new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA"),
-            new RecordSummary("0002:M.esp", "M.esp", 0, true, null),
+            new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data"),
+            new RecordSummary("0002:M.esp", "M.esp", 0, true, null, "Data"),
         ]);
         var svc = new WorldspaceQueryService(new StubSession(reader), DuckDbTestFactory.MakePendingChangeService());
 
@@ -149,6 +171,25 @@ public class WorldspaceQueryServiceTests
         Assert.Equal("0001:M.esp", result[0].FormKey);
         Assert.Equal("WorldA", result[0].EditorId);
         Assert.Null(result[1].EditorId);
+    }
+
+    // #296: GetWorldspaces called repo.GetRecords("wrld", plugin, ...) with no origin at all — the
+    // same class of bug as the other worldspace-tree reads, just one hop further away (through
+    // GetRecords rather than a repository method GetWorldspaceCells/GetInteriorCells/
+    // GetCellReferences own directly). Verifies the plumbing resolves the session's real origin for
+    // the plugin and passes it down, independent of DuckDB.
+    [Fact]
+    public void GetWorldspaces_ResolvesRealOriginFromSession_AndPassesItToGetRecords()
+    {
+        var reader = new StubReader([]);
+        var session = new StubGameSession([
+            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA"),
+        ]);
+        var svc = new WorldspaceQueryService(new StubSession(reader, session), DuckDbTestFactory.MakePendingChangeService());
+
+        svc.GetWorldspaces("M.esp");
+
+        Assert.Equal("ModA", reader.LastGetRecordsOrigin);
     }
 
     [Fact]
@@ -166,6 +207,27 @@ public class WorldspaceQueryServiceTests
         Assert.Single(result.Persistent);
         Assert.Equal("1234:Patch.esp", result.Persistent[0].FormKey);
         Assert.Empty(result.Temporary);
+    }
+
+    // #296: StubSession.Session is null, so ResolveOrigin("Patch.esp") always falls back to the
+    // reserved PluginOrigin.DataDirectory ("Data") — a real non-Data origin ("ModA") on the staged
+    // change therefore must NOT overlay here. Before this fix, the pending-overlay lookup called
+    // _changes.GetChanges(plugin) with no origin argument at all, so it overlaid every origin's
+    // pending edits onto any requested plugin — this ModA-origin create would incorrectly appear
+    // under a "Data"-origin read.
+    [Fact]
+    public void GetCellReferences_PendingOverlay_ScopesToResolvedOrigin_ExcludesOtherOriginPendingCreate()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        changes.Upsert(new PendingChangeUpsert("9999:Patch.esp", "Patch.esp", "refr",
+            new() { [PendingChangeConstants.CreateFieldPath] = PendingChangeConstants.NullElement },
+            "user", null, [],
+            ChangeType: PendingChangeConstants.CreateChangeType,
+            ParentCell: "cell:Fallout4.esm", PlacementGroup: PendingChangeConstants.PlacementGroupPersistent, FormRefs: null, Origin: "ModA"));
+
+        var result = ServiceWithChanges(changes).GetCellReferences("Patch.esp", "cell:Fallout4.esm");
+
+        Assert.Empty(result.Persistent);
     }
 
     [Fact]
