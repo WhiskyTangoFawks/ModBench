@@ -215,9 +215,9 @@ public sealed class RecordQueryService(
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
         RequireRepository().GetReferences(targetFormKey);
 
-    public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null)
+    public IReadOnlyList<PendingChange> GetChanges(string? formKey = null, Guid? memberChangeId = null)
     {
-        var pending = _changes.GetChanges(plugin, formKey, memberChangeId);
+        var pending = _changes.GetChanges(formKey: formKey, memberChangeId: memberChangeId);
         var resolveFormKey = FormKeyResolutionCache.Memoize(RequireRepository().ResolveFormKey);
         return PendingChangeResolver.ResolveAll(pending, RequireSchemas(), resolveFormKey);
     }

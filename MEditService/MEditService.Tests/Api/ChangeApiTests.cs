@@ -65,27 +65,9 @@ public sealed class ChangeApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
         Assert.NotEmpty(changes);
     }
 
-    [Fact]
-    public async Task GetChanges_FilteredByPlugin_ReturnsMatchingOnly()
-    {
-        var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
-
-        await _client.PatchAsJsonAsync($"/records/{formKey}", new
-        {
-            plugin = TestPluginFixture.PluginName,
-            fields = new Dictionary<string, object?> { ["aggression"] = "Frenzied" },
-            source = "user",
-        });
-
-        var matching = await _client.GetFromJsonAsync<JsonElement[]>(
-            $"/changes?plugin={Uri.EscapeDataString(TestPluginFixture.PluginName)}");
-        Assert.NotNull(matching);
-        Assert.NotEmpty(matching);
-
-        var noMatch = await _client.GetFromJsonAsync<JsonElement[]>("/changes?plugin=NonExistent.esp");
-        Assert.NotNull(noMatch);
-        Assert.Empty(noMatch);
-    }
+    // #296: GetChanges_FilteredByPlugin_ReturnsMatchingOnly removed with the `plugin` query
+    // parameter it exercised — its only reference was this test asserting the filter for its own
+    // sake; no caller (frontend, MCP, or otherwise) ever used it. See IRecordQueryService.GetChanges.
 
     [Fact]
     public async Task DeleteChange_ById_Returns204AndRemovesChange()

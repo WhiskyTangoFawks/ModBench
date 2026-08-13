@@ -196,7 +196,7 @@ public sealed class EndpointReceptionLoggingTests
         public IReadOnlyList<string> GetConditionFunctions() => throw new NotSupportedException();
         public IReadOnlyList<string> GetConditionRunOnTargets() => throw new NotSupportedException();
         public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => throw new NotSupportedException();
-        public IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
+        public IReadOnlyList<PendingChange> GetChanges(string? formKey = null, Guid? memberChangeId = null) =>
             throw new NotSupportedException();
     }
 }

@@ -64,8 +64,8 @@ public sealed class EditOrchestratorVmadTests
         public IReadOnlyList<string> GetConditionFunctions() => inner.GetConditionFunctions();
         public IReadOnlyList<string> GetConditionRunOnTargets() => inner.GetConditionRunOnTargets();
         public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => inner.GetPlacement(formKey, plugin, origin);
-        public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
-            inner.GetChanges(plugin, formKey, memberChangeId);
+        public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? formKey = null, Guid? memberChangeId = null) =>
+            inner.GetChanges(formKey, memberChangeId);
     }
 
     // ---- Non-VMAD edit skips GetVmad ----
@@ -132,8 +132,8 @@ public sealed class EditOrchestratorVmadTests
         public IReadOnlyList<string> GetConditionFunctions() => inner.GetConditionFunctions();
         public IReadOnlyList<string> GetConditionRunOnTargets() => inner.GetConditionRunOnTargets();
         public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => inner.GetPlacement(formKey, plugin, origin);
-        public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null) =>
-            inner.GetChanges(plugin, formKey, memberChangeId);
+        public IReadOnlyList<MEditService.Core.Edits.PendingChange> GetChanges(string? formKey = null, Guid? memberChangeId = null) =>
+            inner.GetChanges(formKey, memberChangeId);
     }
 
     [Fact]

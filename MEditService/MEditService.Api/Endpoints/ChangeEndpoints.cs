@@ -168,18 +168,20 @@ public static class ChangeEndpoints
             : orchestrator.DeleteRecords(targets, "user").ToHttpResult();
     }
 
+    // #296: `plugin` deliberately removed — no caller (frontend, MCP, or otherwise) ever filtered
+    // by it (verified: PendingChangesTreeProvider.ts calls /changes with no params or groupId
+    // only), so it was a filename-only-keyed parameter with no requirement behind it. See
+    // IRecordQueryService.GetChanges.
     private static IResult GetChanges(
-        [FromQuery] string? plugin,
         [FromQuery] string? formKey,
         [FromQuery] Guid? groupId,
         IRecordQueryService query,
         ILoggerFactory loggerFactory)
     {
         loggerFactory.CreateLogger(nameof(ChangeEndpoints))
-            .LogInformation("Received GetChanges for {Plugin} {FormKey} {GroupId}", plugin, formKey, groupId);
-        var decodedPlugin = plugin != null ? Uri.UnescapeDataString(plugin) : null;
+            .LogInformation("Received GetChanges for {FormKey} {GroupId}", formKey, groupId);
         var decodedFormKey = formKey != null ? Uri.UnescapeDataString(formKey) : null;
-        return Results.Ok(query.GetChanges(decodedPlugin, decodedFormKey, groupId));
+        return Results.Ok(query.GetChanges(decodedFormKey, groupId));
     }
 
     private static IResult DeleteChangeGroup(Guid groupId, IPendingChangeService changes, ILoggerFactory loggerFactory)

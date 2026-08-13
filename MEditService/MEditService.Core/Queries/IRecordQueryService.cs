@@ -41,5 +41,10 @@ public interface IRecordQueryService
     // ADR-0031: the /changes read surface (Pending Changes tree, pending-column rendering) — each
     // PendingChange's NewValue gets its FormKey-typed leaves resolved in one batched pass via
     // PendingChangeResolver, same lookup as GetCompare's FieldDiff resolution.
-    IReadOnlyList<PendingChange> GetChanges(string? plugin = null, string? formKey = null, Guid? memberChangeId = null);
+    // #296: `plugin` is deliberately absent — no caller (frontend, MCP, or otherwise) ever filtered
+    // by it, so it was a filename-only-keyed parameter with no requirement behind it (the
+    // NOT-a-caller-so-not-a-gap distinction the issue itself draws for this endpoint). Deleting it
+    // removes the problem outright rather than threading an origin only this parameter would need.
+    // If a real caller needs plugin-filtered changes later, add it back with origin from the start.
+    IReadOnlyList<PendingChange> GetChanges(string? formKey = null, Guid? memberChangeId = null);
 }
