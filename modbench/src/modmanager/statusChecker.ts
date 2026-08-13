@@ -3,12 +3,10 @@
 // instanceRoot + a precomputed FileConflictIndex; no vscode import.
 
 import { stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import type { ModlistEntry } from './model';
 import { rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
-import { readMasters } from './masterReader';
-
-const PLUGIN_EXTENSIONS = new Set(['.esp', '.esm', '.esl']);
+import { PLUGIN_EXTENSIONS, readMasters } from './masterReader';
 
 export type ModStatus =
   | { kind: 'ok' }
@@ -24,8 +22,7 @@ export interface ModStatusResult {
 }
 
 function isPlugin(relativePath: string): boolean {
-  const dot = relativePath.lastIndexOf('.');
-  return dot !== -1 && PLUGIN_EXTENSIONS.has(relativePath.slice(dot).toLowerCase());
+  return PLUGIN_EXTENSIONS.has(extname(relativePath).toLowerCase());
 }
 
 /** Lowercased basenames of every plugin any enabled mod provides. */
@@ -46,7 +43,7 @@ export async function computeModStatuses(
   instanceRoot: string,
   index: FileConflictIndex,
   vanillaMasters: Set<string>,
-  log?: (msg: string) => void,
+  log: (msg: string) => void,
 ): Promise<Map<string, ModStatusResult>> {
   const results = new Map<string, ModStatusResult>();
   const providedPlugins = providedPluginBasenames(index.filesByMod);
@@ -65,7 +62,7 @@ async function computeEntryStatus(
   index: FileConflictIndex,
   vanillaMasters: Set<string>,
   providedPlugins: Set<string>,
-  log?: (msg: string) => void,
+  log: (msg: string) => void,
 ): Promise<ModStatusResult> {
   if (!(await modFolderExists(instanceRoot, entry.name))) {
     return { status: { kind: 'missingMod' }, conflictLines: [] };
@@ -113,7 +110,7 @@ async function findMissingMasters(
   modFiles: ModFile[],
   vanillaMasters: Set<string>,
   providedPlugins: Set<string>,
-  log?: (msg: string) => void,
+  log: (msg: string) => void,
 ): Promise<Set<string>> {
   const pluginFiles = modFiles.filter((f) => isPlugin(f.relativePath));
   const mastersPerPlugin = await Promise.all(
@@ -123,7 +120,7 @@ async function findMissingMasters(
       } catch (e) {
         // A malformed/unreadable plugin must not blank the whole tree — skip
         // its masters (can't determine them) rather than throwing.
-        log?.(`[statusChecker] could not read masters from ${f.absolutePath}: ${e instanceof Error ? e.message : String(e)}`);
+        log(`[statusChecker] could not read masters from ${f.absolutePath}: ${e instanceof Error ? e.message : String(e)}`);
         return [];
       }
     }),
@@ -186,7 +183,7 @@ export async function computePluginOrderStatuses(
   order: string[],
   index: FileConflictIndex,
   dataFolder: string | undefined,
-  log?: (msg: string) => void,
+  log: (msg: string) => void,
 ): Promise<Map<string, PluginOrderStatus>> {
   // Mod-provided plugins always resolve via the index; a vanilla/DLC/CC plugin
   // no mod ships falls back to the game Data folder — only when it's known, so
@@ -200,14 +197,14 @@ export async function computePluginOrderStatuses(
     order.map(async (name, i) => {
       const path = pathFor(name);
       if (!path) {
-        log?.(`[statusChecker] could not resolve a path for "${name}" — skipping its master-order check`);
+        log(`[statusChecker] could not resolve a path for "${name}" — skipping its master-order check`);
         return { name, status: { kind: 'ok' } as PluginOrderStatus };
       }
       let masters: string[];
       try {
         masters = await readMasters(path);
       } catch (e) {
-        log?.(`[statusChecker] could not read masters from ${path}: ${e instanceof Error ? e.message : String(e)}`);
+        log(`[statusChecker] could not read masters from ${path}: ${e instanceof Error ? e.message : String(e)}`);
         masters = [];
       }
       return { name, status: checkMasterOrder(masters, order, i) };

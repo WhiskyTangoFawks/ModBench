@@ -1,11 +1,21 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { mkdtemp, mkdir, rm, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Mod, ModlistEntry } from './model';
 import { buildFileConflictIndex } from './fileConflictIndex';
 import { computeModStatuses, checkMasterOrder, computePluginOrderStatuses } from './statusChecker';
 import { buildTes4Buffer } from './test/buildTes4Buffer';
+
+// Scoped to this file only, passthrough by default: wraps `stat` so a single
+// test below can divert one specific path to a synthetic non-ENOENT error.
+// Same wrapper shape as Mo2ModlistSource.test.ts's `readFile` mock (#317) —
+// chmod-based permission denial is silently bypassed when the test runner is
+// root, which a real fs precondition isn't.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, stat: vi.fn(actual.stat) };
+});
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
 
@@ -75,7 +85,7 @@ describe('computeModStatuses', () => {
 
   async function statuses() {
     const index = await buildFileConflictIndex(entries, instanceRoot);
-    return computeModStatuses(entries, instanceRoot, index, vanillaMasters);
+    return computeModStatuses(entries, instanceRoot, index, vanillaMasters, () => {});
   }
 
   it('is ok when a master is satisfied by another enabled mod', async () => {
@@ -98,11 +108,11 @@ describe('computeModStatuses', () => {
   });
 
   it('does not flag a missing master on a disabled mod', async () => {
-    expect((await statuses()).get('DisabledBroken')?.status).toEqual({ kind: 'ok' });
+    expect((await statuses()).get('DisabledBroken')).toEqual({ status: { kind: 'ok' }, conflictLines: [] });
   });
 
   it('reports missingMod for a modlist entry with no folder on disk', async () => {
-    expect((await statuses()).get('Ghost')?.status).toEqual({ kind: 'missingMod' });
+    expect((await statuses()).get('Ghost')).toEqual({ status: { kind: 'missingMod' }, conflictLines: [] });
   });
 
   it('reports conflicts for the overridden (losing) mod, with a tooltip line naming the winner', async () => {
@@ -117,7 +127,7 @@ describe('computeModStatuses', () => {
   });
 
   it('is ok for a mod with no masters and no conflicts', async () => {
-    expect((await statuses()).get('Clean')?.status).toEqual({ kind: 'ok' });
+    expect((await statuses()).get('Clean')).toEqual({ status: { kind: 'ok' }, conflictLines: [] });
   });
 
   it('does not throw when a plugin fails to parse, and does not blank other mods\' statuses', async () => {
@@ -141,6 +151,76 @@ describe('computeModStatuses', () => {
       await rm(corruptRoot, { recursive: true, force: true });
     }
   });
+
+  it('skips separator entries entirely — no status map entry (#318)', async () => {
+    // readModlist()'s full entries (ModListProvider.ts) include separators
+    // (MO2's organizational rows) alongside mods — a real producer, not a
+    // synthetic one. A separator has no mods/<name> folder on disk, so if it
+    // isn't skipped it would wrongly surface as missingMod.
+    const withSeparator: ModlistEntry[] = [{ kind: 'separator', name: 'WEAPONS', enabled: true }, ...entries];
+    const index = await buildFileConflictIndex(withSeparator, instanceRoot);
+    const result = await computeModStatuses(withSeparator, instanceRoot, index, vanillaMasters, () => {});
+    expect(result.has('WEAPONS')).toBe(false);
+  });
+});
+
+describe('computeModStatuses — non-plugin files are never read for masters (#318)', () => {
+  it('does not attempt to read masters from a mod-shipped non-plugin file', async () => {
+    // Every real mod archive ships non-plugin files (readmes, changelogs,
+    // textures) alongside its .esp/.esm — a real producer of a dotted,
+    // non-plugin-extension relativePath.
+    const root = await mkdtemp(join(tmpdir(), 'medit-statuschecker-readme-'));
+    try {
+      await writeMod(root, 'WithReadme', {
+        'WithReadme.esp': buildTes4Buffer([]),
+        'Readme.txt': 'Thanks for downloading!',
+      });
+      const readmeEntries: ModlistEntry[] = [mod('WithReadme')];
+      const index = await buildFileConflictIndex(readmeEntries, root);
+      const logs: string[] = [];
+
+      const result = await computeModStatuses(readmeEntries, root, index, new Set(), (m) => logs.push(m));
+
+      expect(result.get('WithReadme')?.status).toEqual({ kind: 'ok' });
+      expect(logs.some((l) => l.includes('Readme.txt'))).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('computeModStatuses — non-ENOENT stat failures propagate (#318)', () => {
+  // modFolderExists's own contract: "false on ENOENT. Other stat errors
+  // propagate." A permission-denied mod folder (real: a restrictively-mounted
+  // or externally-managed mods/ subtree) must reject, not silently degrade to
+  // missingMod like ENOENT does.
+  it('rejects rather than degrading to missingMod on a non-ENOENT stat error', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'medit-statuschecker-eacces-'));
+    try {
+      await writeMod(root, 'Restricted', { 'Restricted.esp': buildTes4Buffer([]) });
+      const restrictedEntries: ModlistEntry[] = [mod('Restricted')];
+      const index = await buildFileConflictIndex(restrictedEntries, root);
+
+      const { stat: actualStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+      const restrictedPath = join('mods', 'Restricted');
+      vi.mocked(stat).mockImplementation(async (path, ...rest) => {
+        if (String(path).endsWith(restrictedPath)) {
+          throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+        }
+        return actualStat(path, ...(rest as []));
+      });
+
+      try {
+        await expect(
+          computeModStatuses(restrictedEntries, root, index, new Set(), () => {}),
+        ).rejects.toThrow(/EACCES|permission denied/);
+      } finally {
+        vi.mocked(stat).mockImplementation(actualStat);
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('computeModStatuses — case-insensitive conflicts (#128)', () => {
@@ -157,7 +237,7 @@ describe('computeModStatuses — case-insensitive conflicts (#128)', () => {
 
   it('reports a badge conflict for case-variant paths from two mods, winner-by-priority', async () => {
     const index = await buildFileConflictIndex(entries, caseFixture);
-    const statuses = await computeModStatuses(entries, caseFixture, index, new Set());
+    const statuses = await computeModStatuses(entries, caseFixture, index, new Set(), () => {});
 
     expect(statuses.get('ModA')?.status).toEqual({ kind: 'overrides', count: 1 });
     const modB = statuses.get('ModB');
@@ -206,6 +286,17 @@ describe('checkMasterOrder', () => {
       masters: ['Late.esp', 'Missing.esm'],
     });
   });
+
+  it('flags a master positioned at exactly this plugin\'s own index — the documented "at" boundary (#318)', () => {
+    // The function's own doc comment specifies "at/after", not just "after".
+    // A plugin declaring itself as its own master is malformed data no real
+    // editor writes, but checkMasterOrder is a pure, exported utility whose
+    // contract this line specifies directly — exercise the boundary itself.
+    expect(checkMasterOrder(['Self.esp'], ['Self.esp', 'Other.esp'], 0)).toEqual({
+      kind: 'masterNotLoadedBefore',
+      masters: ['Self.esp'],
+    });
+  });
 });
 
 describe('computePluginOrderStatuses', () => {
@@ -235,7 +326,7 @@ describe('computePluginOrderStatuses', () => {
 
   async function statuses(order: string[], df: string | undefined = dataFolder) {
     const index = await buildFileConflictIndex(entries, root);
-    return computePluginOrderStatuses(order, index, df);
+    return computePluginOrderStatuses(order, index, df, () => {});
   }
 
   it('has no entry for a plugin whose masters are all present and before it', async () => {
