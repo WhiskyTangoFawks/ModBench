@@ -53,7 +53,7 @@ public sealed class EditOrchestratorVmadTests
         public RecordDetail? GetRecord(string formKey) => inner.GetRecord(formKey);
         public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => inner.GetRecordForPlugin(formKey, plugin, origin);
         public string? GetRecordType(string formKey) => inner.GetRecordType(formKey);
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin) => inner.GetNativeFormKeys(plugin);
+        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => inner.GetNativeFormKeys(plugin, origin);
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => inner.GetPluginRecordTypes(plugin);
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
@@ -115,7 +115,7 @@ public sealed class EditOrchestratorVmadTests
         public RecordDetail? GetRecord(string formKey) => inner.GetRecord(formKey);
         public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => inner.GetRecordForPlugin(formKey, plugin, origin);
         public string? GetRecordType(string formKey) => inner.GetRecordType(formKey);
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin) => inner.GetNativeFormKeys(plugin);
+        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => inner.GetNativeFormKeys(plugin, origin);
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => inner.GetPluginRecordTypes(plugin);
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);

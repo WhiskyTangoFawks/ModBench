@@ -46,7 +46,10 @@ public interface IRecordReader
 
     // Form keys of records native to the plugin (the FormKey's own ModKey == plugin), across all
     // real record tables. Used for ESL-eligibility validation (issue #85).
-    IReadOnlyList<string> GetNativeFormKeys(string plugin);
+    // origin (#296 / ADR-0036, required): plugin is never optional at this method's one call site
+    // (EditOrchestrator's ESL validation, which already resolves origin for the neighboring
+    // GetPendingNativeFormKeyChanges call), so this mirrors GetRecord's required-parameter treatment.
+    IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin);
     // origin: same nullable-filter reasoning as GetRecords' above.
     PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset, string? origin = null);
     IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames);

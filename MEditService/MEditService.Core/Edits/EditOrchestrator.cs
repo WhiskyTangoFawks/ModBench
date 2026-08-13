@@ -917,7 +917,7 @@ public sealed partial class EditOrchestrator(
     // would leave the stale high FormID counted against eligibility).
     private IReadOnlyList<string> GetEffectiveNativeFormKeys(string plugin)
     {
-        var committed = _query.GetNativeFormKeys(plugin);
+        var committed = _query.GetNativeFormKeys(plugin, ResolveOrigin(plugin));
         var (added, removed) = _changes.GetPendingNativeFormKeyChanges(plugin, ResolveOrigin(plugin));
         if (added.Count == 0 && removed.Count == 0) return committed;
 

@@ -142,7 +142,7 @@ public sealed class SessionManagerLoadExplicitTests
             inner.CountRecordsForPlugin(tableName, plugin, origin);
         public string? FindRecordType(string formKey) => inner.FindRecordType(formKey);
         public RecordLookupEntry? ResolveFormKey(string formKey) => inner.ResolveFormKey(formKey);
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin) => inner.GetNativeFormKeys(plugin);
+        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => inner.GetNativeFormKeys(plugin, origin);
         public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset, string? origin = null) =>
             inner.SearchRecords(tableNames, plugin, search, limit, offset, origin);
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>

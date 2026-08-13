@@ -109,8 +109,8 @@ public sealed class RecordQueryService(
     public string? GetRecordType(string formKey) =>
         RequireRepository().FindRecordType(formKey);
 
-    public IReadOnlyList<string> GetNativeFormKeys(string plugin) =>
-        RequireRepository().GetNativeFormKeys(plugin);
+    public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) =>
+        RequireRepository().GetNativeFormKeys(plugin, origin);
 
     public CompareResult? GetCompare(string formKey)
     {

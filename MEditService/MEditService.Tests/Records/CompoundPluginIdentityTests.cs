@@ -95,6 +95,34 @@ public class CompoundPluginIdentityTests
         Assert.Equal(1, repo.CountRecordsForPlugin("npc_", "Shared.esp", "ModB"));
     }
 
+    // #296 / ADR-0036: GetNativeFormKeys' per-table UNION filtered by plugin filename alone. Unlike
+    // the fixtures above, this needs the two origins to hold genuinely *different* native FormKey
+    // sets (BuildSharedFilenameFixture's single first-slot NPC lands both origins on the identical
+    // FormKey, which can't distinguish a filter bug from a working one) — ModA gets one NPC, ModB
+    // gets that same first NPC plus a second, so an origin-scoped read must see fewer FormKeys than
+    // an unscoped one.
+    [Fact]
+    public void TwoOrigins_SameFilenameDifferentNativeFormKeys_GetNativeFormKeys_ScopesToRequestedOrigin()
+    {
+        var modA = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
+        var sharedFirstKey = modA.Npcs.AddNew("First").FormKey;
+        var modB = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
+        modB.Npcs.AddNew("First");
+        var secondKey = modB.Npcs.AddNew("SecondOnlyInModB").FormKey;
+
+        using var repo = OpenRepo();
+        repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
+        repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
+
+        var modAKeys = repo.GetNativeFormKeys("Shared.esp", "ModA");
+        var modBKeys = repo.GetNativeFormKeys("Shared.esp", "ModB");
+
+        Assert.Single(modAKeys);
+        Assert.Equal(sharedFirstKey.ToString(), modAKeys[0]);
+        Assert.Equal(2, modBKeys.Count);
+        Assert.Contains(secondKey.ToString(), modBKeys);
+    }
+
     // #296 / ADR-0036: GetRecords' outer WHERE filtered by plugin filename alone, and RecordSummary
     // carried no Origin at all — so a listing scoped to one filename silently merged both origins'
     // rows with no way to tell them apart, the same class of bug the worldspace tree reads had.

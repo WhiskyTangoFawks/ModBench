@@ -16,7 +16,10 @@ public interface IRecordQueryService
     // neighboring GetVmad/GetConditions/GetPlacement calls.
     RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin);
     string? GetRecordType(string formKey);
-    IReadOnlyList<string> GetNativeFormKeys(string plugin);
+    // origin (#296 / ADR-0036, required): caller-supplied, same reasoning as GetRecordForPlugin's —
+    // EditOrchestrator (the only caller) already resolves it via ResolveOrigin right alongside the
+    // neighboring GetPendingNativeFormKeyChanges call.
+    IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin);
     CompareResult? GetCompare(string formKey);
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);

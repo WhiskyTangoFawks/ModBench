@@ -706,17 +706,18 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             : new RecordLookupEntry(reader.GetString(0), NullableEditorId());
     }
 
-    public IReadOnlyList<string> GetNativeFormKeys(string plugin)
+    public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin)
     {
         var tables = RequireSchemas().Keys.Where(t => t != HeaderIndexer.TableName).ToList();
         if (tables.Count == 0) return [];
 
         var union = string.Join("\nUNION ALL\n",
-            tables.Select(t => $"SELECT form_key FROM \"{t}\" WHERE plugin = $1"));
+            tables.Select(t => $"SELECT form_key FROM \"{t}\" WHERE plugin = $1 AND origin = $2"));
 
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT DISTINCT form_key FROM ({union})";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         using var reader = cmd.ExecuteReader();
 
         var result = new List<string>();

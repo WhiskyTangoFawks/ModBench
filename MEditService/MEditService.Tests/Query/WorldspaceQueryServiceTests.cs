@@ -35,7 +35,7 @@ public class WorldspaceQueryServiceTests
         public int CountRecordsForPlugin(string t, string p, string origin) => 0;
         public string? FindRecordType(string fk) => null;
         public RecordLookupEntry? ResolveFormKey(string fk) => null;
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin) => [];
+        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => [];
         public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> t, string? p, string? s, int l, int o, string? origin = null) => new([], 0);
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferences(string fk) => [];
