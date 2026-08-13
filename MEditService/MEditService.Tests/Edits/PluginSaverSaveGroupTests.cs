@@ -278,12 +278,61 @@ public sealed class PluginSaverSaveGroupTests
         Assert.NotEmpty(changes.GetChanges(memberChangeId: group.Id)); // early exit preserves pending changes
     }
 
+    // #306 AC2: a plugin absent from Plugins entirely is not a legitimate write target either — the
+    // null lookup must refuse up front, not fall through as "not immutable" and proceed to a save
+    // that would only fail later (SessionManager.RequirePlugin's KeyNotFoundException).
+    [Fact]
+    public async Task Save_PluginAbsentFromSession_ReturnsImmutablePluginResult()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        var group = StageGroupChange(changes, "Ghost.esp");
+        var session = new StubSession(); // default session's known plugins are A.esp/B.esp — Ghost.esp is neither
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+
+        var result = await saver.Save(group.Id);
+
+        var immutable = Assert.IsType<SaveGroupResult.ImmutablePlugin>(result);
+        Assert.Equal("Ghost.esp", immutable.Plugin);
+        Assert.NotEmpty(changes.GetChanges(memberChangeId: group.Id)); // early exit preserves pending changes
+    }
+
+    // #306 AC3: the mis-hit this ticket removes — an unscoped FirstOrDefault lands on whichever
+    // entry sits first in Plugins, and an unlisted copy is always immutable. Not reachable through
+    // the real GameSession/SessionManager: unlisted copies are only ever appended to Plugins after
+    // a completed, blocking session load, so a first-match happens to be correct there today —
+    // this test constructs the reversed order directly, which is the only way to pin the scoping
+    // down as an invariant rather than an accident of append order.
+    [Fact]
+    public async Task Save_UnlistedCopyListedFirst_StillSavesTheLoadOrderCopy()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        var group = StageGroupChange(changes, "Shared.esp");
+        var session = new StubSession();
+        session.SetSession(new StubGameSession([
+            MakeUnlistedPlugin("Shared.esp", "ModB"),
+            MakeLoadOrderPlugin("Shared.esp", "ModA"),
+        ]));
+        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+
+        var result = await saver.Save(group.Id);
+
+        Assert.IsType<SaveGroupResult.Saved>(result);
+        File.Delete(session.LastDestPath!);
+    }
+
     // --- helpers ---
 
     private static SaveResult EmptySaveResult() => new(string.Empty, [], [], [], []);
 
     private static PluginMetadata MakeImmutablePlugin(string name) =>
         new(name, string.Empty, 0, false, true, [], 0, IsImmutable: true, Origin: "Data");
+
+    private static PluginMetadata MakeLoadOrderPlugin(string name, string origin) =>
+        new(name, string.Empty, 0, false, true, [], 0, IsImmutable: false, Origin: origin, InLoadOrder: true);
+
+    private static PluginMetadata MakeUnlistedPlugin(string name, string origin) =>
+        new(name, string.Empty, 0, false, true, [], 0,
+            IsImmutable: true, Origin: origin, Participates: false, InLoadOrder: false);
 
     private sealed class StubSession : ISessionManager, IDisposable
     {
@@ -321,7 +370,17 @@ public sealed class PluginSaverSaveGroupTests
 
         public void Dispose() => Session!.Dispose();
 
-        public IGameSession? Session { get; private set; } = new StubGameSession([]);
+        // #306: every test in this file that doesn't call SetSession saves against "A.esp" or
+        // "B.esp" (StageGroupChange/StageCrossPluginComponent), so the default session carries
+        // load-order, mutable metadata for exactly those two names — otherwise LoadOrderPlugin's
+        // null-means-refuse guard would refuse every one of them, which isn't what those tests are
+        // about. Tests that care about immutability or session membership call SetSession with
+        // their own plugin list instead (Save_ImmutablePlugin_ReturnsImmutablePluginResult,
+        // Save_PluginAbsentFromSession_ReturnsImmutablePluginResult, etc.).
+        public IGameSession? Session { get; private set; } = new StubGameSession([
+            MakeLoadOrderPlugin("A.esp", "Data"),
+            MakeLoadOrderPlugin("B.esp", "Data"),
+        ]);
         public IRecordReader? Repository => throw new NotSupportedException();
         // #274: these stubs never load, so they are always in the no-session state.
         public SessionStatus Status => SessionStatus.None;

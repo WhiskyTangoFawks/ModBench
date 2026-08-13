@@ -26,15 +26,14 @@ public sealed class PluginSaver(IPendingChangeService changes, ISessionManager s
         var s = session.Session;
         if (s != null)
         {
-            foreach (var plugin in changes.GetChanges(memberChangeId: memberChangeId)
-                         .Select(c => c.Plugin)
-                         .Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                var meta = s.Plugins.FirstOrDefault(p =>
-                    p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase));
-                if (meta?.IsImmutable == true)
-                    return new SaveGroupResult.ImmutablePlugin(plugin);
-            }
+            // #306: null (no load-order member of this name) refuses here too — proceeding would
+            // only fail later, inside SessionManager.RequirePlugin's KeyNotFoundException.
+            var refusedPlugin = changes.GetChanges(memberChangeId: memberChangeId)
+                .Select(c => c.Plugin)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault(plugin => s.LoadOrderPlugin(plugin) is not { IsImmutable: false });
+            if (refusedPlugin != null)
+                return new SaveGroupResult.ImmutablePlugin(refusedPlugin);
         }
 
         // #272 / ADR-0036: byColumn is keyed by the compound column identity, not the bare plugin —

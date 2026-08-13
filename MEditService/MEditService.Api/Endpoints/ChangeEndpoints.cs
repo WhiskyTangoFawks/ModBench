@@ -250,8 +250,12 @@ public static class ChangeEndpoints
 
         var decodedPlugin = Uri.UnescapeDataString(plugin);
 
-        var pluginMeta = s.Plugins.FirstOrDefault(p =>
-            p.Name.Equals(decodedPlugin, StringComparison.OrdinalIgnoreCase));
+        // #306: LoadOrderPlugin's null also covers "present in the session but not in the load
+        // order" (e.g. a shadowed/unlisted copy), not only "never loaded under this name at all" —
+        // both answer 404 here. That's a touch misleading for the former (the user can see the
+        // plugin; it just isn't a write target), but tolerable for now because neither this route
+        // nor CreatePlacedRecord has a frontend caller yet. Revisit the status split if one arrives.
+        var pluginMeta = s.LoadOrderPlugin(decodedPlugin);
         if (pluginMeta == null) return Results.NotFound();
         if (pluginMeta.IsImmutable)
             return Results.Problem($"'{decodedPlugin}' is a base-game plugin and cannot be edited.", statusCode: 409);
@@ -290,8 +294,11 @@ public static class ChangeEndpoints
         var decodedPlugin = Uri.UnescapeDataString(plugin);
         var decodedCellFormKey = Uri.UnescapeDataString(cellFormKey);
 
-        var pluginMeta = s.Plugins.FirstOrDefault(p =>
-            p.Name.Equals(decodedPlugin, StringComparison.OrdinalIgnoreCase));
+        // #306: same null-handling as CreateRecord above — LoadOrderPlugin's null also covers a
+        // session-known plugin outside the load order (e.g. a shadowed/unlisted copy), not only
+        // "never loaded", and both answer 404 here. Tolerable only because this route has no
+        // frontend caller yet; revisit the status split if one arrives.
+        var pluginMeta = s.LoadOrderPlugin(decodedPlugin);
         if (pluginMeta == null) return Results.NotFound();
         if (pluginMeta.IsImmutable)
             return Results.Problem($"'{decodedPlugin}' is a base-game plugin and cannot be edited.", statusCode: 409);
