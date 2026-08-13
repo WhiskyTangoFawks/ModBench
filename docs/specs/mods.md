@@ -430,7 +430,10 @@ nor Linux's. Two translations are mandatory:
 - **Wine drive letters.** `Z:` maps to the filesystem root, but **`C:` maps to the prefix's
   `drive_c` and must not be stripped to `/`.** `normalizeGamePath` strips *any* drive letter,
   which is correct only for `Z:`; it is applied solely to `gamePath` today, and consuming
-  executables — which routinely carry real `C:` tool paths — exposes that.
+  executables — which routinely carry real `C:` tool paths — exposes that. The strip is
+  anchored to the start of the path, so a colon inside a folder name (`mods/A:B/…`) survives
+  intact; it takes the platform as an explicit argument rather than reading `process.platform`,
+  and on `win32` returns the path untouched.
 - **Staging-relative binaries only resolve under usvfs.** An entry may point at
   `mods/<Mod>/root/<tool>.exe`, which usvfs makes appear inside the game directory but which
   is a plain staging path to Modbench. Such an entry is remapped to its deployed location, or
