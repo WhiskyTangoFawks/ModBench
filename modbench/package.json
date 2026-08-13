@@ -842,6 +842,7 @@
     "watch": "node esbuild.mjs --watch",
     "generate-api": "openapi-typescript http://localhost:5172/swagger/v1/swagger.json -o src/medit/generated/api.ts",
     "test:unit": "vitest run",
+    "pretest:integration": "node esbuild.mjs",
     "test:integration": "tsc -p tsconfig.integration.json && vscode-test",
     "lint": "eslint src webview/src",
     "prepackage": "cp ../LICENSE ./LICENSE",
