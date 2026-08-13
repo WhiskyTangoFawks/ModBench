@@ -30,8 +30,13 @@ public sealed class DuplicateFilenameSessionApiTests(LoadedApiFixture<TestPlugin
     // makes this the delta-comparison case the ticket is named for rather than two unrelated files.
     private static ScatteredFixtureData BuildTwoCopies() =>
         new PluginFixtureBuilder("api-duplicate-filename")
-            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
-            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModB"), origin: "ModB")
+            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA").Name = "NameFromModA", origin: "ModA")
+            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModB").Name = "NameFromModB", origin: "ModB")
+            // An ordinary editable plugin mastering Shared.esp, so a copy-as-override out of
+            // either column has somewhere legitimate to land.
+            .WithPlugin("Target.esp", (mod, _) =>
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Shared.esp") }),
+                origin: "TargetMod")
             .BuildScattered();
 
     /// <summary>
@@ -41,13 +46,13 @@ public sealed class DuplicateFilenameSessionApiTests(LoadedApiFixture<TestPlugin
     /// </summary>
     private async Task LoadWinningCopyThenShadowedCopy(ScatteredFixtureData fx)
     {
-        var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var shadowed = fx.Plugins.Single(p => p.Origin == "ModB");
+        var loadOrder = fx.Plugins.Where(p => p.Origin != "ModB");
 
         var load = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
             gameDirectory = fx.GameDirectory,
-            plugins = new[] { new { name = winner.Name, path = winner.Path, origin = winner.Origin, participates = true } },
+            plugins = loadOrder.Select(p => new { name = p.Name, path = p.Path, origin = p.Origin, participates = true }),
             gameRelease = "Fallout4",
         });
         load.EnsureSuccessStatusCode();
@@ -132,6 +137,31 @@ public sealed class DuplicateFilenameSessionApiTests(LoadedApiFixture<TestPlugin
         // is exactly as unconflicted as it was before the shadowed copy was loaded — which is the
         // whole claim, that loading one changes no classification already on screen.
         Assert.Equal("OnlyOne", compare.GetProperty("conflictAll").GetString());
+    }
+
+    [Fact]
+    public async Task CopyAsOverrideFromTheShadowedColumn_CopiesThatColumnsContent()
+    {
+        using var fx = BuildTwoCopies();
+        await LoadWinningCopyThenShadowedCopy(fx);
+
+        // Reading a shadowed copy is not editing it (ADR-0036), so copy-as-override *out* of its
+        // column is allowed — and must take that column's record, not whichever copy a filename
+        // happens to resolve to. This is the write-path half of "every action invoked on one
+        // copy's column affects only that copy".
+        var copy = await _client.PostAsJsonAsync(
+            $"/records/{Uri.EscapeDataString("000800:Shared.esp")}/copy-to/{Uri.EscapeDataString("Target.esp")}",
+            new { source = "user", sourcePlugin = "Shared.esp", sourceOrigin = "ModB" });
+        copy.EnsureSuccessStatusCode();
+
+        var staged = await copy.Content.ReadFromJsonAsync<JsonElement>();
+        // EditorID is a column of its own, not a reflected field, so it never appears among staged
+        // changes — the copies carry a distinguishing NPC Name for exactly this assertion.
+        var name = staged.EnumerateArray()
+            .Single(c => c.GetProperty("fieldPath").GetString() == "name")
+            .GetProperty("newValue").GetString();
+
+        Assert.Equal("NameFromModB", name);
     }
 
     [Fact]

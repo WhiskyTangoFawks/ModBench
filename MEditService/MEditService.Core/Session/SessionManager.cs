@@ -297,8 +297,13 @@ public sealed class SessionManager(
         {
             if (_session == null)
                 throw new InvalidOperationException(NoSessionMessage);
+            // #34: load-order members only, for the same reason PluginOriginResolver scopes that
+            // way — this resolves the *file a write lands on* (SavePlugin/PreparePluginSave/
+            // ReindexPlugin all route through here), and a plugin outside the load order is
+            // read-only. Without the scope a save could pick a shadowed copy's path off a bare
+            // filename and write to a file the game does not load.
             var meta = _session.Plugins.FirstOrDefault(p =>
-                string.Equals(p.Name, plugin, StringComparison.OrdinalIgnoreCase)) ?? throw new KeyNotFoundException($"Plugin '{plugin}' not found in session.");
+                p.InLoadOrder && string.Equals(p.Name, plugin, StringComparison.OrdinalIgnoreCase)) ?? throw new KeyNotFoundException($"Plugin '{plugin}' not found in session.");
             return (meta, _repository!, _gameRelease);
         }
     }
