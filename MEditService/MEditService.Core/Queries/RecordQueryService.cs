@@ -48,18 +48,22 @@ public sealed class RecordQueryService(
     {
         var repository = RequireRepository();
         var schemas = RequireSchemas();
+        // #296: wire-facing (RecordEndpoints' /records only ever supplies a bare plugin filename),
+        // so origin is resolved server-side rather than added as a new query parameter — same
+        // reasoning as WorldspaceQueryService. Null when plugin itself is null (nothing to resolve).
+        var origin = plugin == null ? null : PluginOriginResolver.Resolve(_session.Session, plugin);
 
         PagedResult<RecordSummary> committed;
         if (type != null)
         {
             if (!schemas.ContainsKey(type))
                 return new PagedResult<RecordSummary>([], 0);
-            committed = repository.GetRecords(type, plugin, search, limit, offset);
+            committed = repository.GetRecords(type, plugin, search, limit, offset, origin);
         }
         else
         {
             committed = repository.SearchRecords(
-                [.. schemas.Keys.Where(t => t != HeaderTableName)], plugin, search, limit, offset);
+                [.. schemas.Keys.Where(t => t != HeaderTableName)], plugin, search, limit, offset, origin);
         }
 
         if (plugin == null || offset > 0)
@@ -75,9 +79,13 @@ public sealed class RecordQueryService(
 
         var loadOrderIndex = RequireSession().Plugins
             .FirstOrDefault(p => p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase))?.LoadOrderIndex ?? -1;
+        // plugin is non-null past the guard above, so this is the same resolution as `origin`
+        // above but recomputed non-nullably rather than captured — avoids the closure carrying a
+        // string? the compiler can't prove non-null at this point.
+        var stagedOrigin = PluginOriginResolver.Resolve(_session.Session, plugin);
 
         var stagedSummaries = staged
-            .ConvertAll(s => new RecordSummary(s.FormKey, plugin, loadOrderIndex, IsWinner: false, EditorId: null));
+            .ConvertAll(s => new RecordSummary(s.FormKey, plugin, loadOrderIndex, IsWinner: false, EditorId: null, Origin: stagedOrigin));
 
         return new PagedResult<RecordSummary>(
             [.. committed.Items, .. stagedSummaries],

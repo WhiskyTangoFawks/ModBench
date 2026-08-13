@@ -28,12 +28,17 @@ public record PluginResponse(
             masterIssues ?? []);
 }
 
+// Origin (#296 / ADR-0036): the mod folder that provided this row's physical file, or a reserved
+// PluginOrigin value — additive alongside Plugin, same shape as RecordDetail.Origin (#272). Without
+// it, two same-filename plugins listed together (GetRecords/SearchRecords never filtered origin,
+// only plugin) were indistinguishable rows.
 public record RecordSummary(
     string FormKey,
     string Plugin,
     int LoadOrderIndex,
     bool IsWinner,
-    string? EditorId);
+    string? EditorId,
+    string Origin);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
 

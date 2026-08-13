@@ -129,8 +129,8 @@ public sealed class SessionManagerLoadExplicitTests
             inner.SetPluginParticipation(plugin, participates, origin);
         public void Dispose() => inner.Dispose();
 
-        public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset) =>
-            inner.GetRecords(tableName, plugin, search, limit, offset);
+        public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null) =>
+            inner.GetRecords(tableName, plugin, search, limit, offset, origin);
         public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly) =>
             inner.GetRecord(tableName, formKey, plugin, winnerOnly);
         public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey) =>
@@ -143,8 +143,8 @@ public sealed class SessionManagerLoadExplicitTests
         public string? FindRecordType(string formKey) => inner.FindRecordType(formKey);
         public RecordLookupEntry? ResolveFormKey(string formKey) => inner.ResolveFormKey(formKey);
         public IReadOnlyList<string> GetNativeFormKeys(string plugin) => inner.GetNativeFormKeys(plugin);
-        public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset) =>
-            inner.SearchRecords(tableNames, plugin, search, limit, offset);
+        public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset, string? origin = null) =>
+            inner.SearchRecords(tableNames, plugin, search, limit, offset, origin);
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
             inner.GetPluginsWithMatchingRecords(tableNames);
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);

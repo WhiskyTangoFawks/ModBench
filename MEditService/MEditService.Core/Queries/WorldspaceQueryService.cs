@@ -27,7 +27,10 @@ public sealed class WorldspaceQueryService(ISessionManager session, IPendingChan
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin)
     {
         var repo = RequireRepository();
-        return [.. repo.GetRecords("wrld", plugin, null, WorldspaceListLimit, 0).Items.Select(r => new WorldspaceSummary(r.FormKey, r.EditorId))];
+        // #296: same class of bug as the other worldspace-tree reads — without an origin filter, two
+        // same-filename plugins' worldspace lists silently merged into one under this plugin name.
+        return [.. repo.GetRecords("wrld", plugin, null, WorldspaceListLimit, 0, ResolveOrigin(plugin))
+            .Items.Select(r => new WorldspaceSummary(r.FormKey, r.EditorId))];
     }
 
     public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey)

@@ -1345,8 +1345,8 @@ public sealed class RecordQueryServiceTests : IDisposable
             return inner.GetRecord(tableName, formKey, plugin, winnerOnly);
         }
 
-        public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset) =>
-            inner.GetRecords(tableName, plugin, search, limit, offset);
+        public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null) =>
+            inner.GetRecords(tableName, plugin, search, limit, offset, origin);
 
         public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey) =>
             inner.GetAllOverrides(tableName, formKey);
@@ -1363,8 +1363,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         public IReadOnlyList<string> GetNativeFormKeys(string plugin) =>
             inner.GetNativeFormKeys(plugin);
 
-        public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset) =>
-            inner.SearchRecords(tableNames, plugin, search, limit, offset);
+        public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset, string? origin = null) =>
+            inner.SearchRecords(tableNames, plugin, search, limit, offset, origin);
 
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
             inner.GetPluginsWithMatchingRecords(tableNames);

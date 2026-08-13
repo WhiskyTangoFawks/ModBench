@@ -6,7 +6,13 @@ namespace MEditService.Core.Records;
 
 public interface IRecordReader
 {
-    PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset);
+    // origin (#296 / ADR-0036): nullable and independent of plugin, unlike GetWorldspaceCells'/
+    // GetInteriorCells'/GetCellReferences' required origin — this one is a *filter*, like
+    // DuckDbPendingChangeService.BuildFilter's origin, not an identity field: plugin itself is
+    // optional here (browsing every plugin's records is a legitimate call), so origin defaults to
+    // "no additional constraint" (trailing, like BuildFilter's own origin) rather than forcing every
+    // existing plugin/search/limit/offset call site to change just to keep compiling.
+    PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null);
     RecordDetail? GetRecord(string tableName, string formKey, string? plugin, bool winnerOnly);
     IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey);
 
@@ -31,7 +37,8 @@ public interface IRecordReader
     // Form keys of records native to the plugin (the FormKey's own ModKey == plugin), across all
     // real record tables. Used for ESL-eligibility validation (issue #85).
     IReadOnlyList<string> GetNativeFormKeys(string plugin);
-    PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset);
+    // origin: same nullable-filter reasoning as GetRecords' above.
+    PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset, string? origin = null);
     IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
 

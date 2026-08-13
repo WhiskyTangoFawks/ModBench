@@ -56,6 +56,29 @@ public class CompoundPluginIdentityTests
         Assert.Contains(overrides, o => o.EditorId == "FromModB");
     }
 
+    // #296 / ADR-0036: GetRecords' outer WHERE filtered by plugin filename alone, and RecordSummary
+    // carried no Origin at all — so a listing scoped to one filename silently merged both origins'
+    // rows with no way to tell them apart, the same class of bug the worldspace tree reads had.
+    // origin is a nullable *filter* here (unlike the worldspace tree's required origin) because
+    // plugin itself is optional on GetRecords — browsing every plugin's records is a legitimate
+    // call with no origin to supply.
+    [Fact]
+    public void TwoOrigins_SameFilenameSameFormKey_GetRecords_FiltersToRequestedOriginAndSurfacesIt()
+    {
+        var (modA, modB, npcKey) = BuildSharedFilenameFixture();
+
+        using var repo = OpenRepo();
+        repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
+        repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
+
+        var modAResult = repo.GetRecords("npc_", "Shared.esp", null, 100, 0, origin: "ModA");
+
+        var item = Assert.Single(modAResult.Items);
+        Assert.Equal(npcKey.ToString(), item.FormKey);
+        Assert.Equal("FromModA", item.EditorId);
+        Assert.Equal("ModA", item.Origin);
+    }
+
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_NonParticipatingOriginNeverWinsViaOtherOriginsParticipation()
     {

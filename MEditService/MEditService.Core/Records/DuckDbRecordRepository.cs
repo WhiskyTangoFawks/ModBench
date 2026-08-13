@@ -273,9 +273,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     // --- Queries (absorbed from RecordQueryService, with DuckDBParameter throughout) ---
 
-    public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset)
+    public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null)
     {
-        var (where, paramValues) = BuildWhere(plugin, search, _filterActive);
+        var (where, paramValues) = BuildWhere(plugin, search, _filterActive, origin);
 
         var countSql = $"SELECT COUNT(*) FROM \"{tableName}\"{where}";
         using var countCmd = Connection.CreateCommand();
@@ -284,7 +284,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         var total = (long)countCmd.ExecuteScalar()!;
 
         var dataSql = $"""
-            SELECT form_key, plugin, load_order_idx, is_winner, editor_id
+            SELECT form_key, plugin, load_order_idx, is_winner, editor_id, origin
             FROM "{tableName}"{where}
             ORDER BY editor_id
             LIMIT {limit} OFFSET {offset}
@@ -726,13 +726,13 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return result;
     }
 
-    public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset)
+    public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset, string? origin = null)
     {
         if (tableNames.Count == 0)
             return new PagedResult<RecordSummary>([], 0);
 
-        var (where, paramValues) = BuildWhere(plugin, search, _filterActive);
-        const string cols = "form_key, plugin, load_order_idx, is_winner, editor_id";
+        var (where, paramValues) = BuildWhere(plugin, search, _filterActive, origin);
+        const string cols = "form_key, plugin, load_order_idx, is_winner, editor_id, origin";
         var union = string.Join("\nUNION ALL\n",
             tableNames.Select(t => $"SELECT {cols} FROM \"{t}\"{where}"));
 
@@ -761,7 +761,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
         new(reader.GetString(0), reader.GetString(1), reader.GetInt32(2),
-            reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4));
+            reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5));
 
     private static RecordDetail ReadDetail(DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
     {
@@ -799,7 +799,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             ? ""
             : ", " + string.Join(", ", schema.RecordColumns.Select(c => $"\"{c.Name}\""));
 
-    private static (string where, List<string> paramValues) BuildWhere(string? plugin, string? search, bool filterActive = false)
+    // origin (#296 / ADR-0036): nullable and independent of plugin — a *filter*, not an identity
+    // field, mirroring DuckDbPendingChangeService.BuildFilter's own origin. Defaults to "no
+    // constraint" so a plugin-only or filter-less call keeps returning every origin's rows, same as
+    // before this parameter existed.
+    private static (string where, List<string> paramValues) BuildWhere(string? plugin, string? search, bool filterActive = false, string? origin = null)
     {
         var conditions = new List<string>();
         var values = new List<string>();
@@ -808,6 +812,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         {
             conditions.Add($"plugin = ${values.Count + 1}");
             values.Add(plugin);
+        }
+        if (origin != null)
+        {
+            conditions.Add($"origin = ${values.Count + 1}");
+            values.Add(origin);
         }
         if (search != null)
         {
