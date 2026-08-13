@@ -568,6 +568,14 @@ a behaviour change: existing VMAD and Condition editing, staging, and conflict b
 preserved end to end (verified by porting their prior test suites onto the unified tree), with the
 handful of deliberate, called-out differences below.
 
+**Each subrecord reaches the tree from exactly one of those three sources.** Schema reflection
+excludes both condition-shaped properties (#178) and the virtual-machine-adapter property (#260)
+from a record type's reflected columns, because the `conditions`/`vmad` payloads already carry
+them in decoded form — reflecting them again would put the same subrecord in the grid twice, once
+decoded and once as an opaque blob. Both exclusions are keyed on the game's own types rather than
+on property names, so a game whose assembly has no condition codec or no VMAD interface excludes
+nothing.
+
 **Two frictions the adapters exist to paper over**, both additive extensions to the shared node
 shape rather than a second shape:
 
