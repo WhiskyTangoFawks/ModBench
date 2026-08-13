@@ -70,7 +70,11 @@ public sealed class RecordQueryService(
             return committed;
 
         var committedKeys = committed.Items.Select(r => r.FormKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var staged = _changes.GetStagedFormKeys(plugin, type)
+        // #296 review: staged-only records must scope to the same origin as the committed query
+        // above — GetStagedFormKeys has accepted an optional origin filter since #272; omitting it
+        // here (as this call originally did) let two same-filename origins' staged-only records
+        // merge through this path even though the committed side was already correctly scoped.
+        var staged = _changes.GetStagedFormKeys(plugin, type, origin)
             .Where(s => !committedKeys.Contains(s.FormKey))
             .ToList();
 
@@ -79,13 +83,14 @@ public sealed class RecordQueryService(
 
         var loadOrderIndex = RequireSession().Plugins
             .FirstOrDefault(p => p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase))?.LoadOrderIndex ?? -1;
-        // plugin is non-null past the guard above, so this is the same resolution as `origin`
-        // above but recomputed non-nullably rather than captured — avoids the closure carrying a
-        // string? the compiler can't prove non-null at this point.
-        var stagedOrigin = PluginOriginResolver.Resolve(_session.Session, plugin);
 
+        // origin! : plugin is non-null past the guard above, and origin was resolved from that same
+        // plugin nullability check at its declaration (line above), so it is non-null here too — the
+        // compiler's flow analysis doesn't carry that correlation across the guard into this closure
+        // (confirmed: CS8604 without the forgiveness), hence this instead of a second
+        // PluginOriginResolver.Resolve call.
         var stagedSummaries = staged
-            .ConvertAll(s => new RecordSummary(s.FormKey, plugin, loadOrderIndex, IsWinner: false, EditorId: null, Origin: stagedOrigin));
+            .ConvertAll(s => new RecordSummary(s.FormKey, plugin, loadOrderIndex, IsWinner: false, EditorId: null, Origin: origin!));
 
         return new PagedResult<RecordSummary>(
             [.. committed.Items, .. stagedSummaries],
@@ -197,7 +202,12 @@ public sealed class RecordQueryService(
             .Where(x => x.Count > 0)
             .ToDictionary(x => x.Type, x => x.Count, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var recordType in _changes.GetStagedFormKeys(plugin)
+        // #296 review: scoped to the same resolved origin as the CountRecordsForPlugin loop above —
+        // GetStagedFormKeys has accepted an optional origin filter since #272; omitting it here (as
+        // this call originally did) let two same-filename origins' staged-only records merge into
+        // one plugin's record-type counts even though the committed side was already correctly
+        // scoped.
+        foreach (var recordType in _changes.GetStagedFormKeys(plugin, origin: origin)
             .Where(s => !counts.ContainsKey(s.RecordType)
                 || repository.GetRecord(s.RecordType, s.FormKey, plugin, origin, winnerOnly: false) == null)
             .Select(s => s.RecordType))

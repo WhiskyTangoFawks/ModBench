@@ -570,9 +570,13 @@ public sealed partial class EditOrchestrator(
     private List<string> RevertPendingCreateTargets(IReadOnlyList<(string FormKey, string Plugin)> createTargets)
     {
         var reverted = new List<string>();
-        foreach (var (formKey, _) in createTargets)
+        foreach (var (formKey, plugin) in createTargets)
         {
-            var createChangeId = _changes.GetChanges(formKey: formKey)
+            // #296 review: scoped to the target's own resolved origin — GetChanges' origin filter
+            // was silently unused here, so two same-filename origins' pending creates (once #34
+            // lets both exist in a session) would collide on formKey alone and this could revert
+            // the wrong origin's create.
+            var createChangeId = _changes.GetChanges(plugin: plugin, formKey: formKey, origin: ResolveOrigin(plugin))
                 .FirstOrDefault(c => c.ChangeType == PendingChangeConstants.CreateChangeType)?.Id;
             if (createChangeId == null) continue;
 

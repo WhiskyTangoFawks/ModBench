@@ -1159,6 +1159,44 @@ public sealed class RecordQueryServiceTests : IDisposable
         }
     }
 
+    // #296 review: GetPluginRecordTypes' committed-side CountRecordsForPlugin call is correctly
+    // scoped to the resolved origin, but its staged-side GetStagedFormKeys call originally omitted
+    // origin entirely — every other staged-record fixture in this file (including the three above)
+    // stages at Origin: "Data", which is exactly the elided default the issue warns about, so none
+    // of them could tell a working filter from a missing one. This fixture stages a *second*,
+    // distinct FormKey under a real non-Data origin ("ModA") for the same plugin filename; the
+    // session's own resolved origin for "Override.esp" is "Data" (manager.Load's implicit path), so
+    // only the Data-origin staged record should count.
+    [Fact]
+    public void GetPluginRecordTypes_StagedRecord_ScopesToResolvedOrigin()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-staged-types-origin")
+            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
+            .WithPlugin("Override.esp")
+            .Build();
+        using (data)
+        {
+            var reflector = SharedSchemaReflector.Instance;
+            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var changes = DuckDbTestFactory.MakePendingChangeService();
+            changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
+                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
+                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
+            changes.Upsert(new PendingChangeUpsert("001234:Override.esp", "Override.esp", "npc_",
+                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
+                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "ModA"));
+            var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
+
+            var result = svc.GetPluginRecordTypes("Override.esp");
+
+            var npc = Assert.Single(result, r => r.Type == "npc_");
+            Assert.Equal(1, npc.Count);
+        }
+    }
+
     [Fact]
     public void GetPluginRecordTypes_StagedAlreadyCommittedRecordIsNotCounted()
     {
@@ -1219,6 +1257,45 @@ public sealed class RecordQueryServiceTests : IDisposable
             Assert.Equal("Override.esp", result.Items[0].Plugin);
             Assert.False(result.Items[0].IsWinner);
             Assert.Equal(1, result.Items[0].LoadOrderIndex); // Override.esp is second plugin (index 1)
+        }
+    }
+
+    // #296 review: GetRecords' committed-side repository call is correctly scoped to the resolved
+    // origin, but its staged-side GetStagedFormKeys call originally omitted origin entirely — every
+    // other staged-record fixture in this file (including the one above) stages at Origin: "Data",
+    // exactly the elided default the issue warns about, so none of them could tell a working filter
+    // from a missing one. This fixture stages a *second*, distinct FormKey under a real non-Data
+    // origin ("ModA") for the same plugin filename; the session's own resolved origin for
+    // "Override.esp" is "Data" (manager.Load's implicit path), so only the Data-origin staged record
+    // should surface.
+    [Fact]
+    public void GetRecords_ByPlugin_StagedRecord_ScopesToResolvedOrigin()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-staged-records-origin")
+            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
+            .WithPlugin("Override.esp")
+            .Build();
+        using (data)
+        {
+            var reflector = SharedSchemaReflector.Instance;
+            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var changes = DuckDbTestFactory.MakePendingChangeService();
+            changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
+                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
+                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
+            changes.Upsert(new PendingChangeUpsert("001234:Override.esp", "Override.esp", "npc_",
+                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
+                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "ModA"));
+            var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
+
+            var result = svc.GetRecords(type: "npc_", plugin: "Override.esp", search: null, limit: 100, offset: 0);
+
+            Assert.Equal(1, result.Total);
+            Assert.Single(result.Items);
+            Assert.Equal(npcKey.ToString(), result.Items[0].FormKey);
         }
     }
 
