@@ -203,9 +203,24 @@ public static class ChangeEndpoints
         };
     }
 
-    private static IResult BulkDeleteChanges(
+    // #300 / ADR-0036: `plugin` alone doesn't identify which copy to revert once a session can hold
+    // two plugins sharing a filename (#34) — resolved server-side via the shared
+    // PluginOriginResolver, same as GetPluginRecordTypes/GetCellReferences (#296), since no wire
+    // caller has ever had an origin to supply on this route. Only meaningful when a plugin is
+    // named: a bare formKey-only bulk revert has no plugin to resolve an origin from and keeps
+    // reverting across every plugin/origin, as before.
+    //
+    // Resolved only when a session is loaded. PluginOriginResolver falls back to
+    // PluginOrigin.DataDirectory when given a null session, which would make "no session loaded"
+    // indistinguishable from "this plugin is at the Data origin" — pending_changes outlives its
+    // session (Unload never clears it, and the service is a DI singleton), so a plugin staged
+    // under a real mod origin with no session loaded would silently filter to zero rows instead of
+    // reverting. Passing origin: null instead restores the pre-#300 filename-only scope exactly,
+    // which is the right answer when there is no load order to resolve an origin against.
+    internal static IResult BulkDeleteChanges(
         [FromQuery] string? plugin,
         [FromQuery] string? formKey,
+        ISessionManager session,
         IPendingChangeService changes,
         ILoggerFactory loggerFactory)
     {
@@ -215,7 +230,10 @@ public static class ChangeEndpoints
             return Results.Problem("At least one of 'plugin' or 'formKey' must be specified.", statusCode: 400);
         var decodedPlugin = plugin != null ? Uri.UnescapeDataString(plugin) : null;
         var decodedFormKey = formKey != null ? Uri.UnescapeDataString(formKey) : null;
-        return Results.Ok(changes.Revert(decodedPlugin, decodedFormKey));
+        var origin = decodedPlugin != null && session.Session != null
+            ? PluginOriginResolver.Resolve(session.Session, decodedPlugin)
+            : null;
+        return Results.Ok(changes.Revert(decodedPlugin, decodedFormKey, origin));
     }
 
     private static IResult CreateRecord(
