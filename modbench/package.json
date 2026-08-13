@@ -842,6 +842,7 @@
     "watch": "node esbuild.mjs --watch",
     "generate-api": "openapi-typescript http://localhost:5172/swagger/v1/swagger.json -o src/medit/generated/api.ts",
     "test:unit": "vitest run",
+    "test:mutation": "stryker run",
     "pretest:integration": "node esbuild.mjs",
     "test:integration": "tsc -p tsconfig.integration.json && vscode-test",
     "lint": "eslint src webview/src",
@@ -850,6 +851,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

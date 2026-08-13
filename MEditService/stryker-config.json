@@ -15,7 +15,9 @@
       "break": 0
     },
     "mutate": [
-      "**/MEditService.Core/**/*.cs"
+      "**/MEditService.Core/**/*.cs",
+      "!**/MEditService.Core/Queries/RecordQueryService.cs",
+      "!**/MEditService.Core/Session/SessionStatus.cs"
     ],
     "ignore-methods": [
       "Log*"

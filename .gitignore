@@ -18,6 +18,8 @@ bethesda-plugin-editor/out/
 
 # Stryker mutation test reports (keep baseline/ tracked)
 MEditService/StrykerOutput/[0-9]*/
+modbench/reports/mutation/
+modbench/.stryker-tmp/
 
 # DuckDB cache
 *.duckdb

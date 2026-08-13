@@ -1,172 +1,161 @@
 #!/usr/bin/env bash
-# Run Stryker.NET and parse the results. Stryker output goes to a developer-visible
-# terminal window only — nothing is piped to the agent's context.
+# Run Stryker.NET and print only the parsed findings. Raw Stryker output goes to a log
+# file, never to stdout — the caller sees scope, report path, and survivors.
 #
 # Usage (from MEditService/):
-#   bash ../.claude/skills/mutation-test/run.sh
-#   bash ../.claude/skills/mutation-test/run.sh --all              # same scope (since disabled)
-#   bash ../.claude/skills/mutation-test/run.sh --file ConflictClassifier.cs   # since disabled, that file only
-#   bash ../.claude/skills/mutation-test/run.sh --diff-only        # narrow report to survivors on diffed lines
+#   bash ../.claude/skills/mutation-test/stryker/run.sh                    # vs since.target
+#   bash ../.claude/skills/mutation-test/stryker/run.sh --since <ref>      # explicit target
+#   bash ../.claude/skills/mutation-test/stryker/run.sh --all              # full corpus
+#   bash ../.claude/skills/mutation-test/stryker/run.sh --file Foo.cs      # one file
+#   bash ../.claude/skills/mutation-test/stryker/run.sh --diff-only        # narrow to diffed lines
 #
-# NOTE: there is no --mutant-ids / mutant-id option. Stryker.NET's config schema has no
-# such key (confirmed against the installed CLI's --help and a live rejection) — an
-# earlier version of this script's --mutant-ids flag never actually worked. To confirm a
-# specific fix, use --file (below) and check the specific line is no longer reported.
+# Exit: 0 all killed | 1 survivors await disposition | 2 tool error | 3 nothing in scope.
+# Exit 1 means *survivors await disposition*, not *failure*. Exit 3 means the diff held no
+# mutable C#, which is a clean skip, not a problem.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG="stryker-config.json"
-PARSE="python3 $SCRIPT_DIR/parse-report.py"
+BASE_CONFIG="stryker-config.json"
+RUN_CONFIG=".stryker-run.json"
 
-# --- arg parsing ---
 FILE_FILTER=""
+SINCE_REF=""
 ALL=false
 DIFF_ONLY=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --all) ALL=true; shift ;;
         --file) shift; FILE_FILTER="$1"; shift ;;
+        --since) shift; SINCE_REF="$1"; shift ;;
         --diff-only) DIFF_ONLY=true; shift ;;
-        *) shift ;;
+        *) echo "Unknown flag: $1" >&2; exit 2 ;;
     esac
 done
 
-# --- optional config patch ---
-ORIGINAL_CONFIG=""
-restore_config() {
-    if [[ -n "$ORIGINAL_CONFIG" ]]; then
-        echo "$ORIGINAL_CONFIG" > "$CONFIG"
-    fi
-}
-trap restore_config EXIT
+# A second concurrent run contends for the same build output and one of the two dies with
+# no report. Observed in the wild: a run started because the first looked hung.
+if pgrep -f "dotnet-stryker" >/dev/null 2>&1; then
+    echo "ERROR: a dotnet-stryker run is already in progress. Wait for it or kill it." >&2
+    exit 2
+fi
 
-if [[ "$ALL" == "true" ]]; then
-    echo "Scope: all of MEditService.Core (since disabled)"
-    ORIGINAL_CONFIG=$(cat "$CONFIG")
-    python3 -c "
-import json
-cfg = json.load(open('$CONFIG'))
-cfg['stryker-config']['since']['enabled'] = False
-with open('$CONFIG', 'w') as f:
-    json.dump(cfg, f, indent=2)
-    f.write('\n')
-"
+[[ -f "$BASE_CONFIG" ]] || { echo "ERROR: run from MEditService/ (no $BASE_CONFIG here)." >&2; exit 2; }
+
+rm -f "$RUN_CONFIG"
+trap 'rm -f "$RUN_CONFIG"' EXIT
+
+# --- resolve scope, and refuse to spend the ~8min fixed cost on an empty one ---
+#
+# Stryker validates its `since` target only *after* building, mutating and capturing
+# coverage — an unresolvable ref costs ~8 minutes and leaves an output directory with no
+# report at all. Short SHAs do not resolve; a full SHA does. Both checks below are the
+# difference between an instant message and an eight-minute silence.
+MUTATE_JSON="null"
+SINCE_JSON="null"
+KEEP_NEGATIONS="true"
+
+if $ALL; then
+    SCOPE="all of MEditService.Core (since disabled)"
 elif [[ -n "$FILE_FILTER" ]]; then
-    # since disabled: an explicit --file request should test that file regardless of
-    # whether it has a diff vs since.target — since-enabled would silently produce zero
-    # mutants (and no report at all) for an unchanged file, which is exactly the trap a
-    # "confirm this specific file" run needs to not fall into.
-    echo "Scope: $FILE_FILTER (since disabled — file requested explicitly)"
-    ORIGINAL_CONFIG=$(cat "$CONFIG")
-    python3 -c "
-import json
-cfg = json.load(open('$CONFIG'))
-cfg['stryker-config']['since']['enabled'] = False
-with open('$CONFIG', 'w') as f:
-    json.dump(cfg, f, indent=2)
-    f.write('\n')
-"
+    # since stays disabled: an explicit file request must run whether or not that file has
+    # a diff vs the target, or it silently produces zero mutants and no report. The base
+    # config's exclusions are dropped too — naming a file *is* the request to mutate it.
+    SCOPE="$FILE_FILTER (since disabled — file requested explicitly)"
+    MUTATE_JSON="[\"**/$FILE_FILTER\"]"
+    KEEP_NEGATIONS="false"
 else
-    # When HEAD == main (all changes uncommitted), git diff main..HEAD is empty and
-    # Stryker's `since` filter finds nothing. Detect this and fall back to the
-    # working-tree diff so uncommitted Core changes are still covered.
-    SINCE_TARGET=$(python3 -c "import json; cfg=json.load(open('$CONFIG')); print(cfg['stryker-config']['since']['target'])" 2>/dev/null || echo "main")
-    COMMITTED_CHANGES=$(git diff --name-only "${SINCE_TARGET}..HEAD" -- "*.cs" 2>/dev/null || true)
-    if [[ -z "$COMMITTED_CHANGES" ]]; then
-        # Nothing committed ahead of target — fall back to working-tree diff
-        WORKTREE_CORE_CHANGES=$(git diff --name-only "$SINCE_TARGET" 2>/dev/null | grep "MEditService.Core/.*\.cs$" || true)
-        WORKTREE_CORE_NEW=$(git ls-files --others --exclude-standard 2>/dev/null | grep "MEditService.Core/.*\.cs$" || true)
-        WORKTREE_CHANGES=$(printf '%s\n%s' "$WORKTREE_CORE_CHANGES" "$WORKTREE_CORE_NEW" | grep -v '^$' | sort -u || true)
-        if [[ -n "$WORKTREE_CHANGES" ]]; then
-            echo "Scope: uncommitted Core changes vs ${SINCE_TARGET} (since disabled, explicit mutate list)"
-            ORIGINAL_CONFIG=$(cat "$CONFIG")
-            MUTATE_PATTERNS=$(echo "$WORKTREE_CHANGES" | sed 's|.*/MEditService.Core/|**/|' | awk '{print "\"" $0 "\""}' | paste -sd, -)
-            python3 -c "
-import json
-cfg = json.load(open('$CONFIG'))
-cfg['stryker-config']['since']['enabled'] = False
-cfg['stryker-config']['mutate'] = [$MUTATE_PATTERNS]
-with open('$CONFIG', 'w') as f:
-    json.dump(cfg, f, indent=2)
-    f.write('\n')
-"
-        else
-            echo "Scope: files changed vs ${SINCE_TARGET} (no changes detected — running full corpus)"
-            ORIGINAL_CONFIG=$(cat "$CONFIG")
-            python3 -c "
-import json
-cfg = json.load(open('$CONFIG'))
-cfg['stryker-config']['since']['enabled'] = False
-with open('$CONFIG', 'w') as f:
-    json.dump(cfg, f, indent=2)
-    f.write('\n')
-"
-        fi
+    TARGET="${SINCE_REF:-$(python3 -c "import json;print(json.load(open('$BASE_CONFIG'))['stryker-config']['since']['target'])")}"
+    FULL_SHA=$(git rev-parse --verify --quiet "${TARGET}^{commit}" || true)
+    if [[ -z "$FULL_SHA" ]]; then
+        echo "ERROR: since target '$TARGET' does not resolve to a commit." >&2
+        exit 2
+    fi
+
+    COMMITTED=$(git diff --name-only "${FULL_SHA}...HEAD" -- "*.cs" 2>/dev/null || true)
+    if [[ -n "$COMMITTED" ]]; then
+        SCOPE="committed C# changes vs ${TARGET} (${FULL_SHA:0:8})"
+        SINCE_JSON="\"$FULL_SHA\""
     else
-        echo "Scope: files changed vs ${SINCE_TARGET} (use --all for full corpus)"
+        # Nothing committed ahead of the target: fall back to the working tree, so
+        # uncommitted Core changes are still covered.
+        WORKTREE=$( { git diff --name-only "$FULL_SHA" -- "*.cs" || true; \
+                      git ls-files --others --exclude-standard -- "*.cs" || true; } \
+                    | grep "MEditService.Core/.*\.cs$" | sort -u || true)
+        if [[ -z "$WORKTREE" ]]; then
+            echo "Scope: nothing to mutate — no C# changes vs ${TARGET} (${FULL_SHA:0:8}), committed or working-tree."
+            exit 3
+        fi
+        SCOPE="uncommitted Core changes vs ${TARGET} (since disabled, explicit mutate list)"
+        MUTATE_JSON=$(printf '%s\n' "$WORKTREE" | sed 's|.*/MEditService.Core/|**/|' \
+                      | python3 -c "import json,sys;print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))")
     fi
 fi
 
-# --- build stryker args ---
-STRYKER_ARGS=(--config-file "$CONFIG")
-if [[ -n "$FILE_FILTER" ]]; then
-    STRYKER_ARGS+=(--mutate "**/$FILE_FILTER")
-fi
+echo "Scope: $SCOPE"
 
-# --- run stryker; open a developer-visible terminal ---
+# --- generate the run config; never patch the checked-in one ---
+# The previous version edited stryker-config.json in place and restored it from a trap, so
+# a killed run left the repo's config mutated. A generated file cannot corrupt the original.
+MUTATE_JSON="$MUTATE_JSON" SINCE_JSON="$SINCE_JSON" KEEP_NEGATIONS="$KEEP_NEGATIONS" \
+python3 - "$BASE_CONFIG" "$RUN_CONFIG" <<'PY'
+import json, os, sys
+base, out = sys.argv[1], sys.argv[2]
+cfg = json.load(open(base))
+sc = cfg["stryker-config"]
 
-# Record start time so we can identify the newly-generated report (not a stale one)
+mutate = json.loads(os.environ["MUTATE_JSON"])
+since = json.loads(os.environ["SINCE_JSON"])
+
+if mutate is not None:
+    # An explicit mutate list replaces the base globs, but the base config's `!` exclusions
+    # are policy (files whose mutants only ever time out) and must survive it — otherwise
+    # merely having them uncommitted in the working tree puts them back in scope.
+    if os.environ["KEEP_NEGATIONS"] == "true":
+        mutate = mutate + [p for p in sc.get("mutate", []) if p.startswith("!")]
+    sc["mutate"] = mutate
+if since is not None:
+    sc["since"] = {"enabled": True, "target": since}
+else:
+    sc.pop("since", None)
+
+# Dots is the only progress signal that survives redirection: plain characters, no ANSI
+# repaint. The `progress` reporter draws a ShellProgressBar that throws
+# ArgumentOutOfRangeException under a width-less pty, which is what the old pty wrapper made.
+sc["reporters"] = ["json", "html", "dots"]
+json.dump(cfg, open(out, "w"), indent=2)
+PY
+
 RUN_START=$(date +%s)
+LOG=$(mktemp /tmp/stryker-run-XXXXXX.log)
 
-# Stryker writes to the TTY (not stdout/stderr), so use `script` to provide a
-# pseudo-TTY and capture output into a log the terminal window can tail.
-TTY_LOG=$(mktemp /tmp/stryker_tty_XXXXXX.log)
-trap 'restore_config; rm -f "$TTY_LOG"' EXIT
+# TERM=linux makes Stryker emit *nothing at all* — not even --help, exit code 0. Every other
+# value, including unset and `dumb`, works. It is the ambient TERM in a non-interactive
+# shell, so this assignment is what makes an unattended run observable. No pty is needed:
+# Stryker writes to stdout perfectly well once TERM is anything else.
+set +e
+TERM=xterm dotnet-stryker --config-file "$RUN_CONFIG" --log-to-file >"$LOG" 2>&1
+STRYKER_RC=$?
+set -e
 
-STRYKER_CMD="dotnet stryker ${STRYKER_ARGS[*]}"
-script -q -c "$STRYKER_CMD" "$TTY_LOG" >/dev/null 2>&1 &
-STRYKER_PID=$!
+echo "Stryker finished (exit $STRYKER_RC). Log: $LOG"
 
-# Open a terminal following the tty log so the user can watch progress
-TAIL_CMD="tail -n +1 -f '$TTY_LOG'"
-if command -v cosmic-term &>/dev/null; then
-    cosmic-term -- bash -c "$TAIL_CMD" 2>/dev/null &
-elif command -v gnome-terminal &>/dev/null; then
-    gnome-terminal --title="Stryker Mutation Test" -- bash -c "$TAIL_CMD" 2>/dev/null &
-elif command -v xterm &>/dev/null; then
-    xterm -T "Stryker Mutation Test" -e "bash -c \"$TAIL_CMD\"" 2>/dev/null &
-fi
-
-# Wait for stryker; capture exit code without failing the script
-wait "$STRYKER_PID" && STRYKER_RC=0 || STRYKER_RC=$?
-
-# Append completion banner so the open terminal shows it and the user knows it's done
-printf '\n================================================================\n' >> "$TTY_LOG"
-printf '  Stryker complete (exit %s) — safe to close this window\n' "$STRYKER_RC" >> "$TTY_LOG"
-printf '================================================================\n' >> "$TTY_LOG"
-
-echo "Stryker finished (exit $STRYKER_RC)."
-
-# --- find the report generated by this run (not a stale one) ---
-REPORT=$(python3 - <<EOF
-import glob, os
-from pathlib import Path
-reports = glob.glob("StrykerOutput/**/mutation-report.json", recursive=True)
-fresh = [r for r in reports if os.path.getmtime(r) >= $RUN_START]
+REPORT=$(python3 - "$RUN_START" <<'PY'
+import glob, os, sys
+start = int(sys.argv[1])
+fresh = [r for r in glob.glob("StrykerOutput/**/mutation-report.json", recursive=True)
+         if os.path.getmtime(r) >= start]
 print(max(fresh, key=os.path.getmtime) if fresh else "")
-EOF
+PY
 )
 
 if [[ -z "$REPORT" ]]; then
-    echo "ERROR: Stryker did not produce a new report (exit $STRYKER_RC). Check the terminal window for details." >&2
+    echo "ERROR: Stryker produced no report (exit $STRYKER_RC). Last lines of $LOG:" >&2
+    tail -20 "$LOG" >&2
     exit 2
 fi
 
 echo "Report: $REPORT"
 
-# --- parse and print filtered results ---
 PARSE_ARGS=("$REPORT")
-if [[ "$DIFF_ONLY" == "true" ]]; then
-    PARSE_ARGS+=(--diff-only)
-fi
-$PARSE "${PARSE_ARGS[@]}"
+$DIFF_ONLY && PARSE_ARGS+=(--diff-only)
+python3 "$SCRIPT_DIR/parse-report.py" "${PARSE_ARGS[@]}"
