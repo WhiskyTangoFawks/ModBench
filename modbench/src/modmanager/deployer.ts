@@ -271,18 +271,24 @@ async function deployLoadOrder(loadOrder: LoadOrderDeployment[], reporter: Repor
   return written;
 }
 
+/** Normalize a catch clause's `unknown` to a real Error — readManifest's two catch
+ *  sites (an unreadable file, invalid JSON) both need this identically. */
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 async function readManifest(instanceRoot: string): Promise<ManifestResult> {
   let raw: string;
   try {
     raw = await readFile(manifestPath(instanceRoot), 'utf8');
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { status: 'absent' };
-    return { status: 'corrupt', error: err instanceof Error ? err : new Error(String(err)) };
+    return { status: 'corrupt', error: toError(err) };
   }
   try {
     return { status: 'ok', manifest: JSON.parse(raw) as Manifest };
   } catch (err) {
-    return { status: 'corrupt', error: err instanceof Error ? err : new Error(String(err)) };
+    return { status: 'corrupt', error: toError(err) };
   }
 }
 
@@ -304,10 +310,18 @@ async function resolveManifestForPurge(instanceRoot: string, reporter: Reporter)
   return result.status === 'ok' ? result.manifest : null;
 }
 
+export interface PurgeOptions {
+  /** Rename primitive; defaults to fs.rename. Injectable so the cross-volume (EXDEV)
+   *  fallback is testable without a real second volume, same reason as DeployOptions'
+   *  statFn. */
+  renameFn?: (source: string, target: string) => Promise<void>;
+}
+
 export async function purge(
   instanceRoot: string,
   gameDirectory: GameDirectory,
   reporter: Reporter,
+  opts: PurgeOptions = {},
 ): Promise<void> {
   const manifest = await resolveManifestForPurge(instanceRoot, reporter);
   if (!manifest) return;
@@ -320,26 +334,7 @@ export async function purge(
     await rm(target, { force: true });
   }
 
-  // Anything left in Data/ that is neither one of our links nor part of the
-  // vanilla baseline is a runtime output (F4SE logs, MCM INI writes). Preserve
-  // it by moving it into the instance's overwrite/ (sibling of mods/, per MO2).
-  // Compared by folded path: a real on-disk entry's casing must match a kept
-  // path only up to case, since Proton/Wine resolves it case-insensitively.
-  const keptFolded = new Set([...manifest.links, ...manifest.preExisting].map(foldPath));
-  const unmoved: string[] = [];
-  for (const relativePath of await listRelativeFiles(dataFolder)) {
-    if (keptFolded.has(foldPath(relativePath))) continue;
-    const from = join(dataFolder, relativePath);
-    const to = join(instanceRoot, 'overwrite', relativePath);
-    try {
-      await mkdir(dirname(to), { recursive: true });
-      await moveFile(from, to);
-    } catch (err) {
-      // Don't abort the rest of the purge over one stubborn file — collect and
-      // surface it (ADR-0026 integrity: a file left in Data/ must not be silent).
-      unmoved.push(`${relativePath}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
+  const unmoved = await relocateStrayFiles(instanceRoot, dataFolder, manifest, opts.renameFn ?? rename);
   if (unmoved.length > 0) {
     reporter.report(
       'warning',
@@ -352,10 +347,44 @@ export async function purge(
   await rm(manifestPath(instanceRoot), { force: true });
 }
 
+/** Anything left in Data/ that is neither one of our links nor part of the vanilla
+ *  baseline is a runtime output (F4SE logs, MCM INI writes). Preserve it by moving
+ *  it into the instance's overwrite/ (sibling of mods/, per MO2). Compared by folded
+ *  path: a real on-disk entry's casing must match a kept path only up to case, since
+ *  Proton/Wine resolves it case-insensitively. Returns paths (with their error) that
+ *  couldn't be moved, for the caller to surface — never abort the rest of the purge
+ *  over one stubborn file. */
+async function relocateStrayFiles(
+  instanceRoot: string,
+  dataFolder: string,
+  manifest: Manifest,
+  renameFn: (source: string, target: string) => Promise<void>,
+): Promise<string[]> {
+  const keptFolded = new Set([...manifest.links, ...manifest.preExisting].map(foldPath));
+  const unmoved: string[] = [];
+  for (const relativePath of await listRelativeFiles(dataFolder)) {
+    if (keptFolded.has(foldPath(relativePath))) continue;
+    const from = join(dataFolder, relativePath);
+    const to = join(instanceRoot, 'overwrite', relativePath);
+    try {
+      await mkdir(dirname(to), { recursive: true });
+      await moveFile(from, to, renameFn);
+    } catch (err) {
+      // ADR-0026 integrity: a file left in Data/ must not be silent.
+      unmoved.push(`${relativePath}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return unmoved;
+}
+
 /** Move a file, falling back to copy+delete across volumes (rename's EXDEV). */
-async function moveFile(from: string, to: string): Promise<void> {
+async function moveFile(
+  from: string,
+  to: string,
+  renameFn: (source: string, target: string) => Promise<void>,
+): Promise<void> {
   try {
-    await rename(from, to);
+    await renameFn(from, to);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
     await copyFile(from, to);

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { link, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { link, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { deploy, purge } from './deployer';
+import { deploy, isDeployed, purge } from './deployer';
 import { makeDeployerFixture, makeIndex, type DeployerFixture } from './test/deployerFixture';
 
 const CORRUPT_MANIFEST = '{not json';
@@ -55,18 +55,44 @@ describe('deploy', () => {
     const source = join(profileDir, 'plugins.txt');
     await writeFile(source, '# managed\r\n*ModA.esp\r\n');
     const target = join(fx.instanceRoot, 'appdata', 'plugins.txt');
+    const source2 = join(profileDir, 'loadorder.txt');
+    await writeFile(source2, '*ModA.esp\r\n');
+    const target2 = join(fx.instanceRoot, 'appdata', 'loadorder.txt');
     const index = makeIndex({});
 
     await deploy(fx.instanceRoot, fx.gameDirectory, index, fakeReporter(), {
-      loadOrder: [{ source, target }],
+      loadOrder: [{ source, target }, { source: source2, target: target2 }],
     });
 
     expect(await readFile(target, 'utf8')).toBe('# managed\r\n*ModA.esp\r\n');
     const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
-    expect(manifest.loadOrder).toEqual([target]);
+    expect(manifest.loadOrder).toEqual([target, target2]);
+
+    // target2 is already gone (e.g., manually removed) before purge runs — its rm(force:true)
+    // must tolerate this, not throw, and must not block target's (still-present) cleanup.
+    await rm(target2, { force: true });
 
     await purge(fx.instanceRoot, fx.gameDirectory, fakeReporter());
     await expect(stat(target)).rejects.toThrow();
+    await expect(stat(target2)).rejects.toThrow();
+  });
+
+  it('re-deploying with the same load-order target does not fail on the already-existing directory', async () => {
+    fx = await makeDeployerFixture();
+    const profileDir = join(fx.instanceRoot, 'profiles', 'Default');
+    await mkdir(profileDir, { recursive: true });
+    const source = join(profileDir, 'plugins.txt');
+    await writeFile(source, '*ModA.esp\r\n');
+    const target = join(fx.instanceRoot, 'appdata', 'plugins.txt');
+    const opts = { loadOrder: [{ source, target }] };
+
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({}), fakeReporter(), opts);
+    // appdata/ now already exists — the second deploy's mkdir must tolerate that, not throw.
+    const reporter = fakeReporter();
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({}), reporter, opts);
+
+    expect(reporter.reports).toEqual([]);
+    expect(await readFile(target, 'utf8')).toBe('*ModA.esp\r\n');
   });
 
   it('skips and reports a winner whose Data/ path already exists and is not a prior link', async () => {
@@ -82,7 +108,20 @@ describe('deploy', () => {
     expect(await readFile(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'), 'utf8')).toBe('VANILLA');
     const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.links).toEqual([]);
-    expect(reporter.reports.some((r) => r.detail?.includes('textures/foo.dds'))).toBe(true);
+    // ADR-0026 integrity tier: this is mandatory, so the severity tier matters, not just that
+    // some report happened to fire.
+    expect(reporter.reports.some((r) => r.severity === 'warning' && r.detail?.includes('textures/foo.dds'))).toBe(true);
+  });
+
+  it('reports nothing when nothing was skipped, the load order wrote successfully, and both are on the same volume', async () => {
+    fx = await makeDeployerFixture();
+    const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
+    const reporter = fakeReporter();
+
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source }), reporter);
+
+    // ADR-0026 rejects notification fatigue: nothing went wrong, so nothing should surface.
+    expect(reporter.reports).toEqual([]);
   });
 
   it('re-running deploy after a reorder relinks only the changed winner, leaving others alone', async () => {
@@ -108,25 +147,38 @@ describe('deploy', () => {
     fx = await makeDeployerFixture();
     const a = await fx.writeModFile('ModA', 'a.esp', 'A');
     const b = await fx.writeModFile('ModB', 'b.esp', 'B');
-    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'a.esp': a, 'b.esp': b }), fakeReporter());
+    const c = await fx.writeModFile('ModC', 'c.esp', 'C');
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'a.esp': a, 'b.esp': b, 'c.esp': c }), fakeReporter());
 
-    // ModB disabled → no longer in the index.
+    // c.esp's link is already gone from Data/ (e.g., manually removed) before the stale-link
+    // cleanup runs — its rm(force:true) must tolerate this, not throw, and must not block
+    // b.esp's (still-present) cleanup.
+    await rm(join(fx.gameDirectory.dataFolder, 'c.esp'), { force: true });
+
+    // ModB and ModC disabled → no longer in the index.
     await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'a.esp': a }), fakeReporter());
 
     await expect(stat(join(fx.gameDirectory.dataFolder, 'b.esp'))).rejects.toThrow();
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'c.esp'))).rejects.toThrow();
     const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.links).toEqual(['a.esp']);
 
-    // Purge must not misfile the (already removed) b.esp into overwrite/.
+    // Purge must not misfile the (already removed) b.esp/c.esp into overwrite/.
     await purge(fx.instanceRoot, fx.gameDirectory, fakeReporter());
     await expect(stat(join(fx.instanceRoot, 'overwrite', 'b.esp'))).rejects.toThrow();
+    await expect(stat(join(fx.instanceRoot, 'overwrite', 'c.esp'))).rejects.toThrow();
   });
 
   it('purge deletes the manifested links only, leaving preExisting files untouched', async () => {
     fx = await makeDeployerFixture();
     await fx.writeDataFile('Fallout4.esm', 'VANILLA'); // preExisting
     const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
-    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source }), fakeReporter());
+    const source2 = await fx.writeModFile('ModB', 'mod2.esp', 'MOD2');
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source, 'mod2.esp': source2 }), fakeReporter());
+
+    // mod2.esp's link is already gone from Data/ (e.g., manually removed) before purge runs —
+    // its rm(force:true) must tolerate this, not throw.
+    await rm(join(fx.gameDirectory.dataFolder, 'mod2.esp'), { force: true });
 
     await purge(fx.instanceRoot, fx.gameDirectory, fakeReporter());
 
@@ -140,12 +192,81 @@ describe('deploy', () => {
     await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source }), fakeReporter());
     // The game (or F4SE/MCM) writes a new file into Data/ while running.
     await fx.writeDataFile('F4SE/foo.log', 'GENERATED');
+    const reporter = fakeReporter();
 
-    await purge(fx.instanceRoot, fx.gameDirectory, fakeReporter());
+    await purge(fx.instanceRoot, fx.gameDirectory, reporter);
 
     // Moved out of Data/ into the instance's overwrite/ (sibling of mods/, not mods/overwrite/).
     await expect(stat(join(fx.gameDirectory.dataFolder, 'F4SE/foo.log'))).rejects.toThrow();
     expect(await readFile(join(fx.instanceRoot, 'overwrite', 'F4SE/foo.log'), 'utf8')).toBe('GENERATED');
+    // The move succeeded — nothing to report.
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('reports (does not silently drop) a stray Data/ file it could not move into overwrite/', async () => {
+    fx = await makeDeployerFixture();
+    const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source }), fakeReporter());
+    await fx.writeDataFile('F4SE/foo.log', 'GENERATED');
+    // Block the move target: a directory already occupies where the stray file would land.
+    await mkdir(join(fx.instanceRoot, 'overwrite', 'F4SE', 'foo.log'), { recursive: true });
+    const reporter = fakeReporter();
+
+    await purge(fx.instanceRoot, fx.gameDirectory, reporter);
+
+    // Reports the original rename failure directly — a non-EXDEV error must be rethrown, not
+    // masked behind a second, different failure from wrongly attempting the copy+delete fallback.
+    expect(reporter.reports.some((r) => r.severity === 'warning' && r.detail?.includes('F4SE/foo.log') && r.detail?.includes('rename'))).toBe(true);
+    // Still in Data/ — purge did not silently lose it.
+    expect(await readFile(join(fx.gameDirectory.dataFolder, 'F4SE/foo.log'), 'utf8')).toBe('GENERATED');
+  });
+
+  it('falls back to copy+delete when a stray file\'s move fails with EXDEV (cross-volume overwrite/)', async () => {
+    fx = await makeDeployerFixture();
+    const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source }), fakeReporter());
+    await fx.writeDataFile('F4SE/foo.log', 'GENERATED');
+    const exdevError = Object.assign(new Error('cross-device link'), { code: 'EXDEV' });
+    const renameFn = () => Promise.reject(exdevError);
+    const reporter = fakeReporter();
+
+    await purge(fx.instanceRoot, fx.gameDirectory, reporter, { renameFn });
+
+    // Fell back to copy+delete: landed in overwrite/, gone from Data/.
+    expect(await readFile(join(fx.instanceRoot, 'overwrite', 'F4SE/foo.log'), 'utf8')).toBe('GENERATED');
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'F4SE/foo.log'))).rejects.toThrow();
+    // Succeeded via the fallback — nothing to report.
+    expect(reporter.reports).toEqual([]);
+  });
+
+  it('prunes a now-empty Data/ directory but preserves one that still holds a preExisting file', async () => {
+    fx = await makeDeployerFixture();
+    await fx.writeDataFile('Meshes/vanilla.nif', 'VANILLA'); // preExisting, nested — Meshes/ must survive
+    const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source }), fakeReporter());
+    // Stray, nested — Meshes/Stray/ must be pruned once emptied by the move.
+    await fx.writeDataFile('Meshes/Stray/junk.tmp', 'GENERATED');
+
+    await purge(fx.instanceRoot, fx.gameDirectory, fakeReporter());
+
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'Meshes/Stray'))).rejects.toThrow();
+    expect(await readFile(join(fx.gameDirectory.dataFolder, 'Meshes/vanilla.nif'), 'utf8')).toBe('VANILLA');
+  });
+
+  it('purge tolerates a manifest written before loadOrder tracking existed (no loadOrder field)', async () => {
+    fx = await makeDeployerFixture();
+    const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source }), fakeReporter());
+    const manifestFile = join(fx.instanceRoot, ...MANIFEST);
+    const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
+    delete manifest.loadOrder;
+    await writeFile(manifestFile, JSON.stringify(manifest));
+    const reporter = fakeReporter();
+
+    await purge(fx.instanceRoot, fx.gameDirectory, reporter);
+
+    expect(reporter.reports).toEqual([]);
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'mod.esp'))).rejects.toThrow();
   });
 
   it('still writes the manifest (and reports) when a load-order source is missing, so links stay purgeable', async () => {
@@ -223,6 +344,21 @@ describe('deploy', () => {
     expect(manifest.links).toEqual(['textures/foo.dds']); // never both casings
   });
 
+  it('tolerates the old-cased link already being gone when the winner\'s casing changes on redeploy', async () => {
+    fx = await makeDeployerFixture();
+    const a = await fx.writeModFile('ModA', 'Textures/Foo.dds', 'A');
+    const b = await fx.writeModFile('ModB', 'textures/foo.dds', 'B');
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'Textures/Foo.dds': a }), fakeReporter());
+
+    // The old-cased target is already gone from Data/ (e.g., manually removed) before the
+    // casing-change cleanup runs — its rm(force:true) must tolerate this, not throw.
+    await rm(join(fx.gameDirectory.dataFolder, 'Textures/Foo.dds'), { force: true });
+
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'textures/foo.dds': b }), fakeReporter());
+
+    expect(await readFile(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'), 'utf8')).toBe('B');
+  });
+
   it('purge after a casing change cleans up correctly, without misfiling into overwrite/', async () => {
     fx = await makeDeployerFixture();
     const a = await fx.writeModFile('ModA', 'Textures/Foo.dds', 'A');
@@ -267,6 +403,34 @@ describe('deploy', () => {
 
     // Nothing from the second deploy's index got linked.
     await expect(stat(join(fx.gameDirectory.dataFolder, 'other.esp'))).rejects.toThrow();
+  });
+
+  it('aborts and reports (as corrupt) when the manifest path is unreadable, not just when its content is invalid JSON', async () => {
+    fx = await makeDeployerFixture();
+    const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
+    // A directory sitting where the manifest file should be: readFile fails with something
+    // other than ENOENT (EISDIR) — the other half of "corrupt" besides unparseable content.
+    await mkdir(join(fx.instanceRoot, ...MANIFEST), { recursive: true });
+    const reporter = fakeReporter();
+
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source }), reporter);
+
+    expect(reporter.reports.some((r) => r.severity === 'error' && /manifest/i.test(r.message))).toBe(true);
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'mod.esp'))).rejects.toThrow();
+  });
+});
+
+describe('isDeployed', () => {
+  let fx: DeployerFixture;
+  afterEach(() => fx?.cleanup());
+
+  it('is false before any deploy and true once a manifest exists', async () => {
+    fx = await makeDeployerFixture();
+    expect(await isDeployed(fx.instanceRoot)).toBe(false);
+
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({}), fakeReporter());
+
+    expect(await isDeployed(fx.instanceRoot)).toBe(true);
   });
 });
 
