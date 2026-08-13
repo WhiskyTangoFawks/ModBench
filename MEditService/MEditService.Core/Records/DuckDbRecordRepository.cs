@@ -1102,17 +1102,17 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     // ── Phase 16: worldspace tree reads ────────────────────────────────────────
 
-    public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey)
+    public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
             SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
             FROM cell_location cl
             LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
-            WHERE cl.parent_worldspace = $1 AND cl.plugin = $2
+            WHERE cl.parent_worldspace = $1 AND cl.plugin = $2 AND cl.origin = $3
             ORDER BY cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
             """;
-        AddParams(cmd, [worldspaceFormKey, plugin]);
+        AddParams(cmd, [worldspaceFormKey, plugin, origin]);
         using var reader = cmd.ExecuteReader();
 
         var rows = new List<CellLocationSummary>();
@@ -1132,11 +1132,12 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return rows;
     }
 
-    public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset)
+    public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string origin)
     {
         using var countCmd = Connection.CreateCommand();
-        countCmd.CommandText = "SELECT COUNT(*) FROM cell_location WHERE is_interior AND plugin = $1";
+        countCmd.CommandText = "SELECT COUNT(*) FROM cell_location WHERE is_interior AND plugin = $1 AND origin = $2";
         countCmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        countCmd.Parameters.Add(new DuckDBParameter { Value = origin });
         var total = (long)countCmd.ExecuteScalar()!;
 
         using var cmd = Connection.CreateCommand();
@@ -1144,11 +1145,12 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y
             FROM cell_location cl
             LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
-            WHERE cl.is_interior AND cl.plugin = $1
+            WHERE cl.is_interior AND cl.plugin = $1 AND cl.origin = $2
             ORDER BY c.editor_id
             LIMIT {limit} OFFSET {offset}
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         using var reader = cmd.ExecuteReader();
 
         var items = new List<CellSummary>();
@@ -1164,7 +1166,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         return new PagedResult<CellSummary>(items, (int)total);
     }
 
-    public CellReferences GetCellReferences(string plugin, string cellFormKey)
+    public CellReferences GetCellReferences(string plugin, string cellFormKey, string origin)
     {
         var schemas = RequireSchemas();
         var placedTables = PlacedTableNames.Where(schemas.ContainsKey).ToList();
@@ -1179,10 +1181,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             SELECT p.placement_group, r.rt, p.form_key, r.editor_id, r.base
             FROM placement p
             JOIN ({union}) r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
-            WHERE p.parent_cell = $1 AND p.plugin = $2
+            WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3
             ORDER BY r.editor_id
             """;
-        AddParams(cmd, [cellFormKey, plugin]);
+        AddParams(cmd, [cellFormKey, plugin, origin]);
         using var reader = cmd.ExecuteReader();
 
         var persistent = new List<PlacedSummary>();

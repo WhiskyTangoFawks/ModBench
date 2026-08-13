@@ -37,9 +37,13 @@ public interface IRecordReader
 
     // Phase 16 — worldspace tree reads (from the placement / cell_location side tables).
     // Returns every cell under the worldspace; a TopCell has null Block/Sub coordinates.
-    IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey);
-    PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset);
-    CellReferences GetCellReferences(string plugin, string cellFormKey);
+    // origin (#296 / ADR-0036, required): the mod folder that provided this plugin's physical
+    // file, or a reserved PluginOrigin value — plugin here is never optional (every caller is
+    // already scoped to one specific plugin), so unlike GetRecords'/SearchRecords' origin filter,
+    // this one is required rather than defaulted, matching GetVmad/GetConditions/GetPlacement.
+    IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin);
+    PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string origin);
+    CellReferences GetCellReferences(string plugin, string cellFormKey, string origin);
 
     // Phase 16.2 — a placed ref's structural parentage (which cell, persistent/temporary, position),
     // used by EditOrchestrator to stamp placement onto copy/delete changes. Null when not placed.

@@ -274,7 +274,7 @@ public class PlacementIndexingTests
     public void GetCellReferences_SplitsPersistentAndTemporary()
     {
         using var b = IndexFixture();
-        var refs = b.Repo.GetCellReferences("TestWorld.esp", b.ExtCellFk);
+        var refs = b.Repo.GetCellReferences("TestWorld.esp", b.ExtCellFk, "Data");
 
         Assert.Equal(2, refs.Persistent.Count);
         Assert.Single(refs.Temporary);
@@ -294,7 +294,7 @@ public class PlacementIndexingTests
     public void GetWorldspaceCells_ReturnsCellsWithBlockGridAndNullVariants()
     {
         using var b = IndexFixture();
-        var cells = b.Repo.GetWorldspaceCells("TestWorld.esp", b.WorldspaceFk);
+        var cells = b.Repo.GetWorldspaceCells("TestWorld.esp", b.WorldspaceFk, "Data");
         Assert.Equal(3, cells.Count);  // TopCell + ExtCell + BareCell
 
         var ext = cells.Single(c => c.FormKey == b.ExtCellFk);
@@ -372,11 +372,94 @@ public class PlacementIndexingTests
         Assert.Null(repo.GetPlacement(formKey, "Placed.esp", "ModC"));
     }
 
+    // #296 / ADR-0036: same shape as GetPlacement_SameFilenameDifferentOrigin_ScopesToOrigin above —
+    // one mod indexed twice under the same filename at two real (non-Data) origins. Worldspace tree
+    // reads' outer WHERE filtered by plugin filename alone, so before this fix a query scoped to one
+    // origin still returned both origins' rows merged together.
+    private sealed record WorldspaceFixture(
+        DuckDbRecordRepository Repo, string WorldspaceFk, string ExtCellFk, string PlacedFk, string IntCellFk)
+        : IDisposable
+    {
+        public void Dispose() => Repo.Dispose();
+    }
+
+    private static WorldspaceFixture BuildTwoOriginWorldspaceFixture()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("SharedWorld.esp"), Fallout4Release.Fallout4);
+        var wrld = mod.Worldspaces.AddNew("SharedWrld");
+        var extCell = new Cell(mod) { EditorID = "SharedExtCell", Grid = new CellGrid { Point = new P2Int(1, 1) } };
+        var placed = new PlacedObject(mod) { EditorID = "SharedRef", Position = new P3Float(1f, 2f, 3f) };
+        extCell.Persistent.Add(placed);
+        var sub = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
+        sub.Items.Add(extCell);
+        var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
+        block.Items.Add(sub);
+        wrld.SubCells.Add(block);
+
+        var intCell = new Cell(mod) { EditorID = "SharedIntCell", Grid = new CellGrid { Point = new P2Int(0, 0) } };
+        var intSub = new CellSubBlock { BlockNumber = 0 };
+        intSub.Cells.Add(intCell);
+        var intBlock = new CellBlock { BlockNumber = 0 };
+        intBlock.SubBlocks.Add(intSub);
+        mod.Cells.Records.Add(intBlock);
+
+        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        repo.Index((IModGetter)mod, 0, origin: "ModA", participates: true);
+        repo.Index((IModGetter)mod, 1, origin: "ModB", participates: true);
+        repo.UpdateWinners();
+
+        return new WorldspaceFixture(repo, wrld.FormKey.ToString(), extCell.FormKey.ToString(),
+            placed.FormKey.ToString(), intCell.FormKey.ToString());
+    }
+
+    [Fact]
+    public void GetWorldspaceCells_SameFilenameDifferentOrigin_ScopesToOrigin()
+    {
+        using var f = BuildTwoOriginWorldspaceFixture();
+
+        var modACells = f.Repo.GetWorldspaceCells("SharedWorld.esp", f.WorldspaceFk, "ModA");
+        var modBCells = f.Repo.GetWorldspaceCells("SharedWorld.esp", f.WorldspaceFk, "ModB");
+        var modCCells = f.Repo.GetWorldspaceCells("SharedWorld.esp", f.WorldspaceFk, "ModC");
+
+        Assert.Single(modACells);
+        Assert.Single(modBCells);
+        Assert.Empty(modCCells);
+    }
+
+    [Fact]
+    public void GetInteriorCells_SameFilenameDifferentOrigin_ScopesToOrigin()
+    {
+        using var f = BuildTwoOriginWorldspaceFixture();
+
+        var modAPage = f.Repo.GetInteriorCells("SharedWorld.esp", 50, 0, "ModA");
+        var modBPage = f.Repo.GetInteriorCells("SharedWorld.esp", 50, 0, "ModB");
+        var modCPage = f.Repo.GetInteriorCells("SharedWorld.esp", 50, 0, "ModC");
+
+        Assert.Equal(1, modAPage.Total);
+        Assert.Equal(1, modBPage.Total);
+        Assert.Equal(0, modCPage.Total);
+    }
+
+    [Fact]
+    public void GetCellReferences_SameFilenameDifferentOrigin_ScopesToOrigin()
+    {
+        using var f = BuildTwoOriginWorldspaceFixture();
+
+        var modARefs = f.Repo.GetCellReferences("SharedWorld.esp", f.ExtCellFk, "ModA");
+        var modBRefs = f.Repo.GetCellReferences("SharedWorld.esp", f.ExtCellFk, "ModB");
+        var modCRefs = f.Repo.GetCellReferences("SharedWorld.esp", f.ExtCellFk, "ModC");
+
+        Assert.Single(modARefs.Persistent);
+        Assert.Single(modBRefs.Persistent);
+        Assert.Empty(modCRefs.Persistent);
+    }
+
     [Fact]
     public void GetInteriorCells_ReturnsInteriorCellsWithNullVariants()
     {
         using var b = IndexFixture();
-        var page = b.Repo.GetInteriorCells("TestWorld.esp", 50, 0);
+        var page = b.Repo.GetInteriorCells("TestWorld.esp", 50, 0, "Data");
         Assert.Equal(2, page.Total);
 
         var named = page.Items.Single(c => c.FormKey == b.IntCellFk);

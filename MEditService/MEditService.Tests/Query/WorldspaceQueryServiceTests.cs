@@ -17,7 +17,7 @@ public class WorldspaceQueryServiceTests
         IReadOnlyList<RecordSummary>? records = null,
         CellReferences? cellRefs = null) : IRecordReader
     {
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey) => cells;
+        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin) => cells;
 
         public PagedResult<RecordSummary> GetRecords(string t, string? p, string? s, int l, int o) =>
             new(records ?? [], (records ?? []).Count);
@@ -32,8 +32,8 @@ public class WorldspaceQueryServiceTests
         public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> t, string? p, string? s, int l, int o) => new([], 0);
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferences(string fk) => [];
-        public PagedResult<CellSummary> GetInteriorCells(string p, int l, int o) => new([], 0);
-        public CellReferences GetCellReferences(string p, string fk) => cellRefs ?? new([], []);
+        public PagedResult<CellSummary> GetInteriorCells(string p, int l, int o, string origin) => new([], 0);
+        public CellReferences GetCellReferences(string p, string fk, string origin) => cellRefs ?? new([], []);
         public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => null;
     }
 
@@ -166,6 +166,27 @@ public class WorldspaceQueryServiceTests
         Assert.Single(result.Persistent);
         Assert.Equal("1234:Patch.esp", result.Persistent[0].FormKey);
         Assert.Empty(result.Temporary);
+    }
+
+    // #296: StubSession.Session is null, so ResolveOrigin("Patch.esp") always falls back to the
+    // reserved PluginOrigin.DataDirectory ("Data") — a real non-Data origin ("ModA") on the staged
+    // change therefore must NOT overlay here. Before this fix, the pending-overlay lookup called
+    // _changes.GetChanges(plugin) with no origin argument at all, so it overlaid every origin's
+    // pending edits onto any requested plugin — this ModA-origin create would incorrectly appear
+    // under a "Data"-origin read.
+    [Fact]
+    public void GetCellReferences_PendingOverlay_ScopesToResolvedOrigin_ExcludesOtherOriginPendingCreate()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        changes.Upsert(new PendingChangeUpsert("9999:Patch.esp", "Patch.esp", "refr",
+            new() { [PendingChangeConstants.CreateFieldPath] = PendingChangeConstants.NullElement },
+            "user", null, [],
+            ChangeType: PendingChangeConstants.CreateChangeType,
+            ParentCell: "cell:Fallout4.esm", PlacementGroup: PendingChangeConstants.PlacementGroupPersistent, FormRefs: null, Origin: "ModA"));
+
+        var result = ServiceWithChanges(changes).GetCellReferences("Patch.esp", "cell:Fallout4.esm");
+
+        Assert.Empty(result.Persistent);
     }
 
     [Fact]
