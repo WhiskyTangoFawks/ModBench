@@ -8,21 +8,21 @@ public static class WorldspaceEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(WorldspaceEndpoints));
 
-        app.MapGet("/plugins/{plugin}/worldspaces", (string plugin, IWorldspaceQueryService svc) =>
-            GetWorldspaces(plugin, svc, logger))
+        app.MapGet("/plugins/{plugin}/worldspaces", (string plugin, string? origin, IWorldspaceQueryService svc) =>
+            GetWorldspaces(plugin, origin, svc, logger))
         .WithName("GetWorldspaces")
         .WithTags("Worldspaces")
         .Produces<IReadOnlyList<WorldspaceSummary>>()
         .ProducesProblem(500);
 
-        app.MapGet("/plugins/{plugin}/worldspaces/{formKey}/blocks", (string plugin, string formKey, IWorldspaceQueryService svc) =>
+        app.MapGet("/plugins/{plugin}/worldspaces/{formKey}/blocks", (string plugin, string formKey, string? origin, IWorldspaceQueryService svc) =>
         {
-            logger.LogInformation("Received GetWorldspaceBlocks for {Plugin} {FormKey}", plugin, formKey);
+            logger.LogInformation("Received GetWorldspaceBlocks for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             var decodedPlugin = Uri.UnescapeDataString(plugin);
             var decodedFk = Uri.UnescapeDataString(formKey);
             try
             {
-                return Results.Ok(svc.GetWorldspaceBlocks(decodedPlugin, decodedFk));
+                return Results.Ok(svc.GetWorldspaceBlocks(decodedPlugin, decodedFk, origin));
             }
             catch (Exception ex)
             {
@@ -35,14 +35,14 @@ public static class WorldspaceEndpoints
         .Produces<WorldspaceBlocks>()
         .ProducesProblem(500);
 
-        app.MapGet("/plugins/{plugin}/cells/{formKey}/references", (string plugin, string formKey, IWorldspaceQueryService svc) =>
+        app.MapGet("/plugins/{plugin}/cells/{formKey}/references", (string plugin, string formKey, string? origin, IWorldspaceQueryService svc) =>
         {
-            logger.LogInformation("Received GetCellReferences for {Plugin} {FormKey}", plugin, formKey);
+            logger.LogInformation("Received GetCellReferences for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
             var decodedPlugin = Uri.UnescapeDataString(plugin);
             var decodedFk = Uri.UnescapeDataString(formKey);
             try
             {
-                return Results.Ok(svc.GetCellReferences(decodedPlugin, decodedFk));
+                return Results.Ok(svc.GetCellReferences(decodedPlugin, decodedFk, origin));
             }
             catch (Exception ex)
             {
@@ -55,13 +55,13 @@ public static class WorldspaceEndpoints
         .Produces<CellReferences>()
         .ProducesProblem(500);
 
-        app.MapGet("/plugins/{plugin}/interior-cells", (string plugin, IWorldspaceQueryService svc, int limit = 50, int offset = 0) =>
+        app.MapGet("/plugins/{plugin}/interior-cells", (string plugin, string? origin, IWorldspaceQueryService svc, int limit = 50, int offset = 0) =>
         {
-            logger.LogInformation("Received GetInteriorCells for {Plugin}", plugin);
+            logger.LogInformation("Received GetInteriorCells for {Plugin} ({Origin})", plugin, origin);
             var decoded = Uri.UnescapeDataString(plugin);
             try
             {
-                return Results.Ok(svc.GetInteriorCells(decoded, limit, offset));
+                return Results.Ok(svc.GetInteriorCells(decoded, limit, offset, origin));
             }
             catch (Exception ex)
             {
@@ -77,13 +77,13 @@ public static class WorldspaceEndpoints
         return app;
     }
 
-    internal static IResult GetWorldspaces(string plugin, IWorldspaceQueryService svc, ILogger logger)
+    internal static IResult GetWorldspaces(string plugin, string? origin, IWorldspaceQueryService svc, ILogger logger)
     {
-        logger.LogInformation("Received GetWorldspaces for {Plugin}", plugin);
+        logger.LogInformation("Received GetWorldspaces for {Plugin} ({Origin})", plugin, origin);
         var decoded = Uri.UnescapeDataString(plugin);
         try
         {
-            return Results.Ok(svc.GetWorldspaces(decoded));
+            return Results.Ok(svc.GetWorldspaces(decoded, origin));
         }
         catch (Exception ex)
         {

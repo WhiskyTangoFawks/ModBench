@@ -419,7 +419,7 @@ describe('ApiPluginRepository.getWorldspaceBlocks', () => {
     });
     expect(client.GET).toHaveBeenCalledWith(
       '/plugins/{plugin}/worldspaces/{formKey}/blocks',
-      expect.objectContaining({ params: { path: { plugin: 'Plugin.esp', formKey: 'Fallout4.esm:00003C' } } }),
+      expect.objectContaining({ params: { path: { plugin: 'Plugin.esp', formKey: 'Fallout4.esm:00003C' }, query: {} } }),
     );
   });
 
@@ -450,7 +450,7 @@ describe('ApiPluginRepository.getCellReferences', () => {
     });
     expect(client.GET).toHaveBeenCalledWith(
       '/plugins/{plugin}/cells/{formKey}/references',
-      expect.objectContaining({ params: { path: { plugin: 'Plugin.esp', formKey: 'Fallout4.esm:00003C' } } }),
+      expect.objectContaining({ params: { path: { plugin: 'Plugin.esp', formKey: 'Fallout4.esm:00003C' }, query: {} } }),
     );
   });
 
@@ -520,6 +520,66 @@ describe('ApiPluginRepository origin threading', () => {
     const client = { GET: vi.fn().mockResolvedValue({ data: { items: [], total: 0 }, response: { ok: true } }) } as any;
 
     await new ApiPluginRepository(client).getRecords('Plugin0.esp', 'WEAP', 0, 50);
+
+    expect(client.GET.mock.calls[0][1].params.query).not.toHaveProperty('origin');
+  });
+
+  // #305: the spatial routes get the same treatment the record routes already have — a tree row
+  // that knows which copy it stands for states it; an ordinary load-order row sends none.
+  it('sends origin as a query param on getWorldspaces', async () => {
+    const client = { GET: vi.fn().mockResolvedValue({ data: [], response: { ok: true } }) } as any;
+
+    await new ApiPluginRepository(client).getWorldspaces('Shared.esp', 'ModB');
+
+    expect(client.GET).toHaveBeenCalledWith(
+      '/plugins/{plugin}/worldspaces',
+      expect.objectContaining({ params: { path: { plugin: 'Shared.esp' }, query: { origin: 'ModB' } } }),
+    );
+  });
+
+  it('sends origin as a query param on getWorldspaceBlocks', async () => {
+    const client = { GET: vi.fn().mockResolvedValue({ data: { blocks: [], topCell: null }, response: { ok: true } }) } as any;
+
+    await new ApiPluginRepository(client).getWorldspaceBlocks('Shared.esp', 'Fallout4.esm:00003C', 'ModB');
+
+    expect(client.GET).toHaveBeenCalledWith(
+      '/plugins/{plugin}/worldspaces/{formKey}/blocks',
+      expect.objectContaining({
+        params: { path: { plugin: 'Shared.esp', formKey: 'Fallout4.esm:00003C' }, query: { origin: 'ModB' } },
+      }),
+    );
+  });
+
+  it('sends origin as a query param on getCellReferences', async () => {
+    const client = { GET: vi.fn().mockResolvedValue({ data: { persistent: [], temporary: [] }, response: { ok: true } }) } as any;
+
+    await new ApiPluginRepository(client).getCellReferences('Shared.esp', 'Fallout4.esm:00003C', 'ModB');
+
+    expect(client.GET).toHaveBeenCalledWith(
+      '/plugins/{plugin}/cells/{formKey}/references',
+      expect.objectContaining({
+        params: { path: { plugin: 'Shared.esp', formKey: 'Fallout4.esm:00003C' }, query: { origin: 'ModB' } },
+      }),
+    );
+  });
+
+  it('sends origin as a query param on getInteriorCells', async () => {
+    const client = { GET: vi.fn().mockResolvedValue({ data: { items: [], total: 0 }, response: { ok: true } }) } as any;
+
+    await new ApiPluginRepository(client).getInteriorCells('Shared.esp', 0, 50, 'ModB');
+
+    expect(client.GET).toHaveBeenCalledWith(
+      '/plugins/{plugin}/interior-cells',
+      expect.objectContaining({
+        params: { path: { plugin: 'Shared.esp' }, query: { offset: 0, limit: 50, origin: 'ModB' } },
+      }),
+    );
+  });
+
+  it('omits origin entirely on the spatial routes when none is given', async () => {
+    const client = { GET: vi.fn().mockResolvedValue({ data: [], response: { ok: true } }) } as any;
+
+    await new ApiPluginRepository(client).getWorldspaces('Plugin0.esp');
 
     expect(client.GET.mock.calls[0][1].params.query).not.toHaveProperty('origin');
   });

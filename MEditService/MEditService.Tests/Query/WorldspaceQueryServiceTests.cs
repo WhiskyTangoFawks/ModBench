@@ -17,11 +17,19 @@ public class WorldspaceQueryServiceTests
         IReadOnlyList<RecordSummary>? records = null,
         CellReferences? cellRefs = null) : IRecordReader
     {
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin) => cells;
+        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin)
+        {
+            LastGetWorldspaceCellsOrigin = origin;
+            return cells;
+        }
 
-        // #296: captures the origin GetWorldspaces actually resolved and passed down, so the
-        // plumbing (not just the repository-level filter) is verified independently of DuckDB.
+        // #296/#305: capture the origin each method actually resolved (or was explicitly given)
+        // and passed down, so the plumbing (not just the repository-level filter) is verified
+        // independently of DuckDB.
         public string? LastGetRecordsOrigin { get; private set; }
+        public string? LastGetWorldspaceCellsOrigin { get; private set; }
+        public string? LastGetInteriorCellsOrigin { get; private set; }
+        public string? LastGetCellReferencesOrigin { get; private set; }
 
         public PagedResult<RecordSummary> GetRecords(string t, string? p, string? s, int l, int o, string? origin = null)
         {
@@ -39,8 +47,16 @@ public class WorldspaceQueryServiceTests
         public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> t, string? p, string? s, int l, int o, string? origin = null) => new([], 0);
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferences(string fk) => [];
-        public PagedResult<CellSummary> GetInteriorCells(string p, int l, int o, string origin) => new([], 0);
-        public CellReferences GetCellReferences(string p, string fk, string origin) => cellRefs ?? new([], []);
+        public PagedResult<CellSummary> GetInteriorCells(string p, int l, int o, string origin)
+        {
+            LastGetInteriorCellsOrigin = origin;
+            return new(cells.Select(c => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY)).ToList(), cells.Count);
+        }
+        public CellReferences GetCellReferences(string p, string fk, string origin)
+        {
+            LastGetCellReferencesOrigin = origin;
+            return cellRefs ?? new([], []);
+        }
         public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => null;
     }
 
@@ -197,6 +213,71 @@ public class WorldspaceQueryServiceTests
         Assert.Equal("ModA", reader.LastGetRecordsOrigin);
     }
 
+    // #305: a caller that already knows which copy it's browsing (a tree row built from a
+    // specific origin) states it explicitly, and that must win over whatever the load order would
+    // otherwise resolve — the same shape RecordQueryService.GetRecords already has (#34). The
+    // session here resolves "M.esp" to "ModA", so a passing "ModB" through only proves the
+    // explicit value, not the fallback, actually reached GetRecords.
+    [Fact]
+    public void GetWorldspaces_ExplicitOrigin_OverridesResolvedOrigin()
+    {
+        var reader = new StubReader([]);
+        var session = new StubGameSession([
+            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA"),
+        ]);
+        var svc = new WorldspaceQueryService(new StubSession(reader, session), DuckDbTestFactory.MakePendingChangeService());
+
+        svc.GetWorldspaces("M.esp", origin: "ModB");
+
+        Assert.Equal("ModB", reader.LastGetRecordsOrigin);
+    }
+
+    [Fact]
+    public void GetWorldspaceBlocks_ExplicitOrigin_OverridesResolvedOrigin()
+    {
+        var reader = new StubReader([]);
+        var session = new StubGameSession([
+            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA"),
+        ]);
+        var svc = new WorldspaceQueryService(new StubSession(reader, session), DuckDbTestFactory.MakePendingChangeService());
+
+        svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", origin: "ModB");
+
+        Assert.Equal("ModB", reader.LastGetWorldspaceCellsOrigin);
+    }
+
+    [Fact]
+    public void GetInteriorCells_ExplicitOrigin_OverridesResolvedOrigin()
+    {
+        var reader = new StubReader([]);
+        var session = new StubGameSession([
+            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA"),
+        ]);
+        var svc = new WorldspaceQueryService(new StubSession(reader, session), DuckDbTestFactory.MakePendingChangeService());
+
+        svc.GetInteriorCells("M.esp", 50, 0, origin: "ModB");
+
+        Assert.Equal("ModB", reader.LastGetInteriorCellsOrigin);
+    }
+
+    // #305: the only prior coverage of GetInteriorCells with an omitted origin
+    // (WorldspaceQuery_NoSession_ThrowsInvalidOperation, above) only proves the no-session guard —
+    // it asserts nothing about real content flowing through with the load-order-resolved origin.
+    // Mirrors GetWorldspaces_MapsRecordsToSummaries so the omitted-origin path stays pinned by a
+    // real assertion, not just "it doesn't throw", once GetInteriorCells takes an optional origin.
+    [Fact]
+    public void GetInteriorCells_OmittedOrigin_ReturnsRealContent()
+    {
+        var svc = Service([
+            new CellLocationSummary("int:M.esp", "IntCell", null, null, null, null, 0, 0),
+        ]);
+
+        var result = svc.GetInteriorCells("M.esp", 50, 0);
+
+        Assert.Single(result.Items);
+        Assert.Equal("IntCell", result.Items[0].EditorId);
+    }
+
     [Fact]
     public void GetCellReferences_PendingCreated_AppearsUnderCell_InCorrectGroup()
     {
@@ -233,6 +314,26 @@ public class WorldspaceQueryServiceTests
         var result = ServiceWithChanges(changes).GetCellReferences("Patch.esp", "cell:Fallout4.esm");
 
         Assert.Empty(result.Persistent);
+    }
+
+    // #305: the explicit-origin counterpart to the resolved-origin test just above — StubSession's
+    // Session is null here too (resolves to "Data"), but stating "ModA" explicitly must still make
+    // the ModA-origin staged create visible, proving the explicit value overrides resolution rather
+    // than merely being accepted and ignored.
+    [Fact]
+    public void GetCellReferences_ExplicitOrigin_OverridesResolvedOrigin_IncludesMatchingPendingCreate()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        changes.Upsert(new PendingChangeUpsert("9999:Patch.esp", "Patch.esp", "refr",
+            new() { [PendingChangeConstants.CreateFieldPath] = PendingChangeConstants.NullElement },
+            "user", null, [],
+            ChangeType: PendingChangeConstants.CreateChangeType,
+            ParentCell: "cell:Fallout4.esm", PlacementGroup: PendingChangeConstants.PlacementGroupPersistent, FormRefs: null, Origin: "ModA"));
+
+        var result = ServiceWithChanges(changes).GetCellReferences("Patch.esp", "cell:Fallout4.esm", origin: "ModA");
+
+        Assert.Single(result.Persistent);
+        Assert.Equal("9999:Patch.esp", result.Persistent[0].FormKey);
     }
 
     [Fact]

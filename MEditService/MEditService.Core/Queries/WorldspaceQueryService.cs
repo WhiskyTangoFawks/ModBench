@@ -6,10 +6,13 @@ namespace MEditService.Core.Queries;
 
 public interface IWorldspaceQueryService
 {
-    IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin);
-    WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey);
-    CellReferences GetCellReferences(string plugin, string cellFormKey);
-    PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset);
+    // #305 / ADR-0036: origin — stated by a caller that knows which copy of `plugin` it's
+    // browsing (a tree row does; it was built from one), else resolved from the load order as
+    // before. Mirrors GetRecords/GetPluginRecordTypes (#34).
+    IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null);
+    WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null);
+    CellReferences GetCellReferences(string plugin, string cellFormKey, string? origin = null);
+    PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string? origin = null);
 }
 
 /// <summary>
@@ -24,18 +27,20 @@ public sealed class WorldspaceQueryService(ISessionManager session, IPendingChan
     private readonly ISessionManager _session = session;
     private readonly IPendingChangeService _changes = changes;
 
-    public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin)
+    public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null)
     {
+        origin ??= ResolveOrigin(plugin);
         var repo = RequireRepository();
         // #296: same class of bug as the other worldspace-tree reads — without an origin filter, two
         // same-filename plugins' worldspace lists silently merged into one under this plugin name.
-        return [.. repo.GetRecords("wrld", plugin, null, WorldspaceListLimit, 0, ResolveOrigin(plugin))
+        return [.. repo.GetRecords("wrld", plugin, null, WorldspaceListLimit, 0, origin)
             .Items.Select(r => new WorldspaceSummary(r.FormKey, r.EditorId))];
     }
 
-    public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey)
+    public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null)
     {
-        var cells = RequireRepository().GetWorldspaceCells(plugin, worldspaceFormKey, ResolveOrigin(plugin));
+        origin ??= ResolveOrigin(plugin);
+        var cells = RequireRepository().GetWorldspaceCells(plugin, worldspaceFormKey, origin);
 
         // A worldspace's TopCell (persistent interior cell) has no block/sub-block coordinates.
         var topCellRow = cells.FirstOrDefault(c => c.BlockX == null);
@@ -60,9 +65,9 @@ public sealed class WorldspaceQueryService(ISessionManager session, IPendingChan
         return new WorldspaceBlocks(blocks, topCell);
     }
 
-    public CellReferences GetCellReferences(string plugin, string cellFormKey)
+    public CellReferences GetCellReferences(string plugin, string cellFormKey, string? origin = null)
     {
-        var origin = ResolveOrigin(plugin);
+        origin ??= ResolveOrigin(plugin);
         var committed = RequireRepository().GetCellReferences(plugin, cellFormKey, origin);
         var pluginChanges = _changes.GetChanges(plugin, origin: origin);
 
@@ -113,16 +118,15 @@ public sealed class WorldspaceQueryService(ISessionManager session, IPendingChan
         return (deleted, persistentAdded, temporaryAdded);
     }
 
-    public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset) =>
-        RequireRepository().GetInteriorCells(plugin, limit, offset, ResolveOrigin(plugin));
+    public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string? origin = null) =>
+        RequireRepository().GetInteriorCells(plugin, limit, offset, origin ?? ResolveOrigin(plugin));
 
     private IRecordReader RequireRepository() =>
         _session.Repository ?? throw new InvalidOperationException("No session loaded.");
 
-    // #296: this query service is wire-facing (WorldspaceEndpoints) — the frontend has only ever
-    // supplied a bare plugin filename (PluginTreeProvider/PluginRepository never sends origin), so
-    // origin is resolved server-side via the shared PluginOriginResolver rather than added as a new
-    // query/route parameter.
+    // #296 / #305: wire-facing (WorldspaceEndpoints) — an ordinary load-order row has no origin to
+    // give, so this stays the fallback. #34/#305 gave the callers that *do* know (a tree row built
+    // from a specific copy) an explicit origin parameter on every method above instead.
     private string ResolveOrigin(string plugin) =>
         PluginOriginResolver.Resolve(_session.Session, plugin);
 }

@@ -113,7 +113,7 @@ public sealed class EndpointReceptionLoggingTests
         using var _ = loggerFactory;
         var logger = loggerFactory.CreateLogger(nameof(WorldspaceEndpoints));
 
-        WorldspaceEndpoints.GetWorldspaces("Plugin.esp", new StubWorldspaceQueryService(), logger);
+        WorldspaceEndpoints.GetWorldspaces("Plugin.esp", null, new StubWorldspaceQueryService(), logger);
 
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("Plugin.esp"));
     }
@@ -176,10 +176,10 @@ public sealed class EndpointReceptionLoggingTests
 
     private sealed class StubWorldspaceQueryService : IWorldspaceQueryService
     {
-        public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin) => [];
-        public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey) => throw new NotSupportedException();
-        public CellReferences GetCellReferences(string plugin, string cellFormKey) => throw new NotSupportedException();
-        public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset) => throw new NotSupportedException();
+        public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null) => [];
+        public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null) => throw new NotSupportedException();
+        public CellReferences GetCellReferences(string plugin, string cellFormKey, string? origin = null) => throw new NotSupportedException();
+        public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string? origin = null) => throw new NotSupportedException();
     }
 
     private sealed class StubRecordQueryService : IRecordQueryService
