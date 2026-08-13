@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 /** Top-level folder names that mean "this level is already the mod's data root"
  *  (a game data subfolder), so a lone one of them must NOT be peeled as a wrapper. */
-const DATA_DIRS = new Set([
+export const DATA_DIRS = new Set([
   'meshes', 'textures', 'materials', 'sound', 'music', 'scripts', 'source',
   'interface', 'strings', 'f4se', 'skse', 'mcm', 'seq', 'video', 'vis',
   'lodsettings', 'shadersfx', 'grass', 'terrain', 'planetdata', 'programs',
