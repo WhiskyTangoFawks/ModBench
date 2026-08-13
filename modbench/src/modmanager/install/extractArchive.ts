@@ -6,7 +6,11 @@ export type Runner = (bin: string, args: string[]) => Promise<void>;
 
 const CANDIDATES = ['7z', '7za', '7zz'] as const;
 
-const defaultRunner: Runner = (bin, args) =>
+/** The real spawn-based `Runner`. Exported only as a test seam — call it directly
+ *  with any real executable (e.g. `process.execPath`) to exercise the resolve/
+ *  reject wiring without a 7z binary or archive fixture. Not part of the module's
+ *  public API; callers of `extractArchive` never need it. */
+export const defaultRunner: Runner = (bin, args) =>
   new Promise((resolve, reject) => {
     const child = spawn(bin, args, { stdio: 'ignore' });
     child.on('error', reject); // ENOENT when the binary isn't on PATH
