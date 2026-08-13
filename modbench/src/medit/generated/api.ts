@@ -756,6 +756,7 @@ export interface components {
             loadOrderIndex?: number;
             isWinner?: boolean;
             editorId?: string | null;
+            origin?: string | null;
         };
         RecordSummaryPagedResult: {
             items?: components["schemas"]["RecordSummary"][] | null;
@@ -768,6 +769,7 @@ export interface components {
             fieldPath?: string | null;
             recordType?: string | null;
             editorId?: string | null;
+            origin?: string | null;
         };
         ReferenceValidationError: {
             fieldPath?: string | null;
@@ -1256,7 +1258,6 @@ export interface operations {
     GetChanges: {
         parameters: {
             query?: {
-                plugin?: string;
                 formKey?: string;
                 groupId?: string;
             };
