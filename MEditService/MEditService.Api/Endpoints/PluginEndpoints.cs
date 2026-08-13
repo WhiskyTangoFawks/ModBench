@@ -43,6 +43,14 @@ public static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(409);
 
+        app.MapPost("/plugins/load", LoadUnlistedPlugin)
+            .WithName("LoadUnlistedPlugin")
+            .WithTags("Plugins")
+            .Produces<PluginResponse>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(503);
+
         return app;
     }
 
@@ -71,6 +79,34 @@ public static class PluginEndpoints
             .WithTags("Records")
             .Produces<IReadOnlyList<string>>()
             .ProducesProblem(503);
+    }
+
+    // #34 / ADR-0035: loads a plugin file the effective load order does not name. The caller
+    // (Mod Management, which owns mods/ and the file-conflict merge) supplies the physical path
+    // and the origin it resolved the file from; the session decides everything else, since
+    // read-only-ness and non-participation are properties of not being in the load order, not
+    // choices a caller makes.
+    internal static IResult LoadUnlistedPlugin(LoadPluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        logger.LogInformation("Received LoadUnlistedPlugin for {Path} from {Origin}", req.Path, req.Origin);
+        if (string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("Plugin path and origin are required.", statusCode: 400);
+
+        try
+        {
+            return Results.Ok(sessionManager.LoadUnlistedPlugin(req.Path, req.Origin));
+        }
+        catch (FileNotFoundException ex)
+        {
+            logger.LogError(ex, "Unlisted plugin file not found: {Path}", req.Path);
+            return Results.Problem(ex.Message, statusCode: 404);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "No session when loading unlisted plugin {Path}", req.Path);
+            return Results.Problem(ex.Message, statusCode: 503);
+        }
     }
 
     internal static IResult CreatePlugin(CreatePluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
@@ -104,3 +140,5 @@ public static class PluginEndpoints
 }
 
 public record CreatePluginRequest(string Name);
+
+public record LoadPluginRequest(string Path, string Origin);

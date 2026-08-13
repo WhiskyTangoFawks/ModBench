@@ -141,23 +141,23 @@ public sealed class CompareResultColumnKeyIntegrityTests
 
     // ---- minimal ISessionManager/IGameSession fakes ----
     //
-    // Two origins of one physical plugin file can't be built via LoadExplicit (a real session
-    // can't yet hold two same-filename entries — that's #34's job, ADR-0036) — so, matching the
-    // established pattern from this ticket's other AC5 tests (DuckDbRecordRepositoryTests/
-    // PlacementIndexingTests), the repository is hand-indexed twice directly. session.Plugins
-    // gets exactly one entry (both override rows share "Shared.esp" as their Plugin, so one
-    // bare-Name-keyed PluginMetadata resolves masters/participation for both — pluginMasters/
-    // pluginParticipates are deliberately not origin-aware, per this ticket's own scoping).
+    // The repository is hand-indexed twice directly, matching the established pattern from #272's
+    // other AC5 tests (DuckDbRecordRepositoryTests/PlacementIndexingTests). session.Plugins gets
+    // exactly one entry, which is all this test needs: it asserts the *shape* of the response's
+    // column keys, not classification. Since #34 made pluginMasters/pluginParticipates
+    // ColumnKey-keyed, that lone entry resolves masters/participation only for its own origin and
+    // the other column falls back to the fail-open defaults — neither of which this test reads.
+    // A real two-copy session is exercised end-to-end in DuplicateFilenameSessionApiTests.
     private sealed class FakeGameSession(IReadOnlyList<PluginMetadata> plugins) : IGameSession
     {
         public string DataFolderPath => throw new NotSupportedException();
         public GameRelease GameRelease => GameRelease.Fallout4;
         public IReadOnlyList<PluginMetadata> Plugins { get; } = plugins;
         public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
-        public ILinkCache LinkCache => throw new NotSupportedException();
         public string? FilterSql { get; set; }
-        public IModGetter? GetMod(string pluginName) => throw new NotSupportedException();
+        public IModGetter? GetMod(string pluginName, string origin) => throw new NotSupportedException();
         public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();
+        public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) => throw new NotSupportedException();
         public void Dispose() { }
     }
 
@@ -169,6 +169,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
+        public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();

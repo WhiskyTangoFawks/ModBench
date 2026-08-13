@@ -52,6 +52,7 @@ public class WorldspaceQueryServiceTests
         public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string n) => throw new NotSupportedException();
+        public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string p, IReadOnlyList<PendingChange> c) => throw new NotSupportedException();
         public Task<PreparedPluginSave> PreparePluginSave(string p, IReadOnlyList<PendingChange> c) => throw new NotSupportedException();
         public Task ReindexPlugin(string p) => throw new NotSupportedException();
@@ -69,10 +70,10 @@ public class WorldspaceQueryServiceTests
         public GameRelease GameRelease => GameRelease.Fallout4;
         public IReadOnlyList<PluginMetadata> Plugins => plugins;
         public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
-        public Mutagen.Bethesda.Plugins.Cache.ILinkCache LinkCache => throw new NotSupportedException();
         public string? FilterSql { get; set; }
-        public Mutagen.Bethesda.Plugins.Records.IModGetter? GetMod(string pluginName) => null;
+        public Mutagen.Bethesda.Plugins.Records.IModGetter? GetMod(string pluginName, string origin) => null;
         public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();
+        public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) => throw new NotSupportedException();
         public void Dispose() { }
     }
 

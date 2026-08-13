@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Order;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -11,7 +10,14 @@ namespace MEditService.Core.Session;
 public sealed class GameSession : IGameSession
 {
     private readonly List<IModDisposeGetter> _mods = [];
-    private readonly Dictionary<string, IModGetter> _modsByName = new(StringComparer.OrdinalIgnoreCase);
+    // #34 / ADR-0036: keyed by the compound (origin, filename) identity, not the filename alone —
+    // two physical copies of one filename can be open at once (a load-order copy plus a shadowed
+    // one loaded on demand), and a filename-keyed dictionary silently dropped the first. The key
+    // is a joined string rather than a tuple purely so one OrdinalIgnoreCase comparer covers both
+    // halves; NUL can't occur in either, so the join is unambiguous.
+    private readonly Dictionary<string, IModGetter> _modsByKey = new(StringComparer.OrdinalIgnoreCase);
+
+    private static string KeyOf(string origin, string name) => $"{origin}\0{name}";
     private readonly List<PluginMetadata> _plugins = [];
     private readonly List<PluginLoadFailure> _loadFailures = [];
 
@@ -25,11 +31,10 @@ public sealed class GameSession : IGameSession
     // ImportGetter failures captured below, without re-opening the whole load order.
     internal void RecordIndexFailure(string pluginName, string reason) =>
         _loadFailures.Add(new PluginLoadFailure(pluginName, reason));
-    public ILinkCache LinkCache { get; }
     public string? FilterSql { get; set; }
 
-    public IModGetter? GetMod(string pluginName) =>
-        _modsByName.TryGetValue(pluginName, out var mod) ? mod : null;
+    public IModGetter? GetMod(string pluginName, string origin) =>
+        _modsByKey.TryGetValue(KeyOf(origin, pluginName), out var mod) ? mod : null;
 
     private sealed record ResolvedPlugin(string FileName, string FilePath, bool IsImmutable, bool Participates, string Origin);
 
@@ -104,8 +109,6 @@ public sealed class GameSession : IGameSession
         logger.LogDebug("Load order: {Count} plugin(s) ({Implicit} immutable)",
             ordered.Count, ordered.Count(p => p.IsImmutable));
 
-        var modListings = new List<IModListing<IModGetter>>(ordered.Count);
-
         for (int i = 0; i < ordered.Count; i++)
         {
             var (fileName, filePath, isImmutable, participates, origin) = ordered[i];
@@ -128,12 +131,10 @@ public sealed class GameSession : IGameSession
             try
             {
                 mod = ModFactory.ImportGetter(modPath, gameRelease);
-                var metadata = BuildPluginMetadata(mod, fileName, filePath, i, isImmutable, participates, origin);
+                var metadata = BuildPluginMetadata(mod, ordered[i], i);
 
                 _mods.Add(mod);
-                _modsByName[fileName] = mod;
-                // Stryker disable once Boolean : ToUntypedImmutableLinkCache reads listing.Mod directly and ignores the enabled flag
-                modListings.Add(new ModListing<IModGetter>(mod, enabled: true));
+                _modsByKey[KeyOf(origin, fileName)] = mod;
                 _plugins.Add(metadata);
 
                 logger.LogInformation("[{Index}] {FileName}: {RecordCount} records, masters: [{Masters}]",
@@ -147,35 +148,61 @@ public sealed class GameSession : IGameSession
             }
         }
 
-        logger.LogDebug("Building load order and link cache for {Count} plugin(s)", modListings.Count);
-        var loadOrder = new LoadOrder<IModListing<IModGetter>>(modListings);
-        LinkCache = loadOrder.ToUntypedImmutableLinkCache(gameRelease.ToCategory());
-        logger.LogDebug("GameSession ready");
+        logger.LogDebug("GameSession ready: {Count} plugin(s) open", _plugins.Count);
     }
 
     public PluginMetadata AddPlugin(string filePath)
+    {
+        // A plugin created via AddPlugin is appended to plugins.txt with the `*` prefix
+        // (SessionManager.CreatePlugin) — it always participates. It is also always written
+        // directly into the session's data folder, never a mod folder, so its origin is always
+        // the reserved Data-directory value (#269 / ADR-0036).
+        return Open(filePath, PluginOrigin.DataDirectory, _mods.Count, isImmutable: false, participates: true);
+    }
+
+    /// <summary>
+    /// Opens a plugin file the load order does not name — a copy shadowed by a higher-priority
+    /// mod, or a file <c>plugins.txt</c> never lists — on demand, mid-session (#34 / ADR-0035).
+    /// It is read-only (ADR-0036: editing a file the game does not load changes nothing anywhere)
+    /// and never participates in winner computation, so it can arrive late without invalidating
+    /// any classification already on screen.
+    /// </summary>
+    /// <param name="loadOrderIndex">
+    /// The index it is compared *against* — the load-order copy of the same filename, so the two
+    /// land adjacent in the compare grid, which orders columns by it. It never decides a winner:
+    /// non-participating rows are excluded from the winner sweep by the `plugins` join, not by
+    /// their index.
+    /// </param>
+    public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) =>
+        Open(filePath, origin, loadOrderIndex, isImmutable: true, participates: false, inLoadOrder: false);
+
+    private PluginMetadata Open(
+        string filePath, string origin, int loadOrderIndex, bool isImmutable, bool participates, bool inLoadOrder = true)
     {
         var fileName = Path.GetFileName(filePath);
         var modKey = ModKey.FromFileName(fileName);
         var modPath = new ModPath(modKey, filePath);
         var mod = ModFactory.ImportGetter(modPath, GameRelease);
 
-        var loadOrderIndex = _mods.Count;
         _mods.Add(mod);
-        _modsByName[fileName] = mod;
+        _modsByKey[KeyOf(origin, fileName)] = mod;
 
-        // A plugin created via AddPlugin is appended to plugins.txt with the `*` prefix
-        // (SessionManager.CreatePlugin) — it always participates. It is also always written
-        // directly into the session's data folder, never a mod folder, so its origin is always
-        // the reserved Data-directory value (#269 / ADR-0036).
-        var metadata = BuildPluginMetadata(mod, fileName, filePath, loadOrderIndex, isImmutable: false, participates: true, origin: PluginOrigin.DataDirectory);
+        // No Mutagen LoadOrder or link cache is built here or anywhere else in this class: reads
+        // answer from the DuckDB index (ADR-0025), and the write path builds its own typed cache
+        // per save from the load-order members only (SessionManager.BuildTypedLinkCache). That
+        // matters for this method in particular — Mutagen's LoadOrder is keyed by ModKey and
+        // refuses a second listing for a filename it already holds.
+        var metadata = BuildPluginMetadata(
+            mod, new ResolvedPlugin(fileName, filePath, isImmutable, participates, origin), loadOrderIndex, inLoadOrder);
         _plugins.Add(metadata);
         return metadata;
     }
 
     private static PluginMetadata BuildPluginMetadata(
-        IModGetter mod, string fileName, string filePath, int loadOrderIndex, bool isImmutable, bool participates, string origin)
+        IModGetter mod, ResolvedPlugin plugin, int loadOrderIndex, bool inLoadOrder = true)
     {
+        var (fileName, filePath, isImmutable, participates, origin) = plugin;
+
         var masters = mod.MasterReferences
             .Select(r => r.Master.FileName.ToString())
             .ToList();
@@ -190,7 +217,8 @@ public sealed class GameSession : IGameSession
             RecordCount: mod.EnumerateMajorRecords().Count(),
             IsImmutable: isImmutable,
             Origin: origin,
-            Participates: participates
+            Participates: participates,
+            InLoadOrder: inLoadOrder
         );
     }
 
@@ -201,6 +229,5 @@ public sealed class GameSession : IGameSession
             // Stryker disable once Statement : verifying per-mod disposal requires OS-level resource checks beyond the public API
             mod.Dispose();
         }
-        (LinkCache as IDisposable)?.Dispose();
     }
 }

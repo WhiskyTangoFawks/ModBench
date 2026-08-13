@@ -327,6 +327,7 @@ public sealed class PluginSaverSaveGroupTests
         public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> plugins, GameRelease gameRelease) => throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
+        public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
         public string ReserveFormKey(string plugin) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public void SetFilter(string sql) => throw new NotSupportedException();
@@ -339,10 +340,10 @@ public sealed class PluginSaverSaveGroupTests
         public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
         public string DataFolderPath => throw new NotSupportedException();
         public GameRelease GameRelease => throw new NotSupportedException();
-        public ILinkCache LinkCache => throw new NotSupportedException();
         public string? FilterSql { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
-        public IModGetter? GetMod(string pluginName) => throw new NotSupportedException();
+        public IModGetter? GetMod(string pluginName, string origin) => throw new NotSupportedException();
         public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();
+        public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) => throw new NotSupportedException();
         public void Dispose() { }
     }
 }

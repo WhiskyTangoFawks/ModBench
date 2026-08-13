@@ -1,5 +1,4 @@
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Session;
@@ -10,8 +9,10 @@ public interface IGameSession : IDisposable
     GameRelease GameRelease { get; }
     IReadOnlyList<PluginMetadata> Plugins { get; }
     IReadOnlyList<PluginLoadFailure> LoadFailures { get; }
-    ILinkCache LinkCache { get; }
     string? FilterSql { get; set; }
-    IModGetter? GetMod(string pluginName);
+    // #34 / ADR-0036: origin is required, not optional — a session can hold two copies of one
+    // filename, so the filename alone no longer identifies which mod to return.
+    IModGetter? GetMod(string pluginName, string origin);
     PluginMetadata AddPlugin(string filePath);
+    PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex);
 }

@@ -135,10 +135,14 @@ public sealed class RecordQueryService(
             }).ToList();
 
             var sessionPlugins = RequireSession().Plugins;
-            var pluginMasters = sessionPlugins.ToDictionary(p => p.Name, p => p.Masters);
+            // #34 / ADR-0036: keyed by the compound column identity, like everything else here
+            // since #272. These two were the last filename-keyed structures in this method, safe
+            // only while a session could hold at most one plugin per filename — with a second copy
+            // loaded, a filename key is ambiguous, and ToDictionary throws outright.
+            var pluginMasters = sessionPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Masters);
             // #267 / ADR-0035: a non-participating plugin's override is indexed and browsable but
             // never contributes to conflict classification.
-            var pluginParticipates = sessionPlugins.ToDictionary(p => p.Name, p => p.Participates);
+            var pluginParticipates = sessionPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
             var classification = _conflictClassifier.Classify(withPending, pluginMasters, resolveFormKey, pluginParticipates);
             // #272 / ADR-0036: two live bugs fixed together here, both invisible on the
             // pre-#272 suite because every fixture used the elided Data origin.

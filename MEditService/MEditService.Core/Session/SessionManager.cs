@@ -106,7 +106,7 @@ public sealed class SessionManager(
         _nextFormIds.Clear();
         foreach (var plugin in session.Plugins)
         {
-            var mod = session.GetMod(plugin.Name)!;
+            var mod = session.GetMod(plugin.Name, plugin.Origin)!;
 
             _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
             try
@@ -179,6 +179,38 @@ public sealed class SessionManager(
         }
     }
 
+    public PluginResponse LoadUnlistedPlugin(string path, string origin)
+    {
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"Plugin file not found: {path}", path);
+
+        lock (_lock)
+        {
+            if (_session is null)
+                throw new InvalidOperationException(NoSessionMessage);
+
+            var name = Path.GetFileName(path);
+            // It shares the load-order slot of the copy that shadows it, so the two land adjacent
+            // in the compare grid (columns are ordered by this index). A file the load order names
+            // nowhere has nothing to sit beside, so it sorts after everything the session holds.
+            var loadOrderIndex = _session.Plugins
+                .Where(p => p.InLoadOrder && p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                .Select(p => p.LoadOrderIndex)
+                .DefaultIfEmpty(_session.Plugins.Max(p => p.LoadOrderIndex) + 1)
+                .First();
+
+            _logger.LogInformation("Loading unlisted plugin {Name} from {Origin} at load-order slot {Index}", name, origin, loadOrderIndex);
+            var metadata = _session.AddUnlistedPlugin(path, origin, loadOrderIndex);
+            var mod = _session.GetMod(metadata.Name, metadata.Origin)!;
+
+            // No UpdateWinners: a non-participating plugin is excluded from the winner sweep by the
+            // `plugins` join, so nothing already computed can change. That is the whole reason
+            // ADR-0035 lets these arrive lazily while load-order plugins must load together.
+            _repository!.Index(mod, metadata.LoadOrderIndex, metadata.Participates, metadata.Origin);
+            return PluginResponse.FromMetadata(metadata);
+        }
+    }
+
     public async Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes)
     {
         var (metadata, _, gameRelease) = RequirePlugin(plugin);
@@ -199,8 +231,13 @@ public sealed class SessionManager(
     {
         lock (_lock)
         {
+            // #34: load-order members only. A plugin loaded outside the load order is not in the
+            // game's load order by definition, and Mutagen's LoadOrder refuses a second listing
+            // for a filename it already holds — the write paths this cache serves only ever
+            // target load-order plugins anyway.
             var mods = _session!.Plugins
-                .Select(p => _session.GetMod(p.Name))
+                .Where(p => p.InLoadOrder)
+                .Select(p => _session.GetMod(p.Name, p.Origin))
                 .OfType<IModGetter>()
                 .ToList();
             return TypedLinkCacheFactory.Create(mods, gameRelease);
