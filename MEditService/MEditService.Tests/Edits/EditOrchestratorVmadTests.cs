@@ -49,13 +49,13 @@ public sealed class EditOrchestratorVmadTests
         public IReadOnlyList<PluginResponse> GetPlugins() => inner.GetPlugins();
         public IReadOnlyList<string> GetRecordTypes() => inner.GetRecordTypes();
         public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null)
-            => inner.GetRecords(type, plugin, search, limit, offset);
+            => inner.GetRecords(type, plugin, search, limit, offset, origin);
         public RecordDetail? GetRecord(string formKey) => inner.GetRecord(formKey);
         public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => inner.GetRecordForPlugin(formKey, plugin, origin);
         public string? GetRecordType(string formKey) => inner.GetRecordType(formKey);
         public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => inner.GetNativeFormKeys(plugin, origin);
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
-        public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null) => inner.GetPluginRecordTypes(plugin);
+        public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null) => inner.GetPluginRecordTypes(plugin, origin);
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
         public VmadData? GetVmad(string formKey, string plugin, string origin) =>
             throw new InvalidOperationException("GetVmad must not be called for non-VMAD edits");
@@ -111,13 +111,13 @@ public sealed class EditOrchestratorVmadTests
         public IReadOnlyList<PluginResponse> GetPlugins() => inner.GetPlugins();
         public IReadOnlyList<string> GetRecordTypes() => inner.GetRecordTypes();
         public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null)
-            => inner.GetRecords(type, plugin, search, limit, offset);
+            => inner.GetRecords(type, plugin, search, limit, offset, origin);
         public RecordDetail? GetRecord(string formKey) => inner.GetRecord(formKey);
         public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => inner.GetRecordForPlugin(formKey, plugin, origin);
         public string? GetRecordType(string formKey) => inner.GetRecordType(formKey);
         public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => inner.GetNativeFormKeys(plugin, origin);
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
-        public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null) => inner.GetPluginRecordTypes(plugin);
+        public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null) => inner.GetPluginRecordTypes(plugin, origin);
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => inner.GetReferences(targetFormKey);
         public VmadData? GetVmad(string formKey, string plugin, string origin) =>
             !formKey.Equals(vmadFormKey, StringComparison.OrdinalIgnoreCase)

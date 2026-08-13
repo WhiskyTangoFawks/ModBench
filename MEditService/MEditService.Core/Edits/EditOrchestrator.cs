@@ -883,7 +883,10 @@ public sealed partial class EditOrchestrator(
 
         var proposed = ReadStringArray(newMastersJson);
 
-        var loadedPlugins = session.Plugins.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // #34: load-order members only. A copy the load order does not name is loaded for reading,
+        // not by the game — accepting one as a master would write a master reference the game
+        // cannot resolve, which is the opposite of ADR-0036's "no observable change anywhere".
+        var loadedPlugins = session.Plugins.Where(p => p.InLoadOrder).Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var notLoaded = proposed.Where(m => !loadedPlugins.Contains(m)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (notLoaded.Count > 0)
         {

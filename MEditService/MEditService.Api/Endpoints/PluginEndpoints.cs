@@ -136,7 +136,7 @@ public static class PluginEndpoints
             // 409, not 404: the common way to reach this is naming a plugin that *is* loaded but is
             // a load-order member, which is a conflict with what that plugin is, not a missing
             // resource. Only the toggle's own copies are unloadable.
-            logger.LogError(ex, "Refused to unload {Plugin} from {Origin}", req.Plugin, req.Origin);
+            logger.LogWarning(ex, "Refused to unload {Plugin} from {Origin}", req.Plugin, req.Origin);
             return Results.Problem(ex.Message, statusCode: 409);
         }
         catch (InvalidOperationException ex)

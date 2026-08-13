@@ -196,7 +196,10 @@ public sealed class SessionManager(
             var loadOrderIndex = _session.Plugins
                 .Where(p => p.InLoadOrder && p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
                 .Select(p => p.LoadOrderIndex)
-                .DefaultIfEmpty(_session.Plugins.Max(p => p.LoadOrderIndex) + 1)
+                // DefaultIfEmpty's argument is evaluated eagerly, so the fallback is computed
+                // defensively: Plugins is empty when every load-order plugin failed to open, and a
+                // Max() throw there would surface as a misleading 503.
+                .DefaultIfEmpty(_session.Plugins.Count == 0 ? 0 : _session.Plugins.Max(p => p.LoadOrderIndex) + 1)
                 .First();
 
             _logger.LogInformation("Loading unlisted plugin {Name} from {Origin} at load-order slot {Index}", name, origin, loadOrderIndex);

@@ -157,7 +157,12 @@ public sealed class GameSession : IGameSession
         // (SessionManager.CreatePlugin) — it always participates. It is also always written
         // directly into the session's data folder, never a mod folder, so its origin is always
         // the reserved Data-directory value (#269 / ADR-0036).
-        return Open(filePath, PluginOrigin.DataDirectory, _mods.Count, isImmutable: false, participates: true);
+        // One past the highest index in use, not _mods.Count: RemoveUnlistedPlugin can shrink that
+        // list (#34), and a reused index would give two *participating* plugins the same
+        // load_order_idx — UpdateWinners takes MAX(load_order_idx), so both would win a FormKey
+        // they share.
+        var nextIndex = _plugins.Count == 0 ? 0 : _plugins.Max(p => p.LoadOrderIndex) + 1;
+        return Open(filePath, PluginOrigin.DataDirectory, nextIndex, isImmutable: false, participates: true);
     }
 
     /// <summary>
@@ -173,8 +178,19 @@ public sealed class GameSession : IGameSession
     /// non-participating rows are excluded from the winner sweep by the `plugins` join, not by
     /// their index.
     /// </param>
-    public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) =>
-        Open(filePath, origin, loadOrderIndex, isImmutable: true, participates: false, inLoadOrder: false);
+    public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex)
+    {
+        // Idempotent: the visibility toggle re-issues load for everything it discovered, so asking
+        // for a copy that is already open is an ordinary event rather than a caller error. Opening
+        // it twice would append a second PluginMetadata under the same (origin, filename), which
+        // makes every ColumnKey-keyed lookup ambiguous — GetCompare's own dictionaries throw on the
+        // pair — and would leak the first IModGetter.
+        var already = _plugins.FirstOrDefault(p =>
+            !p.InLoadOrder
+            && p.Name.Equals(Path.GetFileName(filePath), StringComparison.OrdinalIgnoreCase)
+            && p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase));
+        return already ?? Open(filePath, origin, loadOrderIndex, isImmutable: true, participates: false, inLoadOrder: false);
+    }
 
     /// <summary>
     /// Closes a plugin the load order does not name and forgets it (#34 / ADR-0035) — the inverse

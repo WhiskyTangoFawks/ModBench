@@ -212,6 +212,27 @@ public sealed class DuplicateFilenameSessionApiTests(LoadedApiFixture<TestPlugin
     }
 
     [Fact]
+    public async Task LoadingTheSameCopyTwice_LeavesOneEntryAndAWorkingCompare()
+    {
+        using var fx = BuildTwoCopies();
+        await LoadWinningCopyThenShadowedCopy(fx);
+        var shadowed = fx.Plugins.Single(p => p.Origin == "ModB");
+
+        // The visibility toggle re-issues load for everything it discovered, so a second load of a
+        // copy already open is an ordinary event, not a caller error.
+        var again = await _client.PostAsJsonAsync("/plugins/load", new { path = shadowed.Path, origin = shadowed.Origin });
+        again.EnsureSuccessStatusCode();
+
+        var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
+        Assert.Single(plugins.EnumerateArray(), p => p.GetProperty("origin").GetString() == "ModB");
+
+        // A duplicate session entry would make every column-keyed lookup ambiguous — GetCompare
+        // builds its masters/participation dictionaries by ColumnKey and would throw on the pair.
+        var compare = await _client.GetAsync($"/records/{Uri.EscapeDataString("000800:Shared.esp")}/compare");
+        Assert.Equal(HttpStatusCode.OK, compare.StatusCode);
+    }
+
+    [Fact]
     public async Task UnloadingALoadOrderPlugin_IsRefused()
     {
         using var fx = BuildTwoCopies();
