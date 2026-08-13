@@ -119,11 +119,12 @@ def collect_results(data: dict, diff_only: bool, repo_root: Path | None, target:
             if status not in ("Survived", "NoCoverage"):
                 continue
             total += 1
-            sl = m["location"]["start"]["line"]
-            el = m["location"]["end"]["line"]
+            loc = m["location"]
+            sl, sc = loc["start"]["line"], loc["start"]["column"]
+            el, ec = loc["end"]["line"], loc["end"]["column"]
             if diff_only and not mutant_survives_diff(fp, sl, el, repo_root, target, diff_cache):
                 continue
-            results.append((status, fp, sl, m.get("mutatorName", "?"),
+            results.append((status, fp, sl, sc, el, ec, m.get("mutatorName", "?"),
                             m.get("description", m.get("replacement", "?")),
                             source_context(src, sl, el)))
     return total, results
@@ -159,9 +160,15 @@ def main() -> None:
         print("No issues found.")
         sys.exit(0)
 
-    for status, fp, line, mutator, desc, ctx in results:
+    print("Location is file:line:startcol-endcol — the span is what distinguishes several "
+          "mutants sharing one line and mutator. The value after the mutator is the "
+          "REPLACEMENT Stryker substituted, NOT the original source; read the original "
+          "from the file before calling anything equivalent.")
+
+    for status, fp, sl, sc, el, ec, mutator, desc, ctx in results:
         display_path = fp.split("MEditService.Core/")[-1] if "MEditService.Core/" in fp else fp
-        print(f"\n[{status}] {display_path}:{line} [{mutator}] {desc}\n{ctx}")
+        span = f"{sl}:{sc}-{ec}" if sl == el else f"{sl}:{sc}-{el}:{ec}"
+        print(f"\n[{status}] {display_path}:{span} [{mutator}] {desc}\n{ctx}")
 
     sys.exit(1)
 

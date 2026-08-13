@@ -28,6 +28,13 @@ Answer for each finding: what specified user-facing requirement does the line se
 | A requirement, but no test observes it | **C — a real gap** |
 
 
+**Executed is not constrained.** A file whose mutants nearly all *survive* rather than
+show as uncovered is not thereby a route-B file. Its tests may assert outcomes perfectly
+well while their fixtures fail to discriminate the branches — a lone `Data/` folder that
+satisfies two different code paths identically leaves no assertion able to tell them
+apart. That is a missing scenario, which is route C. Read the covering tests before
+concluding either way; the survived-to-uncovered ratio does not decide it.
+
 Fast path — on `Equality` / `Conditional` / `Null coalescing` mutators, first check
 whether both branches are provably equal *at exactly the mutation point* under an
 invariant elsewhere (an enum-severity ordering, a sentinel no real value can match,
@@ -42,6 +49,21 @@ Within the finding's route, record the first disposition that fits. Across route
 preference is A over B over C: changing the code beats changing a test beats adding
 one.
 
+**A disposition that changes code is a behavior claim, and mutation testing cannot
+check it.** A run scores the code as written; it has no opinion on whether the code
+still does what it did before. So state what the old code produced and what the new code
+produces — as outputs or sets, not as a description of the mutation site — and name the
+input that distinguishes them. If none exists, say so.
+
+*"This branch is unreachable"* licenses **removing** it. It does not license replacing
+it with something else. One slice deleted an unreachable branch on exactly that correct
+premise and, in the same edit, mapped the values through a different path, adding
+members the original never had; every gate stayed green and a user-visible behavior
+broke silently.
+
+Your safety net is a **case**, not a file. A test that passes both before and after
+proves nothing about the change.
+
 **Route A — no requirement (code smells, `/code-review` vocabulary):**
 
 - **Delete** (**Dead Code**, **Speculative Generality**) — guards impossible or
@@ -51,7 +73,12 @@ one.
 - **Inline the middle man** (**Middle Man**) — the line only delegates onward → call
   the real target direct.
 - **Unify the duplicate** (**Duplicated Code**) — the same logic lives elsewhere →
-  extract one shared copy; coverage follows it.
+  extract one shared copy; coverage follows it. **Unifying is in scope when the
+  duplication is what produced the findings**, and does not wait for its own ticket —
+  deferring it to keep a diff small is the most common way this route gets missed.
+  Twice the duplication was the very thing making the surrounding dispositions correct:
+  an equivalence that holds only because of who calls a function is an equivalence a
+  second copy quietly erodes.
 - **Accept as invariant** — a defensive check at a trust boundary with no behavior a
   requirement-level test could observe → record why the code exists *and* why no test
   can see it.
@@ -91,9 +118,23 @@ Two rules bind the table:
 - **A surviving mutant is never, on its own, a justification for a test.** The
   justification is a requirement. If you cannot name the requirement, the finding is
   route A and the answer is to delete or simplify the code — not to cover it.
-- **Route C is the rarest outcome, not the default.** Reaching for it more than
-  occasionally means step 2 is being skipped: the routes were assigned by what would
-  kill the mutant rather than by what the code is for.
+- **Watch what is driving your routes.** Reaching for C repeatedly *can* mean step 2 is
+  being skipped — routes assigned by what would kill the mutant rather than by what the
+  code is for. It can equally mean the code genuinely is unconstrained: a file whose
+  fixtures never discriminate its branches produces honest C rows in bulk. The test is
+  whether every row names its requirement, not how many rows share a route.
+
+**What the gate checks.** Before the table is approved, it must survive:
+
+- **The count adds up.** Sum the groups and state the sum. One table reported `✓ 66`
+  over groups summing to 60; the six missing findings existed only in prose, where
+  nobody could check them.
+- **No row contradicts another.** A finding accepted as unobservable, in a table that
+  also proposes a test asserting the very thing that would observe it, means one of
+  those two rows is wrong. Read the table against itself before sending it.
+- **Route C names a requirement, not a mutant.**
+- **Every code-changing disposition carries its differential** (§3).
+- **Duplication found during triage is dispositioned, not deferred.**
 
 Once the table is approved:
 
@@ -103,6 +144,24 @@ Once the table is approved:
   surface to the developer with the analysis and a recommendation — these are proposals
   even after the table is approved, because each one needs its own requirement.
 - Accepts and equivalents: record with their invariant.
+
+**Verify against your prediction, not against the mutant.** Re-run afterwards and
+compare each row's outcome to what its disposition *predicted*:
+
+- Predicted accept, still survives → consistent. This is the common good case, not a
+  shortfall.
+- Predicted "the requirement is now constrained", still survives → **your understanding
+  was wrong**, not your kill count. The test does not observe what you thought. Go back
+  to step 2 and re-read the code. **Do not adjust the test until the mutant dies** —
+  that is the degenerate path, and it produces precisely the internals-coupled assertion
+  this skill exists to prevent.
+- Predicted killed, killed → consistent, and on its own confirms nothing.
+
+A row closes because a disposition is recorded and the evidence is consistent with it.
+Never because a mutant died. The re-run is evidence about your reasoning; it is not a
+scoreboard, and it has twice caught a test that could not fail — once where two distinct
+failures produced indistinguishable observations, once where a fixture was built from
+the very collection it asserted about.
 
 Close with the table again: finding → disposition → applied / proposed.
 
@@ -117,6 +176,11 @@ finding compose. Flag with concrete evidence from the test body.
 - **mechanism-not-outcome** — asserts internal call counts, intermediate state, or
   private structure instead of observable behavior (`retries == 3`).
 - **vacuous** — no assertion; only "does not throw"; or asserts a value it just set.
+- **self-referential** — the expectation derives from the same source as the behavior:
+  asserting against the very constant the code under test imports, or building a fixture
+  out of the collection being verified. Both sides move together, so the test cannot
+  fail. Invisible to coverage and to a static read of the diff — it looks like a normal
+  passing test — and it has appeared twice.
 - **over-mocking** — mock verifies mock; the test proves the wiring it declared.
 - **coupled-literals** — exact strings, magic numbers, or ordering the spec never
   constrained.
@@ -135,6 +199,15 @@ So the rules hold in both directions: every test enters the suite through a requ
 and a full red-green cycle, and every accept enters the record with its invariant. That
 is why a run of documented accepts is a pass, and an unexamined 100% kill-rate proves
 nothing.
+
+**The score re-enters at verification time if you let it.** Guarding the triage step is
+not enough: once dispositions are applied, "is the mutant dead yet" becomes the only
+cheaply-checkable proposition in the whole workflow, while every question worth asking —
+is there a requirement, is this equivalent, has this code earned its place — needs
+judgment. That asymmetry is why the pathology keeps returning, and why §4's verification
+step is framed around predictions rather than kills. A mutant is never a target. Killing
+one always has a degenerate solution available: assert the implementation detail it
+touched.
 
 ## As a review axis
 
