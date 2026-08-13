@@ -51,7 +51,7 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
 
         session.AddPlugin(newPluginPath);
 
-        Assert.NotNull(session.GetMod("NewEmpty.esp"));
+        Assert.NotNull(session.GetMod("NewEmpty.esp", PluginOrigin.DataDirectory));
     }
 
     [Fact]

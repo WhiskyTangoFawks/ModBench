@@ -144,7 +144,9 @@ public sealed class EndpointReceptionLoggingTests
             throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) =>
-            new(name, name, 0, false, false, [], 0, false, true, "Data", []);
+            new(name, name, 0, false, false, [], 0, false, true, "Data", [], true);
+        public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
+        public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
@@ -160,7 +162,7 @@ public sealed class EndpointReceptionLoggingTests
             string formKey, string plugin, Dictionary<string, System.Text.Json.JsonElement> fields,
             string source, string? description, string? changeType = null) =>
             new StageEditResult.NoSession();
-        public StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source, string? sourcePlugin = null) => throw new NotSupportedException();
+        public StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source, string? sourcePlugin = null, string? sourceOrigin = null) => throw new NotSupportedException();
         public CreateRecordOutcome CreateRecord(string plugin, string recordType, string? templateFormKey, string source) =>
             throw new NotSupportedException();
         public CreateRecordOutcome CreatePlacedRecord(string plugin, string recordType, string parentCell, string placementGroup,
@@ -182,14 +184,14 @@ public sealed class EndpointReceptionLoggingTests
     {
         public IReadOnlyList<PluginResponse> GetPlugins() => throw new NotSupportedException();
         public IReadOnlyList<string> GetRecordTypes() => throw new NotSupportedException();
-        public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset) =>
+        public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null) =>
             throw new NotSupportedException();
         public RecordDetail? GetRecord(string formKey) => throw new NotSupportedException();
         public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => throw new NotSupportedException();
         public string? GetRecordType(string formKey) => throw new NotSupportedException();
         public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => throw new NotSupportedException();
         public CompareResult? GetCompare(string formKey) => throw new NotSupportedException();
-        public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin) => throw new NotSupportedException();
+        public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null) => throw new NotSupportedException();
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => [];
         public VmadData? GetVmad(string formKey, string plugin, string origin) => throw new NotSupportedException();
         public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) => throw new NotSupportedException();

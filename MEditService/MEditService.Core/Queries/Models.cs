@@ -21,11 +21,14 @@ public record PluginResponse(
     bool IsImmutable,
     bool Participates,
     string Origin,
-    IReadOnlyList<MasterIssue> MasterIssues)
+    IReadOnlyList<MasterIssue> MasterIssues,
+    // InLoadOrder (#34 / ADR-0035): false for a plugin loaded on demand that the effective load
+    // order does not name. See PluginMetadata.InLoadOrder for why this is not Participates.
+    bool InLoadOrder)
 {
     public static PluginResponse FromMetadata(PluginMetadata m, IReadOnlyList<MasterIssue>? masterIssues = null) =>
         new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates, m.Origin,
-            masterIssues ?? []);
+            masterIssues ?? [], m.InLoadOrder);
 }
 
 // Origin (#296 / ADR-0036): the mod folder that provided this row's physical file, or a reserved

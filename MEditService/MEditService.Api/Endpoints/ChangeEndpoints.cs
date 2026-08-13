@@ -152,7 +152,7 @@ public static class ChangeEndpoints
             .LogInformation("Received CopyRecordTo for {FormKey} to {TargetPlugin}", formKey, targetPlugin);
         var decodedFormKey = Uri.UnescapeDataString(formKey);
         var decodedTarget = Uri.UnescapeDataString(targetPlugin);
-        return orchestrator.CopyRecordTo(decodedFormKey, decodedTarget, req.Source ?? "user", req.SourcePlugin).ToHttpResult();
+        return orchestrator.CopyRecordTo(decodedFormKey, decodedTarget, req.Source ?? "user", req.SourcePlugin, req.SourceOrigin).ToHttpResult();
     }
 
     private static IResult DeleteRecords(
@@ -373,6 +373,6 @@ public record CreatePlacedRecordRequest(
 // Issue #202: SourcePlugin, when given, copies that plugin's own version of the record (the
 // column-header menu's right-clicked column) rather than the overall winner — see
 // IEditOrchestrator.CopyRecordTo's own doc comment.
-public record CopyRecordRequest(string? Source, string? SourcePlugin = null);
+public record CopyRecordRequest(string? Source, string? SourcePlugin = null, string? SourceOrigin = null);
 
 public record RenumberRecordRequest(uint NewFormId, string Plugin, string? Source);

@@ -18,8 +18,15 @@ public interface IEditOrchestrator
     /// (issue #202: the column-header menu's "Copy as Override" copies the right-clicked column,
     /// not necessarily the winner); omitted (null), copies the overall winner, unchanged from
     /// pre-#202 behavior.
+    ///
+    /// <paramref name="sourceOrigin"/> (#34 / ADR-0036) names *which* copy of
+    /// <paramref name="sourcePlugin"/> to read when a session holds two of one filename — the
+    /// column the user actually invoked this on. Omitted, the origin is resolved from the filename,
+    /// which is correct only while that filename names one loaded copy. Reading a shadowed copy is
+    /// not editing it, so it is a legitimate source even though it is never a legitimate target.
     /// </summary>
-    StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source, string? sourcePlugin = null);
+    StageEditResult CopyRecordTo(
+        string formKey, string targetPlugin, string source, string? sourcePlugin = null, string? sourceOrigin = null);
 
     /// <summary>
     /// Reserves a new FormKey for <paramref name="plugin"/>, stages a <c>$create</c> change with a new GroupId,

@@ -42,30 +42,6 @@ public sealed class GameSessionLoadExplicitTests
     }
 
     [Fact]
-    public void LoadExplicit_CrossPluginOverride_ResolvesViaLinkCacheAndWinsByOrder()
-    {
-        FormKey shared = default;
-        using var fx = new PluginFixtureBuilder("gs-explicit-winner")
-            .WithPlugin("Fallout4.esm")
-            .WithPlugin("Base.esm", mod => shared = mod.Npcs.AddNew("SharedNPC").FormKey)
-            .WithPlugin("Override.esp", (mod, built) =>
-            {
-                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esm") });
-                var copy = built.Single(m => m.ModKey.FileName == "Base.esm").Npcs.First().DeepCopy();
-                copy.EditorID = "SharedNPC_Overridden";
-                mod.Npcs.Set(copy);
-            })
-            .BuildScattered();
-
-        using var session = GameSession.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-
-        // The record resolves across plugins, and the winner is the highest-order plugin that
-        // defines it (Override.esp), proving load-order winners over scattered physical paths.
-        Assert.True(session.LinkCache.TryResolve<INpcGetter>(shared, out var winner));
-        Assert.Equal("SharedNPC_Overridden", winner!.EditorID);
-    }
-
-    [Fact]
     public void LoadExplicit_MissingPluginFile_IsWarnedAndSkipped_NotALoadFailure()
     {
         using var fx = new PluginFixtureBuilder("gs-explicit-missing")

@@ -141,7 +141,7 @@ describe('ApiPluginRepository.getRecordTypes', () => {
     expect(result).toEqual(types);
     expect(client.GET).toHaveBeenCalledWith(
       '/plugins/{plugin}/record-types',
-      expect.objectContaining({ params: { path: { plugin: 'MyPlugin.esp' } } }),
+      expect.objectContaining({ params: { path: { plugin: 'MyPlugin.esp' }, query: {} } }),
     );
   });
 
@@ -488,5 +488,39 @@ describe('ApiPluginRepository.getInteriorCells', () => {
   it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
     const repo = new ApiPluginRepository(nonOkClient());
     await expect(repo.getInteriorCells('Plugin.esp', 0, 50)).rejects.toThrow(/500/);
+  });
+});
+
+// #34 / ADR-0036: a row that stands for a specific copy of a filename says which one; an ordinary
+// load-order row sends no origin at all and lets the backend resolve it.
+describe('ApiPluginRepository origin threading', () => {
+  it('sends origin as a query param on getRecordTypes', async () => {
+    const client = { GET: vi.fn().mockResolvedValue({ data: [], response: { ok: true } }) } as any;
+
+    await new ApiPluginRepository(client).getRecordTypes('Shared.esp', 'ModB');
+
+    expect(client.GET).toHaveBeenCalledWith(
+      '/plugins/{plugin}/record-types',
+      expect.objectContaining({ params: { path: { plugin: 'Shared.esp' }, query: { origin: 'ModB' } } }),
+    );
+  });
+
+  it('sends origin as a query param on getRecords', async () => {
+    const client = { GET: vi.fn().mockResolvedValue({ data: { items: [], total: 0 }, response: { ok: true } }) } as any;
+
+    await new ApiPluginRepository(client).getRecords('Shared.esp', 'WEAP', 0, 50, 'ModB');
+
+    expect(client.GET).toHaveBeenCalledWith(
+      '/records',
+      expect.objectContaining({ params: { query: expect.objectContaining({ plugin: 'Shared.esp', origin: 'ModB' }) } }),
+    );
+  });
+
+  it('omits origin entirely when none is given', async () => {
+    const client = { GET: vi.fn().mockResolvedValue({ data: { items: [], total: 0 }, response: { ok: true } }) } as any;
+
+    await new ApiPluginRepository(client).getRecords('Plugin0.esp', 'WEAP', 0, 50);
+
+    expect(client.GET.mock.calls[0][1].params.query).not.toHaveProperty('origin');
   });
 });

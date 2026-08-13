@@ -44,14 +44,14 @@ public sealed class RecordQueryService(
     public IReadOnlyList<string> GetRecordTypes() =>
         [.. RequireSchemas().Keys.Where(t => t != HeaderTableName).Order()];
 
-    public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset)
+    public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null)
     {
         var repository = RequireRepository();
         var schemas = RequireSchemas();
-        // #296: wire-facing (RecordEndpoints' /records only ever supplies a bare plugin filename),
-        // so origin is resolved server-side rather than added as a new query parameter — same
-        // reasoning as WorldspaceQueryService. Null when plugin itself is null (nothing to resolve).
-        var origin = plugin == null ? null : PluginOriginResolver.Resolve(_session.Session, plugin);
+        // #34: the caller states which copy when it knows (a tree row does; it was built from one).
+        // Otherwise the #296 behaviour stands — resolve server-side from the load order, since a
+        // bare filename is all most callers have. Null when plugin itself is null (nothing to resolve).
+        origin ??= plugin == null ? null : PluginOriginResolver.Resolve(_session.Session, plugin);
 
         PagedResult<RecordSummary> committed;
         if (type != null)
@@ -82,7 +82,8 @@ public sealed class RecordQueryService(
             return committed;
 
         var loadOrderIndex = RequireSession().Plugins
-            .FirstOrDefault(p => p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase))?.LoadOrderIndex ?? -1;
+            .FirstOrDefault(p => p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase)
+                && p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase))?.LoadOrderIndex ?? -1;
 
         // origin! : plugin is non-null past the guard above, and origin was resolved from that same
         // plugin nullability check at its declaration (line above), so it is non-null here too — the
@@ -135,10 +136,14 @@ public sealed class RecordQueryService(
             }).ToList();
 
             var sessionPlugins = RequireSession().Plugins;
-            var pluginMasters = sessionPlugins.ToDictionary(p => p.Name, p => p.Masters);
+            // #34 / ADR-0036: keyed by the compound column identity, like everything else here
+            // since #272. These two were the last filename-keyed structures in this method, safe
+            // only while a session could hold at most one plugin per filename — with a second copy
+            // loaded, a filename key is ambiguous, and ToDictionary throws outright.
+            var pluginMasters = sessionPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Masters);
             // #267 / ADR-0035: a non-participating plugin's override is indexed and browsable but
             // never contributes to conflict classification.
-            var pluginParticipates = sessionPlugins.ToDictionary(p => p.Name, p => p.Participates);
+            var pluginParticipates = sessionPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
             var classification = _conflictClassifier.Classify(withPending, pluginMasters, resolveFormKey, pluginParticipates);
             // #272 / ADR-0036: two live bugs fixed together here, both invisible on the
             // pre-#272 suite because every fixture used the elided Data origin.
@@ -189,13 +194,12 @@ public sealed class RecordQueryService(
         return null;
     }
 
-    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin)
+    public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null)
     {
         var repository = RequireRepository();
-        // #296: wire-facing (/plugins/{plugin}/record-types only ever supplies a bare plugin
-        // filename), so origin is resolved server-side rather than added as a new route parameter —
-        // same reasoning as GetRecords/GetWorldspaces.
-        var origin = PluginOriginResolver.Resolve(_session.Session, plugin);
+        // #34: stated by the caller when it knows which copy it is browsing (a tree row does),
+        // else resolved server-side from the load order as it has been since #296.
+        origin ??= PluginOriginResolver.Resolve(_session.Session, plugin);
         var counts = RequireSchemas().Keys
             .Where(t => t != HeaderTableName)
             .Select(t => (Type: t, Count: repository.CountRecordsForPlugin(t, plugin, origin)))

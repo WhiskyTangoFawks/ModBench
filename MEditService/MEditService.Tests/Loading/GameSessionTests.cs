@@ -151,9 +151,9 @@ public sealed class GameSessionPluginMetadataTests
             .Build();
         using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-        Assert.NotNull(session.GetMod("CASEMOD.ESP"));
-        Assert.NotNull(session.GetMod("casemod.esp"));
-        Assert.NotNull(session.GetMod("CaseMod.esp"));
+        Assert.NotNull(session.GetMod("CASEMOD.ESP", PluginOrigin.DataDirectory));
+        Assert.NotNull(session.GetMod("casemod.esp", PluginOrigin.DataDirectory));
+        Assert.NotNull(session.GetMod("CaseMod.esp", PluginOrigin.DataDirectory));
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public sealed class GameSessionPluginMetadataTests
             .Build();
         using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-        Assert.Null(session.GetMod("Unknown.esp"));
+        Assert.Null(session.GetMod("Unknown.esp", PluginOrigin.DataDirectory));
     }
 
     // ── Dispose ────────────────────────────────────────────────────────────────
@@ -181,19 +181,6 @@ public sealed class GameSessionPluginMetadataTests
 
         Assert.Contains(session.Plugins, p => p.Name == "Present.esp");
         Assert.DoesNotContain(session.Plugins, p => p.Name == "NonExistent.esp");
-    }
-
-    [Fact]
-    public void LoadedPlugin_FormKeyIsResolvableViaLinkCache()
-    {
-        FormKey npcKey = default;
-        using var data = new PluginFixtureBuilder("gs-linkcache")
-            .WithPlugin("WithNpc.esp", mod => npcKey = mod.Npcs.AddNew("TestNpc").FormKey)
-            .Build();
-
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-
-        Assert.True(session.LinkCache.TryResolve<IMajorRecordGetter>(npcKey, out _));
     }
 
     [Fact]

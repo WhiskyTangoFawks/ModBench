@@ -27,7 +27,8 @@ public static class VmadConflictClassifier
     // the same lookup as FieldDiff — no VMAD-specific index or expected-type list exists at this
     // layer, so every resolved Object is either ResolvedValidType or Unresolved, never
     // ResolvedWrongType (there's no Papyrus-declared expected record type to compare against).
-    // pluginParticipates (#267 / ADR-0035): the plugins.txt `*` prefix, keyed by plugin name. A
+    // pluginParticipates (#267 / ADR-0035): the plugins.txt `*` prefix, keyed by ColumnKey.Of(
+    // plugin, origin) since #34 — a filename alone can name two loaded copies. A
     // non-participating plugin's VMAD is excluded before any diff/winner/cell-state computation —
     // mirrors ConflictClassifier.Classify's identical filter. Null (the default) means every plugin
     // in inputs participates, preserving prior behavior for existing callers.
@@ -36,7 +37,7 @@ public static class VmadConflictClassifier
         Func<string, RecordLookupEntry?>? resolveFormKey = null,
         IReadOnlyDictionary<string, bool>? pluginParticipates = null)
     {
-        inputs = ConflictRules.FilterParticipating(inputs, i => i.Plugin, pluginParticipates);
+        inputs = ConflictRules.FilterParticipating(inputs, i => ColumnKey.Of(i.Plugin, i.Origin), pluginParticipates);
 
         var present = inputs.Where(i => i.Vmad != null).ToList();
         if (present.Count == 0)

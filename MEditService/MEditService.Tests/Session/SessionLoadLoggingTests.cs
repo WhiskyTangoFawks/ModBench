@@ -52,7 +52,7 @@ public sealed class SessionLoadLoggingTests
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("A.esp"));
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("B.esp"));
 
-        string[] pipelineFragments = ["Load order:", "Building load order and link cache", "GameSession ready"];
+        string[] pipelineFragments = ["Load order:", "GameSession ready"];
         foreach (var fragment in pipelineFragments)
         {
             Assert.Contains(entries, e => e.Level == LogLevel.Debug && e.Message.Contains(fragment));

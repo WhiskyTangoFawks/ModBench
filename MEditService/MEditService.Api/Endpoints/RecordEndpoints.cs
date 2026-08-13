@@ -13,11 +13,12 @@ public static class RecordEndpoints
             string? plugin,
             string? type,
             string? search,
+            string? origin = null,
             int limit = 50,
             int offset = 0) =>
         {
-            logger.LogInformation("Received GetRecords for {Plugin} {Type} {Search}", plugin, type, search);
-            var result = svc.GetRecords(type, plugin, search, limit, offset);
+            logger.LogInformation("Received GetRecords for {Plugin} ({Origin}) {Type} {Search}", plugin, origin, type, search);
+            var result = svc.GetRecords(type, plugin, search, limit, offset, origin);
             return Results.Ok(result);
         })
         .WithName("GetRecords")

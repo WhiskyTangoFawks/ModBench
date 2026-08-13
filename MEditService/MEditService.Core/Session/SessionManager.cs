@@ -106,7 +106,7 @@ public sealed class SessionManager(
         _nextFormIds.Clear();
         foreach (var plugin in session.Plugins)
         {
-            var mod = session.GetMod(plugin.Name)!;
+            var mod = session.GetMod(plugin.Name, plugin.Origin)!;
 
             _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
             try
@@ -179,6 +179,58 @@ public sealed class SessionManager(
         }
     }
 
+    public PluginResponse LoadUnlistedPlugin(string path, string origin)
+    {
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"Plugin file not found: {path}", path);
+
+        lock (_lock)
+        {
+            if (_session is null)
+                throw new InvalidOperationException(NoSessionMessage);
+
+            var name = Path.GetFileName(path);
+            // It shares the load-order slot of the copy that shadows it, so the two land adjacent
+            // in the compare grid (columns are ordered by this index). A file the load order names
+            // nowhere has nothing to sit beside, so it sorts after everything the session holds.
+            var loadOrderIndex = _session.Plugins
+                .Where(p => p.InLoadOrder && p.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                .Select(p => p.LoadOrderIndex)
+                // DefaultIfEmpty's argument is evaluated eagerly, so the fallback is computed
+                // defensively: Plugins is empty when every load-order plugin failed to open, and a
+                // Max() throw there would surface as a misleading 503.
+                .DefaultIfEmpty(_session.Plugins.Count == 0 ? 0 : _session.Plugins.Max(p => p.LoadOrderIndex) + 1)
+                .First();
+
+            _logger.LogInformation("Loading unlisted plugin {Name} from {Origin} at load-order slot {Index}", name, origin, loadOrderIndex);
+            var metadata = _session.AddUnlistedPlugin(path, origin, loadOrderIndex);
+            var mod = _session.GetMod(metadata.Name, metadata.Origin)!;
+
+            // No UpdateWinners: a non-participating plugin is excluded from the winner sweep by the
+            // `plugins` join, so nothing already computed can change. That is the whole reason
+            // ADR-0035 lets these arrive lazily while load-order plugins must load together.
+            _repository!.Index(mod, metadata.LoadOrderIndex, metadata.Participates, metadata.Origin);
+            return PluginResponse.FromMetadata(metadata);
+        }
+    }
+
+    public void UnloadUnlistedPlugin(string plugin, string origin)
+    {
+        lock (_lock)
+        {
+            if (_session is null)
+                throw new InvalidOperationException(NoSessionMessage);
+
+            // Session first: it owns the membership check (load-order members are refused there),
+            // so the index is only touched for a copy that was really unlisted and really open.
+            if (!_session.RemoveUnlistedPlugin(plugin, origin))
+                throw new KeyNotFoundException($"No unlisted plugin '{plugin}' from origin '{origin}' is loaded.");
+
+            _logger.LogInformation("Unloading unlisted plugin {Plugin} from {Origin}", plugin, origin);
+            _repository!.Unindex(plugin, origin);
+        }
+    }
+
     public async Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes)
     {
         var (metadata, _, gameRelease) = RequirePlugin(plugin);
@@ -199,8 +251,13 @@ public sealed class SessionManager(
     {
         lock (_lock)
         {
+            // #34: load-order members only. A plugin loaded outside the load order is not in the
+            // game's load order by definition, and Mutagen's LoadOrder refuses a second listing
+            // for a filename it already holds — the write paths this cache serves only ever
+            // target load-order plugins anyway.
             var mods = _session!.Plugins
-                .Select(p => _session.GetMod(p.Name))
+                .Where(p => p.InLoadOrder)
+                .Select(p => _session.GetMod(p.Name, p.Origin))
                 .OfType<IModGetter>()
                 .ToList();
             return TypedLinkCacheFactory.Create(mods, gameRelease);
@@ -260,8 +317,13 @@ public sealed class SessionManager(
         {
             if (_session == null)
                 throw new InvalidOperationException(NoSessionMessage);
+            // #34: load-order members only, for the same reason PluginOriginResolver scopes that
+            // way — this resolves the *file a write lands on* (SavePlugin/PreparePluginSave/
+            // ReindexPlugin all route through here), and a plugin outside the load order is
+            // read-only. Without the scope a save could pick a shadowed copy's path off a bare
+            // filename and write to a file the game does not load.
             var meta = _session.Plugins.FirstOrDefault(p =>
-                string.Equals(p.Name, plugin, StringComparison.OrdinalIgnoreCase)) ?? throw new KeyNotFoundException($"Plugin '{plugin}' not found in session.");
+                p.InLoadOrder && string.Equals(p.Name, plugin, StringComparison.OrdinalIgnoreCase)) ?? throw new KeyNotFoundException($"Plugin '{plugin}' not found in session.");
             return (meta, _repository!, _gameRelease);
         }
     }

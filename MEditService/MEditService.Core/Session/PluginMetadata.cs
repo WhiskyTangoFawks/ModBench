@@ -20,7 +20,14 @@ public record PluginMetadata(
     int RecordCount,
     bool IsImmutable,
     string Origin,
-    bool Participates = true
+    bool Participates = true,
+    // InLoadOrder (#34 / ADR-0035): whether the effective load order names this plugin at all.
+    // False only for a file loaded on demand that the load order does not point at — a copy
+    // shadowed by a higher-priority mod, or a file plugins.txt never lists. Distinct from
+    // Participates, which is the `*` prefix of a plugins.txt line that *is* in the load order: a
+    // disabled plugin doesn't participate but is still a legitimate write target, while this one
+    // is read-only and is not in Mutagen's LoadOrder or LinkCache at all.
+    bool InLoadOrder = true
 );
 
 /// <summary>A plugin that could not be loaded into the session (e.g. an unparseable record);

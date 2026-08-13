@@ -144,6 +144,34 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         tx.Commit();
     }
 
+    // The inverse of Index, table for table — same transaction discipline, and deliberately built
+    // from the same per-plugin delete helpers Index itself calls before each append, so a new
+    // indexed table cannot be added to one side without the other noticing (they are the same
+    // calls). "plugins" is dropped last: it is the row UpdateWinners joins against, and while it
+    // exists this (origin, plugin) is still a known member of the read model.
+    public void Unindex(string plugin, string origin)
+    {
+        _logger.LogInformation("Unindexing {Plugin} from {Origin}", plugin, origin);
+        using var tx = Connection.BeginTransaction();
+
+        foreach (var tableName in RequireSchemas().Keys)
+        {
+            if (tableName == "header") continue; // indexed separately, deleted by name just below
+            DeleteExistingForOrigin(tableName, plugin, origin);
+        }
+
+        DeleteExistingForOrigin("header", plugin, origin);
+        DeleteExistingForOrigin("form_lookup", plugin, origin);
+        DeleteFormReferencesForPlugin(plugin, origin);
+        DeleteVmadForPlugin(plugin, origin);
+        DeleteConditionsForPlugin(plugin, origin);
+        DeleteExistingForOrigin("placement", plugin, origin);
+        DeleteExistingForOrigin("cell_location", plugin, origin);
+        DeleteExistingForOrigin("plugins", plugin, origin);
+
+        tx.Commit();
+    }
+
     private void IndexRecordTable(
         string tableName, RecordTableSchema schema, IModGetter pluginMod,
         string plugin, string origin, int loadOrderIndex, List<FormRef> refs,

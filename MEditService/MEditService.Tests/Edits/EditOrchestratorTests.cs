@@ -1638,6 +1638,8 @@ public sealed class EditOrchestratorTests
             throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
+        public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
+        public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
         public string ReserveFormKey(string plugin) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) =>
             throw new NotSupportedException();
@@ -1669,10 +1671,11 @@ public sealed class EditOrchestratorTests
         public GameRelease GameRelease => _inner.GameRelease;
         public IReadOnlyList<PluginMetadata> Plugins { get; }
         public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
-        public ILinkCache LinkCache => _inner.LinkCache;
         public string? FilterSql { get => _inner.FilterSql; set => _inner.FilterSql = value; }
-        public IModGetter? GetMod(string pluginName) => _inner.GetMod(pluginName);
+        public IModGetter? GetMod(string pluginName, string origin) => _inner.GetMod(pluginName, origin);
         public PluginMetadata AddPlugin(string filePath) => _inner.AddPlugin(filePath);
+        public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) => _inner.AddUnlistedPlugin(filePath, origin, loadOrderIndex);
+        public bool RemoveUnlistedPlugin(string pluginName, string origin) => _inner.RemoveUnlistedPlugin(pluginName, origin);
         public void Dispose() { } // inner managed by StubSessionManagerWithImmutablePlugin
     }
 }

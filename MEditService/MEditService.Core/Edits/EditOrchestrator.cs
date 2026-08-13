@@ -326,7 +326,8 @@ public sealed partial class EditOrchestrator(
         };
     }
 
-    public StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source, string? sourcePlugin = null)
+    public StageEditResult CopyRecordTo(
+        string formKey, string targetPlugin, string source, string? sourcePlugin = null, string? sourceOrigin = null)
     {
         var (earlyOut, session, recordType) = ValidateEditContext(formKey, targetPlugin);
         if (earlyOut != null) return earlyOut;
@@ -336,8 +337,12 @@ public sealed partial class EditOrchestrator(
 
         // Issue #202: an explicit sourcePlugin copies that plugin's own version of the record (the
         // column-header menu's right-clicked column) rather than the overall winner.
+        // #34 / ADR-0036: with sourceOrigin the caller names which *copy* of that filename it
+        // right-clicked, which is the only way to tell two loaded copies apart. Without it the
+        // origin is resolved from the filename — the pre-#34 behaviour, and still correct for the
+        // overwhelming case of a filename naming exactly one loaded copy.
         var sourceRecord = sourcePlugin != null
-            ? _query.GetRecordForPlugin(formKey, sourcePlugin, ResolveOrigin(sourcePlugin))
+            ? _query.GetRecordForPlugin(formKey, sourcePlugin, sourceOrigin ?? ResolveOrigin(sourcePlugin))
             : _query.GetRecord(formKey);
         if (sourceRecord == null) return new StageEditResult.RecordNotFound();
 
@@ -878,7 +883,10 @@ public sealed partial class EditOrchestrator(
 
         var proposed = ReadStringArray(newMastersJson);
 
-        var loadedPlugins = session.Plugins.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // #34: load-order members only. A copy the load order does not name is loaded for reading,
+        // not by the game — accepting one as a master would write a master reference the game
+        // cannot resolve, which is the opposite of ADR-0036's "no observable change anywhere".
+        var loadedPlugins = session.Plugins.Where(p => p.InLoadOrder).Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var notLoaded = proposed.Where(m => !loadedPlugins.Contains(m)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (notLoaded.Count > 0)
         {
