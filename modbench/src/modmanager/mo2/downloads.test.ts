@@ -76,6 +76,16 @@ describe('parseDownloadMeta', () => {
     expect(meta.status).toBe('Uninstalled');
     expect(meta.hidden).toBe(true);
   });
+
+  // Open Meta File (docs/specs/downloads.md:84) is a documented hand-edit affordance —
+  // the one of the three QSettings::IniFormat files (.meta / meta.ini / ModOrganizer.ini)
+  // with a supported UX path to produce padding a writer never would (#326).
+  it('parses a hand-edited .meta with padded key=value spacing the same as the tight form', () => {
+    const tight = parseDownloadMeta('[General]\r\ninstalled=true\r\n');
+    const padded = parseDownloadMeta('[General]\r\ninstalled = true\r\n');
+    expect(padded.status).toBe('Installed');
+    expect(padded).toEqual(tight);
+  });
 });
 
 const row = (name: string, mtimeMs: number, hidden = false): DownloadRow => ({
