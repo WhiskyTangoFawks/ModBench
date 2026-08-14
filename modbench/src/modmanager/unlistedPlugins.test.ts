@@ -64,4 +64,10 @@ describe('findUnlistedPlugins', () => {
 
     expect(findUnlistedPlugins(index, []).map((p) => p.name).sort()).toEqual(['Light.esl', 'Master.esm']);
   });
+
+  it('does not treat a bare ".esp" (no basename) as a plugin, matching masterReader\'s extname-based classification', () => {
+    const index = indexOf({ ModA: ['.esp'] });
+
+    expect(findUnlistedPlugins(index, [])).toEqual([]);
+  });
 });

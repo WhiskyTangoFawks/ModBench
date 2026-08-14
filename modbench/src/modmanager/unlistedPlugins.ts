@@ -6,9 +6,9 @@
 // game's view at all, so their plugins are not "a copy the load order doesn't point at" in any
 // sense a user would recognise — and buildFileConflictIndex doesn't walk them either.
 
+import { extname } from 'node:path';
 import { foldPath, type FileConflictIndex } from './fileConflictIndex';
-
-const PLUGIN_EXTENSIONS = ['.esp', '.esm', '.esl'];
+import { PLUGIN_EXTENSIONS } from './masterReader';
 
 /** A plugin file the load order does not hold, addressed the way the backend addresses every
  *  plugin: (origin, filename) plus the physical path to read it from (ADR-0036). */
@@ -27,7 +27,7 @@ export interface LoadedPlugin {
 }
 
 function isRootLevelPlugin(relativePath: string): boolean {
-  return !relativePath.includes('/') && PLUGIN_EXTENSIONS.some((ext) => foldPath(relativePath).endsWith(ext));
+  return !relativePath.includes('/') && PLUGIN_EXTENSIONS.has(extname(relativePath).toLowerCase());
 }
 
 /** Every root-level plugin file provided by an enabled mod that `loadOrder` does not already hold.
