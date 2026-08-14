@@ -56,14 +56,16 @@ export function sortDownloadRows(
   column: DownloadSortColumn,
   descending: boolean,
 ): DownloadRow[] {
-  const sorted = [...rows].sort((a, b) => {
+  // Negate the comparator for descending, don't reverse the sorted array —
+  // reversing would also reverse tied rows, undoing the sort's stability (#325).
+  const dir = descending ? -1 : 1;
+  return [...rows].sort((a, b) => {
     const av = a[column];
     const bv = b[column];
-    if (av < bv) return -1;
-    if (av > bv) return 1;
+    if (av < bv) return -dir;
+    if (av > bv) return dir;
     return 0;
   });
-  return descending ? sorted.reverse() : sorted;
 }
 
 export function parseDownloadMeta(

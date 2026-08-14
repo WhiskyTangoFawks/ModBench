@@ -210,6 +210,9 @@ Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeIte
 - **Sort by…** — a command in the view's `…` overflow menu (no icon, so it doesn't
   compete for title-bar space): a `showQuickPick` over the four sortable fields (Name,
   Status, Size, Filetime) in both directions. Default remains Filetime descending.
+  The sort is **stable in both directions** — rows tied on the sorted field keep their
+  prior relative order, ascending or descending. This matters most on Status, which has
+  only three values, so ties are the common case rather than the exceptional one (#325).
 - **Filter** (`modbench.downloads.filter`, slot 1) — the shared Modbench filter widget,
   narrowing to rows whose filename contains what the user types, case-insensitively.
   Render-only: a keystroke never re-scans `downloads/`. An error row survives every filter,

@@ -114,6 +114,18 @@ describe('sortDownloadRows', () => {
     ];
     expect(sortDownloadRows(rows, 'status', false).map((r) => r.name)).toEqual(['a', 'b', 'c']);
   });
+
+  // Descending must also be stable: negating the comparator, not reversing the
+  // sorted array, so ties (the Downloaded pair) keep their relative order while
+  // the genuinely different value (Installed) still sorts to its correct place.
+  it('is a stable sort descending too: ties in the sorted column keep their relative order', () => {
+    const rows: DownloadRow[] = [
+      { ...row('a', 1), status: 'Downloaded' },
+      { ...row('b', 2), status: 'Downloaded' },
+      { ...row('c', 3), status: 'Installed' },
+    ];
+    expect(sortDownloadRows(rows, 'status', true).map((r) => r.name)).toEqual(['c', 'a', 'b']);
+  });
 });
 
 describe('filterHiddenRows', () => {
