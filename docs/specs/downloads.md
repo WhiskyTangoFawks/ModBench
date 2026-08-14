@@ -82,7 +82,9 @@ bookkeeping.
 13. As a user, I want to Open File on a row, so that I can inspect the download's
     contents in my system's associated application.
 14. As a user, I want to Open Meta File on a row, so that I can read or hand-edit the
-    `.meta` sidecar when I need to.
+    `.meta` sidecar when I need to — and my edit is read back correctly whether or not I
+    leave spaces around `key = value`, which MO2's own writer never emits but a hand-edit
+    naturally produces.
 15. As a user, I want Open Meta File unavailable when there's no sidecar, so that I'm
     not offered an action with nothing to open.
 16. As a user, I don't need a separate "Reveal in Explorer" row action, because the
