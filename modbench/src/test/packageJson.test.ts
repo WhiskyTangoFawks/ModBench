@@ -334,6 +334,28 @@ describe('package.json title-bar rubric (#247)', () => {
   });
 });
 
+// #259: cloud-upload read as "syncing to a remote" (saving a pending change writes to a local
+// plugin file); discard read as an error/warning state rather than a plain discard. Save and
+// Revert now share one glyph pair everywhere they appear — per-row inline actions and the
+// view-title Save All / Revert All — even though Revert All's icon is declared but never
+// rendered today (it sits in the `1_revert` overflow group, not navigation, per the title-bar
+// rubric's rule 4; see the "keeps Revert All out of the navigation group" test above). Declaring
+// it anyway keeps the pair consistent by construction and correct if it's ever promoted.
+describe('package.json Pending Changes row action icons (#259)', () => {
+  const commandTitle = (id: string) =>
+    (pkg.contributes.commands as { command: string; icon?: string }[]).find((c) => c.command === id);
+
+  it.each(['modbench.saveGroup', 'modbench.saveAllGroups'])(
+    '%s uses $(save) — a plain save affordance, not cloud-upload', (command) => {
+      expect(commandTitle(command)!.icon).toBe('$(save)');
+    });
+
+  it.each(['modbench.revertGroup', 'modbench.revertAllGroups'])(
+    '%s uses $(close) — a plain X, not the discard/error read', (command) => {
+      expect(commandTitle(command)!.icon).toBe('$(close)');
+    });
+});
+
 describe('package.json standalone Deploy/Purge/Launch withdrawal (#186)', () => {
   it('defaults deploymentMode to external so the alpha never exposes standalone deploy without explicit opt-in', () => {
     const prop = pkg.contributes.configuration.properties['modbench.mods.deploymentMode'];

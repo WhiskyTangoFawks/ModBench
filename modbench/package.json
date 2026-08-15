@@ -215,25 +215,25 @@
       {
         "command": "modbench.saveGroup",
         "title": "Save Pending Change",
-        "icon": "$(cloud-upload)",
+        "icon": "$(save)",
         "category": "Modbench"
       },
       {
         "command": "modbench.revertGroup",
         "title": "Revert Pending Change",
-        "icon": "$(discard)",
+        "icon": "$(close)",
         "category": "Modbench"
       },
       {
         "command": "modbench.saveAllGroups",
         "title": "Save All Pending Changes",
-        "icon": "$(cloud-upload)",
+        "icon": "$(save)",
         "category": "Modbench"
       },
       {
         "command": "modbench.revertAllGroups",
         "title": "Revert All Pending Changes",
-        "icon": "$(discard)",
+        "icon": "$(close)",
         "category": "Modbench"
       },
       {
