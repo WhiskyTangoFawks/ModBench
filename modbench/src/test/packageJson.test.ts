@@ -362,3 +362,85 @@ describe('package.json standalone Deploy/Purge/Launch withdrawal (#186)', () => 
     }
   });
 });
+
+// #280: the legacy block hardcoded "Modbench: " into `title` (leaking into every context menu it
+// appeared in — "Modbench: Delete Record" on a tree row); the newer block set `category:
+// "Modbench"` with a bare `title` instead, letting VS Code compose "Modbench: <title>" for the
+// palette while context menus render the bare title. This closes every command onto that second,
+// correct shape — category is metadata independent of palette visibility (it changes nothing in
+// a context menu, which always renders the bare title), so every command gets one even when also
+// gated out of the palette below.
+describe('package.json command titles and categories (#280)', () => {
+  const commands = pkg.contributes.commands as { command: string; title: string; category?: string }[];
+  const palette = pkg.contributes.menus.commandPalette as { command: string; when: string }[];
+
+  it('no title carries the hardcoded "Modbench: " palette prefix — category supplies it instead', () => {
+    const offenders = commands.filter((c) => c.title.startsWith('Modbench: '));
+    expect(offenders.map((c) => c.command)).toEqual([]);
+  });
+
+  it('every modbench.* command declares category "Modbench", independent of palette visibility', () => {
+    const offenders = commands.filter((c) => c.category !== 'Modbench');
+    expect(offenders.map((c) => c.command)).toEqual([]);
+  });
+
+  // These only do something when invoked with a tree/webview argument the Command Palette never
+  // supplies (no formKey, no ctx, no clicked node) — and unlike modbench.deleteRecord (falls back
+  // to a tracked tree selection) or modbench.referencedByTree.copy (falls back to the view's own
+  // selection), none of these has an ambient fallback. Left live, each is either a silent no-op
+  // or — modbench.copyAsOverrideInto — a guaranteed "No record selected." toast: a palette entry
+  // whose only possible outcome is an error costs a user a click to discover, for nothing (AC5).
+  // modbench.showReferencedBy is deliberately absent: post-#282 it takes no argument at all
+  // (focuses the Referenced By view) and always works from the palette — the issue's own cited
+  // no-op example is stale.
+  // Exhaustive both ways, same "nothing missing, nothing extra" shape as EXPECTED_COMMANDS.
+  const PALETTE_GATED = [
+    'modbench.openHeader',
+    'modbench.createPlaced',
+    'modbench.saveGroup',
+    'modbench.revertGroup',
+    'modbench.copyAsOverrideInto',
+    'modbench.pendingCell.reveal',
+    'modbench.pendingCell.saveGroup',
+    'modbench.pendingCell.revertGroup',
+    'modbench.columnHeader.copyAsNewRecord',
+    'modbench.columnHeader.removeOverride',
+    'modbench.columnHeader.addMaster',
+    'modbench.array.add',
+    'modbench.array.remove',
+    'modbench.array.moveUp',
+    'modbench.array.moveDown',
+    'modbench.vmad.addScript',
+    'modbench.vmad.removeScript',
+    'modbench.vmad.addProperty',
+    'modbench.vmad.removeProperty',
+    'modbench.vmad.setScriptFlags',
+    'modbench.vmad.setPropertyFlags',
+    'modbench.downloads.install',
+    'modbench.downloads.visitNexus',
+    'modbench.downloads.openFile',
+    'modbench.downloads.openMeta',
+    'modbench.downloads.delete',
+    'modbench.downloads.hide',
+    'modbench.downloads.unhide',
+    'modbench.modList.mod.openInExplorer',
+    'modbench.modList.mod.addSeparatorBelow',
+    'modbench.modList.mod.moveToSeparator',
+    'modbench.modList.mod.uninstall',
+    'modbench.modList.mod.viewOnNexus',
+    'modbench.modList.separator.rename',
+    'modbench.modList.separator.addSeparatorBelow',
+    'modbench.modList.separator.delete',
+    'modbench.modList.overwrite.reveal',
+    'modbench.pluginListTree.revealInExplorer',
+  ] as const;
+
+  it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
+    expect(PALETTE_GATED).toHaveLength(38);
+    const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
+    const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
+    const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));
+    expect(missingGate).toEqual([]);
+    expect(unexpectedGate).toEqual([]);
+  });
+});
