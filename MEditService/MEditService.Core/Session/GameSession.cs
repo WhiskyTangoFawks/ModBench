@@ -98,7 +98,7 @@ public sealed class GameSession : IGameSession
     /// computation, i.e. its plugins.txt `*` prefix (#270 / ADR-0035).
     /// </summary>
     public static GameSession LoadExplicit(
-        string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> plugins, GameRelease gameRelease, ILogger? logger = null)
+        string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease, ILogger? logger = null)
     {
         var implicitKeys = ResolveImplicitKeys(gameDirectory, gameRelease);
 

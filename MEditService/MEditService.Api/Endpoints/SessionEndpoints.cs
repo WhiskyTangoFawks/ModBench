@@ -124,7 +124,7 @@ public static class SessionEndpoints
             // (#275). #270 / ADR-0035: so is Participates, the plugins.txt `*` prefix; the guard
             // above has already rejected a null, so the caller stated it.
             var explicitPlugins = req.Plugins
-                .Select(p => (p.Name, p.Path, p.Origin, Participates: p.Participates!.Value))
+                .Select(p => new ExplicitPluginInput(p.Name, p.Path, p.Origin, p.Participates!.Value))
                 .ToList();
             sessionManager.LoadExplicit(req.GameDirectory, explicitPlugins, gameRelease);
             return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? []));

@@ -29,7 +29,7 @@ public interface ISessionManager
     /// value (#269 / ADR-0036) — and whether it participates in winner computation, i.e. its
     /// plugins.txt `*` prefix (#270 / ADR-0035).
     /// </summary>
-    void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> plugins, GameRelease gameRelease);
+    void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease);
 
     void Unload();
 

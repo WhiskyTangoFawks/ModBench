@@ -66,7 +66,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         Directory.CreateDirectory(gameDir);
 
         var builtMods = new List<Fallout4Mod>();
-        var explicitPlugins = new List<(string Name, string Path, string Origin, bool Participates)>();
+        var explicitPlugins = new List<ExplicitPluginInput>();
         var i = 0;
         foreach (var (name, _, enabled, configure, writeParams, origin) in _plugins)
         {
@@ -83,7 +83,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
                 var folder = Path.Combine(root, $"mod-{i:D2}-{Path.GetFileNameWithoutExtension(name)}");
                 Directory.CreateDirectory(folder);
                 targetPath = Path.Combine(folder, name);
-                explicitPlugins.Add((name, targetPath, origin, enabled));
+                explicitPlugins.Add(new ExplicitPluginInput(name, targetPath, origin, enabled));
             }
 
             mod.WriteToBinary(targetPath, writeParams);
@@ -113,7 +113,7 @@ public interface IApiPluginFixture<TSelf> : IDisposable where TSelf : IApiPlugin
 }
 
 public sealed record ScatteredFixtureData(
-    string Root, string GameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> Plugins) : IDisposable
+    string Root, string GameDirectory, IReadOnlyList<ExplicitPluginInput> Plugins) : IDisposable
 {
     public void Dispose() => Directory.Delete(Root, recursive: true);
 }

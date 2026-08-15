@@ -77,7 +77,7 @@ public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposa
 
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) =>
             inner.Load(dataFolderPath, pluginsTxtPath, gameRelease);
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<(string Name, string Path, string Origin, bool Participates)> plugins, GameRelease gameRelease) =>
+        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) =>
             inner.LoadExplicit(gameDirectory, plugins, gameRelease);
         public void Unload() => inner.Unload();
         public PluginResponse CreatePlugin(string name) => inner.CreatePlugin(name);

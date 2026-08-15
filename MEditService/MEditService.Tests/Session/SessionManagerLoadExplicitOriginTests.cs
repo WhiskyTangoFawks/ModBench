@@ -25,7 +25,7 @@ public sealed class SessionManagerLoadExplicitOriginTests
         using var fx = new PluginFixtureBuilder("sm-explicit-origin")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .BuildScattered();
-        var withOrigin = fx.Plugins.Select(p => (p.Name, p.Path, Origin: "SomeMod", p.Participates)).ToList();
+        var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
         using var manager = MakeManager();
         ISessionManager sessionManager = manager;
@@ -44,7 +44,7 @@ public sealed class SessionManagerLoadExplicitOriginTests
         using var fx = new PluginFixtureBuilder("sm-explicit-origin-indexed")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .BuildScattered();
-        var withOrigin = fx.Plugins.Select(p => (p.Name, p.Path, Origin: "SomeMod", p.Participates)).ToList();
+        var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
         using var manager = MakeManager();
         ISessionManager sessionManager = manager;
