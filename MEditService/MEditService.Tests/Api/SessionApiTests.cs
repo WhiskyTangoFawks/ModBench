@@ -77,7 +77,7 @@ public sealed class SessionApiTests(LoadedApiFixture<TestPluginFixture> loaded) 
         var badPath = System.IO.Path.Combine(fx.Root, "Bad.esp");
         await System.IO.File.WriteAllTextAsync(badPath, "this is not a plugin");
 
-        var plugins = fx.Plugins.Append((Name: "Bad.esp", Path: badPath, Origin: PluginOrigin.DataDirectory, Participates: true))
+        var plugins = fx.Plugins.Append(new ExplicitPluginInput("Bad.esp", badPath, PluginOrigin.DataDirectory, true))
             .Select(p => new { name = p.Name, path = p.Path, origin = p.Origin, participates = p.Participates });
 
         var response = await _client.PostAsJsonAsync("/session/load-explicit", new

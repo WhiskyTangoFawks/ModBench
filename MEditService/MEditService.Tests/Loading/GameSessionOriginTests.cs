@@ -89,7 +89,7 @@ public sealed class GameSessionOriginTests
         using var fx = new PluginFixtureBuilder("gs-origin-explicit-real")
             .WithPlugin("Mod.esp")
             .BuildScattered();
-        var withOrigin = fx.Plugins.Select(p => (p.Name, p.Path, Origin: "SomeMod", p.Participates)).ToList();
+        var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
         using var session = GameSession.LoadExplicit(fx.GameDirectory, withOrigin, GameRelease.Fallout4).Opened();
 

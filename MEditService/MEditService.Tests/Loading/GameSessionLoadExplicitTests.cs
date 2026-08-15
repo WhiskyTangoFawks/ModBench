@@ -48,7 +48,7 @@ public sealed class GameSessionLoadExplicitTests
             .WithPlugin("Good.esp", mod => mod.Npcs.AddNew("GoodNpc"))
             .BuildScattered();
 
-        var plugins = fx.Plugins.Append(("Missing.esp", "/nonexistent/path/Missing.esp", PluginOrigin.DataDirectory, true)).ToList();
+        var plugins = fx.Plugins.Append(new ExplicitPluginInput("Missing.esp", "/nonexistent/path/Missing.esp", PluginOrigin.DataDirectory, true)).ToList();
 
         using var session = GameSession.LoadExplicit(fx.GameDirectory, plugins, GameRelease.Fallout4).Opened();
 
@@ -67,7 +67,7 @@ public sealed class GameSessionLoadExplicitTests
         // A file that exists with a plugin extension but is not a valid plugin: it must not abort the load.
         var badPath = Path.Combine(fx.Root, "Bad.esp");
         File.WriteAllText(badPath, "this is not a plugin");
-        var plugins = fx.Plugins.Append(("Bad.esp", badPath, PluginOrigin.DataDirectory, true)).ToList();
+        var plugins = fx.Plugins.Append(new ExplicitPluginInput("Bad.esp", badPath, PluginOrigin.DataDirectory, true)).ToList();
 
         using var session = GameSession.LoadExplicit(fx.GameDirectory, plugins, GameRelease.Fallout4).Opened();
 
