@@ -2,9 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 
 vi.mock('node:fs/promises');
-vi.mock('node:child_process');
 
-import { detectGamePaths, parseLibraryFoldersVdf } from '../GamePathDetector';
+import { detectGamePaths, detectWindowsGamePaths, parseLibraryFoldersVdf, parseRegQuerySteamPath } from '../GamePathDetector';
 
 const FO4_APP_ID = '377160';
 
@@ -83,7 +82,7 @@ describe('detectGamePaths (Linux)', () => {
     vi.mocked(fs.readFile).mockResolvedValue(VDF_WITH_FO4);
     vi.mocked(fs.access).mockResolvedValue(undefined);
 
-    const result = await detectGamePaths();
+    const result = await detectGamePaths('linux');
 
     expect(result).not.toBeNull();
     expect(result!.dataFolder).toBe('/mnt/games/steam/steamapps/common/Fallout 4/Data');
@@ -94,7 +93,63 @@ describe('detectGamePaths (Linux)', () => {
   it('returns null when VDF cannot be read', async () => {
     vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
 
-    const result = await detectGamePaths();
+    const result = await detectGamePaths('linux');
+    expect(result).toBeNull();
+  });
+});
+
+describe('parseRegQuerySteamPath', () => {
+  it('extracts the SteamPath value from reg query output', () => {
+    const stdout =
+      'HKEY_CURRENT_USER\\Software\\Valve\\Steam\r\n' +
+      '    SteamPath    REG_SZ    C:/Program Files (x86)/Steam\r\n' +
+      '\r\n';
+
+    expect(parseRegQuerySteamPath(stdout)).toBe('C:/Program Files (x86)/Steam');
+  });
+
+  it('returns null when the output has no SteamPath value', () => {
+    const stdout = 'ERROR: The system was unable to find the specified registry key or value.\r\n';
+
+    expect(parseRegQuerySteamPath(stdout)).toBeNull();
+  });
+});
+
+describe('detectWindowsGamePaths', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('maps a known reg query SteamPath and LOCALAPPDATA to GamePaths', async () => {
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    const runRegQuery = () =>
+      Promise.resolve(
+        'HKEY_CURRENT_USER\\Software\\Valve\\Steam\r\n' +
+          '    SteamPath    REG_SZ    C:/Program Files (x86)/Steam\r\n',
+      );
+
+    const result = await detectWindowsGamePaths(runRegQuery, 'C:/Users/Wayne/AppData/Local');
+
+    expect(result).toEqual({
+      dataFolder: 'C:/Program Files (x86)/Steam/steamapps/common/Fallout 4/Data',
+      pluginsTxt: 'C:/Users/Wayne/AppData/Local/Fallout4/Plugins.txt',
+    });
+  });
+
+  it('returns null when the reg query output has no SteamPath match', async () => {
+    const runRegQuery = () =>
+      Promise.resolve('ERROR: The system was unable to find the specified registry key or value.\r\n');
+
+    const result = await detectWindowsGamePaths(runRegQuery, 'C:/Users/Wayne/AppData/Local');
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when the registry query itself fails (no reg.exe, no Steam)', async () => {
+    const runRegQuery = () => Promise.reject(new Error('ENOENT: reg'));
+
+    const result = await detectWindowsGamePaths(runRegQuery, 'C:/Users/Wayne/AppData/Local');
+
     expect(result).toBeNull();
   });
 });

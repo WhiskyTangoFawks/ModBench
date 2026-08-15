@@ -192,7 +192,7 @@ function makeDetectPaths(): DetectPaths {
     if (dataOverride && pluginsOverride) {
       return Promise.resolve({ dataFolder: dataOverride, pluginsTxt: pluginsOverride });
     }
-    return detectGamePaths();
+    return detectGamePaths(process.platform);
   };
 }
 
