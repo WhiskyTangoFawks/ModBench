@@ -25,7 +25,8 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 
 - `/validate` — end of every coding task: gates, then self-review; wraps gates above.
   `/validate gates` runs gates alone, for when an independent reviewer follows (`/orchestrate`).
-- `/mutation-test` — mutation testing, `MEditService.Core` only.
+- `/mutation-test` — mutation testing: `MEditService.Core` (backend) and
+  `modbench/src/modmanager/` (frontend).
 - `/manual-test` — e2e test against real MO2 instance.
 
 ## Rules that matter

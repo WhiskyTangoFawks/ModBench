@@ -26,7 +26,8 @@ Classify changed files → run matching gate (never review non-compiling code):
 | both | `… --backend --frontend` |
 | config/docs only | skip |
 
-Fix all failures, rerun. Core CS (`MEditService/MEditService.Core/**/*.cs`) = mutation-eligible → `/mutation-test`.
+Fix all failures, rerun. Mutation-eligible → `/mutation-test`: `MEditService/MEditService.Core/**/*.cs`
+or `modbench/src/modmanager/**/*.ts` (excluding `test/**`, `*Provider.ts`, `*Panel.ts`).
 
 ## Step 2 — Review
 
