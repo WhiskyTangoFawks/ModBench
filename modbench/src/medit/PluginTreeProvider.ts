@@ -76,7 +76,6 @@ export class WorldspacesNode extends vscode.TreeItem {
   constructor(public readonly plugin: string, public readonly origin?: string) {
     super('Worldspaces', vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'worldspaces';
-    this.iconPath = new vscode.ThemeIcon('globe');
   }
 }
 

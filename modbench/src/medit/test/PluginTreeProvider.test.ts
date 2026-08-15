@@ -303,6 +303,15 @@ describe('PluginTreeProvider.loadMoreInterior', () => {
 // merged tree's actual plugin rows (contextValue "plugin"/"pluginImplicit", lock icon absent —
 // see plugins.md) lives in PluginListProvider.test.ts.
 
+// ── WorldspacesNode ───────────────────────────────────────────────────────────
+
+describe('WorldspacesNode', () => {
+  it('has no icon, so it sorts alphabetically alongside icon-less record-type nodes', () => {
+    const node = new WorldspacesNode('M.esp');
+    expect(node.iconPath).toBeUndefined();
+  });
+});
+
 // ── InteriorCellsNode ─────────────────────────────────────────────────────────
 
 describe('InteriorCellsNode', () => {
