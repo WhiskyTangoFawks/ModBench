@@ -26,9 +26,14 @@ export function parseLibraryFoldersVdf(content: string): string | null {
   return null;
 }
 
-export async function detectGamePaths(): Promise<GamePaths | null> {
-  if (process.platform === 'win32') {
-    return detectWindows();
+/** Takes `platform` explicitly (rather than reading `process.platform` itself) so tests can
+ *  exercise both branches directly instead of stubbing global process state. */
+export async function detectGamePaths(platform: NodeJS.Platform): Promise<GamePaths | null> {
+  if (platform === 'win32') {
+    return detectWindowsGamePaths(
+      () => execAsync('reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath').then((r) => r.stdout),
+      process.env['LOCALAPPDATA'],
+    );
   }
   return detectLinux();
 }
@@ -54,21 +59,29 @@ async function detectLinux(): Promise<GamePaths | null> {
   }
 }
 
-async function detectWindows(): Promise<GamePaths | null> {
-  try {
-    const { stdout } = await execAsync(
-      'reg query "HKCU\\Software\\Valve\\Steam" /v SteamPath'
-    );
-    const match = stdout.match(/SteamPath\s+REG_SZ\s+(.+)/);
-    if (!match) return null;
+// Parses `reg query "HKCU\Software\Valve\Steam" /v SteamPath` output for the SteamPath value.
+export function parseRegQuerySteamPath(stdout: string): string | null {
+  const match = stdout.match(/SteamPath\s+REG_SZ\s+(.+)/);
+  return match ? match[1].trim() : null;
+}
 
-    const steamPath = match[1].trim();
+/** Exported (rather than kept private like `detectLinux`) purely as a test seam: `execAsync` is
+ *  `promisify(exec)`, and `vi.mock`'s automock of `node:child_process` drops `promisify.custom`,
+ *  which changes what `execAsync` resolves to and breaks the `{ stdout }` shape this function
+ *  relies on. Injecting `runRegQuery`/`localAppData` lets a test pin the registry-output mapping
+ *  directly instead of trying to mock the promisified call. */
+export async function detectWindowsGamePaths(
+  runRegQuery: () => Promise<string>,
+  localAppData: string | undefined,
+): Promise<GamePaths | null> {
+  try {
+    const stdout = await runRegQuery();
+    const steamPath = parseRegQuerySteamPath(stdout);
+    if (!steamPath) return null;
+
     const steamapps = path.join(steamPath, 'steamapps');
     const dataFolder = path.join(steamapps, 'common', 'Fallout 4', 'Data');
-    const pluginsTxt = path.join(
-      process.env['LOCALAPPDATA'] ?? '',
-      'Fallout4', 'Plugins.txt'
-    );
+    const pluginsTxt = path.join(localAppData ?? '', 'Fallout4', 'Plugins.txt');
 
     await fs.access(dataFolder);
     return { dataFolder, pluginsTxt };
