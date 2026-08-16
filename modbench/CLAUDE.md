@@ -86,3 +86,9 @@ User's mental model must never be silently wrong — missing/incomplete data the
 | Background / recoverable / frequent (tree fetch blip, poll) | inline UI (error tree node, status bar) + log — not a toast |
 
 Surface via an injected reporter (logs to channel, shows severity-appropriate surface) — no raw `vscode.window.*` in `SessionController`/repositories; keeps it testable (`SessionWizard` skipped-plugin tests). Backend returns structured failures (e.g. `SessionLoadResponse.Failures`); frontend decides surfacing — backend never swallows a partial outcome.
+
+## Lint baseline
+
+`main` carries accepted `max-lines-per-function` warnings, so "did I add a warning?" is only
+answerable against a real baseline — take one with `git worktree add`, never a stash/checkout
+interleave, which silently lints the wrong tree (it produced a wrong reading during #307).
