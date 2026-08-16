@@ -1104,7 +1104,7 @@ describe('SessionController.loadExplicitSession progress polling', () => {
     repository.getSessionStatus
       .mockResolvedValueOnce(makeStatus({ indexedPlugins: ['Fallout4.esm'] }))
       .mockResolvedValueOnce(makeStatus({ indexedPlugins: ['Fallout4.esm', 'Foo.esp'] }));
-    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST } as any, repository }));
+    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST }, repository }));
     const onProgress = vi.fn();
 
     const load = ctrl.loadExplicitSession(plugins, '/game/Data', 'Fallout4', { onProgress });
@@ -1124,7 +1124,7 @@ describe('SessionController.loadExplicitSession progress polling', () => {
   it('stops polling once the load POST settles, so a finished load leaves no timer running', async () => {
     const { POST, finish } = heldLoad();
     const repository = makeRepository();
-    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST } as any, repository }));
+    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST }, repository }));
     const onProgress = vi.fn();
 
     const load = ctrl.loadExplicitSession(plugins, '/game/Data', 'Fallout4', { onProgress });
@@ -1149,7 +1149,7 @@ describe('SessionController.loadExplicitSession progress polling', () => {
     repository.getSessionStatus.mockResolvedValue(
       makeStatus({ indexedPlugins: ['Fallout4.esm'], failures: [{ name: 'Bad.esp', reason: 'RACE parse' }] }),
     );
-    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST } as any, repository }));
+    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST }, repository }));
     const onProgress = vi.fn();
 
     const load = ctrl.loadExplicitSession(plugins, '/game/Data', 'Fallout4', { onProgress });
@@ -1172,7 +1172,7 @@ describe('SessionController.loadExplicitSession progress polling', () => {
       .mockRejectedValueOnce(new Error('GET /session/status failed (500)'))
       .mockResolvedValue(makeStatus({ indexedPlugins: ['Foo.esp'] }));
     const log = vi.fn();
-    const deps = makeDeps({ client: { ...makeClient(), POST } as any, repository, log });
+    const deps = makeDeps({ client: { ...makeClient(), POST }, repository, log });
     const ctrl = new SessionController(deps);
     const onProgress = vi.fn();
 

@@ -1357,6 +1357,30 @@ describe('Progressive load states its own incompleteness (#307)', () => {
     await launch;
   });
 
+  // AC3 + AC5: the view says, in as many words, that conflict information is not yet computed —
+  // and stops saying it the moment the sweep lands, with no user action. TreeView.message is the
+  // native surface for exactly this (a view-scoped statement about the view's own contents), so
+  // there is no banner row and no bespoke widget.
+  it('states that conflict information is not yet computed, then clears that once the sweep lands', async () => {
+    setIndexed(['TestMod.esp']);
+    const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
+
+    const message = await waitFor('the view to state its own incompleteness', () =>
+      (ext?.exports as { pluginListView?: { message?: string } } | undefined)?.pluginListView?.message);
+    assert.match(message, /conflict information is not yet computed/i);
+
+    // The sweep is the last thing a real load does, so it lands with the POST's own answer.
+    sessionStatus = { ...sessionStatus, conflictsComputed: true };
+    releaseLoadExplicit!();
+    await launch;
+
+    assert.strictEqual(
+      (ext?.exports as { pluginListView?: { message?: string } } | undefined)?.pluginListView?.message,
+      undefined,
+      'the incompleteness statement must clear itself once conflicts are computed',
+    );
+  });
+
   // AC6: a per-plugin failure surfaces when it occurs, not only at the end of the load.
   it('decorates a plugin that failed to load the moment it is reported, not at the end', async () => {
     setIndexed(['TestMod.esp'], { failures: [{ name: 'Other.esp', reason: 'RACE parse' }] });
