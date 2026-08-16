@@ -720,8 +720,10 @@ public sealed class EditOrchestratorTests
                     .OrderBy(r => r.FieldPath).ToList();
                 Assert.Equal(2, refs.Count);
                 Assert.Equal("keywords[0]", refs[0].FieldPath);
+                Assert.Equal("keywords", refs[0].StagedField);
                 Assert.Equal(kw1Key.ToString(), refs[0].TargetFormKey);
                 Assert.Equal("keywords[1]", refs[1].FieldPath);
+                Assert.Equal("keywords", refs[1].StagedField);
                 Assert.Equal(kw2Key.ToString(), refs[1].TargetFormKey);
             }
         }
