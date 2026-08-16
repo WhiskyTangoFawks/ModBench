@@ -499,20 +499,30 @@ plus a theme color, via `vscode.FileDecorationProvider` (`medit/PendingChangeDec
   mutation (stage, copy, create, delete, save, revert). No new endpoint; the provider performs its
   own `GET /changes` read rather than sharing the Pending Changes tree's (that one only fetches
   while its own view is visible).
-- **A failed `refresh()` retains the last-known decorations rather than clearing to empty**
+- **A failed `refresh()` retains the last-known decorations rather than clearing to empty, where
+  `this.changes` is a trustworthy baseline from the current session**
   ([#334](https://github.com/WhiskyTangoFawks/ModBench/issues/334)) — a non-OK response or a
-  thrown request leaves `this.changes` exactly as it was. Every `refresh()` call site is
-  post-mutation, so the worst case of retaining is briefly showing pre-mutation state; the worst
-  case of clearing is the user's staged work looking gone exactly when the backend is unhealthy
+  thrown request leaves `this.changes` exactly as it was. This holds at the post-mutation call
+  sites (the webview's `PENDING_CHANGED` message, every `SessionController` stage/copy/create/
+  delete/save/revert), which only ever fetch what they themselves just changed — the worst case of
+  retaining there is briefly showing pre-mutation state, against the worst case of clearing being
+  the user's staged work looking gone exactly when the backend is unhealthy
   ([ADR-0026](../adr/0026-error-surfacing-policy.md), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md):
-  an absent badge must never be mistakable for "no pending changes"). Retaining state is what
-  places this at ADR-0026's background/recoverable tier (inline UI + log, no toast) instead of the
-  silent-wrong-state tier a clear-to-empty would demand. The failure is logged through the flat
-  `log` shim — today that resolves to info level (`extension.ts` wires it to `outputChannel.info`);
-  true warn-level emission is tracked with this module class's wider flat-shim releveling
-  (`modbench/CLAUDE.md` § Logging), not done here. `clear()` (the deliberate no-session reset,
-  called from `exitToLoadout()`) is unaffected — with no session, empty is a known fact, not a
-  degraded fetch.
+  an absent badge must never be mistakable for "no pending changes"). Retaining state there is what
+  places those call sites at ADR-0026's background/recoverable tier (inline UI + log, no toast)
+  instead of the silent-wrong-state tier a clear-to-empty would demand.
+  **Session entry does not hold** (`makeEnterEditing`, extension.ts): `this.changes` may still
+  carry a *previous* session's entries (the #331 stale-decoration guard exists precisely because
+  of this), so retaining on a failed entry fetch would leak them into the new session as live
+  decorations — the exact silent-wrong-state failure #334 exists to prevent, reintroduced at a
+  different call site. That call site passes `refresh(false)`, which clears instead of retaining
+  on failure. `refresh()`'s `retainOnFailure` parameter defaults to `true` (safe for every other
+  call site) and is opted out of only there.
+  The failure is logged through the flat `log` shim — today that resolves to info level
+  (`extension.ts` wires it to `outputChannel.info`); true warn-level emission is tracked with this
+  module class's wider flat-shim releveling (`modbench/CLAUDE.md` § Logging), not done here.
+  `clear()` (the deliberate no-session reset, called from `exitToLoadout()`) is unaffected — with
+  no session, empty is a known fact, not a degraded fetch.
 
 ### Selection & drag
 

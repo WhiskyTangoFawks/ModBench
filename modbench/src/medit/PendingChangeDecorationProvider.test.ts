@@ -150,6 +150,22 @@ describe('PendingChangeDecorationProvider', () => {
     expect(provider.provideFileDecoration(recordRowUri('MyPatch.esp', '001234:MyPatch.esp'))).toBeDefined();
   });
 
+  // #334 review (Standards axis): retention is only safe where `this.changes` is a trustworthy
+  // baseline from the *current* session. Session entry (extension.ts's makeEnterEditing) has none
+  // — `this.changes` may still hold a previous session's entries — so a failed entry fetch must
+  // clear rather than retain, or a stale decoration leaks across the session boundary.
+  it('clears, not retains, a prior session\'s decorations when refresh(false) — no trustworthy baseline — fails', async () => {
+    const client = makeClient([change()]);
+    const provider = new PendingChangeDecorationProvider(client);
+    await provider.refresh();
+    expect(provider.provideFileDecoration(recordRowUri('MyPatch.esp', '001234:MyPatch.esp'))).toBeDefined();
+
+    client.GET.mockResolvedValue({ data: undefined, response: { ok: false, status: 500 } });
+    await provider.refresh(false);
+
+    expect(provider.provideFileDecoration(recordRowUri('MyPatch.esp', '001234:MyPatch.esp'))).toBeUndefined();
+  });
+
   it('fires onDidChangeFileDecorations once per refresh() call', async () => {
     const client = makeClient([]);
     const provider = new PendingChangeDecorationProvider(client);

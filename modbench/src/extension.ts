@@ -1863,7 +1863,10 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       changeGroupTreeProvider.refresh();
       // #331: a fresh session starts with no pending changes, but a decoration left over from a
       // previous one (or a crash-restart reload mid-edit) must not survive into this one.
-      void pendingChangeDecorationProvider.refresh();
+      // #334 review: refresh(false) — there is no trustworthy baseline from *this* session to
+      // retain, so a failed entry fetch must clear rather than leak the previous session's
+      // decorations in as if they were live.
+      void pendingChangeDecorationProvider.refresh(false);
       await applyLoadedSessionToTree(sessionPluginFiles, result.failures, outputChannel);
       outputChannel.info('[extension] editing session ready');
   };
