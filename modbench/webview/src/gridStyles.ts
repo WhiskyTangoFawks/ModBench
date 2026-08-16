@@ -25,6 +25,12 @@ export const baseCell: React.CSSProperties = {
 
 export const headerCell: React.CSSProperties = { ...baseCell, fontWeight: 600 };
 
+// #304 / ADR-0035: "non-participating copies render dimmed" — the one visual cue distinguishing
+// a column for a copy the load order doesn't name from one that participates, shared by the
+// column header (PluginHeader) and every cell in that column (DiffRow) so the cue survives
+// scrolling past the header (the grid's <thead> is not sticky).
+export const DIMMED_OPACITY = 0.55;
+
 export const toggleBtnStyle: React.CSSProperties = {
   background: 'none',
   border: 'none',

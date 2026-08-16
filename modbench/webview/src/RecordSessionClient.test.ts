@@ -97,6 +97,43 @@ describe('RecordSessionClient.load', () => {
     expect(r.immutableSet?.has(columnKey('Shared.esp', 'ModB'))).toBe(false);
   });
 
+  // #304 / ADR-0036: notInLoadOrderSet mirrors immutableSet's own compound-identity construction
+  // (same PluginInfo list, same columnKey()) — a copy the load order doesn't name is immutable
+  // *and* absent from it, and PluginHeader needs the second fact independently of the first (a
+  // vanilla master is immutable but still in the load order, and must not read the same way).
+  it('computes notInLoadOrderSet from inLoadOrder flags, keyed by compound identity like immutableSet', async () => {
+    fetchMock.mockImplementation((input: Request | string) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.includes('/compare')) return Promise.resolve(jsonResponse({ overrides: [], diffs: [], conflictAll: 'OnlyOne' }));
+      if (url.includes('/changes')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/plugins')) {
+        return Promise.resolve(jsonResponse([
+          { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0, inLoadOrder: true },
+          { name: 'Shared.esp', isImmutable: true, loadOrderIndex: 1, origin: 'ModA', inLoadOrder: true },
+          { name: 'Shared.esp', isImmutable: true, loadOrderIndex: 1, origin: 'ModB', inLoadOrder: false },
+        ]));
+      }
+      return Promise.resolve(jsonResponse({}, 404));
+    });
+
+    const r = await createRecordSessionClient(5172).load('000001:A.esm');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.notInLoadOrderSet).toEqual(new Set([columnKey('Shared.esp', 'ModB')]));
+    expect(r.notInLoadOrderSet?.has(columnKey('Fallout4.esm', null))).toBe(false);
+    expect(r.notInLoadOrderSet?.has(columnKey('Shared.esp', 'ModA'))).toBe(false);
+  });
+
+  // A stale/older response shape omitting the field must default to "in load order" — the
+  // overwhelmingly common case, and the one that leaves every pre-existing fixture (none of which
+  // set inLoadOrder) reading as it always has.
+  it('treats a missing inLoadOrder flag as in-load-order, not shadowed', async () => {
+    const r = await createRecordSessionClient(5172).load('000001:A.esp');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.notInLoadOrderSet).toEqual(new Set());
+  });
+
   it('fails the whole load when compare fails', async () => {
     fetchMock.mockImplementation((input: Request | string) => {
       const url = typeof input === 'string' ? input : input.url;
@@ -118,6 +155,7 @@ describe('RecordSessionClient.load', () => {
     if (!r.ok) return;
     expect(r.changes).toBeNull();
     expect(r.immutableSet).toBeNull();
+    expect(r.notInLoadOrderSet).toBeNull();
   });
 });
 
