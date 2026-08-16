@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DuckDB.NET.Data;
+using MEditService.Core.Queries;
 
 namespace MEditService.Core.Edits;
 
@@ -43,21 +44,24 @@ internal static class PendingChangeGraph
     }
 
     // --- Edge rule 2: B edits a record that A creates -------------------------------------------
-    // Same (form_key, plugin) as a pending $create. A record that does not exist on disk yet cannot
-    // have its field edits saved or reverted apart from the create that brings it into being.
+    // Same (form_key, plugin, origin) as a pending $create. A record that does not exist on disk
+    // yet cannot have its field edits saved or reverted apart from the create that brings it into
+    // being. #333 / ADR-0036: keyed by the compound column identity (ColumnKey.Of), not the bare
+    // plugin — two same-filename, different-origin $creates at the same FormKey are unrelated
+    // records, each running its own NextFormID sequence, and must never union.
     private static void ApplyCreatedRecordRule(IReadOnlyList<PendingChange> nodes, UnionFind uf)
     {
         var createByRecord = new Dictionary<(string, string), int>(RecordKeyComparer);
         for (var i = 0; i < nodes.Count; i++)
         {
             if (nodes[i].ChangeType == PendingChangeConstants.CreateChangeType)
-                createByRecord[(nodes[i].FormKey, nodes[i].Plugin)] = i;
+                createByRecord[(nodes[i].FormKey, ColumnKey.Of(nodes[i].Plugin, nodes[i].Origin))] = i;
         }
         if (createByRecord.Count == 0) return;
 
         for (var i = 0; i < nodes.Count; i++)
         {
-            if (createByRecord.TryGetValue((nodes[i].FormKey, nodes[i].Plugin), out var createIndex))
+            if (createByRecord.TryGetValue((nodes[i].FormKey, ColumnKey.Of(nodes[i].Plugin, nodes[i].Origin)), out var createIndex))
                 uf.Union(i, createIndex);
         }
     }
@@ -82,7 +86,7 @@ internal static class PendingChangeGraph
         void UnionReference(PendingRefRow r)
         {
             if (lifecycleByTarget.TryGetValue(r.TargetFormKey, out var lifecycleNodes) &&
-                index.TryGetValue((r.SourceFormKey, r.SourcePlugin, r.StagedField), out var b))
+                index.TryGetValue((r.SourceFormKey, ColumnKey.Of(r.SourcePlugin, r.SourceOrigin), r.StagedField), out var b))
             {
                 foreach (var a in lifecycleNodes)
                     uf.Union(a, b);
@@ -133,15 +137,19 @@ internal static class PendingChangeGraph
         List<PendingRefRow> pendingRefs,
         UnionFind uf)
     {
-        var refsBySource = pendingRefs.ToLookup(r => (r.SourceFormKey, r.SourcePlugin), RecordKeyComparer);
+        // #333 / ADR-0036: keyed by the compound column identity — two same-filename,
+        // different-origin plugins are unrelated write targets, so a masters-append staged against
+        // one origin's header must never reach into the other's changes.
+        var refsBySource = pendingRefs.ToLookup(r => (r.SourceFormKey, ColumnKey.Of(r.SourcePlugin, r.SourceOrigin)), RecordKeyComparer);
 
         for (var a = 0; a < nodes.Count; a++)
         {
             if (AddedMasters(nodes[a]) is not { } added) continue;
 
+            var headerColumn = ColumnKey.Of(nodes[a].Plugin, nodes[a].Origin);
             for (var b = 0; b < nodes.Count; b++)
             {
-                if (a != b && ReachesAddedMaster(nodes[b], nodes[a].Plugin, added, refsBySource))
+                if (a != b && ReachesAddedMaster(nodes[b], headerColumn, added, refsBySource))
                     uf.Union(a, b);
             }
         }
@@ -163,16 +171,16 @@ internal static class PendingChangeGraph
 
     private static bool ReachesAddedMaster(
         PendingChange b,
-        string headerPlugin,
+        string headerColumn,
         HashSet<string> added,
         ILookup<(string, string), PendingRefRow> refsBySource)
     {
-        if (!b.Plugin.Equals(headerPlugin, StringComparison.OrdinalIgnoreCase)) return false;
+        if (!ColumnKey.Of(b.Plugin, b.Origin).Equals(headerColumn, StringComparison.OrdinalIgnoreCase)) return false;
 
         // The record's own origin covers a copy-to of a record whose home plugin is the new master,
         // even when the record holds no FormLinks at all; the refs cover everything it points at.
         return (OriginPluginOf(b.FormKey) is { } origin && added.Contains(origin)) ||
-               refsBySource[(b.FormKey, b.Plugin)]
+               refsBySource[(b.FormKey, ColumnKey.Of(b.Plugin, b.Origin))]
                    .Any(r => OriginPluginOf(r.TargetFormKey) is { } o && added.Contains(o));
     }
 
@@ -190,13 +198,16 @@ internal static class PendingChangeGraph
         return colon >= 0 && colon < formKey.Length - 1 ? formKey[(colon + 1)..] : null;
     }
 
-    private sealed record PendingRefRow(string SourceFormKey, string SourcePlugin, string StagedField, string TargetFormKey);
+    // #333 / ADR-0036: SourceOrigin, paired with SourcePlugin, is what BuildNodeIndex's lookup keys
+    // on (via ColumnKey.Of) — both pending_form_references and form_references already carry
+    // source_origin; this row type just stops dropping it at the query.
+    private sealed record PendingRefRow(string SourceFormKey, string SourcePlugin, string SourceOrigin, string StagedField, string TargetFormKey);
 
     private static List<PendingRefRow> LoadPendingRefs(DuckDBConnection conn)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT source_form_key, source_plugin, staged_field, target_form_key
+            SELECT source_form_key, source_plugin, source_origin, staged_field, target_form_key
             FROM pending_form_references
             """;
         return ReadRefRows(cmd);
@@ -227,6 +238,7 @@ internal static class PendingChangeGraph
             SELECT DISTINCT
                 fr.source_form_key,
                 fr.source_plugin,
+                fr.source_origin,
                 regexp_extract(fr.field_path, '^[^.\[]*'),
                 fr.target_form_key
             FROM form_references fr
@@ -243,15 +255,19 @@ internal static class PendingChangeGraph
         var rows = new List<PendingRefRow>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
-            rows.Add(new PendingRefRow(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
+            rows.Add(new PendingRefRow(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4)));
         return rows;
     }
 
+    // #333 / ADR-0036: keyed by the compound column identity (ColumnKey.Of), not the bare plugin —
+    // two same-filename, different-origin nodes at the same (form_key, field_path) must resolve to
+    // their own node, not collide on the shared dictionary key.
     private static Dictionary<(string, string, string), int> BuildNodeIndex(IReadOnlyList<PendingChange> nodes)
     {
         var index = new Dictionary<(string, string, string), int>(FieldKeyComparer);
         for (var i = 0; i < nodes.Count; i++)
-            index[(nodes[i].FormKey, nodes[i].Plugin, nodes[i].FieldPath)] = i;
+            index[(nodes[i].FormKey, ColumnKey.Of(nodes[i].Plugin, nodes[i].Origin), nodes[i].FieldPath)] = i;
         return index;
     }
 
