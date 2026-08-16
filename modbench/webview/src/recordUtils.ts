@@ -167,6 +167,31 @@ export function buildColumns(overrides: CompareOverride[], immutableSet?: Set<Co
   return cols;
 }
 
+// #304: the *reason* a column is read-only — `immutableSet` alone (RecordSessionClient.ts) says
+// only that it is, which is genuinely ambiguous: a vanilla/DLC master is immutable and still named
+// by the load order, while a copy the load order doesn't name (ADR-0036, #34) is immutable
+// *because* it isn't. GameSession.AddUnlistedPlugin always sets IsImmutable:true alongside
+// InLoadOrder:false, so the two are never independent on the wire today — but a reader that only
+// checked isImmutable couldn't tell them apart, and PluginHeader needs to: the tooltip names a
+// different cause, and only the second dims (ADR-0035's "non-participating copies render dimmed").
+export type ReadOnlyReason = 'vanillaMaster' | 'notInLoadOrder' | null;
+
+export function readOnlyReason(isImmutable: boolean, inLoadOrder: boolean): ReadOnlyReason {
+  if (!isImmutable) return null;
+  return inLoadOrder ? 'vanillaMaster' : 'notInLoadOrder';
+}
+
+// #304 / ADR-0036: "origin appears inline in the header only when two loaded copies share a
+// filename" — computed from the overrides *this* compare response carries (CompareResult.Overrides
+// via buildColumns' own input), never the session's whole plugin list. Two CompareOverride rows can
+// never share both plugin and origin (the backend's own (form_key, origin, plugin) key), so any
+// filename counted more than once here is necessarily two genuinely distinct loaded copies.
+export function collidingFilenames(overrides: CompareOverride[]): Set<string> {
+  const counts = new Map<string, number>();
+  for (const o of overrides) counts.set(o.plugin, (counts.get(o.plugin) ?? 0) + 1);
+  return new Set([...counts].filter(([, n]) => n > 1).map(([plugin]) => plugin));
+}
+
 // ── Array child helpers ───────────────────────────────────────────────────────
 
 export function parseElementIndex(fieldName: string): number {

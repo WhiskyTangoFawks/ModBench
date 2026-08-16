@@ -199,11 +199,10 @@ export type WebviewToExtension =
       type: typeof WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR; requestId: string; value: string;
       recordLabel: string; fieldName: string; plugin: string;
       // #272 / ADR-0036: required alongside `plugin`, consistent with every other column-identity
-      // payload above. Not yet used to derive the temp-file path (that's path derivation, #34-
-      // shaped — see ADR-0036's own recorded path-collision consequence): two same-filename
-      // columns sharing a temp-file path is unreachable until #34, since nothing loads such a
-      // pair yet. Carrying `origin` now means #34 only has to change the path derivation, not
-      // this message's shape too.
+      // payload above. #304: now the fourth segment extendedEditorPath folds into the temp-file
+      // path (a directory segment, between the record and the field) — two same-filename columns
+      // resolving to one temp file (right target, wrong content) is #34-reachable today, and this
+      // is what fixes it. See extendedFieldEditor.ts's extendedEditorPath comment.
       origin: string;
       readOnly: boolean;
       // Issue #242: FocusedCell's own disk/pending discriminant (#232), mirrored here so the

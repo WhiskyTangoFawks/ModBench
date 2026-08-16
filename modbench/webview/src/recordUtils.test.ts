@@ -2,6 +2,8 @@ import '@testing-library/jest-dom';
 import { describe, it, expect } from 'vitest';
 import {
   buildColumns,
+  readOnlyReason,
+  collidingFilenames,
   parseElementIndex,
   pendingIfChanged,
   moveArrayElement,
@@ -97,6 +99,56 @@ describe('buildColumns', () => {
     expect(cols[0]).toMatchObject({ kind: 'disk', key: columnKey('Shared.esp', 'ModA') });
     expect(cols[1]).toMatchObject({ kind: 'disk', key: columnKey('Shared.esp', 'ModB') });
     expect(cols[2]).toMatchObject({ kind: 'pending', key: columnKey('Shared.esp', 'ModB'), plugin: 'Shared.esp' });
+  });
+});
+
+// #304: the *reason* a column is read-only, distinct from the fact that it is — `immutableSet`
+// alone can't tell a vanilla master (isImmutable, still inLoadOrder) apart from a copy the load
+// order doesn't name (isImmutable *because* !inLoadOrder — GameSession.AddUnlistedPlugin always
+// pairs the two). PluginHeader needs both to word the tooltip and decide whether to dim.
+describe('readOnlyReason', () => {
+  it('is null for a mutable column, regardless of inLoadOrder', () => {
+    expect(readOnlyReason(false, true)).toBeNull();
+    expect(readOnlyReason(false, false)).toBeNull();
+  });
+
+  it('is "vanillaMaster" for an immutable column still named by the load order', () => {
+    expect(readOnlyReason(true, true)).toBe('vanillaMaster');
+  });
+
+  it('is "notInLoadOrder" for an immutable column the load order does not name', () => {
+    expect(readOnlyReason(true, false)).toBe('notInLoadOrder');
+  });
+});
+
+// #304 / ADR-0036: "origin inline only on collision" — computed from the overrides a single
+// compare response already carries (CompareResult.Overrides), never from the session's whole
+// plugin list. A filename appearing once is the overwhelming common case and must not collide.
+describe('collidingFilenames', () => {
+  it('is empty when every override has a distinct filename', () => {
+    const overrides = [makeOverride('Fallout4.esm'), makeOverride('MyMod.esp')];
+    expect(collidingFilenames(overrides)).toEqual(new Set());
+  });
+
+  it('is empty for a single override', () => {
+    expect(collidingFilenames([makeOverride('Fallout4.esm')])).toEqual(new Set());
+  });
+
+  it('names a filename two overrides share, regardless of their differing origins', () => {
+    const overrides = [
+      makeOverride('Shared.esp', { origin: 'ModA' }),
+      makeOverride('Shared.esp', { origin: 'ModB' }),
+    ];
+    expect(collidingFilenames(overrides)).toEqual(new Set(['Shared.esp']));
+  });
+
+  it('does not flag an unrelated filename that only appears once alongside a real collision', () => {
+    const overrides = [
+      makeOverride('Shared.esp', { origin: 'ModA' }),
+      makeOverride('Shared.esp', { origin: 'ModB' }),
+      makeOverride('Solo.esp'),
+    ];
+    expect(collidingFilenames(overrides)).toEqual(new Set(['Shared.esp']));
   });
 });
 

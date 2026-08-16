@@ -35,6 +35,12 @@ export interface PluginInfo {
   // every construction must say which origin, not rely on columnKey() eliding a missing one to
   // the Data origin.
   origin: string;
+  // #304 / ADR-0035: whether the effective load order actually names this copy (PluginResponse.
+  // InLoadOrder — false only for a plugin AddUnlistedPlugin opened on demand). Distinct from
+  // isImmutable: a vanilla/DLC master is immutable and still true here, while a shadowed copy is
+  // immutable *because* this is false — PluginHeader needs both to word its tooltip and decide
+  // whether to dim (see recordUtils.ts's readOnlyReason).
+  inLoadOrder: boolean;
 }
 
 // Issue #122: the composite view for a single record. `load` fires compare + changes + plugins
@@ -48,7 +54,13 @@ export interface PluginInfo {
 // the column-header menu happens via a VS Code QuickPick in the extension host now, which asks
 // PluginRepository directly rather than through this webview-side client.
 export type LoadResult =
-  | { ok: true; result: CompareResult; changes: PendingChange[] | null; immutableSet: Set<ColumnKey> | null }
+  | {
+      ok: true; result: CompareResult; changes: PendingChange[] | null; immutableSet: Set<ColumnKey> | null;
+      // #304 / ADR-0035: mirrors immutableSet's own construction (same PluginInfo list, same
+      // columnKey() keying) — null exactly when immutableSet is (the /plugins fetch itself
+      // failed), never independently.
+      notInLoadOrderSet: Set<ColumnKey> | null;
+    }
   | { ok: false; error: string };
 
 // Issue #122: the webview-side typed backend client. Owns every backend call the record panel
@@ -140,6 +152,11 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
         // Set members, or one origin's mutability silently wins for both (RecordPanel.tsx's
         // immutableSet.has(...) checks).
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin))) : null,
+        // #304 / ADR-0035: same compound-identity keying as immutableSet, filtered the other
+        // direction — `=== false` (not `!p.inLoadOrder`) so a response missing the field (an
+        // older/stale shape) defaults every column to in-load-order, the overwhelmingly common
+        // case, rather than every plugin silently reading as shadowed.
+        notInLoadOrderSet: pluginList ? new Set(pluginList.filter(p => p.inLoadOrder === false).map(p => columnKey(p.name, p.origin))) : null,
       };
     },
 

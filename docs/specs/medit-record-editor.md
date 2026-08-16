@@ -281,8 +281,21 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
 - **Compare grid** (the primary view): one **row per field** (fields with no value in any
   plugin hidden by default); one **column per plugin** that contains the record's FormKey, in
   load order (left = master, right = winning override), plus a **Pending** column for any plugin
-  with staged changes. Column headers show the plugin name as a chip (lock icon on immutable);
-  left-click collapses/expands a column (state persisted in session); right-click opens VS Code's
+  with staged changes. Column headers show the plugin name as a chip, filename only — origin (the
+  mod folder that provided this copy, or a reserved value) lives in the chip's tooltip always, and
+  renders inline in the label only when a second loaded copy shares this filename (ADR-0036;
+  #304). An immutable chip carries a `(read-only)` note beneath it, worded by *why*: a vanilla/
+  DLC/CC master reads `(read-only)`; a copy the effective load order does not name (#34, ADR-0035)
+  reads `(not loaded)` instead, and the whole column — header and every cell — renders dimmed, the
+  one cue distinguishing it from a participating column once scrolled past the header (#304). Both
+  notes' tooltips name the reason. `(not loaded)`'s tooltip deliberately does not prescribe a
+  single fix: `!InLoadOrder` covers two distinct causes the backend does not currently
+  distinguish — a copy shadowed by another mod (a **file** conflict, decided by the Mod override
+  order) and a plugin `plugins.txt` never lists at all (decided by the Plugin load order) — so the
+  tooltip states the fact and names both surfaces that decide it (the Mods view, the Plugins view)
+  rather than one gesture that would only fix one cause. Never "move it earlier in the load
+  order" — that names the wrong axis for a shadowed copy (CONTEXT-MAP.md, CONTEXT.md). Left-click
+  collapses/expands a column (state persisted in session); right-click opens VS Code's
   own native menu offering **Copy as Override Into…** (copies the *right-clicked column's own
   version* of the record — not necessarily the winner — into a picked target plugin, preserving
   `EditOrchestrator.CopyRecordTo`'s FormKey-reference validation and placement copy; the same

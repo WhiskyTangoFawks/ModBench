@@ -29,6 +29,7 @@ import type { Column, PathSegment } from './recordUtils';
 import { pendingCellContext } from './recordUtils';
 import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution, PendingChange } from './types';
 import { columnKey } from './types';
+import { DIMMED_OPACITY } from './gridStyles';
 
 const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
 const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
@@ -76,6 +77,10 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     overrideMap: { [columnKey('Fallout4.esm', null)]: master, [columnKey('MyMod.esp', null)]: mod },
     fieldMetaMap: { Name: strMeta },
     immutableSet: new Set([columnKey('Fallout4.esm', null)]),
+    // #304 / ADR-0035: defaults empty — Fallout4.esm is immutable per this fixture (a stand-in
+    // for a vanilla master) but must not dim on that basis alone; only a column genuinely absent
+    // from the load order does (see the dedicated describe block below).
+    notInLoadOrderSet: new Set(),
     pendingChangeMap: {},
     collapsedColumns: new Set(),
     onOpen: vi.fn(),
@@ -203,6 +208,25 @@ describe('DiffRow — editability follows immutableSet', () => {
     fireEvent.change(input, { target: { value: 'new-value' } });
     fireEvent.blur(input);
     expect(onEdit).toHaveBeenCalledWith('MyMod.esp', 'Name', 'new-value');
+  });
+});
+
+// #304 / ADR-0035: "non-participating copies render dimmed" — the cue must survive scrolling
+// (the grid's <thead> is not sticky, so header-only dimming would disappear on a long record),
+// so every cell in the column dims too, not just PluginHeader's own note (PluginHeader.test.tsx).
+describe('DiffRow — cell dimming follows notInLoadOrderSet (#304 / ADR-0035)', () => {
+  it('dims a cell in a column the load order does not name', () => {
+    renderRow({ notInLoadOrderSet: new Set([columnKey('Fallout4.esm', null)]) });
+    const cell = screen.getAllByText('disk-value')[0].closest('td')!;
+    expect(cell.style.opacity).toBe(String(DIMMED_OPACITY));
+  });
+
+  // Fallout4.esm is immutable per baseProps (a stand-in for a vanilla master) — immutability
+  // alone must not dim a cell, only genuine absence from the load order does.
+  it('does not dim an ordinary immutable column absent from notInLoadOrderSet', () => {
+    renderRow();
+    const cell = screen.getAllByText('disk-value')[0].closest('td')!;
+    expect(cell.style.opacity).toBe('');
   });
 });
 

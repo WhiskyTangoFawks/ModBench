@@ -7,10 +7,10 @@ import { errorText } from '../../src/medit/ApiClient';
 import {
   buildColumns, columnHeaderContext, currentMasters, defaultElementValue, parseElementIndex,
   appendArrayElement, removeArrayElement, moveArrayElement, getAtPath, setAtPath,
-  vmadScriptsContext, vmadScriptContext, vmadPropertyContext,
+  vmadScriptsContext, vmadScriptContext, vmadPropertyContext, collidingFilenames,
 } from './recordUtils';
 import type { PathSegment } from './recordUtils';
-import { mono, fg, baseCell, headerCell, getConflictBg } from './gridStyles';
+import { mono, fg, baseCell, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyles';
 import { buildVmadRows } from './vmadTreeAdapter';
 import { buildConditionRows } from './conditionTreeAdapter';
 import { parseVmadPath } from './vmadOps';
@@ -134,6 +134,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   useEffect(() => { void client.conditionRunOnTargets().then(setRunOnTargets); }, [client]);
   const [allChanges, setAllChanges] = useState<PendingChange[]>([]);
   const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
+  // #304 / ADR-0035: mirrors immutableSet's own state shape — a copy the load order doesn't name
+  // (distinct from "is immutable"; see recordUtils.ts's readOnlyReason) drives PluginHeader's
+  // dimming/tooltip wording independently of the plain immutable fact.
+  const [notInLoadOrderSet, setNotInLoadOrderSet] = useState<Set<ColumnKey>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
@@ -170,6 +174,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       setResult(loaded.result);
       if (loaded.changes) setAllChanges(loaded.changes);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
+      if (loaded.notInLoadOrderSet) setNotInLoadOrderSet(loaded.notInLoadOrderSet);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -819,6 +824,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     [result, immutableSet],
   );
 
+  // #304 / ADR-0036: "origin appears inline in the header only when two loaded copies share a
+  // filename" — computed from this response's own overrides (never the session's whole plugin
+  // list), same source columns already comes from.
+  const collidingPluginNames = useMemo(
+    () => collidingFilenames(result?.overrides ?? []),
+    [result],
+  );
+
   // #272 / ADR-0036: the plugin half of this compound key is built via columnKey(), not the bare
   // `c.plugin` — a staged change is attributed to its column's compound identity end to end, from
   // cell to pending change. The key as a whole (`${ColumnKey}:${fieldPath}`) isn't itself a pure
@@ -968,6 +981,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         overrideMap={overrideMap}
         fieldMetaMap={fieldMetaMap}
         immutableSet={immutableSet}
+        notInLoadOrderSet={notInLoadOrderSet}
         pendingChangeMap={pendingChangeMap}
         collapsedColumns={collapsedColumns}
         onCellDragStart={handleCellDragStart}
@@ -1072,10 +1086,20 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                   // plugin+origin pair (col.override.plugin/.origin), never the compound key.
                   const isCollapsed = collapsedColumns.has(col.key);
                   const isImmutable = immutableSet.has(col.key);
+                  // #304 / ADR-0035: the column's own load-order membership — distinct from
+                  // isImmutable (see recordUtils.ts's readOnlyReason) — drives both the header's
+                  // reason wording and the dimming that carries down through every cell in this
+                  // column (DiffRow, below), matching the tree row's own treatment (ADR-0035:
+                  // "non-participating copies render dimmed").
+                  const inLoadOrder = !notInLoadOrderSet.has(col.key);
                   return (
                     <th
                       key={`disk:${col.key}`}
-                      style={{ ...headerCell, textAlign: 'left', minWidth: isCollapsed ? '48px' : '200px', backgroundColor: getHeaderBg(col.override.conflictThis) }}
+                      style={{
+                        ...headerCell, textAlign: 'left', minWidth: isCollapsed ? '48px' : '200px',
+                        backgroundColor: getHeaderBg(col.override.conflictThis),
+                        opacity: inLoadOrder ? undefined : DIMMED_OPACITY,
+                      }}
                       // Issue #209: the column-header menu (Copy as Override… / Copy as New
                       // Record / Remove / Add Master) is VS Code's own `webview/context` menu
                       // now — no `onContextMenu`/`preventDefault()` here any more, same
@@ -1087,6 +1111,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                       <PluginHeader
                         override={col.override}
                         isImmutable={isImmutable}
+                        inLoadOrder={inLoadOrder}
+                        showOriginInline={collidingPluginNames.has(col.override.plugin)}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleColumnCollapse(col.key)}
                       />

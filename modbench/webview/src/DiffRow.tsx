@@ -8,7 +8,7 @@ import { CheckErrorIcon } from './CheckErrorIcon';
 import { DiskCell, type ArrayOpHandlers } from './DiskCell';
 import { modelValue, coerceModelValue } from './modelValue';
 import { copyToClipboard, readClipboardText, openExtendedFieldEditor } from './nativeBridge';
-import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle } from './gridStyles';
+import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
   pendingIfChanged, pendingValueAtPath, pendingCellContext,
   arrayElementContext, arrayParentContext, combineVscodeContexts, moveArrayElement, removeArrayElement,
@@ -364,6 +364,11 @@ interface DiffRowProps {
   // flag: editability is per-column, so an immutable column never renders an input even
   // though the panel as a whole is always editable.
   immutableSet: Set<ColumnKey>;
+  // #304 / ADR-0035: a column for a copy the load order does not name — distinct from
+  // immutableSet (a vanilla master is also immutable but stays out of this set; see
+  // recordUtils.ts's readOnlyReason). Dims every cell in the column so the cue survives
+  // scrolling past PluginHeader's own note (the grid's <thead> isn't sticky).
+  notInLoadOrderSet: Set<ColumnKey>;
   pendingChangeMap: Record<string, PendingChange>;
   collapsedColumns: Set<ColumnKey>;
   onOpen: (fk: string) => void;
@@ -416,7 +421,7 @@ interface DiffRowProps {
 }
 
 export function DiffRow({
-  diff, columns, overrideMap, fieldMetaMap, immutableSet,
+  diff, columns, overrideMap, fieldMetaMap, immutableSet, notInLoadOrderSet,
   pendingChangeMap, collapsedColumns, onOpen, onEdit,
   onCellDragStart, onCellDrop, structOpContextFor,
   context, hasChildren, isExpanded, onToggle, arrayEdit, onArrayAdd,
@@ -483,7 +488,10 @@ export function DiffRow({
           // — the backend keys its own per-column dictionaries the same way (ColumnKey.Of), so
           // `[o.plugin]` was already wrong the moment a non-Data-origin column existed, not merely
           // ambiguous between two same-filename columns.
-          const cellStyle = { ...baseCell, ...getCellStyle(diff.cellStates?.[key]) };
+          const cellStyle = {
+            ...baseCell, ...getCellStyle(diff.cellStates?.[key]),
+            opacity: notInLoadOrderSet.has(key) ? DIMMED_OPACITY : undefined,
+          };
           if (collapsedColumns.has(key)) {
             return <td key={`disk:${key}`} style={cellStyle} />;
           }

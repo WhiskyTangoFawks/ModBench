@@ -12,6 +12,7 @@ import type { ExtensionToWebview } from './messages';
 import type { FieldMetadata } from './types';
 import { columnKey } from './types';
 import type { LoadResult, RecordSessionClient } from './RecordSessionClient';
+import { DIMMED_OPACITY } from './gridStyles';
 
 // ── shared metadata fixtures ──────────────────────────────────────────────────
 
@@ -125,13 +126,17 @@ interface FakeOpts {
 // Issue #122: a fake record-session client. `load` returns the composite view built from the
 // given compare fixture; write methods are spies tests can assert on and override.
 function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordSessionClient {
-  const pl = (opts.plugins ?? pluginsResponse) as { name: string; isImmutable: boolean; origin?: string }[];
+  const pl = (opts.plugins ?? pluginsResponse) as { name: string; isImmutable: boolean; origin?: string; inLoadOrder?: boolean }[];
   const okLoad = {
     ok: true, result: compare, changes: opts.changes ?? [], plugins: pl,
     // #272 / ADR-0036: mirrors RecordSessionClient.load()'s own columnKey()-keyed construction —
     // a fake that built this as a bare-plugin-name Set (pre-#272) would silently pass every AC5
     // test that exercises immutableSet, since the fake itself wouldn't reproduce the bug.
     immutableSet: new Set(pl.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin ?? null))),
+    // #304 / ADR-0035: mirrors RecordSessionClient.load()'s own `=== false` filter — a fixture
+    // that never sets inLoadOrder (every pre-#304 fixture) must default every column to
+    // in-load-order, the same defensive default the real client applies.
+    notInLoadOrderSet: new Set(pl.filter(p => p.inLoadOrder === false).map(p => columnKey(p.name, p.origin ?? null))),
   } as unknown as LoadResult;
   return {
     load: opts.load ?? vi.fn().mockResolvedValue(okLoad),
@@ -368,11 +373,36 @@ describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', (
     await waitFor(() => expect(screen.getByText('FromA')).toBeInTheDocument());
     expect(screen.getByText('FromB')).toBeInTheDocument();
 
-    const [colAHeader] = screen.getAllByText('Shared.esp');
+    // #304: deliberately changed from the pre-#304 `getAllByText('Shared.esp')[0]` — that query
+    // could no longer tell the two columns apart by text, which was itself the bug this ticket
+    // fixes (ADR-0036: origin renders inline in the header exactly when two loaded copies share a
+    // filename, which this fixture does).
+    const colAHeader = screen.getByText('Shared.esp (ModA)');
     fireEvent.click(colAHeader); // collapses ModA's column only
 
     await waitFor(() => expect(screen.queryByText('FromA')).not.toBeInTheDocument());
     expect(screen.getByText('FromB')).toBeInTheDocument();
+  });
+
+  // #304 / ADR-0036: "origin appears inline in the header only when two loaded copies share a
+  // filename" — this fixture is exactly that collision, on both columns at once (neither is the
+  // sole owner of the plain filename).
+  it('renders origin inline in both column headers when two loaded copies share a filename', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse });
+    await waitFor(() => expect(screen.getByText('Shared.esp (ModA)')).toBeInTheDocument());
+    expect(screen.getByText('Shared.esp (ModB)')).toBeInTheDocument();
+    expect(screen.queryByText('Shared.esp')).not.toBeInTheDocument();
+  });
+
+  // The single-copy control: MyMod.esp is not shared by any other column in this record's
+  // response, so its header must stay the plain filename — origin inline is collision-only, not
+  // "whenever origin isn't Data".
+  it('does not render origin inline for a normal, non-colliding column', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    renderPanel(compareResult);
+    await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
+    expect(screen.queryByText(/MyMod\.esp \(/)).not.toBeInTheDocument();
   });
 
   // The genuinely red case for overrideMap: pre-#272, `map[o.plugin] = o` collided on the bare
@@ -408,6 +438,85 @@ describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', (
     });
 
     await waitFor(() => expect(client.copyAsNew).toHaveBeenCalledWith('000001:Fallout4.esm', 'Target.esp', 'Shared.esp', 'ModB'));
+  });
+});
+
+// #304 / ADR-0035: a copy the load order does not name (#34's AddUnlistedPlugin: IsImmutable,
+// Participates:false, InLoadOrder:false, always together) — distinct from a vanilla master, which
+// is also immutable but stays named by the load order. Deliberately a single, non-colliding
+// column here so this exercises only the reason/dimming wiring, not the origin-inline collision
+// slice (#304's own "renders origin inline..." tests above).
+const notInLoadOrderCompareResult = {
+  conflictAll: 'OnlyOne',
+  overrides: [
+    {
+      formKey: '000001:Solo.esp', plugin: 'Solo.esp', origin: 'ShadowMod', loadOrderIndex: 5, isWinner: false,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Shadowed value' }],
+      pendingFields: {}, conflictThis: 'OnlyOne', recordType: 'npc_',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Name',
+    values: { [columnKey('Solo.esp', 'ShadowMod')]: 'Shadowed value' },
+    winnerColumn: columnKey('Solo.esp', 'ShadowMod'),
+    winnerValue: 'Shadowed value',
+    cellStates: { [columnKey('Solo.esp', 'ShadowMod')]: 'OnlyOne' },
+  }],
+};
+
+const notInLoadOrderPluginsResponse = [
+  { name: 'Solo.esp', origin: 'ShadowMod', isImmutable: true, loadOrderIndex: 5, inLoadOrder: false },
+];
+
+describe('RecordPanel — a copy the load order does not name (#304 / ADR-0035)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('renders the column header dimmed and labeled distinctly from a vanilla master', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Solo.esp');
+    renderPanel(notInLoadOrderCompareResult, { plugins: notInLoadOrderPluginsResponse });
+    await waitFor(() => expect(screen.getByText('Solo.esp')).toBeInTheDocument());
+
+    expect(screen.getByText('(not loaded)')).toBeInTheDocument();
+    expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
+
+    const th = screen.getByText('Solo.esp').closest('th');
+    expect(th).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+    // #304 review: dimming must apply exactly once — PluginHeader's own root <div>, nested
+    // directly inside this dimmed <th>, must not carry a second opacity (CSS opacity compounds on
+    // nesting, so two 0.55s would render at ~0.30, not 0.55). Real nesting, not a standalone
+    // PluginHeader render, is what proves this can't silently regress.
+    const pluginHeaderRoot = th!.querySelector(':scope > div');
+    expect((pluginHeaderRoot as HTMLElement).style.opacity).toBe('');
+  });
+
+  it('does not dim a vanilla-master column (immutable, still in the load order)', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    renderPanel(compareResult, { plugins: pluginsResponse });
+    await waitFor(() => expect(screen.getByText('Fallout4.esm')).toBeInTheDocument());
+
+    expect(screen.getByText('(read-only)')).toBeInTheDocument();
+    const th = screen.getByText('Fallout4.esm').closest('th');
+    expect(th).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+  });
+
+  // AC3: copying *out* of a read-only column must still work and take that column's own
+  // content — Remove/Add Master are gated on `immutable` (package.json's `!immutable` when
+  // clauses), but Copy as Override/Copy as New Record are deliberately not (modbench.package.json
+  // carries no such gate for either), unchanged by this ticket. sourceOrigin is threaded
+  // end to end (#281) so the backend reads *this* copy's fields, never the winner's.
+  it('copying out of a not-in-load-order column still works, taking that column\'s own content', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Solo.esp');
+    const { client } = renderPanel(notInLoadOrderCompareResult, { plugins: notInLoadOrderPluginsResponse });
+    await waitFor(() => expect(screen.getByText('Solo.esp')).toBeInTheDocument());
+
+    postColumnHeaderAction({
+      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE,
+      formKey: '000001:Solo.esp', sourcePlugin: 'Solo.esp', sourceOrigin: 'ShadowMod', targetPlugin: 'Target.esp',
+    });
+
+    await waitFor(() =>
+      expect(client.copyTo).toHaveBeenCalledWith('000001:Solo.esp', 'Target.esp', 'Solo.esp', 'ShadowMod'),
+    );
   });
 });
 

@@ -151,8 +151,9 @@ export function readClipboardText(): Promise<string | null> {
 export function openExtendedFieldEditor(
   params: {
     value: string; recordLabel: string; fieldName: string; plugin: string;
-    // #272 / ADR-0036: required alongside `plugin` — see messages.ts' OPEN_EXTENDED_EDITOR doc
-    // comment for why this isn't yet used for path derivation.
+    // #272 / ADR-0036: required alongside `plugin` — #304 folds this into the temp-file path
+    // (extendedEditorPath's own directory segment) so two same-filename columns never alias onto
+    // one file. See messages.ts' OPEN_EXTENDED_EDITOR doc comment.
     origin: string;
     readOnly: boolean;
     // Issue #242: FocusedCell's own disk/pending discriminant (#232) — absent (disk cell) is

@@ -70,16 +70,16 @@ function makeDeps(tempRoot: string, overrides: Partial<ExtendedFieldEditorDeps> 
 }
 
 describe('extendedEditorPath', () => {
-  it('sanitizes reserved/colon characters and composes dir/file from record, field, plugin', () => {
-    const path = extendedEditorPath('/tmp/root', 'Deacon [000123:Fallout4.esm]', 'Description', 'Fallout4.esm');
+  it('sanitizes reserved/colon characters and composes dir/origin/file from record, field, plugin', () => {
+    const path = extendedEditorPath('/tmp/root', 'Deacon [000123:Fallout4.esm]', 'Description', 'Fallout4.esm', 'Data');
     // Brackets are valid on every platform's filesystem — only the FormKey's colon (a
     // Windows-reserved character) needs replacing.
-    expect(path).toBe(join('/tmp/root', 'Deacon [000123_Fallout4.esm]', 'Description [Fallout4.esm].txt'));
+    expect(path).toBe(join('/tmp/root', 'Deacon [000123_Fallout4.esm]', 'Data', 'Description [Fallout4.esm].txt'));
   });
 
   it('is deterministic — the same identity always produces the same path', () => {
-    const a = extendedEditorPath('/tmp/root', 'Deacon [000123:Fallout4.esm]', 'Description', 'Fallout4.esm');
-    const b = extendedEditorPath('/tmp/root', 'Deacon [000123:Fallout4.esm]', 'Description', 'Fallout4.esm');
+    const a = extendedEditorPath('/tmp/root', 'Deacon [000123:Fallout4.esm]', 'Description', 'Fallout4.esm', 'Data');
+    const b = extendedEditorPath('/tmp/root', 'Deacon [000123:Fallout4.esm]', 'Description', 'Fallout4.esm', 'Data');
     expect(a).toBe(b);
   });
 
@@ -87,14 +87,45 @@ describe('extendedEditorPath', () => {
   // pending column only ever exists alongside a disk column for the same plugin) — without a
   // fourth discriminant, opening one would silently reuse/reseed the other's already-open tab.
   it('a pending cell path differs from its disk companion, given identical record+field+plugin', () => {
-    const disk = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm');
-    const pending = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm', 'pending');
+    const disk = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm', 'Data');
+    const pending = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm', 'Data', 'pending');
     expect(pending).not.toBe(disk);
   });
 
-  it('the pending path stays in the same record directory, suffixed on the filename only', () => {
-    const pending = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm', 'pending');
-    expect(pending).toBe(join('/tmp/root', 'Deacon', 'Description [Fallout4.esm] (Pending).txt'));
+  it('the pending path stays in the same record/origin directory, suffixed on the filename only', () => {
+    const pending = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm', 'Data', 'pending');
+    expect(pending).toBe(join('/tmp/root', 'Deacon', 'Data', 'Description [Fallout4.esm] (Pending).txt'));
+  });
+
+  // #304 / ADR-0036: origin folds into the path unconditionally (no "elide Data" branch) — the
+  // directory is never what the user reads (the tab title is the filename alone, unchanged), so
+  // there is nothing to keep quiet for the common single-origin case, and no collision-dependent
+  // rule to get wrong.
+  it('folds a non-Data origin into its own directory segment, between the record and the field', () => {
+    const path = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Shared.esp', 'ModA');
+    expect(path).toBe(join('/tmp/root', 'Deacon', 'ModA', 'Description [Shared.esp].txt'));
+  });
+
+  // The regression this ticket exists to fix: two loaded columns sharing a filename (ADR-0036)
+  // must never resolve to the same temp file — origin is the only thing left that tells them
+  // apart, since record+field+plugin+column are identical for both.
+  it('two columns sharing a filename but differing in origin never collide', () => {
+    const colA = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Shared.esp', 'ModA');
+    const colB = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Shared.esp', 'ModB');
+    expect(colA).not.toBe(colB);
+  });
+
+  // #304 review: origin is a mod folder name, read off disk — an MO2 instance is user-controlled
+  // input, not a trusted literal, and this is the one component where getting sanitization wrong
+  // writes outside tempRoot. sanitizeForPath's regex (`/[<>:"/\\|?*]/g`) already strips every path
+  // separator, so `..` alone (no `/` or `\` around it) can never traverse — mirrors the coverage
+  // recordLabel/fieldName/plugin already get from the reserved-character test above, extended to
+  // the fourth segment.
+  it('strips path separators from a hostile origin, so it cannot escape tempRoot', () => {
+    const path = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm', '../../../etc/passwd');
+    expect(path.startsWith('/tmp/root')).toBe(true);
+    expect(path).not.toContain('/etc/passwd');
+    expect(path).toBe(join('/tmp/root', 'Deacon', '.._.._.._etc_passwd', 'Description [Fallout4.esm].txt'));
   });
 });
 
@@ -108,7 +139,7 @@ describe('openExtendedFieldEditor', () => {
 
   it('writes the value to the deterministic temp path and opens it beside, as a non-preview tab', async () => {
     const tempRoot = await makeTempRoot();
-    const path = extendedEditorPath(tempRoot, 'Deacon [000123:Fallout4.esm]', 'Description', 'Fallout4.esm');
+    const path = extendedEditorPath(tempRoot, 'Deacon [000123:Fallout4.esm]', 'Description', 'Fallout4.esm', 'Data');
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'a long description' });
 
     await openExtendedFieldEditor(
@@ -125,7 +156,7 @@ describe('openExtendedFieldEditor', () => {
 
   it('leaves a mutable temp file writable', async () => {
     const tempRoot = await makeTempRoot();
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm');
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
 
     await openExtendedFieldEditor(
@@ -141,7 +172,7 @@ describe('openExtendedFieldEditor', () => {
   // permission bit, which is the same mechanism VS Code's own read-only file detection reads.
   it('marks an immutable (readOnly) temp file non-writable', async () => {
     const tempRoot = await makeTempRoot();
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm');
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
 
     await openExtendedFieldEditor(
@@ -159,7 +190,7 @@ describe('openExtendedFieldEditor', () => {
     const tempRoot = await makeTempRoot();
     const saveEvent = makeFakeDocEvent();
     onDidSaveTextDocument.mockImplementation(saveEvent.register);
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm');
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
     openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
     const deps = makeDeps(tempRoot);
 
@@ -178,7 +209,7 @@ describe('openExtendedFieldEditor', () => {
     const tempRoot = await makeTempRoot();
     const saveEvent = makeFakeDocEvent();
     onDidSaveTextDocument.mockImplementation(saveEvent.register);
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm');
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
     openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
     const deps = makeDeps(tempRoot);
 
@@ -200,7 +231,7 @@ describe('openExtendedFieldEditor', () => {
     const closeEvent = makeFakeDocEvent();
     onDidSaveTextDocument.mockImplementation(saveEvent.register);
     onDidCloseTextDocument.mockImplementation(closeEvent.register);
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm');
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
     openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
     const deps = makeDeps(tempRoot);
 
@@ -246,7 +277,7 @@ describe('openExtendedFieldEditor', () => {
   // the immutable path.
   it('a second open of the same immutable cell succeeds identically to the first (no EACCES)', async () => {
     const tempRoot = await makeTempRoot();
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm');
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
     openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
     const params = { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: true };
 
@@ -268,8 +299,8 @@ describe('openExtendedFieldEditor', () => {
   // path-level discriminant is extendedEditorPath's own test above).
   it('a pending cell and its disk companion open independent temp files for the same record+field+plugin', async () => {
     const tempRoot = await makeTempRoot();
-    const diskPath = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm');
-    const pendingPath = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'pending');
+    const diskPath = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
+    const pendingPath = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data', 'pending');
     openTextDocument.mockImplementation((uri: { fsPath: string }) => Promise.resolve({ uri, getText: () => '' }));
 
     await openExtendedFieldEditor(
@@ -286,6 +317,47 @@ describe('openExtendedFieldEditor', () => {
     expect(await readFile(pendingPath, 'utf8')).toBe('pending value');
   });
 
+  // #304 / ADR-0036: the actual regression this ticket exists to fix, at the coordinator's own
+  // boundary — two loaded columns sharing a filename (ModA's Shared.esp and ModB's Shared.esp)
+  // used to resolve to one temp file, so the second open silently overwrote the first's content
+  // ("right target, wrong content" — the commit closure is still bound correctly per-column, only
+  // what the user *sees* while editing was wrong).
+  it('two columns sharing a filename but differing in origin open independent temp files', async () => {
+    const tempRoot = await makeTempRoot();
+    const colAPath = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Shared.esp', 'ModA');
+    const colBPath = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Shared.esp', 'ModB');
+    openTextDocument.mockImplementation((uri: { fsPath: string }) => Promise.resolve({ uri, getText: () => '' }));
+
+    await openExtendedFieldEditor(
+      { requestId: 'r1', value: 'from ModA', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Shared.esp', origin: 'ModA', readOnly: false },
+      makeDeps(tempRoot),
+    );
+    await openExtendedFieldEditor(
+      { requestId: 'r2', value: 'from ModB', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Shared.esp', origin: 'ModB', readOnly: false },
+      makeDeps(tempRoot),
+    );
+
+    expect(colAPath).not.toBe(colBPath);
+    expect(await readFile(colAPath, 'utf8')).toBe('from ModA');
+    expect(await readFile(colBPath, 'utf8')).toBe('from ModB');
+  });
+
+  // #304 review: origin is read off disk (a mod folder name), not a trusted literal — proves the
+  // real write, not just the computed string, stays under tempRoot for a hostile value.
+  it('a hostile origin cannot make the write land outside tempRoot', async () => {
+    const tempRoot = await makeTempRoot();
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', '../../../etc/passwd');
+    openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
+
+    await openExtendedFieldEditor(
+      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: '../../../etc/passwd', readOnly: false },
+      makeDeps(tempRoot),
+    );
+
+    expect(path.startsWith(tempRoot)).toBe(true);
+    expect(await readFile(path, 'utf8')).toBe('x');
+  });
+
   // Review fix (finding #3): AC3's "multi-line string values can be read and edited in full"
   // claim was untested — every other fixture in this suite is single-line. writeFile/getText are
   // content-agnostic in principle, but VS Code's own EOL-normalization/insertFinalNewline on save
@@ -296,7 +368,7 @@ describe('openExtendedFieldEditor', () => {
     const tempRoot = await makeTempRoot();
     const saveEvent = makeFakeDocEvent();
     onDidSaveTextDocument.mockImplementation(saveEvent.register);
-    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm');
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
     const multiline = 'First line.\nSecond line.\n\nFourth line, after a blank one.';
     openTextDocument.mockResolvedValue({ uri: { fsPath: path } });
     const deps = makeDeps(tempRoot);
