@@ -77,7 +77,13 @@ export async function buildExplicitPluginsWithOrigin(
   source: Source,
   instanceRoot: string,
   dataFolder: string,
-  buildIndex: BuildIndex = buildFileConflictIndex,
+  // buildFileConflictIndex now requires a log (#322). This function itself takes no
+  // log/channel parameter, so the default stays a no-op rather than growing this
+  // signature for it — but the sole real caller (makeEnterEditing, extension.ts) passes
+  // its own outputChannel-backed buildIndex explicitly, so the walker's skip/cycle/broken-
+  // link surfacing does reach the Output channel in production; this default only fires
+  // for a caller (e.g. a test) that doesn't supply one.
+  buildIndex: BuildIndex = (entries, root) => buildFileConflictIndex(entries, root, () => {}),
 ): Promise<ExplicitPlugin[]> {
   const [names, enabled, index, overwriteFiles] = await Promise.all([
     source.readPluginOrder(),

@@ -455,7 +455,7 @@ export class ModListProvider
     if (this.instanceRoot) {
       try {
         const [index, vanillaMasters] = await Promise.all([
-          buildFileConflictIndex(entries, this.instanceRoot),
+          buildFileConflictIndex(entries, this.instanceRoot, this.log),
           this.dataFolder.then((df) => readVanillaMasters(df, this.log)),
         ]);
         this.statuses = await computeModStatuses(entries, this.instanceRoot, index, vanillaMasters, this.log);

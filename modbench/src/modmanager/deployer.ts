@@ -72,13 +72,19 @@ export async function isDeployed(instanceRoot: string): Promise<boolean> {
 
 /** Link one winner into Data/. Skips (returns 'skipped') when a vanilla/foreign
  *  file already occupies the target; leaves an unchanged prior link untouched;
- *  relinks only when the winner's inode changed. */
+ *  relinks only when the winner's inode changed. Returns 'cross-volume' (#322)
+ *  when the link itself fails with EXDEV — a winner resolved through a symlink can
+ *  now live outside mods/ entirely (a shared asset folder on another disk, the
+ *  motivating scenario), so `onSameVolume`'s coarse mods/-vs-Data/ precheck no
+ *  longer guarantees every individual winner shares Data/'s volume. Any other
+ *  linkFn failure propagates — only a known, nameable cause is downgraded to a
+ *  per-file outcome. */
 async function linkWinner(
   target: string,
   winner: string,
   wasPreviouslyLinked: boolean,
   linkFn: (source: string, target: string) => Promise<void>,
-): Promise<'linked' | 'skipped'> {
+): Promise<'linked' | 'skipped' | 'cross-volume'> {
   const existing = await statOrNull(target);
   if (existing) {
     // A vanilla/foreign file occupies this path — never overwrite it (ADR-0026
@@ -92,7 +98,12 @@ async function linkWinner(
   } else {
     await mkdir(dirname(target), { recursive: true });
   }
-  await linkFn(winner, target);
+  try {
+    await linkFn(winner, target);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
+    return 'cross-volume';
+  }
   return 'linked';
 }
 
@@ -135,7 +146,7 @@ export async function deploy(
   if (!baseline) return;
   const { previousLinks, preExisting } = baseline;
 
-  const { links, skipped } = await linkWinners(index, dataFolder, previousLinks, opts.linkFn ?? link);
+  const { links, skipped, crossVolume } = await linkWinners(index, dataFolder, previousLinks, opts.linkFn ?? link);
   await removeStaleLinks(dataFolder, previousLinks, links);
 
   if (skipped.length > 0) {
@@ -143,6 +154,13 @@ export async function deploy(
       'warning',
       `${skipped.length} mod file(s) were not deployed — a file already exists in Data/.`,
       skipped.join('\n'),
+    );
+  }
+  if (crossVolume.length > 0) {
+    reporter.report(
+      'warning',
+      `${crossVolume.length} mod file(s) could not be deployed — their source is on a different drive than Data/ (e.g. a symlinked shared folder on another disk).`,
+      crossVolume.join('\n'),
     );
   }
 
@@ -214,9 +232,10 @@ async function linkWinners(
   dataFolder: string,
   previousLinks: Map<string, string>,
   linkFn: (source: string, target: string) => Promise<void>,
-): Promise<{ links: string[]; skipped: string[] }> {
+): Promise<{ links: string[]; skipped: string[]; crossVolume: string[] }> {
   const links: string[] = [];
   const skipped: string[] = [];
+  const crossVolume: string[] = [];
   for (const entry of index.files) {
     const relativePath = entry.relativePath;
     // MO2 Root-Builder: a mod's root/ contents map to the game root, not Data/.
@@ -233,9 +252,11 @@ async function linkWinners(
     const wasPreviouslyLinked = priorPath === relativePath;
 
     const outcome = await linkWinner(join(dataFolder, relativePath), entry.winner, wasPreviouslyLinked, linkFn);
-    (outcome === 'linked' ? links : skipped).push(relativePath);
+    if (outcome === 'linked') links.push(relativePath);
+    else if (outcome === 'cross-volume') crossVolume.push(relativePath);
+    else skipped.push(relativePath);
   }
-  return { links, skipped };
+  return { links, skipped, crossVolume };
 }
 
 /** Remove prior links whose folded key is no longer a winner at all (e.g. a

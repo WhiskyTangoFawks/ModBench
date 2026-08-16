@@ -223,7 +223,7 @@ export class PluginListProvider
     if (!this.instanceRoot) return undefined;
     try {
       const entries = await this.source.readModlist();
-      const index = await buildFileConflictIndex(entries, this.instanceRoot);
+      const index = await buildFileConflictIndex(entries, this.instanceRoot, this.log);
       const dataFolder = await this.dataFolder;
       if (!dataFolder) return undefined;
       return resolvePluginPaths([name], index, dataFolder).get(name);
@@ -326,7 +326,7 @@ export class PluginListProvider
     if (!this.instanceRoot) return undefined;
     try {
       const entries = await this.source.readModlist();
-      const index = await buildFileConflictIndex(entries, this.instanceRoot);
+      const index = await buildFileConflictIndex(entries, this.instanceRoot, this.log);
       const dataFolder = await this.dataFolder;
       return await computePluginOrderStatuses(order, index, dataFolder, this.log);
     } catch (e) {

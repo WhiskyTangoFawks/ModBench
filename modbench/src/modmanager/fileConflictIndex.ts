@@ -2,7 +2,7 @@
 // Pure over ModlistEntry[] + instanceRoot; no vscode import, unit-testable
 // standalone like modlistTree.ts.
 
-import { readdir } from 'node:fs/promises';
+import { readdir, realpath, stat } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import type { ModlistEntry } from './model';
 
@@ -100,26 +100,136 @@ export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, strin
   return new Map(rootLevelEntries(index).map((entry) => [foldPath(entry.relativePath), entry.winnerMod]));
 }
 
-async function walk(dir: string, root = dir): Promise<{ relativePath: string; absolutePath: string }[]> {
+/** Non-regular dirent policy inside `mods/<Mod>/` (#322). `references/modorganizer/`
+ *  (grep-only, checked first) sets the precedent: its own walker
+ *  (`DirectoryWalker::forEachEntry`, `src/envfs.cpp`, consumed by
+ *  `DirectoryEntry::addFiles` in `src/shared/directoryentry.cpp`) classifies purely on
+ *  `FILE_ATTRIBUTE_DIRECTORY` — a directory reparse point (Windows symlink/junction) is
+ *  recursed exactly like a real directory, a file reparse point is read exactly like a
+ *  real file, and a failed open just logs and stops that branch. No cycle guard exists
+ *  there; MO2 leans on NTFS's own reparse-hop ceiling to stay finite, which has no Linux
+ *  equivalent for an application-level directory walk. This walker follows MO2's lead —
+ *  follow transparently, surface what fails — and adds the cycle guard MO2 gets for free:
+ *   - A symlink is followed to whatever it resolves to (file or directory); the target
+ *     participates in the index exactly as if it weren't a link — deploy through the
+ *     link. For a symlinked *file* this means the entry's source is the realpath-resolved
+ *     target, not the symlink's own path: `fs.link`'s final path component doesn't
+ *     dereference a symlink on Linux, so the deployer would otherwise hardlink the link
+ *     itself. The relativePath key is unaffected — still the symlink's own name in the mod
+ *     tree. A symlinked *directory* needs no such resolution: only its own final path
+ *     component is a link, and everything found by walking through it already resolves
+ *     correctly. This is what makes a user's shared-asset-folder symlink inside a mod work.
+ *   - A broken symlink (ENOENT) is skipped — logged, never thrown. Any other stat failure
+ *     (e.g. permission denied) propagates instead of silently degrading to a skip, matching
+ *     statusChecker.ts's `modFolderExists` / #318 convention.
+ *   - Every directory entered — real or reached via a followed symlink — is realpath-
+ *     tracked against its own ancestors; a revisit is a cycle (`mods/ModA/link -> ModA`,
+ *     or a multi-hop loop), skipped and logged rather than recursed forever.
+ *   - A socket, FIFO, or device node is never mod content — always skipped, always logged. */
+async function walk(
+  dir: string,
+  root: string,
+  ancestors: Set<string>,
+  log: (msg: string) => void,
+): Promise<{ relativePath: string; absolutePath: string }[]> {
   const dirents = await readdir(dir, { withFileTypes: true });
   const results: { relativePath: string; absolutePath: string }[] = [];
   for (const dirent of dirents) {
     const absolutePath = join(dir, dirent.name);
     if (dirent.isDirectory()) {
-      results.push(...(await walk(absolutePath, root)));
+      results.push(...(await descend(absolutePath, root, ancestors, log)));
     } else if (dirent.isFile()) {
-      const relativePath = relative(root, absolutePath).split(sep).join('/');
-      if (!EXCLUDED_RELATIVE_PATHS.has(relativePath)) {
-        results.push({ relativePath, absolutePath });
-      }
+      pushEntry(results, root, absolutePath);
+    } else if (dirent.isSymbolicLink()) {
+      results.push(...(await walkSymlink(absolutePath, root, ancestors, log)));
+    } else {
+      log(`[fileConflictIndex] non-regular entry (socket/FIFO/device node), skipping: "${absolutePath}"`);
     }
   }
   return results;
 }
 
-async function walkMod(instanceRoot: string, modName: string): Promise<{ relativePath: string; absolutePath: string }[]> {
+/** The symlink branch of `walk`'s policy, split out to keep both functions' own
+ *  complexity low: resolve what the link points to and dispatch exactly like `walk` would
+ *  for a real entry of that type, or skip+log for broken/non-regular targets (#322). */
+async function walkSymlink(
+  absolutePath: string,
+  root: string,
+  ancestors: Set<string>,
+  log: (msg: string) => void,
+): Promise<{ relativePath: string; absolutePath: string }[]> {
+  let target;
   try {
-    return await walk(join(instanceRoot, 'mods', modName));
+    target = await stat(absolutePath); // follows the link
+  } catch (err) {
+    // ENOENT (broken link) only — any other stat failure (e.g. EACCES) propagates rather
+    // than silently degrading to a skip, matching statusChecker.ts's modFolderExists /
+    // #318 convention: a permission error must reject, not read as "nothing here".
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    log(`[fileConflictIndex] broken symlink, skipping: "${absolutePath}" (${err instanceof Error ? err.message : String(err)})`);
+    return [];
+  }
+  if (target.isDirectory()) return descend(absolutePath, root, ancestors, log);
+  if (target.isFile()) {
+    // Resolve to the real file so the deployer hardlinks the target, not the link itself
+    // (see pushEntry's doc comment) — the relativePath key still comes from the symlink's
+    // own name via walkedPath.
+    const results: { relativePath: string; absolutePath: string }[] = [];
+    pushEntry(results, root, absolutePath, await realpath(absolutePath));
+    return results;
+  }
+  log(`[fileConflictIndex] symlink target is not a file or directory, skipping: "${absolutePath}"`);
+  return [];
+}
+
+/** Recurse into a directory — real or reached via a followed symlink — guarding against a
+ *  symlink cycle by realpath-tracking every directory against its own ancestors (#322). One
+ *  extra stat-family call per directory, negligible against a walk measured at ~0.14s over
+ *  14,865 files (docs/specs/mods.md) — uniform for every directory rather than only
+ *  symlinked ones, so there is one code path to verify instead of two conditionally-correct
+ *  ones. */
+async function descend(
+  dirPath: string,
+  root: string,
+  ancestors: Set<string>,
+  log: (msg: string) => void,
+): Promise<{ relativePath: string; absolutePath: string }[]> {
+  const real = await realpath(dirPath);
+  if (ancestors.has(real)) {
+    log(`[fileConflictIndex] symlink cycle detected at "${dirPath}", skipping`);
+    return [];
+  }
+  return walk(dirPath, root, new Set(ancestors).add(real), log);
+}
+
+/** `walkedPath` is what the relativePath key is computed from — a symlink's own name in
+ *  the mod tree, never resolved. `sourcePath` is what the entry's `absolutePath` field
+ *  becomes (and, via `buildFileConflictIndex`, the `winner` the deployer `fs.link()`s);
+ *  it defaults to `walkedPath` and is only ever overridden for a symlinked file, to the
+ *  realpath-resolved target (#322) — `fs.link`'s final path component does not dereference
+ *  a symlink on Linux, so linking the symlink's own path would hardlink the link itself
+ *  (landing as a second, possibly-broken symlink in Data/, not a copy of the real file). */
+function pushEntry(
+  results: { relativePath: string; absolutePath: string }[],
+  root: string,
+  walkedPath: string,
+  sourcePath: string = walkedPath,
+): void {
+  const relativePath = relative(root, walkedPath).split(sep).join('/');
+  if (!EXCLUDED_RELATIVE_PATHS.has(relativePath)) {
+    results.push({ relativePath, absolutePath: sourcePath });
+  }
+}
+
+async function walkMod(
+  instanceRoot: string,
+  modName: string,
+  log: (msg: string) => void,
+): Promise<{ relativePath: string; absolutePath: string }[]> {
+  const dir = join(instanceRoot, 'mods', modName);
+  try {
+    const rootReal = await realpath(dir);
+    return await walk(dir, dir, new Set([rootReal]), log);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []; // missing mod folder — StatusChecker's concern
     throw err;
@@ -129,6 +239,7 @@ async function walkMod(instanceRoot: string, modName: string): Promise<{ relativ
 export async function buildFileConflictIndex(
   entries: ModlistEntry[],
   instanceRoot: string,
+  log: (msg: string) => void,
 ): Promise<FileConflictIndex> {
   const files = new FileConflictLookup();
   const filesByMod = new Map<string, { relativePath: string; absolutePath: string }[]>();
@@ -137,7 +248,7 @@ export async function buildFileConflictIndex(
 
   // Each mod's disk walk is independent, so run them concurrently; only the
   // merge below needs priority order.
-  const walked = await Promise.all(enabledMods.map((mod) => walkMod(instanceRoot, mod.name)));
+  const walked = await Promise.all(enabledMods.map((mod) => walkMod(instanceRoot, mod.name, log)));
 
   // Entries are in modlist.txt file order, top-first. The top of the file is the
   // winning end of the Mod override order (MO2 pins vanilla/base to losing-most;
