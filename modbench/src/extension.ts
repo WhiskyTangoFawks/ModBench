@@ -7,7 +7,7 @@ import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { createApiClient, type ApiClient, type MasterIssue } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
-import { SessionController } from './medit/SessionController';
+import { SessionController, type SessionLoadProgress } from './medit/SessionController';
 import { reloadSession } from './medit/reloadSession';
 import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
 import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type PendingTreeNode } from './medit/PendingChangesTreeProvider';
@@ -1674,6 +1674,30 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
     outputChannel, revealLog, sessionPluginFiles,
   } = deps;
   return async (progress?: LaunchProgress): Promise<void> => {
+      // #307 / ADR-0035: each poll of the running load, mapped onto the same session hand-off the
+      // completed load uses. Mid-load the only facts that exist are which plugins are indexed and
+      // which have failed: read-only state and master issues are whole-session derivations that a
+      // partial session cannot answer (the backend suppresses master issues outright while
+      // loading — RecordQueryService.GetPlugins), so they are deliberately empty here and land in
+      // one piece when the load completes. A tick is never the last word: the poll is stopped
+      // inside loadExplicitSession before it returns, so the full setSession below always follows.
+      let lastLanded = '';
+      const onLoadProgress = (status: SessionLoadProgress): void => {
+        // Only when something actually landed. setSession fires a whole-tree refresh, and
+        // PluginTreeProvider.getPluginChildren is uncached — an unconditional re-render every
+        // 500ms would re-fetch record types for every expanded row, turning a deep tree into a
+        // request storm for no visible change. Failures count as landing too (AC6): one can
+        // arrive without the indexed set growing at all.
+        const landed = `${status.indexedPlugins.length}:${status.failures.length}`;
+        if (landed === lastLanded) return;
+        lastLanded = landed;
+        pluginsTree?.setSession(
+          new Set(status.indexedPlugins),
+          new Set(),
+          new Map(),
+          new Map(status.failures.map((f) => [f.name, f.reason] as const)),
+        );
+      };
       revealLog(); // the load can take a while; let the user watch the step log
       const gd = await resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths());
       if (!gd) {
@@ -1702,7 +1726,9 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
       // There's no progress stream, so name the count and warn it can take a while.
       progress?.report({ message: `indexing ${plugins.length} plugins… (this can take a while)` });
       outputChannel.info(`[extension] backend healthy; loading session (${plugins.length} plugins)`);
-      const failures = await controller.loadExplicitSession(plugins, gd.dataFolder);
+      const failures = await controller.loadExplicitSession(plugins, gd.dataFolder, undefined, {
+        onProgress: onLoadProgress,
+      });
       // #295 AC4: undefined (not `[]`) means the POST itself failed — loadExplicitSession
       // already surfaced the error (ADR-0026 "explicit action failed" tier). The backend's own
       // SessionManager disposes the previous session unconditionally before attempting the new

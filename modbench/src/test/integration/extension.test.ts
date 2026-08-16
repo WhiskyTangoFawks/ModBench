@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { before, after, describe, it } from 'mocha';
+import { before, after, beforeEach, afterEach, describe, it } from 'mocha';
 import { recordRowUri } from '../../medit/pendingChangeRowUri';
 
 const TEST_PORT = 15172;
@@ -60,6 +60,25 @@ let mockPluginsOverride: MockPlugin[] | null = null;
 // disposes the previous session unconditionally first) means the mock must *not* set
 // sessionLoaded on this path, matching the real backend leaving no session behind either.
 let loadExplicitShouldFail = false;
+// #307: GET /session/status' answer — what the load can honestly say about itself *right now*.
+// Mutable per-test so a suite can script a load landing one plugin at a time and observe the tree
+// react to each, which is the whole subject of progressive load. `conflictsComputed` is separate
+// from any notion of state on purpose (SessionStatus.cs) — the tree gates its incompleteness
+// message on this field alone.
+type MockSessionStatus = {
+  totalPlugins: number;
+  indexedPlugins: { name: string; origin: string }[];
+  conflictsComputed: boolean;
+  failures: { name: string; reason: string }[];
+};
+const NO_SESSION_STATUS: MockSessionStatus =
+  { totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [] };
+let sessionStatus: MockSessionStatus = { ...NO_SESSION_STATUS };
+// #307: when set, POST /session/load-explicit does not answer until the test calls it — the real
+// backend's load blocks for the whole indexing run, and every progressive-load assertion is about
+// what the tree does *during* that window. A mock that answers instantly cannot express it.
+let releaseLoadExplicit: (() => void) | null = null;
+let holdLoadExplicit = false;
 
 function resetMockBackend(): void {
   sessionLoaded = false;
@@ -68,6 +87,22 @@ function resetMockBackend(): void {
   pendingChanges = [];
   mockPluginsOverride = null;
   loadExplicitShouldFail = false;
+  sessionStatus = { ...NO_SESSION_STATUS };
+  holdLoadExplicit = false;
+  releaseLoadExplicit?.();
+  releaseLoadExplicit = null;
+}
+
+/** #307: report the load as having indexed `names` so far. `conflictsComputed` stays false until
+ *  a test says otherwise — the winner sweep is the last thing a real load does. */
+function setIndexed(names: string[], extra: Partial<MockSessionStatus> = {}): void {
+  sessionStatus = {
+    totalPlugins: Math.max(names.length, sessionStatus.totalPlugins),
+    indexedPlugins: names.map((name) => ({ name, origin: 'Data' })),
+    conflictsComputed: false,
+    failures: [],
+    ...extra,
+  };
 }
 
 function createMockBackend(): http.Server {
@@ -92,10 +127,23 @@ function createMockBackend(): http.Server {
           res.end(JSON.stringify({ error: 'simulated load failure' }));
           return;
         }
-        sessionLoaded = true;
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ failures: [] }));
+        // #307: the real load blocks for the whole indexing run. Held open so a test can observe
+        // the tree mid-load; answered immediately otherwise, as every pre-#307 test expects.
+        const answer = () => {
+          sessionLoaded = true;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ failures: [] }));
+        };
+        if (!holdLoadExplicit) return answer();
+        releaseLoadExplicit = () => { releaseLoadExplicit = null; answer(); };
       });
+      return;
+    }
+    // #307 / #274: answers 200 in every state including "no session" — reporting the absence of
+    // a session is this endpoint's job, not a failure to do it (SessionEndpoints.cs).
+    if (url === '/session/status') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(sessionStatus));
       return;
     }
     if (url === '/session/filter') {
@@ -1217,5 +1265,144 @@ describe('Refresh never triggers a session reload (#295 AC5)', () => {
       !requestLog.some((l) => l === 'POST /session/load-explicit'),
       'modbench.refresh must never reload the editing session',
     );
+  });
+});
+
+// ── #307 / ADR-0035: progressive load that states its own incompleteness ───────
+// The trap this closes: an absent conflict badge is indistinguishable from "no conflict". If
+// browsing opens at second five and the sweep lands at second ninety, an unmarked record silently
+// claims to be conflict-free for eighty-five seconds when nothing has looked. So the load is not
+// merely "shown sooner" — it says what it does not yet know.
+//
+// Every assertion here is about the window *during* the load POST, which is why the mock holds it
+// open (holdLoadExplicit) rather than answering instantly like every other suite in this file.
+
+/** Poll `read` until it returns a truthy value, or fail after `label`'s deadline. The tree reacts
+ *  to a status poll on the backend's own 500ms cadence, so a fixed sleep would be either flaky or
+ *  slow; same shape as the downloads watcher's own wait above. */
+async function waitFor<T>(label: string, read: () => Promise<T> | T, timeoutMs = 10_000): Promise<NonNullable<T>> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await read();
+    if (value) return value;
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${label}`);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+describe('Progressive load states its own incompleteness (#307)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
+  const pluginListProviderOf = () =>
+    (ext?.exports as { pluginListProvider?: PluginListProviderLike } | undefined)?.pluginListProvider;
+  let gameDir = '';
+
+  const itemFor = async (name: string) => {
+    const tree = pluginsTree()!;
+    return tree.getTreeItem(findRow(await tree.getChildren(), name));
+  };
+
+  before(async () => {
+    if (!root) return;
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-progressive-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n*MissingMaster.esp\n*Immutable.esm\n');
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.commands.executeCommand('modbench.closeMedit');
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '');
+    fs.rmSync(gameDir, { recursive: true, force: true });
+    resetMockBackend();
+  });
+
+  beforeEach(() => {
+    resetMockBackend();
+    holdLoadExplicit = true;
+    pluginListProviderOf()?.invalidate();
+  });
+
+  afterEach(async () => {
+    releaseLoadExplicit?.();
+    await vscode.commands.executeCommand('modbench.closeMedit');
+  });
+
+  // AC1: rows gain chevrons as each plugin lands, not all at once at the end.
+  it('makes a plugin expandable as soon as it is indexed, while a later one is still a leaf', async () => {
+    setIndexed(['TestMod.esp']);
+    const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
+
+    await waitFor('TestMod.esp to gain a chevron mid-load', async () =>
+      (await itemFor('TestMod.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
+
+    // The other half of the claim, and the one that makes it progressive rather than merely
+    // early: a plugin the load has not reached yet stays a leaf. A row that expanded here would
+    // fetch records for a plugin that is not queryable yet.
+    assert.strictEqual(
+      (await itemFor('Other.esp')).collapsibleState, vscode.TreeItemCollapsibleState.None,
+      'Other.esp has not been indexed yet and must not be expandable',
+    );
+
+    setIndexed(['TestMod.esp', 'Other.esp']);
+    await waitFor('Other.esp to gain a chevron once it lands', async () =>
+      (await itemFor('Other.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
+
+    releaseLoadExplicit!();
+    await launch;
+  });
+
+  // AC6: a per-plugin failure surfaces when it occurs, not only at the end of the load.
+  it('decorates a plugin that failed to load the moment it is reported, not at the end', async () => {
+    setIndexed(['TestMod.esp'], { failures: [{ name: 'Other.esp', reason: 'RACE parse' }] });
+    const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
+
+    const item = await waitFor('Other.esp to be decorated with its load failure mid-load', async () => {
+      const candidate = await itemFor('Other.esp');
+      return candidate.description === '✗ Failed to load' ? candidate : undefined;
+    });
+
+    assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('RACE parse'),
+      `expected the failure reason in the tooltip, got: ${String(item.tooltip)}`);
+
+    releaseLoadExplicit!();
+    await launch;
+  });
+
+  // AC9: master issues are derived from the whole session, so mid-load they would flag masters
+  // that simply have not been opened yet. The backend already suppresses them while loading
+  // (RecordQueryService.GetPlugins gates Classify on SessionState.Ready) and the frontend never
+  // asks for them mid-load — this asserts the suppression is honoured end to end, and, just as
+  // importantly, that it lifts by itself once the load completes.
+  it('leaves master issues off the rows until the load completes, then decorates them with no user action', async () => {
+    setIndexed(['TestMod.esp', 'MissingMaster.esp']);
+    const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
+
+    await waitFor('MissingMaster.esp to gain a chevron mid-load', async () =>
+      (await itemFor('MissingMaster.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
+    const midLoad = await itemFor('MissingMaster.esp');
+    assert.ok(
+      !(typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing master: Ghost.esm')),
+      `master issues must not be decorated mid-load, got: ${String(midLoad.tooltip)}`,
+    );
+
+    releaseLoadExplicit!();
+    await launch;
+
+    const loaded = await itemFor('MissingMaster.esp');
+    assert.ok(typeof loaded.tooltip === 'string' && loaded.tooltip.includes('Missing master: Ghost.esm'),
+      `expected the missing-master tooltip once the load completed, got: ${String(loaded.tooltip)}`);
+    // The other half of the same payload, and the trap this closes: a progressive tick carries
+    // empty readOnly/masterIssues, so if a tick were ever allowed to be the *last* setSession
+    // call, both these decorations would silently vanish from a fully loaded tree. Asserting one
+    // of each proves the completion hand-off still runs, whole, after the last tick.
+    const immutable = await itemFor('Immutable.esm');
+    assert.ok(typeof immutable.tooltip === 'string' && immutable.tooltip.includes('read-only'),
+      `expected the read-only note once the load completed, got: ${String(immutable.tooltip)}`);
   });
 });
