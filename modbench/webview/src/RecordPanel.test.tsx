@@ -847,7 +847,8 @@ describe('RecordPanel — 422 ProblemDetails detail is surfaced', () => {
   });
 });
 
-// ── Issue #86: Add Master picker (header record) ─────────────────────────────
+// ── Issue #86/#335: header record fixtures (masters, once the Add Master picker's; now used only
+// to prove masters still displays, read-only) ────────────────────────────────
 
 const mastersMeta: FieldMetadata = {
   name: 'masters', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
@@ -885,66 +886,11 @@ const headerPluginsResponse = [
   { name: 'DLCRobot.esm', isImmutable: true, loadOrderIndex: 2 },
 ];
 
-// Issue #209: "Add Master…" no longer a standalone button + its own hand-drawn candidate
-// dropdown (ADR-0033: no standalone control once an action is right-click-reachable) — it's an
-// entry on the column header's native right-click menu now, gated `isHeaderRecord && !immutable`
-// and backed by a VS Code QuickPick built from the header `<th>`'s data-vscode-context (`plugin`,
-// `masters`). Neither the native menu's availability nor the QuickPick's candidate list is
-// renderable in this harness (see EXPECTED_COMMANDS in extension.test.ts); what's testable here
-// is the context payload that backs them (covered in "column header native context menu" below)
-// and that the extension host's resolved selection, once broadcast back, stages correctly.
-describe('RecordPanel — Add Master (issue #86, native menu + QuickPick since #209)', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  const headerOpts = { plugins: headerPluginsResponse };
-
-  it("the native modbench.columnHeader.addMaster broadcast stages the full appended masters array via save", async () => {
-    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
-    const { client } = renderPanel(headerCompareResult, headerOpts);
-    await waitFor(() => screen.getByText('MyMod.esp'));
-    postColumnHeaderAction({
-      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER,
-      formKey: '000000:MyMod.esp', plugin: 'MyMod.esp', origin: 'Data', newMaster: 'DLCRobot.esm',
-    });
-
-    await waitFor(() =>
-      expect(client.save).toHaveBeenCalledWith(
-        '000000:MyMod.esp',
-        'MyMod.esp',
-        { masters: ['Fallout4.esm', 'DLCRobot.esm'] },
-        undefined,
-      ),
-    );
-  });
-
-  it('a broadcast for a different formKey is ignored — this panel is not the one that was right-clicked', async () => {
-    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
-    const { client } = renderPanel(headerCompareResult, headerOpts);
-    await waitFor(() => screen.getByText('MyMod.esp'));
-    postColumnHeaderAction({
-      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER,
-      formKey: '000099:Other.esp', plugin: 'MyMod.esp', origin: 'Data', newMaster: 'DLCRobot.esm',
-    });
-
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(client.save).not.toHaveBeenCalled();
-  });
-
-  it('a not_append_only 422 rejection surfaces a readable message', async () => {
-    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
-    const save = vi.fn().mockResolvedValue(resp(422, { fieldErrors: [{ fieldPath: 'masters', reason: 'not_append_only' }] }));
-    renderPanel(headerCompareResult, { ...headerOpts, save });
-    await waitFor(() => screen.getByText('MyMod.esp'));
-    postColumnHeaderAction({
-      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER,
-      formKey: '000000:MyMod.esp', plugin: 'MyMod.esp', origin: 'Data', newMaster: 'DLCRobot.esm',
-    });
-
-    await waitFor(() =>
-      expect(screen.getByText(/masters can only be appended to/)).toBeInTheDocument(),
-    );
-  });
-});
+// Issue #335/ADR-0038: the Add Master command, its picker, and the broadcast that used to stage
+// its result are gone outright — nothing may declare a master directly any more. What remains
+// testable here is that the header record's masters field still displays (below) and that it
+// offers no editing affordance (in "column header native context menu" and the array-op coverage
+// below) — there is no longer a command/message pathway to simulate staging through.
 
 describe('RecordPanel — no VMAD section on the header record (issue #119)', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -1598,14 +1544,14 @@ describe('RecordPanel — drag-drop stages a pending field change', () => {
 
 // ── Column header native context menu (issue #3, native since #209; consolidated in #202) ─────
 //
-// The column-header menu (Copy as Override… / Copy as New Record / Remove / Add Master) is VS
-// Code's own `webview/context` menu now, gated on the header `<th>`'s
-// data-vscode-context — not a rendered `<ul role="menu">` (#208's migration switch applied
-// here too: no `onContextMenu`/`preventDefault()` on the `<th>` any more). Its own availability
-// (the `when` clauses in package.json) isn't renderable in this harness — see EXPECTED_COMMANDS
-// in extension.test.ts. What's testable here is the context payload that backs those `when`
-// clauses and the QuickPick's candidate list; the actions themselves are covered by the
-// broadcast-simulation describes below (same shape as #208's Save/Revert Group tests).
+// The column-header menu (Copy as Override… / Copy as New Record / Remove) is VS Code's own
+// `webview/context` menu now, gated on the header `<th>`'s data-vscode-context — not a rendered
+// `<ul role="menu">` (#208's migration switch applied here too: no `onContextMenu`/
+// `preventDefault()` on the `<th>` any more). Its own availability (the `when` clauses in
+// package.json) isn't renderable in this harness — see EXPECTED_COMMANDS in extension.test.ts.
+// What's testable here is the context payload that backs those `when` clauses; the actions
+// themselves are covered by the broadcast-simulation describes below (same shape as #208's
+// Save/Revert Group tests).
 
 describe('RecordPanel — column header native context menu', () => {
   beforeEach(() => {
@@ -1635,19 +1581,45 @@ describe('RecordPanel — column header native context menu', () => {
     expect(contextOf('Fallout4.esm').immutable).toBe(true);
   });
 
-  it("the header record's own column carries isHeaderRecord: true and its current masters — Add Master's `when`/QuickPick key off these", async () => {
+  // #335/ADR-0038: isHeaderRecord/masters are gone from this payload — both existed solely to
+  // back the now-deleted Add Master command's `when` gate and candidate list.
+  it('the header record column carries no isHeaderRecord/masters — nothing left to back', async () => {
     vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
     renderPanel(headerCompareResult, { plugins: headerPluginsResponse });
     await waitFor(() => screen.getByText('MyMod.esp'));
     const ctx = contextOf('MyMod.esp');
-    expect(ctx.isHeaderRecord).toBe(true);
-    expect(ctx.masters).toEqual(['Fallout4.esm']);
+    expect(ctx).not.toHaveProperty('isHeaderRecord');
+    expect(ctx).not.toHaveProperty('masters');
+  });
+});
+
+// #335/ADR-0038: nothing may declare a master directly any more — the header record still
+// displays masters (AC4), but no editing affordance survives, including the generic
+// array-parent/array-element menu (#227's Add/Remove/Move Up/Move Down) every other array field
+// gets. That menu has no isHeaderRecord/masters-specific exclusion of its own; it's closed by
+// stamping the masters FieldMetadata (and its elementType) readOnly, the same per-row override
+// mechanism the Condition AND/OR gate and VMAD's synthesized Flags row already rely on.
+describe('RecordPanel — header record masters field is read-only in the grid (issue #335/ADR-0038)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('the masters row still displays its value', async () => {
+    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
+    renderPanel(headerCompareResult, { plugins: headerPluginsResponse });
+    await waitFor(() => screen.getByText('MyMod.esp'));
+    expect(screen.getByText('masters')).toBeInTheDocument();
   });
 
-  it('a non-header record column carries isHeaderRecord: false', async () => {
-    renderPanel(compareResult);
+  it('offers no arrayParent/arrayElement data-vscode-context on the masters row — no Add/Remove/Move Up/Move Down survives', async () => {
+    vi.stubGlobal('mEditFormKey', '000000:MyMod.esp');
+    renderPanel(headerCompareResult, { plugins: headerPluginsResponse });
     await waitFor(() => screen.getByText('MyMod.esp'));
-    expect(contextOf('MyMod.esp').isHeaderRecord).toBe(false);
+
+    const cells = Array.from(document.querySelectorAll('td[data-vscode-context]'));
+    const arrayOpCells = cells.filter((c) => {
+      const section = JSON.parse(c.getAttribute('data-vscode-context')!).webviewSection as string;
+      return section === 'arrayParent' || section === 'arrayElement';
+    });
+    expect(arrayOpCells).toHaveLength(0);
   });
 });
 

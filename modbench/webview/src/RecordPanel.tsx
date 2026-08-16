@@ -5,7 +5,7 @@ import { DiffRow, type ArrayEditControls, type FocusedCell } from './DiffRow';
 import { partialSaveMessage, staleIndexMessage } from '../../src/medit/saveClassification';
 import { errorText } from '../../src/medit/ApiClient';
 import {
-  buildColumns, columnHeaderContext, currentMasters, defaultElementValue, parseElementIndex,
+  buildColumns, columnHeaderContext, defaultElementValue, parseElementIndex,
   appendArrayElement, removeArrayElement, moveArrayElement, getAtPath, setAtPath,
   vmadScriptsContext, vmadScriptContext, vmadPropertyContext, collidingFilenames,
 } from './recordUtils';
@@ -220,26 +220,23 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // menu's native commands (none of which carry a changeId — self-filtering is on `formKey`
   // instead, since these act on whichever record this panel currently has loaded, not a specific
   // pending change). copyAsNewRecord/copyAsOverride/removeOverride are called with the signatures
-  // their own handlers already take; addMaster is synthesized here since the inline master picker
-  // that used to own it (PluginHeader) is gone — see currentMasters below.
+  // their own handlers already take.
   // Issue #202: copyAllToPending deleted — Copy as Override now carries the right-clicked column
   // (sourcePlugin) through to the backend instead of a separate shallow-copy action.
-  // #272 / ADR-0036: copyAsNewRecord/addMaster take a ColumnKey — both resolve through
-  // overrideMap (Copy as New Record's source identity, Add Master's current-masters read) before
-  // ever reaching a real plugin filename. removeOverride stays a bare plugin filename — no local
-  // overrideMap lookup, and its write-target DTO deliberately doesn't carry origin (the server
-  // resolves it, ruling Q4/#6). #281: copyAsOverride carries sourceOrigin through to the
-  // backend's own sourceOrigin — its *source* is a read, and a read off a shadowed copy needs
-  // the origin to name which copy (the write target still travels as a bare filename).
+  // #272 / ADR-0036: copyAsNewRecord takes a ColumnKey — resolves through overrideMap (Copy as
+  // New Record's source identity) before ever reaching a real plugin filename. removeOverride
+  // stays a bare plugin filename — no local overrideMap lookup, and its write-target DTO
+  // deliberately doesn't carry origin (the server resolves it, ruling Q4/#6). #281: copyAsOverride
+  // carries sourceOrigin through to the backend's own sourceOrigin — its *source* is a read, and a
+  // read off a shadowed copy needs the origin to name which copy (the write target still travels
+  // as a bare filename).
   const columnHeaderActionsRef = useRef<{
     formKey: string;
     copyAsNewRecord: (sourceKey: ColumnKey, targetPlugin: string) => void;
     copyAsOverride: (sourcePlugin: string, sourceOrigin: string, targetPlugin: string) => void;
     removeOverride: (plugin: string) => void;
-    addMaster: (key: ColumnKey, newMaster: string) => void;
   }>({
-    formKey: '', copyAsNewRecord: () => {}, copyAsOverride: () => {},
-    removeOverride: () => {}, addMaster: () => {},
+    formKey: '', copyAsNewRecord: () => {}, copyAsOverride: () => {}, removeOverride: () => {},
   });
 
   // Issue #227: same staleness problem as pendingCellActionsRef/columnHeaderActionsRef above, for
@@ -310,9 +307,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         actions.copyAsOverride(msg.sourcePlugin, msg.sourceOrigin, msg.targetPlugin);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE) {
         actions.removeOverride(msg.plugin);
-      } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER) {
-        // #272: addMaster resolves through overrideMap (the live pending-aware masters list).
-        actions.addMaster(columnKey(msg.plugin, msg.origin), msg.newMaster);
       }
     };
     // Issue #227: the array-element/array-parent menu's four broadcasts — same self-filter
@@ -453,7 +447,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
           setActionError(body.fieldErrors.map(e => {
             const path = e.fieldPath ?? '?';
             if (e.reason === 'not_in_session') return `${path}: reference not found in session`;
-            if (e.reason === 'not_append_only') return `${path}: masters can only be appended to, not reordered or removed`;
+            // #335/ADR-0038: every direct edit to masters is rejected now, not just non-append
+            // ones — slice 1 only closes the direct-edit path; the content-derivation ADR-0038
+            // decides on is #336, not yet true, so this message claims nothing about *how*
+            // masters gets its value, only that a direct edit isn't the way. Reachable only via
+            // cross-column drag-and-drop onto the masters row now (the array-op menu itself is
+            // gone) — see types.ts' ReferenceValidationError.reason doc comment for why the
+            // backend guard is the only thing left stopping it.
+            if (e.reason === 'read_only') return `${path}: read-only — not directly editable`;
             if (e.reason === 'type_mismatch') return `${path}: expected ${(e.expectedTypes ?? []).join('/')}`;
             if (e.reason === 'null_not_allowed') return `${path}: cannot be null`;
             return `${path}: ${e.reason ?? 'invalid'}`;
@@ -631,9 +632,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
 
   // Issue #86/#119: the header record (synthetic FormKey "000000:<plugin>") carries neither VMAD
   // nor Conditions — same gate the deleted VmadSection/ConditionSection call sites used
-  // (`!isHeaderRecord`), computed here too since these two hooks run before `isHeaderRecord`'s own
-  // declaration further down (hooks can't follow the early-return guards that precede it).
-  const isHeaderRecordForVmad = formKey.startsWith('000000:');
+  // (`!isHeaderRecord`), computed here (ahead of every hook that needs it, including
+  // fieldMetaMap's masters-readOnly stamp below) since hooks can't follow the early-return guards
+  // that precede where the rest of the render logic would naturally compute this.
+  const isHeaderRecord = formKey.startsWith('000000:');
 
   // Issue #231: VMAD and Conditions map into the same node shape (FieldDiff + FieldMetadata) the
   // ordinary reflected fields already use — vmadTreeAdapter.ts/conditionTreeAdapter.ts are pure
@@ -641,12 +643,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // buildRows/DiffRow path below as any other field, and there is no VmadSection/ConditionSection
   // left to render separately.
   const vmadTree = useMemo(
-    () => (isHeaderRecordForVmad || !result?.hasVmad) ? { diffs: [], metaMap: {} } : buildVmadRows(result.vmad),
-    [result, isHeaderRecordForVmad],
+    () => (isHeaderRecord || !result?.hasVmad) ? { diffs: [], metaMap: {} } : buildVmadRows(result.vmad),
+    [result, isHeaderRecord],
   );
   const conditionTree = useMemo(
-    () => isHeaderRecordForVmad ? { diffs: [], metaMap: {} } : buildConditionRows(result?.conditions, runOnTargets),
-    [result, isHeaderRecordForVmad, runOnTargets],
+    () => isHeaderRecord ? { diffs: [], metaMap: {} } : buildConditionRows(result?.conditions, runOnTargets),
+    [result, isHeaderRecord, runOnTargets],
   );
 
   const fieldMetaMap = useMemo((): Record<string, FieldMetadata> => {
@@ -657,8 +659,22 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       }
     }
     Object.assign(map, vmadTree.metaMap, conditionTree.metaMap);
+    // #335/ADR-0038: the header record's masters field displays but is never directly editable —
+    // stamped readOnly here (the same per-row override DiffRow already honors for the Condition
+    // AND/OR gate and VMAD's synthesized Flags row) rather than gated a second way, so every
+    // consumer of this map — the array-parent "Add" affordance and each element's own Remove/Move
+    // Up/Move Down, both otherwise wired generically for any array field — sees exactly one
+    // answer. Stamped on the element type too: array-op availability for an *element* row is
+    // computed from that row's own meta (the element schema), not the parent's.
+    const mastersMeta = map.masters;
+    if (isHeaderRecord && mastersMeta) {
+      map.masters = {
+        ...mastersMeta, readOnly: true,
+        elementType: mastersMeta.elementType ? { ...mastersMeta.elementType, readOnly: true } : mastersMeta.elementType,
+      };
+    }
     return map;
-  }, [result, vmadTree, conditionTree]);
+  }, [result, vmadTree, conditionTree, isHeaderRecord]);
 
   // #272 / ADR-0036: keyed by ColumnKey, not the bare plugin filename — pre-#272, two overrides
   // sharing a filename but differing in origin collided here, and the second silently discarded
@@ -699,17 +715,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     }
   }
 
-  // Issue #209: "Add Master…" moved from PluginHeader's own inline dropdown (deleted) to the
-  // column-header's native menu — the append-to-masters logic (previously the JSX-inline
-  // `onAddMaster` lambda) lives here now instead, using the live (pending-aware) masters list at
-  // broadcast-receipt time rather than whatever the extension host's QuickPick candidate list
-  // was built from (it can only have seen a snapshot carried in data-vscode-context).
-  function handleAddMaster(key: ColumnKey, newMaster: string) {
-    const override = overrideMap[key];
-    if (!override) return;
-    void handleEdit(override.plugin, 'masters', [...currentMasters(override), newMaster]);
-  }
-
   // Issue #209: keeps columnHeaderActionsRef current every render, mirroring
   // pendingCellActionsRef below — the mount-only message listener's column-header branches
   // always need this render's formKey/overrideMap-derived handlers, not whatever closed over
@@ -720,7 +725,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       copyAsNewRecord: (sourcePlugin, targetPlugin) => { void handleCopyAsNewRecord(sourcePlugin, targetPlugin); },
       copyAsOverride: (sourcePlugin, sourceOrigin, targetPlugin) => { void handleCopyTo(sourcePlugin, sourceOrigin, targetPlugin); },
       removeOverride: plugin => { void handleRemoveOverride(plugin); },
-      addMaster: handleAddMaster,
     };
   });
 
@@ -901,9 +905,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   const winner = overrides.find(o => o.isWinner);
   const displayId = (winner ?? overrides[0])?.editorId;
   const title = displayId ? `${displayId} [${formKey}]` : formKey;
-  // Issue #86: the header record lives at the synthetic FormKey "000000:<plugin>" (CONTEXT.md);
-  // only it has an editable masters field.
-  const isHeaderRecord = formKey.startsWith('000000:');
 
   // Issue #231: replaces the old hand-built top-level/array-element/struct-child/grandchild
   // special-casing (three near-duplicate `<DiffRow>` blocks, capped at exactly those three
@@ -1139,11 +1140,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         opacity: inLoadOrder ? undefined : DIMMED_OPACITY,
                       }}
                       // Issue #209: the column-header menu (Copy as Override… / Copy as New
-                      // Record / Remove / Add Master) is VS Code's own `webview/context` menu
-                      // now — no `onContextMenu`/`preventDefault()` here any more, same
-                      // migration switch as #208's pending cells.
+                      // Record / Remove) is VS Code's own `webview/context` menu now — no
+                      // `onContextMenu`/`preventDefault()` here any more, same migration switch
+                      // as #208's pending cells.
                       data-vscode-context={columnHeaderContext(
-                        formKey, col.override.plugin, col.override.origin ?? 'Data', isImmutable, isHeaderRecord, currentMasters(col.override),
+                        formKey, col.override.plugin, col.override.origin ?? 'Data', isImmutable,
                       )}
                     >
                       <PluginHeader

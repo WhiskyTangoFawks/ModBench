@@ -426,7 +426,6 @@ describe('package.json command titles and categories (#280)', () => {
     'modbench.pendingCell.saveGroup',
     'modbench.pendingCell.revertGroup',
     'modbench.copyAsNewRecord',
-    'modbench.columnHeader.addMaster',
     'modbench.array.add',
     'modbench.array.remove',
     'modbench.array.moveUp',
@@ -457,7 +456,7 @@ describe('package.json command titles and categories (#280)', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(37);
+    expect(PALETTE_GATED).toHaveLength(36);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));

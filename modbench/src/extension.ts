@@ -777,8 +777,7 @@ function registerChangeGroupCommands(deps: EditorCommandDeps): vscode.Disposable
 }
 
 // #209: the "New Plugin…" affordance every target-plugin QuickPick offers (Copy as Override…,
-// and — new in #209 — Copy as New Record, now that they share this same picker). Add Master
-// deliberately does NOT use this — see pickAddMasterCandidate below.
+// and — new in #209 — Copy as New Record, now that they share this same picker).
 const NEW_PLUGIN_LABEL = '$(add) New Plugin…';
 
 // #209: extracted from modbench.copyAsOverrideInto's command body (previously the only caller)
@@ -803,23 +802,6 @@ async function pickTargetPlugin(
   if (!name) return undefined;
   await controller.createPlugin(name);
   return name;
-}
-
-// #209: Add Master's candidate list is deliberately NOT pickTargetPlugin's mutable-plugins-only
-// list — a master is very often an immutable base-game/DLC esm, so filtering those out would
-// remove the primary real-world case. Candidates are every loaded plugin minus the header
-// record's own plugin minus whatever's already a master (pending-aware `masters`, carried by the
-// column header's data-vscode-context so this needs no round trip back into the webview to ask).
-// No "New Plugin…" either — declaring a brand-new empty plugin as your own master isn't
-// something the retired inline picker ever offered, and nothing here asks for that scope.
-async function pickAddMasterCandidate(
-  repository: ApiPluginRepository, excludePlugin: string, masters: string[],
-): Promise<string | undefined> {
-  const allPlugins = await repository.getPlugins();
-  const candidates = allPlugins.filter(p => p.name !== excludePlugin && !masters.includes(p.name));
-  const items: vscode.QuickPickItem[] = candidates.map(p => ({ label: p.name, description: `[${p.loadOrderIndex}]` }));
-  const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Select a master to add' });
-  return picked?.label;
 }
 
 // #209: shared by every column-header command below whose real work only exists in the webview
@@ -919,14 +901,6 @@ function registerColumnHeaderCommands(deps: EditorCommandDeps): vscode.Disposabl
           sourcePlugin: arg.plugin, sourceOrigin: arg.origin, targetPlugin,
         });
       }
-    }),
-    vscode.commands.registerCommand('modbench.columnHeader.addMaster', async (ctx?: ColumnHeaderContext) => {
-      if (!ctx) return;
-      const newMaster = await pickAddMasterCandidate(repository, ctx.plugin, ctx.masters);
-      if (!newMaster) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, newMaster,
-      });
     }),
   ];
 }

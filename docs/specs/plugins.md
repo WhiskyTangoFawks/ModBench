@@ -325,8 +325,8 @@ without saying what is not yet known would make that worse, not better.
   **Open Header** action (context menu; also available inline) opens the
   plugin's **header record** — author, masters, flags — as a single-column record panel. A
   plugin's context menu also exposes New Plugin…, Copy as Override Into…, and — on editable
-  plugins only — Add New Record…, Convert to ESL/ESM, Add Master…, and Run Script…. Each is a
-  confirmation or picker as appropriate; destructive ones confirm.
+  plugins only — Add New Record…, Convert to ESL/ESM, and Run Script…. Each is a confirmation or
+  picker as appropriate; destructive ones confirm.
 - **Record-type nodes** (`contextValue: "recordType"`): labeled by the type's **human-readable
   name** (e.g. "Activator" for `ACTI`, "Game Setting" for `GMST`), matching xEdit's naming from
   `wbDefinitionsFO4.pas` (#110); the raw 4-char signature remains the internal identifier (cache
@@ -716,12 +716,14 @@ overflow, then native **Collapse All** last.
 - **A structured conflict/EditorID/record-type filter UI** — filtering is deliberately
   user-written SQL against the per-type tables, not a fixed toggle set (ADR-0018).
 - **Multi-step form-space operations** — compact FormIDs, copy-as-underride (moving a record
-  down into a master), merge-into-another-plugin, and sort/clean/remove masters — are deferred
-  and will be delivered as Python scripts over the header/renumber/copy/delete staging
-  primitives, not bespoke commands. They compose from those primitives and are inherently
-  multi-step (a masters reorder remaps every FormID's master index; clean requires whole-plugin
-  reference analysis). Near-term header editing (author, ESL/ESM flag, add master) is a
-  first-class feature — see User Story 24.
+  down into a master), and merge-into-another-plugin — are deferred and will be delivered as
+  Python scripts over the header/renumber/copy/delete staging primitives, not bespoke commands.
+  They compose from those primitives and are inherently multi-step. Masters sort/clean/remove are
+  not on this deferred list: per
+  [ADR-0038](../adr/0038-masters-are-lifecycle-derived-never-user-declared.md), a plugin's masters
+  are wholly derived from its content, never directly user-editable — so those never exist as a
+  separate operation (staged, scripted, or otherwise) to defer in the first place. Near-term
+  header editing (author, ESL/ESM flag) is a first-class feature — see User Story 24.
 - **What the record editor does with a record once opened** —
   [medit-record-editor.md](medit-record-editor.md).
 

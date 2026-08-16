@@ -14,25 +14,25 @@ export const EXTENSION_TO_WEBVIEW = {
   PENDING_CELL_REVERT_GROUP: 'pendingCellRevertGroup',
   // #209: the column-header menu is a native `webview/context` contribution too, but unlike the
   // pending-cell commands above, none of these actions' real work moved to the extension host —
-  // Copy as New Record / Add Master need field data (`overrideMap`/`currentMasters`) that only
-  // exists in this webview's already-loaded CompareResult, and Copy as Override / Remove already
-  // had their own working webview-side fetch (RecordSessionClient.copyTo/removeOverride) that the
-  // extension host would otherwise have to re-derive. So the command handler's only
-  // extension-host-side job is resolving *which* plugin (QuickPick, mutable-list-plus-"New
-  // Plugin…" for the copy actions, all-loaded-plugins-minus-current-masters for Add Master) —
-  // then it broadcasts the resolved target down to every open record panel, same self-filtering
-  // shape as Save/Revert Group above but keyed on `formKey` (there is no changeId here) so only
-  // the panel actually showing the mutated record acts on it.
+  // Copy as New Record needs field data (`overrideMap`) that only exists in this webview's
+  // already-loaded CompareResult, and Copy as Override / Remove already had their own working
+  // webview-side fetch (RecordSessionClient.copyTo/removeOverride) that the extension host would
+  // otherwise have to re-derive. So the command handler's only extension-host-side job is
+  // resolving *which* plugin (QuickPick, mutable-list-plus-"New Plugin…") — then it broadcasts
+  // the resolved target down to every open record panel, same self-filtering shape as Save/Revert
+  // Group above but keyed on `formKey` (there is no changeId here) so only the panel actually
+  // showing the mutated record acts on it.
   //
   // #202: "Copy All to Pending" (a fourth, near-duplicate action here — it also copied one
   // column's fields, but by shallow client-side field-copy instead of CopyRecordTo's richer
   // FormKey-reference-validated/placement-aware staging) is deleted outright, not just unused —
   // Copy as Override now covers that case by carrying `sourcePlugin` (the right-clicked column)
-  // through to the backend instead of always copying the winner.
+  // through to the backend instead of always copying the winner. #335/ADR-0038: Add Master is
+  // gone the same way — nothing may declare a master directly any more, so there is no longer a
+  // candidate list to resolve or a target to broadcast.
   COLUMN_HEADER_COPY_AS_NEW_RECORD: 'columnHeaderCopyAsNewRecord',
   COLUMN_HEADER_COPY_AS_OVERRIDE: 'columnHeaderCopyAsOverride',
   COLUMN_HEADER_REMOVE_OVERRIDE: 'columnHeaderRemoveOverride',
-  COLUMN_HEADER_ADD_MASTER: 'columnHeaderAddMaster',
   // #210: the FormKey picker's reply — unlike every message above, this is a direct reply to the
   // one panel that asked (via `requestId`, matched by the webview-side pickFormKey bridge), never
   // a broadcast: the QuickPick that produced it only ever existed for that one request, so there
@@ -100,8 +100,7 @@ export const EXTENSION_TO_WEBVIEW = {
   // has no live reference into this webview's React state, so it broadcasts and each panel
   // self-filters on `formKey`). Add Script's own name-collection (`pickScriptNameViaInputBox`,
   // recordPanelMessageRouter.ts) runs entirely in the extension host before this ever fires — the
-  // broadcast only carries the already-picked name, mirroring how COLUMN_HEADER_ADD_MASTER
-  // carries an already-resolved `newMaster` rather than asking the webview to resolve it.
+  // broadcast only carries the already-picked name rather than asking the webview to resolve it.
   VMAD_ADD_SCRIPT: 'vmadAddScript',
   VMAD_REMOVE_SCRIPT: 'vmadRemoveScript',
   VMAD_REMOVE_PROPERTY: 'vmadRemoveProperty',
@@ -313,7 +312,6 @@ export type ExtensionToWebview =
   // can't yet contain two same-name candidates (#34).
   | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE; formKey: string; sourcePlugin: string; sourceOrigin: string; targetPlugin: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE; formKey: string; plugin: string; origin: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER; formKey: string; plugin: string; origin: string; newMaster: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
   | { type: typeof EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED; requestId: string; functionName: string | null }
   | { type: typeof EXTENSION_TO_WEBVIEW.REVERT_GROUP_CONFIRMED; requestId: string; confirmed: boolean }
@@ -345,20 +343,16 @@ export interface PendingCellContext {
 
 // #209: same mechanism as PendingCellContext above, carried by each plugin column header's `<th>`
 // instead of a pending cell. `plugin` is the right-clicked column's own plugin — the "source" that
-// copy actions exclude from their target QuickPick and Remove/Add Master act on directly. `masters`
-// is the header record's current (pending-aware) masters list, needed by modbench.columnHeader.
-// addMaster to compute its candidate list (all loaded plugins minus self minus already-a-master —
-// deliberately NOT the mutable-only filter the copy actions use, see recordUtils.ts) without a
-// round trip back into the webview just to ask. `immutable`/`isHeaderRecord` back the native
-// menu's `when` clauses (Remove absent on an immutable column; Add Master only on the header
-// record's own column, ADR-0033 — no standalone control once an action is right-click-reachable).
+// copy actions exclude from their target QuickPick and Remove acts on directly. `immutable` backs
+// the native menu's `when` clauses (Remove absent on an immutable column). #335/ADR-0038: `masters`
+// and `isHeaderRecord` are gone — both existed solely to back the now-deleted Add Master command
+// (candidate-list computation and its own `when` gate respectively); the header record's masters
+// field still displays, read-only, through the ordinary compare-grid data, which needs neither.
 export interface ColumnHeaderContext {
   webviewSection: 'columnHeader';
   formKey: string;
   plugin: string;
   origin: string;
   immutable: boolean;
-  isHeaderRecord: boolean;
-  masters: string[];
   preventDefaultContextMenuItems: true;
 }
