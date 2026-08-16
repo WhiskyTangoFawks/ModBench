@@ -2,7 +2,7 @@
 
 Tool-specific mechanics for the `mutation-test` review skill. Stryker.NET mutates
 `MEditService.Core`; commands run from `MEditService/`. The review philosophy and triage
-live in `SKILL.md` — this file is only *how to run and read the tool*.
+live in `TRIAGE.md` — this file is only *how to run and read the tool*.
 
 ## Running the report
 
@@ -120,15 +120,16 @@ put it back in scope — but naming one via `--file` does, since that is an expl
 > characters, no ANSI repaint, survives redirection, and gives a live heartbeat in the log
 > (`.` killed, `S` survived, `T` timeout).
 
-> 🏎️ **Confirm fixes with targeted runs, never a full re-run.** After triaging a survivor,
-> confirm with `run.sh --file <File>.cs` and check the specific line no longer appears. Even
-> `--file` pays the ~8 min fixed cost. There is **no** `--mutant-ids` option; Stryker.NET's
-> config schema rejects it (confirmed against the installed CLI). Don't re-add it.
+> 🏎️ **Dispositions close via the unit suite, not a mutation re-run** (`SKILL.md`
+> §Receiving) — the next per-diff run re-audits whatever changed. `--file` exists to scope
+> a *fresh audit* at a named file, and even it pays the ~8 min fixed cost. There is **no**
+> `--mutant-ids` option; Stryker.NET's config schema rejects it (confirmed against the
+> installed CLI). Don't re-add it.
 
 ## Suppression format
 
-The durable-accept mechanism (see `SKILL.md` §Durable accepts — **only after explicit
-developer approval**, always with a reason).
+The durable, config-level form of `TRIAGE.md`'s **Accept as invariant** disposition —
+**only after explicit developer approval**, always with a reason.
 
 Config-level (preferred, for anything project-wide):
 
@@ -150,7 +151,7 @@ annotations.
 
 ## Request-a-fixture disposition (Mutagen seams)
 
-`SKILL.md` triage "Request a fixture" applies here when a guard handles **malformed/edge-case
+`TRIAGE.md`'s "Request a fixture" disposition applies here when a guard handles **malformed/edge-case
 plugin data** on a Mutagen-facing seam you cannot synthesize (the error requires bad binary
 data). The code is likely genuinely needed — do **not** delete or blind-accept. Ask the
 developer for a plugin exhibiting the condition, then write a real behavioral test against it.
@@ -158,7 +159,7 @@ Ledger entry `request-fixture:<condition>`; the survivor is paused until the fix
 
 ## testing-the-framework here
 
-For the `testing-the-framework` test smell (`SKILL.md` §Test-smell taxonomy): the flavour in
+For the `testing-the-framework` test smell (`TRIAGE.md` §Test-smell taxonomy): the flavour in
 this repo is a test that exercises **Mutagen / DuckDB / library** behavior rather than our own
 logic. The backend flavour of `mechanism-not-outcome` is asserting on internal repository
 calls or intermediate DTO shape rather than the queried/saved result.
