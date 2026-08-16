@@ -103,7 +103,11 @@ internal static class PendingChangeGraph
     // collide with another record's lifecycle FormKey, and one-node-per-FormKey would let the second
     // write overwrite the first and drop an edge — under-grouping, which splits an atomic set and
     // lets half be saved without the rest. A reference to a colliding FormKey unions against every
-    // lifecycle change on it.
+    // lifecycle change on it. Deliberately bare FormKey text, not origin-keyed like the rest of this
+    // rule (#333): a reference target has no origin in the domain model (a FormLink names
+    // ModKey:FormID, resolved by load-order winner, not stored per-origin), so two different-origin
+    // lifecycle changes at an identical FormKey text still collide here — a residual gap tracked
+    // separately, not #333's source-side fix.
     private static Dictionary<string, List<int>> LifecycleNodesByTarget(IReadOnlyList<PendingChange> nodes)
     {
         var byTarget = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
