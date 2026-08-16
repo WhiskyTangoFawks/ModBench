@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using MEditService.Core.Schema;
 using Mutagen.Bethesda;
@@ -100,6 +101,101 @@ public class SchemaReflectorTests
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         Assert.Equal("Game Setting", schemas["gmst"].DisplayName);
+    }
+
+    // ── Issue #263: GMST/GLOB's Data column is backed by several concrete Mutagen subclasses,
+    // discriminated per record (the EditorID's leading i/f/s/b/u), not per table — schema
+    // discovery used to pick one subclass's Data property and silently drop the rest, so every
+    // GameSetting of any other type read back with no value. ────────────────────────────────
+
+    [Fact]
+    public void GetSchemas_Gmst_DataColumn_ExtractsCorrectValuePerSubclass()
+    {
+        // All four asserted in one test deliberately: the bug is invisible if only the
+        // discovery-winning subclass is checked (today that's GameSettingBool for FO4 — an
+        // artifact of CLR reflection order, not something this test may rely on).
+        var mod = new Fallout4Mod(ModKey.FromFileName("Gmst263.esp"), Fallout4Release.Fallout4);
+        var i = new GameSettingInt(mod.GetNextFormKey("iTest"), Fallout4Release.Fallout4) { EditorID = "iTest", Data = 42 };
+        var f = new GameSettingFloat(mod.GetNextFormKey("fTest"), Fallout4Release.Fallout4) { EditorID = "fTest", Data = 3.5f };
+        var s = new GameSettingString(mod.GetNextFormKey("sTest"), Fallout4Release.Fallout4) { EditorID = "sTest", Data = "hello" };
+        var b = new GameSettingBool(mod.GetNextFormKey("bTest"), Fallout4Release.Fallout4) { EditorID = "bTest", Data = true };
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var data = schemas["gmst"].RecordColumns.Single(c => c.Name == "data");
+
+        // Widened scalars format as text (FormatWidenedValue) — int/float via InvariantCulture,
+        // not the raw boxed value, so the column round-trips through AppendTyped's VARCHAR branch
+        // (a bare ToString(), see AppendTyped) the same way on every host.
+        Assert.Equal("42", data.Extract(i));
+        Assert.Equal("3.5", data.Extract(f));
+        Assert.Equal("hello", data.Extract(s));
+        Assert.Equal("true", data.Extract(b));
+    }
+
+    [Fact]
+    public void GetSchemas_Gmst_DataColumn_WidenedFloatFormattingIsCultureInvariant()
+    {
+        // Regression: FormatWidenedValue used to hand a raw boxed float straight through to
+        // AppendTyped's VARCHAR branch, whose value.ToString() carries no culture — the first
+        // VARCHAR column to ever hold a raw numeric rather than an already-formatted string. Under
+        // a comma-decimal culture that round-tripped 3.5 as "3,5", defeating AC1/AC2 (the ticket's
+        // whole point) on any non-en-US host. Setting CurrentCulture for the assertion is what
+        // makes this fail without the fix regardless of which machine runs it — a test that only
+        // passes on the machine that wrote it is how the original bug got through.
+        var original = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+
+            var mod = new Fallout4Mod(ModKey.FromFileName("GmstCulture263.esp"), Fallout4Release.Fallout4);
+            var f = new GameSettingFloat(mod.GetNextFormKey("fTest"), Fallout4Release.Fallout4) { EditorID = "fTest", Data = 3.5f };
+
+            var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+            var data = schemas["gmst"].RecordColumns.Single(c => c.Name == "data");
+
+            Assert.Equal("3.5", data.Extract(f));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
+
+    [Fact]
+    public void GetSchemas_Omod_PropertiesColumn_KeepsStructuredArrayShape_NotWidened()
+    {
+        // #339: OMOD's Properties is the same per-subclass-typed shape as GMST/GLOB's Data, but on
+        // a list (each of ArmorModification/NpcModification/WeaponModification/.../Unknown declares
+        // its own element type) rather than a scalar. Widening a list/struct column the way a
+        // scalar conflict widens would cost the *working* subclass its structured element metadata
+        // to make the other subclasses less obviously broken — not a fix. The shape-based rule
+        // (MergeSiblingColumn) must leave this column's typed array shape alone.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
+
+        Assert.Equal("array", properties.ApiType);
+        Assert.NotNull(properties.ElementType);
+    }
+
+    [Fact]
+    public void GetSchemas_Glob_OutputCharColumn_ExclusiveToGlobalFloat_NullOnOtherSubclasses()
+    {
+        // The "not present on every sibling" branch of MergeSiblingColumn (GlobalFloat.OutputChar,
+        // declared only on IGlobalFloatGetter — GlobalInt/Short/Bool have nothing under this name)
+        // is real today, not a hypothetical kept only for a future third subclass — confirmed
+        // against Global.xml. Extracting off a real GlobalBool instance (rather than arguing from
+        // AllowsNull alone) is what actually discharges the nullability requirement for a
+        // sibling-exclusive column.
+        var mod = new Fallout4Mod(ModKey.FromFileName("GlobOutputChar263.esp"), Fallout4Release.Fallout4);
+        var f = new GlobalFloat(mod.GetNextFormKey("TestGlobFloat"), Fallout4Release.Fallout4) { EditorID = "TestGlobFloat", Data = 1.25f, OutputChar = true };
+        var b = new GlobalBool(mod.GetNextFormKey("TestGlobBool"), Fallout4Release.Fallout4) { EditorID = "TestGlobBool", Data = true };
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var outputChar = schemas["glob"].RecordColumns.Single(c => c.Name == "output_char");
+
+        Assert.True(outputChar.AllowsNull);
+        Assert.Equal(true, outputChar.Extract(f));
+        Assert.Null(outputChar.Extract(b));
     }
 
     [Fact]
