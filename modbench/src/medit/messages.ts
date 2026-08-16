@@ -28,8 +28,8 @@ export const EXTENSION_TO_WEBVIEW = {
   // FormKey-reference-validated/placement-aware staging) is deleted outright, not just unused —
   // Copy as Override now covers that case by carrying `sourcePlugin` (the right-clicked column)
   // through to the backend instead of always copying the winner. #335/ADR-0038: Add Master is
-  // gone the same way — masters is lifecycle-derived now, never a direct edit, so there is no
-  // longer a candidate list to resolve or a target to broadcast.
+  // gone the same way — nothing may declare a master directly any more, so there is no longer a
+  // candidate list to resolve or a target to broadcast.
   COLUMN_HEADER_COPY_AS_NEW_RECORD: 'columnHeaderCopyAsNewRecord',
   COLUMN_HEADER_COPY_AS_OVERRIDE: 'columnHeaderCopyAsOverride',
   COLUMN_HEADER_REMOVE_OVERRIDE: 'columnHeaderRemoveOverride',

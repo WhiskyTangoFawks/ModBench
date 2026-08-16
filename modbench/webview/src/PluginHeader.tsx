@@ -67,9 +67,9 @@ const READ_ONLY_TEXT: Record<'vanillaMaster' | 'notInLoadOrder', { label: string
 // with the rest of the column-header's hand-drawn chrome (ColumnHeaderMenu, PluginTargetPicker),
 // in favor of the column header's native right-click menu (ADR-0033: no standalone control once
 // an action is right-click-reachable, same rule #207 applied to the inline revert button).
-// #335/ADR-0038: that native menu entry is gone too now — masters is lifecycle-derived, never a
-// direct user edit; the header record's masters field still renders through the ordinary
-// compare-grid rows below, read-only.
+// #335/ADR-0038: that native menu entry is gone too now — nothing may declare a master directly
+// any more; the header record's masters field still renders through the ordinary compare-grid
+// rows below, read-only.
 export function PluginHeader({
   override: o, isImmutable, inLoadOrder, showOriginInline, collapsed, onToggleCollapse,
 }: PluginHeaderProps) {

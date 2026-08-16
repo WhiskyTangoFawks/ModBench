@@ -887,10 +887,10 @@ const headerPluginsResponse = [
 ];
 
 // Issue #335/ADR-0038: the Add Master command, its picker, and the broadcast that used to stage
-// its result are gone outright — masters is lifecycle-derived now, never a direct user edit. What
-// remains testable here is that the header record's masters field still displays (below) and that
-// it offers no editing affordance (in "column header native context menu" and the array-op
-// coverage below) — there is no longer a command/message pathway to simulate staging through.
+// its result are gone outright — nothing may declare a master directly any more. What remains
+// testable here is that the header record's masters field still displays (below) and that it
+// offers no editing affordance (in "column header native context menu" and the array-op coverage
+// below) — there is no longer a command/message pathway to simulate staging through.
 
 describe('RecordPanel — no VMAD section on the header record (issue #119)', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -1593,12 +1593,12 @@ describe('RecordPanel — column header native context menu', () => {
   });
 });
 
-// #335/ADR-0038: masters is wholly derived from content now — the header record still displays it
-// (AC4), but no editing affordance survives, including the generic array-parent/array-element
-// menu (#227's Add/Remove/Move Up/Move Down) every other array field gets. That menu has no
-// isHeaderRecord/masters-specific exclusion of its own; it's closed by stamping the masters
-// FieldMetadata (and its elementType) readOnly, the same per-row override mechanism the Condition
-// AND/OR gate and VMAD's synthesized Flags row already rely on.
+// #335/ADR-0038: nothing may declare a master directly any more — the header record still
+// displays masters (AC4), but no editing affordance survives, including the generic
+// array-parent/array-element menu (#227's Add/Remove/Move Up/Move Down) every other array field
+// gets. That menu has no isHeaderRecord/masters-specific exclusion of its own; it's closed by
+// stamping the masters FieldMetadata (and its elementType) readOnly, the same per-row override
+// mechanism the Condition AND/OR gate and VMAD's synthesized Flags row already rely on.
 describe('RecordPanel — header record masters field is read-only in the grid (issue #335/ADR-0038)', () => {
   afterEach(() => vi.unstubAllGlobals());
 

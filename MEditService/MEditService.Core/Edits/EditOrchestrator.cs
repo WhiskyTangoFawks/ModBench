@@ -887,14 +887,16 @@ public sealed partial class EditOrchestrator(
     private const string HeaderMastersField = Records.HeaderIndexer.MastersFieldName;
 
     // Issue #335/ADR-0038 stage-time guard for the header's masters field: rejects any direct
-    // edit outright, unconditionally — masters is wholly derived from content now (Effective
-    // masters: committed masters unioned with what the plugin's content, committed and pending,
-    // actually references), so there is nothing left to validate about a proposed value, shape
-    // included. Was issue #86's validated, add-only plugin-reference array; #283 design review
-    // found a real but out-of-scope use for a manually-declared master (load-order pinning) and
-    // ADR-0038 closed the direct-edit path entirely rather than keep validating it. Never runs
-    // against StageMissingMasters' own auto-add-master pending change below — that upserts the
-    // pending change directly, bypassing StageEdit (and this guard) entirely, per invariant B.
+    // edit outright, unconditionally — ADR-0038 decides nothing may declare a master except
+    // content that references it, so there is nothing left to validate about a proposed value,
+    // shape included. This slice only closes the direct-edit path; it does not itself derive
+    // masters from content — GetEffectiveMasters below still returns whatever was last staged or
+    // committed, not a live union over the plugin's content (that derivation is #336). Was issue
+    // #86's validated, add-only plugin-reference array; #283 design review found a real but
+    // out-of-scope use for a manually-declared master (load-order pinning) and ADR-0038 closed
+    // the direct-edit path entirely rather than keep validating it. Never runs against
+    // StageMissingMasters' own auto-add-master pending change below — that upserts the pending
+    // change directly, bypassing StageEdit (and this guard) entirely, per invariant B.
     private static StageEditResult.InvalidReferences? CheckMasterEdit(
         string recordType, Dictionary<string, JsonElement> fields)
     {

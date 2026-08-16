@@ -447,12 +447,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
           setActionError(body.fieldErrors.map(e => {
             const path = e.fieldPath ?? '?';
             if (e.reason === 'not_in_session') return `${path}: reference not found in session`;
-            // #335/ADR-0038: masters is lifecycle-derived — every direct edit is rejected, not
-            // just non-append ones. Reachable only via cross-column drag-and-drop onto the
-            // masters row now (the array-op menu itself is gone, ADR-0038) — see types.ts'
-            // ReferenceValidationError.reason doc comment for why the backend guard is the only
-            // thing left stopping it.
-            if (e.reason === 'read_only') return `${path}: read-only — derived from content, not directly editable`;
+            // #335/ADR-0038: every direct edit to masters is rejected now, not just non-append
+            // ones — slice 1 only closes the direct-edit path; the content-derivation ADR-0038
+            // decides on is #336, not yet true, so this message claims nothing about *how*
+            // masters gets its value, only that a direct edit isn't the way. Reachable only via
+            // cross-column drag-and-drop onto the masters row now (the array-op menu itself is
+            // gone) — see types.ts' ReferenceValidationError.reason doc comment for why the
+            // backend guard is the only thing left stopping it.
+            if (e.reason === 'read_only') return `${path}: read-only — not directly editable`;
             if (e.reason === 'type_mismatch') return `${path}: expected ${(e.expectedTypes ?? []).join('/')}`;
             if (e.reason === 'null_not_allowed') return `${path}: cannot be null`;
             return `${path}: ${e.reason ?? 'invalid'}`;

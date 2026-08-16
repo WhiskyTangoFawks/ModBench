@@ -337,14 +337,14 @@ describe('modbench command registration', () => {
     'modbench.pendingCell.revertGroup',
     // #209: the column-header's native `webview/context` menu commands — same shape as #208's
     // pendingCell.* above (package.json's contributes.menus["webview/context"], gated on
-    // webviewId/webviewSection/immutable/isHeaderRecord, not testable from this harness; and
-    // RecordPanel's data-vscode-context wiring, unit-tested). modbench.copyAsOverrideInto and
+    // webviewId/webviewSection/immutable, not testable from this harness; and RecordPanel's
+    // data-vscode-context wiring, unit-tested). modbench.copyAsOverrideInto and
     // modbench.deleteRecord (already listed above) are reused from this same menu — no separate
     // command ids (#281: columnHeader.removeOverride folded into deleteRecord; Copy as New
     // Record is one all-surface id). #202: modbench.columnHeader.copyAllToPending deleted
     // outright — Copy as Override now covers that case via sourcePlugin instead of a fourth,
-    // near-duplicate action. #335/ADR-0038: modbench.columnHeader.addMaster is gone too — masters
-    // is lifecycle-derived now, never a direct user edit.
+    // near-duplicate action. #335/ADR-0038: modbench.columnHeader.addMaster is gone too — nothing
+    // may declare a master directly (content-derivation itself is #336, not yet built).
     'modbench.copyAsNewRecord',
     // #227: the array-element/array-parent native `webview/context` menu commands — same shape
     // as #208/#209 above (package.json's contributes.menus["webview/context"], gated on
