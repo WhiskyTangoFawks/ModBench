@@ -52,7 +52,7 @@ is worth more than local improvement.
 | --- | --- |
 | **Single click**, value cell | Focus that cell. The row highlights; one cell carries focus. Nothing else happens. |
 | **Single click**, already-focused cell | Open its inline editor. |
-| **Double click**, value cell | Open the fullest editor the type has — inline for numeric and flag types, the extended editor otherwise. |
+| **Double click**, value cell | Open the fullest editor the type has — inline for numeric and flag types, the extended editor otherwise. *Amended by [ADR-0039](0039-no-left-click-leaves-the-record-panel.md): a `string` cell's double click opens the inline editor; the extended editor is right-click only.* |
 | **Double click**, label column | Expand/collapse the node. |
 | **Ctrl+click** | Follow the reference to its record. Unchanged. |
 | **Click and hold, drag** | Copy this value into wherever it is dropped. Unchanged, but **no longer advertised by the cursor**. |
@@ -85,7 +85,11 @@ Default arrow. Drag is not advertised, exactly as in xEdit — `grab` on every v
 2. **The extended editor is a VS Code surface**, not a modeless form. xEdit's `TfrmViewElements` has
    no analogue we can or should reproduce in a webview; the native answer is an editor tab or an
    input box. Behaviour aligned (double click reaches a fuller editor for text and reference types);
-   vehicle substituted.
+   vehicle substituted. *Amended by
+   [ADR-0039](0039-no-left-click-leaves-the-record-panel.md): the behaviour half no longer holds for
+   `string` cells — a tab relocates the user in a way xEdit's modeless form never did, so no
+   left-click gesture reaches the extended editor; it is a right-click action, on immutable cells
+   (read-only) as well as mutable ones.*
 3. **The clipboard is written through the extension host** (`vscode.env.clipboard`) rather than from
    the webview. A mechanism detail with no user-visible difference, chosen because webview clipboard
    access is not guaranteed.
