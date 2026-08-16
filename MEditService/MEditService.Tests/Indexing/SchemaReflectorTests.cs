@@ -102,6 +102,48 @@ public class SchemaReflectorTests
         Assert.Equal("Game Setting", schemas["gmst"].DisplayName);
     }
 
+    // ── Issue #263: GMST/GLOB's Data column is backed by several concrete Mutagen subclasses,
+    // discriminated per record (the EditorID's leading i/f/s/b/u), not per table — schema
+    // discovery used to pick one subclass's Data property and silently drop the rest, so every
+    // GameSetting of any other type read back with no value. ────────────────────────────────
+
+    [Fact]
+    public void GetSchemas_Gmst_DataColumn_ExtractsCorrectValuePerSubclass()
+    {
+        // All four asserted in one test deliberately: the bug is invisible if only the
+        // discovery-winning subclass is checked (today that's GameSettingBool for FO4 — an
+        // artifact of CLR reflection order, not something this test may rely on).
+        var mod = new Fallout4Mod(ModKey.FromFileName("Gmst263.esp"), Fallout4Release.Fallout4);
+        var i = new GameSettingInt(mod.GetNextFormKey("iTest"), Fallout4Release.Fallout4) { EditorID = "iTest", Data = 42 };
+        var f = new GameSettingFloat(mod.GetNextFormKey("fTest"), Fallout4Release.Fallout4) { EditorID = "fTest", Data = 3.5f };
+        var s = new GameSettingString(mod.GetNextFormKey("sTest"), Fallout4Release.Fallout4) { EditorID = "sTest", Data = "hello" };
+        var b = new GameSettingBool(mod.GetNextFormKey("bTest"), Fallout4Release.Fallout4) { EditorID = "bTest", Data = true };
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var data = schemas["gmst"].RecordColumns.Single(c => c.Name == "data");
+
+        Assert.Equal(42, data.Extract(i));
+        Assert.Equal(3.5f, data.Extract(f));
+        Assert.Equal("hello", data.Extract(s));
+        Assert.Equal("true", data.Extract(b));
+    }
+
+    [Fact]
+    public void GetSchemas_Omod_PropertiesColumn_KeepsStructuredArrayShape_NotWidened()
+    {
+        // #339: OMOD's Properties is the same per-subclass-typed shape as GMST/GLOB's Data, but on
+        // a list (each of ArmorModification/NpcModification/WeaponModification/.../Unknown declares
+        // its own element type) rather than a scalar. Widening a list/struct column the way a
+        // scalar conflict widens would cost the *working* subclass its structured element metadata
+        // to make the other subclasses less obviously broken — not a fix. The shape-based rule
+        // (MergeSiblingColumn) must leave this column's typed array shape alone.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
+
+        Assert.Equal("array", properties.ApiType);
+        Assert.NotNull(properties.ElementType);
+    }
+
     [Fact]
     public void GetSchemas_EveryDiscoveredTable_HasANonEmptyDisplayName()
     {

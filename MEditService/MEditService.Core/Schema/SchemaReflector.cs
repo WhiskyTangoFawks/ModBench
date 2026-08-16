@@ -65,8 +65,19 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var majorRecordGetterType =
             assembly.GetType($"Mutagen.Bethesda.{category}.I{category}MajorRecordGetter")!;
 
+        // #263: a GRUP signature can be backed by several concrete Mutagen subclasses sharing one
+        // abstract base — GameSettingInt/Float/String/Bool/UInt are all GMST, GlobalInt/Float/
+        // Short/Bool are all GLOB, DamageType/DamageTypeIndexed are both DMGT — because the type
+        // discriminant lives on the record itself (an EditorID prefix, a subrecord, ...), never on
+        // the table. `discovered`/`seenTables` still record one winner per table (RecordType and
+        // the lifecycle delegates below stay bound to it, deliberately unchanged by this fix — see
+        // BuildLifecycleDelegates and BuildSchema), but `siblingsByTable` keeps every concrete type
+        // sharing a signature so BuildSchema can union their columns instead of the loser's shape
+        // being silently dropped (issue #263: that drop is why a GameSetting's Data column only
+        // ever worked for whichever subclass reflection happened to enumerate first).
         var seenTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var discovered = new List<(string tableName, Type getterType)>();
+        var siblingsByTable = new Dictionary<string, List<Type>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var type in assembly.GetTypes())
         {
@@ -80,14 +91,25 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             var tableName = recordType.Type.ToLowerInvariant();
 
             if (ExcludedTables.Contains(tableName)) continue;
-            if (!seenTables.Add(tableName)) continue;
 
             var getterInterface = assembly.GetType($"Mutagen.Bethesda.{category}.I{type.Name}Getter")!;
+
+            if (!siblingsByTable.TryGetValue(tableName, out var siblings))
+                siblingsByTable[tableName] = siblings = [];
+            siblings.Add(getterInterface);
+
+            if (!seenTables.Add(tableName)) continue;
 
             discovered.Add((tableName, getterInterface));
         }
 
-        var getterTypeToTable = discovered.ToDictionary(d => d.getterType, d => d.tableName);
+        // Bundled fix (issue #263): every sibling getter type now resolves to its table, not just
+        // the winner — before this, a FormLink<IGameSettingFloatGetter> anywhere in the schema
+        // failed to resolve ValidFormKeyTypes to ["gmst"] whenever Float wasn't that run's winner
+        // (GetFormLinkValidTypes below looks types up in this same dictionary).
+        var getterTypeToTable = siblingsByTable
+            .SelectMany(kv => kv.Value.Select(t => (Type: t, Table: kv.Key)))
+            .ToDictionary(x => x.Type, x => x.Table);
 
         var modType = assembly.GetType($"Mutagen.Bethesda.{category}.{category}Mod");
 
@@ -108,7 +130,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var schemas = new Dictionary<string, RecordTableSchema>();
         foreach (var (tableName, getterType) in discovered)
         {
-            var schema = BuildSchema(tableName, getterType, getterTypeToTable, logger, conditionCodec, vmadInterfaceType);
+            var schema = BuildSchema(
+                tableName, getterType, siblingsByTable[tableName],
+                getterTypeToTable, logger, conditionCodec, vmadInterfaceType);
             var (addNew, remove, addExisting) = BuildLifecycleDelegates(modType, getterType);
 
             schemas[tableName] = addNew == null ? schema : new RecordTableSchema
@@ -327,33 +351,89 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return (AddNewToGroup, remove, AddExistingToGroup);
     }
 
+    private static readonly HashSet<string> BaseSkip = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "FormKey", "EditorID", "IsCompressed", "FormVersion", "VersionControl",
+        "MajorRecordFlagsRaw", "SubgraphRevision"
+    };
+
+    // #263: RecordType (used for enumeration in DuckDbRecordRepository.IndexRecordTable) and the
+    // lifecycle delegates (AddNew/Remove/AddExisting, built from getterType just below) stay bound
+    // to the discovery winner, deliberately, even though RecordColumns below is unioned across
+    // every sibling. Two independent reasons:
+    //   - Enumeration already returns every sibling's records no matter which one's getter
+    //     interface is named — Mutagen's own EnumerateMajorRecords falls back through
+    //     InheritingInterfaceMapping to the abstract group base (e.g. IGameSettingGetter) and the
+    //     group enumerator returns every element once the requested type is assignable to it. Rows
+    //     were never dropped; only the Data column's extraction was broken. So RecordType has
+    //     nothing to gain from pointing at the abstract base.
+    //   - GetSetterType(getterType) resolves the *instantiable* class AddNew/AddExisting need
+    //     (via ILoquiRegistration.SetterType). Pointing it at an abstract base's getter interface
+    //     resolves to the abstract class itself, and IGroup.AddNew(FormKey) needs something
+    //     constructible — that would turn "add a new GMST record" from quietly-wrong-but-working
+    //     (today it always creates whichever concrete subclass happens to be the winner) into a
+    //     hard throw. Record *creation* is unrelated to this ticket's display defect and is left
+    //     exactly as good (or bad) as it already was.
     private static RecordTableSchema BuildSchema(
-        string tableName, Type getterType, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger,
+        string tableName, Type getterType, List<Type> siblingGetterTypes,
+        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger,
         IConditionCodec? conditionCodec, Type? vmadInterfaceType)
     {
-        var baseSkip = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "FormKey", "EditorID", "IsCompressed", "FormVersion", "VersionControl",
-            "MajorRecordFlagsRaw", "SubgraphRevision"
-        };
+        var columns = ReflectColumns(getterType, conditionCodec, vmadInterfaceType, getterTypeToTable, logger);
 
-        // #178: condition-shaped properties (e.g. Perk.Conditions, Quest.DialogConditions/
-        // UnusedConditions) are already surfaced by the game's IConditionCodec into the record
-        // editor's dedicated Conditions section — reflecting them again here would duplicate
-        // them as plain array columns. Game-generic: the shape test lives behind the codec
-        // (IsConditionListField), not a hardcoded field-name list, so a game with no registered
-        // codec (conditionCodec == null) simply skips no extra fields here.
-        //
-        // #260: same rule for the virtual-machine-adapter property — it's already surfaced by
-        // the dedicated Scripts (VMAD) section (HasVmad below, RecordQueryService.GetVmad), so
-        // reflecting it again here would duplicate it as an opaque struct column. Type-scoped to
-        // match the section it defers to: HasVmad only renders for a getterType the interface is
-        // assignable to, so the exclusion only fires there too — a type that doesn't implement
-        // the interface must lose nothing. No hardcoded property name: the property is whatever
-        // vmadInterfaceType itself declares, so a game category with no such interface
-        // (vmadInterfaceType == null) skips nothing.
+        // #263: union in every other concrete subclass sharing this signature (siblingGetterTypes
+        // is just [getterType] for the overwhelming majority of tables, so this loop is a no-op
+        // there). The rule is expressed purely in terms of a column's *shape*, never a table or
+        // signature name, so a hypothetical third subclass of an existing signature — or a
+        // brand-new game's own multi-subclass signature — is handled the same way with no code
+        // change here. See MergeSiblingColumn for the shape rule itself.
+        if (siblingGetterTypes.Count > 1)
+        {
+            var widenedDispatch = new Dictionary<string, List<(Type Type, Func<IMajorRecordGetter, object?> Extract)>>();
+            foreach (var sibling in siblingGetterTypes)
+            {
+                if (sibling == getterType) continue;
+                var siblingColumns = ReflectColumns(sibling, conditionCodec, vmadInterfaceType, getterTypeToTable, logger);
+                foreach (var siblingSpec in siblingColumns)
+                    MergeSiblingColumn(columns, widenedDispatch, getterType, sibling, siblingSpec);
+            }
+        }
+
+        return new RecordTableSchema
+        {
+            TableName = tableName,
+            DisplayName = RecordDisplayNames.For(tableName),
+            RecordType = getterType,
+            RecordColumns = columns,
+            HasVmad = vmadInterfaceType?.IsAssignableFrom(getterType) ?? false,
+        };
+    }
+
+    // #178: condition-shaped properties (e.g. Perk.Conditions, Quest.DialogConditions/
+    // UnusedConditions) are already surfaced by the game's IConditionCodec into the record
+    // editor's dedicated Conditions section — reflecting them again here would duplicate
+    // them as plain array columns. Game-generic: the shape test lives behind the codec
+    // (IsConditionListField), not a hardcoded field-name list, so a game with no registered
+    // codec (conditionCodec == null) simply skips no extra fields here.
+    //
+    // #260: same rule for the virtual-machine-adapter property — it's already surfaced by
+    // the dedicated Scripts (VMAD) section (HasVmad below, RecordQueryService.GetVmad), so
+    // reflecting it again here would duplicate it as an opaque struct column. Type-scoped to
+    // match the section it defers to: HasVmad only renders for a getterType the interface is
+    // assignable to, so the exclusion only fires there too — a type that doesn't implement
+    // the interface must lose nothing. No hardcoded property name: the property is whatever
+    // vmadInterfaceType itself declares, so a game category with no such interface
+    // (vmadInterfaceType == null) skips nothing.
+    //
+    // #263: extracted so BuildSchema can call it once per sibling getter type sharing a signature,
+    // not just the discovery winner — identical logic and output to what BuildSchema used to do
+    // inline for a single getterType.
+    private static List<ColumnSpec> ReflectColumns(
+        Type getterType, IConditionCodec? conditionCodec, Type? vmadInterfaceType,
+        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+    {
         var grouped = GetAllInterfaceProperties(getterType)
-            .Where(p => !baseSkip.Contains(p.Name))
+            .Where(p => !BaseSkip.Contains(p.Name))
             .Where(p => conditionCodec == null || !conditionCodec.IsConditionListField(getterType, p.Name))
             .Where(p => vmadInterfaceType == null
                         || !vmadInterfaceType.IsAssignableFrom(getterType)
@@ -383,15 +463,114 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 EnumBitValues: info.EnumBitValues));
         }
 
-        return new RecordTableSchema
+        return columns;
+    }
+
+    // A column's ApiType that means "not a single scalar value" — reflection produces these two
+    // (BuildListColumn / BuildStructColumn); everything else GetColumnInfo can return is scalar.
+    private static readonly HashSet<string> NonScalarApiTypes = new(StringComparer.Ordinal) { "array", "struct" };
+
+    // #263: folds one sibling's version of a column into the accumulating union. The rule is
+    // shape-based, never keyed by table or signature name — see BuildSchema's caller comment for
+    // why that matters (AC: a hypothetical third subclass, or another game's own signature, must
+    // be handled with no code change here).
+    //
+    //   - not present yet on any sibling seen so far (no example in the current FO4 assembly —
+    //     GMST/GLOB/DMGT/OMOD's siblings all declare *something* under every name their winner
+    //     has — but a hypothetical sibling with a genuinely exclusive extra field must still be
+    //     handled): add it as-is, but nullable — not every sibling declares it.
+    //   - present already, identical shape (same DuckDbType + ApiType): leave it. This is the
+    //     common case — a member declared on the shared abstract base (EditorID, Unknown, MaxRank,
+    //     ...) is already reachable, and reads correctly, off *every* sibling instance via ordinary
+    //     interface dispatch, because the reflected PropertyInfo comes from an interface every
+    //     sibling implements, not from one sibling's own interface.
+    //   - present already, conflicting SCALAR shape (GMST/GLOB's per-subclass Data: Int32?/Single?/
+    //     TranslatedString?/Boolean?/UInt32?): widen to a read-only text column whose Extract
+    //     resolves the record's actual sibling at read time and only ever invokes *that* sibling's
+    //     own PropertyInfo — never a foreign one, which is what made the original bug's silent
+    //     try/catch swallow every non-winning subclass's value to null.
+    //   - present already, conflicting NON-scalar shape: leave the winner's typed column
+    //     untouched. Two real examples in the FO4 assembly, not one — OMOD's Properties (a list
+    //     whose element type differs per sibling) and, less obviously, DMGT's own DamageTypes
+    //     (DamageType's is ExtendedList<DamageTypeItem>, a struct list; DamageTypeIndexed's is
+    //     ExtendedList<uint>?, a scalar list — same name, same "array" ApiType, conflicting
+    //     element shape). Widening a list/struct column to opaque text would cost the *working*
+    //     subclass its structured display (element metadata, sub-fields) to make the broken ones
+    //     less obviously broken — that's not a fix, it's uniform mediocrity. Tracked separately:
+    //     #339.
+    private static void MergeSiblingColumn(
+        List<ColumnSpec> columns,
+        Dictionary<string, List<(Type Type, Func<IMajorRecordGetter, object?> Extract)>> widenedDispatch,
+        Type winnerGetterType, Type siblingGetterType, ColumnSpec siblingSpec)
+    {
+        var existingIndex = columns.FindIndex(c => c.Name == siblingSpec.Name);
+        if (existingIndex < 0)
         {
-            TableName = tableName,
-            DisplayName = RecordDisplayNames.For(tableName),
-            RecordType = getterType,
-            RecordColumns = columns,
-            HasVmad = vmadInterfaceType?.IsAssignableFrom(getterType) ?? false,
+            columns.Add(siblingSpec with { AllowsNull = true });
+            return;
+        }
+
+        var existing = columns[existingIndex];
+
+        if (widenedDispatch.TryGetValue(existing.Name, out var dispatch))
+        {
+            // Already widened by an earlier conflicting sibling for this table — extend the same
+            // dispatch list rather than re-deriving it (a fifth sibling, as GMST's Data has, must
+            // still only ever read its own PropertyInfo).
+            dispatch.Add((siblingGetterType, siblingSpec.Extract));
+            return;
+        }
+
+        if (NonScalarApiTypes.Contains(existing.ApiType) || NonScalarApiTypes.Contains(siblingSpec.ApiType))
+            return; // #339: list/struct shape conflict — keep the winner's typed column as-is
+
+        if (existing.DuckDbType == siblingSpec.DuckDbType && existing.ApiType == siblingSpec.ApiType)
+            return; // same shape — shared-ancestor member, existing extractor already reads it fine
+
+        var list = new List<(Type Type, Func<IMajorRecordGetter, object?> Extract)>
+        {
+            (winnerGetterType, existing.Extract),
+            (siblingGetterType, siblingSpec.Extract),
+        };
+        widenedDispatch[existing.Name] = list;
+
+        object? WidenedExtract(IMajorRecordGetter r)
+        {
+            foreach (var (type, extract) in list)
+                if (type.IsInstanceOfType(r))
+                    return FormatWidenedValue(extract(r));
+            return null;
+        }
+
+        columns[existingIndex] = existing with
+        {
+            DuckDbType = "VARCHAR",
+            ApiType = "string",
+            Extract = WidenedExtract,
+            Apply = null, // editing a widened value is out of scope (#263) — read-only falls out of
+                          // PluginWriter.IsFieldPathReadOnly already treating a null Apply as such
+            IsArray = false,
+            ElementType = null,
+            SubFields = null,
+            EnumValues = Empty,
+            ValidFormKeyTypes = Empty,
+            IsBitmask = false,
+            EnumBitValues = null,
+            AllowsNull = true,
         };
     }
+
+    // Cosmetic only, and shape- not signature-scoped: a widened bool leaf reads as lowercase
+    // "true"/"false" (JS-idiomatic) rather than C#'s "True"/"False". Every other widened value
+    // already stringifies the way AppendTyped's own VARCHAR branch would (Convert.ToString-style
+    // formatting via ToString()); this only intercepts bool because it's the one primitive whose
+    // default ToString() looks out of place next to it. Affects only columns that previously read
+    // null for these siblings, so it regresses nothing.
+    private static object? FormatWidenedValue(object? value) => value switch
+    {
+        bool b => b ? "true" : "false",
+        _ => value,
+    };
 
     // ── ColumnInfoResult ──────────────────────────────────────────────────────
 
