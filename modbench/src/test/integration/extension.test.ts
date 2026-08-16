@@ -1398,6 +1398,40 @@ describe('Progressive load states its own incompleteness (#307)', () => {
     await launch;
   });
 
+  // AC7: closing the session mid-load is a deliberate abandonment, not a failure. The polling
+  // stops, the chevrons and the message go, and nothing is reported as broken — the user asked
+  // for exactly this. (The "no error toast" half is asserted at the SessionController seam, where
+  // the reporter is injectable; here we assert the observable consequences in a live window.)
+  it('stops polling and clears the view when the session is closed mid-load', async () => {
+    setIndexed(['TestMod.esp']);
+    const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await waitFor('the load to be under way, polling and rendering', async () =>
+      (await itemFor('TestMod.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
+
+    await vscode.commands.executeCommand('modbench.closeMedit');
+    // The abandoned load resolves on its own — the abort reaches the in-flight POST rather than
+    // leaving it to wait for a socket that will never answer.
+    await launch;
+    const pollsAtClose = requestLog.filter((l) => l === 'GET /session/status').length;
+    assert.ok(pollsAtClose > 0, 'the load should have been polling before it was abandoned');
+
+    await new Promise((r) => setTimeout(r, 1500)); // three poll intervals
+
+    assert.strictEqual(
+      requestLog.filter((l) => l === 'GET /session/status').length, pollsAtClose,
+      'closing the session must stop the polling, not leave it running against a dead backend',
+    );
+    assert.strictEqual(
+      (await itemFor('TestMod.esp')).collapsibleState, vscode.TreeItemCollapsibleState.None,
+      'the chevrons must go with the session',
+    );
+    assert.strictEqual(
+      (ext?.exports as { pluginListView?: { message?: string } } | undefined)?.pluginListView?.message,
+      undefined,
+      'the view must stop claiming a load that is no longer running',
+    );
+  });
+
   // AC9: master issues are derived from the whole session, so mid-load they would flag masters
   // that simply have not been opened yet. The backend already suppresses them while loading
   // (RecordQueryService.GetPlugins gates Classify on SessionState.Ready) and the frontend never

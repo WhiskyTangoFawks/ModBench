@@ -71,6 +71,10 @@ let pluginsTree: PluginsTreeComposite<PluginListNode, PluginTreeNode> | undefine
 // (`TreeView.message`). Module level for the same reason as pluginsTree above: enterEditing and
 // exitToLoadout are module-level, and both have to be able to set and clear it.
 let pluginsTreeView: vscode.TreeView<PluginListNode | PluginTreeNode> | undefined;
+// #307 AC7: the in-flight load's abort handle. Module level for the same reason as the above —
+// exitToLoadout is where a load gets deliberately abandoned, and it is module-level. Replaced by
+// each new load; a superseded one does not need aborting, since the backend answers it 409.
+let loadAbort: AbortController | undefined;
 
 /** #307: the Plugins view's own statement about what it is doing, or what it does not yet know
  *  (`TreeView.message` — the native surface for a view-scoped statement about its own contents,
@@ -183,6 +187,11 @@ function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<
  *  to switch back to any more — the loadout views were never hidden (#268), and Pending Changes /
  *  Referenced By govern their own visibility (staged work, always-present respectively). */
 function exitToLoadout(): void {
+  // #307 AC7: abandon any load still in flight *first* — it aborts the POST outright, so the
+  // load stops polling and returns 'abandoned' rather than discovering a killed backend as a
+  // network error and reporting that to the user as a failure.
+  loadAbort?.abort();
+  loadAbort = undefined;
   // #270: the chevrons go with the session. Cleared before the backend stops, so no row can be
   // expanded into a backend that is on its way down. #281: the immutable set goes with it.
   pluginsTree?.setSession(undefined);
@@ -1819,18 +1828,25 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       // this states the total for the window before the first poll answers.
       say(`Indexing ${plugins.length} plugins… Conflict information is not yet computed.`);
       outputChannel.info(`[extension] backend healthy; loading session (${plugins.length} plugins)`);
-      const failures = await controller.loadExplicitSession(plugins, gd.dataFolder, undefined, {
-        onProgress: onLoadProgress,
-      });
-      // #295 AC4: undefined (not `[]`) means the POST itself failed — loadExplicitSession
-      // already surfaced the error (ADR-0026 "explicit action failed" tier). The backend's own
-      // SessionManager disposes the previous session unconditionally before attempting the new
-      // one, so by this point there is truly no session left, not a stale one — the same
-      // treatment the two failure returns above give themselves, so this is the third symmetric
-      // case rather than a new partial-recovery path. Reading its plugin list or syncing its
-      // filter would either throw against a sessionless backend or silently render nothing,
-      // neither of which is "the tree honestly says editing is unavailable".
-      if (failures === undefined) {
+      loadAbort = new AbortController();
+      const result = await controller.loadExplicitSession(
+        plugins, gd.dataFolder, undefined, { onProgress: onLoadProgress, signal: loadAbort.signal });
+      // #307 AC7: a load that was deliberately abandoned — superseded by a newer load, or
+      // aborted because the user closed the session — leaves *silently*. Nothing to surface
+      // (loadExplicitSession only logged it) and, the bug this fixes, nothing to tear down: the
+      // newer load owns the session now, and exitToLoadout() here would stop its backend.
+      if (result.outcome === 'abandoned') {
+        outputChannel.info('[extension] the editing session load was abandoned; leaving the session that replaced it alone');
+        return;
+      }
+      // #295 AC4: the load itself failed — loadExplicitSession already surfaced the error
+      // (ADR-0026 "explicit action failed" tier). The backend's own SessionManager disposes the
+      // previous session unconditionally before attempting the new one, so by this point there is
+      // truly no session left, not a stale one — the same treatment the two failure returns above
+      // give themselves. Reading its plugin list or syncing its filter would either throw against
+      // a sessionless backend or silently render nothing, neither of which is "the tree honestly
+      // says editing is unavailable".
+      if (result.outcome === 'failed') {
         exitToLoadout();
         return;
       }
@@ -1839,7 +1855,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       // #331: a fresh session starts with no pending changes, but a decoration left over from a
       // previous one (or a crash-restart reload mid-edit) must not survive into this one.
       void pendingChangeDecorationProvider.refresh();
-      await applyLoadedSessionToTree(sessionPluginFiles, failures, outputChannel);
+      await applyLoadedSessionToTree(sessionPluginFiles, result.failures, outputChannel);
       outputChannel.info('[extension] editing session ready');
   };
   return () => withPluginsViewProgress(enter);

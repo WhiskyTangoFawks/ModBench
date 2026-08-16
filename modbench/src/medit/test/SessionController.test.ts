@@ -976,9 +976,11 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    const failures = await ctrl.loadExplicitSession(plugins, '/game/Data');
+    const result = await ctrl.loadExplicitSession(plugins, '/game/Data');
 
-    expect(failures).toEqual([{ name: 'Bad.esp', reason: 'Malformed record' }]);
+    // #307: a tagged outcome, not a bare array — three outcomes (loaded / failed / abandoned)
+    // need three answers, and a second sentinel would be one every call site has to remember.
+    expect(result).toEqual({ outcome: 'loaded', failures: [{ name: 'Bad.esp', reason: 'Malformed record' }] });
   });
 
   it('resolves with an empty array when nothing failed to load', async () => {
@@ -989,9 +991,11 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    const failures = await ctrl.loadExplicitSession(plugins, '/game/Data');
+    const result = await ctrl.loadExplicitSession(plugins, '/game/Data');
 
-    expect(failures).toEqual([]);
+    // #307: still distinguishable from a failed load — now by the outcome tag rather than by
+    // `[]` versus `undefined`.
+    expect(result).toEqual({ outcome: 'loaded', failures: [] });
   });
 
   it('warns when the active profile has zero enabled plugins (never silently empty)', async () => {
@@ -1056,7 +1060,7 @@ describe('SessionController.loadExplicitSession', () => {
   // "loaded, zero failures" and previously meant both. Backend-confirmed (SessionManager.
   // LoadExplicitCore disposes the old session unconditionally, before the new one can even
   // fail to build), so a failed POST really does mean "no session", not "the old one, stale".
-  it('resolves undefined (not an empty array) when the load fails, so a failed load is never mistaken for zero failures', async () => {
+  it('reports a failed load as failed, so it is never mistaken for a load with zero failures', async () => {
     const client = {
       ...makeClient(),
       POST: vi.fn().mockResolvedValue(drainedError(400, 'bad dir')),
@@ -1064,9 +1068,12 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    const failures = await ctrl.loadExplicitSession(plugins, '/game/Data');
+    const result = await ctrl.loadExplicitSession(plugins, '/game/Data');
 
-    expect(failures).toBeUndefined();
+    // #307: `undefined` was #295's way of saying this. It is now the `failed` tag — same
+    // meaning (the backend disposed the previous session before attempting this one, so there
+    // is no session at all), stated in a way that leaves room for the third outcome.
+    expect(result).toEqual({ outcome: 'failed' });
   });
 });
 
@@ -1188,6 +1195,74 @@ describe('SessionController.loadExplicitSession progress polling', () => {
 
     finish();
     await load;
+  });
+});
+
+// ── loadExplicitSession: a deliberately abandoned load is not a failure (#307 AC7) ─
+
+// Two ways a load ends without failing, both of which used to be reported to the user as an
+// error. 409 is the backend saying "your load was superseded" (SessionEndpoints.SupersededLoad) —
+// nothing went wrong, and the newer load now owns the session. An aborted POST is the user
+// closing mEdit mid-load. Neither is something to toast, and — the bug this fixes — neither may
+// make the caller tear down a session it does not own.
+describe('SessionController.loadExplicitSession abandonment', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  const plugins = [{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', participates: true }];
+
+  it('does not surface an error when the load is superseded (409), only logs it', async () => {
+    const client = { ...makeClient(), POST: vi.fn().mockResolvedValue(drainedError(409, 'superseded')) };
+    const log = vi.fn();
+    const deps = makeDeps({ client, log });
+
+    await new SessionController(deps).loadExplicitSession(plugins, '/game/Data');
+
+    expect(deps.showError).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('superseded'));
+  });
+
+  // The pre-existing bug (#307 investigation): a superseded load returned the same "no session"
+  // answer a failed one does, and makeEnterEditing responds to that by calling exitToLoadout() —
+  // tearing the backend down out from under the newer load that legitimately owns the session.
+  // Reachable today by running Reload Session while a load is still running.
+  it('reports a superseded load as abandoned, distinctly from a failed one', async () => {
+    const client = { ...makeClient(), POST: vi.fn().mockResolvedValue(drainedError(409, 'superseded')) };
+
+    const result = await new SessionController(makeDeps({ client })).loadExplicitSession(plugins, '/game/Data');
+
+    expect(result).toEqual({ outcome: 'abandoned' });
+  });
+
+  it('reports an aborted load as abandoned, and surfaces nothing for it', async () => {
+    const controller = new AbortController();
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockImplementation(() => {
+        controller.abort();
+        return Promise.reject(new DOMException('This operation was aborted', 'AbortError'));
+      }),
+    };
+    const deps = makeDeps({ client });
+
+    const result = await new SessionController(deps)
+      .loadExplicitSession(plugins, '/game/Data', 'Fallout4', { signal: controller.signal });
+
+    expect(result).toEqual({ outcome: 'abandoned' });
+    expect(deps.showError).not.toHaveBeenCalled();
+  });
+
+  // The signal is what aborts the request itself rather than waiting for a dead socket — the
+  // whole reason AC7 uses stdlib AbortSignal instead of a bespoke cancellation flag.
+  it('forwards the abort signal to the POST so the request is cancelled, not merely ignored', async () => {
+    const signal = new AbortController().signal;
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'loaded', failures: [] } }),
+    };
+
+    await new SessionController(makeDeps({ client })).loadExplicitSession(plugins, '/game/Data', 'Fallout4', { signal });
+
+    expect(client.POST).toHaveBeenCalledWith('/session/load-explicit', expect.objectContaining({ signal }));
   });
 });
 
