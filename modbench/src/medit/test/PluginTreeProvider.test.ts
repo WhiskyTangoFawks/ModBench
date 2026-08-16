@@ -397,6 +397,78 @@ describe('RecordNode', () => {
   });
 });
 
+// ── #281: record rows carry their copy identity ──────────────────────────────
+// A record-scoped command acts on the clicked row's own copy of the record — so the row has to
+// say which copy it is ((plugin, origin), ADR-0036), and rows whose plugin can't be edited hide
+// Remove via an immutable contextValue, matching the column header's !immutable `when` gate.
+
+describe('#281 record rows carry their copy identity', () => {
+  it('RecordNode carries the browsed origin, threaded from its RecordTypeNode', async () => {
+    const repo = makeRepository();
+    const provider = new PluginTreeProvider(repo);
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp', 'ModA') as RecordTypeNode[];
+
+    const [rec] = await provider.getChildren(typeNode);
+
+    expect((rec as RecordNode).origin).toBe('ModA');
+  });
+
+  it('a shadowed copy\'s record rows are read-only: contextValue recordImmutable', async () => {
+    const repo = makeRepository();
+    const provider = new PluginTreeProvider(repo);
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp', 'ModA') as RecordTypeNode[];
+
+    const [rec] = await provider.getChildren(typeNode);
+
+    expect((rec as RecordNode).contextValue).toBe('recordImmutable');
+  });
+
+  it('record rows of an immutable plugin get contextValue recordImmutable, case-insensitively', async () => {
+    const repo = makeRepository();
+    const provider = new PluginTreeProvider(repo);
+    provider.setImmutablePlugins(new Set(['fallout4.esm'])); // makeRecord's rows belong to Fallout4.esm
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
+
+    const [rec] = await provider.getChildren(typeNode);
+
+    expect((rec as RecordNode).contextValue).toBe('recordImmutable');
+  });
+
+  it('mutable load-order rows keep contextValue record after setImmutablePlugins', async () => {
+    const repo = makeRepository();
+    const provider = new PluginTreeProvider(repo);
+    provider.setImmutablePlugins(new Set(['SomethingElse.esm']));
+    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
+
+    const [rec] = await provider.getChildren(typeNode);
+
+    expect((rec as RecordNode).contextValue).toBe('record');
+  });
+
+  it('placed rows follow the same rule: refrImmutable under an immutable plugin, else refr', async () => {
+    const repo = makeRepository();
+    const provider = new PluginTreeProvider(repo);
+    const placed = { formKey: '000001:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr' };
+    provider.setImmutablePlugins(new Set(['Plugin0.esp']));
+
+    const group = new PlacedGroupNode('Plugin0.esp', 'cell:fk', 'persistent', [placed], undefined);
+    const [row] = await provider.getChildren(group) as PlacedNode[];
+
+    expect(row.contextValue).toBe('refrImmutable');
+  });
+
+  it('placed rows of a shadowed copy are refrImmutable even when the plugin is not listed immutable', async () => {
+    const repo = makeRepository();
+    const provider = new PluginTreeProvider(repo);
+    const placed = { formKey: '000001:Plugin0.esp', editorId: 'ref', baseFormKey: null, recordType: 'refr' };
+
+    const group = new PlacedGroupNode('Plugin0.esp', 'cell:fk', 'persistent', [placed], 'ModA');
+    const [row] = await provider.getChildren(group) as PlacedNode[];
+
+    expect(row.contextValue).toBe('refrImmutable');
+  });
+});
+
 // ── refresh ───────────────────────────────────────────────────────────────────
 
 describe('PluginTreeProvider.refresh', () => {

@@ -114,7 +114,7 @@ interface FakeOpts {
   plugins?: unknown[];
   load?: RecordSessionClient['load'];
   save?: RecordSessionClient['save'];
-  createRecord?: RecordSessionClient['createRecord'];
+  copyAsNew?: RecordSessionClient['copyAsNew'];
   removeOverride?: RecordSessionClient['removeOverride'];
   saveGroup?: RecordSessionClient['saveGroup'];
   revertGroup?: RecordSessionClient['revertGroup'];
@@ -139,7 +139,7 @@ function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordSessionClient 
     revert: vi.fn().mockResolvedValue(resp(200, [])),
     copyTo: vi.fn().mockResolvedValue(resp(200, [])),
     removeOverride: opts.removeOverride ?? vi.fn().mockResolvedValue(resp(200, {})),
-    createRecord: opts.createRecord ?? vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Mod2.esp' })),
+    copyAsNew: opts.copyAsNew ?? vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Mod2.esp' })),
     // Issue #139: group save/revert + the member-count read that decides the Revert Group confirmation.
     // groupMembers defaults to the staged changes (a group of one), the no-confirmation path.
     saveGroup: opts.saveGroup ?? vi.fn().mockResolvedValue(resp(200, { byPlugin: {}, reindexFailure: null })),
@@ -307,13 +307,13 @@ const twoSiblingFieldsResult = {
 const threePluginConflictResult = {
   conflictAll: 'Conflict',
   overrides: [
-    { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
+    { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data', loadOrderIndex: 0, isWinner: false,
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Alice' }],
       pendingFields: {}, conflictThis: 'Master' },
-    { formKey: '000001:Fallout4.esm', plugin: 'Mod1.esp', loadOrderIndex: 1, isWinner: false,
+    { formKey: '000001:Fallout4.esm', plugin: 'Mod1.esp', origin: 'Data', loadOrderIndex: 1, isWinner: false,
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Bob' }],
       pendingFields: {}, conflictThis: 'ConflictLoses', recordType: 'npc_' },
-    { formKey: '000001:Fallout4.esm', plugin: 'Mod2.esp', loadOrderIndex: 2, isWinner: true,
+    { formKey: '000001:Fallout4.esm', plugin: 'Mod2.esp', origin: 'Data', loadOrderIndex: 2, isWinner: true,
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Charlie' }],
       pendingFields: {}, conflictThis: 'ConflictWins' },
   ],
@@ -381,11 +381,12 @@ describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', (
   // one was actually right-clicked. Array/VMAD op targeting resolve through the identical
   // overrideMap-by-ColumnKey mechanism (RecordPanel.tsx's resolveCurrentArrayFor/handleArrayAdd/
   // handleVmadStructOp dispatch), so this is representative of that whole class, not narrowly
-  // about Copy as New Record.
-  it("Copy as New Record on one column stages that column's own fields, never the other same-filename column's", async () => {
+  // about Copy as New Record. #281: the assertion is on copyAsNew's source triple now — the
+  // fields themselves are read server-side off that (plugin, origin)
+  // (EditOrchestratorTests.CreateRecord_ExplicitTemplateSource_CopiesThatPluginsFields_NotWinner).
+  it("Copy as New Record on one column names that column's own origin, never the other same-filename column's", async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    const createRecord = vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Target.esp' }));
-    const { client } = renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse, createRecord });
+    const { client } = renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse });
     await waitFor(() => expect(screen.getByText('FromA')).toBeInTheDocument());
 
     postColumnHeaderAction({
@@ -393,14 +394,12 @@ describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', (
       formKey: '000001:Fallout4.esm', sourcePlugin: 'Shared.esp', sourceOrigin: 'ModA', targetPlugin: 'Target.esp',
     });
 
-    await waitFor(() => expect(client.save).toHaveBeenCalledWith('000099:Target.esp', 'Target.esp', { Name: 'FromA' }));
-    expect(client.save).not.toHaveBeenCalledWith('000099:Target.esp', 'Target.esp', { Name: 'FromB' });
+    await waitFor(() => expect(client.copyAsNew).toHaveBeenCalledWith('000001:Fallout4.esm', 'Target.esp', 'Shared.esp', 'ModA'));
   });
 
-  it("...and targeting the other column's origin stages its own fields instead", async () => {
+  it("...and targeting the other column's origin names it instead", async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    const createRecord = vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Target.esp' }));
-    const { client } = renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse, createRecord });
+    const { client } = renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse });
     await waitFor(() => expect(screen.getByText('FromA')).toBeInTheDocument());
 
     postColumnHeaderAction({
@@ -408,8 +407,7 @@ describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', (
       formKey: '000001:Fallout4.esm', sourcePlugin: 'Shared.esp', sourceOrigin: 'ModB', targetPlugin: 'Target.esp',
     });
 
-    await waitFor(() => expect(client.save).toHaveBeenCalledWith('000099:Target.esp', 'Target.esp', { Name: 'FromB' }));
-    expect(client.save).not.toHaveBeenCalledWith('000099:Target.esp', 'Target.esp', { Name: 'FromA' });
+    await waitFor(() => expect(client.copyAsNew).toHaveBeenCalledWith('000001:Fallout4.esm', 'Target.esp', 'Shared.esp', 'ModB'));
   });
 });
 
@@ -1510,22 +1508,22 @@ describe('RecordPanel — Copy as New Record', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("the native menu's broadcast creates a new record of the source column's type, then stages every source field on it", async () => {
-    const createRecord = vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Mod2.esp', groupId: 'g1' }));
-    const { client } = renderPanel(threePluginConflictResult, { plugins: threePluginsResponse, createRecord });
+  // #281: one backend call — the template-source triple names the right-clicked column; the
+  // backend reads that copy's fields and derives the record type from the template, so there is
+  // no create-blank-then-patch choreography left to assert on.
+  it("the native menu's broadcast copies the source column as a new record in one call", async () => {
+    const copyAsNew = vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Mod2.esp', groupId: 'g1' }));
+    const { client } = renderPanel(threePluginConflictResult, { plugins: threePluginsResponse, copyAsNew });
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD,
       formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', sourceOrigin: 'Data', targetPlugin: 'Mod2.esp',
     });
 
-    // Creates a blank record of the source column's type in the target plugin…
-    await waitFor(() => expect(client.createRecord).toHaveBeenCalledWith('Mod2.esp', 'npc_'));
-
-    // …then stages every source field onto the newly-created FormKey.
     await waitFor(() =>
-      expect(client.save).toHaveBeenCalledWith('000099:Mod2.esp', 'Mod2.esp', { Name: 'Bob' }),
+      expect(client.copyAsNew).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp', 'Mod1.esp', 'Data'),
     );
+    expect(client.save).not.toHaveBeenCalled();
   });
 });
 
@@ -1556,7 +1554,7 @@ describe('RecordPanel — Copy as Override…', () => {
     });
 
     await waitFor(() =>
-      expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp', 'Mod1.esp'),
+      expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp', 'Mod1.esp', 'Data'),
     );
   });
 
@@ -1571,7 +1569,7 @@ describe('RecordPanel — Copy as Override…', () => {
     });
 
     await waitFor(() =>
-      expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp', 'Fallout4.esm'),
+      expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp', 'Fallout4.esm', 'Data'),
     );
   });
 
@@ -2102,7 +2100,7 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
       formKey: '000001:Fallout4.esm', sourcePlugin: 'Mod1.esp', sourceOrigin: 'Data', targetPlugin: 'Mod2.esp',
     });
 
-    await waitFor(() => expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp', 'Mod1.esp'));
+    await waitFor(() => expect(client.copyTo).toHaveBeenCalledWith('000001:Fallout4.esm', 'Mod2.esp', 'Mod1.esp', 'Data'));
     expect(vscode.postMessage).toHaveBeenCalledWith({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED });
   });
 
@@ -2119,8 +2117,8 @@ describe('RecordPanel — pending tree notification (issue #174)', () => {
   });
 
   it('the native Copy as New Record broadcast posts pendingChanged once staged', async () => {
-    const createRecord = vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Mod2.esp' }));
-    renderPanel(threePluginConflictResult, { plugins: threePluginsResponse, createRecord });
+    const copyAsNew = vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Mod2.esp' }));
+    renderPanel(threePluginConflictResult, { plugins: threePluginsResponse, copyAsNew });
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD,
@@ -2437,8 +2435,8 @@ describe('RecordPanel — action logging (issue #200)', () => {
   });
 
   it('the native Copy as New Record broadcast logs an INFO line naming source, target, and the new record', async () => {
-    const createRecord = vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Mod2.esp' }));
-    renderPanel(threePluginConflictResult, { plugins: threePluginsResponse, createRecord });
+    const copyAsNew = vi.fn().mockResolvedValue(resp(200, { formKey: '000099:Mod2.esp' }));
+    renderPanel(threePluginConflictResult, { plugins: threePluginsResponse, copyAsNew });
     await waitFor(() => screen.getByText('Bob'));
     postColumnHeaderAction({
       type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD,

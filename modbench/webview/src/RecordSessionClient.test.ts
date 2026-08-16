@@ -24,7 +24,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 describe('createRecordSessionClient', () => {
   it('exposes the record-session operations', () => {
     const client = createRecordSessionClient(5172);
-    for (const m of ['load', 'save', 'revert', 'copyTo', 'removeOverride', 'createRecord', 'groupMembers', 'saveGroup', 'revertGroup', 'conditionRunOnTargets']) {
+    for (const m of ['load', 'save', 'revert', 'copyTo', 'removeOverride', 'copyAsNew', 'groupMembers', 'saveGroup', 'revertGroup', 'conditionRunOnTargets']) {
       expect(client).toHaveProperty(m);
     }
   });
@@ -166,6 +166,14 @@ describe('RecordSessionClient writes', () => {
     expect(await req.clone().json()).toEqual({ sourcePlugin: 'C.esp' });
   });
 
+  // #281 / #34: sourceOrigin names *which* copy of that filename the clicked column is — without
+  // it the backend resolves the origin from the filename, which mis-targets a shadowed copy.
+  it('copyTo includes sourceOrigin alongside sourcePlugin when given', async () => {
+    await createRecordSessionClient(5172).copyTo('000001:A.esp', 'B.esp', 'C.esp', 'ModA');
+    const req = fetchMock.mock.calls[0][0] as Request;
+    expect(await req.clone().json()).toEqual({ sourcePlugin: 'C.esp', sourceOrigin: 'ModA' });
+  });
+
   it('removeOverride POSTs a delete-records request', async () => {
     await createRecordSessionClient(5172).removeOverride('000001:A.esp', 'A.esp');
     const req = fetchMock.mock.calls[0][0] as Request;
@@ -173,17 +181,19 @@ describe('RecordSessionClient writes', () => {
     expect(await req.clone().json()).toEqual({ records: [{ formKey: '000001:A.esp', plugin: 'A.esp' }] });
   });
 
-  it('createRecord POSTs to the plugin records endpoint', async () => {
-    await createRecordSessionClient(5172).createRecord('B.esp', 'npc_');
+  // #281: Copy as New Record is one backend call — the template-source triple replaces the old
+  // create-blank-then-patch-every-field choreography (the backend reads the named copy's own
+  // fields and derives the record type from the template).
+  it('copyAsNew POSTs a create with the template-source triple', async () => {
+    await createRecordSessionClient(5172).copyAsNew('000001:A.esp', 'B.esp', 'C.esp', 'ModA');
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.url).toContain('/plugins/B.esp/records');
-    expect(await req.clone().json()).toMatchObject({ recordType: 'npc_', source: 'user' });
-  });
-
-  it('createRecord omits recordType when it is undefined', async () => {
-    await createRecordSessionClient(5172).createRecord('B.esp', undefined);
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(await req.clone().json()).toEqual({ source: 'user' });
+    expect(await req.clone().json()).toEqual({
+      source: 'user',
+      templateFormKey: '000001:A.esp',
+      templateSourcePlugin: 'C.esp',
+      templateSourceOrigin: 'ModA',
+    });
   });
 
   it('returns a typed error result for a non-ok response', async () => {

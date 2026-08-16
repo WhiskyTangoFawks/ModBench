@@ -204,7 +204,7 @@
       },
       {
         "command": "modbench.deleteRecord",
-        "title": "Delete Record",
+        "title": "Remove",
         "category": "Modbench"
       },
       {
@@ -252,13 +252,8 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.columnHeader.copyAsNewRecord",
-        "title": "Copy as New Record",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.columnHeader.removeOverride",
-        "title": "Remove",
+        "command": "modbench.copyAsNewRecord",
+        "title": "Copy as New Record Into…",
         "category": "Modbench"
       },
       {
@@ -542,11 +537,7 @@
           "when": "false"
         },
         {
-          "command": "modbench.columnHeader.copyAsNewRecord",
-          "when": "false"
-        },
-        {
-          "command": "modbench.columnHeader.removeOverride",
+          "command": "modbench.copyAsNewRecord",
           "when": "false"
         },
         {
@@ -774,28 +765,23 @@
         },
         {
           "command": "modbench.copyAsOverrideInto",
-          "when": "view == modbench.pluginListTree && viewItem == record",
+          "when": "view == modbench.pluginListTree && (viewItem == record || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)",
           "group": "modbench@1"
         },
         {
-          "command": "modbench.deleteRecord",
-          "when": "view == modbench.pluginListTree && viewItem == record",
+          "command": "modbench.copyAsNewRecord",
+          "when": "view == modbench.pluginListTree && (viewItem == record || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)",
           "group": "modbench@2"
+        },
+        {
+          "command": "modbench.deleteRecord",
+          "when": "view == modbench.pluginListTree && (viewItem == record || viewItem == refr)",
+          "group": "modbench@3"
         },
         {
           "command": "modbench.createPlaced",
           "when": "view == modbench.pluginListTree && (viewItem == placedGroup-persistent || viewItem == placedGroup-temporary)",
           "group": "modbench@1"
-        },
-        {
-          "command": "modbench.copyAsOverrideInto",
-          "when": "view == modbench.pluginListTree && viewItem == refr",
-          "group": "modbench@1"
-        },
-        {
-          "command": "modbench.deleteRecord",
-          "when": "view == modbench.pluginListTree && viewItem == refr",
-          "group": "modbench@2"
         },
         {
           "command": "modbench.saveGroup",
@@ -945,12 +931,12 @@
           "group": "modbench@3"
         },
         {
-          "command": "modbench.columnHeader.copyAsNewRecord",
+          "command": "modbench.copyAsOverrideInto",
           "when": "webviewId == 'modbench' && webviewSection == 'columnHeader'",
           "group": "modbench@5"
         },
         {
-          "command": "modbench.copyAsOverrideInto",
+          "command": "modbench.copyAsNewRecord",
           "when": "webviewId == 'modbench' && webviewSection == 'columnHeader'",
           "group": "modbench@6"
         },
@@ -960,7 +946,7 @@
           "group": "modbench@7"
         },
         {
-          "command": "modbench.columnHeader.removeOverride",
+          "command": "modbench.deleteRecord",
           "when": "webviewId == 'modbench' && webviewSection == 'columnHeader' && !immutable",
           "group": "modbench@8"
         },
@@ -1020,7 +1006,7 @@
       {
         "command": "modbench.deleteRecord",
         "key": "Delete",
-        "when": "focusedView == modbench.pluginListTree && viewItem == record"
+        "when": "focusedView == modbench.pluginListTree && (viewItem == record || viewItem == refr)"
       },
       {
         "command": "modbench.referencedByTree.copy",

@@ -616,6 +616,8 @@ export interface components {
             recordType?: string | null;
             templateFormKey?: string | null;
             source?: string | null;
+            templateSourcePlugin?: string | null;
+            templateSourceOrigin?: string | null;
         };
         CreateRecordResult: {
             formKey?: string | null;

@@ -1047,6 +1047,119 @@ public sealed class EditOrchestratorTests
         }
     }
 
+    // #281: Copy as New Record names its source copy — the template must be read off that
+    // plugin's own version of the record, not the overall winner (the same #202 rule
+    // CopyRecordTo's explicit sourcePlugin enforces for Copy as Override). Source.esp loses
+    // the conflict to Middle.esp, so winning-template behaviour would stage "Unaggressive".
+    [Fact]
+    public void CreateRecord_ExplicitTemplateSource_CopiesThatPluginsFields_NotWinner()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("cr-template-source")
+            .WithPlugin("Source.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("TestNPC");
+                npc.Aggression = Npc.AggressionType.Frenzied;
+                npcKey = npc.FormKey;
+            })
+            .WithPlugin("Middle.esp", mod =>
+            {
+                var overrideNpc = new Npc(npcKey, Fallout4Release.Fallout4)
+                {
+                    Aggression = Npc.AggressionType.Unaggressive
+                };
+                mod.Npcs.Add(overrideNpc);
+            })
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", "npc_", npcKey.ToString(), "user",
+                        templateSourcePlugin: "Source.esp"));
+
+                var staged = changes.GetChanges(formKey: result.FormKey);
+                Assert.Contains(staged, c =>
+                    c.FieldPath == "aggression" && c.NewValue.GetString() == "Frenzied");
+            }
+        }
+    }
+
+    // #281: the Plugins tree's record row knows only its FormKey — the record type is derivable
+    // from the template record, so a caller with a template may omit it.
+    [Fact]
+    public void CreateRecord_NullRecordTypeWithTemplate_DerivesTypeFromTemplate()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("cr-derive-type")
+            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("TemplateNPC").FormKey)
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", null, npcKey.ToString(), "user"));
+
+                var createChange = changes.GetChanges(formKey: result.FormKey).Single(c => c.FieldPath == "$create");
+                Assert.Equal("npc_", createChange.RecordType);
+            }
+        }
+    }
+
+    // #281: Copy as New Record of a placed record lands the new ref under the template's own cell
+    // and Persistent/Temporary GRUP (xEdit keeps a copied ref in its cell; an unparented REFR is
+    // an orphan) — same placement CopyRecordTo already carries for a staged override copy.
+    [Fact]
+    public void CreateRecord_TemplateIsPlaced_StampsTemplatePlacementOnCreate()
+    {
+        var data = PlacedFixture("cr-template-placed", "Source.esp", out var cellFk, out var placedFk);
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Target.esp", null, placedFk, "user",
+                        templateSourcePlugin: "Source.esp"));
+
+                var createChange = changes.GetChanges(formKey: result.FormKey).Single(c => c.FieldPath == "$create");
+                Assert.Equal(cellFk, createChange.ParentCell);
+                Assert.Equal("persistent", createChange.PlacementGroup);
+            }
+        }
+    }
+
+    [Fact]
+    public void CreateRecord_NullRecordTypeWithoutTemplate_ThrowsArgumentException()
+    {
+        var data = new PluginFixtureBuilder("cr-null-type-no-template")
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                Assert.Throws<ArgumentException>(() =>
+                    orchestrator.CreateRecord("Target.esp", null, null, "user"));
+            }
+        }
+    }
+
     [Fact]
     public void CreateRecord_UnknownRecordType_ThrowsArgumentException()
     {

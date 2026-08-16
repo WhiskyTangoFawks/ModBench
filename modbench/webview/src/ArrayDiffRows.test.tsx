@@ -547,7 +547,7 @@ function fakeClient(): RecordSessionClient {
     revert: vi.fn().mockResolvedValue(resp),
     copyTo: vi.fn().mockResolvedValue(resp),
     removeOverride: vi.fn().mockResolvedValue(resp),
-    createRecord: vi.fn().mockResolvedValue(resp),
+    copyAsNew: vi.fn().mockResolvedValue(resp),
     saveGroup: vi.fn().mockResolvedValue(resp),
     revertGroup: vi.fn().mockResolvedValue(resp),
     groupMembers: vi.fn().mockResolvedValue([]),

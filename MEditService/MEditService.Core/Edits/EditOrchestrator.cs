@@ -448,20 +448,30 @@ public sealed partial class EditOrchestrator(
         return committed != null ? ReadStringArray(JsonSerializer.SerializeToElement(committed.Value)) : [];
     }
 
-    public CreateRecordOutcome CreateRecord(string plugin, string recordType, string? templateFormKey, string source) =>
-        CreateRecordCore(plugin, recordType, templateFormKey, source, parentCell: null, placementGroup: null);
+    public CreateRecordOutcome CreateRecord(
+        string plugin, string? recordType, string? templateFormKey, string source,
+        string? templateSourcePlugin = null, string? templateSourceOrigin = null) =>
+        CreateRecordCore(plugin, recordType, templateFormKey, source, parentCell: null, placementGroup: null,
+            templateSourcePlugin, templateSourceOrigin);
 
     public CreateRecordOutcome CreatePlacedRecord(
         string plugin, string recordType, string parentCell, string placementGroup,
         string? templateFormKey, string source) =>
-        CreateRecordCore(plugin, recordType, templateFormKey, source, parentCell, placementGroup);
+        CreateRecordCore(plugin, recordType, templateFormKey, source, parentCell, placementGroup,
+            templateSourcePlugin: null, templateSourceOrigin: null);
 
     private CreateRecordOutcome CreateRecordCore(
-        string plugin, string recordType, string? templateFormKey, string source,
-        string? parentCell, string? placementGroup)
+        string plugin, string? recordType, string? templateFormKey, string source,
+        string? parentCell, string? placementGroup,
+        string? templateSourcePlugin, string? templateSourceOrigin)
     {
         var session = _sessionManager.Session
             ?? throw new InvalidOperationException("No session loaded.");
+
+        // #281: a caller with a template may omit recordType — the tree's record row knows only
+        // its FormKey — so derive it from the template record itself.
+        recordType ??= (templateFormKey != null ? _query.GetRecordType(templateFormKey) : null)
+            ?? throw new ArgumentException("recordType is required when no template is given.", nameof(recordType));
 
         var schemas = _schemaReflector.GetSchemas(session.GameRelease);
         if (!schemas.ContainsKey(recordType))
@@ -470,16 +480,31 @@ public sealed partial class EditOrchestrator(
         Dictionary<string, JsonElement>? templateFields = null;
         if (templateFormKey != null)
         {
-            var winner = _query.GetRecord(templateFormKey)
-                ?? throw new ArgumentException($"Template record '{templateFormKey}' not found.", nameof(templateFormKey));
+            // #281: an explicit templateSourcePlugin reads that copy's own version of the template
+            // record — same contract as CopyRecordTo's sourcePlugin/sourceOrigin above.
+            var template = templateSourcePlugin != null
+                ? _query.GetRecordForPlugin(templateFormKey, templateSourcePlugin, templateSourceOrigin ?? ResolveOrigin(templateSourcePlugin))
+                : _query.GetRecord(templateFormKey);
+            if (template == null)
+                throw new ArgumentException($"Template record '{templateFormKey}' not found.", nameof(templateFormKey));
 
-            templateFields = winner.Fields
+            templateFields = template.Fields
                 .Where(fv => !_writer.IsReadOnly(session.GameRelease, recordType, fv.Metadata.Name))
                 .ToDictionary(fv => fv.Metadata.Name, fv => JsonSerializer.SerializeToElement(fv.Value));
 
             var referenceErrors = ValidateReferences(templateFields, schemas, recordType);
             if (referenceErrors.Count > 0)
                 return new CreateRecordOutcome.InvalidReferences(referenceErrors);
+
+            // #281: a placed template's copy lands under the template's own cell and group (xEdit
+            // keeps a copied ref in its cell; an unparented REFR is an orphan) — unless the caller
+            // stated a placement explicitly (CreatePlacedRecord).
+            if (parentCell == null)
+            {
+                var placement = _query.GetPlacement(templateFormKey, template.Plugin, template.Origin);
+                parentCell = placement?.ParentCell;
+                placementGroup = placement?.PlacementGroup;
+            }
         }
 
         var reservedFormKey = _sessionManager.ReserveFormKey(plugin);
@@ -1141,3 +1166,4 @@ public sealed partial class EditOrchestrator(
         return result;
     }
 }
+

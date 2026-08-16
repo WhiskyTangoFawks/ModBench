@@ -63,6 +63,10 @@ let loadoutHeaderProvider: LoadoutHeaderProvider | undefined;
 // starting and stopping is what puts chevrons on its rows, and both choke points for that
 // (enterEditing, exitToLoadout) are module-level.
 let pluginsTree: PluginsTreeComposite<PluginListNode, PluginTreeNode> | undefined;
+// #281: the record browser behind the merged tree's children. Module level for the same reason as
+// pluginsTree directly above — the session starting/stopping is what tells its record rows which
+// plugins are immutable (Remove hidden via contextValue), through the same choke points.
+let recordBrowserProvider: PluginTreeProvider | undefined;
 // #295: `enterEditing` itself, built once inside `registerLoadoutView`. Module level for the
 // same reason as the above — not a registration-order race (registerLoadoutSurfaces, which
 // calls registerLoadoutView, already runs before registerEditorCommands registers
@@ -138,8 +142,9 @@ function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<
  *  Referenced By govern their own visibility (staged work, always-present respectively). */
 function exitToLoadout(): void {
   // #270: the chevrons go with the session. Cleared before the backend stops, so no row can be
-  // expanded into a backend that is on its way down.
+  // expanded into a backend that is on its way down. #281: the immutable set goes with it.
   pluginsTree?.setSession(undefined);
+  recordBrowserProvider?.setImmutablePlugins([]);
   backendManager?.stop();
 }
 
@@ -244,6 +249,7 @@ export function activate(context: vscode.ExtensionContext) {
   const client = createApiClient(port);
   const repository = new ApiPluginRepository(client, log);
   const treeProvider = new PluginTreeProvider(repository, log);
+  recordBrowserProvider = treeProvider;
   const changeGroupTreeProvider = new PendingChangesTreeProvider(
     client, log, makePendingStateHandler(() => changeGroupTreeView));
   const openPanels = new Map<string, vscode.WebviewPanel>();
@@ -595,38 +601,71 @@ function trackRecordSelection(view: vscode.TreeView<PluginTreeNode | PluginListN
   });
 }
 
+// #281: one operation, one name — xEdit calls this Remove in all three of its menus (ADR-0034),
+// and the column header's old columnHeader.removeOverride was already the same backend call
+// (POST /records/delete), so it folds into modbench.deleteRecord rather than staying a second
+// command. Column-header-invoked it broadcasts (the open panel does HTTP + refresh + error
+// surfacing itself, as with the copy commands); the confirm is the same modal either way.
+function makeRemoveRecordHandler(deps: EditorCommandDeps) {
+  const { controller, recordPanels } = deps;
+
+  const removeFromColumnHeader = async (ctx: ColumnHeaderContext): Promise<void> => {
+    const answer = await vscode.window.showWarningMessage(
+      `Remove "${ctx.formKey}" from ${ctx.plugin}?`, { modal: true }, 'Remove');
+    if (answer !== 'Remove') return;
+    broadcastToRecordPanels(recordPanels, {
+      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
+    });
+  };
+
+  const resolveTargets = (item?: RecordNode | PlacedNode, allSelected?: (RecordNode | PlacedNode)[]) => {
+    if (allSelected?.length) return allSelected;
+    return lastRecordSelection.length ? [...lastRecordSelection] : item ? [item] : [];
+  };
+
+  return async (item?: RecordNode | PlacedNode | ColumnHeaderContext, allSelected?: (RecordNode | PlacedNode)[]) => {
+    if (item && !(item instanceof RecordNode) && !(item instanceof PlacedNode)) {
+      return removeFromColumnHeader(item);
+    }
+
+    const toTarget = (n: RecordNode | PlacedNode) =>
+      n instanceof PlacedNode
+        ? { formKey: n.placed.formKey ?? '', plugin: n.plugin }
+        : { formKey: n.record.formKey, plugin: n.record.plugin };
+    const toName = (n: RecordNode | PlacedNode) =>
+      n instanceof PlacedNode
+        ? (n.placed.editorId ?? n.placed.formKey ?? '')
+        : (n.record.editorId ?? n.record.formKey);
+
+    const targets = resolveTargets(item, allSelected);
+    if (targets.length === 0) {
+      vscode.window.showErrorMessage('Modbench: Select one or more records in the tree first.');
+      return;
+    }
+    // #281: the menu hides Remove on an immutable row, but a multi-select (or the Delete key)
+    // can still assemble a batch that includes one — refuse the whole batch up front, naming
+    // why, rather than letting some of a confirmed selection fail at the backend.
+    const readOnlyCount = targets.filter(n => n.contextValue?.endsWith('Immutable')).length;
+    if (readOnlyCount > 0) {
+      vscode.window.showErrorMessage(
+        `Modbench: ${readOnlyCount} of the selected records are read-only and can't be removed.`);
+      return;
+    }
+    const names = targets.map(toName).join(', ');
+    const label = targets.length === 1 ? `Remove "${names}"?` : `Remove ${targets.length} records?`;
+    const answer = await vscode.window.showWarningMessage(label, { modal: true }, 'Remove');
+    if (answer !== 'Remove') return;
+    await controller.deleteRecords(targets.map(toTarget));
+  };
+}
+
 function registerChangeGroupCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const { controller } = deps;
   return [
     // #273: the old modbench.pluginTree that fed `lastRecordSelection` here is gone — the merged
     // Plugins tree (modbench.pluginListTree) already feeds the same tracker from its own
     // registration (registerPluginListView), so nothing here needs to re-register it.
-    vscode.commands.registerCommand('modbench.deleteRecord', async (item?: RecordNode | PlacedNode, allSelected?: (RecordNode | PlacedNode)[]) => {
-      const toTarget = (n: RecordNode | PlacedNode) =>
-        n instanceof PlacedNode
-          ? { formKey: n.placed.formKey ?? '', plugin: n.plugin }
-          : { formKey: n.record.formKey, plugin: n.record.plugin };
-      const toName = (n: RecordNode | PlacedNode) =>
-        n instanceof PlacedNode
-          ? (n.placed.editorId ?? n.placed.formKey ?? '')
-          : (n.record.editorId ?? n.record.formKey);
-
-      let targets: (RecordNode | PlacedNode)[];
-      if (allSelected?.length) {
-        targets = allSelected;
-      } else {
-        targets = lastRecordSelection.length ? [...lastRecordSelection] : item ? [item] : [];
-      }
-      if (targets.length === 0) {
-        vscode.window.showErrorMessage('Modbench: Select one or more records in the tree first.');
-        return;
-      }
-      const names = targets.map(toName).join(', ');
-      const label = targets.length === 1 ? `Delete "${names}"?` : `Delete ${targets.length} records?`;
-      const answer = await vscode.window.showWarningMessage(label, { modal: true }, 'Delete');
-      if (answer !== 'Delete') return;
-      await controller.deleteRecords(targets.map(toTarget));
-    }),
+    vscode.commands.registerCommand('modbench.deleteRecord', makeRemoveRecordHandler(deps)),
     vscode.commands.registerCommand(
       'modbench.saveGroup',
       async (node?: PendingTreeNode, allSelected?: PendingTreeNode[]) => {
@@ -728,50 +767,47 @@ function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, msg: Ex
   for (const panel of recordPanels) void panel.webview.postMessage(msg);
 }
 
+// #281: the one record-scoped context every surface produces — the clicked row's or column's own
+// copy of the record ((plugin, origin), ADR-0036) — so the record commands below accept any
+// surface's node and stop caring which one it was. The target is still whatever the surface
+// points at: a tree row names its own plugin, the column header its own column (#202).
+function recordSourceOf(arg: RecordNode | PlacedNode | ColumnHeaderContext):
+  { formKey: string; plugin: string; origin?: string } {
+  if (arg instanceof PlacedNode) return { formKey: arg.placed.formKey, plugin: arg.plugin, origin: arg.origin };
+  if (arg instanceof RecordNode) return { formKey: arg.record.formKey, plugin: arg.record.plugin, origin: arg.origin };
+  return { formKey: arg.formKey, plugin: arg.plugin, origin: arg.origin };
+}
+
 /** Copy-as-override and create-placed record commands. */
 function registerCopyCreateCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const { repository, controller, recordPanels } = deps;
   return [
-    // #209: extended to accept an explicit record identity (the column header's own
-    // ColumnHeaderContext) alongside the plugins-tree's RecordNode/PlacedNode — resolved first by
-    // instanceof so the existing tree call site is untouched. The two call shapes still diverge
-    // after the target is picked: tree-invoked keeps calling controller.copyRecordTo directly
-    // (unchanged); column-header-invoked broadcasts instead, so the mutation actually runs
-    // through the webview's own already-working handleCopyTo (HTTP + refresh + error surfacing)
-    // rather than re-deriving that in the extension host and leaving the open panel stale.
+    // #209: accepts any record surface's context (recordSourceOf). #281: every surface now names
+    // its own copy as the source — the backend copies the clicked row's/column's version of the
+    // record, never silently the winner (#202's column-header rule, extended to the tree; the
+    // tree used to copy the winner because its rows carried no plugin). The two call shapes still
+    // diverge after the target is picked: tree-invoked calls controller.copyRecordTo directly;
+    // column-header-invoked broadcasts instead, so the mutation runs through the webview's own
+    // already-working handleCopyTo (HTTP + refresh + error surfacing) rather than re-deriving
+    // that in the extension host and leaving the open panel stale.
     vscode.commands.registerCommand('modbench.copyAsOverrideInto', async (arg?: RecordNode | PlacedNode | ColumnHeaderContext) => {
-      let formKey: string | undefined;
-      let excludePlugin: string | undefined;
-      let excludeOrigin: string | undefined;
-      let fromColumnHeader = false;
-      if (arg instanceof PlacedNode) {
-        formKey = arg.placed.formKey;
-      } else if (arg instanceof RecordNode) {
-        formKey = arg.record?.formKey;
-      } else if (arg) {
-        formKey = arg.formKey;
-        excludePlugin = arg.plugin;
-        excludeOrigin = arg.origin;
-        fromColumnHeader = true;
-      }
-      if (!formKey) {
+      if (!arg) {
         vscode.window.showErrorMessage('Modbench: No record selected.');
         return;
       }
+      const source = recordSourceOf(arg);
 
-      const targetPlugin = await pickTargetPlugin(repository, controller, excludePlugin);
+      const targetPlugin = await pickTargetPlugin(repository, controller, source.plugin);
       if (!targetPlugin) return;
 
-      if (fromColumnHeader) {
-        // #202: sourcePlugin (the right-clicked column, `excludePlugin` above) is forwarded so
-        // the backend copies that plugin's own version of the record, not necessarily the winner.
-        // #272: sourceOrigin identifies *which* column alongside it.
-        broadcastToRecordPanels(recordPanels, {
-          type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE, formKey,
-          sourcePlugin: excludePlugin!, sourceOrigin: excludeOrigin!, targetPlugin,
-        });
+      if (arg instanceof RecordNode || arg instanceof PlacedNode) {
+        await controller.copyRecordTo(source.formKey, targetPlugin, source.plugin, source.origin);
       } else {
-        await controller.copyRecordTo(formKey, targetPlugin);
+        // #272: sourceOrigin identifies *which* column alongside sourcePlugin.
+        broadcastToRecordPanels(recordPanels, {
+          type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE, formKey: source.formKey,
+          sourcePlugin: arg.plugin, sourceOrigin: arg.origin, targetPlugin,
+        });
       }
     }),
     vscode.commands.registerCommand('modbench.createPlaced', async (node?: PlacedGroupNode) => {
@@ -793,32 +829,34 @@ function registerCopyCreateCommands(deps: EditorCommandDeps): vscode.Disposable[
   ];
 }
 
-// #209: Copy as New Record / Remove / Add Master have no plugins-tree equivalent to reuse — they
-// only ever existed as column-header actions — so each gets its own new command (split out from
-// registerCopyCreateCommands to stay under the file's size budget). Copy as New Record still
-// shares pickTargetPlugin with modbench.copyAsOverrideInto rather than re-implementing it.
+// #209: split out from registerCopyCreateCommands to stay under the file's size budget; Copy as
+// New Record shares pickTargetPlugin with modbench.copyAsOverrideInto rather than re-implementing
+// it. #281: modbench.copyAsNewRecord (was columnHeader.copyAsNewRecord) is on every record
+// surface now — tree-invoked it goes through the controller (one backend call; no open panel is
+// required or involved), column-header-invoked it still broadcasts so the open panel refreshes
+// itself. The column header's Remove folded into modbench.deleteRecord (registerChangeGroup-
+// Commands) the same way — one operation, one name.
 // #202: Copy All to Pending deleted outright (not just unwired) — Copy as Override
 // (modbench.copyAsOverrideInto above) now covers that case via sourcePlugin.
 function registerColumnHeaderCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const { repository, controller, recordPanels } = deps;
   return [
-    vscode.commands.registerCommand('modbench.columnHeader.copyAsNewRecord', async (ctx?: ColumnHeaderContext) => {
-      if (!ctx) return;
-      const targetPlugin = await pickTargetPlugin(repository, controller, ctx.plugin);
+    vscode.commands.registerCommand('modbench.copyAsNewRecord', async (arg?: RecordNode | PlacedNode | ColumnHeaderContext) => {
+      if (!arg) {
+        vscode.window.showErrorMessage('Modbench: No record selected.');
+        return;
+      }
+      const source = recordSourceOf(arg);
+      const targetPlugin = await pickTargetPlugin(repository, controller, source.plugin);
       if (!targetPlugin) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD, formKey: ctx.formKey,
-        sourcePlugin: ctx.plugin, sourceOrigin: ctx.origin, targetPlugin,
-      });
-    }),
-    // No target plugin needed — the `when` clause on this command's webview/context contribution
-    // (package.json) already keeps it absent for an immutable column, matching today's disabled
-    // Remove item.
-    vscode.commands.registerCommand('modbench.columnHeader.removeOverride', (ctx?: ColumnHeaderContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
-      });
+      if (arg instanceof RecordNode || arg instanceof PlacedNode) {
+        await controller.copyAsNewRecord(source.formKey, targetPlugin, source.plugin, source.origin);
+      } else {
+        broadcastToRecordPanels(recordPanels, {
+          type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD, formKey: source.formKey,
+          sourcePlugin: arg.plugin, sourceOrigin: arg.origin, targetPlugin,
+        });
+      }
     }),
     vscode.commands.registerCommand('modbench.columnHeader.addMaster', async (ctx?: ColumnHeaderContext) => {
       if (!ctx) return;
@@ -1199,7 +1237,10 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
   // crash or a lost connection reaches us only as a status change. Without this the rows keep
   // their chevrons and expanding one fetches against a backend that is gone.
   backendManager?.on('status', () => {
-    if (!backendManager?.isHealthy) composite.setSession(undefined);
+    if (!backendManager?.isHealthy) {
+      composite.setSession(undefined);
+      recordBrowser.setImmutablePlugins([]);
+    }
   });
   const pluginListView = vscode.window.createTreeView('modbench.pluginListTree', {
     treeDataProvider: composite,
@@ -1659,6 +1700,9 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
         // through the same setSession bundle as everything else the session reports.
         const loadFailures = new Map(failures.map((f) => [f.name ?? '?', f.reason ?? 'Unknown error'] as const));
         pluginsTree?.setSession(session.files, session.readOnly, session.masterIssues, loadFailures);
+        // #281: the same read-only set, to the record rows — theirs is contextValue (Remove
+        // hidden), the plugin rows' is the tooltip note (#276).
+        recordBrowserProvider?.setImmutablePlugins(session.readOnly);
       } catch (err) {
         // Leaving every row a leaf is a safe *render*, but it is not an honest one: the session
         // did load, so the tree would be telling the user editing is unavailable when it is

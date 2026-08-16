@@ -262,7 +262,8 @@ public static class ChangeEndpoints
 
         try
         {
-            return orchestrator.CreateRecord(pluginMeta.Name, req.RecordType, req.TemplateFormKey, req.Source ?? "user") switch
+            return orchestrator.CreateRecord(pluginMeta.Name, req.RecordType, req.TemplateFormKey, req.Source ?? "user",
+                req.TemplateSourcePlugin, req.TemplateSourceOrigin) switch
             {
                 CreateRecordOutcome.Success ok => Results.Ok(new MEditService.Core.Queries.CreateRecordResult(ok.FormKey, ok.GroupId)),
                 CreateRecordOutcome.InvalidReferences inv => Results.UnprocessableEntity(inv.Errors),
@@ -384,10 +385,16 @@ public record PatchRecordRequest(
     string? Description,
     string? ChangeType = null);
 
+// #281: the template-source pair follows the same contract as CopyRecordRequest's source pair —
+// the template is read off that copy's own version of the record, not the winner. RecordType is
+// optional when a template is given (derived from the template record server-side; the Plugins
+// tree's record row knows only its FormKey).
 public record CreateRecordRequest(
-    string RecordType,
+    string? RecordType,
     string? TemplateFormKey,
-    string? Source);
+    string? Source,
+    string? TemplateSourcePlugin = null,
+    string? TemplateSourceOrigin = null);
 
 public record CreatePlacedRecordRequest(
     string RecordType,
