@@ -417,7 +417,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // codec (conditionCodec == null) simply skips no extra fields here.
     //
     // #260: same rule for the virtual-machine-adapter property — it's already surfaced by
-    // the dedicated Scripts (VMAD) section (HasVmad below, RecordQueryService.GetVmad), so
+    // the dedicated Scripts (VMAD) section (HasVmad, set in BuildSchema above since #263 split
+    // this filtering out into its own ReflectColumns; RecordQueryService.GetVmad), so
     // reflecting it again here would duplicate it as an opaque struct column. Type-scoped to
     // match the section it defers to: HasVmad only renders for a getterType the interface is
     // assignable to, so the exclusion only fires there too — a type that doesn't implement
@@ -475,10 +476,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // why that matters (AC: a hypothetical third subclass, or another game's own signature, must
     // be handled with no code change here).
     //
-    //   - not present yet on any sibling seen so far (no example in the current FO4 assembly —
-    //     GMST/GLOB/DMGT/OMOD's siblings all declare *something* under every name their winner
-    //     has — but a hypothetical sibling with a genuinely exclusive extra field must still be
-    //     handled): add it as-is, but nullable — not every sibling declares it.
+    //   - not present yet on any sibling seen so far: add it as-is, but nullable — not every
+    //     sibling declares it. Real today, not hypothetical: GlobalFloat.OutputChar (confirmed
+    //     against Global.xml) is declared only on IGlobalFloatGetter — GlobalInt/Short/Bool have
+    //     nothing under that name — so it's exactly this branch, load-bearing right now, not a
+    //     shape kept only for a future third subclass.
     //   - present already, identical shape (same DuckDbType + ApiType): leave it. This is the
     //     common case — a member declared on the shared abstract base (EditorID, Unknown, MaxRank,
     //     ...) is already reachable, and reads correctly, off *every* sibling instance via ordinary
@@ -560,15 +562,22 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         };
     }
 
-    // Cosmetic only, and shape- not signature-scoped: a widened bool leaf reads as lowercase
-    // "true"/"false" (JS-idiomatic) rather than C#'s "True"/"False". Every other widened value
-    // already stringifies the way AppendTyped's own VARCHAR branch would (Convert.ToString-style
-    // formatting via ToString()); this only intercepts bool because it's the one primitive whose
-    // default ToString() looks out of place next to it. Affects only columns that previously read
-    // null for these siblings, so it regresses nothing.
+    // Every prior VARCHAR column already held a real string; a widened scalar column is the first
+    // one to hand AppendTyped a raw boxed *numeric* value, and AppendTyped's own VARCHAR branch is
+    // a bare value.ToString() with no culture — so on any non-en-US host a widened float/int would
+    // round-trip through the current culture's separators (e.g. "3,5" under de-DE) instead of the
+    // actual value. Format explicitly with InvariantCulture here, for every IFormattable scalar
+    // (int, float, uint, ... — not just the bool case below), so the column's text is culture-
+    // stable the same way every other numeric formatting in this file already is (see e.g.
+    // GetEnumMeta's bit values). bool doesn't implement IFormattable, so it keeps its own case:
+    // lowercase "true"/"false" (JS-idiomatic) rather than C#'s "True"/"False" — cosmetic, and
+    // shape- not signature-scoped. Anything neither (e.g. an already-string value) passes through
+    // unchanged. Affects only columns that previously read null for these siblings, so it
+    // regresses nothing.
     private static object? FormatWidenedValue(object? value) => value switch
     {
         bool b => b ? "true" : "false",
+        IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
         _ => value,
     };
 

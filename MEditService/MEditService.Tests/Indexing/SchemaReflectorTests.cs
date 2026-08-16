@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using MEditService.Core.Schema;
 using Mutagen.Bethesda;
@@ -122,10 +123,42 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var data = schemas["gmst"].RecordColumns.Single(c => c.Name == "data");
 
-        Assert.Equal(42, data.Extract(i));
-        Assert.Equal(3.5f, data.Extract(f));
+        // Widened scalars format as text (FormatWidenedValue) — int/float via InvariantCulture,
+        // not the raw boxed value, so the column round-trips through AppendTyped's VARCHAR branch
+        // (a bare ToString(), see AppendTyped) the same way on every host.
+        Assert.Equal("42", data.Extract(i));
+        Assert.Equal("3.5", data.Extract(f));
         Assert.Equal("hello", data.Extract(s));
         Assert.Equal("true", data.Extract(b));
+    }
+
+    [Fact]
+    public void GetSchemas_Gmst_DataColumn_WidenedFloatFormattingIsCultureInvariant()
+    {
+        // Regression: FormatWidenedValue used to hand a raw boxed float straight through to
+        // AppendTyped's VARCHAR branch, whose value.ToString() carries no culture — the first
+        // VARCHAR column to ever hold a raw numeric rather than an already-formatted string. Under
+        // a comma-decimal culture that round-tripped 3.5 as "3,5", defeating AC1/AC2 (the ticket's
+        // whole point) on any non-en-US host. Setting CurrentCulture for the assertion is what
+        // makes this fail without the fix regardless of which machine runs it — a test that only
+        // passes on the machine that wrote it is how the original bug got through.
+        var original = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+
+            var mod = new Fallout4Mod(ModKey.FromFileName("GmstCulture263.esp"), Fallout4Release.Fallout4);
+            var f = new GameSettingFloat(mod.GetNextFormKey("fTest"), Fallout4Release.Fallout4) { EditorID = "fTest", Data = 3.5f };
+
+            var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+            var data = schemas["gmst"].RecordColumns.Single(c => c.Name == "data");
+
+            Assert.Equal("3.5", data.Extract(f));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
     }
 
     [Fact]
@@ -142,6 +175,27 @@ public class SchemaReflectorTests
 
         Assert.Equal("array", properties.ApiType);
         Assert.NotNull(properties.ElementType);
+    }
+
+    [Fact]
+    public void GetSchemas_Glob_OutputCharColumn_ExclusiveToGlobalFloat_NullOnOtherSubclasses()
+    {
+        // The "not present on every sibling" branch of MergeSiblingColumn (GlobalFloat.OutputChar,
+        // declared only on IGlobalFloatGetter — GlobalInt/Short/Bool have nothing under this name)
+        // is real today, not a hypothetical kept only for a future third subclass — confirmed
+        // against Global.xml. Extracting off a real GlobalBool instance (rather than arguing from
+        // AllowsNull alone) is what actually discharges the nullability requirement for a
+        // sibling-exclusive column.
+        var mod = new Fallout4Mod(ModKey.FromFileName("GlobOutputChar263.esp"), Fallout4Release.Fallout4);
+        var f = new GlobalFloat(mod.GetNextFormKey("TestGlobFloat"), Fallout4Release.Fallout4) { EditorID = "TestGlobFloat", Data = 1.25f, OutputChar = true };
+        var b = new GlobalBool(mod.GetNextFormKey("TestGlobBool"), Fallout4Release.Fallout4) { EditorID = "TestGlobBool", Data = true };
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var outputChar = schemas["glob"].RecordColumns.Single(c => c.Name == "output_char");
+
+        Assert.True(outputChar.AllowsNull);
+        Assert.Equal(true, outputChar.Extract(f));
+        Assert.Null(outputChar.Extract(b));
     }
 
     [Fact]
