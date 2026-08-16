@@ -204,11 +204,14 @@ Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeIte
 
 ### Toolbar
 
-- **Show hidden** — a title-bar eye/eye-closed toggle pair (`modbench.downloads.showHidden`
-  / `.hideHidden`), off by default. It's **additive, not an exclusive filter** (matching
-  MO2's own Show-hidden, `downloadmanager.cpp:102`): turning it on shows hidden rows
-  *alongside* visible ones, dimmed via `HiddenDownloadDecorationProvider`, rather than
-  switching to a hidden-only view.
+- **Show hidden** — a title-bar toggle pair (`modbench.downloads.showHidden` /
+  `.hideHidden`), off by default. The glyph names the *current state*, not the action a
+  click performs: closed eye when off (default — hidden entries not shown) and open eye
+  when on (hidden entries shown); the tooltip names the action ("Show Hidden Downloads" /
+  "Hide Hidden Downloads"). It's **additive, not an exclusive filter** (matching MO2's own
+  Show-hidden, `downloadmanager.cpp:102`): turning it on shows hidden rows *alongside*
+  visible ones, dimmed via `HiddenDownloadDecorationProvider`, rather than switching to a
+  hidden-only view.
 - **Sort by…** — a command in the view's `…` overflow menu (no icon, so it doesn't
   compete for title-bar space): a `showQuickPick` over the four sortable fields (Name,
   Status, Size, Filetime) in both directions. Default remains Filetime descending.

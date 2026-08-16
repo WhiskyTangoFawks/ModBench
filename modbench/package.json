@@ -469,13 +469,13 @@
       {
         "command": "modbench.downloads.showHidden",
         "title": "Show Hidden Downloads",
-        "icon": "$(eye)",
+        "icon": "$(eye-closed)",
         "category": "Modbench"
       },
       {
         "command": "modbench.downloads.hideHidden",
         "title": "Hide Hidden Downloads",
-        "icon": "$(eye-closed)",
+        "icon": "$(eye)",
         "category": "Modbench"
       },
       {
