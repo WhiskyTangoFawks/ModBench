@@ -111,12 +111,43 @@ describe('PendingChangeDecorationProvider', () => {
     expect(decoration?.badge).toBe('M');
   });
 
-  it('degrades to no decoration, without throwing, when the /changes fetch fails', async () => {
+  // #334 AC: "No notification/toast is raised for either failure; each is logged." No toast is
+  // ever raised by this provider (nothing here calls vscode.window.*), so the log call is the
+  // only observable proof the failure was noticed.
+  it('degrades to no decoration, without throwing, and logs the failure, when the /changes fetch fails with no prior state', async () => {
     const client = makeClient(undefined, false);
-    const provider = new PendingChangeDecorationProvider(client);
+    const log = vi.fn();
+    const provider = new PendingChangeDecorationProvider(client, log);
 
     await expect(provider.refresh()).resolves.toBeUndefined();
     expect(provider.provideFileDecoration(recordRowUri('MyPatch.esp', '001234:MyPatch.esp'))).toBeUndefined();
+    expect(log).toHaveBeenCalledOnce();
+  });
+
+  // #334 decision 1: stale-but-flagged beats confidently-empty — a failed refresh must not
+  // read as "nothing staged" when there was staged work a moment ago.
+  it('retains the last-known decorations when a subsequent /changes fetch returns non-OK', async () => {
+    const client = makeClient([change()]);
+    const provider = new PendingChangeDecorationProvider(client);
+    await provider.refresh();
+    expect(provider.provideFileDecoration(recordRowUri('MyPatch.esp', '001234:MyPatch.esp'))).toBeDefined();
+
+    client.GET.mockResolvedValue({ data: undefined, response: { ok: false, status: 500 } });
+    await provider.refresh();
+
+    expect(provider.provideFileDecoration(recordRowUri('MyPatch.esp', '001234:MyPatch.esp'))).toBeDefined();
+  });
+
+  it('retains the last-known decorations when a subsequent /changes fetch throws', async () => {
+    const client = makeClient([change()]);
+    const provider = new PendingChangeDecorationProvider(client);
+    await provider.refresh();
+    expect(provider.provideFileDecoration(recordRowUri('MyPatch.esp', '001234:MyPatch.esp'))).toBeDefined();
+
+    client.GET.mockRejectedValue(new Error('network down'));
+    await expect(provider.refresh()).resolves.toBeUndefined();
+
+    expect(provider.provideFileDecoration(recordRowUri('MyPatch.esp', '001234:MyPatch.esp'))).toBeDefined();
   });
 
   it('fires onDidChangeFileDecorations once per refresh() call', async () => {

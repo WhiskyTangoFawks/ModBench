@@ -46,19 +46,24 @@ export class PendingChangeDecorationProvider implements vscode.FileDecorationPro
   }
 
   /** Re-reads `/changes` and tells VS Code every currently-rendered decoration may have changed.
-   *  Called from every place pending-change state can change (extension.ts) — never on a timer. */
+   *  Called from every place pending-change state can change (extension.ts) — never on a timer.
+   *
+   *  #334 decision 1: a failed fetch leaves `this.changes` exactly as it was — retained, not
+   *  cleared. Stale-but-flagged beats confidently-empty: every call site here is a post-mutation
+   *  trigger, so the worst case of retaining is briefly showing pre-mutation state, while clearing
+   *  would make the user's staged work look gone exactly when the backend is unhealthy. #334
+   *  decision 2: this is why the tier is background/recoverable (inline UI + log, no toast)
+   *  rather than the silent-wrong-state tier that would otherwise apply. */
   async refresh(): Promise<void> {
     try {
       const { data, response } = await this.client.GET('/changes', {});
       if (!response.ok || !Array.isArray(data)) {
-        this.log(`[PendingChangeDecorationProvider] /changes fetch failed (${response.status})`);
-        this.changes = [];
+        this.log(`[PendingChangeDecorationProvider] /changes fetch failed (${response.status}) — retaining last-known decorations`);
       } else {
         this.changes = data.map((c) => ({ formKey: c.formKey ?? '', plugin: c.plugin ?? '', changeType: c.changeType ?? '' }));
       }
     } catch (e) {
-      this.log(`[PendingChangeDecorationProvider] refresh threw: ${e instanceof Error ? e.message : String(e)}`);
-      this.changes = [];
+      this.log(`[PendingChangeDecorationProvider] refresh threw: ${e instanceof Error ? e.message : String(e)} — retaining last-known decorations`);
     }
     this._onDidChangeFileDecorations.fire(undefined);
   }

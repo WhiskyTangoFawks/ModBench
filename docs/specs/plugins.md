@@ -499,6 +499,20 @@ plus a theme color, via `vscode.FileDecorationProvider` (`medit/PendingChangeDec
   mutation (stage, copy, create, delete, save, revert). No new endpoint; the provider performs its
   own `GET /changes` read rather than sharing the Pending Changes tree's (that one only fetches
   while its own view is visible).
+- **A failed `refresh()` retains the last-known decorations rather than clearing to empty**
+  ([#334](https://github.com/WhiskyTangoFawks/ModBench/issues/334)) — a non-OK response or a
+  thrown request leaves `this.changes` exactly as it was. Every `refresh()` call site is
+  post-mutation, so the worst case of retaining is briefly showing pre-mutation state; the worst
+  case of clearing is the user's staged work looking gone exactly when the backend is unhealthy
+  ([ADR-0026](../adr/0026-error-surfacing-policy.md), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md):
+  an absent badge must never be mistakable for "no pending changes"). Retaining state is what
+  places this at ADR-0026's background/recoverable tier (inline UI + log, no toast) instead of the
+  silent-wrong-state tier a clear-to-empty would demand. The failure is logged through the flat
+  `log` shim — today that resolves to info level (`extension.ts` wires it to `outputChannel.info`);
+  true warn-level emission is tracked with this module class's wider flat-shim releveling
+  (`modbench/CLAUDE.md` § Logging), not done here. `clear()` (the deliberate no-session reset,
+  called from `exitToLoadout()`) is unaffected — with no session, empty is a known fact, not a
+  degraded fetch.
 
 ### Selection & drag
 
