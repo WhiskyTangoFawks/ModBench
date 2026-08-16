@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { before, after, describe, it } from 'mocha';
+import { recordRowUri } from '../../medit/pendingChangeRowUri';
 
 const TEST_PORT = 15172;
 let mockBackend: http.Server;
@@ -47,6 +48,9 @@ const requestLog: string[] = [];
 // on and off and observe modbench.hasPendingChanges (via the badge, its same-signal proxy —
 // see the toggle test) react both directions, not just once.
 let pendingGroups: Array<{ id: string; operation: string; description: string | null; changeCount: number; pluginCount: number }> = [];
+// #331: GET /changes' answer — mutable per-test so a suite can stage a decoration-worthy pending
+// change and observe PendingChangeDecorationProvider react to it, and to it being cleared.
+let pendingChanges: Array<{ formKey: string; plugin: string; changeType: string }> = [];
 // #295: lets a test change what the *next* load reports without touching MOCK_PLUGINS itself —
 // simulates a plugin's decoration-worthy state (a master issue, a load failure) changing between
 // one load and a reload of the same session.
@@ -61,6 +65,7 @@ function resetMockBackend(): void {
   sessionLoaded = false;
   requestLog.length = 0;
   pendingGroups = [];
+  pendingChanges = [];
   mockPluginsOverride = null;
   loadExplicitShouldFail = false;
 }
@@ -114,9 +119,10 @@ function createMockBackend(): http.Server {
       res.end(sessionLoaded ? JSON.stringify(MOCK_RECORD_TYPES) : 'No session loaded.');
       return;
     }
-    // #273 Slice A: PendingChangesTreeProvider.getChildren() reads both on every root render —
-    // /changes only matters when a group is expanded, which this suite never does, so it always
-    // answers empty.
+    // #273 Slice A: PendingChangesTreeProvider.getChildren() reads /change-groups on every root
+    // render, and only reads /changes when a group is expanded — most of this suite never does,
+    // so pendingGroups alone answers most of it. #331: PendingChangeDecorationProvider reads
+    // /changes directly on its own refresh() call, independent of any tree render.
     if (url === '/change-groups') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(pendingGroups));
@@ -124,7 +130,7 @@ function createMockBackend(): http.Server {
     }
     if (url === '/changes') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify([]));
+      res.end(JSON.stringify(pendingChanges));
       return;
     }
     res.writeHead(404);
@@ -1127,6 +1133,73 @@ describe('Reload Session actually reloads (#295)', () => {
     fs.rmSync(brokenDir, { recursive: true, force: true });
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+  });
+});
+
+// #331 review finding: exitToLoadout() couldn't reach the decoration provider (it was a local
+// `const` inside activate(), not module-level like pluginsTree/backendManager), so a decorated
+// row kept its badge indefinitely after the session that staged it was gone — a false claim of
+// staged work in a session that no longer exists. Covers both ways exitToLoadout is reached:
+// an explicit Close mEdit, and a reload that fails partway (the same code path, a different
+// trigger — the reviewer only confirmed the close path, this pins the reload one too).
+interface PendingChangeDecorationProviderLike {
+  refresh(): Promise<void>;
+  provideFileDecoration(uri: vscode.Uri): { badge?: string } | undefined;
+}
+
+describe('Pending-change decoration does not survive exitToLoadout (#331)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  const decorations = () =>
+    (ext?.exports as { pendingChangeDecorationProvider?: PendingChangeDecorationProviderLike } | undefined)
+      ?.pendingChangeDecorationProvider;
+  const stagedUri = recordRowUri('TestMod.esp', '000001:TestMod.esp');
+  let gameDir = '';
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-exit-decoration-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '');
+    fs.rmSync(gameDir, { recursive: true, force: true });
+    resetMockBackend();
+  });
+
+  it('an explicit Close mEdit clears a decorated row, not just leaves it claiming a gone session', async () => {
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    pendingChanges = [{ formKey: '000001:TestMod.esp', plugin: 'TestMod.esp', changeType: 'field_edit' }];
+    await decorations()!.refresh();
+    assert.ok(decorations()!.provideFileDecoration(stagedUri),
+      'sanity: the row must actually be decorated before Close mEdit, or clearing it proves nothing');
+
+    await vscode.commands.executeCommand('modbench.closeMedit');
+
+    assert.strictEqual(decorations()!.provideFileDecoration(stagedUri), undefined,
+      'a session that no longer exists must not leave a row still claiming staged changes');
+  });
+
+  it('a reload that fails partway also clears a decorated row (same exitToLoadout path, a different trigger)', async () => {
+    resetMockBackend();
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    pendingChanges = [{ formKey: '000001:TestMod.esp', plugin: 'TestMod.esp', changeType: 'field_edit' }];
+    await decorations()!.refresh();
+    assert.ok(decorations()!.provideFileDecoration(stagedUri), 'sanity: decorated before the failing reload');
+
+    loadExplicitShouldFail = true;
+    await vscode.commands.executeCommand('modbench.reloadSession');
+
+    assert.strictEqual(decorations()!.provideFileDecoration(stagedUri), undefined,
+      'a reload that tears the session down without a replacement must clear the decoration too — SessionManager.LoadExplicitCore disposes the previous session unconditionally, same as an explicit close');
   });
 });
 

@@ -23,6 +23,9 @@ vi.mock('vscode', () => ({
     fire(e?: unknown) { this.handlers.forEach(h => h(e)); }
   },
   ThemeIcon: class { constructor(public id: string) {} },
+  Uri: {
+    from: (opts: { scheme: string; path: string; query?: string }) => ({ scheme: opts.scheme, path: opts.path, query: opts.query ?? '' }),
+  },
 }));
 
 import {
@@ -32,6 +35,8 @@ import {
   ErrorNode, headerFormKeyFor,
 } from '../PluginTreeProvider';
 import type { PluginTreeNode } from '../PluginTreeProvider';
+import { parseRowIdentity } from '../pendingChangeRowUri';
+import type * as vscodeTypes from 'vscode';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -887,5 +892,50 @@ describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific copy
     const children = await provider.getPluginChildren('Plugin0.esp');
 
     expect(children.some(c => c instanceof WorldspacesNode)).toBe(true);
+  });
+});
+
+// #331: every formKey-addressable Plugins-tree row gets a stable pending-change identity URI —
+// not just the flat record list. Undecorated must never be mistakable for "no pending changes"
+// once decoration exists at all (ADR-0035), so this covers every node type that carries a
+// formKey, in one parameterized table rather than one near-identical test per type.
+describe('PluginTreeProvider — pending-change resourceUri (#331)', () => {
+  const cases: { name: string; formKey: string; build: (origin?: string) => vscodeTypes.TreeItem }[] = [
+    {
+      name: 'RecordNode',
+      formKey: 'Fallout4.esm:000001',
+      build: (origin) => new RecordNode({ formKey: 'Fallout4.esm:000001', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true, editorId: null }, origin),
+    },
+    {
+      name: 'WorldspaceNode',
+      formKey: 'Fallout4.esm:000002',
+      build: (origin) => new WorldspaceNode('Fallout4.esm', { formKey: 'Fallout4.esm:000002', editorId: null }, origin),
+    },
+    {
+      name: 'CellNode',
+      formKey: 'Fallout4.esm:000003',
+      build: (origin) => new CellNode('Fallout4.esm', { formKey: 'Fallout4.esm:000003', editorId: null, cellX: null, cellY: null }, origin),
+    },
+    {
+      name: 'PlacedNode',
+      formKey: 'Fallout4.esm:000004',
+      build: (origin) => new PlacedNode('Fallout4.esm', { formKey: 'Fallout4.esm:000004', editorId: null, baseFormKey: null, recordType: 'refr' }, origin),
+    },
+  ];
+
+  it.each(cases)('$name carries a resourceUri identifying (plugin, formKey)', ({ formKey, build }) => {
+    const node = build();
+
+    expect(parseRowIdentity(node.resourceUri as never)).toEqual({
+      kind: 'record', plugin: 'Fallout4.esm', formKey, origin: undefined,
+    });
+  });
+
+  it('carries the row\'s own origin through, for a shadowed-copy row (RecordNode, representative of all four)', () => {
+    const node = new RecordNode({ formKey: 'Foo.esp:000001', plugin: 'Foo.esp', loadOrderIndex: 0, isWinner: false, editorId: null }, 'SomeMod');
+
+    expect(parseRowIdentity(node.resourceUri as never)).toEqual({
+      kind: 'record', plugin: 'Foo.esp', formKey: 'Foo.esp:000001', origin: 'SomeMod',
+    });
   });
 });

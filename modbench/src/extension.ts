@@ -11,6 +11,8 @@ import { SessionController } from './medit/SessionController';
 import { reloadSession } from './medit/reloadSession';
 import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
 import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type PendingTreeNode } from './medit/PendingChangesTreeProvider';
+import { PendingChangeDecorationProvider } from './medit/PendingChangeDecorationProvider';
+import { pluginRowUri } from './medit/pendingChangeRowUri';
 import {
   ReferencedByTreeProvider, ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode,
 } from './medit/ReferencedByTreeProvider';
@@ -67,6 +69,10 @@ let pluginsTree: PluginsTreeComposite<PluginListNode, PluginTreeNode> | undefine
 // pluginsTree directly above — the session starting/stopping is what tells its record rows which
 // plugins are immutable (Remove hidden via contextValue), through the same choke points.
 let recordBrowserProvider: PluginTreeProvider | undefined;
+// #331: module level for the same reason as pluginsTree/recordBrowserProvider above —
+// exitToLoadout (a module-level function, called from several failure paths too) has to be able
+// to clear it, and a local `const` inside activate() is structurally unreachable from there.
+let pendingChangeDecorationProvider: PendingChangeDecorationProvider | undefined;
 // #295: `enterEditing` itself, built once inside `registerLoadoutView`. Module level for the
 // same reason as the above — not a registration-order race (registerLoadoutSurfaces, which
 // calls registerLoadoutView, already runs before registerEditorCommands registers
@@ -145,6 +151,9 @@ function exitToLoadout(): void {
   // expanded into a backend that is on its way down. #281: the immutable set goes with it.
   pluginsTree?.setSession(undefined);
   recordBrowserProvider?.setImmutablePlugins([]);
+  // #331: a direct reset, not refresh() — see PendingChangeDecorationProvider.clear()'s own
+  // comment for why a live re-fetch here would race backendManager.stop() below.
+  pendingChangeDecorationProvider?.clear();
   backendManager?.stop();
 }
 
@@ -252,6 +261,7 @@ export function activate(context: vscode.ExtensionContext) {
   recordBrowserProvider = treeProvider;
   const changeGroupTreeProvider = new PendingChangesTreeProvider(
     client, log, makePendingStateHandler(() => changeGroupTreeView));
+  pendingChangeDecorationProvider = new PendingChangeDecorationProvider(client, log); // #331 — module-level, see its declaration
   const openPanels = new Map<string, vscode.WebviewPanel>();
   const recordPanels = new Set<vscode.WebviewPanel>();
   // #282: the Referenced By view's input — which record panel is active and what FormKey it
@@ -269,7 +279,7 @@ export function activate(context: vscode.ExtensionContext) {
     repository,
     log,
     refreshTree: () => treeProvider.refresh(),
-    refreshGroupTree: () => changeGroupTreeProvider.refresh(),
+    refreshGroupTree: () => { changeGroupTreeProvider.refresh(); void pendingChangeDecorationProvider?.refresh(); }, // #331: one call site for both
     setStatusText: (t) => { statusBarItem.text = t; },
     showWarning: (msg) => { void vscode.window.showWarningMessage(msg); },
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
@@ -283,15 +293,16 @@ export function activate(context: vscode.ExtensionContext) {
     showCollapseAll: true,
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
-  const { modListProvider, downloadsProvider, pluginListProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, changeGroupTreeProvider, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository) });
+  const { modListProvider, downloadsProvider, pluginListProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, changeGroupTreeProvider, pendingChangeDecorationProvider, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository) });
 
   context.subscriptions.push(
     changeGroupTreeView,
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
+    vscode.window.registerFileDecorationProvider(pendingChangeDecorationProvider), // #331
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, changeGroupTreeProvider, changeGroupTreeView, referencedByTreeView, log, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, changeGroupTreeProvider, changeGroupTreeView, referencedByTreeView, log, outputChannel, pendingChangeDecorationProvider,
     }),
   );
 
@@ -301,13 +312,13 @@ export function activate(context: vscode.ExtensionContext) {
   statusBarItem.text = '$(plug) mEdit';
 
   // Exposed for integration tests (pinned Overwrite row #82; editing tree after launch #75;
-  // leveled output channel #198; Downloads tree #233; merged Plugins tree #270;
-  // modbench.hasPendingChanges toggles both ways #273) — unused in production. #273: treeView
-  // (the old modbench.pluginTree's own TreeView) is gone along with that view — treeProvider
-  // itself stays, since it still supplies the merged tree's children.
+  // leveled output channel #198; Downloads tree #233; merged Plugins tree #270; #273/#331
+  // toggle both ways) — unused in production. #273: treeView (the old modbench.pluginTree's own
+  // TreeView) is gone along with that view — treeProvider itself stays, since it still supplies
+  // the merged tree's children.
   return {
     modListProvider, downloadsProvider, pluginListProvider, pluginsTree, treeProvider,
-    changeGroupTreeProvider, changeGroupTreeView, outputChannel,
+    changeGroupTreeProvider, changeGroupTreeView, pendingChangeDecorationProvider, outputChannel,
   };
 }
 
@@ -337,6 +348,9 @@ interface EditorCommandDeps {
   referencedByTreeView: vscode.TreeView<ReferencedByTreeNode>;
   log: (msg: string) => void;
   outputChannel: vscode.LogOutputChannel;
+  // #331: refreshed alongside changeGroupTreeProvider whenever the webview reports a pending-
+  // change mutation (PENDING_CHANGED) — see registerRecordViewCommands' `reveal.decorations`.
+  pendingChangeDecorationProvider: PendingChangeDecorationProvider;
 }
 
 /** Editor-side commands, grouped so no single registrar exceeds the size budget. */
@@ -355,11 +369,12 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
 function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
     context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, scriptsPath,
-    changeGroupTreeProvider, changeGroupTreeView, referencedByTreeView, log, outputChannel, repository,
+    changeGroupTreeProvider, changeGroupTreeView, referencedByTreeView, log, outputChannel, repository, pendingChangeDecorationProvider,
   } = deps;
   const reveal: RevealDeps = {
     provider: changeGroupTreeProvider, view: changeGroupTreeView, log,
     reporter: makeReporter(outputChannel, 'revealPendingChange'),
+    decorations: pendingChangeDecorationProvider, // #331: PENDING_CHANGED refreshes this the same way it refreshes the tree above
   };
   // #210/#211/#212/#225/#230: formKeyPicker/conditionFunctionPicker/revertGroupConfirm/
   // addScriptName/clipboardRead/extendedFieldEditor are left undefined here — each `reply` must
@@ -1231,6 +1246,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     // #277 / ADR-0037 AC8: lets the composite reconcile the order-aware badge with session state
     // by master name, instead of two decorations that can disagree.
     orderIssueMastersOf,
+    pendingChangeUriOf: pluginRowUri, // #331: composite's own guard keeps this off ImplicitMasterNode rows
   });
   pluginsTree = composite;
   // A backend that dies takes the session with it, and `exitToLoadout` is not on that path — a
@@ -1410,6 +1426,10 @@ interface LoadoutViewDeps {
   revealLog: () => void;
   controller: SessionController;
   changeGroupTreeProvider: PendingChangesTreeProvider;
+  // #331: refreshed alongside changeGroupTreeProvider once a session finishes loading (a fresh
+  // session starts with no pending changes, but any decoration left over from the previous one
+  // must clear) — see makeEnterEditing.
+  pendingChangeDecorationProvider: PendingChangeDecorationProvider;
   /** #270: the record browser the Plugins tree's rows expand into. Threaded from `activate`,
    *  which owns the single instance both plugin trees read through. */
   recordBrowser: PluginTreeProvider;
@@ -1422,7 +1442,7 @@ interface LoadoutViewDeps {
  *  tests), or undefined with a neutral log when no workspace is open, or when the
  *  workspace isn't an MO2 instance (#192 — the Mods view shows welcome content instead). */
 function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void } | undefined {
-  const { context, log, outputChannel, revealLog, controller, changeGroupTreeProvider, recordBrowser, sessionPluginFiles } = deps;
+  const { context, log, outputChannel, revealLog, controller, changeGroupTreeProvider, pendingChangeDecorationProvider, recordBrowser, sessionPluginFiles } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
     outputChannel.info('[extension] No workspace folder open — Mod List view not registered.');
@@ -1494,7 +1514,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
             `arrangement (the scripted installer is coming later).`,
         );
     };
-    const enterEditing = makeEnterEditing({ instanceRoot, modlistSource, controller, changeGroupTreeProvider, outputChannel, revealLog, sessionPluginFiles });
+    const enterEditing = makeEnterEditing({ instanceRoot, modlistSource, controller, changeGroupTreeProvider, pendingChangeDecorationProvider, outputChannel, revealLog, sessionPluginFiles });
     // #295: the one assignment — see the module-level declaration's comment for why this can't
     // be threaded as a parameter instead.
     enterEditingFn = enterEditing;
@@ -1633,6 +1653,9 @@ interface EnterEditingDeps {
   modlistSource: Mo2ModlistSource;
   controller: SessionController;
   changeGroupTreeProvider: PendingChangesTreeProvider;
+  // #331: cleared alongside changeGroupTreeProvider once the session load completes — see the
+  // call site below.
+  pendingChangeDecorationProvider: PendingChangeDecorationProvider;
   outputChannel: vscode.LogOutputChannel;
   /** #270: the plugin files the loaded session holds — read once the session is up, to decide
    *  which rows can expand. */
@@ -1646,7 +1669,10 @@ type LaunchProgress = vscode.Progress<{ message?: string }>;
  *  crash-restart reload path. `progress` (when launched by the user) is updated
  *  with the plugin count during the long, blocking index step. */
 function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) => Promise<void> {
-  const { instanceRoot, modlistSource, controller, changeGroupTreeProvider, outputChannel, revealLog, sessionPluginFiles } = deps;
+  const {
+    instanceRoot, modlistSource, controller, changeGroupTreeProvider, pendingChangeDecorationProvider,
+    outputChannel, revealLog, sessionPluginFiles,
+  } = deps;
   return async (progress?: LaunchProgress): Promise<void> => {
       revealLog(); // the load can take a while; let the user watch the step log
       const gd = await resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths());
@@ -1691,6 +1717,9 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
       }
       await controller.syncFilterState();
       changeGroupTreeProvider.refresh();
+      // #331: a fresh session starts with no pending changes, but a decoration left over from a
+      // previous one (or a crash-restart reload mid-edit) must not survive into this one.
+      void pendingChangeDecorationProvider.refresh();
       // #270 / ADR-0035: rows gain chevrons here and nowhere else — this is the moment records
       // become queryable, the same moment #75 gates the editing tree's first fetch on.
       try {
