@@ -46,6 +46,22 @@ that an alternative seems nicer, cleaner, or more modern. xEdit has 25 years of 
 this exact problem domain, and essentially every mEdit user arrives already fluent in it; familiarity
 is worth more than local improvement.
 
+### Baseline, not ceiling *(amendment, 2026-08-16)*
+
+The rule governs **replacing** xEdit's answers, not **adding** what xEdit never had. xEdit is the
+base experience mEdit builds on top of; an opt-in power-user addition with no xEdit counterpart
+needs no platform-limitation justification, provided:
+
+- the default experience remains xEdit's — the addition is reached by an explicit, opt-in
+  affordance, never a changed default;
+- no existing xEdit gesture or meaning is redefined to reach or operate it;
+- where the addition overlaps ground xEdit does cover, xEdit's vocabulary and semantics carry into
+  it.
+
+First instance: the transposed record view
+([#341](https://github.com/WhiskyTangoFawks/ModBench/issues/341)) — an optional plugins-as-rows
+orientation on top of the default plugins-as-columns grid.
+
 ### The gesture model
 
 | Gesture | Meaning |

@@ -55,7 +55,9 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   `xeMainForm.dfm` (tree options) and `xEdit/EditTips.txt` (its own user-facing UX
   doc). Adopt its answer. Diverge **only** for a genuine platform limitation, never
   because an alternative seems nicer — 25 years of refinement against this exact domain,
-  and every user arrives already fluent in it, so familiarity outranks local improvement
+  and every user arrives already fluent in it, so familiarity outranks local improvement.
+  Baseline, not ceiling: opt-in power-user additions xEdit never had are fine — default
+  stays xEdit's, no xEdit gesture redefined (ADR-0034 amendment)
   ([ADR-0034](docs/adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md),
   [ADR-0019](docs/adr/0019-xedit-unified-tree-model-for-compare-grid.md)). Specifying from
   memory of xEdit instead of from xEdit is what cost #201/#204/#218 — click focuses a cell
