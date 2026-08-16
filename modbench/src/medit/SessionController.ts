@@ -31,9 +31,6 @@ export const SESSION_STATUS_POLL_INTERVAL_MS = 500;
  *  a repository return type the caller happens to see. */
 export type SessionLoadProgress = SessionStatus;
 
-/** #307: what a caller may pass to observe (and abandon) a load in progress. Deliberately plain
- *  stdlib — `AbortSignal`, not a bespoke token — so this interface still carries no VS Code
- *  types and `openapi-fetch` can forward it straight to `fetch`. */
 /** #307: how a load ended. Three outcomes, because there are three, and a caller must respond to
  *  each differently:
  *
@@ -53,6 +50,10 @@ export type SessionLoadOutcome =
   | { outcome: 'failed' }
   | { outcome: 'abandoned' };
 
+/** #307: what a caller may pass to observe (and abandon) a load in progress. Deliberately plain
+ *  stdlib — `AbortSignal`, not a bespoke token — so this interface still carries no VS Code types
+ *  and `openapi-fetch` can forward it straight to `fetch`, cancelling the request itself rather
+ *  than leaving it to notice a dead socket. */
 export interface SessionLoadOptions {
   /** Called on each poll of `GET /session/status` while the load POST is in flight. Never called
    *  after the load settles. */

@@ -7,8 +7,8 @@ import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { createApiClient, type ApiClient, type MasterIssue } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
-import { SessionController, type SessionLoadProgress } from './medit/SessionController';
-import { sessionProgressMessage } from './medit/sessionProgress';
+import { SessionController } from './medit/SessionController';
+import { makeLoadProgressHandler } from './medit/sessionProgress';
 import { reloadSession } from './medit/reloadSession';
 import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
 import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type PendingTreeNode } from './medit/PendingChangesTreeProvider';
@@ -1694,41 +1694,6 @@ function registerDownloadsView(
   };
 }
 
-/** #307 / ADR-0035: one poll of the running load, mapped onto the same session hand-off the
- *  completed load uses — chevrons for what is indexed, decorations for what has failed, and the
- *  view's own statement of what it does not yet know.
- *
- *  Mid-load the only facts that exist are which plugins are indexed and which have failed:
- *  read-only state and master issues are whole-session derivations a partial session cannot
- *  answer (the backend suppresses master issues outright while loading —
- *  `RecordQueryService.GetPlugins` gates them on `SessionState.Ready`), so they are deliberately
- *  empty here and land in one piece when the load completes. **A tick is never the last word**:
- *  the poll is stopped inside `loadExplicitSession` before it returns, so the full `setSession`
- *  always follows the final tick — otherwise those two decorations would silently vanish from a
- *  fully loaded tree. */
-function makeLoadProgressHandler(say: (message: string | undefined) => void): (status: SessionLoadProgress) => void {
-  let lastLanded = '';
-  return (status) => {
-    // AC3: the statement is refreshed on every tick regardless of the guard below, since its
-    // plugin count moves even when nothing has landed that is worth a re-render.
-    say(sessionProgressMessage(status));
-    // Re-render only when something actually landed. setSession fires a whole-tree refresh and
-    // PluginTreeProvider.getPluginChildren is uncached, so an unconditional re-render every
-    // 500ms would re-fetch record types for every expanded row — a request storm on a deep tree,
-    // for no visible change. Failures count as landing too (AC6): one can arrive without the
-    // indexed set growing at all.
-    const landed = `${status.indexedPlugins.length}:${status.failures.length}`;
-    if (landed === lastLanded) return;
-    lastLanded = landed;
-    pluginsTree?.setSession(
-      new Set(status.indexedPlugins),
-      new Set(),
-      new Map(),
-      new Map(status.failures.map((f) => [f.name, f.reason] as const)),
-    );
-  };
-}
-
 /** The completed load's whole hand-off to the tree: which plugins the session holds, which are
  *  read-only for editing (#276), each one's master issues (#277) and each one's load failure.
  *
@@ -1766,6 +1731,50 @@ async function applyLoadedSessionToTree(
   }
 }
 
+/** #307 AC7: arm this launch's cancellation, and the check every step past an await makes.
+ *
+ *  Armed **before the launch's first await**, not just before the load POST. A launch has two
+ *  phases — bring the backend up and walk the mod tree, then load — and closing the session during
+ *  the first one has to be honoured too: AC7 says "closing the session mid-load" with no
+ *  qualification by phase, and a backend spawn plus a filesystem walk is a realistic window to
+ *  land in. Armed late, `exitToLoadout`'s `abort()` found nothing to cancel, and the stale launch
+ *  ran on past the close to meet the backend it had just stopped — reporting "Backend failed to
+ *  start" for something the user deliberately did.
+ *
+ *  The controller is held locally as well as in `loadAbort`, because that module-level slot
+ *  belongs to whichever load is newest; only the closure below names *this* launch's own
+ *  cancellation. Every exit past one is silent and touches nothing — the close has already torn
+ *  the view down, so there is nothing to report and nothing to reset. Both failure modes (the
+ *  spurious toast, and repopulating a tree the user just cleared) come from continuing. */
+function armLoadAbort(outputChannel: vscode.LogOutputChannel): { signal: AbortSignal; abandoned: () => boolean } {
+  const abort = new AbortController();
+  loadAbort = abort;
+  return {
+    signal: abort.signal,
+    abandoned: () => {
+      if (!abort.signal.aborted) return false;
+      outputChannel.info('[extension] the editing session launch was abandoned before it loaded; leaving the closed view alone');
+      return true;
+    },
+  };
+}
+
+/** #307: the progressive-load tick handler, wired to this extension's own surfaces. Whether a
+ *  tick is worth applying is decided in `medit/sessionProgress.ts` and unit-tested there; this
+ *  supplies the hand-off itself, the only part that needs VS Code types. The empty read-only and
+ *  master-issue arguments mid-load are deliberate — see `makeLoadProgressHandler`. */
+function makeTreeProgressHandler(): ReturnType<typeof makeLoadProgressHandler> {
+  return makeLoadProgressHandler({
+    say,
+    applySession: (indexedPlugins, failures) => pluginsTree?.setSession(
+      new Set(indexedPlugins),
+      new Set(),
+      new Map(),
+      new Map(failures.map((f) => [f.name, f.reason] as const)),
+    ),
+  });
+}
+
 interface EnterEditingDeps {
   instanceRoot: string;
   modlistSource: Mo2ModlistSource;
@@ -1794,9 +1803,11 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
     outputChannel, revealLog, sessionPluginFiles,
   } = deps;
   const enter = async (): Promise<void> => {
-      const onLoadProgress = makeLoadProgressHandler(say);
+      const { signal, abandoned } = armLoadAbort(outputChannel);
+      const onLoadProgress = makeTreeProgressHandler();
       revealLog(); // the load can take a while; let the user watch the step log
       const gd = await resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths());
+      if (abandoned()) return;
       if (!gd) {
         exitToLoadout(); // don't strand the UI in an empty editing view
         void vscode.window.showErrorMessage(
@@ -1814,6 +1825,9 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
           buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg)),
         ),
       ]);
+      // Before the health gate, deliberately: a close stops the backend, so an abandoned launch
+      // would otherwise fail this check and report the stop it asked for as a startup failure.
+      if (abandoned()) return;
       if (!backendManager!.isHealthy) {
         exitToLoadout(); // tear down the half-started backend and reset the view
         void vscode.window.showErrorMessage('Modbench: Backend failed to start — see the Modbench output for details.');
@@ -1824,9 +1838,8 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       // this states the total for the window before the first poll answers.
       say(`Indexing ${plugins.length} plugins… Conflict information is not yet computed.`);
       outputChannel.info(`[extension] backend healthy; loading session (${plugins.length} plugins)`);
-      loadAbort = new AbortController();
       const result = await controller.loadExplicitSession(
-        plugins, gd.dataFolder, undefined, { onProgress: onLoadProgress, signal: loadAbort.signal });
+        plugins, gd.dataFolder, undefined, { onProgress: onLoadProgress, signal });
       // #307 AC7: a load that was deliberately abandoned — superseded by a newer load, or
       // aborted because the user closed the session — leaves *silently*. Nothing to surface
       // (loadExplicitSession only logged it) and, the bug this fixes, nothing to tear down: the

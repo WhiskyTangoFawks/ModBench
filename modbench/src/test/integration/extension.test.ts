@@ -79,6 +79,12 @@ let sessionStatus: MockSessionStatus = { ...NO_SESSION_STATUS };
 // what the tree does *during* that window. A mock that answers instantly cannot express it.
 let releaseLoadExplicit: (() => void) | null = null;
 let holdLoadExplicit = false;
+// #307 AC7: the same trick one step earlier in the launch. `BackendManager.start()` gates on
+// GET /health, so holding it parks a launch in its *first* phase — before the load POST exists at
+// all — which is the window a mid-load close has to survive too. One-shot: releasing clears the
+// hold, so the connect loop's next attempt answers normally.
+let releaseHealth: (() => void) | null = null;
+let holdHealth = false;
 
 function resetMockBackend(): void {
   sessionLoaded = false;
@@ -91,6 +97,9 @@ function resetMockBackend(): void {
   holdLoadExplicit = false;
   releaseLoadExplicit?.();
   releaseLoadExplicit = null;
+  holdHealth = false;
+  releaseHealth?.();
+  releaseHealth = null;
 }
 
 /** #307: report the load as having indexed `names` so far. `conflictsComputed` stays false until
@@ -111,8 +120,10 @@ function createMockBackend(): http.Server {
     const method = req.method ?? 'GET';
     requestLog.push(`${method} ${url}`);
     if (url === '/health') {
-      res.writeHead(200);
-      res.end();
+      const answer = () => { res.writeHead(200); res.end(); };
+      if (!holdHealth) return answer();
+      holdHealth = false; // one-shot — only the launch's first probe is parked
+      releaseHealth = () => { releaseHealth = null; answer(); };
       return;
     }
     if (method === 'POST' && url === '/session/load-explicit') {
@@ -1430,6 +1441,40 @@ describe('Progressive load states its own incompleteness (#307)', () => {
       undefined,
       'the view must stop claiming a load that is no longer running',
     );
+  });
+
+  // AC7, the *earlier* window. A launch has two phases: bring the backend up and walk the mod
+  // tree, then load. The test above closes during the second. This one closes during the first —
+  // before the load POST exists at all — because AC7 says "closing the session mid-load" with no
+  // qualification by phase, and backend spawn plus a filesystem walk is a realistic window to
+  // land in. Without the abort being armed before the first await, the stale launch runs on past
+  // the close, finds the backend it just stopped, and reports "Backend failed to start" — an
+  // error raised for something the user deliberately did.
+  it('raises no error when the session is closed before the backend is even up', async () => {
+    holdHealth = true;
+    const errors: string[] = [];
+    const realShowError = vscode.window.showErrorMessage;
+    // The test and the extension share one vscode module instance in the extension host, so this
+    // is the only way to observe a toast — there is no API to read notifications back.
+    (vscode.window as { showErrorMessage: unknown }).showErrorMessage =
+      (message: string) => { errors.push(message); return Promise.resolve(undefined); };
+    try {
+      const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
+      await waitFor('the launch to reach the backend health probe', () =>
+        requestLog.some((l) => l === 'GET /health'));
+
+      await vscode.commands.executeCommand('modbench.closeMedit');
+      releaseHealth?.();
+      await launch;
+
+      assert.deepStrictEqual(errors, [], 'a deliberately abandoned launch must raise no error');
+      assert.ok(
+        !requestLog.some((l) => l === 'POST /session/load-explicit'),
+        'an abandoned launch must not go on to load a session the user has closed',
+      );
+    } finally {
+      (vscode.window as { showErrorMessage: unknown }).showErrorMessage = realShowError;
+    }
   });
 
   // AC9: master issues are derived from the whole session, so mid-load they would flag masters

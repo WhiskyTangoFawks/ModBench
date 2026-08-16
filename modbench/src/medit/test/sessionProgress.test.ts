@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { sessionProgressMessage } from '../sessionProgress';
+import { describe, it, expect, vi } from 'vitest';
+import { sessionProgressMessage, makeLoadProgressHandler } from '../sessionProgress';
 
 // #307 / ADR-0035 AC3/AC5. The trap: an absent conflict badge is indistinguishable from "no
 // conflict", so while the winner sweep is outstanding the view has to *say* so in as many words.
@@ -40,5 +40,64 @@ describe('sessionProgressMessage', () => {
 
     expect(message).not.toContain('0');
     expect(message).toMatch(/conflict information is not yet computed/i);
+  });
+});
+
+// #307: one poll tick, translated into what the tree and the view should do about it. The guard
+// this pins is not cosmetic: applying a tick re-renders the whole tree, and
+// PluginTreeProvider.getPluginChildren is uncached, so re-applying an unchanged tick every 500ms
+// would re-fetch record types for every expanded row — a request storm on a deep tree, for no
+// visible change.
+describe('makeLoadProgressHandler', () => {
+  const status = (over: Partial<Parameters<typeof sessionProgressMessage>[0]> = {}) =>
+    ({ totalPlugins: 3, indexedPlugins: [], conflictsComputed: false, failures: [], ...over });
+
+  const handler = () => {
+    const applySession = vi.fn();
+    const say = vi.fn();
+    return { applySession, say, onProgress: makeLoadProgressHandler({ say, applySession }) };
+  };
+
+  it('applies a tick that landed a new plugin', () => {
+    const { applySession, onProgress } = handler();
+
+    onProgress(status({ indexedPlugins: ['A.esp'] }));
+
+    expect(applySession).toHaveBeenCalledWith(['A.esp'], []);
+  });
+
+  it('does not re-apply a tick that landed nothing new', () => {
+    const { applySession, onProgress } = handler();
+
+    onProgress(status({ indexedPlugins: ['A.esp'] }));
+    onProgress(status({ indexedPlugins: ['A.esp'] }));
+    onProgress(status({ indexedPlugins: ['A.esp'] }));
+
+    expect(applySession).toHaveBeenCalledTimes(1);
+  });
+
+  // AC6: a failure can arrive without the indexed set growing at all — a plugin that failed to
+  // index is never added to it. Counting only plugins would leave that row undecorated until the
+  // next plugin happened to land, or until the load finished.
+  it('applies a tick that landed a failure even though no new plugin was indexed', () => {
+    const { applySession, onProgress } = handler();
+
+    onProgress(status({ indexedPlugins: ['A.esp'] }));
+    onProgress(status({ indexedPlugins: ['A.esp'], failures: [{ name: 'B.esp', reason: 'RACE parse' }] }));
+
+    expect(applySession).toHaveBeenCalledTimes(2);
+    expect(applySession).toHaveBeenLastCalledWith(['A.esp'], [{ name: 'B.esp', reason: 'RACE parse' }]);
+  });
+
+  // The statement is not behind the guard: its plugin count moves on ticks that land nothing
+  // worth a re-render, and a stale count reads as a stalled load.
+  it('refreshes the view\'s statement on every tick, including ones it does not apply', () => {
+    const { say, onProgress } = handler();
+
+    onProgress(status({ indexedPlugins: ['A.esp'] }));
+    onProgress(status({ indexedPlugins: ['A.esp'] }));
+
+    expect(say).toHaveBeenCalledTimes(2);
+    expect(say).toHaveBeenLastCalledWith(expect.stringContaining('not yet computed'));
   });
 });
