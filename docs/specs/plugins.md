@@ -295,10 +295,13 @@ without saying what is not yet known would make that worse, not better.
   derivation: mid-load they would flag masters that simply have not been opened yet. The backend
   suppresses them outright while loading (`RecordQueryService.GetPlugins` gates on
   `SessionState.Ready`) and the frontend never asks for them mid-load.
-- **Closing the session mid-load is a deliberate abandonment, not a failure.** The polling stops,
-  chevrons/message/progress clear, and nothing is reported as broken. Same for a load superseded
-  by another load, which the backend answers `409` — the newer load owns the session, so the
-  abandoned one must not tear anything down.
+- **Closing the session is a deliberate abandonment, not a failure — at any point in the launch.**
+  The polling stops, chevrons/message/progress clear, and nothing is reported as broken. This
+  holds for the whole launch, not just the load: a close during the backend spawn and mod-tree
+  walk must not report "Backend failed to start" for the stop the user just asked for, so the
+  cancellation is armed before the launch's first await and checked after each one. Same for a
+  load superseded by another load, which the backend answers `409` — the newer load owns the
+  session, so the abandoned one must not tear anything down.
 - **Mechanism: poll, don't stream.** Every call goes through the generated `openapi-fetch`
   client, which has no streaming path, and the load POST stays blocking. So `GET /session/status`
   ([#274](https://github.com/WhiskyTangoFawks/ModBench/issues/274)) is polled alongside the still
