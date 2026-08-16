@@ -1,4 +1,5 @@
 using System.Text.Json;
+using DuckDB.NET.Data;
 using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -640,6 +641,13 @@ public sealed class EditOrchestratorTests
         return (orchestrator, manager, changes);
     }
 
+    // #312: DuckDbPendingChangeService's connection is swapped to the session's own
+    // (repository.Connection) inside manager.Load() — a connection captured before Load() is stale
+    // once it runs. Read pending_form_references off manager.Repository's connection instead,
+    // fetched after Load(), the same live connection changes itself is writing through.
+    private static DuckDBConnection RequireConnection(SessionManager manager) =>
+        ((IRecordRepository)manager.Repository!).Connection;
+
     [Fact]
     public void CopyRecordTo_ScalarFormKeyField_StagesFormReference()
     {
@@ -658,7 +666,7 @@ public sealed class EditOrchestratorTests
             .Build();
         using (data)
         {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
             using (manager)
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -666,8 +674,8 @@ public sealed class EditOrchestratorTests
                 var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user");
 
                 Assert.IsType<StageEditResult.Staged>(result);
-                var drained = changes.DrainForPlugin("Target.esp");
-                var raceRef = drained.FormRefsByFormKey[npcKey.ToString()]
+                var formRefs = DuckDbTestFactory.ReadFormRefs(RequireConnection(manager), "Target.esp");
+                var raceRef = formRefs[npcKey.ToString()]
                     .FirstOrDefault(r => r.FieldPath == "race");
                 Assert.NotNull(raceRef);
                 Assert.Equal(raceKey.ToString(), raceRef.TargetFormKey);
@@ -698,7 +706,7 @@ public sealed class EditOrchestratorTests
             .Build();
         using (data)
         {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
             using (manager)
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -706,14 +714,16 @@ public sealed class EditOrchestratorTests
                 var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user");
 
                 Assert.IsType<StageEditResult.Staged>(result);
-                var drained = changes.DrainForPlugin("Target.esp");
-                var refs = drained.FormRefsByFormKey[npcKey.ToString()]
+                var formRefs = DuckDbTestFactory.ReadFormRefs(RequireConnection(manager), "Target.esp");
+                var refs = formRefs[npcKey.ToString()]
                     .Where(r => r.FieldPath.StartsWith("keywords", StringComparison.Ordinal))
                     .OrderBy(r => r.FieldPath).ToList();
                 Assert.Equal(2, refs.Count);
                 Assert.Equal("keywords[0]", refs[0].FieldPath);
+                Assert.Equal("keywords", refs[0].StagedField);
                 Assert.Equal(kw1Key.ToString(), refs[0].TargetFormKey);
                 Assert.Equal("keywords[1]", refs[1].FieldPath);
+                Assert.Equal("keywords", refs[1].StagedField);
                 Assert.Equal(kw2Key.ToString(), refs[1].TargetFormKey);
             }
         }
@@ -736,7 +746,7 @@ public sealed class EditOrchestratorTests
             .Build();
         using (data)
         {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
             using (manager)
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -744,8 +754,8 @@ public sealed class EditOrchestratorTests
                 var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user");
 
                 Assert.IsType<StageEditResult.Staged>(result);
-                var drained = changes.DrainForPlugin("Target.esp");
-                var factionRef = drained.FormRefsByFormKey[npcKey.ToString()]
+                var formRefs = DuckDbTestFactory.ReadFormRefs(RequireConnection(manager), "Target.esp");
+                var factionRef = formRefs[npcKey.ToString()]
                     .FirstOrDefault(r => r.FieldPath == "factions[0].faction");
                 Assert.NotNull(factionRef);
                 Assert.Equal(factionKey.ToString(), factionRef.TargetFormKey);
@@ -767,7 +777,7 @@ public sealed class EditOrchestratorTests
             .Build();
         using (data)
         {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
             using (manager)
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -777,8 +787,8 @@ public sealed class EditOrchestratorTests
                 var result = orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
 
                 Assert.IsType<StageEditResult.Staged>(result);
-                var drained = changes.DrainForPlugin("Source.esp");
-                var kwRefs = drained.FormRefsByFormKey[npcKey.ToString()]
+                var formRefs = DuckDbTestFactory.ReadFormRefs(RequireConnection(manager), "Source.esp");
+                var kwRefs = formRefs[npcKey.ToString()]
                     .Where(r => r.FieldPath.StartsWith("keywords", StringComparison.Ordinal))
                     .ToList();
                 Assert.Single(kwRefs);
@@ -804,7 +814,7 @@ public sealed class EditOrchestratorTests
             .Build();
         using (data)
         {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            var (orchestrator, manager, _) = MakeOrchestratorWithChanges();
             using (manager)
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -814,8 +824,8 @@ public sealed class EditOrchestratorTests
                 var result = orchestrator.StageEdit(npcKey.ToString(), "Source.esp", fields, "user", null);
 
                 Assert.IsType<StageEditResult.Staged>(result);
-                var drained = changes.DrainForPlugin("Source.esp");
-                var refs = drained.FormRefsByFormKey[npcKey.ToString()]
+                var formRefs = DuckDbTestFactory.ReadFormRefs(RequireConnection(manager), "Source.esp");
+                var refs = formRefs[npcKey.ToString()]
                     .Where(r => r.FieldPath.StartsWith("factions", StringComparison.Ordinal))
                     .OrderBy(r => r.FieldPath).ToList();
                 Assert.Equal(2, refs.Count);

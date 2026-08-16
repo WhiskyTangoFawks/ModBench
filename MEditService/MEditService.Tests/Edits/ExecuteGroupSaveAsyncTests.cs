@@ -109,7 +109,7 @@ public sealed class ExecuteGroupSaveAsyncTests
     [Fact]
     public async Task WriteThrows_FormRefsRestored()
     {
-        var svc = DuckDbTestFactory.MakePendingChangeService();
+        var (svc, conn) = DuckDbTestFactory.MakePendingChangeServiceWithConnection();
         var formRefs = new[] { new PendingFormRef("aggression", "aggression", "000002:Ref.esp") };
         var staged = svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
@@ -121,8 +121,8 @@ public sealed class ExecuteGroupSaveAsyncTests
             svc.ExecuteGroupSaveAsync(staged[0].Id, _ =>
                 Task.FromException<IReadOnlyList<(string Plugin, PreparedPluginSave Prepared)>>(new IOException("disk full"))));
 
-        var drained = svc.DrainForPlugin("A.esp");
-        Assert.NotEmpty(drained.FormRefsByFormKey["000001:Test.esp"]);
+        var storedFormRefs = DuckDbTestFactory.ReadFormRefs(conn, "A.esp");
+        Assert.NotEmpty(storedFormRefs["000001:Test.esp"]);
     }
 
     // A6
@@ -185,7 +185,7 @@ public sealed class ExecuteGroupSaveAsyncTests
     [Fact]
     public async Task WriteSucceeds_FormRefsDeleted()
     {
-        var svc = DuckDbTestFactory.MakePendingChangeService();
+        var (svc, conn) = DuckDbTestFactory.MakePendingChangeServiceWithConnection();
         var formRefs = new[] { new PendingFormRef("aggression", "aggression", "000002:Ref.esp") };
         var staged = svc.Upsert(new PendingChangeUpsert("000001:Test.esp", "A.esp", "npc_",
             new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
@@ -195,8 +195,8 @@ public sealed class ExecuteGroupSaveAsyncTests
 
         await svc.ExecuteGroupSaveAsync(staged[0].Id, _ => Task.FromResult(NoResults()));
 
-        var drained = svc.DrainForPlugin("A.esp");
-        Assert.Empty(drained.FormRefsByFormKey["000001:Test.esp"]);
+        var storedFormRefs = DuckDbTestFactory.ReadFormRefs(conn, "A.esp");
+        Assert.Empty(storedFormRefs["000001:Test.esp"]);
     }
 
     // A10 — the exact scenario #35 describes: the file is already moved (first half

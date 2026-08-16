@@ -28,6 +28,21 @@ public sealed class EditOrchestratorConditionTests
         return (orchestrator, manager, changes);
     }
 
+    // #312: only the tests below that read pending_form_references need the connection —
+    // MakeOrchestrator() above stays as every other test here uses it.
+    private static (EditOrchestrator orchestrator, SessionManager manager, DuckDbPendingChangeService changes, DuckDB.NET.Data.DuckDBConnection connection)
+        MakeOrchestratorWithConnection()
+    {
+        var reflector = SharedSchemaReflector.Instance;
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        var (changes, connection) = DuckDbTestFactory.MakePendingChangeServiceWithConnection();
+        var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
+        var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector);
+        return (orchestrator, manager, changes, connection);
+    }
+
     private static (FormKey cobjFk, PluginFixtureData data) BuildFixture(string prefix, out string dataFolder, out string pluginsTxt)
     {
         FormKey cobjFk = default;
@@ -95,7 +110,7 @@ public sealed class EditOrchestratorConditionTests
             })
             .Build();
 
-        var (orchestrator, manager, changes) = MakeOrchestrator();
+        var (orchestrator, manager, _, connection) = MakeOrchestratorWithConnection();
         using (manager)
         {
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -107,8 +122,8 @@ public sealed class EditOrchestratorConditionTests
             var result = orchestrator.StageEdit(cobjFk.ToString(), "TestPlugin.esp", fields, "user", null);
 
             Assert.IsType<StageEditResult.Staged>(result);
-            var drained = changes.DrainForPlugin("TestPlugin.esp");
-            var condRef = drained.FormRefsByFormKey[cobjFk.ToString()]
+            var formRefs = DuckDbTestFactory.ReadFormRefs(connection, "TestPlugin.esp");
+            var condRef = formRefs[cobjFk.ToString()]
                 .FirstOrDefault(r => r.FieldPath.Equals(@"CTDA\Conditions\0\Parameter\0", StringComparison.Ordinal));
             Assert.NotNull(condRef);
             Assert.Equal(questFk.ToString(), condRef.TargetFormKey);
@@ -201,7 +216,7 @@ public sealed class EditOrchestratorConditionTests
             })
             .Build();
 
-        var (orchestrator, manager, changes) = MakeOrchestrator();
+        var (orchestrator, manager, _, connection) = MakeOrchestratorWithConnection();
         using (manager)
         {
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -217,8 +232,8 @@ public sealed class EditOrchestratorConditionTests
             var result = orchestrator.StageEdit(cobjFk.ToString(), "TestPlugin.esp", fields, "user", null);
 
             Assert.IsType<StageEditResult.Staged>(result);
-            var drained = changes.DrainForPlugin("TestPlugin.esp");
-            var condRef = drained.FormRefsByFormKey[cobjFk.ToString()]
+            var formRefs = DuckDbTestFactory.ReadFormRefs(connection, "TestPlugin.esp");
+            var condRef = formRefs[cobjFk.ToString()]
                 .FirstOrDefault(r => r.FieldPath.Equals("Conditions", StringComparison.Ordinal));
             Assert.NotNull(condRef);
             Assert.Equal(questFk.ToString(), condRef.TargetFormKey);
@@ -397,7 +412,7 @@ public sealed class EditOrchestratorConditionTests
             })
             .Build();
 
-        var (orchestrator, manager, changes) = MakeOrchestrator();
+        var (orchestrator, manager, _, connection) = MakeOrchestratorWithConnection();
         using (manager)
         {
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -409,8 +424,8 @@ public sealed class EditOrchestratorConditionTests
             var result = orchestrator.StageEdit(ingestibleFk.ToString(), "TestPlugin.esp", fields, "user", null);
 
             Assert.IsType<StageEditResult.Staged>(result);
-            var drained = changes.DrainForPlugin("TestPlugin.esp");
-            var condRef = drained.FormRefsByFormKey[ingestibleFk.ToString()]
+            var formRefs = DuckDbTestFactory.ReadFormRefs(connection, "TestPlugin.esp");
+            var condRef = formRefs[ingestibleFk.ToString()]
                 .FirstOrDefault(r => r.FieldPath.Equals(@"CTDA\Effects[0].Conditions\0\Parameter\0", StringComparison.Ordinal));
             Assert.NotNull(condRef);
             Assert.Equal(questFk.ToString(), condRef.TargetFormKey);

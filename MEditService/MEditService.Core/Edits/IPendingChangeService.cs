@@ -5,10 +5,6 @@ namespace MEditService.Core.Edits;
 
 public record PendingFormRef(string StagedField, string FieldPath, string TargetFormKey);
 
-public sealed record DrainResult(
-    IReadOnlyList<PendingChange> Changes,
-    ILookup<string, PendingFormRef> FormRefsByFormKey);
-
 /// <summary>
 /// One record's worth of staged field edits to insert or update in the pending-changes buffer.
 /// Input command only — never serialized to the wire; the response type is <see cref="PendingChange"/>.
@@ -79,8 +75,6 @@ public interface IPendingChangeService
     RevertChangeResult Revert(Guid changeId);
 
     int Revert(string? plugin, string? formKey, string? origin = null);
-
-    DrainResult DrainForPlugin(string plugin, string? origin = null);
 
     /// <summary>
     /// Atomically saves the component <paramref name="memberChangeId"/> belongs to: deletes its

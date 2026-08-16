@@ -441,61 +441,6 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         return (where, paramValues);
     }
 
-    public DrainResult DrainForPlugin(string plugin, string? origin = null)
-    {
-        _sem.Wait();
-        try
-        {
-            var conn = RequireConnection();
-
-            // Snapshot form refs before atomically removing both tables
-            var refsList = new List<(string SourceFormKey, PendingFormRef Ref)>();
-            using (var refCmd = conn.CreateCommand())
-            {
-                refCmd.CommandText = """
-                    SELECT source_form_key, staged_field, field_path, target_form_key
-                    FROM pending_form_references
-                    WHERE source_plugin = $1 AND ($2 IS NULL OR source_origin = $2)
-                    """;
-                refCmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-                refCmd.Parameters.Add(new DuckDBParameter { Value = (object?)origin });
-                using var refReader = refCmd.ExecuteReader();
-                while (refReader.Read())
-                {
-                    refsList.Add((
-                        refReader.GetString(0),
-                        new PendingFormRef(refReader.GetString(1), refReader.GetString(2), refReader.GetString(3))));
-                }
-            }
-
-            using var txn = conn.BeginTransaction();
-
-            using var del = conn.CreateCommand();
-            del.CommandText = "DELETE FROM pending_form_references WHERE source_plugin = $1 AND ($2 IS NULL OR source_origin = $2)";
-            del.Parameters.Add(new DuckDBParameter { Value = plugin });
-            del.Parameters.Add(new DuckDBParameter { Value = (object?)origin });
-            del.ExecuteNonQuery();
-
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = """
-                DELETE FROM pending_changes
-                WHERE plugin = $1 AND ($2 IS NULL OR origin = $2)
-                RETURNING id, form_key, plugin, origin, field_path, record_type, old_value, new_value, source, description, changed_at, change_type, parent_cell, placement_group
-                """;
-            cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-            cmd.Parameters.Add(new DuckDBParameter { Value = (object?)origin });
-
-            var drained = new List<PendingChange>();
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
-                drained.Add(ReadChange(reader));
-
-            txn.Commit();
-            return new DrainResult(drained, refsList.ToLookup(x => x.SourceFormKey, x => x.Ref));
-        }
-        finally { _sem.Release(); }
-    }
-
     public IReadOnlyList<ChangeGroup> GetChangeGroups()
     {
         _sem.Wait();
