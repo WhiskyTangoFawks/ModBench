@@ -1785,13 +1785,9 @@ interface EnterEditingDeps {
  *  modlist as a load-explicit session, then reveal the editing view. Also the
  *  crash-restart reload path.
  *
- *  #307 / ADR-0035 AC2: the progress indicator lives **in the Plugins view's own header**
- *  (`withProgress` addressed by view id) and is owned here rather than by each caller. It used to
- *  be a `ProgressLocation.Notification` wrapped around this call at two command sites — two
- *  indicators for one operation is noise, and the third caller (the crash-restart reload below)
- *  had no indicator at all. The header bar carries no text, so the step messages go to
- *  `TreeView.message`, which is also where the load's statement about its own incompleteness
- *  goes; one surface, one voice. */
+ *  #307 / ADR-0035 AC2: owns its own progress indicator (`withPluginsViewProgress` — see there)
+ *  rather than leaving each of its three callers to wrap it, and reports its steps through `say`.
+ *  Takes no progress reporter as a result. */
 function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
   const {
     instanceRoot, modlistSource, controller, changeGroupTreeProvider, pendingChangeDecorationProvider,
