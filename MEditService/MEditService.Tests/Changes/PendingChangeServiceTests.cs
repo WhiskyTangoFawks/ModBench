@@ -163,21 +163,6 @@ public sealed class PendingChangeServiceTests : IDisposable
     }
 
     [Fact]
-    public void DrainForPlugin_ReturnsAndClearsPluginChanges()
-    {
-        var old = new Dictionary<string, JsonElement> { ["name"] = J("\"Old\"") };
-        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"A\"") }, "user", null, old, FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-        _svc.Upsert(new PendingChangeUpsert("FK1", "B.esp", "npc_", new Dictionary<string, JsonElement> { ["name"] = J("\"B\"") }, "user", null, old, FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-
-        var drained = _svc.DrainForPlugin("A.esp");
-
-        Assert.Single(drained.Changes);
-        Assert.Equal("A.esp", drained.Changes[0].Plugin);
-        Assert.Empty(_svc.GetChanges(plugin: "A.esp"));
-        Assert.Single(_svc.GetChanges(plugin: "B.esp"));
-    }
-
-    [Fact]
     public void GetPendingFields_ReturnsCurrentNewValues()
     {
         var old = new Dictionary<string, JsonElement> { ["name"] = J("\"Old\"") };
@@ -310,10 +295,10 @@ public sealed class PendingChangeServiceTests : IDisposable
 
         _svc.Revert(changes[0].Id);
 
-        // Re-stage without form refs so DrainForPlugin has a change to return
+        // Re-stage without form refs so there's a change on record for the read below.
         _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_", new() { ["name"] = J("\"Bob\"") }, "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-        var drained = _svc.DrainForPlugin("A.esp");
-        Assert.Empty(drained.FormRefsByFormKey["FK1"]);
+        var formRefs = DuckDbTestFactory.ReadFormRefs(_conn, "A.esp");
+        Assert.Empty(formRefs["FK1"]);
     }
 
     [Fact]
@@ -326,14 +311,14 @@ public sealed class PendingChangeServiceTests : IDisposable
 
         _svc.Revert(plugin: "A.esp", formKey: null);
 
-        // A.esp form refs gone — re-stage so drain has something
+        // A.esp form refs gone — re-stage so there's a change on record for the read below.
         _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_", new() { ["name"] = J("\"Bob\"") }, "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-        var drainedA = _svc.DrainForPlugin("A.esp");
-        Assert.Empty(drainedA.FormRefsByFormKey["FK1"]);
+        var formRefsA = DuckDbTestFactory.ReadFormRefs(_conn, "A.esp");
+        Assert.Empty(formRefsA["FK1"]);
 
         // B.esp form refs intact
-        var drainedB = _svc.DrainForPlugin("B.esp");
-        var bRefs = drainedB.FormRefsByFormKey["FK2"].ToList();
+        var formRefsB = DuckDbTestFactory.ReadFormRefs(_conn, "B.esp");
+        var bRefs = formRefsB["FK2"].ToList();
         Assert.Single(bRefs);
         Assert.Equal("000001:Fallout4.esm", bRefs[0].TargetFormKey);
     }
@@ -349,11 +334,11 @@ public sealed class PendingChangeServiceTests : IDisposable
 
         _svc.Revert(plugin: "P.esp", formKey: "FK1");
 
-        // FK1 refs gone — re-stage (no refs) so drain surfaces FK1; FK2 refs intact.
+        // FK1 refs gone — re-stage (no refs) so there's a change on record; FK2 refs intact.
         _svc.Upsert(new PendingChangeUpsert("FK1", "P.esp", "npc_", new() { ["name"] = J("\"Bob\"") }, "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-        var drained = _svc.DrainForPlugin("P.esp");
-        Assert.Empty(drained.FormRefsByFormKey["FK1"]);
-        var fk2Refs = drained.FormRefsByFormKey["FK2"].ToList();
+        var formRefs = DuckDbTestFactory.ReadFormRefs(_conn, "P.esp");
+        Assert.Empty(formRefs["FK1"]);
+        var fk2Refs = formRefs["FK2"].ToList();
         Assert.Single(fk2Refs);
         Assert.Equal("000002:Fallout4.esm", fk2Refs[0].TargetFormKey);
     }
@@ -367,30 +352,9 @@ public sealed class PendingChangeServiceTests : IDisposable
         _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_", new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, [], [ref1], ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
         _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_", new() { ["race"] = J("\"000002:Fallout4.esm\"") }, "user", null, [], [ref2], ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
 
-        var drained = _svc.DrainForPlugin("A.esp");
-        var refs = drained.FormRefsByFormKey["FK1"].ToList();
+        var refs = DuckDbTestFactory.ReadFormRefs(_conn, "A.esp")["FK1"].ToList();
         Assert.Single(refs);
         Assert.Equal("000002:Fallout4.esm", refs[0].TargetFormKey);
-    }
-
-    [Fact]
-    public void DrainForPlugin_ReturnsAndClearsFormRefs()
-    {
-        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_",
-            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, [],
-            [RaceRef], ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-
-        var drained = _svc.DrainForPlugin("A.esp");
-
-        var refs = drained.FormRefsByFormKey["FK1"].ToList();
-        Assert.Single(refs);
-        Assert.Equal("race", refs[0].StagedField);
-        Assert.Equal("race", refs[0].FieldPath);
-        Assert.Equal("000001:Fallout4.esm", refs[0].TargetFormKey);
-
-        // Clears: a second drain no longer surfaces FK1's refs.
-        var second = _svc.DrainForPlugin("A.esp");
-        Assert.Empty(second.FormRefsByFormKey["FK1"]);
     }
 
     // --- ChangeGroup ---
@@ -566,9 +530,9 @@ public sealed class PendingChangeServiceTests : IDisposable
 
         _svc.RevertGroup(group.Id);
 
-        // Reverting the group-owned change clears its pending form refs: FK1 no longer drains.
-        var drained = _svc.DrainForPlugin("A.esp");
-        Assert.Empty(drained.FormRefsByFormKey["FK1"]);
+        // Reverting the group-owned change clears its pending form refs.
+        var formRefs = DuckDbTestFactory.ReadFormRefs(_conn, "A.esp");
+        Assert.Empty(formRefs["FK1"]);
     }
 
     // --- Finding 8: StageChanges uses Source from GroupMember ---
@@ -607,21 +571,6 @@ public sealed class PendingChangeServiceTests : IDisposable
         var change = _svc.GetChanges(formKey: "FK1")[0];
         Assert.Null(change.ParentCell);
         Assert.Null(change.PlacementGroup);
-    }
-
-    [Fact]
-    public void DrainForPlugin_PreservesPlacement()
-    {
-        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "refr",
-            new() { ["$create"] = J("null") }, "user", null, [],
-            ChangeType: "create",
-            ParentCell: "001234:Fallout4.esm", PlacementGroup: "persistent", FormRefs: null, Origin: "Data"));
-
-        var drained = _svc.DrainForPlugin("A.esp");
-
-        Assert.Single(drained.Changes);
-        Assert.Equal("001234:Fallout4.esm", drained.Changes[0].ParentCell);
-        Assert.Equal("persistent", drained.Changes[0].PlacementGroup);
     }
 
     [Fact]
@@ -690,26 +639,6 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Equal("\"FromModB\"", modBFields!["name"].GetRawText());
     }
 
-    [Fact]
-    public void DrainForPlugin_SameFilenameDifferentOrigin_DrainsOnlyThatOrigin()
-    {
-        // Named consequence (issue #272 body): "DrainForPlugin('Shared.esp') would drain both
-        // origins' staged edits at once" if left filename-only-scoped.
-        _svc.Upsert(new PendingChangeUpsert("FK1", "Shared.esp", "npc_",
-            new() { ["name"] = J("\"FromModA\"") }, "user", null, [], Origin: "ModA", FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null));
-        _svc.Upsert(new PendingChangeUpsert("FK2", "Shared.esp", "npc_",
-            new() { ["name"] = J("\"FromModB\"") }, "user", null, [], Origin: "ModB", FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null));
-
-        var drainedA = _svc.DrainForPlugin("Shared.esp", "ModA");
-
-        Assert.Single(drainedA.Changes);
-        Assert.Equal("FK1", drainedA.Changes[0].FormKey);
-        // ModB's own change must survive ModA's drain — still fetchable afterward.
-        var remaining = _svc.GetChanges(formKey: "FK2");
-        Assert.Single(remaining);
-        Assert.Equal("ModB", remaining[0].Origin);
-    }
-
     // A staged reference edge from one origin's copy must survive another origin's write to the
     // *same* (formKey, plugin, field) — pending_form_references' delete-before-insert was
     // filename-scoped only (no source_origin), so origin B's upsert would silently wipe origin A's
@@ -725,10 +654,10 @@ public sealed class PendingChangeServiceTests : IDisposable
         _svc.Upsert(new PendingChangeUpsert("FK1", "Shared.esp", "npc_",
             new() { ["race"] = J("\"000002:Fallout4.esm\"") }, "user", null, [], [modBRef], Origin: "ModB", ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null));
 
-        var drainedA = _svc.DrainForPlugin("Shared.esp", "ModA");
+        var formRefsA = DuckDbTestFactory.ReadFormRefs(_conn, "Shared.esp", "ModA");
 
         // ModA's own pending_form_references row for FK1/race must still be there — not deleted by
         // ModB's later upsert to the same field.
-        Assert.Contains(drainedA.FormRefsByFormKey["FK1"], r => r.TargetFormKey == "000001:Fallout4.esm");
+        Assert.Contains(formRefsA["FK1"], r => r.TargetFormKey == "000001:Fallout4.esm");
     }
 }

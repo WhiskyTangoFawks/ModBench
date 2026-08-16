@@ -29,6 +29,21 @@ public sealed class EditOrchestratorVmadTests
         return (orchestrator, manager, changes);
     }
 
+    // #312: only the tests below that read pending_form_references need the connection —
+    // MakeOrchestrator() above stays as every other test here uses it.
+    private static (EditOrchestrator orchestrator, SessionManager manager, DuckDbPendingChangeService changes, DuckDB.NET.Data.DuckDBConnection connection)
+        MakeOrchestratorWithConnection()
+    {
+        var reflector = SharedSchemaReflector.Instance;
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        var (changes, connection) = DuckDbTestFactory.MakePendingChangeServiceWithConnection();
+        var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
+        var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector);
+        return (orchestrator, manager, changes, connection);
+    }
+
     private static VirtualMachineAdapter BuildVmad(FormKey targetFk)
     {
         var vmad = new VirtualMachineAdapter();
@@ -379,7 +394,7 @@ public sealed class EditOrchestratorVmadTests
             })
             .Build();
 
-        var (orchestrator, manager, changes) = MakeOrchestrator();
+        var (orchestrator, manager, _, connection) = MakeOrchestratorWithConnection();
         using (manager)
         {
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -396,8 +411,8 @@ public sealed class EditOrchestratorVmadTests
             Assert.Equal(JsonValueKind.Object, oldVal.ValueKind);
             Assert.True(oldVal.TryGetProperty("formKey", out _));
             Assert.True(oldVal.TryGetProperty("alias", out _));
-            var drained = changes.DrainForPlugin("TestPlugin.esp");
-            var vmadRef = drained.FormRefsByFormKey[npcFk.ToString()]
+            var formRefs = DuckDbTestFactory.ReadFormRefs(connection, "TestPlugin.esp");
+            var vmadRef = formRefs[npcFk.ToString()]
                 .FirstOrDefault(r => r.FieldPath.Equals(@"VMAD\DefaultScript\TargetActor", StringComparison.Ordinal));
             Assert.NotNull(vmadRef);
             Assert.Equal(altFk.ToString(), vmadRef.TargetFormKey);
@@ -430,7 +445,7 @@ public sealed class EditOrchestratorVmadTests
             })
             .Build();
 
-        var (orchestrator, manager, changes) = MakeOrchestrator();
+        var (orchestrator, manager, _, connection) = MakeOrchestratorWithConnection();
         using (manager)
         {
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -449,8 +464,8 @@ public sealed class EditOrchestratorVmadTests
             Assert.Equal(JsonValueKind.Object, firstEl.ValueKind);
             Assert.True(firstEl.TryGetProperty("formKey", out _));
             Assert.True(firstEl.TryGetProperty("alias", out _));
-            var drained = changes.DrainForPlugin("TestPlugin.esp");
-            var refs = drained.FormRefsByFormKey[npcFk.ToString()]
+            var formRefs = DuckDbTestFactory.ReadFormRefs(connection, "TestPlugin.esp");
+            var refs = formRefs[npcFk.ToString()]
                 .Where(r => r.FieldPath.Equals(@"VMAD\DefaultScript\Targets", StringComparison.Ordinal))
                 .Select(r => r.TargetFormKey)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -509,7 +524,7 @@ public sealed class EditOrchestratorVmadTests
             })
             .Build();
 
-        var (orchestrator, manager, changes) = MakeOrchestrator();
+        var (orchestrator, manager, _, connection) = MakeOrchestratorWithConnection();
         using (manager)
         {
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -519,8 +534,8 @@ public sealed class EditOrchestratorVmadTests
             var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null, "vmad_struct_op");
 
             Assert.IsType<StageEditResult.Staged>(result);
-            var drained = changes.DrainForPlugin("TestPlugin.esp");
-            var vmadRef = drained.FormRefsByFormKey[npcFk.ToString()]
+            var formRefs = DuckDbTestFactory.ReadFormRefs(connection, "TestPlugin.esp");
+            var vmadRef = formRefs[npcFk.ToString()]
                 .FirstOrDefault(r => r.FieldPath.Equals(@"VMAD\DefaultScript\NewRef", StringComparison.Ordinal));
             Assert.NotNull(vmadRef);
             Assert.Equal(altFk.ToString(), vmadRef.TargetFormKey);
@@ -544,7 +559,7 @@ public sealed class EditOrchestratorVmadTests
             })
             .Build();
 
-        var (orchestrator, manager, changes) = MakeOrchestrator();
+        var (orchestrator, manager, _, connection) = MakeOrchestratorWithConnection();
         using (manager)
         {
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -557,8 +572,8 @@ public sealed class EditOrchestratorVmadTests
             var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null, "vmad_struct_op");
 
             Assert.IsType<StageEditResult.Staged>(result);
-            var drained = changes.DrainForPlugin("TestPlugin.esp");
-            var vmadRef = drained.FormRefsByFormKey[npcFk.ToString()]
+            var formRefs = DuckDbTestFactory.ReadFormRefs(connection, "TestPlugin.esp");
+            var vmadRef = formRefs[npcFk.ToString()]
                 .FirstOrDefault(r => r.FieldPath.Equals(@"VMAD\DefaultScript\Config", StringComparison.Ordinal));
             Assert.NotNull(vmadRef);
             Assert.Equal(altFk.ToString(), vmadRef.TargetFormKey);
@@ -582,7 +597,7 @@ public sealed class EditOrchestratorVmadTests
             })
             .Build();
 
-        var (orchestrator, manager, changes) = MakeOrchestrator();
+        var (orchestrator, manager, _, connection) = MakeOrchestratorWithConnection();
         using (manager)
         {
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -598,8 +613,8 @@ public sealed class EditOrchestratorVmadTests
             var result = orchestrator.StageEdit(npcFk.ToString(), "TestPlugin.esp", fields, "user", null, "vmad_struct_op");
 
             Assert.IsType<StageEditResult.Staged>(result);
-            var drained = changes.DrainForPlugin("TestPlugin.esp");
-            var refs = drained.FormRefsByFormKey[npcFk.ToString()]
+            var formRefs = DuckDbTestFactory.ReadFormRefs(connection, "TestPlugin.esp");
+            var refs = formRefs[npcFk.ToString()]
                 .Where(r => r.FieldPath.Equals(@"VMAD\DefaultScript\Configs", StringComparison.Ordinal))
                 .Select(r => r.TargetFormKey)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
