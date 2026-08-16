@@ -183,8 +183,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       if (loaded.changes) setAllChanges(loaded.changes);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
       if (loaded.notInLoadOrderSet) setNotInLoadOrderSet(loaded.notInLoadOrderSet);
-      // #308: no `?? true` fallback — conflictsComputed is required on LoadResult precisely so a
-      // fixture/response that omits it fails to compile rather than silently reading as settled.
+      // #308: no `?? true` fallback. Against a real client, `conflictsComputed` is required on
+      // LoadResult (RecordSessionClient.ts), so a genuine response omitting it fails to compile.
+      // That guarantee does *not* reach this webview's own test fixtures — RecordPanel.test.tsx's
+      // fakeClient builds its LoadResult as `as unknown as LoadResult`, which bypasses structural
+      // checking entirely, so a fixture that forgot this field would compile fine and read
+      // `undefined` here at runtime. What actually protects that path is this line's own
+      // fail-closed reading: `undefined` is falsy, so recordPanelIncompleteMessage below still
+      // shows the banner rather than silently reading as settled — the type system is not what's
+      // doing the catching there.
       setConflictsComputed(loaded.conflictsComputed);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
