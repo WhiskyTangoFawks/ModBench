@@ -1,8 +1,10 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { link, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { link, lstat, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { deploy, isDeployed, purge } from './deployer';
 import { makeDeployerFixture, makeIndex, type DeployerFixture } from './test/deployerFixture';
+import { buildFileConflictIndex } from './fileConflictIndex';
+import type { ModlistEntry } from './model';
 
 const CORRUPT_MANIFEST = '{not json';
 
@@ -32,6 +34,65 @@ describe('deploy', () => {
     const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.links).toEqual(['textures/foo.dds']);
     expect(manifest.preExisting).toEqual([]);
+  });
+
+  // fs.symlink needs admin rights or Developer Mode on Windows (#185 plans a Windows CI
+  // leg) — skip there rather than fail for an environment reason, not a code one.
+  it.skipIf(process.platform === 'win32')(
+    'deploys a symlinked file as a real hardlink to its target, not a duplicated symlink (#322)',
+    async () => {
+      fx = await makeDeployerFixture();
+      const target = await fx.writeModFile('ModA', 'shared/real.dds', 'REAL');
+      const linkPath = join(fx.instanceRoot, 'mods', 'ModA', 'linked.dds');
+      await symlink(target, linkPath);
+      const entries: ModlistEntry[] = [{ kind: 'mod', name: 'ModA', enabled: true }];
+      const index = await buildFileConflictIndex(entries, fx.instanceRoot, () => {});
+
+      await deploy(fx.instanceRoot, fx.gameDirectory, index, fakeReporter());
+
+      const deployedPath = join(fx.gameDirectory.dataFolder, 'linked.dds');
+      // A real hardlink to the resolved target, not a duplicated symlink — fs.link's final
+      // path component doesn't dereference on Linux, so linking the symlink's own path
+      // would otherwise land a second, possibly-broken symlink in Data/ (#322).
+      expect((await lstat(deployedPath)).isSymbolicLink()).toBe(false);
+      const [srcStat, tgtStat] = await Promise.all([stat(target), stat(deployedPath)]);
+      expect(tgtStat.ino).toBe(srcStat.ino);
+      expect(await readFile(deployedPath, 'utf8')).toBe('REAL');
+    },
+  );
+
+  it('reports the cross-volume-specific message (and does not throw, and never the "already exists" message) when a winner\'s link fails with EXDEV — e.g. a symlinked file resolving onto another volume (#322)', async () => {
+    fx = await makeDeployerFixture();
+    const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
+    const exdevError = Object.assign(new Error('cross-device link'), { code: 'EXDEV' });
+    const linkFn = () => Promise.reject(exdevError);
+    const reporter = fakeReporter();
+
+    await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source }), reporter, { linkFn });
+
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'mod.esp'))).rejects.toThrow(); // nothing landed
+    // The cross-volume-specific message, naming the file — not just *some* warning with the
+    // filename in its detail, which the pre-existing "already exists in Data/" skip message
+    // would equally satisfy if the outcome landed in the wrong bucket.
+    expect(
+      reporter.reports.some(
+        (r) => r.severity === 'warning' && r.message.includes('different drive') && r.detail?.includes('mod.esp'),
+      ),
+    ).toBe(true);
+    expect(reporter.reports.some((r) => r.message.includes('already exists in Data/'))).toBe(false);
+    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    expect(manifest.links).toEqual([]); // not recorded as linked — retried on the next deploy
+  });
+
+  it('rethrows a non-EXDEV link failure rather than treating it as skipped or cross-volume', async () => {
+    fx = await makeDeployerFixture();
+    const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
+    const permError = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    const linkFn = () => Promise.reject(permError);
+
+    await expect(
+      deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source }), fakeReporter(), { linkFn }),
+    ).rejects.toThrow(/EACCES|permission denied/);
   });
 
   it('skips a mod\'s root/ files — they map to the game root, not Data/', async () => {

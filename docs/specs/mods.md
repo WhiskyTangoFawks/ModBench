@@ -558,6 +558,21 @@ folder so the user can reassign or discard those files without leaving Modbench.
   enable/disable, reorder, separator ops — asserted byte-faithfully; and the
   `FileConflictIndex` — winner resolution, conflict/override counts, missing-master and
   missing-mod detection.
+- **Non-regular dirents inside `mods/<Mod>/`** (#322): a symlink is followed transparently —
+  file or directory — and participates in the index and deploy like a real entry, matching
+  what `references/modorganizer/`'s own walker does with a reparse point. A symlinked file
+  deploys as a real hardlink to the resolved target, not a duplicated symlink — `fs.link`'s
+  final path component doesn't dereference on Linux, so the index records the realpath-
+  resolved file as the deploy source while keeping the symlink's own name as its relative
+  path in the mod tree; a symlinked directory needs no such resolution, since only its final
+  path component is a link. A broken symlink (ENOENT) or a symlink cycle is skipped and
+  logged, never thrown (MO2 leans on NTFS's reparse-hop ceiling for the cycle case, which has
+  no Linux equivalent here, so this walker tracks its own ancestors); any other stat failure
+  (e.g. permission denied) propagates rather than silently degrading to a skip. A socket,
+  FIFO, or device node is never mod content — always skipped, always logged. A per-winner
+  link failing with EXDEV (the resolved source landing on a different volume than `Data/` —
+  the shared-asset-folder scenario, on another disk) is reported per file rather than
+  aborting the deploy.
 - **Prior art**: `modlistText.test.ts`, `metaIni.test.ts`, `modOrganizerIni.test.ts`,
   `statusChecker.test.ts` — fixture-in / value-out style; real MO2 instance fixtures live
   under `modbench/src/modmanager/test/fixtures/`.

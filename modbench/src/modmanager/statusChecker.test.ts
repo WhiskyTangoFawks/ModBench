@@ -84,7 +84,7 @@ describe('computeModStatuses', () => {
   });
 
   async function statuses() {
-    const index = await buildFileConflictIndex(entries, instanceRoot);
+    const index = await buildFileConflictIndex(entries, instanceRoot, () => {});
     return computeModStatuses(entries, instanceRoot, index, vanillaMasters, () => {});
   }
 
@@ -141,7 +141,7 @@ describe('computeModStatuses', () => {
       const corruptEntries: ModlistEntry[] = [mod('HasCorruptPlugin'), mod('Other')];
       const logs: string[] = [];
 
-      const index = await buildFileConflictIndex(corruptEntries, corruptRoot);
+      const index = await buildFileConflictIndex(corruptEntries, corruptRoot, () => {});
       const result = await computeModStatuses(corruptEntries, corruptRoot, index, vanillaMasters, (m) => logs.push(m));
 
       expect(result.get('HasCorruptPlugin')?.status).toEqual({ kind: 'ok' });
@@ -158,7 +158,7 @@ describe('computeModStatuses', () => {
     // synthetic one. A separator has no mods/<name> folder on disk, so if it
     // isn't skipped it would wrongly surface as missingMod.
     const withSeparator: ModlistEntry[] = [{ kind: 'separator', name: 'WEAPONS', enabled: true }, ...entries];
-    const index = await buildFileConflictIndex(withSeparator, instanceRoot);
+    const index = await buildFileConflictIndex(withSeparator, instanceRoot, () => {});
     const result = await computeModStatuses(withSeparator, instanceRoot, index, vanillaMasters, () => {});
     expect(result.has('WEAPONS')).toBe(false);
   });
@@ -176,7 +176,7 @@ describe('computeModStatuses — non-plugin files are never read for masters (#3
         'Readme.txt': 'Thanks for downloading!',
       });
       const readmeEntries: ModlistEntry[] = [mod('WithReadme')];
-      const index = await buildFileConflictIndex(readmeEntries, root);
+      const index = await buildFileConflictIndex(readmeEntries, root, () => {});
       const logs: string[] = [];
 
       const result = await computeModStatuses(readmeEntries, root, index, new Set(), (m) => logs.push(m));
@@ -199,7 +199,7 @@ describe('computeModStatuses — non-ENOENT stat failures propagate (#318)', () 
     try {
       await writeMod(root, 'Restricted', { 'Restricted.esp': buildTes4Buffer([]) });
       const restrictedEntries: ModlistEntry[] = [mod('Restricted')];
-      const index = await buildFileConflictIndex(restrictedEntries, root);
+      const index = await buildFileConflictIndex(restrictedEntries, root, () => {});
 
       const { stat: actualStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
       const restrictedPath = join('mods', 'Restricted');
@@ -236,7 +236,7 @@ describe('computeModStatuses — case-insensitive conflicts (#128)', () => {
   const entries: ModlistEntry[] = [mod('ModA'), mod('ModB')];
 
   it('reports a badge conflict for case-variant paths from two mods, winner-by-priority', async () => {
-    const index = await buildFileConflictIndex(entries, caseFixture);
+    const index = await buildFileConflictIndex(entries, caseFixture, () => {});
     const statuses = await computeModStatuses(entries, caseFixture, index, new Set(), () => {});
 
     expect(statuses.get('ModA')?.status).toEqual({ kind: 'overrides', count: 1 });
@@ -325,7 +325,7 @@ describe('computePluginOrderStatuses', () => {
   });
 
   async function statuses(order: string[], df: string | undefined = dataFolder) {
-    const index = await buildFileConflictIndex(entries, root);
+    const index = await buildFileConflictIndex(entries, root, () => {});
     return computePluginOrderStatuses(order, index, df, () => {});
   }
 
@@ -356,7 +356,7 @@ describe('computePluginOrderStatuses', () => {
 
   it('still checks mod-provided masters when dataFolder is unresolved, degrading only vanilla-row lookups', async () => {
     const logs: string[] = [];
-    const index = await buildFileConflictIndex(entries, root);
+    const index = await buildFileConflictIndex(entries, root, () => {});
     // Child before Base still flags (mod-provided path known). DLCRobot.esm is
     // vanilla-only, so with no dataFolder its own file can't be read → degrades
     // to no masters → ok, and a skip is logged.
@@ -379,7 +379,7 @@ describe('computePluginOrderStatuses', () => {
       await writeMod(corruptRoot, 'Bad', { 'Corrupt.esp': 'not a TES4 plugin' });
       await writeMod(corruptRoot, 'Good', { 'Good.esp': buildTes4Buffer(['Missing.esm']) });
       const logs: string[] = [];
-      const index = await buildFileConflictIndex([mod('Bad'), mod('Good')], corruptRoot);
+      const index = await buildFileConflictIndex([mod('Bad'), mod('Good')], corruptRoot, () => {});
       const result = await computePluginOrderStatuses(['Corrupt.esp', 'Good.esp'], index, corruptData, (m) => logs.push(m));
 
       expect(result.get('Corrupt.esp')).toBeUndefined(); // unreadable → treated as no masters

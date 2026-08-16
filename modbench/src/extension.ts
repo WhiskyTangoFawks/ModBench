@@ -1622,7 +1622,9 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
       outputChannel.info('[extension] entering editing: starting backend and building plugin list');
       const [, plugins] = await Promise.all([
         backendManager!.start(),
-        buildExplicitPluginsWithOrigin(modlistSource, instanceRoot, gd.dataFolder),
+        buildExplicitPluginsWithOrigin(modlistSource, instanceRoot, gd.dataFolder, (entries, root) =>
+          buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg)),
+        ),
       ]);
       if (!backendManager!.isHealthy) {
         exitToLoadout(); // tear down the half-started backend and reset the view
@@ -1777,7 +1779,7 @@ function registerDeployCommands(
   };
 
   const runDeploy = async (gd: GameDirectory) => {
-    const index = buildFileConflictIndex(await modlistSource.readModlist(), instanceRoot);
+    const index = buildFileConflictIndex(await modlistSource.readModlist(), instanceRoot, (msg) => outputChannel.debug(msg));
     await deploy(instanceRoot, gd, await index, reporter, { loadOrder: await resolveLoadOrder() });
   };
 
