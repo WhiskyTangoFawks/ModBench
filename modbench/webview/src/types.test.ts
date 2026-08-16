@@ -1,39 +1,82 @@
 import { describe, it, expect } from 'vitest';
 import { columnKey } from './types';
-import type { ConditionDiff, FieldDiff, VmadPropertyDiff, VmadScriptDiff } from './types';
+import type {
+  CompareOverride, CompareResult, ConditionCompare, ConditionDiff, ConditionGroupDiff, FieldDiff,
+  FieldMetadata, FieldValue, FormKeyResolution, ParsedCondition, ParsedConditionParam,
+  PatchRecordValidationError, PendingChange, RecordDetail, ReferenceValidationError, VmadCompare,
+  VmadPropertyDiff, VmadScriptDiff,
+} from './types';
+import type { PluginInfo } from './RecordSessionClient';
 import type { components } from '../../src/medit/generated/api';
 
 type WireSchemas = components['schemas'];
 
-// #272 review: every fixture in this suite used to hand-build `winnerPlugin` on both the type
-// (types.ts) and the test data, so a real backend rename (WinnerPlugin -> WinnerColumn, landed on
-// FieldDiff/ConditionDiff/VmadPropertyDiff/VmadScriptDiff — see generated/api.ts) went unnoticed:
-// the hand type and the hand fixtures agreed with each other and disagreed with the wire. `sharedKey`
-// only *compiles* when `K` is a key of *both* the hand-authored interface and the generated
-// (regenerated-from-the-live-backend) wire schema for the same DTO — if either side renames the
-// field without the other following, the intersection drops the key and this file fails to
-// type-check (the `.toBe(key)` below is a real runtime assertion too, just a trivially-true one:
-// the actual guarantee is the generic constraint, not the returned value).
-//
-// Enforcement note: `vitest run` (`npm run test:unit`) does not type-check test files — it
-// transpiles with esbuild, which strips types without validating them. This check is caught by
-// `npm run build`'s `tsc -p webview/tsconfig.json --noEmit` pass, which includes this file
-// (`webview/tsconfig.json`'s `include: ["src"]`). Confirmed by temporarily reverting the
-// `winnerColumn` rename in types.ts alone: `npm run build` fails on this file with "Type
-// '\"winnerColumn\"' does not satisfy the constraint 'never'" for every DTO below; reverting the
-// generated `api.ts` alone (simulating an un-propagated backend rename) fails the same way.
-function sharedKey<Hand, Wire, K extends keyof Hand & keyof Wire>(key: K): K {
-  return key;
-}
+// #297: this file's type-level checks below are enforced by `tsc -p webview/tsconfig.json
+// --noEmit` (the second step of `npm run build`), not by `vitest run` (`npm run test:unit`) —
+// vitest transpiles test files with esbuild, which strips types without validating them. Only the
+// `describe('columnKey', ...)` block below is a genuine vitest runtime suite.
 
-describe('winnerColumn stays in sync with the wire (#272 regression)', () => {
-  it('FieldDiff.winnerColumn / ConditionDiff.winnerColumn / VmadPropertyDiff.winnerColumn / VmadScriptDiff.winnerColumn all still exist on both the hand type and the generated wire schema', () => {
-    expect(sharedKey<FieldDiff, WireSchemas['FieldDiff'], 'winnerColumn'>('winnerColumn')).toBe('winnerColumn');
-    expect(sharedKey<ConditionDiff, WireSchemas['ConditionDiff'], 'winnerColumn'>('winnerColumn')).toBe('winnerColumn');
-    expect(sharedKey<VmadPropertyDiff, WireSchemas['VmadPropertyDiff'], 'winnerColumn'>('winnerColumn')).toBe('winnerColumn');
-    expect(sharedKey<VmadScriptDiff, WireSchemas['VmadScriptDiff'], 'winnerColumn'>('winnerColumn')).toBe('winnerColumn');
-  });
-});
+// #297 (generalizes the #272 regression check this file used to hand-roll per-DTO for
+// `winnerColumn` alone): every hand-written interface in `types.ts`/`RecordSessionClient.ts` that
+// mirrors a generated wire DTO gets one containment check here — every key the hand type declares
+// must also exist on the generated schema for the same DTO. A backend rename (e.g. #272's
+// WinnerPlugin -> WinnerColumn) drops the renamed key from the generated side, so
+// `KeysContainedIn` stops resolving to `never` and `AssertNoMissingKeys` fails to compile, naming
+// the stale key in the error (e.g. `Type '"winnerColumn"' does not satisfy the constraint
+// 'never'.`).
+//
+// Deliberately not a value-level/assignability check (`Hand extends Wire`): the generated schema
+// types every property as optional-and-nullable regardless of the C# side's actual
+// nullability/required-ness (an OpenAPI-generator gap, not specific to any one field — see #297
+// comment 1), so hand-written -> generated is vacuously satisfiable regardless of renames (no
+// required members on the target) and generated -> hand-written fails on nullability even when
+// names agree. Key containment is exactly the tool that catches a rename and ignores nullability.
+type KeysContainedIn<Hand, Wire> = Exclude<keyof Hand, keyof Wire>;
+type AssertNoMissingKeys<T extends never> = T;
+
+// FieldMetadata: `readOnly`/`defaultValue` are synthesized only by the VMAD/Condition tree
+// adapters (#231, see the fields' own doc comments in types.ts) — the backend never emits them, so
+// they're excluded from the wire-containment check rather than expected to appear on the schema.
+export type CheckFieldMetadata =
+  AssertNoMissingKeys<KeysContainedIn<Omit<FieldMetadata, 'readOnly' | 'defaultValue'>, WireSchemas['FieldMetadata']>>;
+export type CheckFieldValue = AssertNoMissingKeys<KeysContainedIn<FieldValue, WireSchemas['FieldValue']>>;
+export type CheckFormKeyResolution =
+  AssertNoMissingKeys<KeysContainedIn<FormKeyResolution, WireSchemas['FormKeyResolution']>>;
+export type CheckRecordDetail = AssertNoMissingKeys<KeysContainedIn<RecordDetail, WireSchemas['RecordDetail']>>;
+export type CheckCompareOverride =
+  AssertNoMissingKeys<KeysContainedIn<CompareOverride, WireSchemas['CompareOverride']>>;
+
+// FieldDiff: `wirePath`/`commitOverride`/`vmadOpKind`/`collapsedSummary` are all synthesized by
+// vmadTreeAdapter.ts/conditionTreeAdapter.ts (#231, see each field's own doc comment in types.ts)
+// for rows the backend never sends this shape for — excluded for the same reason as
+// FieldMetadata's readOnly/defaultValue above.
+export type CheckFieldDiff = AssertNoMissingKeys<
+  KeysContainedIn<Omit<FieldDiff, 'wirePath' | 'commitOverride' | 'vmadOpKind' | 'collapsedSummary'>, WireSchemas['FieldDiff']>
+>;
+export type CheckVmadPropertyDiff =
+  AssertNoMissingKeys<KeysContainedIn<VmadPropertyDiff, WireSchemas['VmadPropertyDiff']>>;
+export type CheckVmadScriptDiff =
+  AssertNoMissingKeys<KeysContainedIn<VmadScriptDiff, WireSchemas['VmadScriptDiff']>>;
+export type CheckVmadCompare = AssertNoMissingKeys<KeysContainedIn<VmadCompare, WireSchemas['VmadCompare']>>;
+export type CheckParsedConditionParam =
+  AssertNoMissingKeys<KeysContainedIn<ParsedConditionParam, WireSchemas['ParsedConditionParam']>>;
+export type CheckParsedCondition =
+  AssertNoMissingKeys<KeysContainedIn<ParsedCondition, WireSchemas['ParsedCondition']>>;
+export type CheckConditionDiff = AssertNoMissingKeys<KeysContainedIn<ConditionDiff, WireSchemas['ConditionDiff']>>;
+export type CheckConditionGroupDiff =
+  AssertNoMissingKeys<KeysContainedIn<ConditionGroupDiff, WireSchemas['ConditionGroupDiff']>>;
+export type CheckConditionCompare =
+  AssertNoMissingKeys<KeysContainedIn<ConditionCompare, WireSchemas['ConditionCompare']>>;
+export type CheckCompareResult = AssertNoMissingKeys<KeysContainedIn<CompareResult, WireSchemas['CompareResult']>>;
+export type CheckPendingChange = AssertNoMissingKeys<KeysContainedIn<PendingChange, WireSchemas['PendingChange']>>;
+export type CheckReferenceValidationError =
+  AssertNoMissingKeys<KeysContainedIn<ReferenceValidationError, WireSchemas['ReferenceValidationError']>>;
+export type CheckPatchRecordValidationError =
+  AssertNoMissingKeys<KeysContainedIn<PatchRecordValidationError, WireSchemas['PatchRecordValidationError']>>;
+
+// PluginInfo (RecordSessionClient.ts): a deliberate structural subset of the backend's
+// PluginResponse (its own doc comment) — every key it does declare must still exist on the wire.
+export type CheckPluginInfo = AssertNoMissingKeys<KeysContainedIn<PluginInfo, WireSchemas['PluginResponse']>>;
 
 // #272 / ADR-0036: columnKey() is the frontend's own compound column identity, meant to agree
 // with the backend's ColumnKey.Of (MEditService.Core/Queries/ColumnKey.cs) for the same
