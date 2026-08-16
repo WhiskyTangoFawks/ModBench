@@ -120,6 +120,14 @@ export const EXTENSION_TO_WEBVIEW = {
   // broadcast only carries the already-picked value.
   VMAD_SET_SCRIPT_FLAGS: 'vmadSetScriptFlags',
   VMAD_SET_PROPERTY_FLAGS: 'vmadSetPropertyFlags',
+  // #308 / ADR-0035: broadcast to every open record panel exactly once — when
+  // SessionController.reportLoadedSession fires it, on the load-completing false→true transition
+  // of `conflictsComputed` (see that call site's own FORWARD COUPLING (#97) comment). No payload:
+  // it is only ever sent on the one transition that matters, so a field that would always read
+  // `true` documents nothing. Each panel self-filters nothing (unlike the column-header/array/VMAD
+  // broadcasts above) — it's session-wide, not record-specific, so every open panel reacts by
+  // refetching its own comparison (RecordPanel.tsx).
+  SESSION_CONFLICTS_COMPUTED: 'sessionConflictsComputed',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -322,7 +330,8 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_REMOVE_PROPERTY; formKey: string; plugin: string; origin: string; scriptName: string; propName: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY; formKey: string; plugin: string; origin: string; scriptName: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_SET_SCRIPT_FLAGS; formKey: string; plugin: string; origin: string; scriptName: string; flags: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS; formKey: string; plugin: string; origin: string; scriptName: string; propName: string; flags: string };
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS; formKey: string; plugin: string; origin: string; scriptName: string; propName: string; flags: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED };
 
 // #208: the merged `data-vscode-context` object VS Code's webview preload forwards as a
 // `webview/context` command's sole argument — shared shape between the cell (recordUtils.ts'

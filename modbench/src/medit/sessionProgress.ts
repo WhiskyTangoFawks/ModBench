@@ -28,6 +28,26 @@ export function sessionProgressMessage(status: SessionLoadProgress): string | un
   return `${counted} Conflict information is not yet computed.`;
 }
 
+/** #308 / ADR-0035: the record editor's own half of "an absent conflict badge must never be
+ *  mistakable for 'no conflict'" (#307 built the tree's). Unlike the tree, this surface *does*
+ *  render conflict colouring today — an unmarked cell here doesn't just omit a badge, it actively
+ *  paints a verdict — so the statement has to name both facts: the comparison itself is
+ *  incomplete, and the colouring rendered from it is not final because of that. One without the
+ *  other misses the point.
+ *
+ *  Gated on `conflictsComputed` alone, same reasoning as `sessionProgressMessage` — the sweep is
+ *  whole-set, so ADR-0035's live mutations (reorder, enable, disable, #97) will leave a *Ready*
+ *  session with stale winners, and this statement has to be reachable in that state too.
+ *
+ *  Returns `undefined` for "nothing to say", mirroring `sessionProgressMessage` — the caller
+ *  renders nothing rather than an empty banner. No plugin count here (unlike the tree's message):
+ *  this is one record, not a whole load order, so "N of M" has nothing useful to name. */
+export function recordPanelIncompleteMessage(conflictsComputed: boolean): string | undefined {
+  if (conflictsComputed) return undefined;
+  return 'This record\'s comparison is not yet complete: conflict information has not been '
+    + 'computed for every plugin, so the colouring here is not final.';
+}
+
 /** #307: one poll tick of a running load, translated into what the tree and the view should do
  *  about it — chevrons for what is indexed, decorations for what has failed, and the statement of
  *  what is not yet known.

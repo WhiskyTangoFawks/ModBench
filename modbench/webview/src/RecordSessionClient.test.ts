@@ -43,6 +43,9 @@ describe('RecordSessionClient.load', () => {
       if (url.includes('/compare')) return Promise.resolve(jsonResponse({ overrides: [], diffs: [], conflictAll: 'OnlyOne' }));
       if (url.includes('/changes')) return Promise.resolve(jsonResponse([{ id: 'c1' }]));
       if (url.includes('/plugins')) return Promise.resolve(jsonResponse([{ name: 'A.esp', isImmutable: true, loadOrderIndex: 0 }]));
+      // #308: the shared happy-path fixture answers settled — the dedicated describe block below
+      // overrides this per test to exercise the false/failed-fetch cases.
+      if (url.includes('/session/status')) return Promise.resolve(jsonResponse({ conflictsComputed: true }));
       return Promise.resolve(jsonResponse({}, 404));
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -156,6 +159,50 @@ describe('RecordSessionClient.load', () => {
     expect(r.changes).toBeNull();
     expect(r.immutableSet).toBeNull();
     expect(r.notInLoadOrderSet).toBeNull();
+  });
+
+  // #308 / ADR-0035: the record panel's own half of "an absent conflict badge must never be
+  // mistakable for 'no conflict'" — load() reads GET /session/status alongside compare/changes/
+  // plugins so the panel can state, honestly, whether the comparison it is about to render is
+  // settled.
+  it('returns conflictsComputed true when the sweep has run', async () => {
+    const r = await createRecordSessionClient(5172).load('000001:A.esp');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.conflictsComputed).toBe(true);
+  });
+
+  it('returns conflictsComputed false while the sweep is still outstanding', async () => {
+    fetchMock.mockImplementation((input: Request | string) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.includes('/compare')) return Promise.resolve(jsonResponse({ overrides: [], diffs: [], conflictAll: 'OnlyOne' }));
+      if (url.includes('/changes')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/plugins')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/session/status')) return Promise.resolve(jsonResponse({ conflictsComputed: false }));
+      return Promise.resolve(jsonResponse({}, 404));
+    });
+    const r = await createRecordSessionClient(5172).load('000001:A.esp');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.conflictsComputed).toBe(false);
+  });
+
+  // Fails *closed*: an absent answer must read the same as "not computed", never as "settled" —
+  // the opposite default would let a status-fetch blip render a settled-looking grid over a
+  // comparison that was never actually checked (ADR-0026 / ADR-0035).
+  it('defaults conflictsComputed to false when the status fetch itself fails', async () => {
+    fetchMock.mockImplementation((input: Request | string) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.includes('/compare')) return Promise.resolve(jsonResponse({ overrides: [], diffs: [], conflictAll: 'OnlyOne' }));
+      if (url.includes('/changes')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/plugins')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/session/status')) return Promise.resolve(jsonResponse({}, 500));
+      return Promise.resolve(jsonResponse({}, 404));
+    });
+    const r = await createRecordSessionClient(5172).load('000001:A.esp');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.conflictsComputed).toBe(false);
   });
 });
 

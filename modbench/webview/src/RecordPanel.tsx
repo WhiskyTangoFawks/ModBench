@@ -20,6 +20,7 @@ import { columnKey } from './types';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type LogLevel } from './messages';
 import type { RecordSessionClient } from './RecordSessionClient';
+import { recordPanelIncompleteMessage } from '../../src/medit/sessionProgress';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey: string;
@@ -138,6 +139,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // (distinct from "is immutable"; see recordUtils.ts's readOnlyReason) drives PluginHeader's
   // dimming/tooltip wording independently of the plain immutable fact.
   const [notInLoadOrderSet, setNotInLoadOrderSet] = useState<Set<ColumnKey>>(new Set());
+  // #308 / ADR-0035: whether the winner sweep has run — GET /session/status's own field, read by
+  // client.load() alongside compare/changes/plugins. Initial `true` only matters until the first
+  // load lands (the `!result` early-return below renders "Loading…" until then, so this can never
+  // read as a false "settled" to the user); every value after that comes straight off the load's
+  // own `conflictsComputed`, which is a required field precisely so there is no silent fallback
+  // here that could paper over a status fetch nobody checked.
+  const [conflictsComputed, setConflictsComputed] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
@@ -175,6 +183,16 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       if (loaded.changes) setAllChanges(loaded.changes);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
       if (loaded.notInLoadOrderSet) setNotInLoadOrderSet(loaded.notInLoadOrderSet);
+      // #308: no `?? true` fallback. Against a real client, `conflictsComputed` is required on
+      // LoadResult (RecordSessionClient.ts), so a genuine response omitting it fails to compile.
+      // That guarantee does *not* reach this webview's own test fixtures — RecordPanel.test.tsx's
+      // fakeClient builds its LoadResult as `as unknown as LoadResult`, which bypasses structural
+      // checking entirely, so a fixture that forgot this field would compile fine and read
+      // `undefined` here at runtime. What actually protects that path is this line's own
+      // fail-closed reading: `undefined` is falsy, so recordPanelIncompleteMessage below still
+      // shows the banner rather than silently reading as settled — the type system is not what's
+      // doing the catching there.
+      setConflictsComputed(loaded.conflictsComputed);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -375,6 +393,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       } else if (msg.type === EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP) {
         const { allChanges: changes, revertGroup } = pendingCellActionsRef.current;
         if (changes.some(c => c.id === msg.changeId)) revertGroup(msg.changeId);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED) {
+        // #308 / ADR-0035 AC4: a panel already open when the sweep lands must reflect the settled
+        // data, not just clear its own banner over stale content — refresh() re-runs client.load()
+        // in full, so the grid and the banner update together in one state change. Session-wide,
+        // not record-specific (unlike every branch above), so no self-filter — every open panel
+        // reacts. Unconditional: this message is only ever sent once per load (SessionController's
+        // reportLoadedSession), so there is no redundant-refetch cost to guard against.
+        void refreshRef.current(prevFormKeyRef.current);
       } else {
         handleVmadOpMessage(msg);
       }
@@ -1061,6 +1087,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
             void handleVmadStructOp(realPlugin, `VMAD\\${scriptName}\\${name}`, { op: 'add_property', type, name, flags: 'Edited', value });
           }}
         />
+      )}
+      {/* #308 / ADR-0035: the record editor's own "an absent conflict badge must never be
+          mistakable for 'no conflict'" statement — this surface renders conflict colouring
+          today (unlike the Plugins tree, #307), so an unmarked cell here doesn't just omit a
+          badge, it actively paints a verdict nothing has checked yet. Same in-panel-notice shape
+          as the actionError banner below it (there is no WebviewPanel.message the way TreeView
+          has one), clears itself with no user action once refresh() next lands a settled
+          `conflictsComputed` — see the SESSION_CONFLICTS_COMPUTED handler above. */}
+      {recordPanelIncompleteMessage(conflictsComputed) && (
+        <div style={{ flex: '0 0 auto', marginBottom: 8, fontSize: '11px', color: 'var(--vscode-editorWarning-foreground, #cca700)', padding: '3px 6px', border: '1px solid var(--vscode-inputValidation-warningBorder, #cca700)', borderRadius: 2 }}>
+          {recordPanelIncompleteMessage(conflictsComputed)}
+        </div>
       )}
       {actionError && (
         <div style={{ flex: '0 0 auto', marginBottom: 8, fontSize: '11px', color: 'var(--vscode-errorForeground, #f88)', padding: '3px 6px', border: '1px solid var(--vscode-inputValidation-errorBorder, #f88)', borderRadius: 2 }}>

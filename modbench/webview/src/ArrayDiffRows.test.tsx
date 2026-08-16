@@ -535,6 +535,9 @@ function loadReturn(): LoadResult {
   return {
     ok: true, result: currentCompare, changes: currentChanges, plugins: pluginsResponse,
     immutableSet: new Set(pluginsResponse.filter(p => p.isImmutable).map(p => p.name)),
+    // #308: this suite doesn't exercise the incompleteness banner — settled, matching every
+    // fixture here's implicit pre-#308 assumption.
+    conflictsComputed: true,
   } as unknown as LoadResult;
 }
 

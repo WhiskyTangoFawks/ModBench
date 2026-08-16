@@ -511,6 +511,37 @@ plugin:
 - There is **no per-plugin or per-record Save** on the panel. Bulk saving is multi-select in the
   Pending Changes tree, or Save All.
 
+### Progressive load ([#308](https://github.com/WhiskyTangoFawks/ModBench/issues/308), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
+
+A plugin's records are browsable — and therefore this panel is openable — the moment that plugin
+is indexed, well before the winner sweep runs ([#307](https://github.com/WhiskyTangoFawks/ModBench/issues/307)
+gave the Plugins tree this same fact). Unlike the tree, this panel *does* render conflict
+colouring today, which makes it the one surface where **an absent conflict badge is indistinguishable
+from "no conflict"** actively misleads rather than merely omits.
+
+- **A record opened while the sweep is outstanding carries an explicit statement** that the
+  comparison is incomplete and the colouring rendered from it is not final
+  (`recordPanelIncompleteMessage`, `medit/sessionProgress.ts`) — an in-panel banner, the compare
+  grid's own equivalent of the tree's `TreeView.message` (a `WebviewPanel` has no such native
+  surface). It clears itself, no user action, once the sweep lands.
+- **Gate on `SessionStatus.conflictsComputed`, never on "is a load running"** — same rule
+  `plugins.md`'s own Progressive load section states, for the same reason: the sweep is whole-set,
+  so a live mutation can leave a *Ready* session with stale winners this panel must still caveat.
+- **A panel already open when the sweep lands refetches its comparison**, not just clears its own
+  banner over stale content — the extension host broadcasts `SESSION_CONFLICTS_COMPUTED` to every
+  open record panel exactly once, from `SessionController.reportLoadedSession`, the one point a
+  `loadExplicitSession` call is known to have completed the sweep. No poller: the tick stream
+  `plugins.md`'s own progress indicator polls (`GET /session/status`) stops at essentially the same
+  instant the backend sets `conflictsComputed`, so it cannot reliably observe the transition —
+  reusing the load's own completion is the reliable choke point instead.
+- **Forward coupling ([#97](https://github.com/WhiskyTangoFawks/ModBench/issues/97)):** the
+  broadcast above fires only on the load-completing false→true transition. `conflictsComputed` is
+  a separate field from session state precisely because live mutation (reorder, enable, disable)
+  will re-sweep a *Ready* session and can leave it stale again — true→false, the opposite
+  direction — and nothing described here observes that. Live mutation owes this panel the same
+  notification on the way *out* of settled, or the banner silently stops working the moment that
+  ships.
+
 ### Conflict color coding
 
 The compare grid uses the two-axis model from

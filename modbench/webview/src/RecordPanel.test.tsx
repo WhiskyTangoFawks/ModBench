@@ -13,6 +13,7 @@ import type { FieldMetadata } from './types';
 import { columnKey } from './types';
 import type { LoadResult, RecordSessionClient } from './RecordSessionClient';
 import { DIMMED_OPACITY } from './gridStyles';
+import { recordPanelIncompleteMessage } from '../../src/medit/sessionProgress';
 
 // ── shared metadata fixtures ──────────────────────────────────────────────────
 
@@ -113,6 +114,10 @@ function replyRevertGroupConfirmed(confirmed: boolean) {
 interface FakeOpts {
   changes?: unknown[];
   plugins?: unknown[];
+  // #308 / ADR-0035: defaults to true (settled, no banner) — the overwhelmingly common fixture
+  // case, and the one every pre-#308 test implicitly assumed. The two banner-specific tests below
+  // override it.
+  conflictsComputed?: boolean;
   load?: RecordSessionClient['load'];
   save?: RecordSessionClient['save'];
   copyAsNew?: RecordSessionClient['copyAsNew'];
@@ -137,6 +142,7 @@ function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordSessionClient 
     // that never sets inLoadOrder (every pre-#304 fixture) must default every column to
     // in-load-order, the same defensive default the real client applies.
     notInLoadOrderSet: new Set(pl.filter(p => p.inLoadOrder === false).map(p => columnKey(p.name, p.origin ?? null))),
+    conflictsComputed: opts.conflictsComputed ?? true,
   } as unknown as LoadResult;
   return {
     load: opts.load ?? vi.fn().mockResolvedValue(okLoad),
@@ -1073,6 +1079,71 @@ describe('RecordPanel — top-level pending suppressed when identical to disk', 
   });
 });
 
+// #308 / ADR-0035: a record opened while the winner sweep is outstanding must not present its
+// compare grid as a settled answer — this surface *does* render conflict colouring (unlike the
+// tree, #307), so an absent statement here would be the exact "absent badge reads as no conflict"
+// trap ADR-0035 names.
+describe('RecordPanel — incomplete-comparison banner (#308 / ADR-0035)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('states the comparison is incomplete when opened while the winner sweep is outstanding (AC1)', async () => {
+    renderPanel(compareResult, { conflictsComputed: false });
+    await waitFor(() => screen.getByText(recordPanelIncompleteMessage(false)!));
+  });
+
+  it('shows no statement once the sweep has already completed (AC3)', async () => {
+    renderPanel(compareResult, { conflictsComputed: true });
+    await waitFor(() => screen.getByText(/TestNPC/));
+    expect(screen.queryByText(recordPanelIncompleteMessage(false)!)).not.toBeInTheDocument();
+  });
+
+  // AC4: a panel already open when the sweep lands must reflect the settled data, not just clear
+  // its own banner over stale content — this asserts both halves land together (the refetch, and
+  // the banner clearing as a consequence of the fresher conflictsComputed it carries), not just
+  // that the message was heard.
+  it('refetches and reflects settled data when SESSION_CONFLICTS_COMPUTED arrives (AC4)', async () => {
+    const load = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
+        immutableSet: new Set(), notInLoadOrderSet: new Set(), conflictsComputed: false,
+      })
+      .mockResolvedValue({
+        ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
+        immutableSet: new Set(), notInLoadOrderSet: new Set(), conflictsComputed: true,
+      });
+    renderPanel(compareResult, { load });
+    await waitFor(() => screen.getByText(recordPanelIncompleteMessage(false)!));
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', { data: { type: EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED } }));
+    });
+
+    await waitFor(() => expect(screen.queryByText(recordPanelIncompleteMessage(false)!)).not.toBeInTheDocument());
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  // A panel this message reaches before it has ever loaded a record (no formKey) must not throw
+  // or attempt a fetch — refresh() itself already no-ops on an empty formKey; this pins that the
+  // broadcast handler doesn't bypass that guard.
+  it('does nothing when SESSION_CONFLICTS_COMPUTED arrives before any record is loaded', () => {
+    vi.stubGlobal('mEditFormKey', '');
+    const load = vi.fn();
+    renderPanel(compareResult, { load });
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', { data: { type: EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED } }));
+    });
+
+    expect(load).not.toHaveBeenCalled();
+  });
+});
+
 describe('RecordPanel — LOAD_RECORD state management', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
@@ -1103,7 +1174,10 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
     // First load fails; the LOAD_RECORD-driven reload succeeds.
     const load = vi.fn()
       .mockResolvedValueOnce({ ok: false, error: 'HTTP 500' })
-      .mockResolvedValue({ ok: true, result: compareResult, changes: [], plugins: pluginsResponse, immutableSet: new Set(['Fallout4.esm']) });
+      .mockResolvedValue({
+        ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
+        immutableSet: new Set(['Fallout4.esm']), conflictsComputed: true,
+      });
     renderPanel(compareResult, { load });
     await waitFor(() => expect(screen.getByText(/Error:/)).toBeInTheDocument());
 

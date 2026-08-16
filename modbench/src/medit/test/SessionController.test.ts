@@ -107,6 +107,7 @@ function makeDeps(overrides: Partial<SessionControllerDeps> = {}): SessionContro
     showWarning: vi.fn(),
     showError: vi.fn(),
     setFilterActive: vi.fn(),
+    notifyConflictsComputed: vi.fn(),
     ...overrides,
   };
 }
@@ -946,6 +947,25 @@ describe('SessionController.loadExplicitSession', () => {
     expect(deps.showError).not.toHaveBeenCalled();
   });
 
+  // #308 / ADR-0035: reaching this method at all means the load POST — which the backend only
+  // answers after the winner sweep (#274) — resolved successfully, so this is the one reliable,
+  // already-existing point at which conflicts become computed. Record panels open mid-load learn
+  // this to refetch their own settled comparison (RecordPanel's SESSION_CONFLICTS_COMPUTED
+  // handler); no poller is added for it — see this call site's own comment for the reasoning #307
+  // ruled out (the tick stream stops before/at this same transition).
+  it('notifies that conflicts are computed on a successful load', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'loaded', failures: [] } }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.loadExplicitSession(plugins, '/game/Data');
+
+    expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
+  });
+
   it('surfaces skipped-plugin failures as a warning (never silent)', async () => {
     const client = {
       ...makeClient(),
@@ -1074,6 +1094,9 @@ describe('SessionController.loadExplicitSession', () => {
     // meaning (the backend disposed the previous session before attempting this one, so there
     // is no session at all), stated in a way that leaves room for the third outcome.
     expect(result).toEqual({ outcome: 'failed' });
+    // #308: no session means nothing to notify — the backend disposed the previous one before
+    // this attempt, so there is no fresher comparison for an open panel to refetch.
+    expect(deps.notifyConflictsComputed).not.toHaveBeenCalled();
   });
 });
 
@@ -1227,10 +1250,14 @@ describe('SessionController.loadExplicitSession abandonment', () => {
   // Reachable today by running Reload Session while a load is still running.
   it('reports a superseded load as abandoned, distinctly from a failed one', async () => {
     const client = { ...makeClient(), POST: vi.fn().mockResolvedValue(drainedError(409, 'superseded')) };
+    const deps = makeDeps({ client });
 
-    const result = await new SessionController(makeDeps({ client })).loadExplicitSession(plugins, '/game/Data');
+    const result = await new SessionController(deps).loadExplicitSession(plugins, '/game/Data');
 
     expect(result).toEqual({ outcome: 'abandoned' });
+    // #308: whatever load superseded this one owns the notification, if any — this one never
+    // reached a settled state of its own to announce.
+    expect(deps.notifyConflictsComputed).not.toHaveBeenCalled();
   });
 
   it('reports an aborted load as abandoned, and surfaces nothing for it', async () => {
@@ -1249,6 +1276,7 @@ describe('SessionController.loadExplicitSession abandonment', () => {
 
     expect(result).toEqual({ outcome: 'abandoned' });
     expect(deps.showError).not.toHaveBeenCalled();
+    expect(deps.notifyConflictsComputed).not.toHaveBeenCalled();
   });
 
   // The signal is what aborts the request itself rather than waiting for a dead socket — the
