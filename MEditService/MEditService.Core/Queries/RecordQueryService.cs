@@ -129,6 +129,15 @@ public sealed class RecordQueryService(
     // deleted step used to compute when deciding a master was missing: the record's own origin
     // plugin (OriginPluginOf) for every staged FormKey, plus the origin plugin of every FormKey
     // any staged content references.
+    //
+    // Known gap, deliberately out of scope here (#337): this is a *read-time* computation, while
+    // the actual written master order comes from Mutagen's own MastersListContentOption.Iterate at
+    // save time, independently, from the live object graph. PluginWriter.HasMastersEdit can no
+    // longer ever be true (nothing stages a masters field-edit anymore), so every save takes that
+    // path — the two computations happen to agree on *membership* by construction (both derive
+    // from the same staged content) but nothing here guarantees they agree on *order*, and order is
+    // load-bearing (FormID local-master-index resolution). Until #337 unifies them, the compare
+    // grid can display one order while disk ends up with another.
     public IReadOnlyList<string> GetEffectiveMasters(string plugin, string origin)
     {
         var committed = GetRecordForPlugin(HeaderIndexer.FormKeyFor(plugin), plugin, origin)?.Fields
@@ -171,10 +180,13 @@ public sealed class RecordQueryService(
     }
 
     // The plugin substring of a "FormID:Plugin" FormKey string; null when malformed. Duplicated
-    // (also in EditOrchestrator, PendingChangeGraph) rather than extracted to a shared helper —
-    // #338 deletes PendingChangeGraph's copy along with the added-master edge rule, so
-    // consolidating now would churn code about to vanish; #338 will decide where the survivors land.
-    private static string? OriginPluginOf(string formKey)
+    // (also in PendingChangeGraph) rather than extracted to a shared helper — #338 deletes
+    // PendingChangeGraph's copy along with the added-master edge rule, so consolidating now would
+    // churn code about to vanish; #338 will decide where the survivor lands.
+    // internal (not private), same as the pre-#336 EditOrchestrator copy this replaces, so the
+    // malformed-input branch stays directly unit-testable rather than only reachable through
+    // GetEffectiveMasters' well-formed-FormKey callers.
+    internal static string? OriginPluginOf(string formKey)
     {
         var colon = formKey.IndexOf(':');
         return colon >= 0 && colon < formKey.Length - 1 ? formKey[(colon + 1)..] : null;

@@ -195,7 +195,10 @@ internal static class PendingChangeGraph
                 masters.EnumerateArray().Where(m => m.ValueKind == JsonValueKind.String).Select(m => m.GetString()!),
                 StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The plugin substring of a "FormID:Plugin" FormKey string; null when malformed.</summary>
+    /// <summary>The plugin substring of a "FormID:Plugin" FormKey string; null when malformed.
+    /// Duplicated in RecordQueryService (#336/ADR-0038's GetEffectiveMasters) rather than
+    /// consolidated — #338 deletes this copy along with the added-master edge rule above, so
+    /// unifying now would churn code about to vanish; #338 will decide where the survivor lands.</summary>
     private static string? OriginPluginOf(string formKey)
     {
         var colon = formKey.IndexOf(':');
