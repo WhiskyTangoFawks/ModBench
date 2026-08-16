@@ -37,6 +37,11 @@ A sidebar `TreeView` below the Plugins tree, **organized by ChangeGroup** — th
 changes that must be saved or reverted atomically, derived as a connected component of the
 pending-change dependency graph ([ADR-0028](../adr/0028-change-groups-are-derived-dependency-closures.md)).
 
+Grouping is scoped by plugin identity — origin plus filename
+([ADR-0036](../adr/0036-plugin-identity-is-origin-plus-filename.md)) — so two same-filename
+plugins from different origins never share a group, and saving one leaves the other's pending
+changes untouched and its file unwritten.
+
 This view exists to show **grouping, and nothing else** — it is the one fact about the pending
 set that no other surface can show. "Which records have I touched, and what do they look like
 in context" is a different question, already answered by the Plugins tree under the built-in
