@@ -332,8 +332,8 @@ export function activate(context: vscode.ExtensionContext) {
     showWarning: (msg) => { void vscode.window.showWarningMessage(msg); },
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
     setFilterActive,
+    notifyConflictsComputed: () => broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED }),
   });
-
   const changeGroupTreeView: vscode.TreeView<PendingTreeNode> = vscode.window.createTreeView('modbench.changeGroupTree', {
     treeDataProvider: changeGroupTreeProvider,
     canSelectMany: true,

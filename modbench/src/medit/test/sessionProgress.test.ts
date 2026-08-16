@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { sessionProgressMessage, makeLoadProgressHandler } from '../sessionProgress';
+import { sessionProgressMessage, makeLoadProgressHandler, recordPanelIncompleteMessage } from '../sessionProgress';
 
 // #307 / ADR-0035 AC3/AC5. The trap: an absent conflict badge is indistinguishable from "no
 // conflict", so while the winner sweep is outstanding the view has to *say* so in as many words.
@@ -40,6 +40,39 @@ describe('sessionProgressMessage', () => {
 
     expect(message).not.toContain('0');
     expect(message).toMatch(/conflict information is not yet computed/i);
+  });
+});
+
+// #308 / ADR-0035: the record panel's own statement — same trap as sessionProgressMessage above
+// (an absent conflict badge is indistinguishable from "no conflict"), but this surface *does*
+// render conflict colouring today, so the statement has to name both facts: the comparison itself
+// is incomplete, and the colouring it renders is not final because of that. Gated on
+// `conflictsComputed` alone, same reasoning as sessionProgressMessage.
+describe('recordPanelIncompleteMessage', () => {
+  it('states both that the comparison is incomplete and that colouring is not final while the sweep is outstanding', () => {
+    const message = recordPanelIncompleteMessage(false);
+
+    expect(message).toMatch(/comparison.*not.*complete/i);
+    expect(message).toMatch(/colouring.*not final/i);
+  });
+
+  // #304's lesson: an exact-string test, not just a substring/vocabulary check, so a future
+  // reword is a deliberate, reviewed choice rather than a silent drift.
+  it('is exactly the reviewed wording', () => {
+    expect(recordPanelIncompleteMessage(false)).toBe(
+      'This record\'s comparison is not yet complete: conflict information has not been computed '
+      + 'for every plugin, so the colouring here is not final.',
+    );
+  });
+
+  it('clears once the sweep completes, so the statement disappears with no user action', () => {
+    expect(recordPanelIncompleteMessage(true)).toBeUndefined();
+  });
+
+  // Never Mod Management's vocabulary ("mod") as a common noun — this surface's own boundary
+  // (medit-record-editor.md: "operates on records, FormKeys, plugins, and ChangeGroups").
+  it('never uses "mod" as a common noun', () => {
+    expect(recordPanelIncompleteMessage(false)).not.toMatch(/\bmod\b/i);
   });
 });
 

@@ -14,6 +14,10 @@ export interface SessionControllerDeps {
   showWarning: (msg: string) => void;
   showError: (msg: string) => void;
   setFilterActive: (active: boolean, sql?: string) => void;
+  // #308 / ADR-0035: called exactly when a `loadExplicitSession` resolves `{ outcome: 'loaded' }`
+  // — see that call site's own comment for why this is the one reliable, already-existing point
+  // at which conflicts become computed, and why no poller is added for it.
+  notifyConflictsComputed: () => void;
   log?: (msg: string) => void;
 }
 
@@ -219,6 +223,19 @@ export class SessionController {
     }
     this.deps.setStatusText(`$(check) mEdit: Ready (${plugins.length} plugins)`);
     this.deps.refreshTree();
+    // #308 / ADR-0035: the backend only answers this POST after the winner sweep (#274), so
+    // reaching here *is* "conflicts are now computed" — reusing that existing fact rather than
+    // adding a second poller or a second notion of "is the session settled" (the ticket's own
+    // Shape section). Record panels open mid-load are listening for this to refetch their own
+    // comparison instead of staying on the partial one they opened against.
+    //
+    // FORWARD COUPLING (#97): this fires only on the *load-completing* false→true transition.
+    // `conflictsComputed` is a separate field from session `state` precisely because ADR-0035's
+    // live mutations (reorder, enable, disable) will re-sweep a *Ready* session and can leave it
+    // stale again — true→false, the opposite direction. Nothing here observes that transition.
+    // Whoever wires live mutation owes the record panel the same notification on the way *out* of
+    // settled, or this banner will silently stop working the moment #97 ships.
+    this.deps.notifyConflictsComputed();
     return { outcome: 'loaded', failures };
   }
 

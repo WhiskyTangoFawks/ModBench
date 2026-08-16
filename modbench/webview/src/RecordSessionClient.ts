@@ -60,6 +60,16 @@ export type LoadResult =
       // columnKey() keying) — null exactly when immutableSet is (the /plugins fetch itself
       // failed), never independently.
       notInLoadOrderSet: Set<ColumnKey> | null;
+      // #308 / ADR-0035: whether the winner sweep has run — GET /session/status's own field,
+      // read here rather than left for the extension host to relay (the webview already talks to
+      // the backend directly for every other fact this composite view needs). Required, not
+      // nullable like immutableSet/notInLoadOrderSet above: those degrade to "unrestricted" on a
+      // failed fetch (the safe direction for a mutability guard), but this one must fail *closed*
+      // — an absent answer has to read as "not computed", never as "settled", or a status-fetch
+      // blip would render a settled-looking grid over a comparison nothing actually checked
+      // (ADR-0026 / ADR-0035: "an absent conflict badge must never be mistakable for 'no
+      // conflict'").
+      conflictsComputed: boolean;
     }
   | { ok: false; error: string };
 
@@ -136,10 +146,14 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
 
   return {
     async load(formKey) {
-      const [cmp, chg, plugins] = await Promise.all([
+      const [cmp, chg, plugins, status] = await Promise.all([
         client.GET('/records/{formKey}/compare', { params: { path: { formKey } } }),
         client.GET('/changes', { params: { query: { formKey } } }),
         client.GET('/plugins'),
+        // #308 / ADR-0035: the same GET /session/status #307's tree poll already reads, fetched
+        // directly here rather than round-tripped through the extension host — see load()'s own
+        // reasoning for /plugins above.
+        client.GET('/session/status', {}),
       ]);
       if (!cmp.response.ok) return { ok: false, error: `HTTP ${cmp.response.status}` };
       const pluginList = plugins.response.ok ? (plugins.data as PluginInfo[]) : null;
@@ -157,6 +171,9 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
         // older/stale shape) defaults every column to in-load-order, the overwhelmingly common
         // case, rather than every plugin silently reading as shadowed.
         notInLoadOrderSet: pluginList ? new Set(pluginList.filter(p => p.inLoadOrder === false).map(p => columnKey(p.name, p.origin))) : null,
+        // #308: fails closed — `=== true`, not `?? true`, so a failed/absent status fetch reads
+        // as "not computed" (see LoadResult's own doc comment on this field).
+        conflictsComputed: status.response.ok && status.data?.conflictsComputed === true,
       };
     },
 
