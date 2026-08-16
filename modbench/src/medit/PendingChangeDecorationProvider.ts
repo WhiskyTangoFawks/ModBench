@@ -46,19 +46,39 @@ export class PendingChangeDecorationProvider implements vscode.FileDecorationPro
   }
 
   /** Re-reads `/changes` and tells VS Code every currently-rendered decoration may have changed.
-   *  Called from every place pending-change state can change (extension.ts) — never on a timer. */
-  async refresh(): Promise<void> {
+   *  Called from every place pending-change state can change (extension.ts) — never on a timer.
+   *
+   *  #334 decision 1: a failed fetch leaves `this.changes` exactly as it was — retained, not
+   *  cleared — wherever `this.changes` is a trustworthy baseline from the *current* session.
+   *  Stale-but-flagged beats confidently-empty there: the post-mutation call sites (the webview's
+   *  `PENDING_CHANGED` message, `SessionController`'s save/revert/create/copy/delete) only ever
+   *  fetch what they themselves just changed, so the worst case of retaining is briefly showing
+   *  pre-mutation state. #334 decision 2: retaining is why those call sites sit at ADR-0026's
+   *  background/recoverable tier (inline UI + log, no toast) rather than the silent-wrong-state
+   *  tier that would otherwise apply.
+   *
+   *  Session entry (`makeEnterEditing`, extension.ts) has no such baseline: `this.changes` may
+   *  still hold a *previous* session's entries (#331's stale-decoration guard), so retaining on a
+   *  failed entry fetch would leak them into the new session as if they were live — the exact
+   *  silent-wrong-state failure #334 exists to prevent, at a different call site (#334 review).
+   *  That call site passes `retainOnFailure: false` to opt out and clear instead.
+   *
+   *  @param retainOnFailure Default `true` — retain on failure, safe wherever the caller has a
+   *    trustworthy current-session baseline. Pass `false` only where it doesn't. */
+  async refresh(retainOnFailure = true): Promise<void> {
     try {
       const { data, response } = await this.client.GET('/changes', {});
       if (!response.ok || !Array.isArray(data)) {
-        this.log(`[PendingChangeDecorationProvider] /changes fetch failed (${response.status})`);
-        this.changes = [];
+        this.log(`[PendingChangeDecorationProvider] /changes fetch failed (${response.status}) — ` +
+          (retainOnFailure ? 'retaining last-known decorations' : 'clearing (no trustworthy baseline)'));
+        if (!retainOnFailure) this.changes = [];
       } else {
         this.changes = data.map((c) => ({ formKey: c.formKey ?? '', plugin: c.plugin ?? '', changeType: c.changeType ?? '' }));
       }
     } catch (e) {
-      this.log(`[PendingChangeDecorationProvider] refresh threw: ${e instanceof Error ? e.message : String(e)}`);
-      this.changes = [];
+      this.log(`[PendingChangeDecorationProvider] refresh threw: ${e instanceof Error ? e.message : String(e)} — ` +
+        (retainOnFailure ? 'retaining last-known decorations' : 'clearing (no trustworthy baseline)'));
+      if (!retainOnFailure) this.changes = [];
     }
     this._onDidChangeFileDecorations.fire(undefined);
   }

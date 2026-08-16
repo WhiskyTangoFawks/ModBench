@@ -56,18 +56,23 @@ function change(overrides: Partial<any> & { id: string }) {
 }
 
 /** Stub ApiClient. `groups` answers GET /change-groups; `changes` answers the flat
- *  GET /changes; `membersByGroupId` answers GET /changes?groupId={id}. */
+ *  GET /changes; `membersByGroupId` answers GET /changes?groupId={id}. `groupsThrows`/
+ *  `changesThrows` reject instead of resolving non-OK — the "request never came back at all"
+ *  failure mode, distinct from a non-OK response (#334 review). */
 function makeClient(opts: {
   groups?: Group[];
   changes?: any[];
   membersByGroupId?: Record<string, any[]>;
   groupsOk?: boolean;
   changesOk?: boolean;
+  groupsThrows?: boolean;
+  changesThrows?: boolean;
 }) {
-  const { groups = [], changes = [], membersByGroupId = {}, groupsOk = true, changesOk = true } = opts;
+  const { groups = [], changes = [], membersByGroupId = {}, groupsOk = true, changesOk = true, groupsThrows = false, changesThrows = false } = opts;
   return {
     GET: vi.fn().mockImplementation((path: string, init?: any) => {
       if (path === '/change-groups') {
+        if (groupsThrows) return Promise.reject(new Error('network down'));
         return Promise.resolve({ data: groupsOk ? groups : undefined, response: { ok: groupsOk, status: groupsOk ? 200 : 500 } });
       }
       if (path === '/changes') {
@@ -75,6 +80,7 @@ function makeClient(opts: {
         if (gid !== undefined) {
           return Promise.resolve({ data: membersByGroupId[gid] ?? [], response: { ok: true, status: 200 } });
         }
+        if (changesThrows) return Promise.reject(new Error('network down'));
         return Promise.resolve({ data: changesOk ? changes : undefined, response: { ok: changesOk, status: changesOk ? 200 : 500 } });
       }
       return Promise.resolve({ data: undefined, response: { ok: false, status: 404 } });
@@ -109,6 +115,20 @@ describe('PendingChangesTreeProvider — root', () => {
     const children = await provider.getChildren();
     expect(children).toHaveLength(1);
     expect(children[0]).toBeInstanceOf(ErrorNode);
+  });
+
+  // #334 review (Spec axis): a thrown request (network down, no response at all) is a distinct
+  // failure mode from a non-OK response, and must render the same ErrorNode rather than propagate
+  // out of getChildren() as an unhandled rejection.
+  it('returns an ErrorNode, not an unhandled rejection, when the /change-groups request throws', async () => {
+    const provider = new PendingChangesTreeProvider(makeClient({ groupsThrows: true }), vi.fn());
+    await expect(provider.getChildren()).resolves.toEqual([expect.any(ErrorNode)]);
+  });
+
+  it('returns an ErrorNode, not an unhandled rejection, when the /changes request throws', async () => {
+    const client = makeClient({ groups: [group({ id: 'c1' })], changesThrows: true });
+    const provider = new PendingChangesTreeProvider(client, vi.fn());
+    await expect(provider.getChildren()).resolves.toEqual([expect.any(ErrorNode)]);
   });
 
   // ── Slice 1: singleton renders as a top-level leaf ────────────────────────

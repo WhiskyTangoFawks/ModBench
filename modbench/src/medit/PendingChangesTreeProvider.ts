@@ -153,26 +153,42 @@ export class PendingChangesTreeProvider implements vscode.TreeDataProvider<Pendi
     return undefined;
   }
 
+  /** #334 review: wrapped in one try/catch so a thrown request (network down — no response at
+   *  all) renders the same `ErrorNode` as a non-OK response, on either endpoint, rather than
+   *  propagating out of `getChildren()` as an unhandled rejection. */
   private async rootNodes(): Promise<PendingTreeNode[]> {
-    const groupsRes = await this.client.GET('/change-groups', {});
-    if (!groupsRes.response.ok || !Array.isArray(groupsRes.data)) {
-      this.log(`[PendingChangesTreeProvider] /change-groups fetch failed (${groupsRes.response.status})`);
+    try {
+      const groupsRes = await this.client.GET('/change-groups', {});
+      if (!groupsRes.response.ok || !Array.isArray(groupsRes.data)) {
+        this.log(`[PendingChangesTreeProvider] /change-groups fetch failed (${groupsRes.response.status})`);
+        this.onPendingState(0);
+        return [new ErrorNode()];
+      }
+      const groups = groupsRes.data;
+      // Drives the title-bar Save All / Revert All gating (spec: hidden when nothing staged) and,
+      // since #247, the view's numeric badge — one number, so the two can never disagree.
+      this.onPendingState(groups.length);
+      if (groups.length === 0) return [new EmptyStateNode()];
+
+      const changesRes = await this.client.GET('/changes', {});
+      if (!changesRes.response.ok || !Array.isArray(changesRes.data)) {
+        this.log(`[PendingChangesTreeProvider] /changes fetch failed (${changesRes.response.status})`);
+        return [new ErrorNode()];
+      }
+      const byId = new Map((changesRes.data as PendingChange[]).map(c => [c.id, c]));
+      return this.buildNodes(groups, byId);
+    } catch (e) {
+      this.log(`[PendingChangesTreeProvider] fetch threw: ${e instanceof Error ? e.message : String(e)}`);
       this.onPendingState(0);
       return [new ErrorNode()];
     }
-    const groups = groupsRes.data;
-    // Drives the title-bar Save All / Revert All gating (spec: hidden when nothing staged) and,
-    // since #247, the view's numeric badge — one number, so the two can never disagree.
-    this.onPendingState(groups.length);
-    if (groups.length === 0) return [new EmptyStateNode()];
+  }
 
-    const changesRes = await this.client.GET('/changes', {});
-    if (!changesRes.response.ok || !Array.isArray(changesRes.data)) {
-      this.log(`[PendingChangesTreeProvider] /changes fetch failed (${changesRes.response.status})`);
-      return [new ErrorNode()];
-    }
-    const byId = new Map((changesRes.data as PendingChange[]).map(c => [c.id, c]));
-
+  /** Splits a group into its top-level node — an expandable header for a multi-member group, or
+   *  the singleton member's own leaf — then orders the result (ADR-0029: multi-member groups
+   *  first, then single edits by plugin then record so one record's edits are contiguous). Split
+   *  out of `rootNodes()` purely for its complexity budget once #334 review added its try/catch. */
+  private async buildNodes(groups: ChangeGroup[], byId: Map<string | undefined, PendingChange>): Promise<PendingTreeNode[]> {
     const groupNodes: PendingGroupNode[] = [];
     const leafNodes: PendingLeafNode[] = [];
     for (const g of groups) {
@@ -186,8 +202,6 @@ export class PendingChangesTreeProvider implements vscode.TreeDataProvider<Pendi
       }
     }
 
-    // Multi-member groups first (the rare thing this view exists for); then single
-    // edits by plugin, then record, so one record's edits are contiguous (ADR-0029).
     leafNodes.sort((a, b) =>
       a.plugin.localeCompare(b.plugin, undefined, { sensitivity: 'accent' }) ||
       a.formKey.localeCompare(b.formKey, undefined, { sensitivity: 'accent' }));
