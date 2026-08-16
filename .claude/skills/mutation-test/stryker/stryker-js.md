@@ -1,24 +1,32 @@
 # StrykerJS — running mutation tests on the TypeScript side
 
 Companion to `stryker.md` (which covers Stryker.**NET** and `MEditService.Core`). The review
-philosophy and triage live in `SKILL.md`; this file is only *how to run and read the tool* for
+philosophy and triage live in `TRIAGE.md`; this file is only *how to run and read the tool* for
 `modbench`. The two runtimes share nothing but the report schema — do not carry mechanics
 across.
 
 ## Running
 
 ```bash
-cd modbench && npm run test:mutation                      # configured scope
-cd modbench && npx stryker run --mutate "src/modmanager/deployer.ts"   # one file
-cd modbench && npx stryker run --mutate "src/a.ts,src/b.ts"            # the diff's files
+cd modbench && bash ../.claude/skills/mutation-test/stryker/run-js.sh              # changed files vs main
+cd modbench && bash ../.claude/skills/mutation-test/stryker/run-js.sh --since <ref>
+cd modbench && bash ../.claude/skills/mutation-test/stryker/run-js.sh --all        # full corpus + baseline snapshot
+cd modbench && bash ../.claude/skills/mutation-test/stryker/run-js.sh --file deployer.ts
 ```
+
+`run-js.sh` prints its scope, then the report path, then the parsed survivors — same
+exit codes as the .NET side's `run.sh` (0 killed, 1 survivors await disposition, 2 tool
+error, 3 nothing in scope). Raw Stryker output goes to a log file and never reaches
+agent context; that matters here because a bare `npx stryker run` prints the mutation
+score table, and a score in context becomes a target (`TRIAGE.md` §Why dispositions).
 
 Config is `modbench/stryker.config.json`. Reports land in `modbench/reports/mutation/`
 (gitignored).
 
-**There is no `--since`.** StrykerJS has `--incremental` (reuse prior results) but no
-diff-scoping flag, so the review-axis equivalent is to pass the diff's changed files to
-`--mutate` explicitly. That is the whole difference from the .NET side's `since` handling.
+**StrykerJS has no `--since`**, so `run-js.sh` computes it: changed + untracked
+`src/modmanager` files vs the target from `git diff`, filtered through the config's `!`
+exclusions, passed to `--mutate`. Naming a file with `--file` skips the exclusions —
+naming it *is* the request to mutate it.
 
 ## Scope, and why it stops where it does
 
@@ -38,23 +46,24 @@ Mutation runs against `src/modmanager/` only:
 
 ## Cost model
 
-Measured 2026-08-13. Nothing like the .NET side — this is cheap enough to run per-ticket:
+Measured 2026-08-16 at the capped 4-worker concurrency. Nothing like the .NET side —
+this is cheap enough to run per-ticket:
 
 | Scope | Mutants | Wall clock |
 | ----- | ------- | ---------- |
 | One file (`fileConflictIndex.ts`) | 71 | ~1m30s |
-| All of `src/modmanager/` (29 files) | 1869 | **3m11s** |
+| All of `src/modmanager/` (30 files) | 1799 | **3m40s** |
 
-The initial test run is 173 tests in 3 seconds, and `coverageAnalysis: perTest` means each
-mutant runs only its covering tests. There is no build step to pay for, which is where the
-.NET side's ~8 minutes goes.
+The cap is nearly free: the old 11-worker default finished the same corpus only ~30s
+faster, by thrashing all 15 GiB — it was never CPU-bound. The initial test run is 563
+tests in 8 seconds, and `coverageAnalysis: perTest` means each mutant runs only its
+covering tests. There is no build step to pay for, which is where the .NET side's ~8
+minutes goes.
 
 ## What does *not* apply here
 
 - **No `TERM=linux` bug.** That one is Stryker.NET-specific; StrykerJS prints normally under
   the ambient non-interactive `TERM`. Verified, not assumed.
-- **No pty, no wrapper script.** `npx stryker run` behaves, so there is nothing for a
-  `run.sh` to fix. Don't add one for symmetry.
 - **No mass `CompileError`.** StrykerJS disables type checks on mutated output, so the .NET
   side's ~1000 rolled-back mutants have no counterpart.
 
@@ -70,33 +79,29 @@ cd modbench && python3 ../.claude/skills/mutation-test/stryker/parse-report.py r
 Same guardrail as the .NET side: **never read `mutation.json` directly.** Only the parsed
 survivor list reaches context.
 
-> ⚠️ **Every run overwrites `mutation.json`. Snapshot a baseline before you scope a run.**
-> The json reporter writes one fixed path, so a one-file verification run destroys the
-> full-scope report it was measured against — silently, and the replacement looks like a
-> perfectly good report with almost no findings in it. This has already happened once: a
-> slice verified its own six files and took the 330-finding baseline with it.
->
-> Stryker.**NET** has no such trap — it writes timestamped `StrykerOutput/<date>/`
-> directories — so this is one more piece of mechanics that must not be carried across.
->
-> After any full-scope run, copy it before doing anything else:
->
-> ```bash
-> cd modbench && npx stryker run && cp reports/mutation/mutation.json reports/mutation/baseline.json
-> ```
->
-> `baseline.json` is the durable copy no scoped run touches; `parse-report.py` reads it the
-> same way. Re-establishing a lost baseline is only ~3 minutes, so this is a nuisance rather
-> than a disaster — but it costs the per-mutant `file:line` rows, which are exactly what a
-> triage agent reads, and their absence is not obvious from the file.
+> ⚠️ **Every run overwrites `mutation.json`** — the json reporter writes one fixed path,
+> so a scoped verification run silently replaces the full-scope report it was measured
+> against (a slice once took the 330-finding baseline with it that way). `run-js.sh --all`
+> therefore copies each fresh full report to `reports/mutation/baseline.json`, which no
+> scoped run touches; `parse-report.py` reads it the same way. Stryker.**NET** has no such
+> trap — it writes timestamped `StrykerOutput/<date>/` directories.
+
+> ⚠️ **Concurrency is capped in `stryker.config.json` (`concurrency: 4`,
+> `maxTestRunnerReuse: 40`) because the default OOMed the machine.** At the default
+> (cpus−1 = 11 workers here) each vitest worker grows toward ~3 GB over a full run, and
+> the kernel OOM killer picks VS Code as its preferred victim — it killed VS Code twice
+> in the week of 2026-08-14 and took down the whole desktop session on the 16th.
+> `maxTestRunnerReuse` restarts each worker after 40 runs, bounding the growth. Raising
+> either value is how the crash comes back. One mutation run at a time, machine-wide:
+> `run-js.sh` refuses to start beside a live run of either runtime.
 
 ## Baseline
 
-The first full run scored **82.34%** — 1529 killed, 272 survived, 58 uncovered, 10 timeout;
-**330 actionable findings**, concentrated in `deployer.ts` (66), `mo2/modlistText.ts` (44) and
+The first full run (2026-08-13) produced **330 actionable findings** — 272 survived, 58
+uncovered — concentrated in `deployer.ts` (66), `mo2/modlistText.ts` (44) and
 `install/detectRoot.ts` (43).
 
 That is a **backlog, not a review.** A list that size is exactly what tempts an agent into
-one-micro-test-per-survivor, which §4 of `SKILL.md` forbids. Work it in file-sized slices with
-a disposition table each, or it will do more harm than good. The per-diff axis is the intended
+one-micro-test-per-survivor. Work it in file-sized slices, each through `TRIAGE.md` with its
+own disposition table, or it will do more harm than good. The per-diff axis is the intended
 day-to-day use; this number is only the starting point it is measured against.

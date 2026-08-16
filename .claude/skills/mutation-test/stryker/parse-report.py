@@ -3,11 +3,11 @@
 Parse the latest (or a given) Stryker mutation-report.json and print only
 Survived and NoCoverage mutants with source context.
 
-Usage (from MEditService/):
-  python ../.claude/skills/mutation-test/parse-report.py
-  python ../.claude/skills/mutation-test/parse-report.py path/to/mutation-report.json
-  python ../.claude/skills/mutation-test/parse-report.py --diff-only
-  python ../.claude/skills/mutation-test/parse-report.py --diff-only --target main
+Usage (from MEditService/ for .NET reports, modbench/ for StrykerJS reports):
+  python ../.claude/skills/mutation-test/stryker/parse-report.py
+  python ../.claude/skills/mutation-test/stryker/parse-report.py path/to/mutation-report.json
+  python ../.claude/skills/mutation-test/stryker/parse-report.py --diff-only
+  python ../.claude/skills/mutation-test/stryker/parse-report.py --diff-only --target main
 
 --diff-only narrows the report (which Stryker's `since` scopes at the *file* level,
 mutating every testable line in any touched file) down to survivors whose lines

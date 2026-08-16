@@ -6,6 +6,8 @@
     "configFile": "vitest.config.ts"
   },
   "coverageAnalysis": "perTest",
+  "concurrency": 4,
+  "maxTestRunnerReuse": 40,
   "reporters": ["json", "html", "dots"],
   "thresholds": {
     "high": 80,

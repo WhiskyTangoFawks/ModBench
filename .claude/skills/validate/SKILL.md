@@ -26,13 +26,17 @@ Classify changed files → run matching gate (never review non-compiling code):
 | both | `… --backend --frontend` |
 | config/docs only | skip |
 
-Fix all failures, rerun. Mutation-eligible → `/mutation-test`: `MEditService/MEditService.Core/**/*.cs`
-or `modbench/src/modmanager/**/*.ts` (excluding `test/**`, `*Provider.ts`, `*Panel.ts`).
+Fix all failures, rerun.
 
 ## Step 2 — Review
 
-1. Run `/code-review` **report-only** (no `--fix`; `high`/`ultra` for large/risky).
-2. Triage every finding (first match):
+1. Mutation-eligible diff (`MEditService/MEditService.Core/**/*.cs` or
+   `modbench/src/modmanager/**/*.ts`, excluding `test/**`, `*Provider.ts`, `*Panel.ts`)
+   → dispatch the **Suite axis first** (`/mutation-test` carries the brief): a subagent
+   runs the tool and returns a findings table, reported as a third section. It is
+   review, not a gate — there is no score to reach.
+2. Run `/code-review` **report-only** (no `--fix`; `high`/`ultra` for large/risky).
+3. Triage every finding — all axes' — (first match):
 
 | Outcome | When → Action |
 |---|---|
@@ -41,6 +45,6 @@ or `modbench/src/modmanager/**/*.ts` (excluding `test/**`, `*Provider.ts`, `*Pan
 | **Escalate** | ambiguous / wide blast radius → ask dev: fix / ignore / issue |
 | **Reject** | not real → note why |
 
-3. Rerun Step 1 gates if any fix changed logic.
+4. Rerun Step 1 gates if any fix changed logic.
 
 Complexity / quality notes are not a validate step: the `code-quality` Stop hook surfaces them continuously during the work, scoped to changed files, for in-loop triage. Validate owns correctness, gates, and mutation — not the complexity re-check.
