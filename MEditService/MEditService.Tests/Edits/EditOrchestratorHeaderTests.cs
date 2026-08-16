@@ -403,71 +403,22 @@ public sealed class EditOrchestratorHeaderTests
         }
     }
 
-    // --- Issue #86: masters as a validated, add-only plugin-reference array ---
+    // --- Issue #335/ADR-0038: masters is no longer directly user-editable — any staged edit
+    // against the header's masters field is rejected outright, regardless of what it proposes.
+    // (Was issue #86's validated, add-only plugin-reference array; #283 design review found a
+    // real but out-of-scope use for a manually-declared master (load-order pinning) and decided
+    // nothing may declare a master except content that references it — ADR-0038.) ---
 
     private static JsonElement MastersJson(params string[] plugins) =>
         JsonSerializer.SerializeToElement(plugins);
 
-    // --- B2: a master naming a plugin not loaded in the session is rejected ---
-
+    // A proposal that would have been a perfectly valid append under the old add-only rule is
+    // rejected all the same — proves the guard no longer inspects content at all, not just that
+    // it still catches the invalid shapes the old rule caught.
     [Fact]
-    public void StageEdit_MastersNamingUnloadedPlugin_ReturnsInvalidReferences()
+    public void StageEdit_MastersDirectEdit_ValidAppend_IsRejected()
     {
-        var data = new PluginFixtureBuilder("eo-header-masters-unloaded")
-            .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("BaseNpc"))
-            .WithPlugin("TestPlugin.esp", mod => mod.Npcs.AddNew("N"))
-            .Build();
-        using (data)
-        {
-            var (orchestrator, manager) = MakeOrchestrator();
-            using (manager)
-            {
-                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-                var fields = new Dictionary<string, JsonElement> { ["masters"] = MastersJson("NotLoaded.esp") };
-
-                var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
-
-                var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
-                var error = Assert.Single(invalid.Errors);
-                Assert.Equal("masters", error.FieldPath);
-                Assert.Equal("NotLoaded.esp", error.Value);
-                Assert.Equal("not_in_session", error.Reason);
-            }
-        }
-    }
-
-    // --- masters must be a JSON array — a caller sending a non-array shape (malformed direct API/
-    // agent call; the frontend never sends this) is rejected outright rather than silently coerced
-    // to an empty, no-op edit (ADR-0026: never stage an edit that looks accepted but does nothing). ---
-
-    [Fact]
-    public void StageEdit_MastersNonArrayValue_ReturnsInvalidReferences()
-    {
-        var data = new PluginFixtureBuilder("eo-header-masters-nonarray")
-            .WithPlugin("TestPlugin.esp", mod => mod.Npcs.AddNew("N"))
-            .Build();
-        using (data)
-        {
-            var (orchestrator, manager) = MakeOrchestrator();
-            using (manager)
-            {
-                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-                var fields = new Dictionary<string, JsonElement> { ["masters"] = J("\"not-an-array\"") };
-
-                var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
-
-                var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
-                Assert.Equal("not_append_only", Assert.Single(invalid.Errors).Reason);
-            }
-        }
-    }
-
-    // --- B1/AC1 positive: appending a loaded plugin onto an empty masters list stages ---
-
-    [Fact]
-    public void StageEdit_MastersValidAppend_Stages()
-    {
-        var data = new PluginFixtureBuilder("eo-header-masters-valid")
+        var data = new PluginFixtureBuilder("eo-header-masters-valid-append-rejected")
             .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("BaseNpc"))
             .WithPlugin("TestPlugin.esp", mod => mod.Npcs.AddNew("N"))
             .Build();
@@ -481,136 +432,41 @@ public sealed class EditOrchestratorHeaderTests
 
                 var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
 
-                var staged = Assert.IsType<StageEditResult.Staged>(result);
-                Assert.Equal("masters", Assert.Single(staged.Changes).FieldPath);
+                var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
+                var error = Assert.Single(invalid.Errors);
+                Assert.Equal("masters", error.FieldPath);
+                Assert.Equal("read_only", error.Reason);
             }
         }
     }
 
-    // --- B3: add-only enforcement (AC5) — reject removal, reordering, duplication; a
-    // second sequential append builds on the *pending* value, not the stale disk baseline. ---
-
-    private static (EditOrchestrator orchestrator, SessionManager manager, PluginFixtureData data) MakeMastersFixture(string prefix)
+    // A malformed non-array shape is rejected too, same reason as a well-formed proposal — the
+    // guard never gets far enough to look at shape (ADR-0026: never stage an edit that looks
+    // accepted but does nothing, even trivially true here since nothing is ever accepted).
+    [Fact]
+    public void StageEdit_MastersDirectEdit_MalformedShape_IsRejected()
     {
-        var data = new PluginFixtureBuilder(prefix)
-            .WithPlugin("Base.esm", mod => mod.Npcs.AddNew("BaseNpc"))
-            .WithPlugin("Base2.esm", mod => mod.Npcs.AddNew("Base2Npc"))
-            .WithPlugin("Extra.esp", mod => mod.Npcs.AddNew("ExtraNpc"))
-            .WithPlugin(
-                "TestPlugin.esp",
-                mod =>
-                {
-                    mod.Npcs.AddNew("N");
-                    ((Mutagen.Bethesda.Plugins.Records.IMod)mod).MasterReferences.Add(
-                        new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = ModKey.FromFileName("Base.esm") });
-                    ((Mutagen.Bethesda.Plugins.Records.IMod)mod).MasterReferences.Add(
-                        new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = ModKey.FromFileName("Base2.esm") });
-                },
-                // Default write behavior recomputes the masters list purely from FormLink/override
-                // content (MastersListContentOption.Iterate) — TestPlugin's NPC references neither
-                // declared master, so without NoCheck the fixture-build write would silently drop
-                // both before the session ever loads them (issue #86).
-                writeParams: new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
-                {
-                    MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,
-                })
+        var data = new PluginFixtureBuilder("eo-header-masters-malformed-rejected")
+            .WithPlugin("TestPlugin.esp", mod => mod.Npcs.AddNew("N"))
             .Build();
-        var (orchestrator, manager) = MakeOrchestrator();
-        manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-        return (orchestrator, manager, data);
-    }
-
-    [Fact]
-    public void StageEdit_MastersRemovingExisting_ReturnsInvalidReferences()
-    {
-        var (orchestrator, manager, data) = MakeMastersFixture("eo-header-masters-remove");
-        using (data) using (manager)
+        using (data)
         {
-            var fields = new Dictionary<string, JsonElement> { ["masters"] = MastersJson("Base.esm") };
+            var (orchestrator, manager) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+                var fields = new Dictionary<string, JsonElement> { ["masters"] = J("\"not-an-array\"") };
 
-            var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
+                var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
 
-            var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
-            Assert.Equal("not_append_only", Assert.Single(invalid.Errors).Reason);
+                var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
+                Assert.Equal("read_only", Assert.Single(invalid.Errors).Reason);
+            }
         }
     }
 
-    [Fact]
-    public void StageEdit_MastersReordering_ReturnsInvalidReferences()
-    {
-        var (orchestrator, manager, data) = MakeMastersFixture("eo-header-masters-reorder");
-        using (data) using (manager)
-        {
-            var fields = new Dictionary<string, JsonElement> { ["masters"] = MastersJson("Base2.esm", "Base.esm") };
-
-            var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
-
-            var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
-            Assert.Equal("not_append_only", Assert.Single(invalid.Errors).Reason);
-        }
-    }
-
-    [Fact]
-    public void StageEdit_MastersDuplicatingExisting_ReturnsInvalidReferences()
-    {
-        var (orchestrator, manager, data) = MakeMastersFixture("eo-header-masters-dup");
-        using (data) using (manager)
-        {
-            var fields = new Dictionary<string, JsonElement> { ["masters"] = MastersJson("Base.esm", "Base2.esm", "Base.esm") };
-
-            var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
-
-            var invalid = Assert.IsType<StageEditResult.InvalidReferences>(result);
-            Assert.Equal("not_append_only", Assert.Single(invalid.Errors).Reason);
-        }
-    }
-
-    [Fact]
-    public void StageEdit_MastersValidAppendOntoExisting_Stages()
-    {
-        var (orchestrator, manager, data) = MakeMastersFixture("eo-header-masters-append-existing");
-        using (data) using (manager)
-        {
-            var fields = new Dictionary<string, JsonElement> { ["masters"] = MastersJson("Base.esm", "Base2.esm", "Extra.esp") };
-
-            var result = orchestrator.StageEdit(HeaderKey("TestPlugin.esp"), "TestPlugin.esp", fields, "user", null);
-
-            var staged = Assert.IsType<StageEditResult.Staged>(result);
-            Assert.Equal("masters", Assert.Single(staged.Changes).FieldPath);
-        }
-    }
-
-    [Fact]
-    public void StageEdit_MastersSequentialAppends_SecondBuildsOnPendingNotDisk()
-    {
-        var (orchestrator, manager, data) = MakeMastersFixture("eo-header-masters-sequential");
-        using (data) using (manager)
-        {
-            var first = orchestrator.StageEdit(
-                HeaderKey("TestPlugin.esp"), "TestPlugin.esp",
-                new Dictionary<string, JsonElement> { ["masters"] = MastersJson("Base.esm", "Base2.esm", "Extra.esp") },
-                "user", null);
-            Assert.IsType<StageEditResult.Staged>(first);
-
-            // A second append must build on the first (still-pending, unsaved) masters value —
-            // if it fell back to the stale on-disk baseline (which lacks Extra.esp), this second
-            // call would be rejected as a reorder/removal (dropping the first addition), not seen
-            // as a valid append.
-            var second = orchestrator.StageEdit(
-                HeaderKey("TestPlugin.esp"), "TestPlugin.esp",
-                new Dictionary<string, JsonElement> { ["masters"] = MastersJson("Base.esm", "Base2.esm", "Extra.esp") },
-                "user", null);
-
-            // Re-staging the exact same list the second time around is itself a no-op append (zero new
-            // entries) — still valid, and proves the pending value (not disk) was used as the baseline.
-            var staged = Assert.IsType<StageEditResult.Staged>(second);
-            var change = Assert.Single(staged.Changes);
-            var finalMasters = change.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
-            Assert.Equal(["Base.esm", "Base2.esm", "Extra.esp"], finalMasters);
-        }
-    }
-
-    // --- Issue #86 invariant B: copy-to auto-add-master ---
+    // --- Issue #86 invariant B (unchanged by #335 — StageMissingMasters bypasses StageEdit
+    // entirely, so the guard above never runs against it): copy-to auto-add-master ---
 
     private static (EditOrchestrator orchestrator, SessionManager manager, DuckDbPendingChangeService changes)
         MakeOrchestratorWithChanges()
@@ -745,9 +601,9 @@ public sealed class EditOrchestratorHeaderTests
                 mod => ((Mutagen.Bethesda.Plugins.Records.IMod)mod).MasterReferences.Add(
                     new Mutagen.Bethesda.Plugins.Records.MasterReference { Master = ModKey.FromFileName("Origin.esp") }),
                 // Target doesn't yet reference Origin.esp's content, so the declared master would
-                // otherwise be pruned at fixture-build write time (same MastersListContentOption.Iterate
-                // gap as MakeMastersFixture) — NoCheck preserves it so this test isolates the
-                // FormLink-referenced-plugin gap (RaceProvider.esm) from the origin-plugin gap (B4).
+                // otherwise be pruned at fixture-build write time (default MastersListContentOption.
+                // Iterate) — NoCheck preserves it so this test isolates the FormLink-referenced-plugin
+                // gap (RaceProvider.esm) from the origin-plugin gap (B4).
                 writeParams: new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
                 {
                     MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,

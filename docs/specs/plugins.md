@@ -325,8 +325,8 @@ without saying what is not yet known would make that worse, not better.
   **Open Header** action (context menu; also available inline) opens the
   plugin's **header record** — author, masters, flags — as a single-column record panel. A
   plugin's context menu also exposes New Plugin…, Copy as Override Into…, and — on editable
-  plugins only — Add New Record…, Convert to ESL/ESM, Add Master…, and Run Script…. Each is a
-  confirmation or picker as appropriate; destructive ones confirm.
+  plugins only — Add New Record…, Convert to ESL/ESM, and Run Script…. Each is a confirmation or
+  picker as appropriate; destructive ones confirm.
 - **Record-type nodes** (`contextValue: "recordType"`): labeled by the type's **human-readable
   name** (e.g. "Activator" for `ACTI`, "Game Setting" for `GMST`), matching xEdit's naming from
   `wbDefinitionsFO4.pas` (#110); the raw 4-char signature remains the internal identifier (cache

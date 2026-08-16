@@ -170,24 +170,23 @@ better idea.
   definition and the keys are shortcuts onto it, exactly as in xEdit, and there are **no inline
   ▲▼✕ controls**, per the no-second-route rule below. On a pending cell:
   **Reveal in Pending Changes Tree** / **Save Group** / **Revert Group**,
-  **Copy as Override Into…** / **Copy as New Record Into…** / **Remove** / **Add
-  Master…** on a column header (the last only on the header record's own column, and only when
-  mutable — ADR-0033: no standalone control once an action is right-click-reachable, same rule
-  #207 applied to the inline revert button). An action reachable through right-click is never also
-  reachable a second way (no standalone revert icon once Revert Group exists; no standalone Add
-  Master… button once its menu entry exists). Both the pending-cell menu (#208) and the
-  column-header menu (#209) are VS Code's own native context menu
-  (`contributes.menus["webview/context"]`, gated on a `data-vscode-context` attribute the cell/
-  header carries — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s
-  native-first precedent applied inside the webview) rather than a rendered overlay. Column-header actions that need
-  a target plugin (all but Remove) open a `showQuickPick` listing the mutable plugins minus the
+  **Copy as Override Into…** / **Copy as New Record Into…** / **Remove** on a column header
+  (Remove only when mutable — ADR-0033: no standalone control once an action is
+  right-click-reachable, same rule #207 applied to the inline revert button). An action reachable
+  through right-click is never also reachable a second way (no standalone revert icon once Revert
+  Group exists). Both the pending-cell menu (#208) and the column-header menu (#209) are VS Code's
+  own native context menu (`contributes.menus["webview/context"]`, gated on a
+  `data-vscode-context` attribute the cell/header carries —
+  [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s native-first precedent
+  applied inside the webview) rather than a rendered overlay. Column-header actions that need a
+  target plugin (all but Remove) open a `showQuickPick` listing the mutable plugins minus the
   right-clicked column, with a "New Plugin…" entry — the same QuickPick `modbench.copyAsOverrideInto`
   already opens from the plugins tree, extended to accept the column header's record identity
   too, rather than a second picker implementation; filterable and keyboard-first, but no longer
-  positioned at the click like the retired in-webview list. Add Master…'s own QuickPick lists
-  every loaded plugin minus the header record's own plugin minus whatever's already a master —
-  deliberately not filtered to mutable plugins (a master is very often an immutable base-game/DLC
-  esm) — and has no "New Plugin…" entry.
+  positioned at the click like the retired in-webview list. #335/ADR-0038: Add Master… (and its
+  own, deliberately-not-mutable-filtered QuickPick) is gone — masters is lifecycle-derived now,
+  never a direct user edit; the header record's masters field still shows on this same column
+  header, read-only.
 - **Ctrl+click** — acknowledged for now as a fourth, navigation-only gesture (follows a FormKey
   reference to its record). Whether it survives once a right-click "Go to Record" exists is still
   undecided — see Further Notes.
@@ -305,8 +304,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   `CreateRecord`'s template-source pair; #281) / **Remove** (the same `modbench.deleteRecord`
   command and modal confirm as the tree's record rows — one operation, one name, per xEdit's
   `mniNavRemove`/`mniViewHeaderRemove`; #281), absent rather than merely disabled for an immutable
-  column / **Add Master…** (header record's own column only, mutable only). The grid's scroll
-  region is bound to the
+  column. The grid's scroll region is bound to the
   panel's viewport, not to its own content height, so a horizontal scrollbar (for wide grids with
   many plugin columns) stays reachable at the bottom of the visible viewport regardless of
   vertical scroll position, instead of only appearing at the bottom of a possibly very tall table

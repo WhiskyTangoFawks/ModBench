@@ -332,7 +332,14 @@ export interface PendingChange {
 export interface ReferenceValidationError {
   fieldPath: string;
   value?: string;
-  reason?: 'not_in_session' | 'not_append_only' | 'type_mismatch' | 'null_not_allowed';
+  // #335/ADR-0038: 'read_only' replaces 'not_append_only' — the header's masters field rejects
+  // every direct edit outright now (EditOrchestrator.CheckMasterEdit), not just non-append ones,
+  // so a reason naming "append-only" would be false the moment a proposal actually was a pure
+  // append. Still reachable from this webview via cross-column drag-and-drop onto the masters row
+  // (RecordPanel.handleCellDrop gates only on the target column's own mutability, never a field's
+  // readOnly — deliberate, issue #3: "dragging is a copy, only the drop target's mutability
+  // matters" — so the backend guard is what actually stops it).
+  reason?: 'not_in_session' | 'read_only' | 'type_mismatch' | 'null_not_allowed';
   expectedTypes?: string[];
 }
 

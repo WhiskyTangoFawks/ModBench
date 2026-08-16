@@ -343,9 +343,9 @@ describe('modbench command registration', () => {
     // command ids (#281: columnHeader.removeOverride folded into deleteRecord; Copy as New
     // Record is one all-surface id). #202: modbench.columnHeader.copyAllToPending deleted
     // outright — Copy as Override now covers that case via sourcePlugin instead of a fourth,
-    // near-duplicate action.
+    // near-duplicate action. #335/ADR-0038: modbench.columnHeader.addMaster is gone too — masters
+    // is lifecycle-derived now, never a direct user edit.
     'modbench.copyAsNewRecord',
-    'modbench.columnHeader.addMaster',
     // #227: the array-element/array-parent native `webview/context` menu commands — same shape
     // as #208/#209 above (package.json's contributes.menus["webview/context"], gated on
     // webviewId/webviewSection, not testable from this harness; and DiffRow's data-vscode-context

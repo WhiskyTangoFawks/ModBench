@@ -433,9 +433,11 @@ public sealed partial class EditOrchestrator(
                                             or PendingChangeConstants.RenumberChangeType)
             ?.ChangeType;
 
-    // Issue #86: the target's masters as of right now — a still-pending "Add Master" (or a
-    // preceding copy-to's auto-add within the same unsaved session) wins over the committed value,
-    // same convention as CheckMasterEdit / IsPluginEslFlagged.
+    // Issue #86: the target's masters as of right now — a still-pending copy-to auto-add-master
+    // (within the same unsaved session) wins over the committed value, same pending-over-committed
+    // convention as IsPluginEslFlagged. #335/ADR-0038: only StageMissingMasters below still calls
+    // this — CheckMasterEdit no longer needs a baseline, since it rejects every direct edit
+    // outright regardless of content.
     private List<string> GetEffectiveMasters(string plugin)
     {
         var headerFormKey = Records.HeaderIndexer.FormKeyFor(plugin);
@@ -850,14 +852,14 @@ public sealed partial class EditOrchestrator(
     private const string HeaderFlagsField = "flags";
 
     // Combines the two header-only stage-time guards (ESL-eligibility, issue #98; masters
-    // validation, issue #86) behind one call so StageEdit only branches on a single early-out
-    // here, not two.
+    // rejection, issue #335/ADR-0038) behind one call so StageEdit only branches on a single
+    // early-out here, not two.
     private StageEditResult? CheckHeaderStageGuards(
         string plugin, string recordType, Dictionary<string, JsonElement> fields,
         Dictionary<string, JsonElement> oldValues, IGameSession session)
     {
         StageEditResult? eslResult = CheckEslEligibility(plugin, recordType, fields, oldValues, session.GameRelease);
-        return eslResult ?? CheckMasterEdit(plugin, recordType, fields, session);
+        return eslResult ?? CheckMasterEdit(recordType, fields);
     }
 
     // Stage-time ESL-eligibility guard (ADR-0020 style): only when a header edit turns the ESL bit
@@ -884,69 +886,30 @@ public sealed partial class EditOrchestrator(
     // definition and PluginWriter's write-time override) — aliased here for call-site brevity.
     private const string HeaderMastersField = Records.HeaderIndexer.MastersFieldName;
 
-    // Issue #86 stage-time guard for the header's masters field: a validated, add-only
-    // plugin-reference array. First rejects any entry naming a plugin absent from the session,
-    // since a master resolving to no file makes the plugin unloadable. Then rejects any edit that
-    // is not a pure append onto GetEffectiveMasters' baseline (the same helper the copy-to
-    // auto-add-master path uses below), so reordering, removing, or duplicating an existing master
-    // is refused. Sort, clean, and remove operations remain deferred to scripts per AC5.
-    private StageEditResult.InvalidReferences? CheckMasterEdit(
-        string plugin, string recordType, Dictionary<string, JsonElement> fields, IGameSession session)
+    // Issue #335/ADR-0038 stage-time guard for the header's masters field: rejects any direct
+    // edit outright, unconditionally — masters is wholly derived from content now (Effective
+    // masters: committed masters unioned with what the plugin's content, committed and pending,
+    // actually references), so there is nothing left to validate about a proposed value, shape
+    // included. Was issue #86's validated, add-only plugin-reference array; #283 design review
+    // found a real but out-of-scope use for a manually-declared master (load-order pinning) and
+    // ADR-0038 closed the direct-edit path entirely rather than keep validating it. Never runs
+    // against StageMissingMasters' own auto-add-master pending change below — that upserts the
+    // pending change directly, bypassing StageEdit (and this guard) entirely, per invariant B.
+    private static StageEditResult.InvalidReferences? CheckMasterEdit(
+        string recordType, Dictionary<string, JsonElement> fields)
     {
         if (recordType != Records.HeaderIndexer.TableName) return null;
         if (!fields.TryGetValue(HeaderMastersField, out var newMastersJson)) return null;
 
-        // The PATCH endpoint hands this JSON straight through from the request body, so it's not
-        // guaranteed to be an array (a malformed caller could send a string or number) — reject that
-        // outright rather than silently coercing it to an empty list (ADR-0026: never stage an edit
-        // that looks accepted but does nothing).
-        if (newMastersJson.ValueKind != JsonValueKind.Array)
-        {
-            return new StageEditResult.InvalidReferences([
-                new ReferenceValidationError(HeaderMastersField, newMastersJson.GetRawText(), "not_append_only", [])
-            ]);
-        }
-
-        var proposed = ReadStringArray(newMastersJson);
-
-        // #34: load-order members only. A copy the load order does not name is loaded for reading,
-        // not by the game — accepting one as a master would write a master reference the game
-        // cannot resolve, which is the opposite of ADR-0036's "no observable change anywhere".
-        var loadedPlugins = session.Plugins.Where(p => p.InLoadOrder).Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var notLoaded = proposed.Where(m => !loadedPlugins.Contains(m)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (notLoaded.Count > 0)
-        {
-            return new StageEditResult.InvalidReferences(
-                notLoaded.ConvertAll(m => new ReferenceValidationError(HeaderMastersField, m, "not_in_session", [])));
-        }
-
-        var effectiveCurrent = GetEffectiveMasters(plugin);
-        return IsPureAppend(effectiveCurrent, proposed)
-            ? null
-            : new StageEditResult.InvalidReferences([
-                new ReferenceValidationError(HeaderMastersField, JsonSerializer.Serialize(proposed), "not_append_only", [])
-            ]);
+        return new StageEditResult.InvalidReferences([
+            new ReferenceValidationError(HeaderMastersField, newMastersJson.GetRawText(), "read_only", [])
+        ]);
     }
 
     private static List<string> ReadStringArray(JsonElement el) =>
         el.ValueKind == JsonValueKind.Array
             ? el.EnumerateArray().Select(e => e.GetString() ?? "").ToList()
             : [];
-
-    // True when `proposed` is exactly `current` as an ordered prefix, plus one or more newly
-    // appended entries that don't duplicate anything already present.
-    private static bool IsPureAppend(List<string> current, List<string> proposed)
-    {
-        if (proposed.Count < current.Count) return false;
-        for (var i = 0; i < current.Count; i++)
-        {
-            if (!string.Equals(proposed[i], current[i], StringComparison.OrdinalIgnoreCase)) return false;
-        }
-
-        var appended = proposed.Skip(current.Count).ToList();
-        return appended.Distinct(StringComparer.OrdinalIgnoreCase).Count() == appended.Count
-            && !appended.Any(a => current.Contains(a, StringComparer.OrdinalIgnoreCase));
-    }
 
     // Issue #98: the committed record index alone misses pending creates/renumbers, so a plugin
     // could be flagged ESL while a not-yet-saved change would make it invalid. Unions the committed

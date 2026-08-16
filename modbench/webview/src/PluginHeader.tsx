@@ -64,12 +64,12 @@ const READ_ONLY_TEXT: Record<'vanillaMaster' | 'notInLoadOrder', { label: string
 
 // Issue #209: this used to also own "Add Master…" (a button + its own hand-drawn candidate
 // dropdown, gated on isHeaderRecord/showMasterPicker/loadedPlugins) — deleted, not adapted, along
-// with the rest of the column-header's hand-drawn chrome (ColumnHeaderMenu, PluginTargetPicker).
-// Add Master is reachable only via the column header's native right-click menu now (ADR-0033: no
-// standalone control once an action is right-click-reachable, same rule #207 applied to the
-// inline revert button) — see RecordPanel.tsx's data-vscode-context wiring and
-// recordUtils.ts' currentMasters (moved there, since RecordPanel needs it to build that context
-// and to compute the appended list when the native command's broadcast comes back in).
+// with the rest of the column-header's hand-drawn chrome (ColumnHeaderMenu, PluginTargetPicker),
+// in favor of the column header's native right-click menu (ADR-0033: no standalone control once
+// an action is right-click-reachable, same rule #207 applied to the inline revert button).
+// #335/ADR-0038: that native menu entry is gone too now — masters is lifecycle-derived, never a
+// direct user edit; the header record's masters field still renders through the ordinary
+// compare-grid rows below, read-only.
 export function PluginHeader({
   override: o, isImmutable, inLoadOrder, showOriginInline, collapsed, onToggleCollapse,
 }: PluginHeaderProps) {

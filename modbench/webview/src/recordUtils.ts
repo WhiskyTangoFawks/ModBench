@@ -1,4 +1,4 @@
-import type { ColumnKey, CompareOverride, ConflictAll, ConflictThis, FieldMetadata, PathSegment, RecordDetail } from './types';
+import type { ColumnKey, CompareOverride, ConflictAll, ConflictThis, FieldMetadata, PathSegment } from './types';
 import { columnKey } from './types';
 import type {
   ArrayElementContext, ArrayParentContext, ColumnHeaderContext, PendingCellContext,
@@ -27,30 +27,16 @@ export function pendingCellContext(changeId: string): string {
   } satisfies PendingCellContext);
 }
 
-// Issue #86: the header record's "masters" field, pending-aware (a still-unsaved Add Master
-// already counts as current — matches the backend's CheckMasterEdit baseline convention).
-// Moved here from PluginHeader.tsx in #209: RecordPanel now needs it too, to build the column
-// header's data-vscode-context (below) and to compute the appended list when the native Add
-// Master command's broadcast comes back in.
-export function currentMasters(o: RecordDetail): string[] {
-  const disk = o.fields.find(f => f.metadata.name === 'masters')?.value;
-  const pending = o.pendingFields?.masters;
-  const value = Array.isArray(pending) ? pending : disk;
-  return Array.isArray(value) ? value as string[] : [];
-}
-
 // Issue #209: the column-header right-click menu (Copy as Override… / Copy as New Record /
-// Remove / Add Master) is native now too — same mechanism as
-// pendingCellContext above, carried by the header `<th>` instead of a pending cell. `plugin` is
-// this column's own plugin (the copy actions' exclude-from-target-picker source; Remove's
-// direct target); `masters` backs the Add Master command's candidate list without a round trip
-// back into the webview to ask (see ColumnHeaderContext's own doc comment for why that list is
-// NOT filtered to mutable plugins the way the copy actions' picker is).
+// Remove) is native now too — same mechanism as pendingCellContext above, carried by the header
+// `<th>` instead of a pending cell. `plugin` is this column's own plugin (the copy actions'
+// exclude-from-target-picker source; Remove's direct target). #335/ADR-0038: no `masters`/
+// `isHeaderRecord` — both existed solely for the now-deleted Add Master command.
 export function columnHeaderContext(
-  formKey: string, plugin: string, origin: string, immutable: boolean, isHeaderRecord: boolean, masters: string[],
+  formKey: string, plugin: string, origin: string, immutable: boolean,
 ): string {
   return JSON.stringify({
-    webviewSection: 'columnHeader', formKey, plugin, origin, immutable, isHeaderRecord, masters,
+    webviewSection: 'columnHeader', formKey, plugin, origin, immutable,
     preventDefaultContextMenuItems: true,
   } satisfies ColumnHeaderContext);
 }
