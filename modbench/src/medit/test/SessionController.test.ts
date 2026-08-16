@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SessionController, type SessionControllerDeps } from '../SessionController';
 import type { PluginMetadata } from '../ApiClient';
 
@@ -80,9 +80,21 @@ function makeRepository({
     clearFilter: vi.fn().mockResolvedValue(undefined),
     getActiveFilter: vi.fn().mockResolvedValue(activeFilter),
     getPlugins: vi.fn().mockResolvedValue(plugins),
+    getSessionStatus: vi.fn().mockResolvedValue(makeStatus()),
     getRecordTypes: vi.fn().mockResolvedValue([]),
     getRecords: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   } as any;
+}
+
+/** #307: one `GET /session/status` answer. Defaults describe a load that has done nothing yet,
+ *  so a test states only the field it is about. */
+function makeStatus({
+  totalPlugins = 2,
+  indexedPlugins = [] as string[],
+  conflictsComputed = false,
+  failures = [] as { name: string; reason: string }[],
+} = {}) {
+  return { totalPlugins, indexedPlugins, conflictsComputed, failures };
 }
 
 function makeDeps(overrides: Partial<SessionControllerDeps> = {}): SessionControllerDeps {
@@ -1055,6 +1067,127 @@ describe('SessionController.loadExplicitSession', () => {
     const failures = await ctrl.loadExplicitSession(plugins, '/game/Data');
 
     expect(failures).toBeUndefined();
+  });
+});
+
+// ── loadExplicitSession: progressive load (#307 / ADR-0035) ───────────────────
+
+// The load POST stays blocking (#274 kept its contract), and the generated openapi-fetch client
+// has no streaming path — so progress is polled off GET /session/status *alongside* the still
+// in-flight POST. This is the seam the polling logic is tested at: no VS Code types, a fake
+// client and a fake repository, fake timers for the cadence.
+describe('SessionController.loadExplicitSession progress polling', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const plugins = [
+    { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', participates: true },
+    { name: 'Fallout4.esm', path: '/game/Data/Fallout4.esm', origin: 'Data', participates: true },
+  ];
+
+  /** A load POST that stays in flight until the returned `finish` is called — the whole point of
+   *  this suite is what happens *during* that window, which a resolved mock cannot express. */
+  function heldLoad() {
+    let finish!: () => void;
+    const held = new Promise((resolve) => {
+      finish = () => resolve({ response: { ok: true }, data: { status: 'loaded', failures: [] } });
+    });
+    return { POST: vi.fn().mockReturnValue(held), finish };
+  }
+
+  it('reports each poll\'s indexed plugin set to onProgress while the load POST is still in flight', async () => {
+    const { POST, finish } = heldLoad();
+    const repository = makeRepository();
+    repository.getSessionStatus
+      .mockResolvedValueOnce(makeStatus({ indexedPlugins: ['Fallout4.esm'] }))
+      .mockResolvedValueOnce(makeStatus({ indexedPlugins: ['Fallout4.esm', 'Foo.esp'] }));
+    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST } as any, repository }));
+    const onProgress = vi.fn();
+
+    const load = ctrl.loadExplicitSession(plugins, '/game/Data', 'Fallout4', { onProgress });
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({ indexedPlugins: ['Fallout4.esm'] }));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(onProgress).toHaveBeenLastCalledWith(
+      expect.objectContaining({ indexedPlugins: ['Fallout4.esm', 'Foo.esp'] }),
+    );
+    expect(onProgress).toHaveBeenCalledTimes(2);
+
+    finish();
+    await load;
+  });
+
+  it('stops polling once the load POST settles, so a finished load leaves no timer running', async () => {
+    const { POST, finish } = heldLoad();
+    const repository = makeRepository();
+    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST } as any, repository }));
+    const onProgress = vi.fn();
+
+    const load = ctrl.loadExplicitSession(plugins, '/game/Data', 'Fallout4', { onProgress });
+    await vi.advanceTimersByTimeAsync(500);
+    finish();
+    await load;
+    const pollsAtCompletion = repository.getSessionStatus.mock.calls.length;
+    // Guards the assertion below against passing vacuously: "no further polls" means nothing
+    // unless the load was actually polling in the first place.
+    expect(pollsAtCompletion).toBeGreaterThan(0);
+
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(repository.getSessionStatus.mock.calls).toHaveLength(pollsAtCompletion);
+  });
+
+  // AC6: a per-plugin failure is reported the moment it happens, not held back until the load
+  // finishes — the caller decorates that row straight away (ADR-0026).
+  it('carries the failures reported so far on each tick, before the load has finished', async () => {
+    const { POST, finish } = heldLoad();
+    const repository = makeRepository();
+    repository.getSessionStatus.mockResolvedValue(
+      makeStatus({ indexedPlugins: ['Fallout4.esm'], failures: [{ name: 'Bad.esp', reason: 'RACE parse' }] }),
+    );
+    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST } as any, repository }));
+    const onProgress = vi.fn();
+
+    const load = ctrl.loadExplicitSession(plugins, '/game/Data', 'Fallout4', { onProgress });
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({ failures: [{ name: 'Bad.esp', reason: 'RACE parse' }] }),
+    );
+
+    finish();
+    await load;
+  });
+
+  // ADR-0026 background/recoverable tier: a status poll is frequent and non-essential — a blip
+  // gets a log line and the next tick, never a toast and never an aborted load.
+  it('logs a failed status poll and keeps polling, without surfacing it or failing the load', async () => {
+    const { POST, finish } = heldLoad();
+    const repository = makeRepository();
+    repository.getSessionStatus
+      .mockRejectedValueOnce(new Error('GET /session/status failed (500)'))
+      .mockResolvedValue(makeStatus({ indexedPlugins: ['Foo.esp'] }));
+    const log = vi.fn();
+    const deps = makeDeps({ client: { ...makeClient(), POST } as any, repository, log });
+    const ctrl = new SessionController(deps);
+    const onProgress = vi.fn();
+
+    const load = ctrl.loadExplicitSession(plugins, '/game/Data', 'Fallout4', { onProgress });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(onProgress).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({ indexedPlugins: ['Foo.esp'] }));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('session/status'));
+    expect(deps.showError).not.toHaveBeenCalled();
+    expect(deps.showWarning).not.toHaveBeenCalled();
+
+    finish();
+    await load;
   });
 });
 

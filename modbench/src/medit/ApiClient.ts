@@ -25,6 +25,34 @@ export interface MasterIssue {
   kind: 'DirectlyMissing' | 'Unloadable';
 }
 
+/** #307 / ADR-0035: what the session can say about itself *while it is still loading* —
+ *  `GET /session/status`, polled alongside the in-flight load POST.
+ *
+ *  `indexedPlugins` is deliberately flattened to filenames: it is consumed by
+ *  `PluginsTreeComposite.setSession`, which keys on the plugin filename (the boundary object
+ *  CONTEXT-MAP.md names). The wire also carries each entry's origin, which nothing on this path
+ *  needs yet — mapped away here rather than carried unused.
+ *
+ *  The wire's `state` is deliberately *not* mapped. It is derived from `conflictsComputed` today
+ *  and duplicates it; anything deciding whether to render conflict information must read
+ *  `conflictsComputed` (SessionStatus.cs makes this the field's whole reason for existing), and
+ *  offering a second, coincidentally-equal field would invite exactly the wrong read. */
+export interface SessionStatus {
+  /** How many plugins this load set out to open — the denominator for progress. Plugins that
+   *  fail to open still count toward it. */
+  totalPlugins: number;
+  /** Filenames of the plugins whose indexing has completed, in the order they landed. A plugin
+   *  appears here only once it is wholly queryable — strictly later than "opened", which is what
+   *  `GET /plugins` reports. */
+  indexedPlugins: string[];
+  /** Whether the winner sweep has run. False means *nothing has looked yet*, which is not the
+   *  same as "no conflicts" — the distinction this whole endpoint exists to make. */
+  conflictsComputed: boolean;
+  /** Plugins that could not be opened or indexed, as they are discovered — not held back until
+   *  the load finishes (ADR-0026). */
+  failures: { name: string; reason: string }[];
+}
+
 export interface RecordSummary {
   formKey: string;
   plugin: string;

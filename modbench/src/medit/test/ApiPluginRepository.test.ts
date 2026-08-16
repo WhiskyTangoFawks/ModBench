@@ -336,6 +336,46 @@ describe('ApiPluginRepository.getActiveFilter', () => {
   });
 });
 
+// #307 / ADR-0035: what the session can honestly say about itself *while it is still loading* —
+// polled alongside the in-flight load POST. `conflictsComputed` is read separately from `state`
+// on purpose (SessionStatus.cs): the sweep is whole-set, so ADR-0035's live mutations will leave
+// a Ready session with stale winners, and anything deciding whether to render conflict
+// information must read that field, never the state.
+describe('ApiPluginRepository.getSessionStatus', () => {
+  it('calls GET /session/status and reports the plugins indexed so far, the sweep state and the failures', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({
+        data: {
+          state: 1,
+          totalPlugins: 3,
+          indexedPlugins: [{ name: 'Fallout4.esm', origin: 'Data' }, { name: 'TestMod.esp', origin: 'ModA' }],
+          conflictsComputed: false,
+          failures: [{ name: 'Bad.esp', reason: 'RACE parse' }],
+        },
+        response: { ok: true },
+      }),
+    } as any;
+
+    const status = await new ApiPluginRepository(client).getSessionStatus();
+
+    expect(status).toEqual({
+      totalPlugins: 3,
+      indexedPlugins: ['Fallout4.esm', 'TestMod.esp'],
+      conflictsComputed: false,
+      failures: [{ name: 'Bad.esp', reason: 'RACE parse' }],
+    });
+    expect(client.GET).toHaveBeenCalledWith('/session/status', expect.anything());
+  });
+
+  // The endpoint answers 200 in every state including "no session" (SessionEndpoints.cs), so a
+  // non-ok here is a genuine fault. It must not degrade to a plausible-looking "nothing indexed,
+  // conflicts not computed" — that reads as a load making no progress rather than a broken read,
+  // and the caller (SessionController's poll loop) is the one that decides to tolerate it.
+  it('throws on a non-OK response rather than degrading to an empty, still-loading-looking status', async () => {
+    await expect(new ApiPluginRepository(nonOkClient()).getSessionStatus()).rejects.toThrow(/500/);
+  });
+});
+
 // Issue #211: the condition-function catalogue backing the extension-host QuickPick. Unlike most
 // PluginRepository reads (ensureOk-then-throw), this mirrors the deleted webview-side
 // RecordSessionClient.conditionFunctions()'s degrade-to-[] convention (closer precedent:
