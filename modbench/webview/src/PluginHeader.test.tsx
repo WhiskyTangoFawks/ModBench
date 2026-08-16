@@ -56,35 +56,56 @@ describe('PluginHeader', () => {
 
   // #304 / ADR-0036: a copy the load order does not name reads differently on screen (not just
   // in the tooltip) — same underlying fact (immutable) but a distinct cause, and AC2 asks for the
-  // distinction to be visible, not only discoverable on hover.
+  // distinction to be visible, not only discoverable on hover. "(not loaded)", not "(not in load
+  // order)" — a shadowed copy is a file conflict, decided by the Mod override order, not the
+  // Plugin load order this label would otherwise (wrongly) imply (CONTEXT-MAP.md).
   it('shows a distinct label for an immutable column the load order does not name', () => {
     render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />);
     expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
-    expect(screen.getByText('(not in load order)')).toBeInTheDocument();
+    expect(screen.getByText('(not loaded)')).toBeInTheDocument();
   });
 
-  // AC2: the tooltip names the escape hatch (ADR-0036) — raising this copy to the one that
-  // loads makes it editable. Never "mod"/"priority" (CONTEXT-MAP.md's Editing/Mod Management
-  // vocabulary boundary — Editing says "load order", not "priority").
-  it('the not-in-load-order tooltip names the escape hatch, without Mod Management vocabulary', () => {
+  // #304 review: pins the *meaning*, not just the vocabulary — a prior draft avoided "mod" and
+  // "priority" while still asserting the wrong mechanism ("move it earlier in the load order",
+  // which only ever fixes a Plugin-load-order-absent case, never a shadowed-file conflict, which
+  // is decided by the Mod override order instead — CONTEXT-MAP.md, CONTEXT.md:37-49). An exact
+  // match means any future rewording is a deliberate, reviewed choice, not a silent drift back to
+  // something false that happens to still dodge two banned words.
+  it('the not-loaded tooltip is exactly the reviewed, true-for-both-causes wording', () => {
     render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />);
-    const title = screen.getByText('(not in load order)').getAttribute('title') ?? '';
-    expect(title).toMatch(/load order/i);
-    expect(title).toMatch(/editable/i);
+    expect(screen.getByText('(not loaded)')).toHaveAttribute(
+      'title',
+      'This copy plays no part in what the game actually loads, so editing it here changes '
+      + 'nothing anywhere. Whether this file loads, and which copy, is decided in the Mods and '
+      + 'Plugins views.',
+    );
+  });
+
+  // Still checked as a floor, independent of the exact-match test above: whatever the wording is,
+  // it must never reintroduce Mod Management's vocabulary as a common noun/mechanism ("this mod",
+  // "raise its priority") — distinct from naming the actual "Mods"/"Plugins" view titles, which is
+  // naming a surface, not importing a bounded context's model.
+  it('the not-loaded tooltip never uses "mod" as a common noun or "priority" as a mechanism', () => {
+    render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />);
+    const title = screen.getByText('(not loaded)').getAttribute('title') ?? '';
     expect(title).not.toMatch(/\bmod\b/i);
     expect(title).not.toMatch(/priority/i);
   });
 
-  // #304 / ADR-0035: dimming keys on inLoadOrder, not isImmutable — a vanilla master must not
-  // dim (it participates normally; it just can't be edited), only a copy the load order doesn't
-  // name, matching the tree row's own treatment for the identical reason (ADR-0035).
-  it('renders dimmed only when the column is not in the load order', () => {
-    const { container: dimmed } = render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />);
-    const { container: vanilla } = render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={true} />);
-    const { container: mutable } = render(<PluginHeader {...baseProps()} isImmutable={false} inLoadOrder={true} />);
-    expect((dimmed.firstElementChild as HTMLElement).style.opacity).not.toBe('');
-    expect((vanilla.firstElementChild as HTMLElement).style.opacity).toBe('');
-    expect((mutable.firstElementChild as HTMLElement).style.opacity).toBe('');
+  // #304 review: dimming is applied exactly once, by RecordPanel's own <th> — PluginHeader must
+  // not also dim its own root, or the two compound (CSS opacity multiplies on nesting: 0.55 twice
+  // renders at ~0.30). Renders the actual nesting (a <th> wrapping <PluginHeader>, mirroring
+  // RecordPanel's real markup) so this can't silently return.
+  it('does not dim its own root when nested in a dimmed header cell — dimming is the header cell\'s job alone', () => {
+    const { container } = render(
+      <table><thead><tr>
+        <th style={{ opacity: 0.55 }}>
+          <PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />
+        </th>
+      </tr></thead></table>,
+    );
+    const pluginHeaderRoot = container.querySelector('th > div');
+    expect((pluginHeaderRoot as HTMLElement).style.opacity).toBe('');
   });
 
   // ADR-0036: origin is never what the user reads by default — only the filename.

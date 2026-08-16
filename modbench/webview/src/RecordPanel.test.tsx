@@ -476,11 +476,17 @@ describe('RecordPanel — a copy the load order does not name (#304 / ADR-0035)'
     renderPanel(notInLoadOrderCompareResult, { plugins: notInLoadOrderPluginsResponse });
     await waitFor(() => expect(screen.getByText('Solo.esp')).toBeInTheDocument());
 
-    expect(screen.getByText('(not in load order)')).toBeInTheDocument();
+    expect(screen.getByText('(not loaded)')).toBeInTheDocument();
     expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
 
     const th = screen.getByText('Solo.esp').closest('th');
     expect(th).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+    // #304 review: dimming must apply exactly once — PluginHeader's own root <div>, nested
+    // directly inside this dimmed <th>, must not carry a second opacity (CSS opacity compounds on
+    // nesting, so two 0.55s would render at ~0.30, not 0.55). Real nesting, not a standalone
+    // PluginHeader render, is what proves this can't silently regress.
+    const pluginHeaderRoot = th!.querySelector(':scope > div');
+    expect((pluginHeaderRoot as HTMLElement).style.opacity).toBe('');
   });
 
   it('does not dim a vanilla-master column (immutable, still in the load order)', async () => {

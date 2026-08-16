@@ -114,6 +114,19 @@ describe('extendedEditorPath', () => {
     const colB = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Shared.esp', 'ModB');
     expect(colA).not.toBe(colB);
   });
+
+  // #304 review: origin is a mod folder name, read off disk — an MO2 instance is user-controlled
+  // input, not a trusted literal, and this is the one component where getting sanitization wrong
+  // writes outside tempRoot. sanitizeForPath's regex (`/[<>:"/\\|?*]/g`) already strips every path
+  // separator, so `..` alone (no `/` or `\` around it) can never traverse — mirrors the coverage
+  // recordLabel/fieldName/plugin already get from the reserved-character test above, extended to
+  // the fourth segment.
+  it('strips path separators from a hostile origin, so it cannot escape tempRoot', () => {
+    const path = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm', '../../../etc/passwd');
+    expect(path.startsWith('/tmp/root')).toBe(true);
+    expect(path).not.toContain('/etc/passwd');
+    expect(path).toBe(join('/tmp/root', 'Deacon', '.._.._.._etc_passwd', 'Description [Fallout4.esm].txt'));
+  });
 });
 
 describe('openExtendedFieldEditor', () => {
@@ -327,6 +340,22 @@ describe('openExtendedFieldEditor', () => {
     expect(colAPath).not.toBe(colBPath);
     expect(await readFile(colAPath, 'utf8')).toBe('from ModA');
     expect(await readFile(colBPath, 'utf8')).toBe('from ModB');
+  });
+
+  // #304 review: origin is read off disk (a mod folder name), not a trusted literal — proves the
+  // real write, not just the computed string, stays under tempRoot for a hostile value.
+  it('a hostile origin cannot make the write land outside tempRoot', async () => {
+    const tempRoot = await makeTempRoot();
+    const path = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', '../../../etc/passwd');
+    openTextDocument.mockResolvedValue({ uri: { fsPath: path }, getText: () => 'x' });
+
+    await openExtendedFieldEditor(
+      { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: '../../../etc/passwd', readOnly: false },
+      makeDeps(tempRoot),
+    );
+
+    expect(path.startsWith(tempRoot)).toBe(true);
+    expect(await readFile(path, 'utf8')).toBe('x');
   });
 
   // Review fix (finding #3): AC3's "multi-line string values can be read and edited in full"
