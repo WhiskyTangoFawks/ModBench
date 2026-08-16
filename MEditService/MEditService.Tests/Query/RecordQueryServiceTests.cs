@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -27,6 +28,8 @@ public sealed class RecordQueryServiceTests : IDisposable
     }
 
     public void Dispose() => _manager.Dispose();
+
+    private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
     // --- GET /plugins ---
 
@@ -973,6 +976,185 @@ public sealed class RecordQueryServiceTests : IDisposable
             Assert.NotNull(compare);
             var overrides = Assert.Single(compare.Overrides);
             Assert.Equal("CompareA.esp", overrides.Plugin);
+        }
+    }
+
+    // --- GetEffectiveMasters (#336/ADR-0038: committed masters unioned with the origin plugins of
+    // everything currently staged for the plugin — the derived replacement for the deleted
+    // stage-missing-masters pending row) ---
+
+    private static (RecordQueryService Svc, SessionManager Manager, DuckDbPendingChangeService Changes)
+        MakeSvcWithRealChanges(PluginFixtureData data)
+    {
+        var reflector = SharedSchemaReflector.Instance;
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);
+        manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
+        return (svc, manager, changes);
+    }
+
+    [Fact]
+    public void GetEffectiveMasters_NoStagedContent_ReturnsCommittedMasters()
+    {
+        var data = new PluginFixtureBuilder("rqs-effmasters-committed")
+            .WithPlugin("Target.esp", mod =>
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esm") }),
+                writeParams: new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
+                {
+                    MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,
+                })
+            .Build();
+        using (data)
+        {
+            var (svc, manager, _) = MakeSvcWithRealChanges(data);
+            using (manager)
+            {
+                var masters = svc.GetEffectiveMasters("Target.esp", "Data");
+
+                Assert.Equal(["Base.esm"], masters);
+            }
+        }
+    }
+
+    [Fact]
+    public void GetEffectiveMasters_StagedRecordsOwnOrigin_IncludesItEvenWithNoCommittedMasters()
+    {
+        var data = new PluginFixtureBuilder("rqs-effmasters-own-origin").WithPlugin("Target.esp").Build();
+        using (data)
+        {
+            var (svc, manager, changes) = MakeSvcWithRealChanges(data);
+            using (manager)
+            {
+                // Simulates a copied record's own FormKey (originating in Base.esm) landing in
+                // Target.esp — the same shape CopyRecordTo's own upsert produces, staged directly
+                // here to isolate GetEffectiveMasters from the orchestrator.
+                changes.Upsert(new PendingChangeUpsert(
+                    "000001:Base.esm", "Target.esp", "npc_",
+                    new() { ["editorId"] = J("\"Copied\"") }, "user", null, [],
+                    FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
+                    ParentCell: null, PlacementGroup: null, Origin: "Data"));
+
+                var masters = svc.GetEffectiveMasters("Target.esp", "Data");
+
+                Assert.Equal(["Base.esm"], masters);
+            }
+        }
+    }
+
+    [Fact]
+    public void GetEffectiveMasters_StagedFormRefTarget_IncludesReferencedOriginNotTheRecordsOwnPlugin()
+    {
+        var data = new PluginFixtureBuilder("rqs-effmasters-formref").WithPlugin("Target.esp").Build();
+        using (data)
+        {
+            var (svc, manager, changes) = MakeSvcWithRealChanges(data);
+            using (manager)
+            {
+                changes.Upsert(new PendingChangeUpsert(
+                    "000800:Target.esp", "Target.esp", "npc_",
+                    new() { ["race"] = J("\"000001:RaceProvider.esm\"") }, "user", null, [],
+                    FormRefs: [new PendingFormRef("race", "race", "000001:RaceProvider.esm")],
+                    ChangeType: PendingChangeConstants.FieldEditChangeType,
+                    ParentCell: null, PlacementGroup: null, Origin: "Data"));
+
+                var masters = svc.GetEffectiveMasters("Target.esp", "Data");
+
+                // RaceProvider.esm (the reference target's origin) is included; Target.esp (the
+                // staged record's own plugin — never a master of itself) is not.
+                Assert.Equal(["RaceProvider.esm"], masters);
+            }
+        }
+    }
+
+    [Fact]
+    public void GetEffectiveMasters_ScopedByOrigin_DoesNotPoolAnotherOriginsStagedContent()
+    {
+        var data = new PluginFixtureBuilder("rqs-effmasters-origin-scope").WithPlugin("Target.esp").Build();
+        using (data)
+        {
+            var (svc, manager, changes) = MakeSvcWithRealChanges(data);
+            using (manager)
+            {
+                changes.Upsert(new PendingChangeUpsert(
+                    "000001:Alpha.esm", "Target.esp", "npc_", new() { ["editorId"] = J("\"A\"") },
+                    "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
+                    ParentCell: null, PlacementGroup: null, Origin: "ModA"));
+                changes.Upsert(new PendingChangeUpsert(
+                    "000001:Beta.esm", "Target.esp", "npc_", new() { ["editorId"] = J("\"B\"") },
+                    "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
+                    ParentCell: null, PlacementGroup: null, Origin: "ModB"));
+
+                // #333/ADR-0036: ModA's and ModB's staged content never pool, even though they
+                // share the "Target.esp" filename.
+                Assert.Equal(["Alpha.esm"], svc.GetEffectiveMasters("Target.esp", "ModA"));
+                Assert.Equal(["Beta.esm"], svc.GetEffectiveMasters("Target.esp", "ModB"));
+            }
+        }
+    }
+
+    [Fact]
+    public void GetEffectiveMasters_MultipleMissingMasters_ReturnsDeterministicSortedOrder()
+    {
+        var data = new PluginFixtureBuilder("rqs-effmasters-order").WithPlugin("Target.esp").Build();
+        using (data)
+        {
+            var (svc, manager, changes) = MakeSvcWithRealChanges(data);
+            using (manager)
+            {
+                // Staged in an order that would expose an unsorted `SELECT DISTINCT` row order —
+                // GetCompare feeds this straight into per-plugin FieldDiff comparison (masters is
+                // not a sortable field, since master order is load-bearing for FormID resolution),
+                // so two independently-derived lists over the *same* real facts must agree byte for
+                // byte or the classifier would flag a spurious conflict purely from ordering.
+                changes.Upsert(new PendingChangeUpsert(
+                    "000001:Zeta.esm", "Target.esp", "npc_", new() { ["editorId"] = J("\"Z\"") },
+                    "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
+                    ParentCell: null, PlacementGroup: null, Origin: "Data"));
+                changes.Upsert(new PendingChangeUpsert(
+                    "000002:Zeta.esm", "Target.esp", "npc_", new() { ["race"] = J("\"000001:Alpha.esm\"") },
+                    "user", null, [],
+                    FormRefs: [new PendingFormRef("race", "race", "000001:Alpha.esm")],
+                    ChangeType: PendingChangeConstants.FieldEditChangeType,
+                    ParentCell: null, PlacementGroup: null, Origin: "Data"));
+
+                var masters = svc.GetEffectiveMasters("Target.esp", "Data");
+
+                Assert.Equal(["Alpha.esm", "Zeta.esm"], masters);
+            }
+        }
+    }
+
+    // --- GetCompare's header masters row (#336/ADR-0038 AC1/AC3: the compare grid reads the same
+    // derived value GetEffectiveMasters computes, not a raw committed/pending field) ---
+
+    [Fact]
+    public void GetCompare_StagedContentNeedingNewMaster_HeaderMastersReflectsItImmediately()
+    {
+        var data = new PluginFixtureBuilder("rqs-getcompare-derived-masters").WithPlugin("Target.esp").Build();
+        using (data)
+        {
+            var (svc, manager, changes) = MakeSvcWithRealChanges(data);
+            using (manager)
+            {
+                changes.Upsert(new PendingChangeUpsert(
+                    "000001:Base.esm", "Target.esp", "npc_", new() { ["editorId"] = J("\"Copied\"") },
+                    "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
+                    ParentCell: null, PlacementGroup: null, Origin: "Data"));
+
+                var compare = svc.GetCompare("000000:Target.esp");
+
+                Assert.NotNull(compare);
+                var single = Assert.Single(compare.Overrides);
+                var masters = single.Fields.Single(f => f.Metadata.Name == "masters");
+                Assert.Equal(["Base.esm"], JsonSerializer.Deserialize<List<string>>(JsonSerializer.Serialize(masters.Value)));
+
+                // A single column can never be anything but OnlyOne (ConflictClassifier.Classify's
+                // count==1 branch) — pins that substituting the derived value into Fields before
+                // classification doesn't somehow escalate the common single-plugin case.
+                Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
+            }
         }
     }
 

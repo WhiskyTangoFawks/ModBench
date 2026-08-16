@@ -331,6 +331,29 @@ public sealed class DuckDbPendingChangeService : IPendingChangeService, IPending
         finally { _sem.Release(); }
     }
 
+    public IReadOnlyList<string> GetStagedFormRefTargets(string plugin, string? origin = null)
+    {
+        _sem.Wait();
+        try
+        {
+            var conn = RequireConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                SELECT DISTINCT target_form_key FROM pending_form_references
+                WHERE source_plugin = $1 AND ($2 IS NULL OR source_origin = $2)
+                """;
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+            cmd.Parameters.Add(new DuckDBParameter { Value = (object?)origin });
+
+            var result = new List<string>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                result.Add(reader.GetString(0));
+            return result;
+        }
+        finally { _sem.Release(); }
+    }
+
     public (IReadOnlyList<string> Added, IReadOnlyList<string> Removed) GetPendingNativeFormKeyChanges(string plugin, string? origin = null)
     {
         _sem.Wait();

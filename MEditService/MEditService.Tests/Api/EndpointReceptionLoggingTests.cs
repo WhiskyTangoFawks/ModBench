@@ -191,6 +191,7 @@ public sealed class EndpointReceptionLoggingTests
             throw new NotSupportedException();
         public RecordDetail? GetRecord(string formKey) => throw new NotSupportedException();
         public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => throw new NotSupportedException();
+        public IReadOnlyList<string> GetEffectiveMasters(string plugin, string origin) => throw new NotSupportedException();
         public string? GetRecordType(string formKey) => throw new NotSupportedException();
         public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => throw new NotSupportedException();
         public CompareResult? GetCompare(string formKey) => throw new NotSupportedException();

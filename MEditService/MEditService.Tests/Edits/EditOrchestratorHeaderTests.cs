@@ -465,10 +465,15 @@ public sealed class EditOrchestratorHeaderTests
         }
     }
 
-    // --- Issue #86 invariant B (unchanged by #335 — StageMissingMasters bypasses StageEdit
-    // entirely, so the guard above never runs against it): copy-to auto-add-master ---
+    // --- Issue #86 invariant B, re-grounded by #336/ADR-0038: "the target ends up referencing
+    // every origin it needs" now holds by construction through the derived read
+    // (RecordQueryService.GetEffectiveMasters), not through a staged header pending-change row —
+    // CopyRecordTo stages the copy's own fields only. Grouping with the header (ADR-0028 edge
+    // rule 3) and the multi-copy "share one group" guarantee both went with the deleted row: they
+    // were an artifact of that mechanism, not a real dependency between unrelated copies. Left in
+    // place, dead, until #338 deletes the edge rule itself.
 
-    private static (EditOrchestrator orchestrator, SessionManager manager, DuckDbPendingChangeService changes)
+    private static (EditOrchestrator orchestrator, SessionManager manager, DuckDbPendingChangeService changes, RecordQueryService query)
         MakeOrchestratorWithChanges()
     {
         var reflector = SharedSchemaReflector.Instance;
@@ -478,13 +483,14 @@ public sealed class EditOrchestratorHeaderTests
         var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
         var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector);
-        return (orchestrator, manager, changes);
+        return (orchestrator, manager, changes, query);
     }
 
-    // --- B4: the copied record's own origin plugin gets auto-added, in the copy's change group ---
+    // --- B4: the copied record's own origin plugin is reflected in the derived read, no header
+    // row staged. ---
 
     [Fact]
-    public void CopyRecordTo_TargetMissingSourceAsMaster_StagesMasterAddInSameGroup()
+    public void CopyRecordTo_TargetMissingSourceAsMaster_EffectiveMastersIncludesSourceOriginNoRowStaged()
     {
         FormKey npcKey = default;
         var data = new PluginFixtureBuilder("eo-copy-master-origin")
@@ -493,7 +499,7 @@ public sealed class EditOrchestratorHeaderTests
             .Build();
         using (data)
         {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            var (orchestrator, manager, changes, query) = MakeOrchestratorWithChanges();
             using (manager)
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -504,40 +510,33 @@ public sealed class EditOrchestratorHeaderTests
 
                 var headerKey = HeaderKey("Target.esp");
 
-                // The copied record only resolves in Target.esp because of the master this copy also
-                // adds, so the two travel together (ADR-0028 edge rule 3) — here via the record's own
-                // origin plugin, since a bare copied NPC holds no FormLinks of its own. One group
-                // covering both, not two adjacent ones.
-                var group = Assert.Single(changes.GetChangeGroups());
-                Assert.True(group.ChangeCount >= 2);
-                Assert.Contains(headerKey, changes.GetChanges(memberChangeId: group.Id).Select(c => c.FormKey));
-                Assert.Contains(npcKey.ToString(), changes.GetChanges(memberChangeId: group.Id).Select(c => c.FormKey));
-
-                var mastersChange = changes.GetChanges(plugin: "Target.esp", formKey: headerKey).Single(c => c.FieldPath == "masters");
-                var newMasters = mastersChange.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
-                Assert.Equal(["Base.esm"], newMasters);
-                // The captured old value must be the real prior masters list (empty here), not an
-                // absent/null placeholder — it drives revert and the frontend's pending-diff display.
-                Assert.Equal(JsonValueKind.Array, mastersChange.OldValue.ValueKind);
-                Assert.Empty(mastersChange.OldValue.EnumerateArray());
-
-                // Atomicity: reverting the group removes the copy and the master-add together —
-                // proving they're genuinely one unit, not just two changes that happen to share an id.
-                Assert.True(changes.RevertGroup(group.Id));
-                Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: npcKey.ToString()));
+                // No masters pending row exists — nothing left to group the copy's fields with
+                // (edge rule 3 has no header change to reach), same "groups of one" shape B6 below
+                // already established for a copy that needs no master.
                 Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: headerKey));
+                Assert.All(changes.GetChangeGroups(), g => Assert.Equal("field_edit", g.Operation));
+
+                Assert.Equal(["Base.esm"], query.GetEffectiveMasters("Target.esp", "Data"));
+
+                // Reverting the copy (by FormKey — the whole-record revert a real "revert this
+                // record" action uses) needs no separate masters cleanup: the derived read
+                // reflects the revert automatically (AC3), with no orphaned pending state.
+                changes.Revert(plugin: "Target.esp", formKey: npcKey.ToString());
+                Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: npcKey.ToString()));
+                Assert.Empty(query.GetEffectiveMasters("Target.esp", "Data"));
             }
         }
     }
 
-    // --- B4 regression: two sequential copy-tos into the *same* target, each needing a different
-    // missing master, must land in one shared group, not two — the pending-change upsert's
-    // ON CONFLICT keeps the *first* group id a row is tagged with (DuckDbPendingChangeService
-    // COALESCEs group_id), so a naive "always mint a fresh group id" implementation would tag the
-    // second copy's own record with an id the header's masters row never actually joined. ---
+    // --- B4 regression, re-grounded: two sequential copy-tos needing different missing masters
+    // used to share one group only because both unioned against the same masters-add row (#112-era
+    // guard). With that row gone, they have no genuine dependency on each other and land in
+    // separate groups — more correct, not a regression (ADR-0028: a group is a derived dependency
+    // closure), and each remains independently revertible with its own masters need correctly
+    // reflected. ---
 
     [Fact]
-    public void CopyRecordTo_TwoSequentialCopiesNeedingDifferentMasters_ShareOneGroup()
+    public void CopyRecordTo_TwoSequentialCopiesNeedingDifferentMasters_EachIndependentlyRevertible()
     {
         FormKey npc1Key = default;
         FormKey npc2Key = default;
@@ -548,7 +547,7 @@ public sealed class EditOrchestratorHeaderTests
             .Build();
         using (data)
         {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            var (orchestrator, manager, changes, query) = MakeOrchestratorWithChanges();
             using (manager)
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -557,34 +556,23 @@ public sealed class EditOrchestratorHeaderTests
                 Assert.IsType<StageEditResult.Staged>(orchestrator.CopyRecordTo(npc2Key.ToString(), "Target.esp", "user"));
 
                 var headerKey = HeaderKey("Target.esp");
-
-                // Both copies depend on the one masters change that adds both their origins, so all
-                // three form a single component (ADR-0028 edge rule 3) — the header change is the
-                // shared neighbour that joins two copies which reference nothing of each other's.
-                var group = Assert.Single(changes.GetChangeGroups());
-                Assert.Equal(
-                    [headerKey, npc1Key.ToString(), npc2Key.ToString()],
-                    changes.GetChanges(memberChangeId: group.Id).Select(c => c.FormKey).Distinct().Order());
-
-                var mastersChange = changes.GetChanges(plugin: "Target.esp", formKey: headerKey).Single(c => c.FieldPath == "masters");
-                var newMasters = mastersChange.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
-                Assert.Equal(["Origin1.esm", "Origin2.esm"], newMasters);
-
-                // Full atomicity: reverting the (single, shared) group removes both copies and the
-                // masters change together.
-                Assert.True(changes.RevertGroup(group.Id));
-                Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: npc1Key.ToString()));
-                Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: npc2Key.ToString()));
                 Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: headerKey));
+                Assert.Equal(["Origin1.esm", "Origin2.esm"], query.GetEffectiveMasters("Target.esp", "Data"));
+
+                // Reverting npc1 leaves npc2 — and only npc2's own implied master — staged.
+                changes.Revert(plugin: "Target.esp", formKey: npc1Key.ToString());
+                Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: npc1Key.ToString()));
+                Assert.NotEmpty(changes.GetChanges(plugin: "Target.esp", formKey: npc2Key.ToString()));
+                Assert.Equal(["Origin2.esm"], query.GetEffectiveMasters("Target.esp", "Data"));
             }
         }
     }
 
-    // --- B5: a FormLink inside the copied content, referencing a third plugin, gets auto-added too —
-    // independent of the record's own origin (already mastered here), same group. ---
+    // --- B5: a FormLink inside the copied content, referencing a third plugin, is reflected in the
+    // derived read too — independent of the record's own origin (already mastered here). ---
 
     [Fact]
-    public void CopyRecordTo_ContentReferencesUnmasteredPlugin_StagesMasterAddInSameGroup()
+    public void CopyRecordTo_ContentReferencesUnmasteredPlugin_EffectiveMastersIncludesItNoRowStaged()
     {
         FormKey npcKey = default;
         FormKey raceKey = default;
@@ -611,7 +599,7 @@ public sealed class EditOrchestratorHeaderTests
             .Build();
         using (data)
         {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            var (orchestrator, manager, changes, query) = MakeOrchestratorWithChanges();
             using (manager)
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -621,25 +609,17 @@ public sealed class EditOrchestratorHeaderTests
                 Assert.IsType<StageEditResult.Staged>(result);
 
                 var headerKey = HeaderKey("Target.esp");
+                Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: headerKey));
 
-                // The copy and the masters-add it triggers travel together (ADR-0028 edge rule 3):
-                // the copied record only resolves in Target.esp because of the master this change
-                // adds. Observed as one derived group covering both, not a shared group_id.
-                var group = Assert.Single(changes.GetChangeGroups());
-                Assert.Contains(npcKey.ToString(), changes.GetChanges(memberChangeId: group.Id).Select(c => c.FormKey));
-                Assert.Contains(headerKey, changes.GetChanges(memberChangeId: group.Id).Select(c => c.FormKey));
-
-                var mastersChange = changes.GetChanges(plugin: "Target.esp", formKey: headerKey).Single(c => c.FieldPath == "masters");
-                var newMasters = mastersChange.NewValue.EnumerateArray().Select(e => e.GetString()).ToList();
-                // Origin.esp was already a master (excluded from the append); only the FormLink's
-                // origin (RaceProvider.esm) is new.
-                Assert.Equal(["Origin.esp", "RaceProvider.esm"], newMasters);
+                // Origin.esp was already a committed master (excluded); only the FormLink's origin
+                // (RaceProvider.esm) is newly implied.
+                Assert.Equal(["Origin.esp", "RaceProvider.esm"], query.GetEffectiveMasters("Target.esp", "Data"));
             }
         }
     }
 
-    // --- B6: a copy into a target that already masters everything referenced stays ungrouped —
-    // regression guard against always wrapping copy-to in a spurious group. ---
+    // --- B6: a copy into a target that already masters everything referenced needs no masters
+    // change — unchanged by #336, since none was ever staged for this case either. ---
 
     [Fact]
     public void CopyRecordTo_TargetAlreadyMastersSource_NoMastersChangeStaged()
@@ -658,7 +638,7 @@ public sealed class EditOrchestratorHeaderTests
             .Build();
         using (data)
         {
-            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            var (orchestrator, manager, changes, query) = MakeOrchestratorWithChanges();
             using (manager)
             {
                 manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
@@ -671,8 +651,8 @@ public sealed class EditOrchestratorHeaderTests
 
                 // The subject: no masters change staged, because Target.esp already masters Base.esm.
                 Assert.Empty(changes.GetChanges(plugin: "Target.esp", formKey: headerKey));
+                Assert.Equal(["Base.esm"], query.GetEffectiveMasters("Target.esp", "Data"));
 
-                // This used to assert no groups at all — a copy needing no master "stayed ungrouped".
                 // ADR-0028 abolishes the ungrouped change: with no master-add to entangle them (edge
                 // rule 3) and no lifecycle change in sight, the copied fields are simply groups of
                 // one. That is the fix for #112, not a regression — before it, these changes had a
@@ -681,6 +661,34 @@ public sealed class EditOrchestratorHeaderTests
                 Assert.NotEmpty(groups);
                 Assert.All(groups, g => Assert.Equal("field_edit", g.Operation));
                 Assert.DoesNotContain(headerKey, groups.SelectMany(g => changes.GetChanges(memberChangeId: g.Id)).Select(c => c.FormKey));
+            }
+        }
+    }
+
+    // --- AC5 (#336/ADR-0038): the automatic door slice 1 left open is now closed too — no
+    // production path stages a pending-change row targeting the header's masters field at all,
+    // needing a master or not. ---
+
+    [Fact]
+    public void CopyRecordTo_NeverStagesAPendingChangeRowTargetingTheHeadersMastersField()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("eo-copy-master-ac5")
+            .WithPlugin("Base.esm", mod => npcKey = mod.Npcs.AddNew("BaseNpc").FormKey)
+            .WithPlugin("Target.esp") // no masters declared — the case most likely to need one
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes, _) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                orchestrator.CopyRecordTo(npcKey.ToString(), "Target.esp", "user");
+
+                Assert.DoesNotContain(
+                    changes.GetChanges(),
+                    c => c.RecordType == HeaderIndexer.TableName && c.FieldPath == HeaderIndexer.MastersFieldName);
             }
         }
     }
