@@ -1,6 +1,6 @@
 import type { components } from './generated/api';
 import type {
-  ApiClient, PluginMetadata, MasterIssue, RecordSummary,
+  ApiClient, PluginMetadata, MasterIssue, RecordSummary, SessionStatus,
   WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
 } from './ApiClient';
 import { errorText } from './ApiClient';
@@ -90,6 +90,10 @@ export interface CellPage {
 
 export interface PluginRepository {
   getPlugins(): Promise<PluginMetadata[]>;
+  // #307 / ADR-0035: the load's own progress, polled alongside the in-flight load POST. Separate
+  // from getPlugins() rather than folded into it: this one answers while the session is still
+  // incomplete, and it is the only read that can distinguish "not looked yet" from "no conflict".
+  getSessionStatus(): Promise<SessionStatus>;
   // origin (#34 / ADR-0036): which copy of `plugin` to read, when the session holds two files of
   // one filename. Optional — an ordinary load-order row has no origin to give, and the backend
   // resolves that case from the load order, where a filename is unambiguous.
@@ -145,6 +149,22 @@ export class ApiPluginRepository implements PluginRepository {
     const { data, error, response } = await this.client.GET('/plugins', {});
     this.ensureOk('GET /plugins', response, error);
     return (data ?? []).map(toPluginMetadata);
+  }
+
+  // #307: the endpoint answers 200 in every state including "no session" (SessionEndpoints.cs),
+  // so a non-ok is a genuine fault and gets the same ensureOk treatment as every other read here.
+  // Degrading it to an empty status would be indistinguishable from a load making no progress.
+  async getSessionStatus(): Promise<SessionStatus> {
+    const { data, error, response } = await this.client.GET('/session/status', {});
+    this.ensureOk('GET /session/status', response, error);
+    return {
+      totalPlugins: data?.totalPlugins ?? 0,
+      // The wire carries each entry's origin too; the consumer keys on filename alone (see
+      // SessionStatus in ApiClient.ts), so it is dropped here rather than carried unused.
+      indexedPlugins: (data?.indexedPlugins ?? []).map((p) => p.name ?? ''),
+      conflictsComputed: data?.conflictsComputed ?? false,
+      failures: (data?.failures ?? []).map((f) => ({ name: f.name ?? '', reason: f.reason ?? 'Unknown error' })),
+    };
   }
 
   async getRecordTypes(plugin: string, origin?: string): Promise<{ type: string; count: number; displayName: string }[]> {

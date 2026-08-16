@@ -1,0 +1,66 @@
+import type { SessionLoadProgress } from './SessionController';
+
+/** #307 / ADR-0035: what the Plugins view says about itself while a load is running — the text
+ *  behind `TreeView.message`, and the whole of AC3.
+ *
+ *  The statement exists because **an absent conflict badge is indistinguishable from "no
+ *  conflict"**. If browsing opens at second five and the winner sweep lands at second ninety,
+ *  then for eighty-five seconds an unmarked record silently claims to be conflict-free when
+ *  nothing has looked. Saying so is what makes the incomplete session honest rather than merely
+ *  early.
+ *
+ *  Gated on `conflictsComputed` and nothing else — deliberately not on "is a load running".
+ *  The sweep is whole-set, so ADR-0035's live mutations (reorder, enable, disable) will leave a
+ *  finished session with stale winners, and this message has to be reachable in that state too
+ *  (`SessionStatus.cs` makes the field's separateness from `State` its whole reason to exist).
+ *
+ *  Returns `undefined` for "nothing to say" — the value `TreeView.message` itself takes to clear.
+ *  A pure function of the status so it is unit-testable without a VS Code harness; the assignment
+ *  to the view is a one-line glue in `extension.ts`. */
+export function sessionProgressMessage(status: SessionLoadProgress): string | undefined {
+  if (status.conflictsComputed) return undefined;
+  // Before the backend publishes the session, status is SessionStatus.None — no total yet. "0 of
+  // 0 plugins indexed" reads as a stalled load rather than one still opening the load order, so
+  // the count waits until there is one to state.
+  const counted = status.totalPlugins > 0
+    ? `Loading session — ${status.indexedPlugins.length} of ${status.totalPlugins} plugins indexed.`
+    : 'Loading session…';
+  return `${counted} Conflict information is not yet computed.`;
+}
+
+/** #307: one poll tick of a running load, translated into what the tree and the view should do
+ *  about it — chevrons for what is indexed, decorations for what has failed, and the statement of
+ *  what is not yet known.
+ *
+ *  Lives here rather than in `extension.ts` so it is unit-testable without a VS Code harness: it
+ *  knows *when* a tick is worth applying, which is real logic, while `applySession` — the actual
+ *  hand-off to the tree, and the only part that needs VS Code types — stays a caller's closure.
+ *
+ *  Mid-load, a tick carries only the indexed set and the failures. Read-only state and master
+ *  issues are whole-session derivations a partial session cannot answer (the backend suppresses
+ *  master issues outright while loading — `RecordQueryService.GetPlugins` gates them on
+ *  `SessionState.Ready`), so they land in one piece when the load completes. **A tick is never
+ *  the last word**: the poll stops before `loadExplicitSession` returns, so the completed load's
+ *  own hand-off always follows the final tick — otherwise those two decorations would silently
+ *  vanish from a fully loaded tree. */
+export function makeLoadProgressHandler(deps: {
+  say: (message: string | undefined) => void;
+  applySession: (indexedPlugins: string[], failures: { name: string; reason: string }[]) => void;
+}): (status: SessionLoadProgress) => void {
+  let lastLanded = '';
+  return (status) => {
+    // Deliberately not behind the guard below: the statement's plugin count moves even on ticks
+    // that land nothing worth a re-render, and a stale count reads as a stalled load.
+    deps.say(sessionProgressMessage(status));
+    // Apply only when something actually landed. Applying re-renders the whole tree, and
+    // `PluginTreeProvider.getPluginChildren` is uncached, so re-applying an unchanged tick every
+    // poll would re-fetch record types for every expanded row — a request storm on a deep tree,
+    // for no visible change. Failures count as landing too (AC6): a plugin that failed to index
+    // is never added to the indexed set, so counting only plugins would leave its row
+    // undecorated until the next plugin happened to land.
+    const landed = `${status.indexedPlugins.length}:${status.failures.length}`;
+    if (landed === lastLanded) return;
+    lastLanded = landed;
+    deps.applySession(status.indexedPlugins, status.failures);
+  };
+}

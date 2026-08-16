@@ -653,4 +653,30 @@ describe('PluginsTreeComposite — pending-change resourceUri (#331)', () => {
     expect(() => composite.getTreeItem(PLUGIN_ROW)).not.toThrow();
     expect(composite.getTreeItem(PLUGIN_ROW).resourceUri).toBeUndefined();
   });
+
+  // #307: a progressive load calls setSession once per poll as plugins land, so this row is
+  // re-rendered many times during one load rather than once at the end. Its resourceUri is the
+  // identity PendingChangeDecorationProvider keys on — if a re-render churned it, decorations
+  // would flicker or detach mid-load. Stability is a real invariant now, not an implementation
+  // detail: #331's row caching has a second consumer.
+  it('keeps a row\'s resourceUri stable across repeated setSession calls, as a progressive load makes', async () => {
+    const uri = { scheme: 'medit-pending-plugin', path: '/A.esp' } as never;
+    const pendingChangeUriOf = vi.fn().mockReturnValue(uri);
+    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
+      rows: new FakeRows([PLUGIN_ROW]), children: new FakeChildren(), pluginFileOf: (row) => row.file, pendingChangeUriOf,
+    });
+    await composite.getChildren();
+
+    composite.setSession(new Set(['A.esp']));
+    const first = composite.getTreeItem(PLUGIN_ROW).resourceUri;
+    composite.setSession(new Set(['A.esp', 'B.esp']));
+    composite.setSession(new Set(['A.esp', 'B.esp', 'C.esp']));
+    const last = composite.getTreeItem(PLUGIN_ROW).resourceUri;
+
+    expect(last).toBe(first);
+    expect(last).toBe(uri);
+    // Built once and left alone thereafter — the row provider hands back the same mutable node,
+    // and the composite's own guard sees a resourceUri already present on every later render.
+    expect(pendingChangeUriOf).toHaveBeenCalledTimes(1);
+  });
 });

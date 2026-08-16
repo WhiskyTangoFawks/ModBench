@@ -8,6 +8,7 @@ import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog
 import { createApiClient, type ApiClient, type MasterIssue } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController } from './medit/SessionController';
+import { makeLoadProgressHandler } from './medit/sessionProgress';
 import { reloadSession } from './medit/reloadSession';
 import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
 import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type PendingTreeNode } from './medit/PendingChangesTreeProvider';
@@ -65,6 +66,45 @@ let loadoutHeaderProvider: LoadoutHeaderProvider | undefined;
 // starting and stopping is what puts chevrons on its rows, and both choke points for that
 // (enterEditing, exitToLoadout) are module-level.
 let pluginsTree: PluginsTreeComposite<PluginListNode, PluginTreeNode> | undefined;
+// #307: the same view, as a TreeView — what carries the load's own progress (a native header
+// progress indicator, addressed by this view id) and its incompleteness statement
+// (`TreeView.message`). Module level for the same reason as pluginsTree above: enterEditing and
+// exitToLoadout are module-level, and both have to be able to set and clear it.
+let pluginsTreeView: vscode.TreeView<PluginListNode | PluginTreeNode> | undefined;
+// #307 AC7: the in-flight load's abort handle. Module level for the same reason as the above —
+// exitToLoadout is where a load gets deliberately abandoned, and it is module-level. Replaced by
+// each new load; a superseded one does not need aborting, since the backend answers it 409.
+let loadAbort: AbortController | undefined;
+
+/** #307: the Plugins view's own statement about what it is doing, or what it does not yet know
+ *  (`TreeView.message` — the native surface for a view-scoped statement about its own contents,
+ *  so there is no banner row and no bespoke widget). `undefined` clears it, which is the value
+ *  the property itself takes. */
+function say(message: string | undefined): void {
+  if (pluginsTreeView) pluginsTreeView.message = message;
+}
+
+/** #307 / ADR-0035 AC2: run `work` with a progress indicator in the **Plugins view's own header**,
+ *  addressed by view id. One indicator, in the view whose contents are being loaded, running for
+ *  the whole operation — the backend spawn, the indexing, and the winner sweep, which the load
+ *  POST only returns after.
+ *
+ *  It used to be a `ProgressLocation.Notification` wrapped around the load at two command sites;
+ *  two indicators for one operation is noise, and the third caller (the crash-restart reload) had
+ *  no indicator at all. The header bar carries no text, so the step messages go to `say` above —
+ *  one surface, one voice.
+ *
+ *  AC5: the message clears here, on every exit path including `work`'s own early returns and
+ *  throws, so no failure can leave the view claiming a load that is not running.
+ *
+ *  Deliberately not `cancellable`: the header location has no cancel affordance (that is a
+ *  Notification-only option), and abandoning a load is Close mEdit's job, not a second control. */
+function withPluginsViewProgress(work: () => Promise<void>): Promise<void> {
+  return Promise.resolve(vscode.window.withProgress(
+    { location: { viewId: 'modbench.pluginListTree' } },
+    async () => { try { await work(); } finally { say(undefined); } },
+  ));
+}
 // #281: the record browser behind the merged tree's children. Module level for the same reason as
 // pluginsTree directly above — the session starting/stopping is what tells its record rows which
 // plugins are immutable (Remove hidden via contextValue), through the same choke points.
@@ -81,7 +121,7 @@ let pendingChangeDecorationProvider: PendingChangeDecorationProvider | undefined
 // function's own early returns), leaving it permanently unset for the lifetime of that
 // activation. Assigned exactly once, where `enterEditing` is built; every reader treats it as
 // possibly-absent for that reason, not as a race to guard against.
-let enterEditingFn: ((progress?: vscode.Progress<{ message?: string }>) => Promise<void>) | undefined;
+let enterEditingFn: (() => Promise<void>) | undefined;
 
 const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
@@ -147,9 +187,17 @@ function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<
  *  to switch back to any more — the loadout views were never hidden (#268), and Pending Changes /
  *  Referenced By govern their own visibility (staged work, always-present respectively). */
 function exitToLoadout(): void {
+  // #307 AC7: abandon any load still in flight *first* — it aborts the POST outright, so the
+  // load stops polling and returns 'abandoned' rather than discovering a killed backend as a
+  // network error and reporting that to the user as a failure.
+  loadAbort?.abort();
+  loadAbort = undefined;
   // #270: the chevrons go with the session. Cleared before the backend stops, so no row can be
   // expanded into a backend that is on its way down. #281: the immutable set goes with it.
   pluginsTree?.setSession(undefined);
+  // #307: so does anything the load was saying about itself. A statement about a session that no
+  // longer exists is the same class of silent-wrong-state as a stale chevron.
+  say(undefined);
   recordBrowserProvider?.setImmutablePlugins([]);
   // #331: a direct reset, not refresh() — see PendingChangeDecorationProvider.clear()'s own
   // comment for why a live re-fetch here would race backendManager.stop() below.
@@ -317,7 +365,7 @@ export function activate(context: vscode.ExtensionContext) {
   // TreeView) is gone along with that view — treeProvider itself stays, since it still supplies
   // the merged tree's children.
   return {
-    modListProvider, downloadsProvider, pluginListProvider, pluginsTree, treeProvider,
+    modListProvider, downloadsProvider, pluginListProvider, pluginsTree, pluginListView: pluginsTreeView, treeProvider,
     changeGroupTreeProvider, changeGroupTreeView, pendingChangeDecorationProvider, outputChannel,
   };
 }
@@ -491,10 +539,9 @@ function registerReloadSessionCommand(controller: SessionController, outputChann
       // leaving the tree claiming a session that either never came up or is now half-torn-down.
       reload: async () => {
         try {
-          await vscode.window.withProgress(
-            { location: vscode.ProgressLocation.Notification, title: 'mEdit' },
-            (progress) => enter(progress),
-          );
+          // #307 AC2: the progress indicator moved into enterEditing itself, addressed at the
+          // Plugins view's header — two indicators for one operation was noise.
+          await enter();
         } catch (err) {
           outputChannel.error(`[extension] reloadSession failed: ${err instanceof Error ? err.message : String(err)}`);
           exitToLoadout();
@@ -1009,7 +1056,8 @@ interface ModListCoreDeps {
   modListProvider: ModListProvider;
   modlistSource: Mo2ModlistSource;
   updateProfileDescription: () => Promise<void>;
-  enterEditing: (progress?: vscode.Progress<{ message?: string }>) => Promise<void>;
+  // #307: takes no progress reporter any more — it owns its own, in the Plugins view's header.
+  enterEditing: () => Promise<void>;
   outputChannel: vscode.LogOutputChannel;
 }
 /** Loadout core commands: refresh, switch profile, filter, launch mEdit. */
@@ -1047,14 +1095,11 @@ function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[]
         { icon: 'list-tree', label: 'Group by separator' },
       ),
       vscode.commands.registerCommand('modbench.modList.launchMedit', async () => {
-        // enterEditing puts chevrons on the merged tree's rows only once the session is
-        // loaded (issue #75 / #270) — there is no view mode left to flip (#273). Show
-        // progress while the backend spawns and the session loads.
+        // #270 / #307: enterEditing now puts chevrons on the merged tree's rows *as each plugin
+        // lands* rather than all at once at the end, and owns its own progress indicator — in
+        // the Plugins view's header, not a notification (AC2). Nothing to wrap here any more.
         try {
-          await vscode.window.withProgress(
-            { location: vscode.ProgressLocation.Notification, title: 'mEdit' },
-            (progress) => enterEditing(progress),
-          );
+          await enterEditing();
         } catch (err) {
           outputChannel.error(`[extension] launchMedit failed: ${err instanceof Error ? err.message : String(err)}`);
           exitToLoadout(); // reset the view and tear down any half-started backend
@@ -1268,6 +1313,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     // plugin → record type → record — so it earns the affordance the editing tree already had.
     showCollapseAll: true,
   });
+  pluginsTreeView = pluginListView; // #307: see its declaration — progress and message live here
   return { pluginListProvider, disposables: [
     pluginListView,
     composite,
@@ -1648,6 +1694,87 @@ function registerDownloadsView(
   };
 }
 
+/** The completed load's whole hand-off to the tree: which plugins the session holds, which are
+ *  read-only for editing (#276), each one's master issues (#277) and each one's load failure.
+ *
+ *  #270 / ADR-0035: rows gain chevrons here — and, since #307, *finish* gaining them here. A
+ *  progressive load's ticks carry only the indexed set and the failures, because read-only state
+ *  and master issues are whole-session derivations a partial session cannot answer; this is the
+ *  call that fills them in. **A tick must never be the last word** — if one were, both those
+ *  decorations would silently vanish from a fully loaded tree.
+ */
+async function applyLoadedSessionToTree(
+  sessionPluginFiles: () => Promise<SessionPluginFiles>,
+  failures: { name?: string | null; reason?: string | null }[],
+  outputChannel: vscode.LogOutputChannel,
+): Promise<void> {
+  try {
+    const session = await sessionPluginFiles();
+    // #277 / ADR-0037 AC7: the same failures the toast inside loadExplicitSession already
+    // consumed — held here (not re-derived, not a second endpoint) and handed to the tree
+    // through the same setSession bundle as everything else the session reports.
+    const loadFailures = new Map(failures.map((f) => [f.name ?? '?', f.reason ?? 'Unknown error'] as const));
+    pluginsTree?.setSession(session.files, session.readOnly, session.masterIssues, loadFailures);
+    // #281: the same read-only set, to the record rows — theirs is contextValue (Remove
+    // hidden), the plugin rows' is the tooltip note (#276).
+    recordBrowserProvider?.setImmutablePlugins(session.readOnly);
+  } catch (err) {
+    // Leaving every row a leaf is a safe *render*, but it is not an honest one: the session
+    // did load, so the tree would be telling the user editing is unavailable when it is
+    // available, with nothing on screen to say why. ADR-0026 integrity tier — notify, don't
+    // just log.
+    const message = err instanceof Error ? err.message : String(err);
+    outputChannel.error(`[extension] reading the session's plugin list failed; plugin rows will not expand: ${message}`);
+    void vscode.window.showWarningMessage(
+      'Modbench: The editing session loaded, but its plugin list could not be read — plugin rows will not expand into records. Reload the session to retry.',
+    );
+  }
+}
+
+/** #307 AC7: arm this launch's cancellation, and the check every step past an await makes.
+ *
+ *  Armed **before the launch's first await**, not just before the load POST. A launch has two
+ *  phases — bring the backend up and walk the mod tree, then load — and closing the session during
+ *  the first one has to be honoured too: AC7 says "closing the session mid-load" with no
+ *  qualification by phase, and a backend spawn plus a filesystem walk is a realistic window to
+ *  land in. Armed late, `exitToLoadout`'s `abort()` found nothing to cancel, and the stale launch
+ *  ran on past the close to meet the backend it had just stopped — reporting "Backend failed to
+ *  start" for something the user deliberately did.
+ *
+ *  The controller is held locally as well as in `loadAbort`, because that module-level slot
+ *  belongs to whichever load is newest; only the closure below names *this* launch's own
+ *  cancellation. Every exit past one is silent and touches nothing — the close has already torn
+ *  the view down, so there is nothing to report and nothing to reset. Both failure modes (the
+ *  spurious toast, and repopulating a tree the user just cleared) come from continuing. */
+function armLoadAbort(outputChannel: vscode.LogOutputChannel): { signal: AbortSignal; abandoned: () => boolean } {
+  const abort = new AbortController();
+  loadAbort = abort;
+  return {
+    signal: abort.signal,
+    abandoned: () => {
+      if (!abort.signal.aborted) return false;
+      outputChannel.info('[extension] the editing session launch was abandoned before it loaded; leaving the closed view alone');
+      return true;
+    },
+  };
+}
+
+/** #307: the progressive-load tick handler, wired to this extension's own surfaces. Whether a
+ *  tick is worth applying is decided in `medit/sessionProgress.ts` and unit-tested there; this
+ *  supplies the hand-off itself, the only part that needs VS Code types. The empty read-only and
+ *  master-issue arguments mid-load are deliberate — see `makeLoadProgressHandler`. */
+function makeTreeProgressHandler(): ReturnType<typeof makeLoadProgressHandler> {
+  return makeLoadProgressHandler({
+    say,
+    applySession: (indexedPlugins, failures) => pluginsTree?.setSession(
+      new Set(indexedPlugins),
+      new Set(),
+      new Map(),
+      new Map(failures.map((f) => [f.name, f.reason] as const)),
+    ),
+  });
+}
+
 interface EnterEditingDeps {
   instanceRoot: string;
   modlistSource: Mo2ModlistSource;
@@ -1663,19 +1790,24 @@ interface EnterEditingDeps {
   /** Surface the Modbench output channel so the user can watch the launch steps. */
   revealLog: () => void;
 }
-type LaunchProgress = vscode.Progress<{ message?: string }>;
 /** Build the enter-editing action: spawn/attach the backend and load the active
  *  modlist as a load-explicit session, then reveal the editing view. Also the
- *  crash-restart reload path. `progress` (when launched by the user) is updated
- *  with the plugin count during the long, blocking index step. */
-function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) => Promise<void> {
+ *  crash-restart reload path.
+ *
+ *  #307 / ADR-0035 AC2: owns its own progress indicator (`withPluginsViewProgress` — see there)
+ *  rather than leaving each of its three callers to wrap it, and reports its steps through `say`.
+ *  Takes no progress reporter as a result. */
+function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
   const {
     instanceRoot, modlistSource, controller, changeGroupTreeProvider, pendingChangeDecorationProvider,
     outputChannel, revealLog, sessionPluginFiles,
   } = deps;
-  return async (progress?: LaunchProgress): Promise<void> => {
+  const enter = async (): Promise<void> => {
+      const { signal, abandoned } = armLoadAbort(outputChannel);
+      const onLoadProgress = makeTreeProgressHandler();
       revealLog(); // the load can take a while; let the user watch the step log
       const gd = await resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths());
+      if (abandoned()) return;
       if (!gd) {
         exitToLoadout(); // don't strand the UI in an empty editing view
         void vscode.window.showErrorMessage(
@@ -1685,7 +1817,7 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
       }
       // Spawn/attach the backend and walk the mod tree concurrently — independent
       // work; the health gate is applied after they join.
-      progress?.report({ message: 'starting backend…' });
+      say('Starting backend…');
       outputChannel.info('[extension] entering editing: starting backend and building plugin list');
       const [, plugins] = await Promise.all([
         backendManager!.start(),
@@ -1693,25 +1825,37 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
           buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg)),
         ),
       ]);
+      // Before the health gate, deliberately: a close stops the backend, so an abandoned launch
+      // would otherwise fail this check and report the stop it asked for as a startup failure.
+      if (abandoned()) return;
       if (!backendManager!.isHealthy) {
         exitToLoadout(); // tear down the half-started backend and reset the view
         void vscode.window.showErrorMessage('Modbench: Backend failed to start — see the Modbench output for details.');
         return;
       }
-      // load-explicit is one blocking call that indexes every plugin — the slow part.
-      // There's no progress stream, so name the count and warn it can take a while.
-      progress?.report({ message: `indexing ${plugins.length} plugins… (this can take a while)` });
+      // load-explicit is one blocking call that indexes every plugin — the slow part. The polled
+      // status takes over from here (onLoadProgress above), naming real counts as they land;
+      // this states the total for the window before the first poll answers.
+      say(`Indexing ${plugins.length} plugins… Conflict information is not yet computed.`);
       outputChannel.info(`[extension] backend healthy; loading session (${plugins.length} plugins)`);
-      const failures = await controller.loadExplicitSession(plugins, gd.dataFolder);
-      // #295 AC4: undefined (not `[]`) means the POST itself failed — loadExplicitSession
-      // already surfaced the error (ADR-0026 "explicit action failed" tier). The backend's own
-      // SessionManager disposes the previous session unconditionally before attempting the new
-      // one, so by this point there is truly no session left, not a stale one — the same
-      // treatment the two failure returns above give themselves, so this is the third symmetric
-      // case rather than a new partial-recovery path. Reading its plugin list or syncing its
-      // filter would either throw against a sessionless backend or silently render nothing,
-      // neither of which is "the tree honestly says editing is unavailable".
-      if (failures === undefined) {
+      const result = await controller.loadExplicitSession(
+        plugins, gd.dataFolder, undefined, { onProgress: onLoadProgress, signal });
+      // #307 AC7: a load that was deliberately abandoned — superseded by a newer load, or
+      // aborted because the user closed the session — leaves *silently*. Nothing to surface
+      // (loadExplicitSession only logged it) and, the bug this fixes, nothing to tear down: the
+      // newer load owns the session now, and exitToLoadout() here would stop its backend.
+      if (result.outcome === 'abandoned') {
+        outputChannel.info('[extension] the editing session load was abandoned; leaving the session that replaced it alone');
+        return;
+      }
+      // #295 AC4: the load itself failed — loadExplicitSession already surfaced the error
+      // (ADR-0026 "explicit action failed" tier). The backend's own SessionManager disposes the
+      // previous session unconditionally before attempting the new one, so by this point there is
+      // truly no session left, not a stale one — the same treatment the two failure returns above
+      // give themselves. Reading its plugin list or syncing its filter would either throw against
+      // a sessionless backend or silently render nothing, neither of which is "the tree honestly
+      // says editing is unavailable".
+      if (result.outcome === 'failed') {
         exitToLoadout();
         return;
       }
@@ -1720,31 +1864,10 @@ function makeEnterEditing(deps: EnterEditingDeps): (progress?: LaunchProgress) =
       // #331: a fresh session starts with no pending changes, but a decoration left over from a
       // previous one (or a crash-restart reload mid-edit) must not survive into this one.
       void pendingChangeDecorationProvider.refresh();
-      // #270 / ADR-0035: rows gain chevrons here and nowhere else — this is the moment records
-      // become queryable, the same moment #75 gates the editing tree's first fetch on.
-      try {
-        const session = await sessionPluginFiles();
-        // #277 / ADR-0037 AC7: the same failures the toast inside loadExplicitSession already
-        // consumed — held here (not re-derived, not a second endpoint) and handed to the tree
-        // through the same setSession bundle as everything else the session reports.
-        const loadFailures = new Map(failures.map((f) => [f.name ?? '?', f.reason ?? 'Unknown error'] as const));
-        pluginsTree?.setSession(session.files, session.readOnly, session.masterIssues, loadFailures);
-        // #281: the same read-only set, to the record rows — theirs is contextValue (Remove
-        // hidden), the plugin rows' is the tooltip note (#276).
-        recordBrowserProvider?.setImmutablePlugins(session.readOnly);
-      } catch (err) {
-        // Leaving every row a leaf is a safe *render*, but it is not an honest one: the session
-        // did load, so the tree would be telling the user editing is unavailable when it is
-        // available, with nothing on screen to say why. ADR-0026 integrity tier — notify, don't
-        // just log.
-        const message = err instanceof Error ? err.message : String(err);
-        outputChannel.error(`[extension] reading the session's plugin list failed; plugin rows will not expand: ${message}`);
-        void vscode.window.showWarningMessage(
-          'Modbench: The editing session loaded, but its plugin list could not be read — plugin rows will not expand into records. Reload the session to retry.',
-        );
-      }
+      await applyLoadedSessionToTree(sessionPluginFiles, result.failures, outputChannel);
       outputChannel.info('[extension] editing session ready');
   };
+  return () => withPluginsViewProgress(enter);
 }
 
 

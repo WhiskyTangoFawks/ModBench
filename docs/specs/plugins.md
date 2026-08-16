@@ -261,6 +261,62 @@ there is no separate load-session step.
   review. A drop onto a child row is refused rather than treated as "past the last row", which
   would silently move the dragged plugins to the end of the load order.
 
+### Progressive load ([#307](https://github.com/WhiskyTangoFawks/ModBench/issues/307), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
+
+The load is progressive **and states its own incompleteness**. Both halves are the point: the
+trap this closes is that **an absent conflict badge is indistinguishable from "no conflict"**. If
+browsing opens at second five and the winner sweep lands at second ninety, then for eighty-five
+seconds an unmarked record silently claims to be conflict-free when nothing has looked — the same
+class of error as `is_winner` describing a load order that does not exist. Showing things sooner
+without saying what is not yet known would make that worse, not better.
+
+- **Rows gain chevrons individually, as each plugin finishes indexing** — not all at once at the
+  end. A plugin the load has not reached yet stays a leaf, so a row never expands onto records
+  that are not queryable yet.
+- **The view's own header carries the progress indicator** for the whole operation — backend
+  spawn, indexing, and the winner sweep (`withProgress` addressed by view id). Not a
+  notification: two indicators for one operation is noise. The header bar carries no text, so the
+  step messages go to `TreeView.message` instead.
+- **`TreeView.message` states, in as many words, that conflict information is not yet computed**,
+  for as long as the winner sweep is outstanding. It clears itself when the sweep lands — no user
+  action, no Refresh.
+- **No conflict badge is rendered before the sweep completes.** No conflict badge exists on this
+  tree yet ([#285](https://github.com/WhiskyTangoFawks/ModBench/issues/285) — see Further Notes),
+  so this is an **invariant handed to #285**, not current code: whatever renders that badge must
+  gate on `SessionStatus.conflictsComputed`, and must render *nothing* — not "no conflict" —
+  while it is false.
+- **Gate on `conflictsComputed`, never on "is a load running".** They coincide today but are
+  deliberately separate fields (`SessionStatus.cs`): the sweep is whole-set, so ADR-0035's live
+  mutations (reorder, enable, disable) will leave a finished session with stale winners until it
+  is re-run.
+- **Per-plugin load failures decorate their rows the moment they are reported**, through the same
+  `setSession` channel as everything else the session reports (#277) — not held back to the end.
+- **Master issues stay off the rows until the load completes.** They are a whole-session
+  derivation: mid-load they would flag masters that simply have not been opened yet. The backend
+  suppresses them outright while loading (`RecordQueryService.GetPlugins` gates on
+  `SessionState.Ready`) and the frontend never asks for them mid-load.
+- **Closing the session is a deliberate abandonment, not a failure — at any point in the launch.**
+  The polling stops, chevrons/message/progress clear, and nothing is reported as broken. This
+  holds for the whole launch, not just the load: a close during the backend spawn and mod-tree
+  walk must not report "Backend failed to start" for the stop the user just asked for, so the
+  cancellation is armed before the launch's first await and checked after each one. Same for a
+  load superseded by another load, which the backend answers `409` — the newer load owns the
+  session, so the abandoned one must not tear anything down.
+- **Mechanism: poll, don't stream.** Every call goes through the generated `openapi-fetch`
+  client, which has no streaming path, and the load POST stays blocking. So `GET /session/status`
+  ([#274](https://github.com/WhiskyTangoFawks/ModBench/issues/274)) is polled alongside the still
+  in-flight `POST /session/load-explicit`, which remains the completion signal. Cadence lives in
+  one named constant, `SESSION_STATUS_POLL_INTERVAL_MS` (`SessionController.ts`), set to 500ms to
+  match `BackendManager`'s own health-poll cadence; it is the single dial for
+  [#313](https://github.com/WhiskyTangoFawks/ModBench/issues/313)'s tuning pass.
+- **A progress tick is never the last word.** Ticks carry only the indexed set and the failures;
+  the completed load's hand-off (`applyLoadedSessionToTree`) always follows the final tick and
+  carries read-only state and master issues with it. Were a tick ever last, both decorations
+  would silently vanish from a fully loaded tree.
+- A tick re-renders only when something actually landed: `setSession` fires a whole-tree refresh
+  and `PluginTreeProvider.getPluginChildren` is uncached, so an unconditional re-render every
+  poll would re-fetch record types for every expanded row.
+
 ### Record navigation (Editing, once a session is running)
 
 - **Plugin nodes** (`contextValue: "plugin"`, or `"pluginImplicit"` for an implicitly-loaded
@@ -591,6 +647,22 @@ overflow, then native **Collapse All** last.
   context boundary itself (`src/test/contextBoundary.test.ts`).
 - **Record semantics and conflict classification** are the backend's responsibility and tested
   there (`MEditService/CLAUDE.md`); this surface consumes representative responses as fixtures.
+- **Progressive-load seams** (#307). The polling itself is `SessionController.loadExplicitSession`
+  with an `onProgress` callback and an `AbortSignal` — HTTP orchestration with no VS Code types,
+  so cadence, tick reporting, poll-failure tolerance and the three load outcomes (loaded /
+  failed / abandoned) are unit-tested with a fake client and fake timers. The incompleteness
+  statement's text is a pure function (`medit/sessionProgress.ts`). What only a live window can
+  show — chevrons appearing one plugin at a time, a mid-load failure decoration, master issues
+  staying off until completion, `TreeView.message` appearing and clearing, and a mid-load close
+  stopping the polling — is in the integration suite, whose mock backend **holds the load POST
+  open** so the assertions land in the window that actually matters.
+- **The view-header progress indicator (AC2) has no automated test.** `withProgress` returns
+  nothing readable and leaves no observable state in the extension host — the same absence of a
+  seam as `showCollapseAll` (modbench/CLAUDE.md title-bar rule 7). It is verified by reading the
+  call sites (`makeEnterEditing`'s `withPluginsViewProgress`, and that neither
+  `modbench.modList.launchMedit` nor `modbench.reloadSession` wraps the load in a second
+  indicator) and by `/manual-test` against a real load order. Recorded here as a known untested
+  surface rather than covered by a test that would only restate the call.
 - **Prior art**: `modlistText.test.ts`, `metaIni.test.ts`, `statusChecker.test.ts` — same
   fixture-in/value-out style; instance fixtures live under
   `modbench/src/modmanager/test/fixtures/`.
@@ -644,6 +716,9 @@ overflow, then native **Collapse All** last.
   is planned but not yet built on this tree — see [#285](https://github.com/WhiskyTangoFawks/ModBench/issues/285),
   which also tracks the missing Conflicts node; both were recorded as spec drift by #270 and
   carry over unchanged by this merge. The full visual encoding, once built, lives in
-  [medit-record-editor.md](medit-record-editor.md).
+  [medit-record-editor.md](medit-record-editor.md). **#285 inherits one invariant from #307**: the
+  badge must gate on `SessionStatus.conflictsComputed` and render nothing at all while it is
+  false — an absent badge that means "not computed yet" must never be drawn as one that means
+  "no conflict" (see Progressive load).
 - **Deferred follow-up**: [#62](https://github.com/WhiskyTangoFawks/ModBench/issues/62)
   (cross-tree highlight).
