@@ -405,6 +405,45 @@ session-load toast (`SessionController.loadExplicitSession`, one aggregated warn
 unchanged and is not duplicated by this decoration — the same failures reach both, from the same
 response, so there is exactly one notification and one persistent, per-row explanation of why.
 
+### Pending-change decoration ([#331](https://github.com/WhiskyTangoFawks/ModBench/issues/331))
+
+Any row (plugin or record) that carries a staged pending change is decorated with the same
+git-style vocabulary VS Code users already read from the Explorer's own SCM decorations: a badge
+plus a theme color, via `vscode.FileDecorationProvider` (`medit/PendingChangeDecorationProvider.ts`)
+— never a bespoke badge mechanism.
+
+- **Record row** (`RecordNode`, and every other formKey-addressable node in the spatial hierarchy
+  — `WorldspaceNode`, `CellNode`, `PlacedNode`): a staged field edit, delete or renumber renders
+  the **'modified'** treatment (badge `M`, `gitDecoration.modifiedResourceForeground`). A staged
+  **creation** (today: a record staged via the create change type; #288 will add staged plugin
+  creation as a consumer of this same language) renders the **'added'** treatment instead (badge
+  `A`, `gitDecoration.addedResourceForeground`) — distinct from 'modified', matching git's own
+  treatment of a new file. Every node type that can carry a pending change gets this — an
+  undecorated row must never be mistakable for "no pending changes" once decoration exists at all.
+- **Plugin row**: 'modified' whenever *any* contained record carries a staged change, uniformly —
+  even when the only staged content is a creation. 'added' is reserved for the thing that is
+  itself new (matching git: a folder holding a new file still reads as modified, not added); once
+  #288 makes a *plugin* the pending-created thing, plugin-level 'added' becomes correct there.
+- **Implicit/forced-master plugin rows are out of scope.** `ImplicitMasterNode`
+  (`modmanager/PluginListProvider.ts`) already sets its own `resourceUri` — a real
+  `Data/<name>` filesystem path consumed exclusively by `ImplicitMasterDecorationProvider` to gray
+  a forced-loaded master's label (#276) — and a `TreeItem.resourceUri` is single-valued, so
+  assigning a second one for pending-change purposes would silently break that unrelated
+  decoration. `PluginsTreeComposite` enforces this structurally (never overwrites a resourceUri a
+  row provider already set), not by naming "implicit master" — the records a vanilla/DLC/CC master
+  contains still decorate individually, through their own `RecordNode` scheme; only the plugin
+  row's own badge is affected.
+- A shadowed copy's row (ADR-0036: two loaded copies sharing a filename) never decorates, even
+  when the winning copy of the same file has a staged change on the same FormKey — only the
+  winning copy is ever staged against (the backend always resolves the current winning origin
+  server-side), so a shadowed row's identity URI carries its `origin` specifically so the
+  derivation can refuse to decorate it.
+- Event-driven, not polled: refreshed from the same points that already tell the extension host
+  "pending state changed" — the webview's `PENDING_CHANGED` message and every `SessionController`
+  mutation (stage, copy, create, delete, save, revert). No new endpoint; the provider performs its
+  own `GET /changes` read rather than sharing the Pending Changes tree's (that one only fetches
+  while its own view is visible).
+
 ### Selection & drag
 
 - `canSelectMany: true`, shared across both plugin rows and expanded record nodes — batch-capable

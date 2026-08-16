@@ -15,6 +15,11 @@ export interface RevealDeps {
   view: vscode.TreeView<PendingTreeNode>;
   log: (msg: string) => void;
   reporter: Reporter;
+  // #331: the Plugins-tree pending-change decoration provider — refreshed alongside `provider`
+  // on every PENDING_CHANGED message, so a staged/reverted/saved change decorates live without
+  // depending on the Pending Changes view being visible (that view's own fetch is; this one
+  // performs its own — see PendingChangeDecorationProvider's doc comment).
+  decorations: { refresh(): void };
 }
 
 // Issue #140/#208: resolves a pending change id to a tree node and reveals it, expanding a
@@ -390,6 +395,7 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
     await vscode.commands.executeCommand('modbench.openEditor', { formKey: m.formKey, label: m.formKey });
   } else if (m.type === WEBVIEW_TO_EXTENSION.PENDING_CHANGED) {
     deps.reveal?.provider.refresh();
+    deps.reveal?.decorations.refresh();
   } else if (m.type === WEBVIEW_TO_EXTENSION.LOG) {
     deps.channel[m.level](m.message);
   } else if (m.type === WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD) {

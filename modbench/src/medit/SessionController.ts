@@ -51,6 +51,10 @@ export class SessionController {
       return;
     }
     this.deps.refreshTree();
+    // #331 (bundled pre-existing bug fix): a tree-invoked copy stages a pending change same as a
+    // webview-staged edit does — this call was missing, so both the Pending Changes view and the
+    // new decoration provider went stale after it.
+    this.deps.refreshGroupTree();
   }
 
   /** #281: Copy as New Record from a tree row — one backend call; the record type is derived from
@@ -73,6 +77,9 @@ export class SessionController {
       return;
     }
     this.deps.refreshTree();
+    // #331 (bundled pre-existing bug fix): this stages a `create` change — see copyRecordTo's
+    // own comment above.
+    this.deps.refreshGroupTree();
   }
 
   /** Load the editing session from an ordered { name, path, origin, participates } list built
@@ -186,6 +193,10 @@ export class SessionController {
         return false;
       }
       this.deps.refreshTree();
+      // #331 (bundled pre-existing bug fix): a staged delete (or a reverted-create, when the
+      // deleted record was itself pending) is a pending-change mutation — see copyRecordTo's own
+      // comment above.
+      this.deps.refreshGroupTree();
       return true;
     } catch (e) {
       this.log(`[SessionController] deleteRecords threw: ${e instanceof Error ? e.message : String(e)}`);
@@ -213,6 +224,9 @@ export class SessionController {
         return;
       }
       this.deps.refreshTree();
+      // #331 (bundled pre-existing bug fix): this stages a `create` change — see copyRecordTo's
+      // own comment above.
+      this.deps.refreshGroupTree();
     } catch (e) {
       this.log(`[SessionController] createPlaced threw: ${e instanceof Error ? e.message : String(e)}`);
       this.deps.showError(`mEdit: Create placed failed — ${e instanceof Error ? e.message : String(e)}`);

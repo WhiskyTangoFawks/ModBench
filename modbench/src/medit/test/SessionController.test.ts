@@ -173,6 +173,27 @@ describe('SessionController.copyRecordTo', () => {
       }),
     );
   });
+
+  // #331 (bundled pre-existing bug fix): a tree-invoked copy stages a pending change same as a
+  // webview-staged edit — the Pending Changes tree (and, since #331, the Plugins-tree decoration
+  // provider) must hear about it too, not just the record tree.
+  it('also refreshes the pending-change group tree on success', async () => {
+    const deps = makeDeps();
+    const ctrl = new SessionController(deps);
+
+    await ctrl.copyRecordTo('Fallout4.esm:001234', 'MyPatch.esp');
+
+    expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
+  });
+
+  it('does not refresh the pending-change group tree on failure', async () => {
+    const deps = makeDeps({ client: makeClient({ copyRecordOk: false }) });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.copyRecordTo('Fallout4.esm:001234', 'MyPatch.esp');
+
+    expect(deps.refreshGroupTree).not.toHaveBeenCalled();
+  });
 });
 
 // ── copyAsNewRecord ───────────────────────────────────────────────────────────
@@ -229,6 +250,16 @@ describe('SessionController.copyAsNewRecord', () => {
 
     expect(deps.showError).toHaveBeenCalledOnce();
     expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  // #331 (bundled pre-existing bug fix): stages a `create` change — see SessionController.copyRecordTo's own test above.
+  it('also refreshes the pending-change group tree on success', async () => {
+    const deps = makeDeps();
+    const ctrl = new SessionController(deps);
+
+    await ctrl.copyAsNewRecord('Fallout4.esm:001234', 'MyPatch.esp', 'Source.esp');
+
+    expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
   });
 });
 
@@ -795,6 +826,18 @@ describe('SessionController.deleteRecords', () => {
     expect(deps.showError).toHaveBeenCalled();
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
+
+  // #331 (bundled pre-existing bug fix): a staged delete (or reverted-create) is a pending-change
+  // mutation — see SessionController.copyRecordTo's own test above.
+  it('also refreshes the pending-change group tree on success', async () => {
+    const client = { ...makeClient(), POST: vi.fn().mockResolvedValue({ response: { ok: true, status: 200 } }) };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.deleteRecords([{ formKey: '000001:Test.esp', plugin: 'Test.esp' }]);
+
+    expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
+  });
 });
 
 // ── createPlaced ───────────────────────────────────────────────────────────────
@@ -849,6 +892,17 @@ describe('SessionController.createPlaced', () => {
 
     expect(deps.showError).toHaveBeenCalled();
     expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  // #331 (bundled pre-existing bug fix): stages a `create` change — see SessionController.copyRecordTo's own test above.
+  it('also refreshes the pending-change group tree on success', async () => {
+    const client = { ...makeClient(), POST: vi.fn().mockResolvedValue({ response: { ok: true, status: 200 } }) };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.createPlaced('MyMod.esp', '000001A4:Fallout4.esm', 'refr', 'persistent');
+
+    expect(deps.refreshGroupTree).toHaveBeenCalledOnce();
   });
 });
 

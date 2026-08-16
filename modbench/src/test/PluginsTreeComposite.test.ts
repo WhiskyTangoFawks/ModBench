@@ -591,3 +591,66 @@ describe('PluginsTreeComposite — reconciling the order-aware badge with sessio
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Missing master: Ghost.esm');
   });
 });
+
+// #331: a plugin row's pending-change decoration resourceUri — composite is the one place
+// allowed to know both sides (ADR-0035), so it's where this cross-cutting assignment lands,
+// exactly like the read-only tooltip and master-issue decorations above.
+describe('PluginsTreeComposite — pending-change resourceUri (#331)', () => {
+  it('assigns the resourceUri pendingChangeUriOf returns, for a plugin row', async () => {
+    const uri = { scheme: 'medit-pending-plugin', path: '/A.esp' } as never;
+    const pendingChangeUriOf = vi.fn().mockReturnValue(uri);
+    const rowSource = new FakeRows([PLUGIN_ROW]);
+    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
+      rows: rowSource, children: new FakeChildren(), pluginFileOf: (row) => row.file, pendingChangeUriOf,
+    });
+    await composite.getChildren();
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+
+    expect(item.resourceUri).toBe(uri);
+    expect(pendingChangeUriOf).toHaveBeenCalledWith('A.esp');
+  });
+
+  // ImplicitMasterNode (modmanager/PluginListProvider.ts) already sets a real Data/<name>
+  // resourceUri of its own, consumed by ImplicitMasterDecorationProvider — resourceUri is
+  // single-valued, so this must never be clobbered (#331 review: implicit masters are explicitly
+  // out of scope for pending-change decoration).
+  it('never overwrites a resourceUri the row provider already set', async () => {
+    const rowSource = new FakeRows([PLUGIN_ROW]);
+    const original = rowSource.getTreeItem(PLUGIN_ROW);
+    const existingUri = { scheme: 'file', path: '/game/Data/A.esp' };
+    (original as unknown as { resourceUri: unknown }).resourceUri = existingUri;
+    const pendingChangeUriOf = vi.fn().mockReturnValue({ scheme: 'medit-pending-plugin', path: '/A.esp' });
+    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
+      rows: rowSource, children: new FakeChildren(), pluginFileOf: (row) => row.file, pendingChangeUriOf,
+    });
+    await composite.getChildren();
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+
+    expect(item.resourceUri).toBe(existingUri);
+    expect(pendingChangeUriOf).not.toHaveBeenCalled();
+  });
+
+  it('never assigns a resourceUri for a row that stands for no plugin file (error/empty state)', async () => {
+    const pendingChangeUriOf = vi.fn().mockReturnValue({ scheme: 'medit-pending-plugin', path: '/x' });
+    const rowSource = new FakeRows([ERROR_ROW]);
+    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
+      rows: rowSource, children: new FakeChildren(), pluginFileOf: (row) => row.file, pendingChangeUriOf,
+    });
+    await composite.getChildren();
+
+    const item = composite.getTreeItem(ERROR_ROW);
+
+    expect(item.resourceUri).toBeUndefined();
+    expect(pendingChangeUriOf).not.toHaveBeenCalled();
+  });
+
+  it('works without a wired pendingChangeUriOf — no resourceUri, no throw', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+
+    expect(() => composite.getTreeItem(PLUGIN_ROW)).not.toThrow();
+    expect(composite.getTreeItem(PLUGIN_ROW).resourceUri).toBeUndefined();
+  });
+});
