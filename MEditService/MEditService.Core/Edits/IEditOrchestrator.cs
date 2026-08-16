@@ -33,10 +33,19 @@ public interface IEditOrchestrator
     /// and returns the reserved FormKey and GroupId.
     /// Returns <see cref="CreateRecordOutcome.InvalidReferences"/> when the template record carries
     /// dangling or type-mismatched FormLink references.
-    /// Throws <see cref="ArgumentException"/> for an unknown <paramref name="recordType"/>.
+    /// Throws <see cref="ArgumentException"/> for an unknown <paramref name="recordType"/>, or a
+    /// null one with no template to derive it from (#281: a caller with a template may omit it —
+    /// the Plugins tree's record row knows only its FormKey).
     /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
+    ///
+    /// <paramref name="templateSourcePlugin"/> / <paramref name="templateSourceOrigin"/> (#281)
+    /// follow CopyRecordTo's sourcePlugin/sourceOrigin contract exactly: given, the template
+    /// fields are read off that copy's own version of <paramref name="templateFormKey"/> rather
+    /// than the overall winner — Copy as New Record acts on the surface's clicked target.
     /// </summary>
-    CreateRecordOutcome CreateRecord(string plugin, string recordType, string? templateFormKey, string source);
+    CreateRecordOutcome CreateRecord(
+        string plugin, string? recordType, string? templateFormKey, string source,
+        string? templateSourcePlugin = null, string? templateSourceOrigin = null);
 
     /// <summary>
     /// Like <see cref="CreateRecord"/>, but for a placed record (refr/achr): stamps

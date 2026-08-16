@@ -68,10 +68,15 @@ export interface RecordSessionClient {
   // Issue #202: sourcePlugin, when given, copies that plugin's own version of the record (the
   // column-header menu's right-clicked column) rather than the overall winner.
   copyTo(
-    formKey: string, targetPlugin: string, sourcePlugin?: string,
+    formKey: string, targetPlugin: string, sourcePlugin?: string, sourceOrigin?: string,
   ): Promise<WriteResult<PendingChange[], ProblemDetails | PatchRecordValidationError>>;
   removeOverride(formKey: string, plugin: string): Promise<WriteResult<DeleteRecordsResponse, ProblemDetails>>;
-  createRecord(plugin: string, recordType?: string): Promise<WriteResult<CreateRecordResult, ProblemDetails>>;
+  // #281: Copy as New Record in one backend call — the template-source triple names which copy's
+  // fields to read (never silently the winner) and the backend derives the record type from the
+  // template, replacing the old create-blank-then-patch-every-field choreography here.
+  copyAsNew(
+    formKey: string, targetPlugin: string, sourcePlugin: string, sourceOrigin: string,
+  ): Promise<WriteResult<CreateRecordResult, ProblemDetails>>;
   // Issue #139: the changes in the whole component `changeId` belongs to (ADR-0028). Read fully
   // here (not a raw Response) because the panel only needs the member list to decide the Revert
   // Group confirmation; a failed read yields [] so the panel falls back to a plain single-change
@@ -151,11 +156,11 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
       }));
     },
 
-    copyTo(formKey, targetPlugin, sourcePlugin) {
+    copyTo(formKey, targetPlugin, sourcePlugin, sourceOrigin) {
       return write<PendingChange[], ProblemDetails | PatchRecordValidationError>(
         client.POST('/records/{formKey}/copy-to/{targetPlugin}', {
           params: { path: { formKey, targetPlugin } },
-          body: sourcePlugin ? { sourcePlugin } : {},
+          body: sourcePlugin ? { sourcePlugin, ...(sourceOrigin ? { sourceOrigin } : {}) } : {},
         }),
       );
     },
@@ -166,10 +171,15 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
       }));
     },
 
-    createRecord(plugin, recordType) {
+    copyAsNew(formKey, targetPlugin, sourcePlugin, sourceOrigin) {
       return write<CreateRecordResult, ProblemDetails>(client.POST('/plugins/{plugin}/records', {
-        params: { path: { plugin } },
-        body: { source: 'user', ...(recordType ? { recordType } : {}) },
+        params: { path: { plugin: targetPlugin } },
+        body: {
+          source: 'user',
+          templateFormKey: formKey,
+          templateSourcePlugin: sourcePlugin,
+          templateSourceOrigin: sourceOrigin,
+        },
       }));
     },
 

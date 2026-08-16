@@ -165,7 +165,8 @@ public sealed class EndpointReceptionLoggingTests
             string source, string? description, string? changeType = null) =>
             new StageEditResult.NoSession();
         public StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source, string? sourcePlugin = null, string? sourceOrigin = null) => throw new NotSupportedException();
-        public CreateRecordOutcome CreateRecord(string plugin, string recordType, string? templateFormKey, string source) =>
+        public CreateRecordOutcome CreateRecord(string plugin, string? recordType, string? templateFormKey, string source,
+            string? templateSourcePlugin = null, string? templateSourceOrigin = null) =>
             throw new NotSupportedException();
         public CreateRecordOutcome CreatePlacedRecord(string plugin, string recordType, string parentCell, string placementGroup,
             string? templateFormKey, string source) => throw new NotSupportedException();

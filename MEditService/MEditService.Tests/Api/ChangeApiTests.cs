@@ -323,6 +323,42 @@ public sealed class ChangeApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
         Assert.True(body.TryGetProperty("formKey", out _));
     }
 
+    // #281: Copy as New Record from a tree row supplies only the FormKey — recordType is derived
+    // from the template server-side, so the request may omit it.
+    [Fact]
+    public async Task PostPluginRecords_TemplateWithoutRecordType_Returns200()
+    {
+        var plugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
+
+        var resp = await _client.PostAsJsonAsync($"/plugins/{plugin}/records", new
+        {
+            templateFormKey = _fixture.Npc1FormKey.ToString(),
+            source = "user",
+        });
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.TryGetProperty("formKey", out _));
+    }
+
+    // #281: templateSourcePlugin binds and threads — a source with no loaded copy of the template
+    // record must fail the template lookup (422), where an unbound field would fall through to the
+    // winner and answer 200.
+    [Fact]
+    public async Task PostPluginRecords_TemplateSourcePluginNotLoaded_Returns422()
+    {
+        var plugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
+
+        var resp = await _client.PostAsJsonAsync($"/plugins/{plugin}/records", new
+        {
+            templateFormKey = _fixture.Npc1FormKey.ToString(),
+            templateSourcePlugin = "NotLoaded.esp",
+            source = "user",
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, resp.StatusCode);
+    }
+
     [Fact]
     public async Task PostPluginRecords_UnknownRecordType_Returns422()
     {

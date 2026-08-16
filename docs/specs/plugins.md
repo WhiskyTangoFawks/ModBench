@@ -276,11 +276,17 @@ there is no separate load-session step.
   `wbDefinitionsFO4.pas` (#110); the raw 4-char signature remains the internal identifier (cache
   keys, `contextValue`, commands, API `type`). Children are paginated record nodes with a
   "Load more…" node at the end of a page.
-- **Record nodes** (`contextValue: "record"`): labeled `{EditorID}  [{RecordType}:{FormID}]`
-  (FormKey only when no EditorID). Single-click (or Open Record) opens the editor; the context
-  menu adds Copy as Override Into…, Copy as New Record Into…, Remove Record (a confirmation
-  listing every selected record, deleting the whole selection as one batch; the Delete key also
-  triggers it), Show Referenced By, and Run Script… (context = this record). Removing a record
+- **Record nodes** (`contextValue: "record"`, or `"recordImmutable"` for a row whose plugin is
+  read-only for editing — an immutable plugin or a shadowed copy — which keeps the copy family
+  but hides Remove, matching the column header's `!immutable` gate; #281): labeled
+  `{EditorID}  [{RecordType}:{FormID}]` (FormKey only when no EditorID). Single-click (or Open
+  Record) opens the editor; the context menu adds Copy as Override Into…, Copy as New Record
+  Into…, Remove (a confirmation listing every selected record, deleting the whole selection as
+  one batch; the Delete key also triggers it), and Run Script… (context = this record). #281:
+  the row carries its own copy identity (plugin + origin), and the copy commands act on *that*
+  version — never silently the winner — the same #202 rule the column header follows; the three
+  entries are the same command ids, in the same xEdit order, on the record row, the placed row
+  and the record editor's column header (enforced by `packageJson.test.ts`). Removing a record
   that is itself a **pending create** reverts that create's whole ChangeGroup (component-revert,
   ADR-0028) instead of staging a `delete` on top of it — a record with no on-disk existence has
   nothing to delete. A mixed batch reverts the pending-create targets and stages a `delete` for
@@ -288,8 +294,8 @@ there is no separate load-session step.
   `stagedGroup`) rather than collapsing them (#143).
 - Context menu availability is driven by node `contextValue`, sourced from whichever side of
   the composite built the row: Mod Management for plugin rows (`"plugin"`, `"pluginImplicit"`),
-  the record browser for everything a row expands into (`"recordType"`, `"record"`, and the
-  spatial/placed contextValues below).
+  the record browser for everything a row expands into (`"recordType"`, `"record"` /
+  `"recordImmutable"`, `"refr"` / `"refrImmutable"`, and the spatial contextValues below).
 
 ### Record filter (SQL)
 
@@ -330,8 +336,10 @@ there is no separate load-session step.
   Persistent/Temporary placed-reference groups → placed references. Block and Sub-block nodes
   are grouping-only (no record, no click); clicking a CELL or REFR node opens the editor.
 - Context menus: a **placed group** offers Create Placed… (quick pick REFR/ACHR + optional
-  template FormKey); a **placed reference** offers Copy as Override Into… and Delete (the same
-  handlers as elsewhere). CELL nodes have no menu.
+  template FormKey); a **placed reference** (`contextValue: "refr"` / `"refrImmutable"`) offers
+  the same record trio as a record row — Copy as Override Into…, Copy as New Record Into…,
+  Remove — with the same handlers and immutable gating (#281; a copied-as-new placed record
+  lands under the template's own cell and Persistent/Temporary group). CELL nodes have no menu.
 
 ### Missing-master badge (order-aware) and session-derived master/load-failure decoration
 
@@ -400,7 +408,7 @@ response, so there is exactly one notification and one persistent, per-row expla
 ### Selection & drag
 
 - `canSelectMany: true`, shared across both plugin rows and expanded record nodes — batch-capable
-  context commands (currently Remove Record) receive the full selection.
+  context commands (currently Remove) receive the full selection.
 - Drag-and-drop reorders the current plugin-row selection (single or multi, contiguous or not)
   as a block, moving all selected rows to the drop index while preserving their relative order —
   same `TreeDragAndDropController` mechanics already built for the Mods tree's separator-block
@@ -439,9 +447,9 @@ overflow, then native **Collapse All** last.
   to the game's `Data/` folder for an unmanaged vanilla/DLC/CC plugin) and reveals it in the OS
   file manager. Same primitive as the Mods tree's existing "Open in Explorer"
   (`revealFileInOS`).
-- Record-scope context menu entries (Copy as Override Into…, Delete/Remove Record, Create
-  Placed…) are described under Record navigation above — they apply to this tree's expanded
-  rows the same way regardless of which side of the composite built the row above them.
+- Record-scope context menu entries (Copy as Override Into…, Copy as New Record Into…, Remove,
+  Create Placed…) are described under Record navigation above — they apply to this tree's
+  expanded rows the same way regardless of which side of the composite built the row above them.
 
 ### Write mechanism
 

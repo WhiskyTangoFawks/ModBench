@@ -34,14 +34,41 @@ export class SessionController {
     this.deps.refreshTree();
   }
 
-  async copyRecordTo(formKey: string, target: string): Promise<void> {
+  // #281: sourcePlugin/sourceOrigin name the clicked row's own copy — the backend copies that
+  // version, not the winner (#202's column-header rule, now on every surface).
+  async copyRecordTo(formKey: string, target: string, sourcePlugin?: string, sourceOrigin?: string): Promise<void> {
     const { error, response } = await this.deps.client.POST(
       '/records/{formKey}/copy-to/{targetPlugin}',
-      { params: { path: { formKey, targetPlugin: target } }, body: {} },
+      {
+        params: { path: { formKey, targetPlugin: target } },
+        body: sourcePlugin ? { sourcePlugin, ...(sourceOrigin ? { sourceOrigin } : {}) } : {},
+      },
     );
     if (!response.ok) {
       const text = errorText(error);
       this.log(`[SessionController] copyRecordTo failed (${response.status}): ${text}`);
+      this.deps.showError(`mEdit: Copy failed — ${text}`);
+      return;
+    }
+    this.deps.refreshTree();
+  }
+
+  /** #281: Copy as New Record from a tree row — one backend call; the record type is derived from
+   *  the template server-side and the fields are read off the named source copy, so no open
+   *  record panel is involved. */
+  async copyAsNewRecord(formKey: string, target: string, sourcePlugin: string, sourceOrigin?: string): Promise<void> {
+    const { error, response } = await this.deps.client.POST('/plugins/{plugin}/records', {
+      params: { path: { plugin: target } },
+      body: {
+        templateFormKey: formKey,
+        templateSourcePlugin: sourcePlugin,
+        ...(sourceOrigin ? { templateSourceOrigin: sourceOrigin } : {}),
+        source: 'user',
+      },
+    });
+    if (!response.ok) {
+      const text = errorText(error);
+      this.log(`[SessionController] copyAsNewRecord failed (${response.status}): ${text}`);
       this.deps.showError(`mEdit: Copy failed — ${text}`);
       return;
     }

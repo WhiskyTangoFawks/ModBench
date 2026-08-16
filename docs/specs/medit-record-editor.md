@@ -170,7 +170,7 @@ better idea.
   definition and the keys are shortcuts onto it, exactly as in xEdit, and there are **no inline
   ▲▼✕ controls**, per the no-second-route rule below. On a pending cell:
   **Reveal in Pending Changes Tree** / **Save Group** / **Revert Group**,
-  **Copy as Override…** / **Copy as New Record** / **Remove** / **Add
+  **Copy as Override Into…** / **Copy as New Record Into…** / **Remove** / **Add
   Master…** on a column header (the last only on the header record's own column, and only when
   mutable — ADR-0033: no standalone control once an action is right-click-reachable, same rule
   #207 applied to the inline revert button). An action reachable through right-click is never also
@@ -283,12 +283,15 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   load order (left = master, right = winning override), plus a **Pending** column for any plugin
   with staged changes. Column headers show the plugin name as a chip (lock icon on immutable);
   left-click collapses/expands a column (state persisted in session); right-click opens VS Code's
-  own native menu offering **Copy as Override…** (copies the *right-clicked column's own version*
-  of the record — not necessarily the winner — into a picked target plugin, preserving
+  own native menu offering **Copy as Override Into…** (copies the *right-clicked column's own
+  version* of the record — not necessarily the winner — into a picked target plugin, preserving
   `EditOrchestrator.CopyRecordTo`'s FormKey-reference validation and placement copy; the same
-  `modbench.copyAsOverrideInto` command the plugins tree uses, there defaulting to the winner
-  since a tree node carries no column) / **Copy as New Record** (same values, a fresh FormKey in
-  the target) / **Remove**, absent rather than merely disabled for an immutable
+  `modbench.copyAsOverrideInto` command the plugins tree uses — #281: the tree row names its own
+  copy as the source the same way, so the gesture means "copy *this* version" on every surface) /
+  **Copy as New Record Into…** (same values, a fresh FormKey in the target — one backend call,
+  `CreateRecord`'s template-source pair; #281) / **Remove** (the same `modbench.deleteRecord`
+  command and modal confirm as the tree's record rows — one operation, one name, per xEdit's
+  `mniNavRemove`/`mniViewHeaderRemove`; #281), absent rather than merely disabled for an immutable
   column / **Add Master…** (header record's own column only, mutable only). The grid's scroll
   region is bound to the
   panel's viewport, not to its own content height, so a horizontal scrollbar (for wide grids with

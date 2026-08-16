@@ -38,10 +38,12 @@ function makeClient({
   plugins = makePlugins(2),
   createPluginOk = true,
   copyRecordOk = true,
+  createRecordOk = true,
 }: {
   plugins?: PluginMetadata[];
   createPluginOk?: boolean;
   copyRecordOk?: boolean;
+  createRecordOk?: boolean;
 } = {}) {
   return {
     GET: vi.fn().mockResolvedValue({ data: plugins, response: { ok: true } }),
@@ -55,6 +57,13 @@ function makeClient({
       }
       if (path === '/records/{formKey}/copy-to/{targetPlugin}') {
         return Promise.resolve(copyRecordOk ? { response: { ok: true, status: 200 } } : drainedError(400, 'Copy failed'));
+      }
+      if (path === '/plugins/{plugin}/records') {
+        return Promise.resolve(
+          createRecordOk
+            ? { response: { ok: true, status: 200 }, data: { formKey: '000801:MyPatch.esp', groupId: 'g1' } }
+            : drainedError(422, 'Copy failed'),
+        );
       }
       return Promise.resolve({ response: { ok: true } });
     }),
@@ -144,6 +153,79 @@ describe('SessionController.copyRecordTo', () => {
     const ctrl = new SessionController(deps);
 
     await ctrl.copyRecordTo('Fallout4.esm:001234', 'MyPatch.esp');
+
+    expect(deps.showError).toHaveBeenCalledOnce();
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  // #281: a tree-invoked Copy as Override names the clicked row's own copy — the backend copies
+  // that version, not the winner (#202's column-header rule, now on every surface).
+  it('forwards sourcePlugin/sourceOrigin in the body when given', async () => {
+    const deps = makeDeps();
+    const ctrl = new SessionController(deps);
+
+    await ctrl.copyRecordTo('Fallout4.esm:001234', 'MyPatch.esp', 'Source.esp', 'ModA');
+
+    expect(deps.client.POST).toHaveBeenCalledWith(
+      '/records/{formKey}/copy-to/{targetPlugin}',
+      expect.objectContaining({
+        body: { sourcePlugin: 'Source.esp', sourceOrigin: 'ModA' },
+      }),
+    );
+  });
+});
+
+// ── copyAsNewRecord ───────────────────────────────────────────────────────────
+
+// #281: Copy as New Record from a tree row — one backend call (template + source copy named),
+// no open record panel required.
+describe('SessionController.copyAsNewRecord', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs a create with the template-source triple and refreshes tree', async () => {
+    const deps = makeDeps();
+    const ctrl = new SessionController(deps);
+
+    await ctrl.copyAsNewRecord('Fallout4.esm:001234', 'MyPatch.esp', 'Source.esp', 'ModA');
+
+    expect(deps.client.POST).toHaveBeenCalledWith(
+      '/plugins/{plugin}/records',
+      expect.objectContaining({
+        params: { path: { plugin: 'MyPatch.esp' } },
+        body: {
+          templateFormKey: 'Fallout4.esm:001234',
+          templateSourcePlugin: 'Source.esp',
+          templateSourceOrigin: 'ModA',
+          source: 'user',
+        },
+      }),
+    );
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+  });
+
+  it('omits templateSourceOrigin when the row has none (load-order copy)', async () => {
+    const deps = makeDeps();
+    const ctrl = new SessionController(deps);
+
+    await ctrl.copyAsNewRecord('Fallout4.esm:001234', 'MyPatch.esp', 'Source.esp');
+
+    expect(deps.client.POST).toHaveBeenCalledWith(
+      '/plugins/{plugin}/records',
+      expect.objectContaining({
+        body: {
+          templateFormKey: 'Fallout4.esm:001234',
+          templateSourcePlugin: 'Source.esp',
+          source: 'user',
+        },
+      }),
+    );
+  });
+
+  it('shows error and does not refresh tree on failure', async () => {
+    const deps = makeDeps({ client: makeClient({ createRecordOk: false }) });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.copyAsNewRecord('Fallout4.esm:001234', 'MyPatch.esp', 'Source.esp');
 
     expect(deps.showError).toHaveBeenCalledOnce();
     expect(deps.refreshTree).not.toHaveBeenCalled();

@@ -425,8 +425,7 @@ describe('package.json command titles and categories (#280)', () => {
     'modbench.pendingCell.reveal',
     'modbench.pendingCell.saveGroup',
     'modbench.pendingCell.revertGroup',
-    'modbench.columnHeader.copyAsNewRecord',
-    'modbench.columnHeader.removeOverride',
+    'modbench.copyAsNewRecord',
     'modbench.columnHeader.addMaster',
     'modbench.array.add',
     'modbench.array.remove',
@@ -458,11 +457,69 @@ describe('package.json command titles and categories (#280)', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(38);
+    expect(PALETTE_GATED).toHaveLength(37);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));
     expect(missingGate).toEqual([]);
     expect(unexpectedGate).toEqual([]);
+  });
+});
+
+// #281: one object, one context menu. The record-scoped actions — the copy family and Remove —
+// are the same command ids, in xEdit's pmuViewHeader order (copy as override, copy as new record,
+// remove — ADR-0034), on every surface that shows a record: the tree's record row, the placed row
+// and the record editor's column header. Adding a record action means adding it to every surface
+// or this fails.
+describe('package.json one record menu on every record surface (#281)', () => {
+  const menus = pkg.contributes.menus as Record<string, { command: string; when: string; group?: string }[]>;
+  const RECORD_MENU = ['modbench.copyAsOverrideInto', 'modbench.copyAsNewRecord', 'modbench.deleteRecord'];
+  const COPY_ONLY = RECORD_MENU.slice(0, 2);
+
+  /** The #281 record actions contributed for a given tree contextValue, in group order. */
+  function treeRecordMenu(viewItem: string): string[] {
+    const mentions = new RegExp(`viewItem == ${viewItem}\\b`);
+    return (menus['view/item/context'] ?? [])
+      .filter((e) => e.when.includes('modbench.pluginListTree') && mentions.test(e.when))
+      .filter((e) => RECORD_MENU.includes(e.command))
+      .sort((a, b) => (a.group ?? '').localeCompare(b.group ?? '', undefined, { numeric: true }))
+      .map((e) => e.command);
+  }
+
+  /** The #281 record actions on the column header, in group order. */
+  function columnHeaderMenu(): { command: string; when: string }[] {
+    return (menus['webview/context'] ?? [])
+      .filter((e) => e.when.includes("webviewSection == 'columnHeader'"))
+      .filter((e) => RECORD_MENU.includes(e.command))
+      .sort((a, b) => (a.group ?? '').localeCompare(b.group ?? '', undefined, { numeric: true }));
+  }
+
+  it('offers the same record actions, in the same order, on record rows, placed rows and the column header', () => {
+    expect(treeRecordMenu('record')).toEqual(RECORD_MENU);
+    expect(treeRecordMenu('refr')).toEqual(RECORD_MENU);
+    expect(columnHeaderMenu().map((e) => e.command)).toEqual(RECORD_MENU);
+  });
+
+  it('hides Remove for an immutable copy on every surface, keeping the copy family', () => {
+    expect(treeRecordMenu('recordImmutable')).toEqual(COPY_ONLY);
+    expect(treeRecordMenu('refrImmutable')).toEqual(COPY_ONLY);
+    const remove = columnHeaderMenu().find((e) => e.command === 'modbench.deleteRecord');
+    expect(remove?.when).toContain('!immutable');
+  });
+
+  it('one operation, one name: the command is titled "Remove" and the old per-surface ids are gone', () => {
+    const commands = pkg.contributes.commands as { command: string; title: string }[];
+    expect(commands.find((c) => c.command === 'modbench.deleteRecord')?.title).toBe('Remove');
+    const ids = new Set(commands.map((c) => c.command));
+    expect(ids.has('modbench.columnHeader.removeOverride')).toBe(false);
+    expect(ids.has('modbench.columnHeader.copyAsNewRecord')).toBe(false);
+    for (const [menuId, entries] of Object.entries(menus)) {
+      for (const gone of ['modbench.columnHeader.removeOverride', 'modbench.columnHeader.copyAsNewRecord']) {
+        expect(
+          entries.some((e) => e.command === gone),
+          `expected no "${menuId}" entry invoking ${gone}`,
+        ).toBe(false);
+      }
+    }
   });
 });

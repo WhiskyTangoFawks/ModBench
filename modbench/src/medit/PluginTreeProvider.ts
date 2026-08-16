@@ -45,10 +45,18 @@ export class RecordTypeNode extends vscode.TreeItem {
 
 export class RecordNode extends vscode.TreeItem {
   readonly kind = 'record' as const;
-  constructor(public readonly record: RecordSummary) {
+  // #281: a record-scoped command acts on the clicked row's own copy of the record, so the row
+  // carries which copy it is ((plugin via record, origin) — ADR-0036), and a row whose plugin
+  // can't be edited hides Remove via its contextValue, matching the column header's !immutable
+  // `when` gate.
+  constructor(
+    public readonly record: RecordSummary,
+    public readonly origin?: string,
+    immutable = false,
+  ) {
     const label = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
     super(label, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'record';
+    this.contextValue = immutable ? 'recordImmutable' : 'record';
     this.command = {
       command: 'modbench.openEditor',
       title: 'Open Record',
@@ -133,11 +141,17 @@ export class PlacedGroupNode extends vscode.TreeItem {
 
 export class PlacedNode extends vscode.TreeItem {
   readonly kind = 'placed' as const;
-  constructor(public readonly plugin: string, public readonly placed: PlacedSummary, public readonly origin?: string) {
+  // #281: same copy-identity/immutability rule as RecordNode above.
+  constructor(
+    public readonly plugin: string,
+    public readonly placed: PlacedSummary,
+    public readonly origin?: string,
+    immutable = false,
+  ) {
     const name = placed.editorId ?? placed.baseFormKey ?? placed.formKey;
     const label = `${name} [${placed.recordType.toUpperCase()}:${formId(placed.formKey)}]`;
     super(label, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'refr';
+    this.contextValue = immutable ? 'refrImmutable' : 'refr';
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: placed.formKey, label }] };
   }
 }
@@ -205,10 +219,27 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // ErrorNode alongside the still-clickable LoadMoreNode/InteriorLoadMoreNode.
   private readonly loadMoreFailures = new Map<string, string>();
   private readonly interiorLoadMoreFailures = new Map<string, string>();
+  // #281: lowercased filenames of the session's immutable plugins (the same set extension.ts
+  // already hands PluginsTreeComposite.setSession as readOnlyFiles) — record/placed rows under
+  // one hide Remove via their contextValue, matching the column header's !immutable `when` gate.
+  private readonly immutablePlugins = new Set<string>();
   private readonly log: (msg: string) => void;
 
   constructor(private readonly repository: PluginRepository, log?: (msg: string) => void) {
     this.log = log ?? (() => {});
+  }
+
+  setImmutablePlugins(names: Iterable<string>): void {
+    this.immutablePlugins.clear();
+    for (const n of names) this.immutablePlugins.add(n.toLowerCase());
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  // #281 / ADR-0036: a shadowed copy (origin stated) is read-only by construction — an edit to a
+  // file the game does not load changes nothing observable — so origin alone decides before the
+  // immutable set is even consulted.
+  private isImmutable(plugin: string, origin?: string): boolean {
+    return origin !== undefined || this.immutablePlugins.has(plugin.toLowerCase());
   }
 
   refresh(): void {
@@ -243,7 +274,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     if (element instanceof BlockNode) return element.block.subBlocks.map(s => new SubBlockNode(element.plugin, s, element.origin));
     if (element instanceof SubBlockNode) return element.subBlock.cells.map(c => new CellNode(element.plugin, c, element.origin));
     if (element instanceof CellNode) return this.fetchCellGroups(element);
-    if (element instanceof PlacedGroupNode) return element.placed.map(p => new PlacedNode(element.plugin, p, element.origin));
+    if (element instanceof PlacedGroupNode) {
+      return element.placed.map(p =>
+        new PlacedNode(element.plugin, p, element.origin, this.isImmutable(element.plugin, element.origin)));
+    }
     if (element instanceof InteriorCellsNode) return this.fetchInteriorCells(element);
     return [];
   }
@@ -408,7 +442,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       }
     }
 
-    const nodes: PluginTreeNode[] = cached.items.map(r => new RecordNode(r));
+    const nodes: PluginTreeNode[] = cached.items.map(r =>
+      new RecordNode(r, node.origin, this.isImmutable(r.plugin, node.origin)));
     if (cached.total > cached.items.length) {
       nodes.push(new LoadMoreNode(node, cached.total - cached.items.length));
     }

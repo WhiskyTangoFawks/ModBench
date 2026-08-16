@@ -202,14 +202,16 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // Issue #202: copyAllToPending deleted — Copy as Override now carries the right-clicked column
   // (sourcePlugin) through to the backend instead of a separate shallow-copy action.
   // #272 / ADR-0036: copyAsNewRecord/addMaster take a ColumnKey — both resolve through
-  // overrideMap (Copy as New Record's field source, Add Master's current-masters read) before
-  // ever reaching a real plugin filename. copyAsOverride/removeOverride stay bare plugin
-  // filenames — neither does a local overrideMap lookup, and their write-target DTOs
-  // deliberately don't carry origin (the server resolves it, ruling Q4/#6).
+  // overrideMap (Copy as New Record's source identity, Add Master's current-masters read) before
+  // ever reaching a real plugin filename. removeOverride stays a bare plugin filename — no local
+  // overrideMap lookup, and its write-target DTO deliberately doesn't carry origin (the server
+  // resolves it, ruling Q4/#6). #281: copyAsOverride carries sourceOrigin through to the
+  // backend's own sourceOrigin — its *source* is a read, and a read off a shadowed copy needs
+  // the origin to name which copy (the write target still travels as a bare filename).
   const columnHeaderActionsRef = useRef<{
     formKey: string;
     copyAsNewRecord: (sourceKey: ColumnKey, targetPlugin: string) => void;
-    copyAsOverride: (sourcePlugin: string, targetPlugin: string) => void;
+    copyAsOverride: (sourcePlugin: string, sourceOrigin: string, targetPlugin: string) => void;
     removeOverride: (plugin: string) => void;
     addMaster: (key: ColumnKey, newMaster: string) => void;
   }>({
@@ -279,10 +281,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         // plugin name — is what must reach it.
         actions.copyAsNewRecord(columnKey(msg.sourcePlugin, msg.sourceOrigin), msg.targetPlugin);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE) {
-        // #272: copyAsOverride never looks anything up locally — CopyRecordTo's own write-target
-        // DTO deliberately doesn't carry origin (the server resolves it), so the bare plugin
-        // filename is correct as-is.
-        actions.copyAsOverride(msg.sourcePlugin, msg.targetPlugin);
+        // #281: sourceOrigin rides along — the copy *reads* the clicked column, and a read off a
+        // shadowed copy needs the origin to name which copy. The write target (targetPlugin)
+        // still travels as a bare filename (the server resolves it, ruling Q4/#6).
+        actions.copyAsOverride(msg.sourcePlugin, msg.sourceOrigin, msg.targetPlugin);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE) {
         actions.removeOverride(msg.plugin);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.COLUMN_HEADER_ADD_MASTER) {
@@ -518,11 +520,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
 
   // Issue #202: sourcePlugin is the right-clicked column (not necessarily the winner) — forwarded
   // to copyTo unchanged; the backend (EditOrchestrator.CopyRecordTo) decides whose fields actually
-  // get copied. Logged on success (#200 deliberately deferred this action's own log call here).
-  async function handleCopyTo(sourcePlugin: string, targetPlugin: string) {
+  // get copied. #281: sourceOrigin alongside it, naming which copy of that filename the column is.
+  // Logged on success (#200 deliberately deferred this action's own log call here).
+  async function handleCopyTo(sourcePlugin: string, sourceOrigin: string | undefined, targetPlugin: string) {
     setActionError(null);
     try {
-      const result = await client.copyTo(formKey, targetPlugin, sourcePlugin);
+      const result = await client.copyTo(formKey, targetPlugin, sourcePlugin, sourceOrigin);
       if (!result.ok) {
         setActionError(result.status === 409 ? 'Plugin is read-only' : `Copy failed: ${errorText(result.error)}`);
         return;
@@ -643,32 +646,22 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   }, [result]);
 
   // Issue #3: "Copy as New Record" — a fresh FormKey in the target plugin, not an override of
-  // this one. CreateRecord's TemplateFormKey only templates from the overall winner (EditOrchestrator
-  // .CreateRecordCore calls _query.GetRecord(formKey), winner-only), which isn't necessarily this
-  // source column's plugin — so instead of relying on TemplateFormKey, create a blank record of the
-  // right type, then PATCH every source-column field onto it.
+  // this one. #281: one backend call — CreateRecord's template-source pair reads this source
+  // column's own version (not the winner) and derives the record type from the template, so the
+  // old create-blank-then-PATCH-every-field choreography here is gone.
   async function handleCopyAsNewRecord(sourceKey: ColumnKey, targetPlugin: string) {
     const source = overrideMap[sourceKey];
     if (!source) return;
-    const sourcePlugin = source.plugin;
     setActionError(null);
     try {
-      const createResult = await client.createRecord(targetPlugin, source.recordType);
-      if (!createResult.ok) {
-        setActionError(createResult.status === 409 ? 'Plugin is read-only' : `Copy failed: ${errorText(createResult.error)}`);
+      const result = await client.copyAsNew(formKey, targetPlugin, source.plugin, source.origin);
+      if (!result.ok) {
+        setActionError(result.status === 409 ? 'Plugin is read-only' : `Copy failed: ${errorText(result.error)}`);
         return;
       }
       // #163: formKey is nullable on the generated CreateRecordResult; the backend always
       // populates it on a 200 (same trust the old `.json() as { formKey: string }` cast placed).
-      const newFormKey = createResult.data.formKey as string;
-      const fields: Record<string, unknown> = {};
-      for (const fv of source.fields) fields[fv.metadata.name] = fv.value;
-      const patchResult = await client.save(newFormKey, targetPlugin, fields);
-      if (!patchResult.ok) {
-        setActionError(`Copy failed: ${errorText(patchResult.error)}`);
-        return;
-      }
-      logAction('info', `Copied ${sourcePlugin} (record ${formKey}) as new record ${newFormKey} on ${targetPlugin}`);
+      logAction('info', `Copied ${source.plugin} (record ${formKey}) as new record ${result.data.formKey as string} on ${targetPlugin}`);
       notifyPendingChanged();
     } catch (e) {
       setActionError(`Copy failed: ${e instanceof Error ? e.message : 'network error'}`);
@@ -694,7 +687,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     columnHeaderActionsRef.current = {
       formKey,
       copyAsNewRecord: (sourcePlugin, targetPlugin) => { void handleCopyAsNewRecord(sourcePlugin, targetPlugin); },
-      copyAsOverride: (sourcePlugin, targetPlugin) => { void handleCopyTo(sourcePlugin, targetPlugin); },
+      copyAsOverride: (sourcePlugin, sourceOrigin, targetPlugin) => { void handleCopyTo(sourcePlugin, sourceOrigin, targetPlugin); },
       removeOverride: plugin => { void handleRemoveOverride(plugin); },
       addMaster: handleAddMaster,
     };
