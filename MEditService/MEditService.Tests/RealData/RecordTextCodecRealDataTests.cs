@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MEditService.Core.Serialization;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -29,6 +30,12 @@ namespace MEditService.Tests.RealData;
 /// stays at 2, and the two serialized YAML texts diverge starting inside the ObjectTemplates block
 /// (first divergent text: expected "...FirstPersonModel:\n  F..." vs actual "...- Name:\n    TargetLan...").
 /// See the #367 report for the full verbatim failure output.
+///
+/// The round-trip fidelity assertion applies the same <c>GetEqualsMask</c> technique
+/// <c>RecordTextCodecTests</c> uses on a synthetic weapon, but here against this real, dense fixture
+/// record — a synthetic weapon alone leaves most fields at their CLR default on both sides of the
+/// round trip, so a Mutagen bump that breaks e.g. <c>ObjectTemplates</c> or
+/// <c>VirtualMachineAdapter</c> deserialization specifically would pass a synthetic-only check.
 /// </summary>
 public class RecordTextCodecRealDataTests(ITestOutputHelper output)
 {
@@ -41,36 +48,45 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
         var dir = Directory.CreateTempSubdirectory("medit-codec-realdata-");
         try
         {
-            using var overlayDisposable = ModFactory.ImportGetter(
+            using var overlayImport = ModFactory.ImportGetter(
                 new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
                 GameRelease.Fallout4);
-            var deepParsedDisposable = ModFactory.ImportSetter(
+            var deepParsedImport = ModFactory.ImportSetter(
                 new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
                 GameRelease.Fallout4);
-            var overlay = (IFallout4ModGetter)overlayDisposable;
-            var deepParsed = (IFallout4ModGetter)deepParsedDisposable;
+            var overlay = (IFallout4ModGetter)overlayImport;
+            var deepParsed = (IFallout4ModGetter)deepParsedImport;
 
             var overlayWeapon = overlay.Weapons.Single(w => w.EditorID == AffectedWeaponEditorId);
             var deepParsedWeapon = deepParsed.Weapons.Single(w => w.EditorID == AffectedWeaponEditorId);
 
-            // Sanity: this is the shape #369 pins — if these ever match, the fixture no longer
-            // exercises the regression and this test should pick a different record.
-            output.WriteLine($"Overlay ObjectTemplates: {overlayWeapon.ObjectTemplates?.Count ?? 0}, " +
-                $"deep-parse ObjectTemplates: {deepParsedWeapon.ObjectTemplates?.Count ?? 0}");
+            // The sanity condition, asserted rather than only logged: at the 0.53.1 pin both
+            // readers agree (that IS the property this test protects), and the count is non-zero
+            // (proving this weapon genuinely carries ObjectTemplates content — the shape #369's
+            // pin comment says the 0.54.0 regression corrupts — rather than being an accidental
+            // vacuous pass). A print here would be a sanity condition nobody is watching: a
+            // fixture change that stopped exercising the regression shape would leave this test
+            // green for the wrong reason.
+            var overlayTemplateCount = overlayWeapon.ObjectTemplates?.Count ?? 0;
+            var deepParsedTemplateCount = deepParsedWeapon.ObjectTemplates?.Count ?? 0;
+            output.WriteLine($"Overlay ObjectTemplates: {overlayTemplateCount}, deep-parse ObjectTemplates: {deepParsedTemplateCount}");
+            Assert.Equal(deepParsedTemplateCount, overlayTemplateCount);
+            Assert.True(deepParsedTemplateCount > 0,
+                "Expected this fixture weapon to carry ObjectTemplates content; pick a different affected weapon if it no longer does.");
 
             var overlayPath = Path.Combine(dir.FullName, "overlay.yaml");
             var deepParsedPath = Path.Combine(dir.FullName, "deep-parsed.yaml");
 
             var swSerializeOverlay = Stopwatch.StartNew();
-            await codec.SerializeAsync(overlayWeapon, overlayPath);
+            await codec.SerializeAsync(overlayWeapon, overlayPath, GameRelease.Fallout4);
             swSerializeOverlay.Stop();
 
             var swSerializeDeep = Stopwatch.StartNew();
-            await codec.SerializeAsync(deepParsedWeapon, deepParsedPath);
+            await codec.SerializeAsync(deepParsedWeapon, deepParsedPath, GameRelease.Fallout4);
             swSerializeDeep.Stop();
 
             var swDeserialize = Stopwatch.StartNew();
-            var roundTripped = await codec.DeserializeAsync(deepParsedPath);
+            var roundTripped = await codec.DeserializeAsync(deepParsedPath, GameRelease.Fallout4);
             swDeserialize.Stop();
 
             output.WriteLine($"AC4: serialize (overlay) {swSerializeOverlay.ElapsedMilliseconds} ms, " +
@@ -82,7 +98,13 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
             var deepParsedText = await File.ReadAllTextAsync(deepParsedPath);
 
             Assert.Equal(deepParsedText, overlayText);
-            Assert.Equal(deepParsedWeapon.EditorID, roundTripped.EditorID);
+
+            var mask = deepParsedWeapon.GetEqualsMask(roundTripped);
+            var leaves = MaskInspector.CountLeaves(mask).ToList();
+            var divergent = leaves.Where(l => !l.Value).Select(l => l.Path).ToList();
+
+            Assert.NotEmpty(leaves);
+            Assert.Empty(divergent);
         }
         finally
         {

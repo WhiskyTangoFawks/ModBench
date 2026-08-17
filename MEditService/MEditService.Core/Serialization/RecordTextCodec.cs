@@ -25,42 +25,35 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     private static readonly MutagenSerializationWriterKernel<YamlSerializationWriterKernel, YamlWritingUnit> WriterKernel = new();
     private static readonly YamlSerializationReaderKernel ReaderKernel = new();
 
-    static RecordTextCodec()
+    public async Task SerializeAsync(IWeaponGetter record, string filePath, GameRelease gameRelease, CancellationToken cancel = default)
     {
-        // Compile-time-only: see RecordTextCodecGeneratorSeed. Never touches a real mod.
-        _ = RecordTextCodecGeneratorSeed.Touch();
-    }
-
-    public async Task SerializeAsync(IWeaponGetter record, string filePath, CancellationToken cancel = default)
-    {
+        // No Directory.CreateDirectory here, deliberately: RecordTextCodec has no production
+        // caller yet (that's #370, and the ACs say nothing about directory-creation policy) — this
+        // is exactly the "machinery now, use it later" shape the root CLAUDE.md's Minimal-by-Default
+        // rule rejects. #370's caller decides that policy with its own test.
         var directory = Path.GetDirectoryName(filePath);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
         using var stream = File.Create(filePath);
         var streamPackage = new StreamPackage(stream, directory ?? string.Empty);
         var writer = WriterKernel.GetNewObject(streamPackage);
-        var metaData = new SerializationMetaData(GameRelease.Fallout4, null, null, null, cancel);
+        var metaData = new SerializationMetaData(gameRelease, null, null, null, cancel);
 
         await Weapon_Serialization.Serialize<YamlSerializationWriterKernel, YamlWritingUnit>(
             writer, record, WriterKernel, metaData);
         WriterKernel.Finalize(streamPackage, writer);
 
-        logger.LogInformation("Serialized record {FormKey} to {FilePath}", record.FormKey, filePath);
+        logger.LogTrace("Serialized record {FormKey} to {FilePath}", record.FormKey, filePath);
     }
 
-    public async Task<Weapon> DeserializeAsync(string filePath, CancellationToken cancel = default)
+    public async Task<Weapon> DeserializeAsync(string filePath, GameRelease gameRelease, CancellationToken cancel = default)
     {
         using var stream = File.OpenRead(filePath);
         var streamPackage = new StreamPackage(stream, Path.GetDirectoryName(filePath) ?? string.Empty);
         var reader = ReaderKernel.GetNewObject(streamPackage);
-        var metaData = new SerializationMetaData(GameRelease.Fallout4, null, null, null, cancel);
+        var metaData = new SerializationMetaData(gameRelease, null, null, null, cancel);
 
         var record = await Weapon_Serialization.Deserialize(reader, ReaderKernel, metaData);
 
-        logger.LogInformation("Deserialized record {FormKey} from {FilePath}", record.FormKey, filePath);
+        logger.LogTrace("Deserialized record {FormKey} from {FilePath}", record.FormKey, filePath);
         return record;
     }
 }

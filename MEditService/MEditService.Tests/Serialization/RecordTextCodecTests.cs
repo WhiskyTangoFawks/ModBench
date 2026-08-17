@@ -1,6 +1,7 @@
-using System.Reflection;
 using MEditService.Core.Serialization;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog;
@@ -32,6 +33,12 @@ public class RecordTextCodecTests
     // metadata (Spriggit's own scope), which this codec never touches; VersionControl (the field
     // that could plausibly be "the timestamp" on a record) round-trips like everything else, which
     // is why this test asserts every field equal with no exceptions.
+    //
+    // The leaf-count guard is load-bearing, not decoration: Assert.Empty(divergent) alone passes
+    // if the walker visits zero leaves (a broken walker, a mask that came back null-shaped, etc.)
+    // just as happily as it passes on genuine equality — the same structural blindness
+    // BinaryRoundTripGateTests was written to avoid. 81 is the measured leaf count for MakeWeapon();
+    // a future Mutagen bump changing that number is itself worth seeing, not just silently accepted.
     [Fact]
     public async Task SerializeAsync_ThenDeserializeAsync_IsFieldFaithful()
     {
@@ -41,106 +48,20 @@ public class RecordTextCodecTests
         try
         {
             var filePath = Path.Combine(dir.FullName, "weapon.yaml");
-            await codec.SerializeAsync(original, filePath);
+            await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
 
-            var roundTripped = await codec.DeserializeAsync(filePath);
+            var roundTripped = await codec.DeserializeAsync(filePath, GameRelease.Fallout4);
 
             var mask = original.GetEqualsMask(roundTripped);
-            var divergent = FindDivergentFields(mask, "").ToList();
+            var leaves = MaskInspector.CountLeaves(mask).ToList();
+            var divergent = leaves.Where(l => !l.Value).Select(l => l.Path).ToList();
 
+            Assert.Equal(81, leaves.Count);
             Assert.Empty(divergent);
         }
         finally
         {
             dir.Delete(recursive: true);
-        }
-    }
-
-    // Walks a Mutagen-generated Mask<bool> object graph (Loqui's MaskItem<Overall, Specific>
-    // wrappers, indexed collections, and plain bool leaves) and returns the dotted field path of
-    // every leaf that is `false` (unequal). Test-only — production code never needs this; Mutagen
-    // generates the mask, this just makes a failure legible instead of a bare "objects differ".
-    private static IEnumerable<string> FindDivergentFields(object? node, string path)
-    {
-        switch (node)
-        {
-            case null:
-                yield break;
-            case bool b:
-                if (!b)
-                {
-                    yield return path;
-                }
-                yield break;
-        }
-
-        var type = node.GetType();
-
-        if (type.GetField("Overall") is { } overallField && type.GetField("Specific") is { } specificField)
-        {
-            foreach (var f in FindDivergentFields(overallField.GetValue(node), path))
-            {
-                yield return f;
-            }
-
-            foreach (var f in FindDivergentFields(specificField.GetValue(node), path))
-            {
-                yield return f;
-            }
-
-            yield break;
-        }
-
-        if (node is System.Collections.IEnumerable enumerable and not string)
-        {
-            var i = 0;
-            foreach (var element in enumerable)
-            {
-                var elementType = element?.GetType();
-                if (elementType is { IsGenericType: true } && elementType.GetGenericTypeDefinition() == typeof(ValueTuple<,>))
-                {
-                    var idx = elementType.GetField("Item1")!.GetValue(element);
-                    var val = elementType.GetField("Item2")!.GetValue(element);
-                    foreach (var f in FindDivergentFields(val, $"{path}[{idx}]"))
-                    {
-                        yield return f;
-                    }
-                }
-                else
-                {
-                    foreach (var f in FindDivergentFields(element, $"{path}[{i}]"))
-                    {
-                        yield return f;
-                    }
-                }
-
-                i++;
-            }
-
-            yield break;
-        }
-
-        foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
-        {
-            var childPath = path.Length == 0 ? field.Name : $"{path}.{field.Name}";
-            foreach (var f in FindDivergentFields(field.GetValue(node), childPath))
-            {
-                yield return f;
-            }
-        }
-
-        foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
-            if (prop.GetIndexParameters().Length > 0)
-            {
-                continue;
-            }
-
-            var childPath = path.Length == 0 ? prop.Name : $"{path}.{prop.Name}";
-            foreach (var f in FindDivergentFields(prop.GetValue(node), childPath))
-            {
-                yield return f;
-            }
         }
     }
 
@@ -154,7 +75,7 @@ public class RecordTextCodecTests
         {
             var filePath = Path.Combine(dir.FullName, "weapon.yaml");
 
-            await codec.SerializeAsync(weapon, filePath);
+            await codec.SerializeAsync(weapon, filePath, GameRelease.Fallout4);
 
             Assert.True(File.Exists(filePath));
             Assert.Equal([filePath], Directory.GetFiles(dir.FullName, "*", SearchOption.AllDirectories));

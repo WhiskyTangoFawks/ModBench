@@ -28,11 +28,15 @@ public sealed class RecordTextCodecCustomization : ICustomize
     // (RecordTextCodecTests.SerializeAsync_ThenDeserializeAsync_IsFieldFaithful has no exclusion
     // list), and the serialized YAML is byte-identical with and without these two calls (checked
     // directly during #367's implementation, not inferred from the field-fidelity result alone).
-    // They are mod/header-level customizations (Spriggit's own scope) with nothing on a standalone
-    // Weapon to act on. Keep them anyway: ADR-0040 says replicate the customization, and they
-    // become load-bearing the moment a header record (CONTEXT.md's "Header record" —
-    // Fallout4ModHeader modeled as a first-class record) is ever serialized through this codec.
-    // Do not read "verified no-op" as "safe to delete".
+    // Weapon just has nothing they touch, not "nothing on a record" in general:
+    // OmitTimestampData suppresses any object's Timestamp/PersistentTimestamp/TemporaryTimestamp/
+    // SubCellsTimestamp fields (CustomizationDriver.WrapOmission) — three of those ARE major-record
+    // properties (Cell.PersistentTimestamp, Cell.TemporaryTimestamp, Worldspace.SubCellsTimestamp),
+    // not mod/header-level. OmitLastModifiedData targets Fallout4Group.LastModified specifically —
+    // a plugin-file group header field, not the mod header (Fallout4ModHeader) either. Keep both
+    // anyway: ADR-0040 says replicate the customization, and they go load-bearing the moment #370
+    // serializes a Cell, a Worldspace, or anything written through a group. Do not read "verified
+    // no-op on Weapon" as "safe to delete" or as "only matters for headers" — neither is true.
     public void Customize(ICustomizationBuilder builder)
     {
         builder
