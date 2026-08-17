@@ -390,12 +390,13 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         if (siblingGetterTypes.Count > 1)
         {
             var widenedDispatch = new Dictionary<string, List<(Type Type, Func<IMajorRecordGetter, object?> Extract)>>();
+            var nonScalarMergeDispatch = new Dictionary<string, List<(Type Type, Func<IMajorRecordGetter, object?> Extract)>>();
             foreach (var sibling in siblingGetterTypes)
             {
                 if (sibling == getterType) continue;
                 var siblingColumns = ReflectColumns(sibling, conditionCodec, vmadInterfaceType, getterTypeToTable, logger);
                 foreach (var siblingSpec in siblingColumns)
-                    MergeSiblingColumn(columns, widenedDispatch, getterType, sibling, siblingSpec);
+                    MergeSiblingColumn(columns, widenedDispatch, nonScalarMergeDispatch, getterType, sibling, siblingSpec);
             }
         }
 
@@ -471,6 +472,35 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // (BuildListColumn / BuildStructColumn); everything else GetColumnInfo can return is scalar.
     private static readonly HashSet<string> NonScalarApiTypes = new(StringComparer.Ordinal) { "array", "struct" };
 
+    // #339: distinguishes OMOD's Properties (mergeable — every sibling's element is the same
+    // struct{property: enum, step: float}, only the enum's own member-name domain differs per
+    // sibling) from DMGT's DamageTypes (not mergeable — DamageType's element is a struct of two
+    // formlinks, DamageTypeIndexed's is a bare uint, no field names in common at all). Two enum
+    // leaves are always considered compatible here — their domains get unioned by the caller, not
+    // by this check — everything else (Type, IsArray, AllowsNull, IsBitmask, and recursively
+    // Fields/ElementType) must match exactly, including field *presence*: a name only one side
+    // declares is a real conflict, not something a domain union can paper over.
+    private static bool IsSameShapeExceptEnumDomain(FieldMetadata? a, FieldMetadata? b)
+    {
+        if (a == null || b == null) return a == b;
+        if (a.Type != b.Type || a.IsArray != b.IsArray || a.AllowsNull != b.AllowsNull || a.IsBitmask != b.IsBitmask)
+            return false;
+        if (a.Type == "enum") return true;
+
+        if (a.Fields == null != (b.Fields == null)) return false;
+        if (a.Fields != null && b.Fields != null)
+        {
+            if (a.Fields.Count != b.Fields.Count) return false;
+            foreach (var fa in a.Fields)
+            {
+                var fb = b.Fields.FirstOrDefault(f => f.Name == fa.Name);
+                if (fb == null || !IsSameShapeExceptEnumDomain(fa, fb)) return false;
+            }
+        }
+
+        return IsSameShapeExceptEnumDomain(a.ElementType, b.ElementType);
+    }
+
     // #263: folds one sibling's version of a column into the accumulating union. The rule is
     // shape-based, never keyed by table or signature name — see BuildSchema's caller comment for
     // why that matters (AC: a hypothetical third subclass, or another game's own signature, must
@@ -491,18 +521,21 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     //     resolves the record's actual sibling at read time and only ever invokes *that* sibling's
     //     own PropertyInfo — never a foreign one, which is what made the original bug's silent
     //     try/catch swallow every non-winning subclass's value to null.
-    //   - present already, conflicting NON-scalar shape: leave the winner's typed column
-    //     untouched. Two real examples in the FO4 assembly, not one — OMOD's Properties (a list
-    //     whose element type differs per sibling) and, less obviously, DMGT's own DamageTypes
-    //     (DamageType's is ExtendedList<DamageTypeItem>, a struct list; DamageTypeIndexed's is
-    //     ExtendedList<uint>?, a scalar list — same name, same "array" ApiType, conflicting
-    //     element shape). Widening a list/struct column to opaque text would cost the *working*
-    //     subclass its structured display (element metadata, sub-fields) to make the broken ones
-    //     less obviously broken — that's not a fix, it's uniform mediocrity. Tracked separately:
-    //     #339.
+    //   - present already, conflicting NON-scalar shape, structurally identical except which enum
+    //     member names the shared "which property" leaf allows (OMOD's Properties — every sibling's
+    //     element is struct{property: enum, step: float}, only the enum's own domain differs):
+    //     merge into one column, keeping the typed shape and dispatching Extract to whichever
+    //     sibling's own (already-correct) reflected Extract matches the record's runtime type —
+    //     never a foreign one. See MergeNonScalarByEnumDomain.
+    //   - present already, conflicting NON-scalar shape, structurally different (DMGT's
+    //     DamageTypes — DamageType's element is a struct of two formlinks, DamageTypeIndexed's is a
+    //     bare uint, no field names in common): split into two columns, one per shape, each
+    //     dispatch-guarded to its own declaring sibling(s) by construction rather than a swallowed
+    //     throw. See SplitNonScalarByShape.
     private static void MergeSiblingColumn(
         List<ColumnSpec> columns,
         Dictionary<string, List<(Type Type, Func<IMajorRecordGetter, object?> Extract)>> widenedDispatch,
+        Dictionary<string, List<(Type Type, Func<IMajorRecordGetter, object?> Extract)>> nonScalarMergeDispatch,
         Type winnerGetterType, Type siblingGetterType, ColumnSpec siblingSpec)
     {
         var existingIndex = columns.FindIndex(c => c.Name == siblingSpec.Name);
@@ -523,8 +556,31 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             return;
         }
 
+        if (nonScalarMergeDispatch.ContainsKey(existing.Name))
+        {
+            // Already merged by an earlier conflicting sibling — extend the same dispatch list AND
+            // fold this sibling's own enum domain into the running union (a fifth OMOD-shaped
+            // sibling must still contribute its own T's member names, not just the second one).
+            MergeNonScalarByEnumDomain(
+                columns, existingIndex, nonScalarMergeDispatch, winnerGetterType, siblingGetterType, siblingSpec);
+            return;
+        }
+
         if (NonScalarApiTypes.Contains(existing.ApiType) || NonScalarApiTypes.Contains(siblingSpec.ApiType))
-            return; // #339: list/struct shape conflict — keep the winner's typed column as-is
+        {
+            if (IsSameShapeExceptEnumDomain(existing.ToFieldMetadata(), siblingSpec.ToFieldMetadata()))
+            {
+                MergeNonScalarByEnumDomain(
+                    columns, existingIndex, nonScalarMergeDispatch, winnerGetterType, siblingGetterType, siblingSpec);
+                return;
+            }
+
+            // #339: not the same shape at all (e.g. DMGT's DamageTypes: DamageType's struct-of-
+            // formlinks vs DamageTypeIndexed's bare uint) — no field names in common, so there is
+            // nothing for a domain union to reconcile. Split into two columns, one per shape.
+            SplitNonScalarByShape(columns, existingIndex, winnerGetterType, siblingGetterType, siblingSpec);
+            return;
+        }
 
         if (existing.DuckDbType == siblingSpec.DuckDbType && existing.ApiType == siblingSpec.ApiType)
             return; // same shape — shared-ancestor member, existing extractor already reads it fine
@@ -560,6 +616,157 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             EnumBitValues = null,
             AllowsNull = true,
         };
+    }
+
+    // #339: OMOD's Properties rung — every sibling's element is the exact same
+    // struct{property: enum, step: float} (IsSameShapeExceptEnumDomain already confirmed this),
+    // so unlike the scalar-widen rung above there is no need to give up the typed shape at all.
+    // Each sibling's own ReflectColumns call already built a fully self-consistent, correctly-typed
+    // Extract for *that* sibling's own runtime type (BuildSchema calls ReflectColumns once per
+    // sibling independently) — the defect was only ever that the merged schema kept calling the
+    // *winner's* Extract against a foreign instance. Dispatching by runtime type to the matching
+    // sibling's own pre-built Extract, exactly like WidenedExtract above, fixes that without any
+    // per-element reflection: the raw JSON each sibling's Extract already produces is correctly
+    // shaped for its own element type, so nothing here needs to touch it beyond picking the right
+    // one to call.
+    private static void MergeNonScalarByEnumDomain(
+        List<ColumnSpec> columns,
+        int existingIndex,
+        Dictionary<string, List<(Type Type, Func<IMajorRecordGetter, object?> Extract)>> nonScalarMergeDispatch,
+        Type winnerGetterType, Type siblingGetterType, ColumnSpec siblingSpec)
+    {
+        var existing = columns[existingIndex];
+
+        // First conflicting sibling seeds the dispatch list with the winner's own Extract; a later
+        // conflicting sibling (a fifth OMOD-shaped subclass, hypothetically) extends the same list
+        // rather than re-deriving it, exactly like the scalar-widen rung above.
+        if (!nonScalarMergeDispatch.TryGetValue(existing.Name, out var list))
+            nonScalarMergeDispatch[existing.Name] = list = [(winnerGetterType, existing.Extract)];
+        list.Add((siblingGetterType, siblingSpec.Extract));
+
+        object? MergedExtract(IMajorRecordGetter r)
+        {
+            foreach (var (type, extract) in list)
+                if (type.IsInstanceOfType(r))
+                    return extract(r);
+            return null;
+        }
+
+        // The winner's own metadata (element/sub-field shape) is kept as-is — IsSameShapeExceptEnumDomain
+        // already confirmed it matches every sibling field-for-field — except any enum leaf's
+        // EnumValues, which becomes the union of every sibling's own domain (OMOD's `property`
+        // sub-field: Armor.Property ∪ Npc.Property ∪ Weapon.Property ∪ NoneProperty's empty set).
+        var mergedElementType = existing.ElementType != null && siblingSpec.ElementType != null
+            ? UnionEnumDomains(existing.ElementType, siblingSpec.ElementType)
+            : existing.ElementType;
+        var mergedSubFields = existing.SubFields != null && siblingSpec.SubFields != null
+            ? existing.SubFields.Select(fa =>
+                UnionEnumDomains(fa, siblingSpec.SubFields.First(fb => fb.Name == fa.Name))).ToList()
+            : existing.SubFields;
+        var mergedEnumValues = existing.ApiType == "enum"
+            ? existing.EnumValues.Concat(siblingSpec.EnumValues).Distinct().ToList()
+            : existing.EnumValues;
+
+        columns[existingIndex] = existing with
+        {
+            Extract = MergedExtract,
+            ElementType = mergedElementType,
+            SubFields = mergedSubFields,
+            EnumValues = mergedEnumValues,
+        };
+    }
+
+    // Recursively unions an enum leaf's EnumValues across two structurally-identical-except-domain
+    // shapes (IsSameShapeExceptEnumDomain's own counterpart) — every non-enum leaf, and every
+    // struct/array's own shape, is already identical, so this only ever changes an enum's member
+    // names, never any other field.
+    private static FieldMetadata UnionEnumDomains(FieldMetadata a, FieldMetadata b)
+    {
+        if (a.Type == "enum")
+            return a with { EnumValues = a.EnumValues.Concat(b.EnumValues).Distinct().ToList() };
+        if (a.Fields != null && b.Fields != null)
+            return a with { Fields = a.Fields.Select(fa => UnionEnumDomains(fa, b.Fields.First(fb => fb.Name == fa.Name))).ToList() };
+        if (a.ElementType != null && b.ElementType != null)
+            return a with { ElementType = UnionEnumDomains(a.ElementType, b.ElementType) };
+        return a;
+    }
+
+    // #339: a small, hand-curated disambiguation for a split column's name — the same convention
+    // RecordDisplayNames already uses for xEdit-sourced display labels, not a merge-decision rule
+    // (the decision to split at all is shape-based, made above; only the resulting *label* is
+    // curated here, same as RecordDisplayNames/MapToXEditFlagName already do elsewhere in this
+    // file). One entry today: DMGT's DamageTypeIndexed shape. xEdit itself never disambiguates
+    // this — wbDefinitionsFO4.pas unions both forms under one form-version-gated 'Damage Types'
+    // field, since a DamageType record can never be both forms at once — so *some* label is
+    // unavoidable here (a genuine platform limitation: Mutagen models the two forms as two
+    // co-existing classes, not a version-gated union). 'actor_value_indices' borrows xEdit's own
+    // element vocabulary for that shape ('Actor Value Index'), the closest thing to not diverging
+    // from xEdit at all (ADR-0034).
+    private static readonly Dictionary<string, string> SplitColumnNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["damage_types"] = "actor_value_indices",
+    };
+
+    // A plain scalar leaf (no further substructure) — used to decide, shape-based rather than
+    // win-order-based, which side of a split keeps the property's own base name. See
+    // SplitNonScalarByShape.
+    private static bool IsScalarElementShape(FieldMetadata? elementType) =>
+        elementType is { Fields: null, ElementType: null };
+
+    private static string QualifiedSplitName(string baseName, ColumnSpec scalarShapeSpec) =>
+        SplitColumnNames.TryGetValue(baseName, out var name)
+            ? name
+            // Shape-derived fallback for an unmapped future conflict (AC: no code change needed) —
+            // not pretty, but deterministic and never a table/signature name.
+            : $"{baseName}_{scalarShapeSpec.ElementType?.Type ?? scalarShapeSpec.ApiType}";
+
+    // #339: the struct/richer shape always keeps the property's own name; the plain-scalar shape
+    // always gets the disambiguated name — a rule that holds regardless of which subclass wins
+    // schema discovery (see BuildForCategory's own comment: that race is a reflection-order
+    // artifact, never something callers may rely on), which is why this can rename an
+    // *already-placed* winner column rather than only ever appending the sibling's.
+    //
+    // Scoped to two siblings — DMGT's only real case today. A hypothetical third sibling sharing
+    // one of these two shapes would need to re-resolve which of the two split columns to extend,
+    // which this does not attempt (no real data exercises it; #263 left an equivalent gap
+    // undocumented in its own lifecycle-delegate carve-out, this one is called out explicitly).
+    //
+    // Both resulting columns get a type-checked Extract (AC3's "impossible by construction", not a
+    // foreign read swallowed by the pre-existing catch-all) — both are new paths this rung adds,
+    // the winner's own column included, since it may be the one getting renamed here.
+    private static void SplitNonScalarByShape(
+        List<ColumnSpec> columns, int existingIndex,
+        Type winnerGetterType, Type siblingGetterType, ColumnSpec siblingSpec)
+    {
+        var existing = columns[existingIndex];
+        var baseName = existing.Name; // == siblingSpec.Name, that's why they collided above
+
+        var existingIsScalar = IsScalarElementShape(existing.ElementType);
+        var siblingIsScalar = IsScalarElementShape(siblingSpec.ElementType);
+
+        if (existingIsScalar && !siblingIsScalar)
+        {
+            // The winner turned out to be the plain shape — rename it off the base name, then
+            // reclaim the base name for the sibling's struct shape, so the result is identical to
+            // the opposite win order below.
+            columns[existingIndex] = Guarded(existing, winnerGetterType) with { Name = QualifiedSplitName(baseName, existing) };
+            columns.Add(Guarded(siblingSpec, siblingGetterType) with { Name = baseName, AllowsNull = true });
+        }
+        else
+        {
+            columns[existingIndex] = Guarded(existing, winnerGetterType); // stays at baseName
+            columns.Add(Guarded(siblingSpec, siblingGetterType) with
+            {
+                Name = QualifiedSplitName(baseName, siblingIsScalar ? siblingSpec : existing),
+                AllowsNull = true,
+            });
+        }
+
+        static ColumnSpec Guarded(ColumnSpec spec, Type ownerGetterType)
+        {
+            var innerExtract = spec.Extract;
+            return spec with { Extract = r => ownerGetterType.IsInstanceOfType(r) ? innerExtract(r) : null };
+        }
     }
 
     // Every prior VARCHAR column already held a real string; a widened scalar column is the first
@@ -685,6 +892,18 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     // ── Sub-schema building ───────────────────────────────────────────────────
 
+    // #339 (a follow-up issue number for this specific gap is pending from the maintainer, filed
+    // separately): this walks only the properties declared on getterInterface and the interfaces
+    // it implements/inherits — never a more-derived sibling interface. OMOD's Properties element
+    // type, IAObjectModPropertyGetter<T>, declares
+    // only Property/Step; the real per-element data (Value) lives on 7 separate leaf getter
+    // interfaces (IObjectModIntPropertyGetter<T>, IObjectModFloatPropertyGetter<T>, ...), each
+    // implementing IAObjectModPropertyGetter<T> rather than the other way around, so none of them
+    // is ever visible here. Confirmed by dumping the real reflected shape, not assumed: today's
+    // "structured" omod Properties column — winner and every #339-merged sibling alike — surfaces
+    // property + step only, never value. Pre-existing, not introduced or fixed by #339 (whose AC
+    // only requires parity with what the winner already showed); a future reader should not have
+    // to rediscover why a "structured" OMOD property list has no value in it.
     private static List<SubFieldSpec> BuildSubSchema(
         Type getterInterface,
         IReadOnlyDictionary<Type, string> getterTypeToTable,

@@ -92,18 +92,72 @@ public class MultiSubclassIndexingTests
     }
 
     [Fact]
-    public void Index_Dmgt_ConflictingListSiblings_DoesNotCrashAndKeepsWinnersColumnCorrect()
+    public void Index_Omod_AllSubclasses_PropertiesColumnRoundTripsForEveryType()
+    {
+        // #339: SchemaReflectorTests' schema/Extract-seam tests cover the same defect without a
+        // database; this one also exercises DDL (TableDdlBuilder building the merged array column)
+        // and the appender (AppendTyped's VARCHAR branch) for every one of OMOD's five concrete
+        // subclasses in one real Index -> query round trip, same rationale as GMST/GLOB above:
+        // the defect is invisible if only the discovery-winning subclass is checked.
+        var mod = new Fallout4Mod(ModKey.FromFileName("Omod339.esp"), Fallout4Release.Fallout4);
+
+        var armor = new ArmorModification(mod.GetNextFormKey("ArmorMod"), Fallout4Release.Fallout4) { EditorID = "ArmorMod" };
+        armor.Properties.Add(new ObjectModIntProperty<Armor.Property> { Property = Armor.Property.BodyPart, Step = 1f });
+        mod.ObjectModifications.Add(armor);
+
+        var npc = new NpcModification(mod.GetNextFormKey("NpcMod"), Fallout4Release.Fallout4) { EditorID = "NpcMod" };
+        npc.Properties.Add(new ObjectModIntProperty<Npc.Property> { Property = Npc.Property.ForcedInventory, Step = 2f });
+        mod.ObjectModifications.Add(npc);
+
+        var weapon = new WeaponModification(mod.GetNextFormKey("WeaponMod"), Fallout4Release.Fallout4) { EditorID = "WeaponMod" };
+        weapon.Properties.Add(new ObjectModIntProperty<Weapon.Property> { Property = Weapon.Property.AmmoCapacity, Step = 3f });
+        mod.ObjectModifications.Add(weapon);
+
+        var obj = new ObjectModification(mod.GetNextFormKey("ObjectMod"), Fallout4Release.Fallout4) { EditorID = "ObjectMod" };
+        obj.Properties.Add(new ObjectModIntProperty<AObjectModification.NoneProperty> { Step = 4f });
+        mod.ObjectModifications.Add(obj);
+
+        var unknown = new UnknownObjectModification(mod.GetNextFormKey("UnknownMod"), Fallout4Release.Fallout4) { EditorID = "UnknownMod" };
+        unknown.Properties.Add(new ObjectModIntProperty<AObjectModification.NoneProperty> { Step = 5f });
+        mod.ObjectModifications.Add(unknown);
+
+        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
+        repo.UpdateWinners();
+
+        var rows = Query(repo, "SELECT editor_id, properties FROM omod ORDER BY editor_id");
+        Assert.Equal(5, rows.Count);
+        var byEdid = rows.ToDictionary(r => (string)r["editor_id"]!, r => (string?)r["properties"]);
+        Assert.Contains("BodyPart", byEdid["ArmorMod"]);
+        Assert.Contains("ForcedInventory", byEdid["NpcMod"]);
+        Assert.Contains("AmmoCapacity", byEdid["WeaponMod"]);
+        Assert.NotNull(byEdid["ObjectMod"]);
+        Assert.NotNull(byEdid["UnknownMod"]);
+    }
+
+    [Fact]
+    public void Index_Dmgt_ConflictingListSiblings_DoesNotCrashAndWinnersOwnShapeColumnStaysReadable()
     {
         // DMGT turned out to be a second real example of the *non-scalar* carve-out (#339), not
         // the clean additive case it looks like at first glance: DamageType's own DamageTypes
         // (ExtendedList<DamageTypeItem>, a struct list, always non-null) and DamageTypeIndexed's
         // DamageTypes (ExtendedList<uint>?, a plain scalar list) share a column name but conflict
-        // in element shape — exactly like OMOD's Properties, just with both sides happening to
-        // share the "array" ApiType too. This round-trips both subclasses through the real
-        // Index/query pipeline to prove the carve-out doesn't corrupt indexing (or throw) when a
-        // non-winning sibling's instance meets the winner's typed PropertyInfo — it degrades to
-        // null, the same as any other type mismatch this schema already tolerates, never a crash.
-        // (SchemaReflectorTests' OMOD test pins the same rule at the schema/shape seam instead.)
+        // in element shape. This round-trips both subclasses through the real Index/query pipeline
+        // to prove indexing a plugin containing both siblings does not crash, and that the
+        // discovery winner's own data is still readable.
+        //
+        // #339 rename/repoint: originally named …KeepsWinnersColumnCorrect and queried the fixed
+        // name `damage_types`, which was safe before this ticket — whichever subclass won schema
+        // discovery kept that name. It is not safe after: naming is now shape-based (`damage_types`
+        // is always the struct shape, `actor_value_indices` always the scalar shape) precisely so a
+        // Mutagen package bump reordering reflection metadata can never silently rename a
+        // production DuckDB column that the frontend and user-written SQL filters depend on — see
+        // SplitNonScalarByShape's own comment. That means there is no longer a single "winner's
+        // column" name to hardcode. Same protection as before — crash-free indexing of both
+        // siblings, and the winner's own value reads back non-null — relocated to look the column
+        // up by shape (DmgtSplitColumns, the same mechanism SchemaReflectorTests' split test uses)
+        // rather than assume a name.
         var mod = new Fallout4Mod(ModKey.FromFileName("Dmgt263.esp"), Fallout4Release.Fallout4);
         var plain = new DamageType(mod, "TestPlainDmgt");
         mod.DamageTypes.Add(plain);
@@ -113,16 +167,20 @@ public class MultiSubclassIndexingTests
         // Which subclass wins the schema race is a reflection-order artifact this test must not
         // pin (see BuildForCategory's own comment) — ask the schema itself instead of assuming.
         var schemas = Reflector.GetSchemas(GameRelease.Fallout4);
-        var winnerEdid = schemas["dmgt"].RecordType.IsInstanceOfType(plain) ? "TestPlainDmgt" : "TestIndexedDmgt";
+        var winnerIsStructShaped = schemas["dmgt"].RecordType.IsInstanceOfType(plain);
+        var winnerEdid = winnerIsStructShaped ? "TestPlainDmgt" : "TestIndexedDmgt";
+        var winnerColumnName = (winnerIsStructShaped
+            ? DmgtSplitColumns.StructShaped(schemas["dmgt"])
+            : DmgtSplitColumns.ScalarShaped(schemas["dmgt"])).Name;
 
         using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
 
-        var rows = Query(repo, "SELECT editor_id, damage_types FROM dmgt ORDER BY editor_id");
+        var rows = Query(repo, $"SELECT editor_id, \"{winnerColumnName}\" AS winner_value FROM dmgt ORDER BY editor_id");
         Assert.Equal(2, rows.Count); // rows are never dropped, whichever subclass loses the schema race
-        var byEdid = rows.ToDictionary(r => (string)r["editor_id"]!, r => r["damage_types"]);
-        Assert.NotNull(byEdid[winnerEdid]); // winner's own typed column still reads correctly
+        var byEdid = rows.ToDictionary(r => (string)r["editor_id"]!, r => r["winner_value"]);
+        Assert.NotNull(byEdid[winnerEdid]); // winner's own data is still readable, now via its shape column
     }
 }

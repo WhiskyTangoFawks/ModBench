@@ -837,6 +837,14 @@ future surface, VMAD/Condition rows included (#231) since they render through th
 5. **Null / missing fields** render as an empty cell, never "null"/"undefined".
 6. **Read-only cells** in immutable plugin columns are never editable and render no input on
    click.
+7. **A signature backed by several concrete Mutagen subclasses that declare the same list/struct
+   field with genuinely different element shapes gets more than one column** for that field, one
+   per shape, rather than one column silently reading null for every subclass but the schema's
+   discovery winner (#339) — e.g. `dmgt`'s `damage_types` (struct elements) and
+   `actor_value_indices` (scalar elements) are two separate columns; a given record's row is
+   populated in whichever one matches its own subclass and empty in the other. This differs from
+   the *same-shape* case (#263), where such a conflict merges into one column instead. `FieldMetadata`
+   itself stays column-wide either way — there is no per-row element shape.
 
 ### Action logging
 

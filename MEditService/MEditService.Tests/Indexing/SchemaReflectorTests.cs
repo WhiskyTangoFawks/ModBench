@@ -4,6 +4,7 @@ using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
@@ -175,6 +176,130 @@ public class SchemaReflectorTests
 
         Assert.Equal("array", properties.ApiType);
         Assert.NotNull(properties.ElementType);
+    }
+
+    [Fact]
+    public void GetSchemas_Omod_PropertiesColumn_ExtractsCorrectPropertyAndStepForEverySubclass()
+    {
+        // #339: keeping the column's shape (test above) isn't enough on its own — until this fix,
+        // Extract was still bound to whichever single sibling won schema discovery, so every OTHER
+        // sibling's own Properties list read back null (a foreign PropertyInfo throws, the throw is
+        // swallowed). All five OMOD subclasses share the exact same generic element classes
+        // (ObjectMod{Bool,Enum,Float,FormLinkFloat,FormLinkInt,Int,String}Property<T>) — confirmed
+        // against the real Mutagen.Bethesda.Fallout4 source, not assumed from the brief — with T
+        // (the per-subclass "which property" enum) the only thing that varies. One element per
+        // subclass, all five asserted in one test deliberately (same rationale as the GMST/GLOB
+        // tests above): the defect is invisible if only the discovery-winning subclass is checked.
+        var mod = new Fallout4Mod(ModKey.FromFileName("Omod339.esp"), Fallout4Release.Fallout4);
+
+        // Not added to mod.ObjectModifications (the one shared Fallout4Group<AObjectModification>
+        // every sibling actually lives in, confirmed against Fallout4Mod_Generated.cs — there is no
+        // per-subclass group) — Extract only needs a standalone instance of each concrete type.
+        var armor = new ArmorModification(mod.GetNextFormKey("ArmorMod"), Fallout4Release.Fallout4) { EditorID = "ArmorMod" };
+        armor.Properties.Add(new ObjectModIntProperty<Armor.Property> { Property = Armor.Property.BodyPart, Step = 1f });
+
+        var npc = new NpcModification(mod.GetNextFormKey("NpcMod"), Fallout4Release.Fallout4) { EditorID = "NpcMod" };
+        npc.Properties.Add(new ObjectModIntProperty<Npc.Property> { Property = Npc.Property.ForcedInventory, Step = 2f });
+
+        var weapon = new WeaponModification(mod.GetNextFormKey("WeaponMod"), Fallout4Release.Fallout4) { EditorID = "WeaponMod" };
+        weapon.Properties.Add(new ObjectModIntProperty<Weapon.Property> { Property = Weapon.Property.AmmoCapacity, Step = 3f });
+
+        var obj = new ObjectModification(mod.GetNextFormKey("ObjectMod"), Fallout4Release.Fallout4) { EditorID = "ObjectMod" };
+        obj.Properties.Add(new ObjectModIntProperty<AObjectModification.NoneProperty> { Step = 4f });
+
+        var unknown = new UnknownObjectModification(mod.GetNextFormKey("UnknownMod"), Fallout4Release.Fallout4) { EditorID = "UnknownMod" };
+        unknown.Properties.Add(new ObjectModIntProperty<AObjectModification.NoneProperty> { Step = 5f });
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
+
+        AssertFirstElement(properties, armor, "BodyPart", 1f);
+        AssertFirstElement(properties, npc, "ForcedInventory", 2f);
+        AssertFirstElement(properties, weapon, "AmmoCapacity", 3f);
+        // AObjectModification.NoneProperty (Object/Unknown's T) is a genuinely empty enum — 0
+        // members — confirmed against the real source (ObjectModification.cs), not assumed. An
+        // enum value with no matching member name stringifies to its raw numeric value, "0" here
+        // (default(T)), not null.
+        AssertFirstElement(properties, obj, "0", 4f);
+        AssertFirstElement(properties, unknown, "0", 5f);
+
+        static void AssertFirstElement(ColumnSpec properties, IMajorRecordGetter record, string expectedProperty, float expectedStep)
+        {
+            var json = properties.Extract(record) as string;
+            Assert.NotNull(json);
+            var items = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(json);
+            Assert.NotNull(items);
+            var element = Assert.Single(items);
+            Assert.Equal(expectedProperty, element["property"].GetString());
+            Assert.Equal(expectedStep, element["step"].GetSingle());
+        }
+    }
+
+    [Fact]
+    public void GetSchemas_Omod_PropertiesColumn_PropertySubField_EnumValuesIsUnionOfSiblingEnums()
+    {
+        // #339 design decision: the `property` sub-field's EnumValues become the union of every
+        // sibling's own T enum member names — Armor.Property, Npc.Property, Weapon.Property (and
+        // AObjectModification.NoneProperty, which has zero members, contributing nothing). Member
+        // names below are transcribed directly from the real Mutagen source (Armor.cs, Npc.cs,
+        // Weapon.cs in references/Mutagen/Mutagen.Bethesda.Fallout4/Records/Major Records/), not
+        // assumed — a prior ticket's plan (see #339's own issue-comment scope correction on dmgt)
+        // shipped wrong precisely by trusting a brief's description of a Mutagen shape instead of
+        // reading it.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
+        var propertyField = properties.ElementType!.Fields!.Single(f => f.Name == "property");
+
+        Assert.Contains("BodyPart", propertyField.EnumValues); // Armor.Property-only member
+        Assert.Contains("ForcedInventory", propertyField.EnumValues); // Npc.Property-only member
+        Assert.Contains("AmmoCapacity", propertyField.EnumValues); // Weapon.Property-only member
+        Assert.Contains("Keywords", propertyField.EnumValues); // shared by Armor.Property and Npc.Property — union must not duplicate it
+        Assert.Equal(propertyField.EnumValues.Count, propertyField.EnumValues.Distinct().Count());
+    }
+
+    [Fact]
+    public void GetSchemas_Dmgt_SplitsIntoPerShapeColumns_EachDispatchGuardedToOwnSubclass()
+    {
+        // #339: DamageType.DamageTypes (ExtendedList<DamageTypeItem>, a struct of two formlinks)
+        // and DamageTypeIndexed.DamageTypes (ExtendedList<uint>?, a bare scalar list) are a genuine,
+        // irreconcilable shape conflict — confirmed against the real Mutagen source
+        // (DamageTypeItem_Generated.cs declares ActorValue/Spell; DamageTypeIndexed_Generated.cs
+        // declares neither, nor anything else under that name) — no field names in common at all,
+        // unlike OMOD's Properties above. xEdit itself never disambiguates this (wbDefinitionsFO4.pas
+        // unions both under one form-version-gated 'Damage Types' field, since the two forms can
+        // never coexist there); Mutagen modelling them as two co-existing classes is what forces a
+        // label here — 'actor_value_indices' borrows xEdit's own element vocabulary for the scalar
+        // shape ('Actor Value Index'), the closest thing to not diverging from xEdit at all
+        // (ADR-0034). Naming must be shape-based, not win-order-based — the existing DMGT round-trip
+        // test's own comment says which subclass wins schema discovery is a reflection-order
+        // artifact that must not be pinned — so this asserts fixed column names and per-column
+        // dispatch-guarded reads regardless of which subclass the schema race actually returns.
+        var mod = new Fallout4Mod(ModKey.FromFileName("DmgtSplit339.esp"), Fallout4Release.Fallout4);
+        var structShaped = new DamageType(mod, "PlainDmgt339");
+        structShaped.DamageTypes.Add(new DamageTypeItem
+        {
+            ActorValue = new FormLink<IActorValueInformationGetter>(FormKey.Factory("000001:Test.esp")),
+            Spell = new FormLink<ISpellGetter>(FormKey.Factory("000002:Test.esp")),
+        });
+        var scalarShaped = new DamageTypeIndexed(mod, "IndexedDmgt339") { DamageTypes = new Noggog.ExtendedList<uint> { 7, 11 } };
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var damageTypes = DmgtSplitColumns.StructShaped(schemas["dmgt"]);
+        var actorValueIndices = DmgtSplitColumns.ScalarShaped(schemas["dmgt"]);
+
+        // The shape-based lookup above is deliberately name-agnostic (it is what the round-trip
+        // test below shares); the fixed names are still this test's own point, asserted directly.
+        Assert.Equal("damage_types", damageTypes.Name);
+        Assert.Equal("actor_value_indices", actorValueIndices.Name);
+        Assert.Equal("int", actorValueIndices.ElementType!.Type);
+
+        // Each column reads only its own subclass — by construction (a type check before the
+        // reflected getter is ever invoked), not by falling through to a swallowed reflection
+        // throw. Foreign-instance reads return null either way; the point is *how*.
+        Assert.NotNull(damageTypes.Extract(structShaped));
+        Assert.Null(damageTypes.Extract(scalarShaped));
+        Assert.NotNull(actorValueIndices.Extract(scalarShaped));
+        Assert.Null(actorValueIndices.Extract(structShaped));
     }
 
     [Fact]
