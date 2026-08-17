@@ -251,6 +251,21 @@ describe('PluginListProvider — filter', () => {
     expect(rows.some((r) => r instanceof EmptyNode)).toBe(false);
   });
 
+  // #255 AC6: the filter is durable within the session — it outlives a Refresh and whatever the
+  // re-read turns up. The render-vs-invalidate split (#79) is what makes that true, so this is
+  // the test that says so: invalidate() clears the row cache and must not touch the term.
+  it('survives a refresh and an underlying data change, narrowing whatever the re-read returns', async () => {
+    const order = ['Alpha.esp', 'Beta.esp'];
+    const provider = new PluginListProvider({ source: new FakeSource(order) });
+    provider.setFilter('alpha');
+    expect((await provider.getChildren()).map((r) => r.label)).toEqual(['Alpha.esp']);
+
+    order.push('AlphaTwo.esp'); // a plugin arrives on disk
+    provider.invalidate();      // …and Refresh re-reads
+
+    expect((await provider.getChildren()).map((r) => r.label)).toEqual(['Alpha.esp', 'AlphaTwo.esp']);
+  });
+
   it('fires onDidChangeTreeData when the filter is set', () => {
     const provider = new PluginListProvider({ source: new FakeSource(['Alpha.esp']) });
     let fired = false;
