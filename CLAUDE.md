@@ -15,7 +15,7 @@ dotnet build -v minimal
 dotnet test -v minimal
 
 # from modbench/
-npm run lint
+npm run lint              # binary: --max-warnings 0, so any warning fails it (#340). No baseline-diffing.
 npm run build             # type-check + bundle extension + webview
 npm run test:unit         # Vitest, no backend
 npm run test:integration  # real VS Code process (~10s), no backend; bundles extension.js first (pretest hook)
