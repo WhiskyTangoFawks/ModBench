@@ -45,7 +45,22 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
    *  this. `undefined` from the accessor itself (as opposed to the accessor being absent) means
    *  "no plugin filename to build one from" (an error/empty-state row). */
   pendingChangeUriOf?(pluginFile: string): vscode.Uri | undefined;
+  /** #279 / ADR-0035 § Live mutation: this plugin's drift, or `undefined` for one that has not
+   *  drifted **or** that nothing is currently known about. `pluginDrift.ts` deliberately makes
+   *  those one value, so it is not a distinction this composite could render even if it wanted to
+   *  — which is how #334's rule (an absent marker must never be produced by a failed computation)
+   *  is kept here: a failure never reaches this accessor as an answer. Optional and the same shape
+   *  as the accessors above; omitted in tests that don't exercise drift. */
+  driftOf?(pluginFile: string): PluginDrift | undefined;
 }
+
+/** A plugin whose name no longer resolves to the file its records were read from (#279 /
+ *  ADR-0035 § Live mutation). Structurally matches `pluginDrift.ts`'s own `PluginDrift` without
+ *  importing it: this file imports nothing but `vscode`, and `src/test/contextBoundary.test.ts`
+ *  holds it to that for the composition root's own modules as much as for either context's.
+ *  `currentOrigin: null` means the name resolves to nothing at all — the one drift no re-read can
+ *  repair, since there is no file to read. */
+type PluginDrift = { loadedOrigin: string; currentOrigin: string | null; currentPath: string | null };
 
 /** A plugin's own declared master, absent from the session (#277 / ADR-0037). Structurally
  *  matches `medit/ApiClient.ts`'s `MasterIssue` without importing it — the composite imports
@@ -105,22 +120,59 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     // decoration and the master-issue decoration are all decided here for the same reason the
     // chevron is — this is the one place allowed to know both what the row provider built and
     // what the session says, so neither side has to learn the other's vocabulary. Tooltip and (for
-    // the error decorations only) icon/description — never a contextValue and never the leading
-    // slot (checkbox/lock, #276): no per-row editing command exists yet to gate off one (see
-    // plugins.md), and the leading slot answers exactly one question ("can you change whether
-    // this loads?") that none of this is part of.
+    // the error decorations only) icon/description, plus — since #279 — a contextValue, but still
+    // never the leading slot (checkbox/lock, #276), which answers exactly one question ("can you
+    // change whether this loads?") that none of this is part of.
+    //
+    // #279 is what changed the contextValue half. This comment previously read "never a
+    // contextValue", on the stated grounds that no per-row editing command existed to gate off
+    // one; Re-read is the first, so the reason expired rather than the rule being broken. It stays
+    // the *only* one: a contextValue here must correspond to a command in package.json's
+    // `view/item/context`, or it is dead weight that silently widens some other clause.
     const base = this.captureOriginalDecoration(element as object, item);
     item.tooltip = base.tooltip;
     item.description = base.description;
     item.iconPath = base.iconPath;
+    item.contextValue = base.contextValue;
 
     const rawFile = this.deps.pluginFileOf(element as TRow);
     const file = rawFile?.toLowerCase();
     this.applyReadOnlyNote(item, file);
     this.applyBackendDecoration(item, element as TRow, file);
+    this.applyDriftDecoration(item, rawFile);
     this.applyPendingChangeUri(item, rawFile);
 
     return item;
+  }
+
+  /** #279 / ADR-0035 § Live mutation: the row states that the file behind it changed, and becomes
+   *  a re-read target when there is something to re-read.
+   *
+   *  Applied *after* the backend decorations and deliberately additive: it appends its own tooltip
+   *  line and takes icon/description only if nothing more fundamental already claimed them. A
+   *  plugin that failed to load outright, or that is missing a master, has something wrong with it
+   *  that outranks where its bytes came from — but drift is still true of it, still worth saying,
+   *  and still re-readable, so it is never suppressed, only out-ranked in the one slot each.
+   *
+   *  Note this runs only with a session: with none there is no loaded origin for a current one to
+   *  differ from, so `driftOf` has nothing to answer and the row is left alone. */
+  private applyDriftDecoration(item: vscode.TreeItem, file: string | undefined): void {
+    if (file === undefined || this.sessionFiles === undefined) return;
+    const drift = this.deps.driftOf?.(file);
+    if (drift === undefined) return;
+
+    // AC3: both origins, named. The wording says "would now resolve to" rather than "does" on
+    // purpose — nothing has been re-read, so the loaded origin is still the one being served.
+    const wouldResolveTo = drift.currentOrigin ?? 'nothing';
+    const note = `This plugin's file changed: loaded from ${drift.loadedOrigin}, would now resolve to ${wouldResolveTo}.`;
+    item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
+    item.description ??= '⚠ Drifted';
+    item.iconPath ??= new vscode.ThemeIcon('warning');
+
+    // The gate on the Re-read command (package.json `view/item/context`). Only when there is a
+    // file to read: a plugin whose name now resolves to nothing still flags and still says so in
+    // its tooltip, but offering to re-read it would be offering to read nothing.
+    if (drift.currentPath !== null) item.contextValue = 'pluginDrifted';
   }
 
   /** #331: a plugin row's pending-change decoration identity, deferring to whatever `resourceUri`
@@ -150,9 +202,19 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     tooltip: string | vscode.MarkdownString | undefined;
     description: vscode.TreeItem['description'];
     iconPath: vscode.TreeItem['iconPath'];
+    contextValue: string | undefined;
   } {
     if (!this.originalDecoration.has(key)) {
-      this.originalDecoration.set(key, { tooltip: item.tooltip, description: item.description, iconPath: item.iconPath });
+      this.originalDecoration.set(key, {
+        tooltip: item.tooltip,
+        description: item.description,
+        iconPath: item.iconPath,
+        // #279: captured for the same reason as the other three. A drifted row's contextValue is
+        // overwritten to gate the Re-read command, so without the row's own value recorded here a
+        // re-read that *resolves* the drift would leave the row claiming to be drifted forever —
+        // and, worse, still matching the menu clause that offers to re-read it again.
+        contextValue: item.contextValue,
+      });
     }
     return this.originalDecoration.get(key)!;
   }
@@ -222,6 +284,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     tooltip: string | vscode.MarkdownString | undefined;
     description: vscode.TreeItem['description'];
     iconPath: vscode.TreeItem['iconPath'];
+    contextValue: string | undefined;
   }>();
 
   private isRow(element: TRow | TChild): boolean {
