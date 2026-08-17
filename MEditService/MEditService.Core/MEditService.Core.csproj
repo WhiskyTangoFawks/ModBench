@@ -13,6 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- #367: Mutagen.Bethesda.Serialization.SourceGenerator 1.37.x requires Roslyn >= 4.14; this
+         repo's SDK (9.0.119) ships Roslyn 4.12, so the generator fails to load (CS9057) without
+         this pin. Remove once the repo's own SDK floor moves past 4.14: Microsoft.Net.Compilers.
+         Toolset becomes redundant then, not wrong; there's no forcing function to delete it. -->
+    <PackageReference Include="Microsoft.Net.Compilers.Toolset" Version="4.14.0" PrivateAssets="all" />
     <PackageReference Include="Autofac" Version="9.1.0" />
     <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.2" />
     <!-- Pinned to 0.53.x: 0.54.0 reintroduces a binary round-trip defect confined to the lazy
@@ -29,6 +34,17 @@
          ModFactory.ImportGetter overlay this bug lives in, so this isn't a defect confined to an
          unused code path. Move only once #385 confirms the regression is fixed upstream. -->
     <PackageReference Include="Mutagen.Bethesda.Fallout4" Version="0.53.1" />
+    <!-- #367: library-level integration of Spriggit's codec (ADR-0040), not the Spriggit tool
+         itself: avoids its exe-per-version machinery and its exact Mutagen [0.54.0] pin, which
+         this repo cannot take (see the 0.53.1 pin comment above). Serialization 1.37.1 depends on
+         Mutagen.Bethesda.Core >= 0.51.3 (a floor, not Spriggit's exact pin), so it is compatible
+         with 0.53.1, confirmed via the nuspec; restores with zero NuGet warnings. -->
+    <PackageReference Include="Mutagen.Bethesda.Serialization" Version="1.37.1" />
+    <PackageReference Include="Mutagen.Bethesda.Serialization.Yaml" Version="1.37.1" />
+    <PackageReference Include="Mutagen.Bethesda.Serialization.SourceGenerator" Version="1.37.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Roslynator.Analyzers" Version="4.15.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
