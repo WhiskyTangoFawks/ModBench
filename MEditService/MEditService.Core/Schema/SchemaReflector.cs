@@ -501,6 +501,19 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return IsSameShapeExceptEnumDomain(a.ElementType, b.ElementType);
     }
 
+    // IsSameShapeExceptEnumDomain applied to two columns, with the *column's own* AllowsNull
+    // normalized away first. That flag is bookkeeping this ladder itself introduces (a column
+    // becomes AllowsNull once it's dispatch-guarded — MergeNonScalarByEnumDomain,
+    // SplitNonScalarByShape), not a property of the underlying Mutagen shape — comparing it here
+    // would make the routing decision depend on whether this column happened to be merged already,
+    // not on whether the sibling's shape actually matches. A freshly-reflected sibling spec is
+    // never itself AllowsNull for this reason, so leaving the raw comparison in would falsely
+    // report a shape mismatch for a real match the moment a column had already merged once.
+    private static bool IsSameColumnShapeExceptEnumDomain(ColumnSpec a, ColumnSpec b) =>
+        IsSameShapeExceptEnumDomain(
+            a.ToFieldMetadata() with { AllowsNull = false },
+            b.ToFieldMetadata() with { AllowsNull = false });
+
     // #263: folds one sibling's version of a column into the accumulating union. The rule is
     // shape-based, never keyed by table or signature name — see BuildSchema's caller comment for
     // why that matters (AC: a hypothetical third subclass, or another game's own signature, must
@@ -558,17 +571,35 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         if (nonScalarMergeDispatch.ContainsKey(existing.Name))
         {
-            // Already merged by an earlier conflicting sibling — extend the same dispatch list AND
-            // fold this sibling's own enum domain into the running union (a fifth OMOD-shaped
-            // sibling must still contribute its own T's member names, not just the second one).
-            MergeNonScalarByEnumDomain(
-                columns, existingIndex, nonScalarMergeDispatch, winnerGetterType, siblingGetterType, siblingSpec);
+            // Already merged by an earlier conflicting sibling. Nothing guarantees a later sibling
+            // sharing this column's *name* also shares the shape the earlier ones merged on — this
+            // must re-check, not assume: BuildForCategory is game-generic (any Mutagen.Bethesda.
+            // {category}), so a genuinely mismatched third-plus sibling here is not an FO4-only
+            // hypothetical, and skipping this check let UnionEnumDomains' by-name Fields lookup
+            // throw uncaught, taking out schema construction for the whole category.
+            if (IsSameColumnShapeExceptEnumDomain(existing, siblingSpec))
+            {
+                // Extend the same dispatch list AND fold this sibling's own enum domain into the
+                // running union (a fifth OMOD-shaped sibling must still contribute its own T's
+                // member names, not just the second one).
+                MergeNonScalarByEnumDomain(
+                    columns, existingIndex, nonScalarMergeDispatch, winnerGetterType, siblingGetterType, siblingSpec);
+                return;
+            }
+
+            // Genuinely mismatched. `existing` is already a merged, multi-sibling-safe column —
+            // its Extract dispatches correctly across every sibling folded into it so far — so this
+            // never touches it; retroactively re-splitting an already-merged group is speculative
+            // machinery for a conflict no supported game currently has (same trade-off
+            // SplitNonScalarByShape itself declines below). The mismatched sibling gets its own
+            // column instead of being silently dropped.
+            AddAsOwnColumn(columns, siblingGetterType, siblingSpec);
             return;
         }
 
         if (NonScalarApiTypes.Contains(existing.ApiType) || NonScalarApiTypes.Contains(siblingSpec.ApiType))
         {
-            if (IsSameShapeExceptEnumDomain(existing.ToFieldMetadata(), siblingSpec.ToFieldMetadata()))
+            if (IsSameColumnShapeExceptEnumDomain(existing, siblingSpec))
             {
                 MergeNonScalarByEnumDomain(
                     columns, existingIndex, nonScalarMergeDispatch, winnerGetterType, siblingGetterType, siblingSpec);
@@ -673,6 +704,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             ElementType = mergedElementType,
             SubFields = mergedSubFields,
             EnumValues = mergedEnumValues,
+            // Same reason WidenedExtract's own column sets this above: becoming dispatch-guarded
+            // means every row of a non-matching sibling now legitimately reads null through this
+            // column — false here would assert a guarantee the dispatch no longer keeps.
+            AllowsNull = true,
         };
     }
 
@@ -720,11 +755,33 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             // not pretty, but deterministic and never a table/signature name.
             : $"{baseName}_{scalarShapeSpec.ElementType?.Type ?? scalarShapeSpec.ApiType}";
 
+    // Cheap collision guard for a computed column name (curated or shape-derived-fallback) against
+    // whatever is already in `columns` — a curated or fallback name colliding with an unrelated
+    // existing column would otherwise reach TableDdlBuilder.CreateRecordTable as two ColumnSpecs
+    // sharing one name, which fails the whole table's CREATE TABLE at DDL time, not just this field.
+    private static string UniqueColumnName(List<ColumnSpec> columns, string candidate)
+    {
+        var name = candidate;
+        var suffix = 2;
+        while (columns.Any(c => c.Name == name))
+        {
+            name = $"{candidate}_{suffix}";
+            suffix++;
+        }
+        return name;
+    }
+
     // #339: the struct/richer shape always keeps the property's own name; the plain-scalar shape
-    // always gets the disambiguated name — a rule that holds regardless of which subclass wins
-    // schema discovery (see BuildForCategory's own comment: that race is a reflection-order
-    // artifact, never something callers may rely on), which is why this can rename an
-    // *already-placed* winner column rather than only ever appending the sibling's.
+    // always gets the disambiguated name. This holds regardless of which subclass wins schema
+    // discovery (see BuildForCategory's own comment: that race is a reflection-order artifact,
+    // never something callers may rely on) — but only for the one-scalar-one-struct pairing DMGT
+    // actually exercises, which is what lets this rename an *already-placed* winner column rather
+    // than only ever appending the sibling's. It is NOT win-order-independent for a two-scalar or
+    // two-struct conflict: IsScalarElementShape can't tell those two apart, so both fall through to
+    // the `else` branch below and the discovery winner keeps the base name — the exact reflection-
+    // order artifact the guarantee above disclaims. No supported game has that conflict today, and
+    // building a shape-based discriminator for it would mean inventing one with nothing real to
+    // validate it against; left as a documented gap, not built.
     //
     // Scoped to two siblings — DMGT's only real case today. A hypothetical third sibling sharing
     // one of these two shapes would need to re-resolve which of the two split columns to extend,
@@ -733,7 +790,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     //
     // Both resulting columns get a type-checked Extract (AC3's "impossible by construction", not a
     // foreign read swallowed by the pre-existing catch-all) — both are new paths this rung adds,
-    // the winner's own column included, since it may be the one getting renamed here.
+    // the winner's own column included, since it may be the one getting renamed here. Both are also
+    // AllowsNull: true — becoming dispatch-guarded means every row of the *other* shape now
+    // legitimately reads null through each column, on both sides of the split, not just the newly
+    // appended one.
     private static void SplitNonScalarByShape(
         List<ColumnSpec> columns, int existingIndex,
         Type winnerGetterType, Type siblingGetterType, ColumnSpec siblingSpec)
@@ -749,17 +809,19 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             // The winner turned out to be the plain shape — rename it off the base name, then
             // reclaim the base name for the sibling's struct shape, so the result is identical to
             // the opposite win order below.
-            columns[existingIndex] = Guarded(existing, winnerGetterType) with { Name = QualifiedSplitName(baseName, existing) };
-            columns.Add(Guarded(siblingSpec, siblingGetterType) with { Name = baseName, AllowsNull = true });
+            var qualified = UniqueColumnName(columns, QualifiedSplitName(baseName, existing));
+            columns[existingIndex] = Guarded(existing, winnerGetterType) with { Name = qualified, AllowsNull = true };
+            columns.Add(Guarded(siblingSpec, siblingGetterType) with
+            {
+                Name = UniqueColumnName(columns, baseName),
+                AllowsNull = true,
+            });
         }
         else
         {
-            columns[existingIndex] = Guarded(existing, winnerGetterType); // stays at baseName
-            columns.Add(Guarded(siblingSpec, siblingGetterType) with
-            {
-                Name = QualifiedSplitName(baseName, siblingIsScalar ? siblingSpec : existing),
-                AllowsNull = true,
-            });
+            columns[existingIndex] = Guarded(existing, winnerGetterType) with { AllowsNull = true }; // stays at baseName
+            var qualified = UniqueColumnName(columns, QualifiedSplitName(baseName, siblingIsScalar ? siblingSpec : existing));
+            columns.Add(Guarded(siblingSpec, siblingGetterType) with { Name = qualified, AllowsNull = true });
         }
 
         static ColumnSpec Guarded(ColumnSpec spec, Type ownerGetterType)
@@ -767,6 +829,22 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             var innerExtract = spec.Extract;
             return spec with { Extract = r => ownerGetterType.IsInstanceOfType(r) ? innerExtract(r) : null };
         }
+    }
+
+    // #339: the fast-path counterpart to SplitNonScalarByShape, for a sibling that turned out not
+    // to share an *already-merged* column's shape (see the nonScalarMergeDispatch branch above) —
+    // the merged column is left untouched (it is already correct for every sibling folded into it),
+    // so this only ever adds the mismatched sibling as its own column, guarded the same way.
+    private static void AddAsOwnColumn(List<ColumnSpec> columns, Type siblingGetterType, ColumnSpec siblingSpec)
+    {
+        var innerExtract = siblingSpec.Extract;
+        var name = UniqueColumnName(columns, QualifiedSplitName(siblingSpec.Name, siblingSpec));
+        columns.Add(siblingSpec with
+        {
+            Name = name,
+            Extract = r => siblingGetterType.IsInstanceOfType(r) ? innerExtract(r) : null,
+            AllowsNull = true,
+        });
     }
 
     // Every prior VARCHAR column already held a real string; a widened scalar column is the first

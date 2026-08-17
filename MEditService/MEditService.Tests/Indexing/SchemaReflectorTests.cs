@@ -213,6 +213,11 @@ public class SchemaReflectorTests
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
 
+        // Merging makes this column dispatch-guarded — a record of a *sixth*, non-OMOD subclass
+        // (hypothetically) would read null through it, same as any dispatch-guarded column already
+        // does (see WidenedExtract's own column) — AllowsNull must say so, not still claim false.
+        Assert.True(properties.AllowsNull);
+
         AssertFirstElement(properties, armor, "BodyPart", 1f);
         AssertFirstElement(properties, npc, "ForcedInventory", 2f);
         AssertFirstElement(properties, weapon, "AmmoCapacity", 3f);
@@ -292,6 +297,12 @@ public class SchemaReflectorTests
         Assert.Equal("damage_types", damageTypes.Name);
         Assert.Equal("actor_value_indices", actorValueIndices.Name);
         Assert.Equal("int", actorValueIndices.ElementType!.Type);
+
+        // Both sides of a split are dispatch-guarded, not just the newly-appended one — a
+        // DamageType row legitimately reads null through actor_value_indices and vice versa, so
+        // both columns must say AllowsNull, not just whichever one wasn't the discovery winner.
+        Assert.True(damageTypes.AllowsNull);
+        Assert.True(actorValueIndices.AllowsNull);
 
         // Each column reads only its own subclass — by construction (a type check before the
         // reflected getter is ever invoked), not by falling through to a swallowed reflection
