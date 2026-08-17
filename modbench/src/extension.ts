@@ -208,6 +208,10 @@ function exitToLoadout(): void {
   // #307: so does anything the load was saying about itself. A statement about a session that no
   // longer exists is the same class of silent-wrong-state as a stale chevron.
   say(undefined);
+  // #255: and so does the record-filter half of the Plugins tree's readout — the record filter is
+  // a fact about the session, so it cannot outlive it in the description. (The name filter's half
+  // is untouched: it filters load-order rows, which are still there.)
+  pluginsNameFilter?.setBaseDescription(undefined);
   recordBrowserProvider?.setImmutablePlugins([]);
   // #331: a direct reset, not refresh() — see PendingChangeDecorationProvider.clear()'s own
   // comment for why a live re-fetch here would race backendManager.stop() below.
