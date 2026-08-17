@@ -61,6 +61,46 @@ sessions or CI. Recorded here because this ADR named the SDK specifically and th
 substitution should be visible, not silent — later stages should default to the same
 compiler-pin approach rather than an SDK bump unless something forces otherwise.
 
+#### Truth partition, shallow container vendoring, upstream anchors *(amendment, 2026-08-17)*
+
+The #387 design conversation (empirical probes plus maintainer alignment; full model and
+probe evidence on that ticket) refined how this decision is articulated. Nothing here
+reverses it — this is the model the decision was implicitly relying on, made explicit:
+
+- **Truth is partitioned per record, not per plugin.** For a tracked record, ledger text
+  at `main` is authoritative and the binary is a build artifact; for an untracked record
+  the binary is authoritative. Tracking is monotonic (first touch vendors a baseline;
+  nothing untracks). No delta is stored anywhere — every ledger file is full record
+  state; "delta" exists only as git's rendering of two states. Partial coverage is git's
+  own tracked/untracked distinction (the vendor-branch pattern), not an origin+delta
+  scheme. The DB is a materialized read model over {binary, text@refs} — never
+  authoritative, always rebuildable. Single write path: working-tree text → commit →
+  apply-to-binary; the binary is only ever written from accepted text state (modbench's
+  own saves) or by external tools (which is drift, below).
+- **Container-shaped records vendor shallow.** Probed on #387: under `.FilePerRecord()`
+  the generated per-record serializers write child major records as sibling folder trees
+  keyed by *field name only* — two Cells serialized into one directory silently merge
+  and cross-contaminate their children on read — and `Worldspace_Serialization` drops
+  `SubCells` entirely (only the whole-mod entry point serializes worldspace blocks).
+  The ledger therefore strips child-major fields before serializing a container record
+  (children are their own ledger entries; containment is encoded in the ledger path),
+  which preserves one-record-one-file and sidesteps both defects. Probe-confirmed:
+  shallow serialize emits exactly one file, and deserialize with no child folders
+  round-trips clean.
+- **Upstream anchors make drift detectable and classifiable.** Baseline (vendor)
+  commits carry provenance trailers assembled by Mod Management (Nexus identity,
+  version, archive filename, SHA-256 of the pristine binary — opaque strings to
+  Editing, same discipline as ADR-0036 origins); a sync-state hash of the binary as
+  modbench last wrote it lives under the hidden gitdir, outside history. At load:
+  hash unchanged → clean (O(1), no re-serialization); hash moved with provenance moved
+  → upstream advance → new baselines + rebase of user commits (#382); hash moved alone
+  → in-place external edit (xEdit et al.) → re-serialize the tracked set and surface
+  the diff as uncommitted working-tree changes for user disposition (commit / revert /
+  reclassify as upstream). Drift import refuses to overwrite uncommitted modbench edits
+  on the same record — spike Q9's rule at one more door. Byte-hashing the pristine
+  binary is legitimate here despite consequence 3's caveat: that caveat covers binaries
+  *we rebuild*; upstream originals are stable bytes we never rewrite.
+
 Vocabulary is git's own, inventing nothing (glossary draft in the findings doc §Q8):
 working tree, stage, commit, branch, merge, revert, conflict. Surviving domain terms:
 change-group closure, apply-to-binary, vendor.
