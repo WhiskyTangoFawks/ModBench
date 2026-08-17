@@ -34,16 +34,17 @@ public sealed class RecordQueryService(
             _session.Status.State == SessionState.Ready
                 ? MasterResolution.Classify(s.Plugins, s.LoadFailures)
                 : new Dictionary<string, IReadOnlyList<MasterIssue>>();
-        PluginResponse ToResponse(PluginMetadata p) =>
-            PluginResponse.FromMetadata(p, masterIssues.GetValueOrDefault(p.Name));
+        PluginResponse ToResponse(PluginMetadata p, bool hasMatchingRecords) =>
+            PluginResponse.FromMetadata(p, masterIssues.GetValueOrDefault(p.Name), hasMatchingRecords);
 
         if (s.FilterSql is null)
-            return [.. s.Plugins.Select(ToResponse)];
+            return [.. s.Plugins.Select(p => ToResponse(p, hasMatchingRecords: true))];
 
+        // #278 / ADR-0035 amending ADR-0018: a record filter prunes records and record types, never
+        // a plugin row — every plugin is still returned, and HasMatchingRecords is the additive fact
+        // a caller (the composite's chevron) decides expandability from, not row presence.
         var matchingPlugins = RequireRepository().GetPluginsWithMatchingRecords(RequireSchemas().Keys);
-        return [.. s.Plugins
-            .Where(p => matchingPlugins.Contains(p.Name))
-            .Select(ToResponse)];
+        return [.. s.Plugins.Select(p => ToResponse(p, matchingPlugins.Contains(p.Name)))];
     }
 
     // The header isn't a browsable record type (User Story 7's "expand a plugin -> record types"

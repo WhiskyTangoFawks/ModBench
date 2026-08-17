@@ -1559,7 +1559,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal(TestPluginFixture.RecordCount, result.Items.Count);
     }
 
-    // --- GetPlugins: filter pruning (A4) ---
+    // --- GetPlugins: HasMatchingRecords, never row pruning (#278 / ADR-0035 amending ADR-0018) ---
 
     [Fact]
     public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
@@ -1568,19 +1568,28 @@ public sealed class RecordQueryServiceTests : IDisposable
         try
         {
             var plugins = _svc.GetPlugins();
-            Assert.Contains(plugins, p => p.Name == TestPluginFixture.PluginName);
+            var plugin = Assert.Single(plugins, p => p.Name == TestPluginFixture.PluginName);
+            Assert.True(plugin.HasMatchingRecords);
         }
         finally { _manager.ClearFilter(); }
     }
 
+    // Renamed from GetPlugins_WithFilterMatchingNoRecords_HidesPlugin (#278 / ADR-0035 amending
+    // ADR-0018): that name pinned the old rule this issue exists to overturn — a plugin the active
+    // filter matched none of this plugin's records used to be dropped from the list entirely
+    // (Assert.Empty(plugins)). The rule changes: a record filter prunes records and record types,
+    // never a plugin row, because this tree is also the load order and hiding a plugin mid-filter
+    // would make it unreorderable. The plugin now stays in the list; HasMatchingRecords is the
+    // additive fact a caller (the tree's chevron) reads instead.
     [Fact]
-    public void GetPlugins_WithFilterMatchingNoRecords_HidesPlugin()
+    public void GetPlugins_WithFilterMatchingNoRecords_KeepsPluginVisibleButFlagsNoMatch()
     {
         _manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key");
         try
         {
             var plugins = _svc.GetPlugins();
-            Assert.Empty(plugins);
+            var plugin = Assert.Single(plugins, p => p.Name == TestPluginFixture.PluginName);
+            Assert.False(plugin.HasMatchingRecords);
         }
         finally { _manager.ClearFilter(); }
     }
@@ -1592,8 +1601,9 @@ public sealed class RecordQueryServiceTests : IDisposable
         _manager.ClearFilter();
 
         var plugins = _svc.GetPlugins();
-        Assert.Single(plugins);
-        Assert.Equal(TestPluginFixture.PluginName, plugins[0].Name);
+        var plugin = Assert.Single(plugins);
+        Assert.Equal(TestPluginFixture.PluginName, plugin.Name);
+        Assert.True(plugin.HasMatchingRecords);
     }
 
     private sealed class SpyRecordReader(IRecordReader inner) : IRecordReader

@@ -31,6 +31,7 @@ function makePlugins(count: number): PluginMetadata[] {
     isImmutable: false,
     origin: 'Data',
     masterIssues: [],
+    hasMatchingRecords: true,
   }));
 }
 
@@ -107,6 +108,7 @@ function makeDeps(overrides: Partial<SessionControllerDeps> = {}): SessionContro
     showWarning: vi.fn(),
     showError: vi.fn(),
     setFilterActive: vi.fn(),
+    refreshMatchingPlugins: vi.fn(),
     notifyConflictsComputed: vi.fn(),
     ...overrides,
   };
@@ -295,6 +297,19 @@ describe('SessionController.setFilter', () => {
     expect(deps.showError).not.toHaveBeenCalled();
   });
 
+  // #278 / ADR-0035 amending ADR-0018: a plugin's chevron depends on the filter's per-plugin
+  // match set, which is only current as of the filter that produced it — a new filter has to
+  // trigger a fresh derivation, or a chevron the old filter suppressed (or restored) would keep
+  // stating the wrong thing about the new one.
+  it('refreshes the plugin-match set on success', async () => {
+    const deps = makeDeps({ repository: makeRepository() });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.setFilter('SELECT form_key FROM "npc_"');
+
+    expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
+  });
+
   // #255: the Plugins tree's description names both narrowing axes, so the record filter has to
   // say *which* filter — raw SQL is unreadable as a readout, and "a filter is active" sends the
   // user back to the palette to find out which one.
@@ -318,6 +333,7 @@ describe('SessionController.setFilter', () => {
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('form_key'));
     expect(deps.setFilterActive).not.toHaveBeenCalled();
     expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 });
 
@@ -336,6 +352,18 @@ describe('SessionController.clearFilter', () => {
     expect(repository.clearFilter).toHaveBeenCalledOnce();
     expect(deps.setFilterActive).toHaveBeenCalledWith(false);
     expect(deps.refreshTree).toHaveBeenCalledOnce();
+  });
+
+  // #278 / ADR-0035 amending ADR-0018: the mirror-image bug this ticket exists to kill — a stale
+  // `false` surviving past the filter that produced it would leave a plugin permanently
+  // unexpandable even with nothing filtering it any more.
+  it('refreshes the plugin-match set, so a stale no-match chevron does not survive the filter that produced it', async () => {
+    const deps = makeDeps({ repository: makeRepository() });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.clearFilter();
+
+    expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
 });
 

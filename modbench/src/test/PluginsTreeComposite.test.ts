@@ -90,6 +90,7 @@ function make(
   rows: FakeRow[],
   children = new FakeChildren(),
   driftOf?: (file: string) => { loadedOrigin: string; currentOrigin: string | null; currentPath: string | null } | undefined,
+  hasMatchingRecords?: (file: string) => boolean | undefined,
 ) {
   const rowSource = new FakeRows(rows);
   const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
@@ -98,6 +99,7 @@ function make(
     pluginFileOf: (row) => row.file,
     orderIssueMastersOf: (row) => row.orderIssueMasters,
     driftOf,
+    hasMatchingRecords,
   });
   // The composite tells rows from children by having handed the rows out, so every test renders
   // the root first — which is what VS Code does, and what its TreeDataProvider contract
@@ -196,6 +198,39 @@ describe('PluginsTreeComposite when a session starts', () => {
     composite.setSession(new Set(['A.esp']));
 
     expect(fired).toHaveLength(1);
+  });
+});
+
+// #278 / ADR-0035 amending ADR-0018: a record filter prunes records and record types, never a
+// plugin row. The row stays exactly where the load order put it; the only thing an active filter
+// with no matches on this plugin is allowed to change is the chevron.
+describe('PluginsTreeComposite — a record filter suppresses the chevron, never the row (#278 / ADR-0035)', () => {
+  it('leaves a plugin with no matching records visible, but not expandable', async () => {
+    const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), undefined, (file) => file !== 'A.esp');
+    composite.setSession(new Set(['A.esp', 'B.esp']));
+    await render();
+
+    expect(await composite.getChildren()).toEqual([PLUGIN_ROW, OTHER_ROW]);
+    expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
+  });
+
+  it('keeps the chevron on a plugin the filter still matches', async () => {
+    const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), undefined, (file) => file !== 'A.esp');
+    composite.setSession(new Set(['A.esp', 'B.esp']));
+    await render();
+
+    expect(composite.getTreeItem(OTHER_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+  });
+
+  // No filter machinery wired (the accessor absent) has to read the same as "no filter active" —
+  // every existing session-start test above already asserts a chevron with no third argument at
+  // all, so this only has to hold the line rather than prove it fresh.
+  it('keeps every session row expandable when hasMatchingRecords is not wired', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    composite.setSession(new Set(['A.esp']));
+    await render();
+
+    expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 });
 

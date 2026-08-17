@@ -14,6 +14,7 @@ function makePlugin(i: number): PluginMetadata {
     isImmutable: false,
     origin: 'Data',
     masterIssues: [],
+    hasMatchingRecords: true,
   };
 }
 

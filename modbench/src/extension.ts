@@ -87,6 +87,14 @@ let pluginsNameFilter: NameFilter | undefined;
 // exitToLoadout is where a load gets deliberately abandoned, and it is module-level. Replaced by
 // each new load; a superseded one does not need aborting, since the backend answers it 409.
 let loadAbort: AbortController | undefined;
+// #278 / ADR-0035 amending ADR-0018: per-plugin filter matches, lowercased filename → does this
+// plugin own at least one record the active record filter matches. Module level for the same
+// reason as pluginsTree above — SessionController's setFilter/clearFilter are the choke points
+// that invalidate it (via refreshMatchingPlugins below), and they run before the composite that
+// reads it exists. `undefined` (never fetched, or no filter active) reads as "matches" everywhere
+// it's consulted — the same safe default PluginsTreeComposite.hasMatchingRecords itself falls
+// back to when the accessor has nothing to say.
+let matchingPlugins: Map<string, boolean> | undefined;
 
 /** #307: the Plugins view's own statement about what it is doing, or what it does not yet know
  *  (`TreeView.message` — the native surface for a view-scoped statement about its own contents,
@@ -211,6 +219,25 @@ function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<
   };
 }
 
+/** #278 / ADR-0035 amending ADR-0018: `SessionController.setFilter`/`clearFilter`'s
+ *  `refreshMatchingPlugins` — re-derives `matchingPlugins` off a fresh `GET /plugins` (the same
+ *  call `sessionPluginFilesFrom` makes at session start) and re-renders, so `PluginsTreeComposite`'s
+ *  chevron reads the filter that is active now, not the one that produced the last set. A read
+ *  failure degrades to "no data" (matches everywhere) rather than throwing — a chevron guess is
+ *  wrong in the same direction `hasMatchingRecords` already treats as safe, and a record filter's
+ *  whole *point* is to be applied and inspected, so silently freezing every chevron would be a far
+ *  worse failure than briefly over-showing them. */
+async function refreshMatchingPlugins(repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel): Promise<void> {
+  try {
+    const plugins = await repository.getPlugins();
+    matchingPlugins = new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const));
+  } catch (err) {
+    outputChannel.error(`[extension] refreshing the record filter's plugin matches failed: ${err instanceof Error ? err.message : String(err)}`);
+    matchingPlugins = undefined;
+  }
+  pluginsTree?.refreshDecorations();
+}
+
 /** Leave editing: tear down the editing backend. #273: there is no separate loadout view mode
  *  to switch back to any more — the loadout views were never hidden (#268), and Pending Changes /
  *  Referenced By govern their own visibility (staged work, always-present respectively). */
@@ -237,6 +264,9 @@ function exitToLoadout(): void {
   // stays written from exactly one place. (The name filter's half of the readout is untouched: it
   // filters load-order rows, which are still there.)
   setFilterActive?.(false);
+  // #278 / ADR-0035 amending ADR-0018: and so does the match set it drove — a statement about
+  // which plugins *this* session's records matched, same reasoning as drift just above.
+  matchingPlugins = undefined;
   recordBrowserProvider?.setImmutablePlugins([]);
   // #331: a direct reset, not refresh() — see PendingChangeDecorationProvider.clear()'s own
   // comment for why a live re-fetch here would race backendManager.stop() below.
@@ -348,6 +378,7 @@ export function activate(context: vscode.ExtensionContext) {
     showWarning: (msg) => { void vscode.window.showWarningMessage(msg); },
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
     setFilterActive,
+    refreshMatchingPlugins: () => { void refreshMatchingPlugins(repository, outputChannel); },
     notifyConflictsComputed: () => broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED }),
   });
   const changeGroupTreeView: vscode.TreeView<PendingTreeNode> = vscode.window.createTreeView('modbench.changeGroupTree', {
@@ -1282,6 +1313,11 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     orderIssueMastersOf,
     pendingChangeUriOf: pluginRowUri, // #331: composite's own guard keeps this off ImplicitMasterNode rows
     driftOf: (file) => tracker.driftOf(file), // #279
+    // #278 / ADR-0035 amending ADR-0018: matchingPlugins is refreshed off the module-level
+    // refreshMatchingPlugins function above, whenever SessionController's setFilter/clearFilter
+    // run. Undefined (never fetched, or the accessor finds nothing for this file) reads as
+    // "matches" — the composite's own fallback for an accessor that has nothing to say.
+    hasMatchingRecords: (file) => matchingPlugins?.get(file.toLowerCase()),
   });
   pluginsTree = composite;
   clearSessionWhenBackendDies(composite, recordBrowser, tracker);
@@ -1323,26 +1359,35 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
         }
       }
     }),
-    vscode.commands.registerCommand('modbench.pluginListTree.revealInExplorer', async (node: PluginListNode) => {
-      if (node?.kind !== 'plugin') return;
-      const name = node.plugin.name;
-      const filePath = await pluginListProvider.resolvePluginPath(name);
-      if (!filePath) {
-        // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
-        outputChannel.error(`[extension] revealInExplorer could not resolve a path for "${name}"`);
-        void vscode.window.showErrorMessage(`Modbench: Could not resolve a file location for "${name}".`);
-        return;
-      }
-      try {
-        await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(filePath));
-      } catch (err) {
-        outputChannel.error(`[extension] revealInExplorer for "${name}" failed: ${err instanceof Error ? err.message : String(err)}`);
-        void vscode.window.showErrorMessage(`Modbench: Failed to reveal "${name}" in Explorer.`);
-      }
-    }),
+    registerRevealInExplorerCommand(pluginListProvider, outputChannel),
     registerRereadCommand(tracker, controller, outputChannel),
     pluginsNameFilter,
   ] };
+}
+
+/** `modbench.pluginListTree.revealInExplorer`: pulled out of `registerPluginListView` (#278,
+ *  which pushed that function over the lint budget) purely to stay under it — no other reason to
+ *  split it out, same as `registerRereadCommand` alongside it. */
+function registerRevealInExplorerCommand(
+  pluginListProvider: PluginListProvider, outputChannel: vscode.LogOutputChannel,
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.pluginListTree.revealInExplorer', async (node: PluginListNode) => {
+    if (node?.kind !== 'plugin') return;
+    const name = node.plugin.name;
+    const filePath = await pluginListProvider.resolvePluginPath(name);
+    if (!filePath) {
+      // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
+      outputChannel.error(`[extension] revealInExplorer could not resolve a path for "${name}"`);
+      void vscode.window.showErrorMessage(`Modbench: Could not resolve a file location for "${name}".`);
+      return;
+    }
+    try {
+      await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(filePath));
+    } catch (err) {
+      outputChannel.error(`[extension] revealInExplorer for "${name}" failed: ${err instanceof Error ? err.message : String(err)}`);
+      void vscode.window.showErrorMessage(`Modbench: Failed to reveal "${name}" in Explorer.`);
+    }
+  });
 }
 
 /** #279 / ADR-0035 § Live mutation: drift is the comparison between the origin a plugin's records
@@ -1389,6 +1434,9 @@ function clearSessionWhenBackendDies(
     composite.setSession(undefined);
     recordBrowser.setImmutablePlugins([]);
     tracker.setLoaded(undefined);
+    // #278 / ADR-0035 amending ADR-0018: same reasoning as the three above — a statement about
+    // which plugins the dead session's records matched must not seed the next one.
+    matchingPlugins = undefined;
   });
 }
 

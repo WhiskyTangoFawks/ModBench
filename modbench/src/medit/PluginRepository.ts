@@ -26,6 +26,16 @@ function requireOrigin(r: PluginResponse): string {
   return r.origin;
 }
 
+// #278 / ADR-0035 amending ADR-0018: the backend has always emitted this since
+// RecordQueryService gained it, but the generated type is `boolean | undefined` for the same
+// reason origin is `string | undefined | null` above (#297) — the OpenAPI generator isn't
+// NRT-aware. `?? true` degrades to "matches" rather than "doesn't", the safe direction: it never
+// suppresses a chevron a stale/older backend never meant to suppress. Its own function (rather
+// than inline in toPluginMetadata) keeps that one under its complexity budget.
+function hasMatchingRecords(r: PluginResponse): boolean {
+  return r.hasMatchingRecords ?? true;
+}
+
 function toPluginMetadata(r: PluginResponse): PluginMetadata {
   return {
     name: r.name ?? '',
@@ -38,6 +48,7 @@ function toPluginMetadata(r: PluginResponse): PluginMetadata {
     isImmutable: r.isImmutable ?? false,
     origin: requireOrigin(r),
     masterIssues: (r.masterIssues ?? []).map(toMasterIssue),
+    hasMatchingRecords: hasMatchingRecords(r),
   };
 }
 
