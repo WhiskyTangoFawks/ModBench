@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
@@ -10,8 +11,8 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Ledger;
 
 /// <summary>
-/// Copy-on-write vendoring (ADR-0040): the first staged edit to a record in an untracked mod
-/// creates that mod's ledger repo, commits the record's pristine text (serialized from a fresh
+/// Copy-on-write vendoring (ADR-0040): the first staged edit to a record in an untracked origin
+/// creates that origin's ledger repo, commits the record's pristine text (serialized from a fresh
 /// <b>deep parse</b> of the plugin binary — never the session's lazy overlay; see the class remarks
 /// below) as the baseline, and writes the edited text as uncommitted working-tree dirt. A record
 /// already tracked at <c>HEAD</c> skips the deep parse entirely — its current ledger text (pristine
@@ -27,13 +28,25 @@ namespace MEditService.Core.Ledger;
 /// </summary>
 public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec, ILogger<RecordVendor> logger)
 {
+    // Per-origin-folder mutex (#370 review finding 4): git's own index.lock makes two concurrent
+    // git-add/commit sequences against the same gitdir race (one throws), and EnsureRepo's
+    // check-then-create has no lock of its own either. A minimal keyed semaphore closes both —
+    // deliberately not a general locking abstraction, just enough to serialize the one shared
+    // resource (the gitdir) two concurrent PATCH requests touching the same origin folder could
+    // otherwise race on.
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> Gates = new(StringComparer.Ordinal);
+
+    private static SemaphoreSlim GateFor(string originFolder) =>
+        Gates.GetOrAdd(Path.GetFullPath(originFolder), static _ => new SemaphoreSlim(1, 1));
+
     /// <summary>
     /// Vendors <paramref name="formKeyString"/> if it is not already tracked, then writes
     /// <paramref name="fields"/> applied on top as uncommitted working-tree dirt. No-op-safe to call
     /// repeatedly: a second call for an already-tracked record adds no new baseline commit (AC3).
+    /// Serialized per <paramref name="originFolder"/> — see <see cref="Gates"/>.
     /// </summary>
     public async Task VendorAndStageDirtAsync(
-        string modFolderAbsolutePath,
+        string originFolder,
         string pluginFilePath,
         string pluginFileName,
         string recordType,
@@ -44,23 +57,51 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         GameRelease release,
         CancellationToken cancel = default)
     {
-        ledger.EnsureRepo(modFolderAbsolutePath);
-        var relativePath = LedgerRecordPath.For(pluginFileName, recordType, formKeyString);
-        var absolutePath = Path.Combine(modFolderAbsolutePath, relativePath);
+        var gate = GateFor(originFolder);
+        await gate.WaitAsync(cancel).ConfigureAwait(false);
+        try
+        {
+            ledger.EnsureRepo(originFolder);
+            var relativePath = LedgerRecordPath.For(pluginFileName, recordType, formKeyString);
+            var absolutePath = Path.Combine(originFolder, relativePath);
 
-        var record = ledger.IsTrackedAtHead(modFolderAbsolutePath, relativePath)
-            ? await codec.DeserializeAsync(absolutePath, concreteRecordType, release, cancel)
-            : await VendorPristineAsync(modFolderAbsolutePath, pluginFilePath, formKeyString, recordType, relativePath, absolutePath, release, cancel);
+            if (ledger.IsTrackedAtHead(originFolder, relativePath))
+            {
+                var record = await codec.DeserializeAsync(absolutePath, concreteRecordType, release, cancel).ConfigureAwait(false);
+                ApplyFields(record, fields, recordType, schemas, release);
+                await codec.SerializeAsync((IMajorRecordGetter)record, absolutePath, release, cancel).ConfigureAwait(false);
+            }
+            else
+            {
+                await VendorPristineThenDirtAsync(
+                    originFolder, pluginFilePath, formKeyString, recordType, relativePath, absolutePath,
+                    fields, schemas, release, cancel).ConfigureAwait(false);
+            }
 
-        ApplyFields(record, fields, recordType, schemas, release);
-
-        await codec.SerializeAsync((IMajorRecordGetter)record, absolutePath, release, cancel);
-        logger.LogTrace("Staged dirt for {FormKey} at {Path}", formKeyString, absolutePath);
+            logger.LogTrace("Staged dirt for {FormKey} at {Path}", formKeyString, absolutePath);
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
-    private async Task<IMajorRecord> VendorPristineAsync(
-        string modFolderAbsolutePath, string pluginFilePath, string formKeyString, string recordType,
-        string relativePath, string absolutePath, GameRelease release, CancellationToken cancel)
+    // First touch. Order is load-bearing (#370 review finding 3): write + stage the pristine text
+    // first, then do everything that can still fail (apply the staged fields, write dirt), and only
+    // commit — the operation that makes the record permanently tracked (IsTrackedAtHead gates the
+    // deep-parse branch on "not yet tracked", so a tracked-but-half-vendored record would never be
+    // retried) — once all of that has succeeded. This works with plain `git add` + `git commit`
+    // rather than needing plumbing: `git commit` always commits the *index* state, never the
+    // working-tree file's content at commit time, so staging the pristine blob here and overwriting
+    // the working-tree file with dirt afterward still leaves the commit holding pristine — see
+    // LedgerRepository's own remarks. A failure anywhere below leaves no commit at all: at worst an
+    // inert staged-but-uncommitted index entry, silently superseded the next time this record is
+    // touched (still gated on "not yet tracked" at HEAD, so nothing is skipped).
+    private async Task VendorPristineThenDirtAsync(
+        string originFolder, string pluginFilePath, string formKeyString, string recordType,
+        string relativePath, string absolutePath,
+        IReadOnlyDictionary<string, JsonElement> fields, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        GameRelease release, CancellationToken cancel)
     {
         if (!FormKey.TryFactory(formKeyString, out var formKey))
             throw new ArgumentException($"'{formKeyString}' is not a valid FormKey.", nameof(formKeyString));
@@ -74,15 +115,31 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
             ?? throw new InvalidOperationException($"Record '{formKeyString}' not found in '{pluginFilePath}' while vendoring.");
 
         // Container-shaped records vendor shallow (ADR-0040/#387 amendment) — in place, on this
-        // single-use deep-parsed object, before its first (and only, from this read) serialize; see
-        // ContainerStripFields' own remarks for why this is safe without a defensive copy.
+        // single-use deep-parsed object; see ContainerStripFields' own remarks for why that's safe
+        // without a defensive copy.
         ContainerStripFields.StripInPlace(pristine);
 
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
-        await codec.SerializeAsync((IMajorRecordGetter)pristine, absolutePath, release, cancel);
-        ledger.CommitPristine(modFolderAbsolutePath, relativePath, $"vendor: {recordType} {formKeyString}");
+        await codec.SerializeAsync((IMajorRecordGetter)pristine, absolutePath, release, cancel).ConfigureAwait(false);
+        ledger.StagePristine(originFolder, relativePath);
 
-        return pristine;
+        // Everything from here down can still fail — deliberately staged (above) but not yet
+        // committed. On failure, unstage rather than leave the pristine blob sitting in the index:
+        // CommitStaged commits the index as a whole (see its own remarks on why it takes no
+        // pathspec), so an un-cleared stray entry here would otherwise get swept into some later,
+        // unrelated successful commit in this same origin folder.
+        try
+        {
+            ApplyFields(pristine, fields, recordType, schemas, release);
+            await codec.SerializeAsync((IMajorRecordGetter)pristine, absolutePath, release, cancel).ConfigureAwait(false);
+        }
+        catch
+        {
+            ledger.UnstagePath(originFolder, relativePath);
+            throw;
+        }
+
+        ledger.CommitStaged(originFolder, $"vendor: {recordType} {formKeyString}");
     }
 
     // Reuses PluginWriter's own per-field apply path (TryApplyField, widened private -> internal
@@ -91,6 +148,16 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
     // VMAD-struct-op endpoint. A synthetic PendingChange carries only what TryApplyField actually
     // reads (ChangeType/FieldPath/NewValue/RecordType); the rest of the record's many fields
     // (Id/ChangedAt/Resolutions/...) are inert here and filled with the closest-to-neutral value.
+    //
+    // Two things #370's review found missing here, both fixed:
+    // - TryApplyField's ApplyOutcome was discarded; a ReadOnly/NotFound field silently never reached
+    //   the vendored dirt. Now a non-Applied outcome throws (finding 2) — surfaced through the same
+    //   best-effort catch in EditOrchestrator.VendorOnFirstTouch as every other vendoring failure,
+    //   rather than landing invisibly.
+    // - The batch had no equivalent to PluginWriter.ApplyFieldChanges' condition-list-restage
+    //   ordering (finding 6): reused directly (PluginWriter.OrderForConditionListRestage, also
+    //   widened internal) rather than reimplemented, so a batched PATCH mixing a whole-list restage
+    //   with a nested per-index edit vendors the same result the eventual real save would produce.
     private static void ApplyFields(
         IMajorRecord record,
         IReadOnlyDictionary<string, JsonElement> fields,
@@ -98,28 +165,59 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         GameRelease release)
     {
-        foreach (var (fieldPath, newValue) in fields)
-        {
-            var change = new PendingChange(
-                Id: Guid.NewGuid(),
-                FormKey: record.FormKey.ToString(),
-                Plugin: record.FormKey.ModKey.FileName.String,
-                FieldPath: fieldPath,
-                RecordType: recordType,
-                OldValue: PendingChangeConstants.NullElement,
-                NewValue: newValue,
-                Source: "vendor",
-                Description: null,
-                ChangedAt: DateTime.UtcNow,
-                ChangeType: PendingChangeConstants.FieldEditChangeType,
-                ParentCell: null,
-                PlacementGroup: null,
-                Resolutions: null,
-                RecordResolution: null,
-                RecordTypeDisplayName: null,
-                Origin: "vendor");
+        var changes = fields.Select(kv => new PendingChange(
+            Id: Guid.NewGuid(),
+            FormKey: record.FormKey.ToString(),
+            Plugin: record.FormKey.ModKey.FileName.String,
+            FieldPath: kv.Key,
+            RecordType: recordType,
+            OldValue: PendingChangeConstants.NullElement,
+            NewValue: kv.Value,
+            Source: "vendor",
+            Description: null,
+            ChangedAt: DateTime.UtcNow,
+            ChangeType: PendingChangeConstants.FieldEditChangeType,
+            ParentCell: null,
+            PlacementGroup: null,
+            Resolutions: null,
+            RecordResolution: null,
+            RecordTypeDisplayName: null,
+            Origin: "vendor"))
+            .ToList();
 
-            PluginWriter.TryApplyField(record, change, schemas, release);
+        foreach (var change in PluginWriter.OrderForConditionListRestage(changes))
+        {
+            var outcome = PluginWriter.TryApplyField(record, change, schemas, release);
+            if (outcome != PluginWriter.ApplyOutcome.Applied)
+                throw new VendorFieldApplyException(change.FieldPath, outcome.ToString());
         }
+    }
+}
+
+/// <summary>
+/// Thrown by <see cref="RecordVendor"/> when a staged field fails to apply while vendoring
+/// (<see cref="PluginWriter.TryApplyField"/> returned something other than
+/// <see cref="PluginWriter.ApplyOutcome.Applied"/>) — surfaced rather than silently dropped, so the
+/// ledger's dirt never diverges from the pending-change DB's own record of what was staged without
+/// anything saying so (#370 review finding 2).
+/// </summary>
+public sealed class VendorFieldApplyException : Exception
+{
+    public VendorFieldApplyException()
+    {
+    }
+
+    public VendorFieldApplyException(string message) : base(message)
+    {
+    }
+
+    public VendorFieldApplyException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
+
+    internal VendorFieldApplyException(string fieldPath, string outcome)
+        : base($"Vendoring could not apply field '{fieldPath}' ({outcome}) — nothing was written or " +
+               "committed for it, so the ledger does not silently diverge from what was actually staged.")
+    {
     }
 }

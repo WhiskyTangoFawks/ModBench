@@ -5,63 +5,111 @@ using Microsoft.Extensions.Logging;
 namespace MEditService.Core.Ledger;
 
 /// <summary>
-/// Owns one hidden per-mod git repo (ADR-0040): gitdir under <see cref="LedgerOptions.RootPath"/>,
-/// working tree = the mod folder, no <c>.git</c> inside the mod. One repo per mod folder — keyed by
-/// the folder's own canonical absolute path, not by Mod Management's opaque <c>origin</c> string
-/// (which Editing must treat as uninterpreted and isn't guaranteed filename-safe) — reused across
-/// every record vendored from that mod, created once (<see cref="EnsureRepo"/> is idempotent).
+/// Owns one hidden per-origin git repo (ADR-0040): gitdir under <see cref="LedgerOptions.RootPath"/>,
+/// working tree = the origin folder (the folder Mod Management's <c>origin</c> — see
+/// <c>PluginOrigin</c>/<c>ResolveOrigin()</c> — resolves to a physical path), no <c>.git</c> inside
+/// it. One repo per origin folder — keyed by the folder's own canonical absolute path, not by the
+/// opaque <c>origin</c> string itself (which Editing must treat as uninterpreted and isn't
+/// guaranteed filename-safe) — reused across every record vendored from that origin, created once
+/// (<see cref="EnsureRepo"/> is idempotent).
+///
+/// Staging and committing are deliberately separate operations (<see cref="StagePristine"/> /
+/// <see cref="CommitStaged"/>), not one atomic "commit the pristine text" call: the caller
+/// (<c>RecordVendor</c>) stages the pristine blob into the index immediately after writing it, then
+/// does the work that can still fail (applying the staged field edits, writing the dirt text), and
+/// only calls <see cref="CommitStaged"/> (a bare <c>git commit</c>, deliberately no pathspec — see
+/// its own remarks) once all of that has succeeded, or <see cref="UnstagePath"/> if it didn't. A
+/// bare <c>git commit</c> commits whatever is in the index — not whatever the working-tree file
+/// currently holds — so the working-tree file can be overwritten with dirt *between* staging and
+/// committing without the commit ever capturing that dirt: it still commits the pristine blob that
+/// was staged earlier. A failure between the two calls leaves nothing committed and, once
+/// <see cref="UnstagePath"/> runs, nothing staged either — not a baseline commit orphaned from its
+/// dirt, and not a stray index entry a later, unrelated commit could accidentally sweep in.
 /// </summary>
 public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerRepository> logger)
 {
-    /// <summary>The gitdir/worktree pair for a mod folder — deterministic from the folder's own
-    /// canonical path, so the same mod always resolves to the same repo without any durable state
-    /// beyond the filesystem itself (the ledger's own commits are the only "is this vendored yet"
-    /// record; see <see cref="IsTrackedAtHead"/>).</summary>
-    public (string GitDir, string WorkTree) PathsFor(string modFolderAbsolutePath)
+    /// <summary>The gitdir/worktree pair for an origin folder — deterministic from the folder's own
+    /// canonical path, so the same origin always resolves to the same repo without any durable
+    /// state beyond the filesystem itself (the ledger's own commits are the only "is this vendored
+    /// yet" record; see <see cref="IsTrackedAtHead"/>).</summary>
+    public (string GitDir, string WorkTree) PathsFor(string originFolder)
     {
-        var workTree = Path.GetFullPath(modFolderAbsolutePath);
+        var workTree = Path.GetFullPath(originFolder);
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(workTree)))[..16];
         var gitDir = Path.Combine(options.RootPath, key, "gitdir");
         return (gitDir, workTree);
     }
 
     /// <summary>Creates the repo (gitdir + <c>git init -b main</c>) if it does not already exist.
-    /// Idempotent: a second call against the same mod folder is a no-op, verified by checking for
+    /// Idempotent: a second call against the same origin folder is a no-op, verified by checking for
     /// the gitdir's own <c>HEAD</c> file rather than tracking "already initialized" anywhere else —
-    /// the filesystem is the only source of truth here, same as the truth-partition model's DB.</summary>
-    public void EnsureRepo(string modFolderAbsolutePath)
+    /// the filesystem is the only source of truth here, same as the truth-partition model's DB. Not
+    /// safe to call concurrently against the same origin folder from two threads without an external
+    /// lock — see <c>RecordVendor</c>'s per-origin-folder gate, which is what actually makes this
+    /// check-then-create sequence race-free in production.</summary>
+    public void EnsureRepo(string originFolder)
     {
-        var (gitDir, workTree) = PathsFor(modFolderAbsolutePath);
+        var (gitDir, workTree) = PathsFor(originFolder);
         if (File.Exists(Path.Combine(gitDir, "HEAD"))) return;
 
         Directory.CreateDirectory(gitDir);
         Directory.CreateDirectory(workTree);
         GitCli.Run(gitDir, workTree, "init", "-q", "-b", "main");
-        logger.LogInformation("Ledger created for {ModFolder} at {GitDir}", workTree, gitDir);
+        logger.LogInformation("Ledger created for {OriginFolder} at {GitDir}", workTree, gitDir);
     }
 
     /// <summary>Whether <paramref name="relativePath"/> already exists at <c>HEAD</c> on
     /// <c>main</c> — the ledger's own "is this record vendored yet" question, answered by asking git
     /// directly rather than keeping a separate tracked-record table (truth partition: no state
     /// beyond {binary, text@refs}).</summary>
-    public bool IsTrackedAtHead(string modFolderAbsolutePath, string relativePath)
+    public bool IsTrackedAtHead(string originFolder, string relativePath)
     {
-        var (gitDir, workTree) = PathsFor(modFolderAbsolutePath);
+        var (gitDir, workTree) = PathsFor(originFolder);
         return GitCli.TryRun(gitDir, workTree, out _, "cat-file", "-e", $"HEAD:{ToGitPath(relativePath)}");
     }
 
-    /// <summary>Commits the pristine text already written to <paramref name="relativePath"/> in the
-    /// working tree — the vendor commit every later diff is measured against. Caller is responsible
-    /// for having written the file before calling this (and for not calling it twice for the same
-    /// path — see <see cref="IsTrackedAtHead"/>).</summary>
-    public void CommitPristine(string modFolderAbsolutePath, string relativePath, string message)
+    /// <summary>Stages <paramref name="relativePath"/>'s current working-tree content into the
+    /// index (<c>git add</c>) — captures it for a later <see cref="CommitStaged"/> regardless of
+    /// what the working-tree file holds by the time that call happens. Caller is responsible for
+    /// having written the pristine text to that path first.</summary>
+    public void StagePristine(string originFolder, string relativePath)
     {
-        var (gitDir, workTree) = PathsFor(modFolderAbsolutePath);
-        var gitPath = ToGitPath(relativePath);
-        GitCli.Run(gitDir, workTree, "add", "--", gitPath);
+        var (gitDir, workTree) = PathsFor(originFolder);
+        GitCli.Run(gitDir, workTree, "add", "--", ToGitPath(relativePath));
+    }
+
+    /// <summary>Commits whatever is currently staged — the pristine text <see cref="StagePristine"/>
+    /// captured, not the working-tree file's content at commit time, which the caller may have since
+    /// overwritten with dirt. This is the vendor (baseline) commit every later diff is measured
+    /// against; call it only once everything that could still fail for this record has already
+    /// succeeded.
+    ///
+    /// Deliberately no trailing pathspec on the <c>git commit</c> invocation, despite one narrowing
+    /// every other command here to its own path: empirically, <c>git commit -- &lt;path&gt;</c>
+    /// does <b>not</b> commit the index's staged content for that path — it re-reads the current
+    /// working-tree file, which is exactly the dirt this method must not commit. A bare
+    /// <c>git commit</c> commits the index as a whole, which is what actually produces "the staged
+    /// pristine blob, not today's working-tree content" — verified directly (two shell probes, one
+    /// per form) before landing this, not assumed from a plausible-sounding pathspec-narrowing
+    /// analogy to <c>add</c>/<c>reset</c>. <see cref="UnstagePath"/> is the caller's guard against
+    /// this now committing an unrelated stray index entry from an earlier failed attempt.</summary>
+    public void CommitStaged(string originFolder, string message)
+    {
+        var (gitDir, workTree) = PathsFor(originFolder);
         GitCli.Run(gitDir, workTree,
             "-c", "user.email=modbench@local", "-c", "user.name=Modbench",
-            "commit", "-q", "-m", message, "--", gitPath);
+            "commit", "-q", "-m", message);
+    }
+
+    /// <summary>Undoes a <see cref="StagePristine"/> that will never reach <see cref="CommitStaged"/>
+    /// (the risky work in between threw) — <c>git reset -- path</c>, which works even before any
+    /// commit exists. Without this, a failed attempt's staged-but-uncommitted pristine blob would sit
+    /// in the index until some *later*, unrelated successful commit swept it in too (since
+    /// <see cref="CommitStaged"/> commits the whole index, by design — see its own remarks).</summary>
+    public void UnstagePath(string originFolder, string relativePath)
+    {
+        var (gitDir, workTree) = PathsFor(originFolder);
+        GitCli.Run(gitDir, workTree, "reset", "-q", "--", ToGitPath(relativePath));
     }
 
     private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');

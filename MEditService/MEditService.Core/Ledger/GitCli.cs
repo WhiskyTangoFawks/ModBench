@@ -42,10 +42,16 @@ internal static class GitCli
         psi.Environment["GIT_DIR"] = gitDir;
         psi.Environment["GIT_WORK_TREE"] = workTree;
 
+        // Read both streams concurrently, not sequentially: reading stdout to completion before
+        // touching stderr (or vice versa) is the classic .NET Process deadlock — a child that fills
+        // one OS pipe buffer (~64 KB) while the parent blocks fully draining the other wedges both
+        // sides. Unlikely at this class's typical payloads (a single-record YAML diff, a short `git
+        // log`) but not bounded by construction, so not safe to leave sequential.
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start the git process.");
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        Task.WaitAll(stdoutTask, stderrTask);
         process.WaitForExit();
-        return (process.ExitCode, stdout, stderr);
+        return (process.ExitCode, stdoutTask.Result, stderrTask.Result);
     }
 }

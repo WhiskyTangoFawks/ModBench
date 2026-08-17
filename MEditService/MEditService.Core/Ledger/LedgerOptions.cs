@@ -1,8 +1,9 @@
 namespace MEditService.Core.Ledger;
 
 /// <summary>
-/// Where per-mod ledger gitdirs live — "internal Modbench state" (ADR-0040), never inside the mod
-/// folder itself (that folder is the working tree; it must contain no git metadata at all). Follows
+/// Where per-origin ledger gitdirs live — "internal Modbench state" (ADR-0040), never inside the
+/// origin folder itself (that folder is the working tree; it must contain no git metadata at all).
+/// Follows
 /// the same location convention Serilog already uses for logs
 /// (<c>%LOCALAPPDATA%/mEdit/logs</c> — see <c>Program.cs</c>) rather than inventing a new one:
 /// <c>%LOCALAPPDATA%/mEdit/ledgers</c>.

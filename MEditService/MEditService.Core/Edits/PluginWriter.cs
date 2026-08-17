@@ -361,7 +361,11 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
     // edit staged *after* an add (targeting the newly-added index) is only valid once the restage
     // has run. A stable sort — not reliance on incidental enumeration order — makes this hold
     // regardless of which order the two pending changes happen to have been staged/enumerated in.
-    private static IEnumerable<PendingChange> OrderForConditionListRestage(List<PendingChange> fieldChanges) =>
+    // internal, not private (#370 review): RecordVendor (Ledger/) reuses this exact ordering when
+    // vendoring a batched PATCH's fields — a ledger preview built without it could apply a restage
+    // and a nested per-index edit in the wrong order and vendor a result the eventual real save
+    // (through this same PluginWriter) would never produce.
+    internal static IEnumerable<PendingChange> OrderForConditionListRestage(List<PendingChange> fieldChanges) =>
         fieldChanges.OrderBy(c => ConditionPath.IsConditionPath(c.FieldPath) ? 1 : 0);
 
     // Applies header field edits (author/flags) onto mod.ModHeader via the schema's

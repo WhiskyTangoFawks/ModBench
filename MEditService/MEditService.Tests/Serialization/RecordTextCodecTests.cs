@@ -85,4 +85,35 @@ public class RecordTextCodecTests
             dir.Delete(recursive: true);
         }
     }
+
+    // Spec review finding 3: #370's generalization of this codec (reflection dispatch by runtime
+    // type, replacing #367's hardcoded direct call) was verified behavior-preserving for Weapon by a
+    // one-time manual git-stash A/B with a matching sha256 — real, but it lived only in a commit
+    // message, so a future change to the dispatch mechanism could silently drift Weapon's output
+    // with nothing going red. This is that check turned into a standing gate: the exact text
+    // MakeWeapon() produced at that verification is checked in
+    // (TestData/weapon-dispatch-golden.yaml) and compared byte-for-byte on every run. A failure here
+    // means the dispatch changed *what* gets produced for a type it was proven not to change, not
+    // just *how* it's resolved — regenerate the golden file only after re-verifying that claim, the
+    // same way (never by just accepting the new output).
+    [Fact]
+    public async Task SerializeAsync_ForAFixedWeapon_MatchesThePinnedGoldenTextExactly()
+    {
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+        var dir = Directory.CreateTempSubdirectory("medit-codec-golden-");
+        try
+        {
+            var filePath = Path.Combine(dir.FullName, "weapon.yaml");
+            await codec.SerializeAsync(MakeWeapon(), filePath, GameRelease.Fallout4);
+
+            var actual = await File.ReadAllTextAsync(filePath);
+            var golden = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "TestData", "weapon-dispatch-golden.yaml"));
+
+            Assert.Equal(golden, actual);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
 }

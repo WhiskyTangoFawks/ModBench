@@ -43,6 +43,12 @@ public sealed partial class EditOrchestrator(
         if (PendingLifecycleChangeType(formKey, plugin) is { } blockingType)
             return new StageEditResult.RecordPendingDeleteOrRenumber(blockingType);
 
+        // #370 scope cut (documented, not an oversight — orchestrator-approved): VMAD struct-op
+        // edits never reach VendorOnFirstTouch below, so a record whose first-ever edit arrives as
+        // a struct-op (attach/detach/reorder a script) is never vendored by it, and no later plain
+        // field edit retroactively fixes that — the "first touch" moment already passed. Vendoring
+        // this change type has its own write shape (struct ops, not a flat field dict) and is
+        // tracked as a follow-up, not built here.
         if (changeType == PendingChangeConstants.VmadStructOpChangeType)
             return StageVmadStructOps(formKey, plugin, recordType!, fields, source, description);
 
@@ -119,23 +125,24 @@ public sealed partial class EditOrchestrator(
         var origin = ResolveOrigin(plugin);
 
         // Q3 (#370, orchestrator-approved scope cut): a DataDirectory-origin plugin has no distinct
-        // mod folder to serve as a ledger working tree — it's the shared game Data directory (or a
-        // flat single-folder dev/test setup), not an MO2-style per-mod folder. Staying untracked is
-        // the correct, legal truth-partition state (binary remains authoritative) rather than a
-        // gap — but it must be observable, not silent, so it's logged rather than only skipped.
+        // origin folder to serve as a ledger working tree — it's the shared game Data directory (or
+        // a flat single-folder dev/test setup), not an MO2-style per-origin folder. Staying
+        // untracked is the correct, legal truth-partition state (binary remains authoritative)
+        // rather than a gap — but it must be observable, not silent, so it's logged rather than
+        // only skipped.
         if (origin == PluginOrigin.DataDirectory)
         {
             _logger.LogDebug(
-                "Skipped vendoring for {FormKey} in {Plugin}: DataDirectory origin has no mod folder to vendor into",
+                "Skipped vendoring for {FormKey} in {Plugin}: DataDirectory origin has no folder to vendor into",
                 formKey, plugin);
             return;
         }
 
         var pluginMeta = session.LoadOrderPlugin(plugin);
-        var modFolder = pluginMeta == null ? null : Path.GetDirectoryName(pluginMeta.Path);
-        if (pluginMeta == null || string.IsNullOrEmpty(modFolder))
+        var originFolder = pluginMeta == null ? null : Path.GetDirectoryName(pluginMeta.Path);
+        if (pluginMeta == null || string.IsNullOrEmpty(originFolder))
         {
-            _logger.LogWarning("Skipped vendoring for {FormKey} in {Plugin}: no resolvable mod folder", formKey, plugin);
+            _logger.LogWarning("Skipped vendoring for {FormKey} in {Plugin}: no resolvable origin folder", formKey, plugin);
             return;
         }
 
@@ -150,12 +157,16 @@ public sealed partial class EditOrchestrator(
         try
         {
             _recordVendor.VendorAndStageDirtAsync(
-                modFolder, pluginMeta.Path, pluginMeta.Name, recordType, concreteType,
+                originFolder, pluginMeta.Path, pluginMeta.Name, recordType, concreteType,
                 formKey, fields, schemas, session.GameRelease).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Vendoring failed for {FormKey} in {Plugin}; edit is staged, ledger unchanged", formKey, plugin);
+            // #370 review finding 3: RecordVendor now stages the pristine blob before doing the
+            // work that can still fail and commits only after all of it succeeds (see its own
+            // remarks), so a failure caught here genuinely never leaves a baseline commit orphaned
+            // from its dirt — "ledger unchanged" is true again, not just asserted.
+            _logger.LogWarning(ex, "Vendoring failed for {FormKey} in {Plugin}; edit is staged, no ledger commit was made", formKey, plugin);
         }
     }
 
