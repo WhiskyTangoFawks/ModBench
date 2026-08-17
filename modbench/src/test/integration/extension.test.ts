@@ -1267,6 +1267,55 @@ describe('Pending-change decoration does not survive exitToLoadout (#331)', () =
   });
 });
 
+// #255: the Plugins tree's description names both of its narrowing axes, and the record filter
+// is a fact about the *session* — so it cannot outlive one. Same exitToLoadout path and the same
+// silent-wrong-state class as the decoration above: a readout describing a session that is gone.
+// The name filter's half is deliberately untouched by a close — it narrows load-order rows,
+// which are still there.
+describe('The record-filter readout does not outlive its session (#255)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  const description = () =>
+    (ext?.exports as { pluginListView?: { description?: string } } | undefined)?.pluginListView?.description;
+  let gameDir = '';
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-exit-filter-readout-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '');
+    fs.rmSync(gameDir, { recursive: true, force: true });
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    resetMockBackend();
+  });
+
+  it('an explicit Close mEdit takes the record filter out of the description', async () => {
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    // Applied from an open document — the one record-filter entry point a test can drive; the
+    // other opens a quick pick over the scripts folder.
+    const doc = await vscode.workspace.openTextDocument({ language: 'sql', content: 'SELECT form_key FROM "npc_"' });
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand('modbench.setFilterFromDocument');
+    assert.ok(description()?.includes('records:'),
+      `sanity: the description must name the record filter before Close mEdit, or clearing it proves nothing (was: ${description() ?? 'unset'})`);
+
+    await vscode.commands.executeCommand('modbench.closeMedit');
+
+    assert.ok(!(description() ?? '').includes('records:'),
+      'a session that no longer exists must not leave the view still claiming a record filter');
+  });
+});
+
 // #295 AC5: Refresh (#247's single Mod-Management refresh) must remain distinct and never
 // trigger a reload — a regression assertion, not new behavior; modbench.refresh's own body
 // never touches enterEditing/loadExplicitSession.
