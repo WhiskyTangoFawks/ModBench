@@ -34,6 +34,10 @@ scope) are normal outcomes, not failures.
   saturates memory as well as CPU, and two at once has OOM-killed the machine. The
   wrappers refuse to start beside a live run.
 - Work from the wrappers' parsed output only; never open the raw report.
+- **A zero-finding result against a diff the review says exists is a mis-scope, not a
+  clean audit** — a `--since` target that no longer matches the tree (moved HEAD, wrong
+  SHA) silently filters every mutant. Verify the target resolves to the diff's fixed
+  point; fall back to `--file` on the changed files before reporting clean.
 
 **Done when** every `Survived` and `NoCoverage` finding is listed with file, line, and
 mutator.

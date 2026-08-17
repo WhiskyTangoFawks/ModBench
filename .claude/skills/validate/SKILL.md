@@ -26,6 +26,9 @@ Classify changed files → run matching gate (never review non-compiling code):
 | both | `… --backend --frontend` |
 | config/docs only | skip |
 
+Run gate commands with an explicit `timeout: 600000` — the Bash tool's 120 s default
+silently backgrounds a full `dotnet test` run, which reads as a hang or a skipped gate.
+
 Fix all failures, rerun.
 
 ## Step 2 — Review

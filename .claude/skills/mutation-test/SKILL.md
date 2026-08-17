@@ -17,17 +17,35 @@ axis lives here, in the repo that owns the runner.
 
 One subagent, dispatched in parallel with the other two review axes — **first**, because
 it runs the mutation tool itself and costs tens of minutes (C# ~17, TS ~4) where they
-cost a couple. It is fine that it reports last. Brief:
+cost a couple. It is fine that it reports last.
 
-> You are the Suite axis of this code review. Read
+Two dispatch rules, both learned from the executor still committing to the branch
+while this axis ran:
+
+- **Resolve the fixed point to an immutable SHA before dispatch** (`git rev-parse`),
+  never a symbolic ref or branch name. A `--since` run against a moving HEAD counted
+  0 changed files and `since`-filtered every mutant, reporting an empty audit as a
+  clean one.
+- **The axis never shares a worktree with a live executor.** Give it its own
+  throwaway worktree pinned at that SHA — `git worktree add --detach <path> <sha>` —
+  and remove it after the report. Pinning is then free and a destructive reset is
+  structurally impossible; one axis briefed "change no files" ran `git reset --hard`
+  on the shared worktree to pin itself and discarded another agent's commit.
+
+Brief:
+
+> You are the Suite axis of this code review. Work only in `<detached worktree
+> path>`, pinned at `<sha>` — never in any other checkout. Read
 > `.claude/skills/mutation-test/TRIAGE.md` and follow it end to end: run the mutation
-> tool scoped to `<the review's fixed point>`, triage every finding to exactly one
-> disposition, and report the findings table in TRIAGE.md's format.
-> **Propose only — change no files.** Report the table and nothing else.
+> tool scoped to `<sha>`, triage every finding to exactly one disposition, and report
+> the findings table in TRIAGE.md's format.
+> **Propose only — change no files, and no ref or history operations: `git reset`,
+> `git checkout`, `git rebase`, `git branch -f` are forbidden, not just file edits.**
+> Report the table and nothing else.
 
-Pass the review's own fixed point, so the mutants and the diff under review are the
-same set of files. Report the returned table as a third section beside the other two
-axes; don't rerank it against them.
+Pass the review's own fixed point as that SHA, so the mutants and the diff under
+review are the same set of files. Report the returned table as a third section beside
+the other two axes; don't rerank it against them.
 
 Standalone (outside an orchestrated review): follow `TRIAGE.md` yourself, then handle
 the table exactly as below.

@@ -28,7 +28,9 @@ Traverse with `gh`:
 ## Conventions
 
 - **Create**: `gh issue create --title "..." --body "..."` (heredoc for multi-line).
-- **Read**: `gh issue view <number> --comments`; filter via `jq`, include labels.
+- **Read**: `gh issue view <number> --json number,title,body,labels,comments` — never
+  `--comments`, whose GraphQL query still requests the deprecated `projectCards` field and
+  exits 1 in this repo.
 - **List**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`; add `--label`/`--state` as needed.
 - **Comment**: `gh issue comment <number> --body "..."`
 - **Labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
@@ -42,7 +44,8 @@ Traverse with `gh`:
 
 If `yes`: same labels/states as issues, via `gh pr`:
 
-- **Read**: `gh pr view <number> --comments`; diff: `gh pr diff <number>`.
+- **Read**: `gh pr view <number> --json number,title,body,labels,comments` (same
+  deprecated-`projectCards` failure as `gh issue view --comments`); diff: `gh pr diff <number>`.
 - **List external PRs**: `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments`; keep `authorAssociation` = `CONTRIBUTOR`/`FIRST_TIME_CONTRIBUTOR`/`NONE`; drop `OWNER`/`MEMBER`/`COLLABORATOR`.
 - **Comment/label/close**: `gh pr comment`, `gh pr edit --add-label`/`--remove-label`, `gh pr close`.
 
@@ -54,4 +57,4 @@ Create a GitHub issue.
 
 ## When a skill says "fetch the relevant ticket"
 
-Run `gh issue view <number> --comments`.
+Run `gh issue view <number> --json number,title,body,labels,comments`.
