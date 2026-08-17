@@ -25,7 +25,15 @@ if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LocalAppData")))
 
 try
 {
-    var builder = WebApplication.CreateBuilder(args);
+    // #343: default content root is the launching process's cwd, not this binary's own directory —
+    // the extension spawns us without setting one, so appsettings.json (and its
+    // Microsoft.AspNetCore: Warning override) silently never loaded. Anchor to our own directory so
+    // every launch mode (dev-attached, extension-spawned) behaves alike.
+    var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+    {
+        Args = args,
+        ContentRootPath = AppContext.BaseDirectory,
+    });
 
     builder.Host
         .UseServiceProviderFactory(new AutofacServiceProviderFactory())
