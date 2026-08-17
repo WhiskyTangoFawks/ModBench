@@ -19,13 +19,26 @@ import type { SessionLoadProgress } from './SessionController';
  *  to the view is a one-line glue in `extension.ts`. */
 export function sessionProgressMessage(status: SessionLoadProgress): string | undefined {
   if (status.conflictsComputed) return undefined;
+  return `${countedPhase(status)} Conflict information is not yet computed.`;
+}
+
+/** The count half of {@link sessionProgressMessage} — split out only to give each phase its own
+ *  early return rather than a nested ternary. */
+function countedPhase(status: SessionLoadProgress): string {
   // Before the backend publishes the session, status is SessionStatus.None — no total yet. "0 of
   // 0 plugins indexed" reads as a stalled load rather than one still opening the load order, so
   // the count waits until there is one to state.
-  const counted = status.totalPlugins > 0
-    ? `Loading session — ${status.indexedPlugins.length} of ${status.totalPlugins} plugins indexed.`
-    : 'Loading session…';
-  return `${counted} Conflict information is not yet computed.`;
+  if (status.totalPlugins === 0) return 'Loading session…';
+  // #342: `IndexProgressively` opens and indexes one plugin at a time, so an empty
+  // `indexedPlugins` here is honest — the load order's first plugin (often a large base-game
+  // master) can take a real while to open and index before anything lands. But a bare "0 of 612"
+  // reads exactly like a stalled load, indistinguishable from one that truly is stuck, so this
+  // phase names the work in progress instead of leaving a static-looking count to speak for it.
+  // The count itself stays — dropping it would trade "looks stuck" for "how big is this even".
+  if (status.indexedPlugins.length === 0) {
+    return `Loading session — opening and indexing the first plugin(s) (0 of ${status.totalPlugins} indexed so far)…`;
+  }
+  return `Loading session — ${status.indexedPlugins.length} of ${status.totalPlugins} plugins indexed.`;
 }
 
 /** #308 / ADR-0035: the record editor's own half of "an absent conflict badge must never be

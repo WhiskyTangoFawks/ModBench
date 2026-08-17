@@ -31,6 +31,19 @@ describe('sessionProgressMessage', () => {
     expect(message).toContain('12 of 200');
   });
 
+  // #342: totalPlugins is known (unlike the omitted-count case below) but nothing has landed yet
+  // — IndexProgressively opens and indexes one plugin at a time, and a large first master can hold
+  // the count at zero for a real while. A bare "0 of 200" is indistinguishable from a stalled
+  // load, so this phase has to say work is under way rather than leave a static count to imply
+  // otherwise — and it must keep stating the total, which "0 of 200" already gave the user and a
+  // vaguer phase message must not take back.
+  it('says work is under way on the first plugin(s), not just "0 of N", while nothing has landed yet', () => {
+    const message = sessionProgressMessage(status({ totalPlugins: 200, indexedPlugins: [] }));
+
+    expect(message).toMatch(/opening and indexing the first/i);
+    expect(message).toContain('0 of 200');
+  });
+
   // Before the backend publishes the session at all, `GET /session/status` answers
   // SessionStatus.None — no plugins, and no count yet (SessionManager.cs). "0 of 0 plugins
   // indexed" is a number the user would read as a stalled load rather than as one still opening
