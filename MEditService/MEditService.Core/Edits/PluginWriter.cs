@@ -361,7 +361,11 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
     // edit staged *after* an add (targeting the newly-added index) is only valid once the restage
     // has run. A stable sort — not reliance on incidental enumeration order — makes this hold
     // regardless of which order the two pending changes happen to have been staged/enumerated in.
-    private static IEnumerable<PendingChange> OrderForConditionListRestage(List<PendingChange> fieldChanges) =>
+    // internal, not private (#370 review): RecordVendor (Ledger/) reuses this exact ordering when
+    // vendoring a batched PATCH's fields — a ledger preview built without it could apply a restage
+    // and a nested per-index edit in the wrong order and vendor a result the eventual real save
+    // (through this same PluginWriter) would never produce.
+    internal static IEnumerable<PendingChange> OrderForConditionListRestage(List<PendingChange> fieldChanges) =>
         fieldChanges.OrderBy(c => ConditionPath.IsConditionPath(c.FieldPath) ? 1 : 0);
 
     // Applies header field edits (author/flags) onto mod.ModHeader via the schema's
@@ -502,7 +506,11 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         return true;
     }
 
-    private enum ApplyOutcome { Applied, ReadOnly, NotFound }
+    // internal, not private (#370): RecordVendor (Ledger/) reuses this exact per-field apply
+    // outcome to interpret TryApplyField's result when vendoring a staged edit onto a deep-parsed
+    // or ledger-deserialized record — the same three outcomes StageEdit's own field-apply already
+    // means. No behavior change for PluginWriter's own callers; this only widens visibility.
+    internal enum ApplyOutcome { Applied, ReadOnly, NotFound }
 
     // Collects each change's outcome into the three SaveResult buckets, owning the
     // ApplyOutcome→bucket mapping in one place so the four Apply passes don't each
@@ -525,7 +533,14 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         }
     }
 
-    private static ApplyOutcome TryApplyField(
+    // internal, not private (#370): the single per-field apply entry point RecordVendor reuses to
+    // apply a staged field edit onto a record object outside the whole-plugin write path (vendoring
+    // a record's dirt into its ledger). Safety net: PluginWriterApplyTests (plain field edits),
+    // PluginWriterConditionTests / PluginWriterVmadTests (the two special-cased field shapes this
+    // method also dispatches). Signature and behavior are unchanged — this is a visibility widening
+    // only, verified by the fact that every existing PluginWriter call site above still compiles
+    // and every plugin-writer test still passes unmodified.
+    internal static ApplyOutcome TryApplyField(
         IMajorRecord record,
         PendingChange change,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,

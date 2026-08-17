@@ -4,6 +4,7 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -27,7 +28,7 @@ public sealed class DeleteRecordsTests
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);
         var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
         return (orchestrator, manager, changes);
     }
 
@@ -40,7 +41,7 @@ public sealed class DeleteRecordsTests
             dataFolder, pluginsTxtPath, GameRelease.Fallout4, immutablePlugin, reflector, changes);
         var query = new RecordQueryService(stubManager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(stubManager, query, writer, changes, reflector);
+        var orchestrator = new EditOrchestrator(stubManager, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
         return (orchestrator, stubManager, changes);
     }
 
@@ -53,7 +54,7 @@ public sealed class DeleteRecordsTests
             dataFolder, pluginsTxtPath, GameRelease.Fallout4, sharedPluginName, reflector, changes);
         var query = new RecordQueryService(stubManager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(stubManager, query, writer, changes, reflector);
+        var orchestrator = new EditOrchestrator(stubManager, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
         return (orchestrator, stubManager, changes);
     }
 
