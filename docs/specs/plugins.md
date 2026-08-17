@@ -288,6 +288,12 @@ without saying what is not yet known would make that worse, not better.
 - **`TreeView.message` states, in as many words, that conflict information is not yet computed**,
   for as long as the winner sweep is outstanding. It clears itself when the sweep lands — no user
   action, no Refresh.
+- **Before the first plugin lands, the message names the work rather than the count.** Indexing
+  interleaves opening and indexing per plugin, so on a real load order the first plugin is a
+  base-game master big enough that `0 of N` is *truthful* for a long stretch — and reads as a
+  stall. The zero-count phrasing therefore says work is under way on the first plugin(s), keeping
+  the count visible rather than replacing it
+  ([#342](https://github.com/WhiskyTangoFawks/ModBench/issues/342)).
 - **No conflict badge is rendered before the sweep completes.** No conflict badge exists on this
   tree yet ([#285](https://github.com/WhiskyTangoFawks/ModBench/issues/285) — see Further Notes),
   so this is an **invariant handed to #285**, not current code: whatever renders that badge must
