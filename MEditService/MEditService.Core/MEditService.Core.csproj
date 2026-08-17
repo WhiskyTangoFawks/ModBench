@@ -15,6 +15,19 @@
   <ItemGroup>
     <PackageReference Include="Autofac" Version="9.1.0" />
     <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.2" />
+    <!-- Pinned to 0.53.x: 0.54.0 reintroduces a binary round-trip defect confined to the lazy
+         binary-overlay reader (Fallout4ModBinaryOverlay / ModFactory.ImportGetter) — an
+         alphabetized ObjectTemplate_Registration.AllRecordTypes splits every on-disk
+         OBTF/FULL/OBTS template in two on read, and the write serializes the inflated list
+         (FO4 weapon ObjectTemplates, spike #359). Confirmed still failing
+         BinaryRoundTripGateTests.LazyOverlayReloadAndRewrite_ProducesByteIdenticalOutput
+         (MEditService.Tests/RealData) as of this pin. The production save path
+         (PluginWriter.SaveAsync, .SaveAsync_ReloadAndResave_ProducesByteIdenticalOutput in the same
+         file) goes through ModFactory.ImportSetter's genuine deep parse instead and does NOT reach
+         this defect — so a green save-path test is not evidence 0.54.0 is safe; the overlay test is
+         the one that gates a bump. GameSession's own read/indexing path uses the same
+         ModFactory.ImportGetter overlay this bug lives in, so this isn't a defect confined to an
+         unused code path. Move only once #385 confirms the regression is fixed upstream. -->
     <PackageReference Include="Mutagen.Bethesda.Fallout4" Version="0.53.1" />
     <PackageReference Include="Roslynator.Analyzers" Version="4.15.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
