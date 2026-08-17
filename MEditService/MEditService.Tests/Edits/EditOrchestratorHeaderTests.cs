@@ -5,6 +5,7 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -34,7 +35,7 @@ public sealed class EditOrchestratorHeaderTests
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);
         var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
         return (orchestrator, manager);
     }
 
@@ -482,7 +483,7 @@ public sealed class EditOrchestratorHeaderTests
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);
         var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
         return (orchestrator, manager, changes, query);
     }
 

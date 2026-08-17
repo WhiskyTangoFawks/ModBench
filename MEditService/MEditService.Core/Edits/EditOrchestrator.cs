@@ -1,10 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -15,13 +17,17 @@ public sealed partial class EditOrchestrator(
     IRecordQueryService query,
     IPluginWriter writer,
     IPendingChangeService changes,
-    ISchemaReflector schemaReflector) : IEditOrchestrator
+    ISchemaReflector schemaReflector,
+    RecordVendor recordVendor,
+    ILogger<EditOrchestrator> logger) : IEditOrchestrator
 {
     private readonly ISessionManager _sessionManager = sessionManager;
     private readonly IRecordQueryService _query = query;
     private readonly IPluginWriter _writer = writer;
     private readonly IPendingChangeService _changes = changes;
     private readonly ISchemaReflector _schemaReflector = schemaReflector;
+    private readonly RecordVendor _recordVendor = recordVendor;
+    private readonly ILogger<EditOrchestrator> _logger = logger;
 
     public StageEditResult StageEdit(
         string formKey,
@@ -94,7 +100,81 @@ public sealed partial class EditOrchestrator(
         var staged = _changes.Upsert(new PendingChangeUpsert(formKey, plugin, recordType!, fields, source, description, oldValues,
             Origin: ResolveOrigin(plugin), FormRefs: formRefs, ChangeType: PendingChangeConstants.FieldEditChangeType,
             ParentCell: null, PlacementGroup: null));
+
+        VendorOnFirstTouch(formKey, plugin, recordType!, fields, schemasForValidation, session!);
+
         return new StageEditResult.Staged(staged);
+    }
+
+    // ADR-0040/#370: vendoring is best-effort, never blocking — a failure here (git unavailable, an
+    // unresolvable record type, ...) must not turn an edit that already staged successfully into a
+    // failed HTTP response. The pending-change table above is the source of truth for "did the edit
+    // stage"; the ledger is a separate system whose own state this call tries to keep current.
+    // Logged as a warning on failure, mirroring MEditService/CLAUDE.md's best-effort-catch
+    // convention (no silent catch{}).
+    private void VendorOnFirstTouch(
+        string formKey, string plugin, string recordType, Dictionary<string, JsonElement> fields,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, IGameSession session)
+    {
+        var origin = ResolveOrigin(plugin);
+
+        // Q3 (#370, orchestrator-approved scope cut): a DataDirectory-origin plugin has no distinct
+        // mod folder to serve as a ledger working tree — it's the shared game Data directory (or a
+        // flat single-folder dev/test setup), not an MO2-style per-mod folder. Staying untracked is
+        // the correct, legal truth-partition state (binary remains authoritative) rather than a
+        // gap — but it must be observable, not silent, so it's logged rather than only skipped.
+        if (origin == PluginOrigin.DataDirectory)
+        {
+            _logger.LogDebug(
+                "Skipped vendoring for {FormKey} in {Plugin}: DataDirectory origin has no mod folder to vendor into",
+                formKey, plugin);
+            return;
+        }
+
+        var pluginMeta = session.LoadOrderPlugin(plugin);
+        var modFolder = pluginMeta == null ? null : Path.GetDirectoryName(pluginMeta.Path);
+        if (pluginMeta == null || string.IsNullOrEmpty(modFolder))
+        {
+            _logger.LogWarning("Skipped vendoring for {FormKey} in {Plugin}: no resolvable mod folder", formKey, plugin);
+            return;
+        }
+
+        if (!schemas.TryGetValue(recordType, out var schema) || ResolveConcreteRecordType(schema.RecordType) is not { } concreteType)
+        {
+            _logger.LogWarning(
+                "Skipped vendoring for {FormKey} in {Plugin}: could not resolve a concrete record type for '{RecordType}'",
+                formKey, plugin, recordType);
+            return;
+        }
+
+        try
+        {
+            _recordVendor.VendorAndStageDirtAsync(
+                modFolder, pluginMeta.Path, pluginMeta.Name, recordType, concreteType,
+                formKey, fields, schemas, session.GameRelease).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Vendoring failed for {FormKey} in {Plugin}; edit is staged, ledger unchanged", formKey, plugin);
+        }
+    }
+
+    // Mutagen's own stable naming convention (I<Type>Getter <-> <Type>) — the same one
+    // RecordTextCodec's dispatch relies on for the direct (non-overlay) case. Null when
+    // schema.RecordType isn't shaped that way (defensive; every FO4 major-record getter is).
+    private static Type? ResolveConcreteRecordType(Type getterType)
+    {
+        const string Prefix = "I";
+        const string Suffix = "Getter";
+        var name = getterType.Name;
+        if (name.Length <= Prefix.Length + Suffix.Length || !name.StartsWith(Prefix, StringComparison.Ordinal)
+            || !name.EndsWith(Suffix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var concreteName = name[Prefix.Length..^Suffix.Length];
+        return Type.GetType($"Mutagen.Bethesda.Fallout4.{concreteName}, Mutagen.Bethesda.Fallout4");
     }
 
     private void ClearSupersededConditionListFields(

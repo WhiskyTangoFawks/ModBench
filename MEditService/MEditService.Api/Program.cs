@@ -5,9 +5,11 @@ using Autofac.Extensions.DependencyInjection;
 using MEditService.Api;
 using MEditService.Api.Endpoints;
 using MEditService.Core.Edits;
+using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Core.Session;
 using Mutagen.Bethesda;
 using Serilog;
@@ -68,6 +70,14 @@ try
     builder.Services.AddSingleton<IPendingChangeService>(sp => sp.GetRequiredService<DuckDbPendingChangeService>());
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
+    // ADR-0040/#370: internal Modbench state, not request-scoped — the default lives under
+    // %LOCALAPPDATA%/mEdit/ledgers (LedgerOptions), same convention as the existing log path.
+    // Test hosts override this singleton via WebApplicationFactory.WithWebHostBuilder rather than
+    // an environment variable (env vars are process-global; xUnit test classes share one process).
+    builder.Services.AddSingleton(LedgerOptions.Default);
+    builder.Services.AddSingleton<LedgerRepository>();
+    builder.Services.AddSingleton<RecordTextCodec>();
+    builder.Services.AddSingleton<RecordVendor>();
     builder.Services.AddSingleton<IEditOrchestrator, EditOrchestrator>();
     builder.Services.AddSingleton<PluginSaver>();
 
