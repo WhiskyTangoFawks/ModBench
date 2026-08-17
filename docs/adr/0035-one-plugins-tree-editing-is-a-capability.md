@@ -96,6 +96,33 @@ resolves to. These **flag the affected rows as drifted** and offer a re-read of 
 They never trigger a session reload — silently re-reading a file underneath staged edits is the one
 operation this design refuses.
 
+#### Mod-level changes are absorbed, not flagged *(amendment, 2026-08-17)*
+
+The paragraph above is withdrawn. Its rationale only ever covered the staged-edits case, and
+extending "never silently under staged edits" to "never automatically at all" made a user gesture
+out of correctness the system can restore itself. "Drift" is not a concept a user wants to know;
+it was inventory of this refusal.
+
+When a mod-level change alters which physical file a plugin name resolves to, the session
+**re-reads that plugin automatically** — the same absorption every other loadout gesture gets. The
+row shows the ordinary progressive-load presentation while it happens (chevron state, and the
+view's conflict-information-stale message until the winner re-sweep lands): mid-load is already a
+state this tree knows how to state, so no new concept is introduced. VS Code's own file model is
+the precedent — a clean buffer follows the disk silently; only a dirty one involves the user.
+
+Staged edits are the dirty-buffer case, and they **migrate rather than gate**. Pending changes are
+keyed by `(plugin, origin)`; the re-read updates that key to the newly resolved origin and
+re-validates each staged edit against the new file's index. An edit whose target record and field
+exist in the new copy carries over — the intent was always "the plugin that loads", never one
+copy's bytes. Only an edit the new file cannot take (its record or field is absent there) surfaces
+in the Pending Changes view as unappliable — a true conflict needing a human, rebase-style. A name
+that comes to resolve to nothing at all (uninstall with no fallback copy) is the existing
+missing-plugin state, with its staged edits retained and marked the same way.
+
+What survives of the original position is its load-bearing core: **no gesture ever silently
+discards staged work.** Under this amendment a discard cannot happen at all — the failure mode is
+an edit visibly parked as unappliable, never one dropped.
+
 **Loading is progressive and states its own incompleteness.** A plugin's records are browsable the
 moment that plugin is indexed, but conflict information is not correct until the final winner sweep.
 Both facts are surfaced: rows gain chevrons as they land, and the view carries an explicit
