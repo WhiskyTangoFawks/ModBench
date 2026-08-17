@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
-using System.Text.Json;
 
 namespace MEditService.Tests.Api;
 
@@ -11,8 +10,10 @@ namespace MEditService.Tests.Api;
 /// whatever directory launched it rather than the directory the binary itself lives in — meaning
 /// the committed <c>appsettings.json</c> next to the binary, and the
 /// <c>Microsoft.AspNetCore: Warning</c> override in it, never loaded. These tests spawn the real,
-/// already-built <c>MEditService.Api.dll</c> as an actual child process from an unrelated working
-/// directory — the same shape the extension spawns — rather than going through
+/// already-built <c>MEditService.Api.dll</c> through the <c>dotnet</c> muxer, as an actual child
+/// process launched from an unrelated working directory (the extension itself launches the
+/// published native executable directly, but <see cref="AppContext.BaseDirectory"/> — what the
+/// fix anchors to — resolves identically either way), rather than going through
 /// <see cref="Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory{TEntryPoint}"/>, which resolves
 /// its own content root by walking up from the test assembly and so never reproduces this bug.
 /// </summary>
@@ -21,34 +22,33 @@ public sealed class BackendContentRootTests
     private static readonly string ApiDirectory = Path.GetDirectoryName(typeof(Program).Assembly.Location)!;
 
     [Fact]
-    public async Task SpawnedFromArbitraryCwd_WithoutUrlsFlag_BindsToAppsettingsConfiguredPort()
+    public async Task SpawnedFromArbitraryCwd_AnchorsContentRootToItsOwnDirectory()
     {
-        var appsettingsPath = Path.Combine(ApiDirectory, "appsettings.json");
-        Assert.True(File.Exists(appsettingsPath),
-            $"expected appsettings.json next to the spawned dll at {ApiDirectory} — same layout the extension bundles");
-        var configuredUrls = JsonDocument.Parse(await File.ReadAllTextAsync(appsettingsPath))
-            .RootElement.GetProperty("Urls").GetString()!;
-        var configuredPort = new Uri(configuredUrls).Port;
-
+        var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
         var lines = new List<string>();
-        using var process = Spawn([], lines);
+        // #343 review: a fixed port (e.g. the committed appsettings.json one) collides with a
+        // developer's own running backend — an ephemeral port (127.0.0.1:0; Kestrel refuses dynamic
+        // binding on the bare "localhost" host name) can't collide with anything, and the content
+        // root — not the port — is what this test witnesses.
+        using var process = Spawn(["--urls", "http://127.0.0.1:0"], workingDirectory, lines);
         try
         {
-            // Identity, not reachability (#343 review): a stray listener already on this port would
-            // make a bare TCP/HTTP probe a false green on unfixed code, exactly what
-            // WebApplicationFactory was rejected for above. The child's own stdout naming the address
-            // it bound is the only signal that can't be satisfied by someone else's process.
-            var boundOwnPort = await WaitForLineAsync(lines,
-                l => l.Contains($"Now listening on: http://localhost:{configuredPort}", StringComparison.Ordinal),
+            var expectedContentRoot = Path.TrimEndingDirectorySeparator(ApiDirectory);
+            var reportedOwnDirectory = await WaitForLineAsync(lines,
+                l => l.Contains("Content root path: ", StringComparison.Ordinal) &&
+                     Path.TrimEndingDirectorySeparator(
+                         l[(l.IndexOf("Content root path: ", StringComparison.Ordinal) + "Content root path: ".Length)..])
+                         == expectedContentRoot,
                 TimeSpan.FromSeconds(15));
 
-            Assert.True(boundOwnPort,
-                $"expected the spawned backend to bind the port from its own appsettings.json " +
-                $"({configuredPort}); captured output:\n{string.Join('\n', Snapshot(lines))}");
+            Assert.True(reportedOwnDirectory,
+                $"expected the spawned backend to report its content root as {expectedContentRoot} " +
+                $"(its own directory), not {workingDirectory} (the cwd it was launched from); " +
+                $"captured output:\n{string.Join('\n', Snapshot(lines))}");
         }
         finally
         {
-            Kill(process);
+            Cleanup(process, workingDirectory);
         }
     }
 
@@ -59,9 +59,11 @@ public sealed class BackendContentRootTests
         // Microsoft.AspNetCore override, since it's a different config key. An arbitrary free port
         // (not the committed 5172) so a concurrent run or leftover listener can't collide.
         var port = GetFreeTcpPort();
+        var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
         var lines = new List<string>();
         using var process = Spawn(
-            ["--urls", $"http://localhost:{port}", "--Serilog:MinimumLevel:Default", "Debug"], lines);
+            ["--urls", $"http://localhost:{port}", "--Serilog:MinimumLevel:Default", "Debug"],
+            workingDirectory, lines);
         try
         {
             var started = await WaitForLineAsync(lines,
@@ -78,6 +80,9 @@ public sealed class BackendContentRootTests
             await Task.Delay(TimeSpan.FromMilliseconds(500));
             var snapshot = Snapshot(lines);
 
+            // The six-line ASP.NET Core pipeline log this ticket kills. Distinct from — and
+            // unaffected by — UseSerilogRequestLogging's own one-line-per-request summary (pinned
+            // separately below), which writes under a different category entirely.
             Assert.DoesNotContain(snapshot, l =>
                 l.Contains("Request starting", StringComparison.Ordinal) ||
                 l.Contains("Executing endpoint", StringComparison.Ordinal) ||
@@ -87,13 +92,49 @@ public sealed class BackendContentRootTests
         }
         finally
         {
-            Kill(process);
+            Cleanup(process, workingDirectory);
         }
     }
 
-    private static Process Spawn(IReadOnlyList<string> extraArgs, List<string> capturedLines)
+    [Fact]
+    public async Task SpawnedFromArbitraryCwd_RequestLogging_ShowsFailuresButNotSuccessesAtDefaultLevel()
     {
+        // No --Serilog:MinimumLevel:Default here: the default (Information) is exactly the "without
+        // enabling debug" case the issue's third acceptance criterion names.
+        var port = GetFreeTcpPort();
         var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
+        var lines = new List<string>();
+        using var process = Spawn(["--urls", $"http://localhost:{port}"], workingDirectory, lines);
+        try
+        {
+            var started = await WaitForLineAsync(lines,
+                l => l.Contains($"Now listening on: http://localhost:{port}", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(15));
+            Assert.True(started,
+                $"backend never reported listening on its own port; captured output:\n{string.Join('\n', Snapshot(lines))}");
+
+            using var client = new HttpClient();
+            await client.GetAsync(new Uri($"http://localhost:{port}/health")); // 200
+            await client.GetAsync(new Uri($"http://localhost:{port}/definitely-not-a-route")); // 404, no route matches
+
+            var sawFailureLine = await WaitForLineAsync(lines,
+                l => l.Contains("WRN", StringComparison.Ordinal) && l.Contains("responded 404", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(10));
+            var snapshot = Snapshot(lines);
+
+            Assert.True(sawFailureLine,
+                $"expected a genuine 4xx to produce a visible line without enabling debug; " +
+                $"captured output:\n{string.Join('\n', snapshot)}");
+            Assert.DoesNotContain(snapshot, l => l.Contains("responded 200", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Cleanup(process, workingDirectory);
+        }
+    }
+
+    private static Process Spawn(IReadOnlyList<string> extraArgs, string workingDirectory, List<string> capturedLines)
+    {
         var psi = new ProcessStartInfo("dotnet")
         {
             WorkingDirectory = workingDirectory,
@@ -149,7 +190,7 @@ public sealed class BackendContentRootTests
         }
     }
 
-    private static void Kill(Process process)
+    private static void Cleanup(Process process, string workingDirectory)
     {
         try
         {
@@ -159,6 +200,10 @@ public sealed class BackendContentRootTests
         catch (InvalidOperationException)
         {
             // Already exited between the check and the kill — nothing left to do.
+        }
+        finally
+        {
+            Directory.Delete(workingDirectory, recursive: true);
         }
     }
 }

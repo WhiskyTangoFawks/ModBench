@@ -11,6 +11,7 @@ using MEditService.Core.Schema;
 using MEditService.Core.Session;
 using Mutagen.Bethesda;
 using Serilog;
+using Serilog.Events;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
@@ -71,6 +72,23 @@ try
     builder.Services.AddSingleton<PluginSaver>();
 
     var app = builder.Build();
+
+    // #343: one summary line per request instead of ASP.NET Core's own six-line pipeline log (now
+    // silenced by appsettings.json's Microsoft.AspNetCore: Warning override — a different category
+    // than this middleware writes under, so the override doesn't touch it and no second override is
+    // needed here). The level is what makes it a win rather than a regression: most endpoint guards
+    // and StageEditResultExtensions.ToHttpResult return a 4xx without logging anything of their own,
+    // so without an explicit selector a deliberate failure would be invisible; with the default
+    // (Information), a success line would flood right back in at one line/request.
+    app.UseSerilogRequestLogging(opts => opts.GetLevel = RequestLogLevel);
+
+    static LogEventLevel RequestLogLevel(HttpContext ctx, double _, Exception? ex) => ex switch
+    {
+        not null => LogEventLevel.Error,
+        null when ctx.Response.StatusCode >= 500 => LogEventLevel.Error,
+        null when ctx.Response.StatusCode >= 400 => LogEventLevel.Warning,
+        _ => LogEventLevel.Debug,
+    };
 
     app.UseCors();
     app.UseSwagger();
