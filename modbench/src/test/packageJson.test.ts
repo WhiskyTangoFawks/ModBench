@@ -176,7 +176,10 @@ describe('package.json Open Header reachable from every plugin-bearing row (#273
   it.each(['modbench@1', 'inline'])('targets the merged tree, both plugin row kinds, group %s', (group) => {
     const entry = contextMenus().find((e) => e.command === 'modbench.openHeader' && e.group === group);
     expect(entry, `expected an openHeader entry in group ${group}`).toBeTruthy();
-    expect(entry!.when).toBe('view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)');
+    // #279 widened this: a drifted plugin row's contextValue is pluginDrifted, and it is still a
+    // plugin row — the header it opens is the loaded copy's, which is exactly what the session
+    // still serves.
+    expect(entry!.when).toBe('view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted || viewItem == pluginImplicit)');
   });
 });
 
@@ -500,10 +503,12 @@ describe('package.json command titles and categories (#280)', () => {
     'modbench.modList.separator.delete',
     'modbench.modList.overwrite.reveal',
     'modbench.pluginListTree.revealInExplorer',
+    // #279: needs the clicked row for its plugin name and its drift, and has no ambient fallback.
+    'modbench.pluginListTree.rereadPlugin',
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(36);
+    expect(PALETTE_GATED).toHaveLength(37);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));
@@ -567,5 +572,51 @@ describe('package.json one record menu on every record surface (#281)', () => {
         ).toBe(false);
       }
     }
+  });
+});
+
+// #279 / ADR-0035 § Live mutation. Drift makes a plugin row carry a *different* contextValue for
+// the first time, and every clause gating on the old one had to be widened to keep matching. That
+// widening is the risk this block exists to hold still: a shared gate silently reaching new rows
+// is invisible in a diff that only adds a menu entry.
+describe('package.json per-plugin Re-read on a drifted row (#279)', () => {
+  const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
+  const forPluginRows = () => contextMenus().filter((e) => e.when.includes('viewItem == plugin'));
+
+  it('offers Re-read only on a row that has somewhere to re-read from', () => {
+    const entry = contextMenus().find((e) => e.command === 'modbench.pluginListTree.rereadPlugin');
+    expect(entry).toBeTruthy();
+    // Never `viewItem == plugin`: an undrifted row has nothing to re-read, and a row that resolves
+    // to nothing keeps the plain `plugin` value precisely so this clause misses it.
+    expect(entry!.when).toBe('view == modbench.pluginListTree && viewItem == pluginDrifted');
+  });
+
+  it('sits below Reveal in Explorer in the same row-action group', () => {
+    const entry = contextMenus().find((e) => e.command === 'modbench.pluginListTree.rereadPlugin');
+    expect(entry!.group).toBe('pluginActions@2');
+  });
+
+  // Rule 4 (modbench/CLAUDE.md): destructive actions never get an icon. Re-read discards staged
+  // edits, so it is a menu entry with a modal confirm and nothing else.
+  it('never appears as an inline or navigation icon', () => {
+    const inline = contextMenus().filter((e) => e.command === 'modbench.pluginListTree.rereadPlugin' && e.group === 'inline');
+    const title = (pkg.contributes.menus['view/title'] as { command: string }[])
+      .filter((e) => e.command === 'modbench.pluginListTree.rereadPlugin');
+    expect([...inline, ...title]).toEqual([]);
+  });
+
+  // The D3 enumeration, kept honest: every command reachable from a plugin row, listed. A new one
+  // that forgets `pluginDrifted` disappears from drifted rows; a new one that adds it without
+  // meaning to gains them. Either way this fails rather than shipping.
+  it('every plugin-row command states exactly which plugin rows it applies to', () => {
+    expect(forPluginRows().map((e) => [e.command, e.when])).toEqual([
+      // Open Header: reads the loaded copy's header, which is what the session still serves.
+      ['modbench.openHeader', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted || viewItem == pluginImplicit)'],
+      ['modbench.openHeader', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted || viewItem == pluginImplicit)'],
+      // Reveal in Explorer: re-resolves the path live, so on a drifted row it reveals the file the
+      // name points at now — the same question it always answered, not a stale one.
+      ['modbench.pluginListTree.revealInExplorer', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)'],
+      ['modbench.pluginListTree.rereadPlugin', 'view == modbench.pluginListTree && viewItem == pluginDrifted'],
+    ]);
   });
 });

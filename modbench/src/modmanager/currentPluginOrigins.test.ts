@@ -109,12 +109,27 @@ describe('resolveCurrentPluginOrigins', () => {
     expect(result.get('gone.esp')).toBeNull();
   });
 
-  it('no resolvable Data folder still answers for every name rather than throwing', async () => {
+  // #334 at its source. With no Data folder the last rung cannot be *checked*, which is not the
+  // same as finding it empty — answering "resolves to nothing" here would flag every vanilla
+  // plugin as gone the moment the game directory failed to resolve.
+  it('omits a name it could not check, rather than reporting it resolves to nothing', async () => {
     instanceRoot = await makeRoot();
 
     const result = await resolveCurrentPluginOrigins(['Gone.esp'], index({}), instanceRoot, undefined);
 
-    expect(result.get('gone.esp')).toBeNull();
+    expect(result.has('gone.esp')).toBe(false);
+  });
+
+  it('still answers for a name it could resolve without the Data folder', async () => {
+    instanceRoot = await makeRoot();
+    const fakeIndex = index({ 'Foo.esp': { winner: '/mods/A/Foo.esp', winnerMod: 'A' } });
+
+    const result = await resolveCurrentPluginOrigins(['Foo.esp', 'Gone.esp'], fakeIndex, instanceRoot, undefined);
+
+    // Unknown is per-name, not all-or-nothing: a mod-provided plugin is fully resolved on an
+    // earlier rung and never needed the Data folder at all.
+    expect(result.get('foo.esp')).toEqual({ origin: 'A', path: '/mods/A/Foo.esp' });
+    expect(result.has('gone.esp')).toBe(false);
   });
 
   // The invariant that keeps drift meaningful, pinned rather than left to prose. These two

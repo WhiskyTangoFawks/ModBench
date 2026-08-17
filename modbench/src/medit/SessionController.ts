@@ -306,6 +306,60 @@ export class SessionController {
     this.deps.setFilterActive(sql !== null, sql ?? undefined, undefined);
   }
 
+  /** #279 / ADR-0035 § Live mutation: re-read one plugin from the copy its name resolves to now.
+   *  The path and origin come from the caller — Mod Management resolved them; the backend cannot
+   *  and must not.
+   *
+   *  Returns whether it happened. A failure is ADR-0026's "explicit action failed" tier (the user
+   *  ran a command), so it is notified as well as logged, and nothing is refreshed: the session is
+   *  exactly as it was, staged edits included. A 409 here is the ordinary "a load is still in
+   *  flight" answer, which is worth telling the user precisely because retrying will work. */
+  async rereadPlugin(plugin: string, path: string, origin: string): Promise<boolean> {
+    try {
+      const { error, response } = await this.deps.client.POST('/plugins/reread', {
+        body: { plugin, path, origin },
+      });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[SessionController] rereadPlugin(${plugin}) failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Could not re-read "${plugin}" — ${text}`);
+        return false;
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[SessionController] rereadPlugin(${plugin}) threw: ${message}`);
+      this.deps.showError(`mEdit: Could not re-read "${plugin}" — ${message}`);
+      return false;
+    }
+    // The plugin's records were replaced and winners re-swept, so every cached page for it and
+    // every conflict badge in the tree is stale.
+    this.deps.refreshTree();
+    // And the re-read discarded that copy's staged edits, so the Pending Changes tree and the
+    // pending-change row decorations are describing changes the backend no longer holds — the
+    // exact stale-decoration case #331/#334 exist for.
+    this.deps.refreshGroupTree();
+    return true;
+  }
+
+  /** How many staged edits belong to `(plugin, origin)` — what the re-read confirm states before
+   *  they are discarded (#279).
+   *
+   *  Scoped by origin as well as filename because that pair is a staged edit's identity
+   *  (ADR-0036): two copies of one filename stage independently, and a re-read discards only the
+   *  copy it replaces. Deliberately **throws** rather than degrading to 0, unlike its neighbour
+   *  below: 0 is the one answer that silently skips the confirm, so "could not find out" has to
+   *  stay distinguishable from "nothing to lose". `rereadPlugin.ts` decides between them. */
+  async stagedChangeCount(plugin: string, origin: string): Promise<number> {
+    const { data, error, response } = await this.deps.client.GET('/changes', {});
+    if (!response.ok || !Array.isArray(data)) {
+      const text = errorText(error);
+      this.log(`[SessionController] stagedChangeCount(${plugin}) failed (${response.status}): ${text}`);
+      throw new Error(text || `GET /changes failed (${response.status})`);
+    }
+    const same = (a: string | undefined | null, b: string) => (a ?? '').toLowerCase() === b.toLowerCase();
+    return data.filter((c) => same(c.plugin, plugin) && same(c.origin, origin)).length;
+  }
+
   /** #295: whether the backend currently holds any staged work — read live off
    *  `GET /change-groups`, not a cached frontend signal. `modbench.hasPendingChanges` is a
    *  write-only VS Code context key (there is no API to read one back); the Pending Changes

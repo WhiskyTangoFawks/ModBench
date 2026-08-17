@@ -88,10 +88,12 @@ async function isFile(path: string): Promise<boolean> {
  *  resolves names that exist — but uninstalling the only provider of a loaded plugin is drift too,
  *  and it is the one kind no re-read can repair.
  *
- *  Every name is a key, case-folded (plugins.txt casing is not authoritative here any more than it
- *  is anywhere else in this module). A name that resolves to nothing is present with a `null`
- *  value rather than omitted, so a caller can tell "asked, and the answer is nothing" from "never
- *  asked" — the difference between flagging drift and failing to compute it (#334). */
+ *  A name that resolves to nothing is present with a `null` value rather than omitted, so a caller
+ *  can tell "asked, and the answer is nothing" from "could not tell" — the difference between
+ *  flagging drift and failing to compute it (#334). A name is *omitted* only when the ladder could
+ *  not be walked to the end for it, which today means one thing: no resolvable Data folder to check
+ *  the last rung against. Keys are case-folded, plugins.txt casing being no more authoritative here
+ *  than anywhere else in this module. */
 export async function resolveCurrentPluginOrigins(
   names: string[],
   index: FileConflictIndex,
@@ -104,7 +106,7 @@ export async function resolveCurrentPluginOrigins(
     Promise.resolve(rootLevelWinnerMods(index)),
   ]);
 
-  const resolved = await Promise.all(names.map(async (name): Promise<[string, ResolvedOrigin]> => {
+  const resolved = await Promise.all(names.map(async (name): Promise<[string, ResolvedOrigin | undefined]> => {
     const key = foldPath(name);
 
     const overwriteFile = overwriteFiles.get(key);
@@ -117,12 +119,17 @@ export async function resolveCurrentPluginOrigins(
       return [key, { origin: winnerMod, path: winnerByName.get(key)! }];
     }
 
-    if (dataFolder === undefined) return [key, null];
+    // No resolvable Data folder means the last rung cannot be *checked*, not that it is empty —
+    // so the name is left out of the map entirely (unknown) rather than answered `null`. Answering
+    // `null` here would flag every vanilla plugin as "resolves to nothing" the moment the game
+    // directory failed to resolve, which is #334's rule broken at its source: a marker produced by
+    // a computation that did not happen.
+    if (dataFolder === undefined) return [key, undefined];
     const dataPath = join(dataFolder, name);
     return [key, (await isFile(dataPath)) ? { origin: DATA_DIRECTORY_ORIGIN, path: dataPath } : null];
   }));
 
-  return new Map(resolved);
+  return new Map(resolved.filter((e): e is [string, ResolvedOrigin] => e[1] !== undefined));
 }
 
 type Source = Pick<IModlistSource, 'readPluginOrder' | 'readEnabledPlugins' | 'readModlist'>;

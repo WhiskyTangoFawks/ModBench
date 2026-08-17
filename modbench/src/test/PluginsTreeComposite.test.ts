@@ -811,3 +811,24 @@ describe('PluginsTreeComposite when a plugin has drifted', () => {
     expect(item.tooltip).toBeUndefined();
   });
 });
+
+// #279: the distinction that a drift recomputation has to respect. A mod-level change alters no
+// line of the load order, so the rows are the same rows — re-decorated, never rebuilt. Wiring drift
+// to the row provider's `invalidate()` instead broke exactly this, and the integration suite caught
+// it as "the row list is unchanged, so this must be the same reused row object".
+describe('PluginsTreeComposite decoration refresh', () => {
+  it('re-renders without asking the row provider to re-read', async () => {
+    const { composite, rowSource, render } = make([PLUGIN_ROW]);
+    await render();
+    const heard: unknown[] = [];
+    composite.onDidChangeTreeData(() => heard.push(true));
+
+    composite.refreshDecorations();
+
+    expect(heard.length).toBe(1);
+    // Re-rendering hands back the rows already built, so a row keeps its identity — which is what
+    // the decoration state (and the tree's selection) is keyed to.
+    expect(await composite.getChildren()).toEqual([PLUGIN_ROW]);
+    expect(rowSource.rows[0]).toBe(PLUGIN_ROW);
+  });
+});

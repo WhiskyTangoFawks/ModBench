@@ -337,6 +337,17 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     this.emitter.fire(undefined);
   }
 
+  /** #279: re-render what is already built, because something this composite *layers on* changed —
+   *  today, drift. Deliberately not the row provider's `invalidate()`, which means "re-read
+   *  plugins.txt from disk": a mod-level change alters no line of the load order, and re-reading
+   *  would hand out a fresh set of row objects, discarding the per-row decoration state keyed to
+   *  the old ones (`originalDecoration`) and losing the tree's selection with it. Same distinction
+   *  `PluginListProvider` already draws internally between `invalidate()` and `render()`, surfaced
+   *  here because the trigger now lives outside it. */
+  refreshDecorations(): void {
+    this.emitter.fire(undefined);
+  }
+
   dispose(): void {
     for (const s of this.subscriptions) s.dispose();
     this.emitter.dispose();

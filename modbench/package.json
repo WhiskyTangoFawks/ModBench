@@ -501,6 +501,11 @@
         "command": "modbench.pluginListTree.revealInExplorer",
         "title": "Reveal in Explorer",
         "category": "Modbench"
+      },
+      {
+        "command": "modbench.pluginListTree.rereadPlugin",
+        "title": "Re-read Plugin from Its Current File",
+        "category": "Modbench"
       }
     ],
     "menus": {
@@ -660,6 +665,10 @@
         {
           "command": "modbench.pluginListTree.revealInExplorer",
           "when": "false"
+        },
+        {
+          "command": "modbench.pluginListTree.rereadPlugin",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -779,12 +788,12 @@
       "view/item/context": [
         {
           "command": "modbench.openHeader",
-          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted || viewItem == pluginImplicit)",
           "group": "modbench@1"
         },
         {
           "command": "modbench.openHeader",
-          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted || viewItem == pluginImplicit)",
           "group": "inline"
         },
         {
@@ -929,8 +938,13 @@
         },
         {
           "command": "modbench.pluginListTree.revealInExplorer",
-          "when": "view == modbench.pluginListTree && viewItem == plugin",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
           "group": "pluginActions@1"
+        },
+        {
+          "command": "modbench.pluginListTree.rereadPlugin",
+          "when": "view == modbench.pluginListTree && viewItem == pluginDrifted",
+          "group": "pluginActions@2"
         },
         {
           "command": "modbench.revertGroup",

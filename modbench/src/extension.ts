@@ -35,13 +35,16 @@ import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './modmanager/ModListProvider';
 import { createOverwriteWatcher } from './modmanager/overwriteWatcher';
 import { createModsWatcher } from './modmanager/modsWatcher';
+import { createModlistWatcher } from './modmanager/modlistWatcher';
 import { OverwriteDecorationProvider } from './modmanager/OverwriteDecorationProvider';
 import { PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListNode } from './modmanager/PluginListProvider';
 import { PluginsTreeComposite } from './PluginsTreeComposite';
+import { createDriftTracker, type DriftTracker } from './pluginDrift';
+import { rereadDriftedPlugin } from './medit/rereadPlugin';
 import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './modmanager/gameDirectory';
 import { deploy, isDeployed, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
-import { buildExplicitPluginsWithOrigin } from './modmanager/explicitSession';
+import { buildExplicitPluginsWithOrigin, resolveCurrentPluginOrigins } from './modmanager/explicitSession';
 import { detectRoot } from './modmanager/install/detectRoot';
 import { extractArchive } from './modmanager/install/extractArchive';
 import {
@@ -67,6 +70,9 @@ let loadoutHeaderProvider: LoadoutHeaderProvider | undefined;
 // starting and stopping is what puts chevrons on its rows, and both choke points for that
 // (enterEditing, exitToLoadout) are module-level.
 let pluginsTree: PluginsTreeComposite<PluginListNode, PluginTreeNode> | undefined;
+// #279: module-level for the same reason pluginsTree is — the session lifecycle (enter,
+// close, backend death) hands it state from call sites that never see the view's wiring.
+let driftTracker: DriftTracker | undefined;
 // #307: the same view, as a TreeView — what carries the load's own progress (a native header
 // progress indicator, addressed by this view id) and its incompleteness statement
 // (`TreeView.message`). Module level for the same reason as pluginsTree above: enterEditing and
@@ -176,6 +182,10 @@ interface SessionPluginFiles {
   files: Set<string>;
   readOnly: Set<string>;
   masterIssues: Map<string, MasterIssue[]>;
+  /** #279: the origin each held plugin was actually read from — half of the drift comparison, the
+   *  other half being what Mod Management says the name resolves to now. Carried in the same
+   *  hand-off as everything else the session reports about its plugins, for the same reason. */
+  origins: Map<string, string>;
 }
 
 function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<SessionPluginFiles> {
@@ -189,6 +199,7 @@ function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<
       // but `?? []` here too rather than trusting that guarantee silently, per the field's own
       // wire contract (`masterIssues?: MasterIssue[] | null`).
       masterIssues: new Map(plugins.map((p) => [p.name, p.masterIssues ?? []] as const)),
+      origins: new Map(plugins.map((p) => [p.name, p.origin] as const)),
     };
   };
 }
@@ -205,6 +216,11 @@ function exitToLoadout(): void {
   // #270: the chevrons go with the session. Cleared before the backend stops, so no row can be
   // expanded into a backend that is on its way down. #281: the immutable set goes with it.
   pluginsTree?.setSession(undefined);
+  // #279: and so does drift — it is a statement about the plugins *this* session read, so it
+  // cannot outlive it. Cleared directly rather than recomputed, for the same reason as the
+  // pending-change decorations below: with no session there is nothing to compare against, so the
+  // answer is known without asking.
+  driftTracker?.setLoaded(undefined);
   // #307: so does anything the load was saying about itself. A statement about a session that no
   // longer exists is the same class of silent-wrong-state as a stale chevron.
   say(undefined);
@@ -1226,6 +1242,8 @@ interface PluginListDeps {
   /** The record browser that supplies a plugin row's children (#270). Passed as the composite's
    *  child source and never touched directly here. */
   recordBrowser: PluginTreeProvider;
+  /** #279: the per-plugin re-read's HTTP half, plus the staged-edit count its confirm states. */
+  controller: SessionController;
 }
 /** The Plugins tree: a view of plugins.txt, stacked below the Mods tree. A row's checkbox toggles
  *  its enabled state (writing plugins.txt immediately); rows drag-and-drop to reorder (single or
@@ -1237,8 +1255,10 @@ interface PluginListDeps {
  *  records. The composite is built here, at the composition root, because it is the only place
  *  that may know both; `PluginListProvider` is unchanged and still owns everything about a row. */
 function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
-  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser } = deps;
+  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser, controller } = deps;
   const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
+  const tracker = makeDriftTracker(modlistSource, instanceRoot, outputChannel);
+  driftTracker = tracker;
   const composite = new PluginsTreeComposite<PluginListNode, PluginTreeNode>({
     rows: pluginListProvider,
     children: recordBrowser,
@@ -1247,17 +1267,10 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     // by master name, instead of two decorations that can disagree.
     orderIssueMastersOf,
     pendingChangeUriOf: pluginRowUri, // #331: composite's own guard keeps this off ImplicitMasterNode rows
+    driftOf: (file) => tracker.driftOf(file), // #279
   });
   pluginsTree = composite;
-  // A backend that dies takes the session with it, and `exitToLoadout` is not on that path — a
-  // crash or a lost connection reaches us only as a status change. Without this the rows keep
-  // their chevrons and expanding one fetches against a backend that is gone.
-  backendManager?.on('status', () => {
-    if (!backendManager?.isHealthy) {
-      composite.setSession(undefined);
-      recordBrowser.setImmutablePlugins([]);
-    }
-  });
+  clearSessionWhenBackendDies(composite, recordBrowser, tracker);
   const pluginListView = vscode.window.createTreeView('modbench.pluginListTree', {
     treeDataProvider: composite,
     canSelectMany: true,
@@ -1280,6 +1293,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     vscode.window.registerFileDecorationProvider(
       new ImplicitMasterDecorationProvider(dataFolder, () => pluginListProvider.implicitMasterNames()),
     ),
+    ...wireDriftTracker(tracker, instanceRoot, composite),
     trackRecordSelection(pluginListView),
     pluginListView.onDidChangeCheckboxState(async (e) => {
       for (const [node, state] of e.items) {
@@ -1312,8 +1326,121 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
         void vscode.window.showErrorMessage(`Modbench: Failed to reveal "${name}" in Explorer.`);
       }
     }),
+    registerRereadCommand(tracker, controller, outputChannel),
     pluginsNameFilter,
   ] };
+}
+
+/** #279 / ADR-0035 § Live mutation: drift is the comparison between the origin a plugin's records
+ *  were read from and the origin its name resolves to now. The tracker owns the comparison and
+ *  imports from neither bounded context; this is where the Mod-Management half is injected, which
+ *  is the only place allowed to know both sides.
+ *
+ *  The walk is done fresh per refresh rather than against a cached index: it runs off a debounced
+ *  watcher, and the whole question it answers is "what does the loadout say *now*". */
+function makeDriftTracker(
+  modlistSource: Mo2ModlistSource,
+  instanceRoot: string,
+  outputChannel: vscode.LogOutputChannel,
+): DriftTracker {
+  return createDriftTracker({
+    log: (msg) => outputChannel.debug(msg),
+    currentOrigins: async (names) => resolveCurrentPluginOrigins(
+      names,
+      await buildFileConflictIndex(await modlistSource.readModlist(), instanceRoot, (msg) => outputChannel.debug(msg)),
+      instanceRoot,
+      // Resolved here, per refresh, and *not* taken from the `dataFolder` promise the views share:
+      // that one is resolved once at activation, while the session resolves its own at launch
+      // (`makeEnterEditing`). The two can name different folders — the setting is editable while
+      // Modbench runs — and drift compares against what the session actually loaded, so it has to
+      // ask the same question the same way. Caught by the integration suite, which changes the
+      // setting after activation and saw every Data-origin plugin flagged as resolving to nothing.
+      (await resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths()))?.dataFolder,
+    ),
+  });
+}
+
+/** A backend that dies takes the session with it, and `exitToLoadout` is not on that path — a
+ *  crash or a lost connection reaches us only as a status change. Without this the rows keep their
+ *  chevrons and expanding one fetches against a backend that is gone (#270), the record rows keep
+ *  a read-only set nothing backs (#281), and the drift markers keep describing a session that no
+ *  longer exists (#279). All three are statements about a live session, so all three go together. */
+function clearSessionWhenBackendDies(
+  composite: PluginsTreeComposite<PluginListNode, PluginTreeNode>,
+  recordBrowser: PluginTreeProvider,
+  tracker: DriftTracker,
+): void {
+  backendManager?.on('status', () => {
+    if (backendManager?.isHealthy) return;
+    composite.setSession(undefined);
+    recordBrowser.setImmutablePlugins([]);
+    tracker.setLoaded(undefined);
+  });
+}
+
+/** #279: what keeps the drift tracker current — Mod Management's own reactive watchers, never a
+ *  timer (modbench/CLAUDE.md: reactive over manual, and this ticket adds no polling).
+ *
+ *  Two watchers because one does not cover the three gestures. `modlist.txt` is rewritten by
+ *  install, uninstall *and* reprioritise, so it catches all three; `mods/**` catches a folder
+ *  appearing or vanishing without a `modlist.txt` write, which is what a hand-dropped or
+ *  hand-deleted mod folder looks like before auto-registration notices it. */
+function wireDriftTracker(
+  tracker: DriftTracker, instanceRoot: string, composite: PluginsTreeComposite<PluginListNode, PluginTreeNode>,
+): vscode.Disposable[] {
+  return [
+    tracker,
+    // A recomputed drift set changes what rows *say*, not which rows there are — so this
+    // re-renders and never invalidates. `pluginListProvider.invalidate()` here would re-read
+    // plugins.txt on every mod-level change and hand out fresh row objects, which drops the
+    // decoration state keyed to the old ones and the tree's selection with it.
+    tracker.onDidChange(() => composite.refreshDecorations()),
+    createModlistWatcher(instanceRoot, () => void tracker.refresh()),
+    createModsWatcher(instanceRoot, () => void tracker.refresh()),
+  ];
+}
+
+/** #279 / ADR-0035 § Live mutation: the per-plugin re-read a drifted row offers. Only ever reached
+ *  from that row's own menu (`viewItem == pluginDrifted`, package.json) — nothing automatic calls
+ *  it, which is the whole design: a mod-level change flags a row, it never reloads anything.
+ *
+ *  Prompt here, delegate to `rereadDriftedPlugin` for the decision and `SessionController` for the
+ *  call — the split modbench/CLAUDE.md asks for, and what keeps the confirm's wording unit-testable
+ *  without a VS Code harness. */
+function registerRereadCommand(
+  tracker: DriftTracker, controller: SessionController, outputChannel: vscode.LogOutputChannel,
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.pluginListTree.rereadPlugin', async (node: PluginListNode) => {
+    if (node?.kind !== 'plugin') return;
+    const plugin = node.plugin.name;
+    const drift = tracker.driftOf(plugin);
+    if (drift === undefined) {
+      // The marker and the menu clause come off the same tracker, so this needs the loadout to
+      // have changed between the menu opening and the click. Said out loud rather than no-op'd:
+      // the user asked for something and is owed an answer (ADR-0026).
+      outputChannel.info(`[extension] re-read asked for "${plugin}", which is no longer out of date`);
+      void vscode.window.showInformationMessage(`Modbench: "${plugin}" already matches the file it resolves to — nothing to re-read.`);
+      return;
+    }
+    const ran = await rereadDriftedPlugin(
+      { plugin, loadedOrigin: drift.loadedOrigin, currentOrigin: drift.currentOrigin, currentPath: drift.currentPath },
+      {
+      stagedChangeCount: (p, origin) => controller.stagedChangeCount(p, origin),
+      confirm: async (message, detail) =>
+        await vscode.window.showWarningMessage(message, { modal: true, detail }, 'Re-read') === 'Re-read',
+      reread: (p, path, origin) => controller.rereadPlugin(p, path, origin),
+      report: (message) => {
+        outputChannel.warn(`[extension] ${message}`);
+        void vscode.window.showWarningMessage(`Modbench: ${message}`);
+      },
+      },
+    );
+    if (!ran) return;
+    // Recomputed, never assumed cleared: a further mod change can have landed while the modal
+    // was open, in which case this plugin is drifted again — against a different copy — and the
+    // row has to keep saying so.
+    await tracker.refresh();
+  });
 }
 
 /** #255: the merged Plugins tree's name filter — the axis that narrows *which plugin rows*
@@ -1529,7 +1656,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
       });
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
     const { pluginListProvider, disposables: pluginListDisposables } =
-      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser });
+      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser, controller });
     const { modListView, modListFilter, updateProfileDescription } =
       createModListView(modListProvider, modlistSource, outputChannel);
 
@@ -1714,6 +1841,11 @@ async function applyLoadedSessionToTree(
     // through the same setSession bundle as everything else the session reports.
     const loadFailures = new Map(failures.map((f) => [f.name ?? '?', f.reason ?? 'Unknown error'] as const));
     pluginsTree?.setSession(session.files, session.readOnly, session.masterIssues, loadFailures);
+    // #279: the loaded half of the drift comparison. Handed over at the same moment as everything
+    // else the completed load reports, then computed once against the loadout as it stands — so a
+    // mod change made *before* the session opened is already reflected, not only ones made after.
+    driftTracker?.setLoaded(session.origins);
+    void driftTracker?.refresh();
     // #281: the same read-only set, to the record rows — theirs is contextValue (Remove
     // hidden), the plugin rows' is the tooltip note (#276).
     recordBrowserProvider?.setImmutablePlugins(session.readOnly);
