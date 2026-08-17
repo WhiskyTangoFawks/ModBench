@@ -8,6 +8,22 @@ The Modbench subsystem (Loadout view) that installs, orders, enables, and deploy
 A distributable package of files (plugins + loose assets + archives) occupying one `mods/<name>/` folder that mirrors the game's `Data/` layout.
 _Avoid_: plugin, package
 
+**Authored mod**:
+A mod the user owns outright — created in Modbench, or adopted — with no upstream it derives from. The only kind of mod whose full content may be shared.
+_Avoid_: custom mod, personal mod, own mod
+
+**Downloaded mod**:
+A mod installed from a Download or any other external source; the upstream defines the pristine content it derives from. Ownership, not transport, is the split — a mod installed from someone else's git repository is still a Downloaded mod.
+_Avoid_: third-party mod, external mod
+
+**Modified**:
+The state of a Downloaded mod whose files have diverged from what its upstream installed. Derived by comparison, never declared — a mod drifts into this state by being edited and out of it by being reverted. Only the divergence, never the full content, may be shared.
+_Avoid_: "modified mod" as a kind, edited mod, tweaked mod
+
+**Adopt**:
+Take ownership of a Modified mod: reclassify it as Authored and sever the upstream link. One-way — for when tracking a divergence stops being honest because the mod is more the user's work than the upstream's.
+_Avoid_: fork, convert
+
 **Download**:
 A single distributable file sitting in the instance's shared `downloads/` folder (`.zip`/`.7z`/`.rar`), with an optional MO2-written `.meta` sidecar carrying its Nexus metadata. A download is the **uninstalled state of a mod**: installing one produces a `mods/<name>/` folder, and the two are linked only derivably, via the installed mod's `meta.ini` `installationFile` — never by stored state on the download. The relationship is many-to-many (one download can be installed into several mods; a merged mod can come from several downloads), so no download "belongs to" a mod.
 _Avoid_: archive (that is BA2/BSA — see **Mod**), package
