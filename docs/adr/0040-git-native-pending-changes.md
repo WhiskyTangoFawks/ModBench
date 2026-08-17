@@ -45,6 +45,22 @@ regression is fixed upstream (and reported); a binary round-trip stability test 
 the suite immediately (it protects the *current* save path too); build toolchain bumps
 to an SDK with Roslyn ≥ 4.14.
 
+#### Toolchain gate: compiler pin substituted for an SDK bump *(amendment, 2026-08-17)*
+
+#367 (the stage-1 codec) took a narrower toolchain change than this ADR specifies. The
+generator needs Roslyn ≥ 4.14; the repo's SDK does not ship it, and the obvious fix — an
+SDK bump — was measured against the actual build rather than assumed safe: the newer
+SDK's own bundled analyzer set adds 23 `CA1873` errors across existing, unrelated files
+under this repo's `TreatWarningsAsErrors`, none of them caused by the codec. A
+`Microsoft.Net.Compilers.Toolset 4.14.0` package reference, scoped to
+`MEditService.Core` only, satisfies the same Roslyn floor without moving the analyzer
+set at all — verified: the existing solution builds 0 warnings / 0 errors with only the
+compiler swapped, and the full suite's pass count is unchanged. Effect equivalent,
+strictly less invasive; no `global.json`, no SDK provisioning question for other
+sessions or CI. Recorded here because this ADR named the SDK specifically and the
+substitution should be visible, not silent — later stages should default to the same
+compiler-pin approach rather than an SDK bump unless something forces otherwise.
+
 Vocabulary is git's own, inventing nothing (glossary draft in the findings doc §Q8):
 working tree, stage, commit, branch, merge, revert, conflict. Surviving domain terms:
 change-group closure, apply-to-binary, vendor.
