@@ -1847,9 +1847,21 @@ async function applyLoadedSessionToTree(
   sessionPluginFiles: () => Promise<SessionPluginFiles>,
   failures: { name?: string | null; reason?: string | null }[],
   outputChannel: vscode.LogOutputChannel,
+  // #342: the load's own reported plugin count — carried in only so this can be logged next to
+  // what actually reached the tree, not because this function needs it for anything else.
+  plannedPluginCount: number,
 ): Promise<void> {
   try {
     const session = await sessionPluginFiles();
+    // #342: this is the one line standing between a stuck-tail load and a diagnosable one — do
+    // not remove it as logging noise. It names the count this call is about to hand to
+    // `setSession`, the payload this whole function exists to deliver whole (see the doc comment
+    // above). A short count here next to a much larger `plannedPluginCount` means the hand-off ran
+    // but `sessionPluginFiles()` came back smaller than the load itself reported — point at the
+    // backend's `GET /plugins`. No line at all for a load that otherwise reached "editing session
+    // ready" means this function never got this far — point at whatever sits between here and the
+    // load POST resolving instead.
+    outputChannel.info(`[extension] applying completed session to tree: ${session.files.size} of ${plannedPluginCount} plugins`);
     // #277 / ADR-0037 AC7: the same failures the toast inside loadExplicitSession already
     // consumed — held here (not re-derived, not a second endpoint) and handed to the tree
     // through the same setSession bundle as everything else the session reports.
@@ -2012,7 +2024,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       // retain, so a failed entry fetch must clear rather than leak the previous session's
       // decorations in as if they were live.
       void pendingChangeDecorationProvider.refresh(false);
-      await applyLoadedSessionToTree(sessionPluginFiles, result.failures, outputChannel);
+      await applyLoadedSessionToTree(sessionPluginFiles, result.failures, outputChannel, plugins.length);
       outputChannel.info('[extension] editing session ready');
   };
   return () => withPluginsViewProgress(enter);
