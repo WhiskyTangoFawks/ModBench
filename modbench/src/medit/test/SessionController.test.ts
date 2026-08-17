@@ -290,9 +290,21 @@ describe('SessionController.setFilter', () => {
 
     expect(ok).toBe(true);
     expect(repository.setFilter).toHaveBeenCalledWith('SELECT form_key FROM "npc_"');
-    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"');
+    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"', undefined);
     expect(deps.refreshTree).toHaveBeenCalledOnce();
     expect(deps.showError).not.toHaveBeenCalled();
+  });
+
+  // #255: the Plugins tree's description names both narrowing axes, so the record filter has to
+  // say *which* filter — raw SQL is unreadable as a readout, and "a filter is active" sends the
+  // user back to the palette to find out which one.
+  it('forwards the filter source label to the readout alongside the SQL', async () => {
+    const deps = makeDeps({ repository: makeRepository() });
+    const ctrl = new SessionController(deps);
+
+    await ctrl.setFilter('SELECT form_key FROM "npc_"', 'npcs.sql');
+
+    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"', 'npcs.sql');
   });
 
   it('shows error and returns false when repository returns an error message', async () => {
@@ -339,7 +351,7 @@ describe('SessionController.syncFilterState', () => {
 
     await ctrl.syncFilterState();
 
-    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"');
+    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"', undefined);
   });
 
   it('sets filter active false when no filter is returned', async () => {
@@ -349,7 +361,7 @@ describe('SessionController.syncFilterState', () => {
 
     await ctrl.syncFilterState();
 
-    expect(deps.setFilterActive).toHaveBeenCalledWith(false, undefined);
+    expect(deps.setFilterActive).toHaveBeenCalledWith(false, undefined, undefined);
   });
 
   it('degrades to inactive and warns, without throwing, when the read fails', async () => {

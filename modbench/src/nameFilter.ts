@@ -39,15 +39,33 @@ export interface NameFilterDeps {
   toggle?: { icon: string; label: string };
 }
 
-export function registerNameFilter(deps: NameFilterDeps): vscode.Disposable {
+export interface NameFilter extends vscode.Disposable {
+  /** Whatever else this view says about itself, which the readout composes around: the active
+   *  profile on Mods, the record filter's source on the Plugins tree. The filter owns
+   *  `view.description` outright — two writers would race, and the term has to appear beside
+   *  the base rather than replace it. */
+  setBaseDescription(text: string | undefined): void;
+}
+
+export function registerNameFilter(deps: NameFilterDeps): NameFilter {
   let term = '';
   let toggleOn = true;
+  let base: string | undefined;
+
+  /** The persistent chip #255 asks for, in the surface the platform already provides. The term
+   *  reads first: it is the volatile fact the user just applied, and on the Plugins tree the base
+   *  is the *other* filter axis, which the term is naturally read before. */
+  const render = (): void => {
+    const parts = [term && `"${term}"`, base].filter(Boolean);
+    deps.view.description = parts.length > 0 ? parts.join(' · ') : undefined;
+  };
 
   const apply = (text: string, nextToggleOn: boolean): void => {
     term = text;
     toggleOn = nextToggleOn;
     deps.setFilter(text, nextToggleOn);
     void vscode.commands.executeCommand('setContext', `${deps.viewId}.filterActive`, text !== '');
+    render();
   };
 
   const openBox = () => {
@@ -76,5 +94,8 @@ export function registerNameFilter(deps: NameFilterDeps): vscode.Disposable {
     vscode.commands.registerCommand(`${deps.viewId}.clearFilter`, () => apply('', true)),
   ];
 
-  return { dispose: () => { for (const d of disposables) d.dispose(); } };
+  return {
+    setBaseDescription: (text) => { base = text; render(); },
+    dispose: () => { for (const d of disposables) d.dispose(); },
+  };
 }

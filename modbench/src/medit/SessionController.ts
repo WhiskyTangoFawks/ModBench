@@ -13,7 +13,10 @@ export interface SessionControllerDeps {
   setStatusText: (text: string) => void;
   showWarning: (msg: string) => void;
   showError: (msg: string) => void;
-  setFilterActive: (active: boolean, sql?: string) => void;
+  /** #255: `label` names the filter's *source* (a `.sql` filename, or the document it was applied
+   *  from) for the Plugins tree's description readout — undefined when it isn't known, which is
+   *  the case for a filter read back off the backend at session start. */
+  setFilterActive: (active: boolean, sql?: string, label?: string) => void;
   // #308 / ADR-0035: called exactly when a `loadExplicitSession` resolves `{ outcome: 'loaded' }`
   // — see that call site's own comment for why this is the one reliable, already-existing point
   // at which conflicts become computed, and why no poller is added for it.
@@ -271,13 +274,13 @@ export class SessionController {
     return () => { stopped = true; clearTimeout(timer); };
   }
 
-  async setFilter(sql: string): Promise<boolean> {
+  async setFilter(sql: string, label?: string): Promise<boolean> {
     const error = await this.deps.repository.setFilter(sql);
     if (error) {
       this.deps.showError(`mEdit: Filter failed — ${error}`);
       return false;
     }
-    this.deps.setFilterActive(true, sql);
+    this.deps.setFilterActive(true, sql, label);
     this.deps.refreshTree();
     return true;
   }
@@ -300,7 +303,7 @@ export class SessionController {
       this.deps.setFilterActive(false);
       return;
     }
-    this.deps.setFilterActive(sql !== null, sql ?? undefined);
+    this.deps.setFilterActive(sql !== null, sql ?? undefined, undefined);
   }
 
   /** #295: whether the backend currently holds any staged work — read live off

@@ -149,6 +149,50 @@ describe('the name filter is durable (#255)', () => {
   });
 });
 
+describe('the active term reads out in the view description (#255)', () => {
+  it('names the active term, so the user can see what they are filtered by without opening anything', async () => {
+    const { view } = setup();
+    await open();
+    currentBox().type('arm');
+    expect(view.description).toBe('"arm"');
+  });
+
+  it('says nothing when no filter is active', async () => {
+    const { view } = setup();
+    await open();
+    currentBox().type('arm');
+    await clear();
+    expect(view.description).toBeUndefined();
+  });
+
+  it('composes with whatever else the view says about itself — the term first, then the base', async () => {
+    const { view, filter } = setup();
+    filter.setBaseDescription('Default');
+    await open();
+    currentBox().type('arm');
+    expect(view.description).toBe('"arm" · Default');
+  });
+
+  it('leaves the base description alone while no filter is active — the Mods profile name predates this and survives it', () => {
+    const { view, filter } = setup();
+    filter.setBaseDescription('Default');
+    expect(view.description).toBe('Default');
+  });
+
+  // The merged Plugins tree carries two independent narrowing axes (plugins.md, Toolbar):
+  // this name filter and the SQL record filter. Both show, and clearing either leaves the
+  // other's half of the readout standing.
+  it('recomposes when the other axis changes under a live filter', async () => {
+    const { view, filter } = setup();
+    await open();
+    currentBox().type('arm');
+    filter.setBaseDescription('records: cells.sql');
+    expect(view.description).toBe('"arm" · records: cells.sql');
+    filter.setBaseDescription(undefined);
+    expect(view.description).toBe('"arm"');
+  });
+});
+
 describe('the Mods separator toggle rides on the box (#247, unchanged by #255)', () => {
   const toggle = { icon: 'list-tree', label: 'Group by separator' };
 
