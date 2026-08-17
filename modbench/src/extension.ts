@@ -519,6 +519,34 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       const name = await promptPluginName();
       if (name) await controller.createPlugin(name);
     }),
+    ...registerFilterCommands(scriptsPath, controller),
+    // #273: reaches every plugin-bearing merged-tree row (modmanager's PluginListNode, not
+    // medit's own PluginNode) via pluginFileOf() — the same row-agnostic adapter the composite
+    // already uses. Not an immutability decision: reconciling 'pluginImplicit' with medit's
+    // 'pluginImmutable' is #276's, not this ticket's.
+    vscode.commands.registerCommand('modbench.openHeader', (node?: PluginListNode) => {
+      const pluginName = node && pluginFileOf(node);
+      if (!pluginName) return;
+      void vscode.commands.executeCommand('modbench.openEditor', {
+        formKey: headerFormKeyFor(pluginName), label: pluginName,
+      });
+    }),
+    // #282: no longer retargets anything — the view follows activeRecordTracker on its own.
+    // Kept as a Command Palette reveal-this-view convenience (issue's own allowance); no menu
+    // invokes this anymore (package.json's view/item/context entry is removed).
+    vscode.commands.registerCommand('modbench.showReferencedBy',
+      () => vscode.commands.executeCommand('modbench.referencedByTree.focus')),
+    registerReferencedByCopyCommand(referencedByTreeView, outputChannel),
+  ];
+}
+
+// #340: modbench.setFilter/setFilterFromDocument/clearFilter — pulled out of
+// registerRecordViewCommands purely to stay under the lint budget, same reasoning as
+// registerReloadSessionCommand below — no other reason to split it out. The three commands are
+// one concern (select/apply/clear the active SQL filter), distinct from the record-panel and
+// reveal commands that dominate the rest of that function.
+function registerFilterCommands(scriptsPath: string, controller: SessionController): vscode.Disposable[] {
+  return [
     // #273 Slice D: modbench.filterPluginTree (issue #70) is gone — it duplicated
     // modbench.pluginListTree.filter over the same rows once the merged tree made this
     // command's own view (modbench.pluginTree) unreachable.
@@ -549,23 +577,6 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       await controller.setFilter(sql, editor.document.isUntitled ? 'document' : path.basename(editor.document.fileName));
     }),
     vscode.commands.registerCommand('modbench.clearFilter', () => controller.clearFilter()),
-    // #273: reaches every plugin-bearing merged-tree row (modmanager's PluginListNode, not
-    // medit's own PluginNode) via pluginFileOf() — the same row-agnostic adapter the composite
-    // already uses. Not an immutability decision: reconciling 'pluginImplicit' with medit's
-    // 'pluginImmutable' is #276's, not this ticket's.
-    vscode.commands.registerCommand('modbench.openHeader', (node?: PluginListNode) => {
-      const pluginName = node && pluginFileOf(node);
-      if (!pluginName) return;
-      void vscode.commands.executeCommand('modbench.openEditor', {
-        formKey: headerFormKeyFor(pluginName), label: pluginName,
-      });
-    }),
-    // #282: no longer retargets anything — the view follows activeRecordTracker on its own.
-    // Kept as a Command Palette reveal-this-view convenience (issue's own allowance); no menu
-    // invokes this anymore (package.json's view/item/context entry is removed).
-    vscode.commands.registerCommand('modbench.showReferencedBy',
-      () => vscode.commands.executeCommand('modbench.referencedByTree.focus')),
-    registerReferencedByCopyCommand(referencedByTreeView, outputChannel),
   ];
 }
 
@@ -1144,6 +1155,34 @@ interface ModInstallDeps {
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>;
   promptModName: (defaultName: string) => Thenable<string | undefined>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
+}
+// #340: the three closures registerModInstallCommands needs — pulled out of registerLoadoutView
+// purely to stay under the lint budget, no other reason to split it out (same reasoning as
+// registerRevealInExplorerCommand). Named for what's already true at the call site, where they're
+// handed to registerModInstallCommands as one bundle.
+function makeModActionHelpers(
+  modListProvider: ModListProvider, outputChannel: vscode.LogOutputChannel,
+): Pick<ModInstallDeps, 'runModAction' | 'promptModName' | 'warnIfFomod'> {
+  return {
+    runModAction: async (logLabel, failMessage, action) => {
+      try {
+        await action();
+        modListProvider.invalidate();
+      } catch (err) {
+        outputChannel.error(`[extension] ${logLabel} failed: ${err instanceof Error ? err.message : String(err)}`);
+        void vscode.window.showErrorMessage(`Modbench: ${failMessage}`);
+      }
+    },
+    // Prompt for a mod name, defaulting to the archive/folder basename.
+    promptModName: (defaultName) => vscode.window.showInputBox({ prompt: 'Mod name', value: defaultName }),
+    warnIfFomod: (name, isFomod) => {
+      if (isFomod)
+        void vscode.window.showWarningMessage(
+          `Modbench: "${name}" is a FOMOD installer — its files were copied as-is and need manual ` +
+            `arrangement (the scripted installer is coming later).`,
+        );
+    },
+  };
 }
 /** Loadout install commands: from archive, from folder. */
 function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
@@ -1736,27 +1775,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     const { modListView, modListFilter, updateProfileDescription } =
       createModListView(modListProvider, modlistSource, outputChannel);
 
-    const runModAction = async (logLabel: string, failMessage: string, action: () => Promise<void>) => {
-      try {
-        await action();
-        modListProvider.invalidate();
-      } catch (err) {
-        outputChannel.error(`[extension] ${logLabel} failed: ${err instanceof Error ? err.message : String(err)}`);
-        void vscode.window.showErrorMessage(`Modbench: ${failMessage}`);
-      }
-    };
-
-    /** Prompt for a mod name, defaulting to the archive/folder basename. */
-    const promptModName = (defaultName: string): Thenable<string | undefined> =>
-      vscode.window.showInputBox({ prompt: 'Mod name', value: defaultName });
-
-    const warnIfFomod = (name: string, isFomod: boolean): void => {
-      if (isFomod)
-        void vscode.window.showWarningMessage(
-          `Modbench: "${name}" is a FOMOD installer — its files were copied as-is and need manual ` +
-            `arrangement (the scripted installer is coming later).`,
-        );
-    };
+    const { runModAction, promptModName, warnIfFomod } = makeModActionHelpers(modListProvider, outputChannel);
     const enterEditing = makeEnterEditing({ instanceRoot, modlistSource, controller, changeGroupTreeProvider, pendingChangeDecorationProvider, outputChannel, revealLog, sessionPluginFiles });
     // #295: the one assignment — see the module-level declaration's comment for why this can't
     // be threaded as a parameter instead.

@@ -1078,7 +1078,7 @@
     "test:mutation": "stryker run",
     "pretest:integration": "node esbuild.mjs",
     "test:integration": "tsc -p tsconfig.integration.json && vscode-test",
-    "lint": "eslint src webview/src",
+    "lint": "eslint src webview/src --max-warnings 0",
     "prepackage": "cp ../LICENSE ./LICENSE",
     "package": "vsce package"
   },

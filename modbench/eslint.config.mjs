@@ -29,8 +29,10 @@ export default tseslint.config(
 
     // Complexity feedback on extension-host logic (mod-management + orchestration),
     // mirroring the backend Sonar complexity rules. Thresholds approximate their C#
-    // counterparts (S3776/S1541/S138/S134/S107). Kept at `warn` so they never fail
-    // `npm run lint`; the code-quality Stop hook surfaces them scoped to changed files.
+    // counterparts (S3776/S1541/S138/S134/S107). Kept at `warn`, not `error` (#340) — a
+    // warning still fails `npm run lint` via its `--max-warnings 0` flag, but severity stays
+    // `warn` here so the code-quality Stop hook keeps surfacing these scoped to changed files
+    // between turns, ahead of the gate.
     // Not applied to webview/src (thin React presentation) or tests.
     {
         files: ['src/**/*.ts'],
