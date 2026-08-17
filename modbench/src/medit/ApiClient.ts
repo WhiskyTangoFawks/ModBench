@@ -18,6 +18,10 @@ export interface PluginMetadata {
   // #277 / ADR-0037: this plugin's own declared masters that don't resolve in the session —
   // never a transitive fact about a master's own masters. Empty for a plugin with none.
   masterIssues: MasterIssue[];
+  // #278 / ADR-0035 amending ADR-0018: true with no active record filter, or when this plugin
+  // owns at least one record the filter matches — the fact PluginsTreeComposite's chevron reads,
+  // since GetPlugins() itself never drops a plugin for having none.
+  hasMatchingRecords: boolean;
 }
 
 export interface MasterIssue {

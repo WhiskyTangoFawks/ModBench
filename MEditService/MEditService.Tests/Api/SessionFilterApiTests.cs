@@ -85,8 +85,15 @@ public sealed class SessionFilterApiTests(LoadedApiFixture<TestPluginFixture> lo
 
     // --- filter affects GET /plugins ---
 
+    // Renamed from PostFilter_MatchingNoRecords_HidesPluginFromGetPlugins (#278 / ADR-0035
+    // amending ADR-0018): that name pinned the old rule this issue exists to overturn — a plugin
+    // the filter matched none of this plugin's records used to vanish from /plugins entirely
+    // (Assert.Empty(pluginsAfter)). The rule changes: a record filter prunes records and record
+    // types, never a plugin row, because this tree is also the load order and hiding a plugin
+    // mid-filter would make it unreorderable. The plugin now stays on the wire;
+    // hasMatchingRecords is the additive fact a caller reads instead.
     [Fact]
-    public async Task PostFilter_MatchingNoRecords_HidesPluginFromGetPlugins()
+    public async Task PostFilter_MatchingNoRecords_KeepsPluginInGetPluginsButFlagsNoMatch()
     {
         var pluginsBefore = await _client.GetFromJsonAsync<JsonElement[]>("/plugins");
         Assert.NotNull(pluginsBefore);
@@ -97,7 +104,8 @@ public sealed class SessionFilterApiTests(LoadedApiFixture<TestPluginFixture> lo
 
         var pluginsAfter = await _client.GetFromJsonAsync<JsonElement[]>("/plugins");
         Assert.NotNull(pluginsAfter);
-        Assert.Empty(pluginsAfter);
+        Assert.Equal(pluginsBefore!.Length, pluginsAfter!.Length);
+        Assert.All(pluginsAfter, p => Assert.False(p.GetProperty("hasMatchingRecords").GetBoolean()));
     }
 
     [Fact]
@@ -110,5 +118,6 @@ public sealed class SessionFilterApiTests(LoadedApiFixture<TestPluginFixture> lo
         var plugins = await _client.GetFromJsonAsync<JsonElement[]>("/plugins");
         Assert.NotNull(plugins);
         Assert.NotEmpty(plugins);
+        Assert.All(plugins, p => Assert.True(p.GetProperty("hasMatchingRecords").GetBoolean()));
     }
 }

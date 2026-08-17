@@ -52,6 +52,13 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
    *  is kept here: a failure never reaches this accessor as an answer. Optional and the same shape
    *  as the accessors above; omitted in tests that don't exercise drift. */
   driftOf?(pluginFile: string): PluginDrift | undefined;
+  /** #278 / ADR-0035 amending ADR-0018: whether this plugin owns at least one record the active
+   *  record filter matches. A record filter narrows records and record types, never plugin rows
+   *  — this is the one thing it is allowed to change about a row, and only via the chevron: a
+   *  plugin with no matches stays visible, it just doesn't expand onto an empty list. Optional,
+   *  and `undefined` from the accessor's own return (as opposed to the accessor being unwired)
+   *  means the same as `true` — no filter machinery to ask means nothing has been ruled out. */
+  hasMatchingRecords?(pluginFile: string): boolean | undefined;
 }
 
 /** A plugin whose name no longer resolves to the file its records were read from (#279 /
@@ -292,13 +299,18 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   }
 
   /** The plugin file this row can browse, or undefined when it can't be expanded — no session, no
-   *  plugin file, or a file the session doesn't hold. That last case is the honest one: a row
-   *  whose plugin never made it into the session would otherwise expand to an empty list, which
-   *  reads as "this plugin has no records" (ADR-0026's silent-wrong-state tier). */
+   *  plugin file, a file the session doesn't hold, or (#278 / ADR-0035 amending ADR-0018) an active
+   *  record filter that matches none of this plugin's records. That last case is the row-visible,
+   *  chevron-only half of the amendment: the row itself is never removed by a record filter — only
+   *  `getTreeItem`'s decision to render it collapsible is. The empty-session case is the honest one
+   *  for the same underlying reason: a row that would expand to an empty list reads as "this plugin
+   *  has no records" (ADR-0026's silent-wrong-state tier), whether the emptiness comes from never
+   *  having been indexed or from every record having been filtered out. */
   private expandableFile(row: TRow): string | undefined {
     if (this.sessionFiles === undefined) return undefined;
     const file = this.deps.pluginFileOf(row);
-    return file !== undefined && this.sessionFiles.has(file.toLowerCase()) ? file : undefined;
+    if (file === undefined || !this.sessionFiles.has(file.toLowerCase())) return undefined;
+    return this.deps.hasMatchingRecords?.(file) === false ? undefined : file;
   }
 
   private sessionFiles?: Set<string>;

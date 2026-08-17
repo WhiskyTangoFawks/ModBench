@@ -800,6 +800,7 @@ export interface components {
             origin?: string | null;
             masterIssues?: components["schemas"]["MasterIssue"][] | null;
             inLoadOrder?: boolean;
+            hasMatchingRecords?: boolean;
         };
         ProblemDetails: {
             type?: string | null;

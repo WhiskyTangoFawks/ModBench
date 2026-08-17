@@ -24,11 +24,20 @@ public record PluginResponse(
     IReadOnlyList<MasterIssue> MasterIssues,
     // InLoadOrder (#34 / ADR-0035): false for a plugin loaded on demand that the effective load
     // order does not name. See PluginMetadata.InLoadOrder for why this is not Participates.
-    bool InLoadOrder)
+    bool InLoadOrder,
+    // HasMatchingRecords (#278 / ADR-0035 amending ADR-0018): true with no active filter, or when
+    // this plugin owns at least one record the active filter matches. A record filter prunes
+    // records and record types, never a plugin row — GetPlugins() always returns every plugin —
+    // so this is the one additive fact a caller needs to decide whether the row should still
+    // offer a chevron. Defaults true: every call site but RecordQueryService.GetPlugins() returns
+    // a single plugin outside any filtered listing, where "has matches" isn't a question being
+    // asked.
+    bool HasMatchingRecords = true)
 {
-    public static PluginResponse FromMetadata(PluginMetadata m, IReadOnlyList<MasterIssue>? masterIssues = null) =>
+    public static PluginResponse FromMetadata(
+        PluginMetadata m, IReadOnlyList<MasterIssue>? masterIssues = null, bool hasMatchingRecords = true) =>
         new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates, m.Origin,
-            masterIssues ?? [], m.InLoadOrder);
+            masterIssues ?? [], m.InLoadOrder, hasMatchingRecords);
 }
 
 // Origin (#296 / ADR-0036): the mod folder that provided this row's physical file, or a reserved

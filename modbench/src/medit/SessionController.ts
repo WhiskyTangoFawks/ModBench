@@ -17,6 +17,14 @@ export interface SessionControllerDeps {
    *  from) for the Plugins tree's description readout — undefined when it isn't known, which is
    *  the case for a filter read back off the backend at session start. */
   setFilterActive: (active: boolean, sql?: string, label?: string) => void;
+  /** #278 / ADR-0035 amending ADR-0018: called whenever the record filter's per-plugin match set
+   *  can have changed — after `setFilter` succeeds, and after `clearFilter` — so the caller can
+   *  re-fetch and re-publish `PluginMetadata.hasMatchingRecords` to `PluginsTreeComposite`'s
+   *  chevron. Symmetric on purpose: a stale `false` surviving a clear would leave a plugin
+   *  permanently unexpandable, the mirror image of the bug this ticket exists to kill. Takes no
+   *  argument — the same "something changed, go re-derive it" shape as `refreshTree` — because
+   *  the fetch and the derivation both belong to the caller, not here. */
+  refreshMatchingPlugins: () => void;
   // #308 / ADR-0035: called exactly when a `loadExplicitSession` resolves `{ outcome: 'loaded' }`
   // — see that call site's own comment for why this is the one reliable, already-existing point
   // at which conflicts become computed, and why no poller is added for it.
@@ -282,6 +290,7 @@ export class SessionController {
     }
     this.deps.setFilterActive(true, sql, label);
     this.deps.refreshTree();
+    this.deps.refreshMatchingPlugins();
     return true;
   }
 
@@ -289,6 +298,7 @@ export class SessionController {
     await this.deps.repository.clearFilter();
     this.deps.setFilterActive(false);
     this.deps.refreshTree();
+    this.deps.refreshMatchingPlugins();
   }
 
   async syncFilterState(): Promise<void> {

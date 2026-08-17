@@ -470,6 +470,32 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
     expect(source.reorderPluginsCalls).toEqual([]);
   });
 
+  // #278 / ADR-0035 AC5: the position a drop computes has to come from the full plugins.txt
+  // order, never the filtered/displayed row list — a name filter narrows *which rows show*, not
+  // the load order they belong to. `dropIndexFor` already computes against `this.lastOrder`
+  // (plugins.txt's raw order) rather than `getChildren()`'s filtered output, so this is expected
+  // to be green without any production change; it pins that invariant explicitly, which nothing
+  // did before (grep for `filterText` alongside `handleDrop`/`handleDrag` found nothing).
+  it('produces the same load-order position with a name filter hiding a row between the drag and its target, as with no filter at all', async () => {
+    const ORDER = ['M1.esp', 'M2.esp', 'X1.esp', 'M3.esp', 'X2.esp'];
+
+    const baselineSource = new FakeSource(ORDER);
+    await drag(baselineSource, ['M1.esp'], 'M3.esp');
+
+    const filteredSource = new FakeSource(ORDER);
+    const provider = new PluginListProvider({ source: filteredSource });
+    await provider.getChildren(); // populate the cached order
+    provider.setFilter('m'); // matches M1/M2/M3 only — X1.esp sits hidden between the drag and its target
+    const visible = await provider.getChildren();
+    expect(visible.map((n) => (n as PluginNode).plugin.name)).toEqual(['M1.esp', 'M2.esp', 'M3.esp']);
+
+    const dt = new FakeDataTransfer();
+    provider.handleDrag([node('M1.esp')], dt as never, NONE);
+    await provider.handleDrop(node('M3.esp'), dt as never, NONE);
+
+    expect(filteredSource.reorderPluginsCalls).toEqual(baselineSource.reorderPluginsCalls);
+  });
+
   it('surfaces a write failure via the reporter and resyncs the tree (ADR-0026)', async () => {
     const source = new FakeSource(ORDER);
     source.reorderPluginsError = new Error('disk full');

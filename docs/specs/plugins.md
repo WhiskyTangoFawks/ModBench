@@ -295,8 +295,8 @@ without saying what is not yet known would make that worse, not better.
   the count visible rather than replacing it
   ([#342](https://github.com/WhiskyTangoFawks/ModBench/issues/342)).
 - **No conflict badge is rendered before the sweep completes.** No conflict badge exists on this
-  tree yet ([#285](https://github.com/WhiskyTangoFawks/ModBench/issues/285) — see Further Notes),
-  so this is an **invariant handed to #285**, not current code: whatever renders that badge must
+  tree yet ([#364](https://github.com/WhiskyTangoFawks/ModBench/issues/364) — see Further Notes),
+  so this is an **invariant handed to #364**, not current code: whatever renders that badge must
   gate on `SessionStatus.conflictsComputed`, and must render *nothing* — not "no conflict" —
   while it is false.
 - **Gate on `conflictsComputed`, never on "is a load running".** They coincide today but are
@@ -787,10 +787,14 @@ overflow, then native **Collapse All** last.
 - **Integration seam** (`npm run test:integration`, real VS Code process): the tree renders from
   `plugins.txt` with no session; checkbox toggle, drag-reorder and the name filter round-trip
   with and without a session running; starting/stopping a session puts chevrons on and takes
-  them off without disturbing the load order; navigation opens a record panel; the record filter
-  prunes record types and records but never a plugin row; Reveal in Explorer dispatches; read
-  failure renders the error tree node. Add new command id(s) to `EXPECTED_COMMANDS`
-  (`modbench/CLAUDE.md`).
+  them off without disturbing the load order; navigation opens a record panel; a plugin
+  `GET /plugins` reports with no matching records keeps its row and loses only its chevron,
+  restored once a reload reports no filter at all rather than staying stuck suppressed (#278) —
+  the pruning rule itself (record types and records pruned, a plugin row never removed) is
+  backend-tested (`MEditService.Tests`), not re-proven here, since this suite's mock backend
+  drives `GET /plugins` directly rather than through a real `POST /session/filter`; Reveal in
+  Explorer dispatches; read failure renders the error tree node. Add new command id(s) to
+  `EXPECTED_COMMANDS` (`modbench/CLAUDE.md`).
 
 ## Out of Scope
 
@@ -835,10 +839,10 @@ overflow, then native **Collapse All** last.
   command ids and its filter-active context key from the view id so the three cannot drift into
   three conventions.
 - The conflict badge on a record node (the two-axis model, [ADR-0016](../adr/0016-two-axis-conflict-model.md))
-  is planned but not yet built on this tree — see [#285](https://github.com/WhiskyTangoFawks/ModBench/issues/285),
+  is planned but not yet built on this tree — see [#364](https://github.com/WhiskyTangoFawks/ModBench/issues/364),
   which also tracks the missing Conflicts node; both were recorded as spec drift by #270 and
   carry over unchanged by this merge. The full visual encoding, once built, lives in
-  [medit-record-editor.md](medit-record-editor.md). **#285 inherits one invariant from #307**: the
+  [medit-record-editor.md](medit-record-editor.md). **#364 inherits one invariant from #307**: the
   badge must gate on `SessionStatus.conflictsComputed` and render nothing at all while it is
   false — an absent badge that means "not computed yet" must never be drawn as one that means
   "no conflict" (see Progressive load).

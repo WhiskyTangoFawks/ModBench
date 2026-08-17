@@ -23,6 +23,10 @@ let ext: vscode.Extension<unknown> | undefined;
 type MockPlugin = {
   name: string; path: string; origin: string; participates: boolean;
   isImmutable?: boolean; masterIssues?: { masterName: string; kind: string }[];
+  // #278 / ADR-0035 amending ADR-0018: omitted everywhere below on purpose — every existing row
+  // exercises the wire's `?? true` default this way, the same convention masterIssues above
+  // already uses for the "field entirely absent" case.
+  hasMatchingRecords?: boolean;
 };
 const MOCK_PLUGINS: MockPlugin[] = [
   { name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', participates: true },
@@ -1165,6 +1169,39 @@ describe('Reload Session actually reloads (#295)', () => {
     assert.strictEqual(after, before, 'the row list is unchanged (plugins.txt untouched), so this must be the same reused row object');
     assert.strictEqual(tree.getTreeItem(after).tooltip, undefined,
       'a resolved master issue must clear the tooltip, not leave the stale decoration stacked on top of the fresh one');
+  });
+
+  // #278 review finding 1 (Standards): matchingPlugins used to be refreshed only by
+  // SessionController.setFilter/clearFilter, so a plugin a filter suppressed the chevron of
+  // stayed suppressed through a Reload Session that came up with no filter at all — the exact
+  // "map outlives the filter state it describes" bug this ticket exists to prevent, in mirror
+  // image. Fixed by routing GET /plugins' hasMatchingRecords through the same completion hand-off
+  // (applyLoadedSessionToTree) every session (re)load already reaches downstream of
+  // SessionController.syncFilterState — modbench.reloadSession included, since it re-runs the
+  // identical makeEnterEditing closure Launch mEdit uses. The first reload below stands in for
+  // "a filter was active"; the second is the regression case (reload with no filter must clear
+  // it) and is what would have stayed red without the fix — before it, matchingPlugins had no
+  // path back to `true` short of an in-session setFilter/clearFilter call.
+  it('clears a chevron a filter suppressed once a reload comes up with no filter, not just applies the suppression (#278 review)', async () => {
+    const tree = pluginsTree()!;
+    const before = findRow(await tree.getChildren(), 'TestMod.esp');
+    assert.strictEqual(tree.getTreeItem(before).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
+      'sanity: the row is expandable before either reload below');
+
+    // Stands in for "a record filter matching none of TestMod.esp's records was active when this
+    // session loaded" — GetPlugins() reports it, unprompted by any setFilter call on this side.
+    mockPluginsOverride = MOCK_PLUGINS.map((p) => p.name === 'TestMod.esp' ? { ...p, hasMatchingRecords: false } : p);
+    await vscode.commands.executeCommand('modbench.reloadSession');
+    const suppressed = findRow(await tree.getChildren(), 'TestMod.esp');
+    assert.strictEqual(tree.getTreeItem(suppressed).collapsibleState, vscode.TreeItemCollapsibleState.None,
+      'sanity: the mechanism reaches the tree — a filter with no matches on this plugin suppresses its chevron');
+
+    // The next load — a plain reload, reporting no filter at all — must restore it.
+    mockPluginsOverride = null;
+    await vscode.commands.executeCommand('modbench.reloadSession');
+    const restored = findRow(await tree.getChildren(), 'TestMod.esp');
+    assert.strictEqual(tree.getTreeItem(restored).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
+      'a reload that comes up with no filter must restore a chevron an earlier filter suppressed, not leave it permanently unexpandable');
   });
 
   // AC4: a failed reload must not leave the tree claiming a session the backend has already
