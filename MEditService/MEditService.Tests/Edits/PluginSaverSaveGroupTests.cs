@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Session;
@@ -12,6 +13,17 @@ namespace MEditService.Tests.Edits;
 
 public sealed class PluginSaverSaveGroupTests
 {
+    // #371: none of this file's fixture plugins carry a resolvable origin folder (MakeLoadOrderPlugin
+    // leaves Path empty), so LedgerGroupCommitter.CommitGroupSave is always called with an empty
+    // touched-record list here and never actually reaches the ledger repo — a shared instance over a
+    // scratch root is enough; the save-time ledger commit itself is covered end to end (real git,
+    // real save endpoint) by SaveChangeGroupLedgerCommitApiTests.
+    private static readonly LedgerGroupCommitter LedgerCommitter = new(
+        new LedgerRepository(
+            new LedgerOptions(Path.Combine(Path.GetTempPath(), "medit-pluginsaver-tests-ledger")),
+            NullLogger<LedgerRepository>.Instance),
+        NullLogger<LedgerGroupCommitter>.Instance);
+
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
     private static ChangeGroup StageGroupChange(DuckDbPendingChangeService svc, string plugin)
@@ -55,7 +67,7 @@ public sealed class PluginSaverSaveGroupTests
     {
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         var result = await saver.Save(Guid.NewGuid());
 
@@ -76,7 +88,7 @@ public sealed class PluginSaverSaveGroupTests
         };
         var group = changes.StageChanges(members);
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         var result = await saver.Save(group.Id);
 
@@ -94,7 +106,7 @@ public sealed class PluginSaverSaveGroupTests
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var group = StageGroupChange(changes, "A.esp");
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         var result = await saver.Save(group.Id);
 
@@ -108,7 +120,7 @@ public sealed class PluginSaverSaveGroupTests
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var group = StageGroupChange(changes, "A.esp");
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         await saver.Save(group.Id);
 
@@ -123,7 +135,7 @@ public sealed class PluginSaverSaveGroupTests
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var group = StageGroupChange(changes, "A.esp");
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         await saver.Save(group.Id);
 
@@ -138,7 +150,7 @@ public sealed class PluginSaverSaveGroupTests
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var group = StageGroupChange(changes, "A.esp");
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         await saver.Save(group.Id);
 
@@ -154,7 +166,7 @@ public sealed class PluginSaverSaveGroupTests
         var group = StageGroupChange(changes, "A.esp");
         var session = new StubSession();
         session.SetPrepareResponse(() => Task.FromException<PreparedPluginSave>(new IOException("disk full")));
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         await Assert.ThrowsAsync<IOException>(() => saver.Save(group.Id));
 
@@ -183,7 +195,7 @@ public sealed class PluginSaverSaveGroupTests
             return Task.FromResult(new PreparedPluginSave(tmpInDir, tmp, EmptySaveResult()));
         });
         session.SetPrepareResponse(() => Task.FromException<PreparedPluginSave>(new IOException("disk full")));
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         await Assert.ThrowsAsync<IOException>(() => saver.Save(groupId));
 
@@ -199,7 +211,7 @@ public sealed class PluginSaverSaveGroupTests
         var groupId = StageCrossPluginComponent(changes);
 
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         await saver.Save(groupId);
 
@@ -217,7 +229,7 @@ public sealed class PluginSaverSaveGroupTests
         var group = StageGroupChange(changes, "A.esp");
         var session = new StubSession();
         session.SetReindexResponse(() => Task.FromException(new IOException("duckdb busy")));
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         var result = await saver.Save(group.Id);
 
@@ -237,7 +249,7 @@ public sealed class PluginSaverSaveGroupTests
         var group = StageGroupChange(changes, "A.esp");
         var session = new StubSession();
         session.SetReindexResponse(() => Task.FromException(new IOException("duckdb busy")));
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         await saver.Save(group.Id);
 
@@ -252,7 +264,7 @@ public sealed class PluginSaverSaveGroupTests
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var group = StageGroupChange(changes, "A.esp");
         var session = new StubSession();
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         var result = await saver.Save(group.Id);
 
@@ -269,7 +281,7 @@ public sealed class PluginSaverSaveGroupTests
         var group = StageGroupChange(changes, "Immutable.esm");
         var session = new StubSession();
         session.SetSession(new StubGameSession([MakeImmutablePlugin("Immutable.esm")]));
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         var result = await saver.Save(group.Id);
 
@@ -287,7 +299,7 @@ public sealed class PluginSaverSaveGroupTests
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var group = StageGroupChange(changes, "Ghost.esp");
         var session = new StubSession(); // default session's known plugins are A.esp/B.esp — Ghost.esp is neither
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         var result = await saver.Save(group.Id);
 
@@ -312,7 +324,7 @@ public sealed class PluginSaverSaveGroupTests
             MakeUnlistedPlugin("Shared.esp", "ModB"),
             MakeLoadOrderPlugin("Shared.esp", "ModA"),
         ]));
-        var saver = new PluginSaver(changes, session, NullLogger<PluginSaver>.Instance);
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
 
         var result = await saver.Save(group.Id);
 

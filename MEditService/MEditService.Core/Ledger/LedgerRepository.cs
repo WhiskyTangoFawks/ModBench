@@ -13,18 +13,24 @@ namespace MEditService.Core.Ledger;
 /// guaranteed filename-safe) — reused across every record vendored from that origin, created once
 /// (<see cref="EnsureRepo"/> is idempotent).
 ///
-/// Staging and committing are deliberately separate operations (<see cref="StagePristine"/> /
-/// <see cref="CommitStaged"/>), not one atomic "commit the pristine text" call: the caller
-/// (<c>RecordVendor</c>) stages the pristine blob into the index immediately after writing it, then
-/// does the work that can still fail (applying the staged field edits, writing the dirt text), and
-/// only calls <see cref="CommitStaged"/> (a bare <c>git commit</c>, deliberately no pathspec — see
-/// its own remarks) once all of that has succeeded, or <see cref="UnstagePath"/> if it didn't. A
-/// bare <c>git commit</c> commits whatever is in the index — not whatever the working-tree file
-/// currently holds — so the working-tree file can be overwritten with dirt *between* staging and
-/// committing without the commit ever capturing that dirt: it still commits the pristine blob that
-/// was staged earlier. A failure between the two calls leaves nothing committed and, once
-/// <see cref="UnstagePath"/> runs, nothing staged either — not a baseline commit orphaned from its
-/// dirt, and not a stray index entry a later, unrelated commit could accidentally sweep in.
+/// Staging and committing are deliberately separate operations (<see cref="StagePath"/> /
+/// <see cref="CommitStaged"/>), not one atomic "commit this text" call: a caller stages a path's
+/// current working-tree content into the index immediately after writing it, then does the work
+/// that can still fail, and only calls <see cref="CommitStaged"/> (a bare <c>git commit</c>,
+/// deliberately no pathspec — see its own remarks) once all of that has succeeded, or
+/// <see cref="UnstagePath"/> if it didn't. A bare <c>git commit</c> commits whatever is in the
+/// index — not whatever the working-tree file currently holds — so the working-tree file can be
+/// overwritten *between* staging and committing without the commit ever capturing that later
+/// content: it still commits what was staged earlier. A failure between the two calls leaves
+/// nothing committed and, once <see cref="UnstagePath"/> runs, nothing staged either — not a
+/// commit orphaned from work that never finished, and not a stray index entry a later, unrelated
+/// commit could accidentally sweep in.
+///
+/// Two callers share this split (#371): <c>RecordVendor</c> stages a freshly-written pristine
+/// blob before applying the risky field edits on top of it; <c>Ledger/LedgerGroupCommitter</c>
+/// stages one or more already-tracked records' current dirt (written by <c>RecordVendor</c> on
+/// every prior stage, per ADR-0040) right before a save's own commit. One stage primitive, reused
+/// for both — never two parallel ones.
 /// </summary>
 public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerRepository> logger)
 {
@@ -68,20 +74,33 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
         return GitCli.TryRun(gitDir, workTree, out _, "cat-file", "-e", $"HEAD:{ToGitPath(relativePath)}");
     }
 
+    /// <summary>Reads <paramref name="relativePath"/>'s text as it stood at <paramref name="commitish"/>
+    /// (<c>git show &lt;commitish&gt;:&lt;path&gt;</c>) — a point-in-time read that touches neither
+    /// the working tree nor the index. What reverting a record needs to recover its state at an
+    /// earlier commit (#371 AC3) before that state is re-staged through the normal edit path;
+    /// <paramref name="commitish"/> is any git revision expression (a full or short SHA, a ref —
+    /// git decides, this is a pass-through).</summary>
+    public string ReadTextAtCommit(string originFolder, string relativePath, string commitish)
+    {
+        var (gitDir, workTree) = PathsFor(originFolder);
+        return GitCli.Run(gitDir, workTree, "show", $"{commitish}:{ToGitPath(relativePath)}");
+    }
+
     /// <summary>Stages <paramref name="relativePath"/>'s current working-tree content into the
     /// index (<c>git add</c>) — captures it for a later <see cref="CommitStaged"/> regardless of
     /// what the working-tree file holds by the time that call happens. Caller is responsible for
-    /// having written the pristine text to that path first.</summary>
-    public void StagePristine(string originFolder, string relativePath)
+    /// having written the text to be captured to that path first.</summary>
+    public void StagePath(string originFolder, string relativePath)
     {
         var (gitDir, workTree) = PathsFor(originFolder);
         GitCli.Run(gitDir, workTree, "add", "--", ToGitPath(relativePath));
     }
 
-    /// <summary>Commits whatever is currently staged — the pristine text <see cref="StagePristine"/>
+    /// <summary>Commits whatever is currently staged — the text <see cref="StagePath"/>
     /// captured, not the working-tree file's content at commit time, which the caller may have since
-    /// overwritten with dirt. This is the vendor (baseline) commit every later diff is measured
-    /// against; call it only once everything that could still fail for this record has already
+    /// overwritten. For a vendor's first-touch call this is the baseline commit every later diff is
+    /// measured against; for a save-time call (<c>LedgerGroupCommitter</c>) this is the group's own
+    /// commit (ADR-0040/#371). Call it only once everything that could still fail has already
     /// succeeded.
     ///
     /// Deliberately no trailing pathspec on the <c>git commit</c> invocation, despite one narrowing
@@ -101,9 +120,9 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
             "commit", "-q", "-m", message);
     }
 
-    /// <summary>Undoes a <see cref="StagePristine"/> that will never reach <see cref="CommitStaged"/>
+    /// <summary>Undoes a <see cref="StagePath"/> that will never reach <see cref="CommitStaged"/>
     /// (the risky work in between threw) — <c>git reset -- path</c>, which works even before any
-    /// commit exists. Without this, a failed attempt's staged-but-uncommitted pristine blob would sit
+    /// commit exists. Without this, a failed attempt's staged-but-uncommitted content would sit
     /// in the index until some *later*, unrelated successful commit swept it in too (since
     /// <see cref="CommitStaged"/> commits the whole index, by design — see its own remarks).</summary>
     public void UnstagePath(string originFolder, string relativePath)

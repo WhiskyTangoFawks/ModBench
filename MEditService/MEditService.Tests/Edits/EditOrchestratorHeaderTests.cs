@@ -35,7 +35,7 @@ public sealed class EditOrchestratorHeaderTests
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);
         var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
         return (orchestrator, manager);
     }
 
@@ -483,7 +483,7 @@ public sealed class EditOrchestratorHeaderTests
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);
         var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
         return (orchestrator, manager, changes, query);
     }
 

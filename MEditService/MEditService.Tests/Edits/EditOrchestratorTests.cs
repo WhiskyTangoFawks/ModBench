@@ -28,7 +28,7 @@ public sealed class EditOrchestratorTests
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
         return (orchestrator, manager);
     }
 
@@ -126,7 +126,7 @@ public sealed class EditOrchestratorTests
             var changes = DuckDbTestFactory.MakePendingChangeService();
             var query = new RecordQueryService(sessionStub, changes, reflector, new ConflictClassifier());
             var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-            var orchestrator = new EditOrchestrator(sessionStub, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+            var orchestrator = new EditOrchestrator(sessionStub, query, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
 
             var fields = new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") };
 
@@ -152,7 +152,7 @@ public sealed class EditOrchestratorTests
             var changes = DuckDbTestFactory.MakePendingChangeService();
             var query = new RecordQueryService(sessionStub, changes, reflector, new ConflictClassifier());
             var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-            var orchestrator = new EditOrchestrator(sessionStub, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+            var orchestrator = new EditOrchestrator(sessionStub, query, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
 
             var fields = new Dictionary<string, JsonElement> { ["author"] = J("\"Jane Modder\"") };
             var result = orchestrator.StageEdit("000000:TestPlugin.esp", "TestPlugin.esp", fields, "user", null);
@@ -238,7 +238,7 @@ public sealed class EditOrchestratorTests
                 var changes = DuckDbTestFactory.MakePendingChangeService();
                 var query = new RecordQueryService(sessionStub, changes, reflector, new ConflictClassifier());
                 var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-                var orchestrator = new EditOrchestrator(sessionStub, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+                var orchestrator = new EditOrchestrator(sessionStub, query, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
                 var fields = new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") };
 
                 var result = orchestrator.StageEdit(npcKey.ToString(), "Shared.esp", fields, "user", null);
@@ -465,7 +465,7 @@ public sealed class EditOrchestratorTests
             var changes = DuckDbTestFactory.MakePendingChangeService();
             var query = new RecordQueryService(sessionStub, changes, reflector, new ConflictClassifier());
             var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-            var orchestrator = new EditOrchestrator(sessionStub, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+            var orchestrator = new EditOrchestrator(sessionStub, query, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
 
             var result = orchestrator.CopyRecordTo(npcKey.ToString(), "Source.esp", "user");
 
@@ -638,7 +638,7 @@ public sealed class EditOrchestratorTests
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);
         var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
         return (orchestrator, manager, changes);
     }
 

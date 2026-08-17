@@ -29,6 +29,15 @@ public interface IEditOrchestrator
         string formKey, string targetPlugin, string source, string? sourcePlugin = null, string? sourceOrigin = null);
 
     /// <summary>
+    /// Reverts <paramref name="formKey"/>'s fields to how they stood at <paramref name="commitish"/>
+    /// in its own ledger (ADR-0040/#371 AC3) and stages that as an ordinary field edit — see
+    /// <c>EditOrchestrator</c>'s own remarks for why this both bypasses <see cref="StageEdit"/>'s
+    /// editable-subset guard (like <see cref="CopyRecordTo"/> already does) and, unlike
+    /// <see cref="CopyRecordTo"/>, still refreshes the ledger's own working-tree dirt.
+    /// </summary>
+    Task<StageEditResult> RevertRecordToLedgerCommitAsync(string formKey, string plugin, string commitish, string source);
+
+    /// <summary>
     /// Reserves a new FormKey for <paramref name="plugin"/>, stages a <c>$create</c> change with a new GroupId,
     /// and returns the reserved FormKey and GroupId.
     /// Returns <see cref="CreateRecordOutcome.InvalidReferences"/> when the template record carries

@@ -25,7 +25,7 @@ public sealed class EditOrchestratorConditionTests
         var changes = DuckDbTestFactory.MakePendingChangeService();
         var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
         return (orchestrator, manager, changes);
     }
 
@@ -40,7 +40,7 @@ public sealed class EditOrchestratorConditionTests
         var (changes, connection) = DuckDbTestFactory.MakePendingChangeServiceWithConnection();
         var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
         return (orchestrator, manager, changes, connection);
     }
 
