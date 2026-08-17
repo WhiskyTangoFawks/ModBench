@@ -667,10 +667,17 @@ public sealed class EditOrchestratorHeaderTests
 
     // --- AC5 (#336/ADR-0038): the automatic door slice 1 left open is now closed too — no
     // production path stages a pending-change row targeting the header's masters field at all,
-    // needing a master or not. ---
+    // needing a master or not. This is the invariant #338's deleted added-master edge rule
+    // (PendingChangeGraph.ApplyAddedMasterRule) depended on for its own deletion to be safe: the
+    // rule only ever matched a node satisfying that shape, and with no path able to produce one,
+    // its loop body was dead over every reachable state. CopyRecordTo is the one path that could
+    // plausibly violate it — the pre-#336 auto-add-master step lived here — so it's the only one
+    // exercised below; StageEdit's direct masters edit is separately rejected outright by #335's
+    // guard (StageEdit_MastersDirectEdit_ValidAppend_IsRejected above), and no other staging path
+    // ever touches the masters field at all. ---
 
     [Fact]
-    public void CopyRecordTo_NeverStagesAPendingChangeRowTargetingTheHeadersMastersField()
+    public void NoProductionPathStagesAPendingChangeRowTargetingTheHeadersMastersField()
     {
         FormKey npcKey = default;
         var data = new PluginFixtureBuilder("eo-copy-master-ac5")
