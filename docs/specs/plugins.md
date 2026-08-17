@@ -513,6 +513,14 @@ drift provider would have to answer for the other context's URI scheme and then 
 badge on any row carrying both. That is a platform limitation, which is the one carve-out
 Native-first allows.
 
+**Reveal in Explorer diverges on a drifted row, deliberately.** That command re-resolves the plugin
+name to a path *live* on every invocation, so on a drifted row it reveals the file the name resolves
+to **now**, while the tree is still browsing the copy the session loaded. The two point at different
+files until the row is re-read. This is not an inconsistency to reconcile: "where is this plugin's
+file" is the question that command has always answered, answered freshly, and it is the right answer
+for every undrifted row. Making it reveal the loaded copy instead would change a pre-existing
+command's semantics, which is a separate decision from this one.
+
 **Re-read.** Per plugin and explicit only — no batching, no "re-read all drifted". It re-indexes
 that one plugin from the new origin (`POST /plugins/reread` → unindex the old `(plugin, origin)`,
 open and index the new copy in the same load-order slot, re-sweep winners so conflict badges

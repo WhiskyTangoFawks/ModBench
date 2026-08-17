@@ -477,23 +477,33 @@ public sealed class SessionManager(
         if (!File.Exists(newPath))
             throw new FileNotFoundException($"Plugin file not found: {newPath}", newPath);
 
-        // Refused, never queued behind the load and *never* EnterExclusive(): that call cancels
-        // whatever load is in flight, so joining the gate would let a re-read destroy a load the
-        // user is sitting and watching. The indexing loop also writes to the very repository this
-        // would unindex from. The caller retries once the load has landed; the endpoint answers 409.
-        // Refused for the whole load, including the window before the partial session is published:
-        // a re-read is not answerable against a load order that is still being assembled, and
-        // "there is no session yet" would be a misleading way to say so.
+        // One lock for the whole check-and-act, deliberately — see below. `_lock` is reentrant, so
+        // RequirePlugin taking it again inside is free.
         lock (_lock)
         {
+            // Refused, never queued behind the load and *never* EnterExclusive(): that call cancels
+            // whatever load is in flight, so joining the gate would let a re-read destroy a load the
+            // user is sitting and watching. The indexing loop also writes to the very repository
+            // this would unindex from. The caller retries once the load has landed; the endpoint
+            // answers 409. Refused for the whole load, including the window before the partial
+            // session is published: a re-read is not answerable against a load order still being
+            // assembled, and "there is no session yet" would be a misleading way to say so.
+            //
+            // This check and the mutation below must share one lock acquisition. Split across two,
+            // a Load/LoadExplicit landing in the gap runs BeginLoad() → DisposeCurrentSession(),
+            // nulling _session and disposing _repository — so the mutation would dereference a null
+            // session and write to a disposed DuckDB connection, surfacing as a 500 and a touched
+            // native resource exactly where this comment promises a clean 409. Unload() is the same
+            // hazard without even setting _loadCancellation, so the check alone could never have
+            // covered it. Every other gated mutation in this file holds the lock across the whole
+            // check-and-act (LoadUnlistedPlugin, UnloadUnlistedPlugin); this now does too, and
+            // holding it across an open-plus-index is precisely what LoadUnlistedPlugin already
+            // does. (#279 review)
             if (_loadCancellation is not null)
                 throw new SessionBusyException("A session load is still in flight; re-read this plugin once it has finished.");
-        }
 
-        var (previous, repository, _) = RequirePlugin(plugin);
+            var (previous, repository, _) = RequirePlugin(plugin);
 
-        lock (_lock)
-        {
             _logger.LogInformation("Re-reading {Plugin}: {OldOrigin} → {NewOrigin}", plugin, previous.Origin, newOrigin);
 
             // Rebind first — it opens the new file, which is the failure-prone half, and it leaves

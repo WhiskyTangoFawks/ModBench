@@ -32,12 +32,15 @@ public sealed class SessionManagerRereadPluginTests
     /// one NPC carrying <paramref name="editorId"/>. Built from the same ModKey as the fixture's
     /// copy, so the two files agree on the record's FormKey and differ only in its EditorID — which
     /// is what makes "did the index come from the other file?" a single-field question.</summary>
-    private static string WriteCopy(string root, string folder, string name, string editorId)
+    private static string WriteCopy(string root, string folder, string name, string editorId, int extraRecords = 0)
     {
         var dir = Path.Combine(root, folder);
         Directory.CreateDirectory(dir);
         var mod = new Fallout4Mod(ModKey.FromFileName(name), Fallout4Release.Fallout4);
         mod.Npcs.AddNew(editorId);
+        // Each AddNew consumes a FormID, so `extraRecords` is how a copy is given a NextFormID
+        // demonstrably different from the fixture's — see the reservation test below.
+        for (var i = 0; i < extraRecords; i++) mod.Npcs.AddNew($"{editorId}Filler{i}");
         var path = Path.Combine(dir, name);
         mod.WriteToBinary(path);
         return path;
@@ -175,6 +178,157 @@ public sealed class SessionManagerRereadPluginTests
         // The load finished on its own terms and still holds the copy it was loading.
         Assert.Equal("ModA", manager.Session!.Plugins.Single(p => p.Name == "A.esp").Origin);
         Assert.Equal("FromModA", ReadIndexedNpc(manager, "A.esp").EditorId);
+    }
+
+    /// <summary>Fires <paramref name="onUnindex"/> the first time a re-read unindexes the copy it
+    /// is replacing — i.e. from *inside* the mutation, which is the only place a test can get a
+    /// thread in edgeways while <see cref="SessionManager.RereadPlugin"/> holds the session lock.
+    /// Nothing on the load path calls Unindex, so the hook cannot fire early.</summary>
+    private sealed class UnindexHookFactory(IRecordRepositoryFactory inner, Action onUnindex) : IRecordRepositoryFactory
+    {
+        public IRecordRepository Create(GameRelease gameRelease) => new HookedRepository(inner.Create(gameRelease), onUnindex);
+
+        private sealed class HookedRepository(IRecordRepository inner, Action onUnindex) : DelegatingRecordRepository(inner)
+        {
+            private bool _fired;
+            public override void Unindex(string plugin, string origin)
+            {
+                if (!_fired) { _fired = true; onUnindex(); }
+                base.Unindex(plugin, origin);
+            }
+        }
+    }
+
+    // #279 review: the re-read holds the session for the whole of its mutation, so a teardown
+    // cannot land midway and dispose the DuckDB connection it is still writing to — the crash class
+    // MEditService/CLAUDE.md's drain invariant exists to prevent.
+    //
+    // Unload() is the teardown, deliberately rather than a competing Load: it disposes the session
+    // *without* ever setting _loadCancellation, so the in-flight-load check cannot see it coming.
+    // Only the lock's scope can refuse it, which makes this a test of that scope rather than of the
+    // check.
+    //
+    // Honest limit: this cannot fail on the exact split-lock version the review found. There the
+    // mutation was still a single lock block and the unguarded window sat between the check and
+    // RequirePlugin, with no injectable seam inside it to park a thread in. What it does pin is
+    // that the mutation may never *again* be narrowed out of that lock — the same defect
+    // reintroduced from the other end.
+    [Fact]
+    public async Task RereadPlugin_HoldsTheSessionAcrossItsMutation_SoATeardownCannotLandMidway()
+    {
+        using var fx = new PluginFixtureBuilder("sm-reread-teardown")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
+            .BuildScattered();
+        var newPath = WriteCopy(fx.Root, "mod-ModB", "A.esp", "FromModB");
+
+        var reflector = SharedSchemaReflector.Instance;
+        SessionManager? manager = null;
+        Task? teardown = null;
+        var factory = new UnindexHookFactory(
+            new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector)),
+            () =>
+            {
+                var started = new ManualResetEventSlim();
+                teardown = Task.Run(() => { started.Set(); manager!.Unload(); });
+                Assert.True(started.Wait(TimeSpan.FromSeconds(5)), "the teardown thread never started");
+                // If the re-read did not hold the session across its mutation, this is exactly
+                // where the disposal would land — part-way through unindex/index/sweep.
+                Assert.False(
+                    teardown.Wait(TimeSpan.FromMilliseconds(250)),
+                    "Unload completed while a re-read was mid-mutation — the session can be disposed underneath it");
+            });
+
+        manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        using (manager)
+        {
+            ISessionManager sessionManager = manager;
+            sessionManager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+
+            var response = sessionManager.RereadPlugin("A.esp", newPath, "ModB");
+
+            // It ran to completion against a live session, not a half-disposed one.
+            Assert.Equal("ModB", response.Origin);
+            // Awaited, not blocked on (xUnit1031); the timeout keeps a genuine deadlock a failure
+            // rather than a hung suite.
+            await teardown!.WaitAsync(TimeSpan.FromSeconds(30));
+            // And the teardown it held off then happened, rather than being lost.
+            Assert.Null(manager.Session);
+        }
+    }
+
+    // #279 review (Suite axis): the FormID reservation counter belongs to the *file*, not the name.
+    // Carrying the replaced copy's counter over would hand out FormKeys the new copy has already
+    // used — silent data corruption at the next Create Record. The negation on that line survived
+    // mutation, i.e. nothing observed it; this is what observes it.
+    [Fact]
+    public void RereadPlugin_ReservesTheNextFormIdOfTheCopyItReadFromDisk()
+    {
+        using var fx = new PluginFixtureBuilder("sm-reread-formid")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
+            .BuildScattered();
+        // Two more records than the loaded copy, so the two files' NextFormIDs cannot coincide and
+        // the reserved key names which file the counter came from.
+        var newPath = WriteCopy(fx.Root, "mod-ModB", "A.esp", "FromModB", extraRecords: 2);
+
+        var (manager, _) = MakeManager();
+        using (manager)
+        {
+            ISessionManager sessionManager = manager;
+            sessionManager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+            var beforeReread = sessionManager.ReserveFormKey("A.esp");
+
+            sessionManager.RereadPlugin("A.esp", newPath, "ModB");
+
+            var afterReread = sessionManager.ReserveFormKey("A.esp");
+            // Not merely "different": specifically the new copy's own next id, which is three
+            // FormIDs further on than the one-record copy the session loaded. A counter left
+            // untouched would answer one past `beforeReread` instead.
+            Assert.NotEqual(beforeReread, afterReread);
+            var used = FormKey.Factory(beforeReread).ID;
+            Assert.Equal(used + 2, FormKey.Factory(afterReread).ID);
+        }
+    }
+
+    // #279 review (Suite axis): the endpoint's own blank check filters before SessionManager is
+    // ever called, so these two guards had no coverage at all. Tested here directly, matching the
+    // CreatePlugin_NullName/_WhitespaceName pair this method is patterned after — each public entry
+    // point answers for its own arguments, independently of the API layer in front of it.
+    [Fact]
+    public void RereadPlugin_BlankPath_ThrowsArgumentException()
+    {
+        using var fx = new PluginFixtureBuilder("sm-reread-blank-path")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
+            .BuildScattered();
+
+        var (manager, _) = MakeManager();
+        using (manager)
+        {
+            ISessionManager sessionManager = manager;
+            sessionManager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+
+            var ex = Assert.Throws<ArgumentException>(() => sessionManager.RereadPlugin("A.esp", "   ", "ModB"));
+            Assert.Contains("path", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void RereadPlugin_BlankOrigin_ThrowsArgumentException()
+    {
+        using var fx = new PluginFixtureBuilder("sm-reread-blank-origin")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
+            .BuildScattered();
+        var newPath = WriteCopy(fx.Root, "mod-ModB", "A.esp", "FromModB");
+
+        var (manager, _) = MakeManager();
+        using (manager)
+        {
+            ISessionManager sessionManager = manager;
+            sessionManager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+
+            // A real path, so "no origin" is the only thing left for this to be refused over.
+            var ex = Assert.Throws<ArgumentException>(() => sessionManager.RereadPlugin("A.esp", newPath, "   "));
+            Assert.Contains("origin", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
