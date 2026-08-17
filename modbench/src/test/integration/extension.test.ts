@@ -1352,13 +1352,18 @@ describe('Close mEdit clears the record filter\'s code lens too, not just the re
   // FilterCodeLensProvider only renders a lens for a document inside scriptsPath, and scriptsPath
   // is resolved once at activate() (config, or ~/.medit/scripts) — not reconfigurable per test the
   // way mods.gameDirectory is elsewhere in this file. setupScripts already creates and writes into
-  // this real directory on every activation; this file is additive to it, uniquely named so a
-  // leaked file (a crash between write and cleanup) reads as this test's own rather than a mystery
-  // in a real product-facing folder, and removed in `after` without touching anything else there.
+  // this real directory on every activation; this file is additive to it, kept in its own
+  // mkdtempSync'd subdirectory (the file's own uniqueness idiom, used ten other places including
+  // gameDir just below — atomic, unlike a hand-rolled Date.now() name, which two runs against the
+  // same $HOME could collide on) so a leaked artifact (a crash between write and cleanup) reads as
+  // this test's own rather than a mystery in a real product-facing folder. The provider gates on a
+  // URI *prefix*, so a subdirectory under scriptsPath still matches, same as gameDir under a temp
+  // root elsewhere in this file.
   const scriptsDir = path.join(os.homedir(), '.medit', 'scripts');
-  const scriptsFile = path.join(scriptsDir, `__test-354-filter-lens-${Date.now()}.sql`);
   const sql = 'SELECT form_key FROM "npc_"';
   let gameDir = '';
+  let scriptsSubdir = '';
+  let scriptsFile = '';
 
   const codeLensCommandFor = async (uri: vscode.Uri): Promise<string | undefined> => {
     const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>('vscode.executeCodeLensProvider', uri);
@@ -1374,6 +1379,8 @@ describe('Close mEdit clears the record filter\'s code lens too, not just the re
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
     fs.mkdirSync(scriptsDir, { recursive: true });
+    scriptsSubdir = fs.mkdtempSync(path.join(scriptsDir, '__test-354-'));
+    scriptsFile = path.join(scriptsSubdir, 'filter-lens.sql');
     fs.writeFileSync(scriptsFile, sql);
   });
 
@@ -1383,9 +1390,9 @@ describe('Close mEdit clears the record filter\'s code lens too, not just the re
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '');
     fs.rmSync(gameDir, { recursive: true, force: true });
-    // Tolerate the file already being gone; a cleanup failure here must never mask the test's own
-    // assertion result.
-    try { fs.rmSync(scriptsFile, { force: true }); } catch { /* best-effort */ }
+    // Tolerate the directory already being gone; a cleanup failure here must never mask the
+    // test's own assertion result.
+    try { fs.rmSync(scriptsSubdir, { recursive: true, force: true }); } catch { /* best-effort */ }
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     resetMockBackend();
   });
