@@ -366,6 +366,7 @@ describe('modbench command registration', () => {
     'modbench.vmad.setPropertyFlags',
     'modbench.createPlaced',
     'modbench.modList.filter',
+    'modbench.modList.clearFilter',
     'modbench.modList.switchProfile',
     'modbench.modList.launchMedit',
     'modbench.modList.sortDescending',
@@ -400,11 +401,15 @@ describe('modbench command registration', () => {
     // #247: Downloads narrows by name through the same widget as every other list view,
     // superseding #233's native-tree-Find call.
     'modbench.downloads.filter',
+    // #255: every name filter is durable, so every one of them has an explicit clear — the
+    // slot-1 clear variant, gated on that view's own filter-active context key.
+    'modbench.downloads.clearFilter',
     // #238: the view/title Sort by… overflow command and the Show-hidden title-bar toggle.
     'modbench.downloads.sortBy',
     'modbench.downloads.showHidden',
     'modbench.downloads.hideHidden',
     'modbench.pluginListTree.filter',
+    'modbench.pluginListTree.clearFilter',
     'modbench.pluginListTree.revealInExplorer',
   ];
 

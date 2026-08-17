@@ -231,6 +231,33 @@ describe('package.json filtering is one UX (#247)', () => {
   it('keeps $(filter) for the record filter, so the two never read as the same action', () => {
     expect(commandTitle('modbench.setFilter')!.icon).toBe('$(filter)');
   });
+
+  // #255: the filter is durable, so it needs a way out — the established two-command +
+  // context-key toggle template (sort direction, show-hidden), so slot 1 shows exactly one of
+  // the pair at a time. The key is per view: the record filter's `modbench.filterActive` is a
+  // different, independently-clearable axis on the same title bar.
+  const DURABLE_FILTERS = [
+    ['modbench.modList', 'modbench.modList.filter', 'modbench.modList.clearFilter', 'modbench.modList.filterActive'],
+    ['modbench.pluginListTree', 'modbench.pluginListTree.filter', 'modbench.pluginListTree.clearFilter', 'modbench.pluginListTree.filterActive'],
+    ['modbench.downloads', 'modbench.downloads.filter', 'modbench.downloads.clearFilter', 'modbench.downloads.filterActive'],
+  ] as const;
+
+  it.each(DURABLE_FILTERS)('%s swaps slot 1 to its clear variant while a filter is active', (view, open, clearCommand, key) => {
+    const openEntry = titleMenus().find((e) => e.command === open && e.when.includes(`view == ${view}`));
+    const clearEntry = titleMenus().find((e) => e.command === clearCommand && e.when.includes(`view == ${view}`));
+    expect(clearEntry, `expected ${clearCommand} on ${view}`).toBeTruthy();
+    expect(openEntry!.when).toBe(`view == ${view} && !${key}`);
+    expect(clearEntry!.when).toBe(`view == ${view} && ${key}`);
+    expect(clearEntry!.group).toBe('navigation@1');
+  });
+
+  // $(clear-all) is what VS Code's own Extensions view uses for "Clear Extensions Search
+  // Results" — clearing a text filter on a list. $(search-stop) was rejected: it means halting a
+  // search in progress, which would imply the results stay. #247 owns the icon rubric and may
+  // override this; it is recorded here rather than silently inherited.
+  it.each(DURABLE_FILTERS)('%s clears with $(clear-all)', (_view, _open, clearCommand) => {
+    expect(commandTitle(clearCommand)!.icon).toBe('$(clear-all)');
+  });
 });
 
 describe('package.json Refresh is one command (#247)', () => {

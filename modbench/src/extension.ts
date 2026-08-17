@@ -56,6 +56,7 @@ import { HiddenDownloadDecorationProvider } from './modmanager/HiddenDownloadDec
 import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
 import { makeReporter } from './reporter';
 import { LoadoutHeaderProvider } from './LoadoutHeaderProvider';
+import { registerNameFilter } from './nameFilter';
 
 let backendManager: BackendManager | undefined;
 // #247: the Loadout header re-reads its rows whenever workspace-scope state moves. Module
@@ -203,45 +204,6 @@ function exitToLoadout(): void {
   // comment for why a live re-fetch here would race backendManager.stop() below.
   pendingChangeDecorationProvider?.clear();
   backendManager?.stop();
-}
-
-/** The filter widget — one implementation for every list view (Mods, Plugin List, Plugins
- *  tree, Downloads): a transient InputBox that live-narrows as the user types and restores
- *  the unfiltered list on dismiss. Registers `commandId` to open it.
- *
- *  #247: there used to be two of these, the second hand-rolled inside the Mods command body
- *  purely to carry a toggle button — so "filter" meant three different things across five
- *  title bars. `toggle` folds that case in as an option; it is also why `setFilter` takes the
- *  toggle state as a second argument that the three plain call sites ignore.
- *
- *  The clear-on-dismiss below is the whole of #255: the filter does not survive losing focus,
- *  which makes it usable only while typing. It is deliberately still here — fixing it is a
- *  UX decision (a persistent chip and an explicit clear), and now that there is one widget
- *  that fix lands on all four views at once. */
-function registerFilterBoxCommand(
-  commandId: string,
-  placeholder: string,
-  setFilter: (text: string, toggleOn: boolean) => void,
-  toggle?: { icon: string; label: string },
-): vscode.Disposable {
-  return vscode.commands.registerCommand(commandId, () => {
-    const box = vscode.window.createInputBox();
-    box.placeholder = placeholder;
-    let toggleOn = true;
-    const updateButtons = () => {
-      if (!toggle) return;
-      box.buttons = [{ iconPath: new vscode.ThemeIcon(toggle.icon), tooltip: `${toggle.label} (${toggleOn ? 'on' : 'off'})` }];
-    };
-    updateButtons();
-    box.onDidTriggerButton(() => {
-      toggleOn = !toggleOn;
-      updateButtons();
-      setFilter(box.value, toggleOn);
-    });
-    box.onDidChangeValue((text) => setFilter(text, toggleOn));
-    box.onDidHide(() => { setFilter('', true); box.dispose(); });
-    box.show();
-  });
 }
 
 /** Game-path resolver: explicit `game.*` overrides if both set, else autodetect.
@@ -1028,6 +990,9 @@ function registerVmadOpCommands(deps: EditorCommandDeps): vscode.Disposable[] {
 
 interface ModListCoreDeps {
   modListProvider: ModListProvider;
+  // #255: the name filter's readout surface — the view's own description, which this view
+  // already uses for the active profile name (the two compose, see nameFilter.ts).
+  modListView: vscode.TreeView<ModlistNode>;
   modlistSource: Mo2ModlistSource;
   updateProfileDescription: () => Promise<void>;
   // #307: takes no progress reporter any more — it owns its own, in the Plugins view's header.
@@ -1036,7 +1001,7 @@ interface ModListCoreDeps {
 }
 /** Loadout core commands: refresh, switch profile, filter, launch mEdit. */
 function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[] {
-  const { modListProvider, modlistSource, updateProfileDescription, enterEditing, outputChannel } = deps;
+  const { modListProvider, modListView, modlistSource, updateProfileDescription, enterEditing, outputChannel } = deps;
   return [
       vscode.commands.registerCommand('modbench.modList.sortDescending', () => {
         modListProvider.toggleSortOrder();
@@ -1063,11 +1028,13 @@ function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[]
         void updateProfileDescription();
         loadoutHeaderProvider?.refresh();
       }),
-      registerFilterBoxCommand(
-        'modbench.modList.filter', 'Filter mods…',
-        (text, grouping) => modListProvider.setFilter(text, grouping),
-        { icon: 'list-tree', label: 'Group by separator' },
-      ),
+      registerNameFilter({
+        view: modListView,
+        viewId: 'modbench.modList',
+        placeholder: 'Filter mods…',
+        setFilter: (text, grouping) => modListProvider.setFilter(text, grouping),
+        toggle: { icon: 'list-tree', label: 'Group by separator' },
+      }),
       vscode.commands.registerCommand('modbench.modList.launchMedit', async () => {
         // #270 / #307: enterEditing now puts chevrons on the merged tree's rows *as each plugin
         // lands* rather than all at once at the end, and owns its own progress indicator — in
@@ -1330,7 +1297,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
         void vscode.window.showErrorMessage(`Modbench: Failed to reveal "${name}" in Explorer.`);
       }
     }),
-    registerFilterBoxCommand('modbench.pluginListTree.filter', 'Filter plugins…', (text) => pluginListProvider.setFilter(text)),
+    registerNameFilter({ view: pluginListView, viewId: 'modbench.pluginListTree', placeholder: 'Filter plugins…', setFilter: (text) => pluginListProvider.setFilter(text) }),
   ] };
 }
 
@@ -1548,7 +1515,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     context.subscriptions.push(
       modListView,
       modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)),
-      ...registerModListCoreCommands({ modListProvider, modlistSource, updateProfileDescription, enterEditing, outputChannel }),
+      ...registerModListCoreCommands({ modListProvider, modListView, modlistSource, updateProfileDescription, enterEditing, outputChannel }),
       ...registerDeployCommands(instanceRoot, modlistSource, outputChannel),
       registerLaunchCommand(outputChannel),
       ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
@@ -1659,7 +1626,7 @@ function registerDownloadsView(
       vscode.window.registerFileDecorationProvider(
         new HiddenDownloadDecorationProvider(instanceRoot, () => downloadsProvider.hiddenNames()),
       ),
-      registerFilterBoxCommand('modbench.downloads.filter', 'Filter downloads…', (text) => downloadsProvider.setFilter(text)),
+      registerNameFilter({ view: downloadsView, viewId: 'modbench.downloads', placeholder: 'Filter downloads…', setFilter: (text) => downloadsProvider.setFilter(text) }),
       registerDownloadsSortCommand(downloadsProvider),
       ...registerDownloadsHiddenToggleCommands(downloadsProvider),
       ...registerDownloadsSingleRowCommands(instanceRoot, log),
