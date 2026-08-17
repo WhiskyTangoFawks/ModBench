@@ -80,6 +80,14 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 **Index**: DuckDB read model of committed record data. Rebuilt on session load. Cache, not source of truth — deleting it loses nothing. _Avoid: database, store._
 
+**Ledger**: The hidden git repository of per-record text that carries durable history and review state for a plugin's records, handed to the backend as opaque physical paths (working tree + gitdir), never discovered by it (ADR-0040). For every record it tracks, text at its `main` is authoritative and the plugin binary is a build artifact; for untracked records the binary remains authoritative. _Avoid: text mirror, Spriggit repo._
+
+**Tracked record**: A record whose text lives in a ledger. Tracking is monotonic — a record becomes tracked at first touch (see Vendor) and nothing untracks it. _Avoid: vendored record (vendoring is the act), versioned record._
+
+**Vendor**: Commit a record's pristine text to the ledger, copy-on-write at first touch, before the user's first edit lands. Container-shaped records vendor *shallow*: their Child records are vendored as entries of their own and the parent's file carries only the parent's fields, containment expressed in the ledger path — one record is always exactly one file (ADR-0040 amendment, #387). _Avoid: import, snapshot._
+
+**Baseline**: The vendored pristine-text commit a tracked record's edits diff against. Advances only when the pristine content itself changes, by vendoring the new pristine text and rebasing the user's commits onto it. _Avoid: original, base version._
+
 **Pending change**: Staged field edit held in memory; not yet written to disk. For complex fields, stores the entire new field value atomically — no per-element pending change. _Avoid: draft, unsaved edit._
 
 **ChangeGroup**: Set of pending changes that must be saved or reverted atomically because reverting a subset would invalidate the rest — possibly spanning plugins (e.g. a renumber's cascading reference updates). Derived, not stored: a connected component of the pending-change dependency graph, never a batch labelled by whichever command staged it. Every pending change is in exactly one group; a change nothing depends on is a group of one. There is no such thing as an ungrouped change. Surfaced in the Pending Changes tree. See ADR-0028. _Avoid: transaction, batch edit, standalone/ungrouped change._
