@@ -86,7 +86,12 @@ let loadAbort: AbortController | undefined;
  *  so there is no banner row and no bespoke widget). `undefined` clears it, which is the value
  *  the property itself takes. */
 function say(message: string | undefined): void {
-  if (pluginsTreeView) pluginsTreeView.message = message;
+  if (!pluginsTreeView) return;
+  pluginsTreeView.message = message;
+  // #255: one message surface, two things that can want it. The load's statement wins while it
+  // has something to say; when it stops, whatever the name filter had to say comes back — a
+  // no-matches statement must not be silently swallowed by a load that has since finished.
+  if (message === undefined) pluginsNameFilter?.refresh();
 }
 
 /** #307 / ADR-0035 AC2: run `work` with a progress indicator in the **Plugins view's own header**,
@@ -1260,7 +1265,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     showCollapseAll: true,
   });
   pluginsTreeView = pluginListView; // #307: see its declaration — progress and message live here
-  pluginsNameFilter = registerNameFilter({ view: pluginListView, viewId: 'modbench.pluginListTree', placeholder: 'Filter plugins…', setFilter: (text) => pluginListProvider.setFilter(text) });
+  pluginsNameFilter = registerPluginsNameFilter(pluginListView, pluginListProvider);
   return { pluginListProvider, disposables: [
     pluginListView,
     composite,
@@ -1305,6 +1310,21 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     }),
     pluginsNameFilter,
   ] };
+}
+
+/** #255: the merged Plugins tree's name filter — the axis that narrows *which plugin rows*
+ *  appear, composing with (never replacing) the record filter's axis over which records appear
+ *  under an expanded row. An error row survives every filter by design (ADR-0026), so it counts
+ *  as content here: a view showing the reason its list is wrong must not also claim the term
+ *  matched nothing. */
+function registerPluginsNameFilter(
+  view: vscode.TreeView<PluginListNode | PluginTreeNode>, provider: PluginListProvider,
+): NameFilter {
+  return registerNameFilter({
+    view, viewId: 'modbench.pluginListTree', placeholder: 'Filter plugins…',
+    setFilter: (text) => provider.setFilter(text),
+    hasRows: async () => (await provider.getChildren()).length > 0,
+  });
 }
 
 /** Overwrite-folder surface (#82): a live watcher that re-renders the Mods tree
@@ -1431,6 +1451,9 @@ function createModListView(
     viewId: 'modbench.modList',
     placeholder: 'Filter mods…',
     setFilter: (text, grouping) => modListProvider.setFilter(text, grouping),
+    // The pinned Overwrite row sits outside all filtering (it is a fixture over the folder, not
+    // a modlist entry), so it is not evidence that the term matched anything.
+    hasRows: async () => (await modListProvider.getChildren()).some((n) => !(n instanceof OverwriteNode)),
     toggle: { icon: 'list-tree', label: 'Group by separator' },
   });
   const updateProfileDescription = async () => {
@@ -1653,7 +1676,11 @@ function registerDownloadsView(
       vscode.window.registerFileDecorationProvider(
         new HiddenDownloadDecorationProvider(instanceRoot, () => downloadsProvider.hiddenNames()),
       ),
-      registerNameFilter({ view: downloadsView, viewId: 'modbench.downloads', placeholder: 'Filter downloads…', setFilter: (text) => downloadsProvider.setFilter(text) }),
+      registerNameFilter({
+        view: downloadsView, viewId: 'modbench.downloads', placeholder: 'Filter downloads…',
+        setFilter: (text) => downloadsProvider.setFilter(text),
+        hasRows: async () => (await downloadsProvider.getChildren()).length > 0,
+      }),
       registerDownloadsSortCommand(downloadsProvider),
       ...registerDownloadsHiddenToggleCommands(downloadsProvider),
       ...registerDownloadsSingleRowCommands(instanceRoot, log),

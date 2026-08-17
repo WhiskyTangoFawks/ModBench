@@ -35,6 +35,11 @@ export interface NameFilterDeps {
   /** Applies the term to the view's provider, which is where the narrowing itself lives. The
    *  second argument is the Mods separator toggle; the other call sites ignore it. */
   setFilter: (text: string, toggleOn: boolean) => void;
+  /** Whether the view has any rows left once the term is applied — asked of the provider rather
+   *  than inferred, because "matched nothing" and "shows nothing" are different questions. A row
+   *  that survives every filter by design (ADR-0026's error row, the Mods tree's pinned Overwrite
+   *  row) is content, and a view showing content must not claim there are no matches. */
+  hasRows: () => Promise<boolean>;
   /** The Mods tree's group-by-separator option, or absent on views with no option to carry. */
   toggle?: { icon: string; label: string };
 }
@@ -45,6 +50,10 @@ export interface NameFilter extends vscode.Disposable {
    *  `view.description` outright — two writers would race, and the term has to appear beside
    *  the base rather than replace it. */
   setBaseDescription(text: string | undefined): void;
+  /** Restate the readout. For the one view where something else legitimately writes the same
+   *  message surface — the Plugins tree, whose session load speaks there (#307) — this is how
+   *  the filter's own statement comes back once the load has stopped talking. */
+  refresh(): void;
 }
 
 export function registerNameFilter(deps: NameFilterDeps): NameFilter {
@@ -60,12 +69,35 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
     deps.view.description = parts.length > 0 ? parts.join(' · ') : undefined;
   };
 
+  /** The no-matches statement (`TreeView.message`), or nothing. Only ever *clears* a message it
+   *  put there itself: the Plugins view uses the same property for the session load's own
+   *  statement (#307's `say`), and a filter keystroke must not silently erase it.
+   *
+   *  `generation` drops the answer of a `hasRows` call that a later keystroke has already
+   *  overtaken — the provider is asked asynchronously, and out-of-order resolutions would
+   *  otherwise leave the message describing a term the user has moved past. */
+  let generation = 0;
+  let messageShown = false;
+  const renderMessage = async (): Promise<void> => {
+    const mine = ++generation;
+    const empty = term !== '' && !(await deps.hasRows());
+    if (mine !== generation) return;
+    if (empty) {
+      deps.view.message = `No matches for "${term}".`;
+      messageShown = true;
+    } else if (messageShown) {
+      deps.view.message = undefined;
+      messageShown = false;
+    }
+  };
+
   const apply = (text: string, nextToggleOn: boolean): void => {
     term = text;
     toggleOn = nextToggleOn;
     deps.setFilter(text, nextToggleOn);
     void vscode.commands.executeCommand('setContext', `${deps.viewId}.filterActive`, text !== '');
     render();
+    void renderMessage();
   };
 
   const openBox = () => {
@@ -96,6 +128,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
 
   return {
     setBaseDescription: (text) => { base = text; render(); },
+    refresh: () => { render(); void renderMessage(); },
     dispose: () => { for (const d of disposables) d.dispose(); },
   };
 }

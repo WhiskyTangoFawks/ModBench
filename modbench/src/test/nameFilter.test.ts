@@ -76,6 +76,7 @@ function setup(overrides: Partial<NameFilterDeps> = {}): Harness {
     viewId: VIEW_ID,
     placeholder: 'Filter things…',
     setFilter: (text, toggleOn) => applied.push({ text, toggleOn }),
+    hasRows: () => Promise.resolve(true),
     ...overrides,
   });
   return { view, applied, filter };
@@ -190,6 +191,71 @@ describe('the active term reads out in the view description (#255)', () => {
     expect(view.description).toBe('"arm" · records: cells.sql');
     filter.setBaseDescription(undefined);
     expect(view.description).toBe('"arm"');
+  });
+});
+
+describe('a term that matches nothing says so (#255)', () => {
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+  it('names the term rather than leaving a bare empty tree, which reads as "there is nothing here"', async () => {
+    const { view } = setup({ hasRows: () => Promise.resolve(false) });
+    await open();
+    currentBox().type('zzz');
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+  });
+
+  it('says nothing while rows match', async () => {
+    const { view } = setup({ hasRows: () => Promise.resolve(true) });
+    await open();
+    currentBox().type('arm');
+    await flush();
+    expect(view.message).toBeUndefined();
+  });
+
+  it('takes the message back down when the filter is cleared', async () => {
+    const { view } = setup({ hasRows: () => Promise.resolve(false) });
+    await open();
+    currentBox().type('zzz');
+    await flush();
+    await clear();
+    await flush();
+    expect(view.message).toBeUndefined();
+  });
+
+  // ADR-0026: the message is decided by what survived the filter, not by whether the term
+  // matched anything. A view whose rows are an error row (DownloadsProvider and
+  // ModListProvider both keep theirs through every filter) still has rows — telling that user
+  // "no matches for arm" sends them debugging their filter instead of their data.
+  it('stays silent when what survived the filter is an error row', async () => {
+    const { view } = setup({ hasRows: () => Promise.resolve(true) });
+    await open();
+    currentBox().type('zzz');
+    await flush();
+    expect(view.message).toBeUndefined();
+  });
+
+  // The Plugins view has one message surface and two things that can want it: the session
+  // load's own statement (#307) and this. The load wins while it is running; `refresh` is how
+  // the filter gets its statement back once the load stops talking.
+  it('restates its message on refresh, after something else has taken the view message surface', async () => {
+    const { view, filter } = setup({ hasRows: () => Promise.resolve(false) });
+    await open();
+    currentBox().type('zzz');
+    await flush();
+    view.message = 'Loading plugins…';
+    filter.refresh();
+    await flush();
+    expect(view.message).toBe('No matches for "zzz".');
+  });
+
+  it('leaves the message alone when no filter is active — the view has other things to say (#307 load progress)', async () => {
+    const { view } = setup({ hasRows: () => Promise.resolve(false) });
+    view.message = 'Loading plugins…';
+    await open();
+    currentBox().hide();
+    await flush();
+    expect(view.message).toBe('Loading plugins…');
   });
 });
 
