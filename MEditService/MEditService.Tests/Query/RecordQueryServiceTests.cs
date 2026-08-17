@@ -1132,7 +1132,13 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetCompare_StagedContentNeedingNewMaster_HeaderMastersReflectsItImmediately()
     {
-        var data = new PluginFixtureBuilder("rqs-getcompare-derived-masters").WithPlugin("Target.esp").Build();
+        var data = new PluginFixtureBuilder("rqs-getcompare-derived-masters")
+            .WithPlugin("Target.esp", mod =>
+            {
+                mod.ModHeader.Author = "Test Author";
+                mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small;
+            })
+            .Build();
         using (data)
         {
             var (svc, manager, changes) = MakeSvcWithRealChanges(data);
@@ -1149,6 +1155,15 @@ public sealed class RecordQueryServiceTests : IDisposable
                 var single = Assert.Single(compare.Overrides);
                 var masters = single.Fields.Single(f => f.Metadata.Name == "masters");
                 Assert.Equal(["Base.esm"], JsonSerializer.Deserialize<List<string>>(JsonSerializer.Serialize(masters.Value)));
+
+                // The substitution's selectivity is the thing WithEffectiveMasters must get right —
+                // sibling header fields must survive untouched, not get overwritten with the same
+                // masters array (a mutant flipping the field-name check to always-true would leave
+                // every assertion above green while corrupting author/flags on every header read).
+                var author = single.Fields.Single(f => f.Metadata.Name == "author");
+                Assert.Equal("Test Author", author.Value);
+                var flags = single.Fields.Single(f => f.Metadata.Name == "flags");
+                Assert.Equal(((long)Fallout4ModHeader.HeaderFlag.Small).ToString(System.Globalization.CultureInfo.InvariantCulture), flags.Value);
 
                 // A single column can never be anything but OnlyOne (ConflictClassifier.Classify's
                 // count==1 branch) — pins that substituting the derived value into Fields before
