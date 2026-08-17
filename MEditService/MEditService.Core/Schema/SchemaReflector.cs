@@ -892,18 +892,17 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     // ── Sub-schema building ───────────────────────────────────────────────────
 
-    // #339 (a follow-up issue number for this specific gap is pending from the maintainer, filed
-    // separately): this walks only the properties declared on getterInterface and the interfaces
-    // it implements/inherits — never a more-derived sibling interface. OMOD's Properties element
-    // type, IAObjectModPropertyGetter<T>, declares
-    // only Property/Step; the real per-element data (Value) lives on 7 separate leaf getter
-    // interfaces (IObjectModIntPropertyGetter<T>, IObjectModFloatPropertyGetter<T>, ...), each
-    // implementing IAObjectModPropertyGetter<T> rather than the other way around, so none of them
-    // is ever visible here. Confirmed by dumping the real reflected shape, not assumed: today's
-    // "structured" omod Properties column — winner and every #339-merged sibling alike — surfaces
-    // property + step only, never value. Pre-existing, not introduced or fixed by #339 (whose AC
-    // only requires parity with what the winner already showed); a future reader should not have
-    // to rediscover why a "structured" OMOD property list has no value in it.
+    // #360: this walks only the properties declared on getterInterface and the interfaces it
+    // implements/inherits — never a more-derived sibling interface. OMOD's Properties element
+    // type, IAObjectModPropertyGetter<T>, declares only Property/Step; the real per-element data
+    // (Value) lives on 7 separate leaf getter interfaces (IObjectModIntPropertyGetter<T>,
+    // IObjectModFloatPropertyGetter<T>, ...), each implementing IAObjectModPropertyGetter<T>
+    // rather than the other way around, so Value is never descended into here. Confirmed by
+    // dumping the real reflected shape, not assumed: today's "structured" omod Properties column —
+    // winner and every #339-merged sibling alike — surfaces property + step only, never value.
+    // Predates #339 and is unaffected by it (whose AC only requires parity with what the winner
+    // already showed) — this affects every subclass, discovery winner included, so nobody reads
+    // "structured list" here and assumes the value is in it.
     private static List<SubFieldSpec> BuildSubSchema(
         Type getterInterface,
         IReadOnlyDictionary<Type, string> getterTypeToTable,
