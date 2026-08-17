@@ -6,7 +6,7 @@ namespace MEditService.Core.Edits;
 
 /// <summary>
 /// The single home of change-group policy (ADR-0028). A change group is a connected component of
-/// the pending-change dependency graph: <c>pending_changes</c> supplies the nodes and the three
+/// the pending-change dependency graph: <c>pending_changes</c> supplies the nodes and the two
 /// edge rules below supply the edges. There is no stored grouping to read.
 /// <para>
 /// A new kind of dependency between changes is a new edge rule here, not a new place that assigns
@@ -30,7 +30,6 @@ internal static class PendingChangeGraph
             var pendingRefs = LoadPendingRefs(conn);
             ApplyCreatedRecordRule(nodes, uf);
             ApplyLifecycleReferenceRule(conn, nodes, index, pendingRefs, uf);
-            ApplyAddedMasterRule(nodes, pendingRefs, uf);
         }
 
         var byRoot = new Dictionary<int, List<PendingChange>>();
@@ -129,80 +128,6 @@ internal static class PendingChangeGraph
             }
         }
         return byTarget;
-    }
-
-    // --- Edge rule 3: B references a record reachable only via a master that A adds --------------
-    // A plugin-level dependency rather than a FormKey-level one: A appends masters to a plugin's
-    // header, and B is a change in that plugin that only resolves because of them. Mirrors what
-    // EditOrchestrator.StageMissingMasters computes when it decides a master is missing — the
-    // record's own origin plugin, plus the origin of everything it references.
-    private static void ApplyAddedMasterRule(
-        IReadOnlyList<PendingChange> nodes,
-        List<PendingRefRow> pendingRefs,
-        UnionFind uf)
-    {
-        // #333 / ADR-0036: keyed by the compound column identity — two same-filename,
-        // different-origin plugins are unrelated write targets, so a masters-append staged against
-        // one origin's header must never reach into the other's changes.
-        var refsBySource = pendingRefs.ToLookup(r => (r.SourceFormKey, ColumnKey.Of(r.SourcePlugin, r.SourceOrigin)), RecordKeyComparer);
-
-        for (var a = 0; a < nodes.Count; a++)
-        {
-            if (AddedMasters(nodes[a]) is not { } added) continue;
-
-            var headerColumn = ColumnKey.Of(nodes[a].Plugin, nodes[a].Origin);
-            for (var b = 0; b < nodes.Count; b++)
-            {
-                if (a != b && ReachesAddedMaster(nodes[b], headerColumn, added, refsBySource))
-                    uf.Union(a, b);
-            }
-        }
-    }
-
-    /// <summary>The masters a header change appends, or null when it is not an add-masters change.</summary>
-    private static HashSet<string>? AddedMasters(PendingChange change)
-    {
-        if (change.RecordType != Records.HeaderIndexer.TableName ||
-            change.FieldPath != Records.HeaderIndexer.MastersFieldName)
-        {
-            return null;
-        }
-
-        var added = MasterList(change.NewValue);
-        added.ExceptWith(MasterList(change.OldValue));
-        return added.Count == 0 ? null : added;
-    }
-
-    private static bool ReachesAddedMaster(
-        PendingChange b,
-        string headerColumn,
-        HashSet<string> added,
-        ILookup<(string, string), PendingRefRow> refsBySource)
-    {
-        if (!ColumnKey.Of(b.Plugin, b.Origin).Equals(headerColumn, StringComparison.OrdinalIgnoreCase)) return false;
-
-        // The record's own origin covers a copy-to of a record whose home plugin is the new master,
-        // even when the record holds no FormLinks at all; the refs cover everything it points at.
-        return (OriginPluginOf(b.FormKey) is { } origin && added.Contains(origin)) ||
-               refsBySource[(b.FormKey, ColumnKey.Of(b.Plugin, b.Origin))]
-                   .Any(r => OriginPluginOf(r.TargetFormKey) is { } o && added.Contains(o));
-    }
-
-    private static HashSet<string> MasterList(JsonElement masters) =>
-        masters.ValueKind != JsonValueKind.Array
-            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            : new HashSet<string>(
-                masters.EnumerateArray().Where(m => m.ValueKind == JsonValueKind.String).Select(m => m.GetString()!),
-                StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>The plugin substring of a "FormID:Plugin" FormKey string; null when malformed.
-    /// Duplicated in RecordQueryService (#336/ADR-0038's GetEffectiveMasters) rather than
-    /// consolidated — #338 deletes this copy along with the added-master edge rule above, so
-    /// unifying now would churn code about to vanish; #338 will decide where the survivor lands.</summary>
-    private static string? OriginPluginOf(string formKey)
-    {
-        var colon = formKey.IndexOf(':');
-        return colon >= 0 && colon < formKey.Length - 1 ? formKey[(colon + 1)..] : null;
     }
 
     // #333 / ADR-0036: SourceOrigin, paired with SourcePlugin, is what BuildNodeIndex's lookup keys

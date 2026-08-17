@@ -1,16 +1,15 @@
 using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Core.Edits;
-using MEditService.Core.Records;
 
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #333 / ADR-0036: <see cref="PendingChangeGraph"/>'s three union rules must key on plugin identity
+/// #333 / ADR-0036: <see cref="PendingChangeGraph"/>'s two union rules must key on plugin identity
 /// (origin + filename), not filename alone — otherwise two same-filename, different-origin plugins'
 /// independent pending changes union into one component, and saving one group silently writes and
 /// commits the other origin's untouched, unreviewed plugin (the #272 migration never reached this
-/// module). Each test below isolates exactly one of the three rules; scenarios mirror the
+/// module). Each test below isolates exactly one of the two rules; scenarios mirror the
 /// #272/DuplicateFilenameSessionApiTests idiom — two origins sharing one plugin filename, each
 /// running its own NextFormID sequence from the same ModKey, so FormKey text alone cannot
 /// distinguish them.
@@ -167,40 +166,5 @@ public sealed class PendingChangeGraphOriginTests
         cmd.Parameters.Add(new DuckDBParameter { Value = targetFormKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = fieldPath });
         cmd.ExecuteNonQuery();
-    }
-
-    // --- Rule 3 (ApplyAddedMasterRule) --------------------------------------------------------
-
-    // The issue's "worst of the three": deterministically triggerable through the header's
-    // synthetic FormKey, needing no FormID collision. ModA appends "NewMaster.esp" as a master;
-    // ModA's own change at a FormKey whose ModKey is "NewMaster.esp" reaches it (ReachesAddedMaster's
-    // origin-substring branch). ModB — same plugin filename, different origin, no header change of
-    // its own — independently stages the same shape of change and must stay untouched.
-    [Fact]
-    public void AddedMasterRule_EntanglesOnlyTheOriginThatAddedTheMaster()
-    {
-        var svc = DuckDbTestFactory.MakePendingChangeService();
-
-        var headerChange = svc.Upsert(new PendingChangeUpsert(
-            "000000:Shared.esp", "Shared.esp", HeaderIndexer.TableName,
-            new Dictionary<string, JsonElement> { [HeaderIndexer.MastersFieldName] = J("""["NewMaster.esp"]""") },
-            "user", null,
-            new Dictionary<string, JsonElement> { [HeaderIndexer.MastersFieldName] = J("[]") },
-            FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
-            ParentCell: null, PlacementGroup: null, Origin: "ModA"))[0];
-
-        var modAReacher = StageFieldEdit(svc, "000005:NewMaster.esp", "Shared.esp", "ModA", "aggression");
-        var modBReacher = StageFieldEdit(svc, "000006:NewMaster.esp", "Shared.esp", "ModB", "aggression");
-
-        var groups = svc.GetChangeGroups();
-        Assert.Equal(2, groups.Count);
-
-        var headerGroup = svc.GetChanges(memberChangeId: headerChange.Id);
-        Assert.Equal(2, headerGroup.Count);
-        Assert.Contains(headerGroup, c => c.Id == modAReacher.Id);
-        Assert.DoesNotContain(headerGroup, c => c.Id == modBReacher.Id);
-
-        var modBGroup = svc.GetChanges(memberChangeId: modBReacher.Id);
-        Assert.Single(modBGroup);
     }
 }

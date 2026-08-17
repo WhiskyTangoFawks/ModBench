@@ -183,10 +183,9 @@ public sealed class RecordQueryService(
         };
     }
 
-    // The plugin substring of a "FormID:Plugin" FormKey string; null when malformed. Duplicated
-    // (also in PendingChangeGraph) rather than extracted to a shared helper — #338 deletes
-    // PendingChangeGraph's copy along with the added-master edge rule, so consolidating now would
-    // churn code about to vanish; #338 will decide where the survivor lands.
+    // The plugin substring of a "FormID:Plugin" FormKey string; null when malformed. #338 deleted
+    // PendingChangeGraph's copy along with the added-master edge rule that solely owned it, leaving
+    // this the only copy — not worth extracting to a shared helper for its single remaining call site.
     // internal (not private), same as the pre-#336 EditOrchestrator copy this replaces, so the
     // malformed-input branch stays directly unit-testable rather than only reachable through
     // GetEffectiveMasters' well-formed-FormKey callers.
