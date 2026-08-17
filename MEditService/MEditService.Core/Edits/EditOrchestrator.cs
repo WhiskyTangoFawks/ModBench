@@ -818,7 +818,7 @@ public sealed partial class EditOrchestrator(
     }
 
     // Single source of truth lives on HeaderIndexer (shared with SchemaReflector's column
-    // definition and PluginWriter's write-time override) — aliased here for call-site brevity.
+    // definition) — aliased here for call-site brevity.
     private const string HeaderMastersField = Records.HeaderIndexer.MastersFieldName;
 
     // Issue #335/ADR-0038 stage-time guard for the header's masters field: rejects any direct

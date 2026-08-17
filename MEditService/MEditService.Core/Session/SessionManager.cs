@@ -380,7 +380,8 @@ public sealed class SessionManager(
     public async Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes)
     {
         var (metadata, _, gameRelease) = RequirePlugin(plugin);
-        var result = await _writer.SaveAsync(metadata.Path, changes, gameRelease, BuildTypedLinkCache(gameRelease));
+        var result = await _writer.SaveAsync(
+            metadata.Path, changes, gameRelease, BuildTypedLinkCache(gameRelease), MastersWritingOrder());
         await ReindexPlugin(plugin);
         return result;
     }
@@ -388,7 +389,8 @@ public sealed class SessionManager(
     public async Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes)
     {
         var (metadata, _, gameRelease) = RequirePlugin(plugin);
-        return await _writer.PrepareAsync(metadata.Path, changes, gameRelease, BuildTypedLinkCache(gameRelease));
+        return await _writer.PrepareAsync(
+            metadata.Path, changes, gameRelease, BuildTypedLinkCache(gameRelease), MastersWritingOrder());
     }
 
     // Typed link cache over the session's load-order getters; the placed-record write paths in
@@ -407,6 +409,52 @@ public sealed class SessionManager(
                 .OfType<IModGetter>()
                 .ToList();
             return TypedLinkCacheFactory.Create(mods, gameRelease);
+        }
+    }
+
+    // #337/ADR-0038: what PluginWriter orders the written masters list by, and — just as load-
+    // bearing — the completeness guarantee that keeps WithMastersListOrdering from throwing
+    // MissingModException when Iterate's content-sync needs a master this list doesn't name (not
+    // defensive padding: proved reachable, not hypothetical — see below). Session-wide rather than
+    // scoped to the plugin being saved: nothing on PendingChange records which plugin a copy's
+    // fields originated from, and per-change-origin scoping would need new plumbing to track it.
+    // Every session plugin's name, unioned with every session plugin's own already-committed
+    // Masters (one hop, not recursive — justified below) is simpler and provably total instead.
+    //
+    // Result is the same for every plugin in a given session — deliberately not parameterized by
+    // which one is being saved.
+    //
+    // Proof of totality: every FormKey Iterate could ever need as a new master for the plugin being
+    // saved comes from a FormLink embedded somewhere in that plugin's post-edit content. That
+    // FormLink arrived one of two ways. (1) It was already on the plugin's own on-disk content
+    // before this save — closed over that plugin's own on-disk masters (its own PluginMetadata.
+    // Masters) at binary-parse time, since Mutagen resolves a local master index into a ModKey
+    // using only the parsed file's own master-list metadata, never anything external — the same
+    // #277 "declared-but-absent master" shape as before, just now stated for any session plugin,
+    // not only the save target. (2) It arrived via a pending change's NewValue. Every pending
+    // change's NewValue is either schema-validated (EditOrchestrator.ValidateReferences, on
+    // StageEdit's and CreateRecordCore's template-copy path), which requires the FormKey resolve
+    // via RecordQueryService — i.e. belong to an *indexed*, hence session-loaded, plugin — or
+    // copied verbatim from an existing record's already-resolved fields (CopyRecordTo, which skips
+    // ValidateReferences — confirmed reachable via review: a copy can carry a FormLink the source
+    // plugin alone declares as a master). CopyRecordTo's only source, RecordQueryService.GetRecord/
+    // GetRecordForPlugin, reads committed (indexed) data only, never a pending overlay, so that
+    // source record is itself on-disk content of some session-loaded plugin — closed over *that*
+    // plugin's own on-disk masters by the same parse-time argument as (1). Either way, every
+    // possible new master is a name in _session.Plugins or a name in some session plugin's own
+    // already-committed Masters — exactly this union. One hop suffices because PluginMetadata.
+    // Masters is already each plugin's own fully-resolved master list; nothing here ever needs to
+    // chase a master's own masters transitively.
+    private List<string> MastersWritingOrder()
+    {
+        lock (_lock)
+        {
+            var ordered = _session!.Plugins.OrderBy(p => p.LoadOrderIndex).ToList();
+            return ordered
+                .Select(p => p.Name)
+                .Concat(ordered.SelectMany(p => p.Masters))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
     }
 

@@ -763,6 +763,66 @@ public sealed class EditOrchestratorTests
         }
     }
 
+    // #337 review: CopyRecordTo skips ValidateReferences (it stages the source record's fields
+    // verbatim), so a copy can carry a FormLink to a plugin that only the *source* plugin ever
+    // declares as a master — never a session member itself. Proves SessionManager.
+    // MastersWritingOrder's completeness argument holds through this real bypass, not just the
+    // schema-validated StageEdit path: the save must not throw MissingModException. Placed-record
+    // copy (PluginWriter is the only copy-as-override shape it currently materializes onto disk —
+    // ApplyFieldChanges falls through to NotFound for a non-placed override with no create change)
+    // — and it doubles as the "2+ masters" fixture for free: the cell-override pull-in needs
+    // Master.esm itself as a master, and the copied ref's own Base needs OrphanMaster.esm, so the
+    // sort genuinely compares two real entries, not a 1-element list.
+    [Fact]
+    public async Task CopyRecordTo_ThenSave_MasterOnlyDeclaredBySourcePlugin_SavesWithoutThrowing()
+    {
+        FormKey cellFk = default, refAFk = default;
+        var data = new PluginFixtureBuilder("eo-copy-orphan-master")
+            .WithPlugin("Master.esm", mod =>
+            {
+                var wrld = mod.Worldspaces.AddNew("PlacedWorld");
+                var cell = new Cell(mod) { EditorID = "ExtCell", Grid = new CellGrid { Point = new P2Int(1, 2) } };
+                cellFk = cell.FormKey;
+                var refA = new PlacedObject(mod)
+                {
+                    EditorID = "refA",
+                    // "OrphanMaster.esm" is never built or loaded anywhere in this session —
+                    // Master.esm is the only plugin that ever declares it, via this one FormLink.
+                    Base = new FormLinkNullable<IPlaceableObjectGetter>(FormKey.Factory("000001:OrphanMaster.esm")),
+                };
+                refAFk = refA.FormKey;
+                cell.Persistent.Add(refA);
+                var sub = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                sub.Items.Add(cell);
+                var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                block.Items.Add(sub);
+                wrld.SubCells.Add(block);
+            })
+            .WithPlugin("Target.esp")
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                Assert.IsType<StageEditResult.Staged>(orchestrator.CopyRecordTo(refAFk.ToString(), "Target.esp", "user"));
+
+                var staged = changes.GetChanges(plugin: "Target.esp", origin: "Data");
+
+                await manager.SavePlugin("Target.esp", staged);
+
+                var targetPath = Path.Combine(data.DataFolder, "Target.esp");
+                using var saved = Fallout4Mod.CreateFromBinaryOverlay(
+                    new ModPath(ModKey.FromFileName("Target.esp"), targetPath), Fallout4Release.Fallout4);
+                Assert.Equal(
+                    new[] { "Master.esm", "OrphanMaster.esm" },
+                    saved.MasterReferences.Select(r => r.Master.FileName.ToString()).OrderBy(n => n, StringComparer.Ordinal));
+            }
+        }
+    }
+
     [Fact]
     public void StageEdit_KeywordsField_NullStringElement_YieldsNoRef()
     {

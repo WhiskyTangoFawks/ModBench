@@ -142,6 +142,77 @@ public class SessionManagerTests(TestPluginFixture fixture)
         }
     }
 
+    // #337/ADR-0038: the saved master list's order follows the session's current plugin load
+    // order (Plugins.txt declaration order here), not alphabetical — pinned end-to-end through the
+    // real production wiring (Load → SavePlugin), not just PluginWriter's own loadOrder parameter
+    // in isolation (see PluginWriterMastersTests for that unit-level pin).
+    [Fact]
+    public async Task SavePlugin_MastersOrder_MatchesSessionLoadOrder()
+    {
+        var data = new PluginFixtureBuilder("sm-masters-order")
+            // Deliberately reverse-alphabetical Plugins.txt order: CCC before AAA.
+            .WithPlugin("CCC.esm", mod => mod.Npcs.AddNew("CccNpc"))
+            .WithPlugin("AAA.esm", mod => mod.Npcs.AddNew("AaaNpc"))
+            .WithPlugin("Active.esp", (mod, priorMods) =>
+            {
+                mod.ModHeader.Author = "Original Author";
+                mod.Npcs.GetOrAddAsOverride(priorMods[0].Npcs.First()); // CCC.esm
+                mod.Npcs.GetOrAddAsOverride(priorMods[1].Npcs.First()); // AAA.esm
+            })
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var change = MakePendingChange("000000:Active.esp", "Active.esp", "author", "header", "\"New Author\"");
+
+            await manager.SavePlugin("Active.esp", [change]);
+
+            var activePath = Path.Combine(data.DataFolder, "Active.esp");
+            using var saved = Fallout4Mod.CreateFromBinaryOverlay(
+                new ModPath(ModKey.FromFileName("Active.esp"), activePath), Fallout4Release.Fallout4);
+            Assert.Equal(["CCC.esm", "AAA.esm"], saved.MasterReferences.Select(r => r.Master.FileName.ToString()));
+        }
+    }
+
+    // #337/ADR-0038 hardening: a load-order member can carry a *committed* master that the session
+    // never separately loaded (disabled/uninstalled/otherwise absent from the profile — #277's
+    // "declared-but-absent master" shape). Mutagen's WithMastersListOrdering throws
+    // MissingModException for any master its content-sync needs that is missing from the given
+    // list — proven directly against Mutagen before relying on it — so completeness of that list is
+    // a correctness property, not an optimization: this must still save without throwing.
+    [Fact]
+    public async Task SavePlugin_ContentReferencesMasterAbsentFromSession_SavesWithoutThrowing()
+    {
+        var data = new PluginFixtureBuilder("sm-masters-absent")
+            .WithPlugin("Known.esm", mod => mod.Npcs.AddNew("KnownNpc"))
+            .WithPlugin("Active.esp", (mod, priorMods) =>
+            {
+                mod.ModHeader.Author = "Original Author";
+                mod.Npcs.GetOrAddAsOverride(priorMods[0].Npcs.First()); // Known.esm: a real session member
+                // "Missing.esm" is never built or listed anywhere — Active.esp's own committed
+                // content references it directly, exactly like a plugin whose declared master
+                // isn't present in the current profile.
+                mod.Npcs.AddNew("ActiveNpc").Keywords = [new FormLink<IKeywordGetter>(FormKey.Factory("000001:Missing.esm"))];
+            })
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var change = MakePendingChange("000000:Active.esp", "Active.esp", "author", "header", "\"New Author\"");
+
+            await manager.SavePlugin("Active.esp", [change]);
+
+            var activePath = Path.Combine(data.DataFolder, "Active.esp");
+            using var saved = Fallout4Mod.CreateFromBinaryOverlay(
+                new ModPath(ModKey.FromFileName("Active.esp"), activePath), Fallout4Release.Fallout4);
+            Assert.Equal(
+                ["Known.esm", "Missing.esm"],
+                saved.MasterReferences.Select(r => r.Master.FileName.ToString()));
+        }
+    }
+
     // --- CreatePlugin ---
 
     [Fact]

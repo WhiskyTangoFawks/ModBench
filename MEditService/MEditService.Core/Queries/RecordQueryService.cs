@@ -130,14 +130,18 @@ public sealed class RecordQueryService(
     // plugin (OriginPluginOf) for every staged FormKey, plus the origin plugin of every FormKey
     // any staged content references.
     //
-    // Known gap, deliberately out of scope here (#337): this is a *read-time* computation, while
-    // the actual written master order comes from Mutagen's own MastersListContentOption.Iterate at
-    // save time, independently, from the live object graph. PluginWriter.HasMastersEdit can no
-    // longer ever be true (nothing stages a masters field-edit anymore), so every save takes that
-    // path — the two computations happen to agree on *membership* by construction (both derive
-    // from the same staged content) but nothing here guarantees they agree on *order*, and order is
-    // load-bearing (FormID local-master-index resolution). Until #337 unifies them, the compare
-    // grid can display one order while disk ends up with another.
+    // Order still diverges from what #337 writes, by design of that slice's scope (not a leftover
+    // bug to chase here): this method orders as [committed masters, their original stored order] +
+    // [newly-implied masters, alphabetical] — a *read-time* scheme with no notion of load order.
+    // PluginWriter (#337) instead writes Mutagen's content-derived master set sorted by the
+    // session's *current plugin load order*, unconditionally on every save. The two agree in the
+    // common case (every effective master is already committed, and committed order already
+    // matches load order) but can still diverge whenever a pending edit implies a brand-new,
+    // not-yet-committed master: this method appends it alphabetically at the end, while the write
+    // slots it wherever load order actually puts it. Aligning this method's order to load order
+    // would pull load-order knowledge into RecordQueryService, a new cross-context dependency
+    // (ADR-0038's "masters are Editing-context, load order is Mod Management's") deliberately left
+    // for a follow-up rather than folded into #337.
     public IReadOnlyList<string> GetEffectiveMasters(string plugin, string origin)
     {
         var committed = GetRecordForPlugin(HeaderIndexer.FormKeyFor(plugin), plugin, origin)?.Fields

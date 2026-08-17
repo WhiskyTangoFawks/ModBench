@@ -15,17 +15,24 @@ namespace MEditService.Core.Edits;
 
 public interface IPluginWriter
 {
+    // loadOrder (#337/ADR-0038): plugin filenames in the session's current load order, used to
+    // order the written master list explicitly (xEdit-familiar canonical form on disk — ADR-0034
+    // at the file level) instead of leaving it to Mutagen's undefined default. Optional — null
+    // skips the explicit ordering (today's default-sort behavior) — because PluginWriter has no
+    // session concept of its own; SessionManager (the only production caller) always supplies it.
     Task<PreparedPluginSave> PrepareAsync(
         string pluginPath,
         IReadOnlyList<PendingChange> changes,
         GameRelease gameRelease,
-        ILinkCache? linkCache = null);
+        ILinkCache? linkCache = null,
+        IReadOnlyList<string>? loadOrder = null);
 
     Task<SaveResult> SaveAsync(
         string pluginPath,
         IReadOnlyList<PendingChange> changes,
         GameRelease gameRelease,
-        ILinkCache? linkCache = null);
+        ILinkCache? linkCache = null,
+        IReadOnlyList<string>? loadOrder = null);
 
     bool IsReadOnly(GameRelease release, string recordType, string fieldPath);
 }
@@ -41,7 +48,8 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         string pluginPath,
         IReadOnlyList<PendingChange> changes,
         GameRelease gameRelease,
-        ILinkCache? linkCache = null)
+        ILinkCache? linkCache = null,
+        IReadOnlyList<string>? loadOrder = null)
     {
         var backupPath = CreateBackup(pluginPath);
 
@@ -73,14 +81,16 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
             .WithLoadOrderFromHeaderMasters()
             .WithNoDataFolder();
 
-        // Issue #86: Mutagen's default MastersListContentOption.Iterate recomputes the written
-        // masters list purely from FormLink/override content, discarding any declared master with
-        // no referencing content yet — which would silently drop a just-staged "Add Master" (the
-        // whole point of which is to pre-declare a master before content references it). Scoped to
-        // only saves that actually staged a masters edit, so every other save keeps today's
-        // content-derived master sync untouched.
-        if (HasMastersEdit(changes))
-            writeBuilder = writeBuilder.WithMastersListContent(MastersListContentOption.NoCheck);
+        // #337/ADR-0038: masters are wholly content-derived, unconditionally, on every save —
+        // Mutagen's default MastersListContentOption.Iterate. There is no longer a way to stage a
+        // masters edit (ADR-0038/#335/#336), so there is nothing left that would need a declared
+        // master preserved ahead of content referencing it (issue #86's now-deleted NoCheck branch).
+        //
+        // Ordering is explicit rather than left to Mutagen's default (alphabetical, masters-first):
+        // the session's current load order when supplied, so the written file's master list matches
+        // what a modder opening it in xEdit afterward expects (ADR-0034 at the file level).
+        if (loadOrder != null)
+            writeBuilder = writeBuilder.WithMastersListOrdering(loadOrder.Select(name => ModKey.FromFileName(name)));
 
         await writeBuilder.WriteAsync();
 
@@ -92,21 +102,14 @@ public sealed class PluginWriter(ISchemaReflector schemaReflector, ILogger<Plugi
         string pluginPath,
         IReadOnlyList<PendingChange> changes,
         GameRelease gameRelease,
-        ILinkCache? linkCache = null)
+        ILinkCache? linkCache = null,
+        IReadOnlyList<string>? loadOrder = null)
     {
-        using var prep = await PrepareAsync(pluginPath, changes, gameRelease, linkCache);
+        using var prep = await PrepareAsync(pluginPath, changes, gameRelease, linkCache, loadOrder);
         prep.Commit();
         PruneOldBackups(pluginPath);
         return prep.Result;
     }
-
-    // Issue #86: does this save include a staged edit to the header's masters field? Used to scope
-    // the MastersListContentOption.NoCheck override to only the saves that need it.
-    private static bool HasMastersEdit(IReadOnlyList<PendingChange> changes) =>
-        changes.Any(c =>
-            c.RecordType == Records.HeaderIndexer.TableName &&
-            c.FieldPath == Records.HeaderIndexer.MastersFieldName &&
-            c.ChangeType == PendingChangeConstants.FieldEditChangeType);
 
     public bool IsReadOnly(GameRelease release, string recordType, string fieldPath)
     {

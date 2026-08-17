@@ -190,7 +190,12 @@ better idea.
   masters unioned with the origins of everything currently staged for it — so copying a record in
   from a not-yet-mastered plugin updates the displayed list immediately, with no pending change on
   the masters field, and reverting that copy drops the implied master again. Membership is what
-  this guarantees; the order written to disk is settled at save time (#337).
+  this guarantees. #337: every save writes exactly the content-derived master set, ordered by
+  current plugin load order — there is no staged-masters special case left in the writer. The
+  displayed order can still differ from the written order in one case: a pending edit implying a
+  brand-new master shows it appended at the end of the list, while the save slots it wherever load
+  order puts it. Membership always agrees; only position can differ, and only before that master
+  is committed.
 - **Ctrl+click** — acknowledged for now as a fourth, navigation-only gesture (follows a FormKey
   reference to its record). Whether it survives once a right-click "Go to Record" exists is still
   undecided — see Further Notes.
