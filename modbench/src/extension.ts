@@ -7,7 +7,7 @@ import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { createApiClient, type ApiClient, type MasterIssue } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
-import { SessionController } from './medit/SessionController';
+import { SessionController, type SessionLoadProgress } from './medit/SessionController';
 import { makeLoadProgressHandler } from './medit/sessionProgress';
 import { reloadSession } from './medit/reloadSession';
 import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
@@ -1847,21 +1847,26 @@ async function applyLoadedSessionToTree(
   sessionPluginFiles: () => Promise<SessionPluginFiles>,
   failures: { name?: string | null; reason?: string | null }[],
   outputChannel: vscode.LogOutputChannel,
-  // #342: the load's own reported plugin count — carried in only so this can be logged next to
-  // what actually reached the tree, not because this function needs it for anything else.
-  plannedPluginCount: number,
+  // #342: the backend's own reported plugin count (the last poll's `SessionStatus.totalPlugins`,
+  // via `makeTreeProgressHandler`'s `lastTotalPlugins()`) — carried in only so this can be logged
+  // next to what actually reached the tree, not because this function needs it for anything else.
+  // Deliberately not `plugins.length` from the caller's own request list: that list is what the
+  // frontend asked the backend to load, and omits the implicit masters the backend prepends, so
+  // comparing against it would read every healthy load as short.
+  totalPlugins: number,
 ): Promise<void> {
   try {
     const session = await sessionPluginFiles();
     // #342: this is the one line standing between a stuck-tail load and a diagnosable one — do
-    // not remove it as logging noise. It names the count this call is about to hand to
-    // `setSession`, the payload this whole function exists to deliver whole (see the doc comment
-    // above). A short count here next to a much larger `plannedPluginCount` means the hand-off ran
-    // but `sessionPluginFiles()` came back smaller than the load itself reported — point at the
-    // backend's `GET /plugins`. No line at all for a load that otherwise reached "editing session
-    // ready" means this function never got this far — point at whatever sits between here and the
-    // load POST resolving instead.
-    outputChannel.info(`[extension] applying completed session to tree: ${session.files.size} of ${plannedPluginCount} plugins`);
+    // not remove it as logging noise. `totalPlugins` is the backend's own count; `failures` is
+    // what the load already reported as unopenable or unindexable, so a plugin counted there is
+    // accounted for, not missing. `session.files.size + failures.length` should land close to
+    // `totalPlugins` for an ordinary load — a gap bigger than that, or a load that otherwise
+    // reaches "editing session ready" with no line at all, is what points at this hand-off rather
+    // than at something upstream (most likely the backend's own `GET /plugins`).
+    outputChannel.info(
+      `[extension] applying completed session to tree: ${session.files.size} indexed, ${failures.length} failed, of ${totalPlugins} planned`,
+    );
     // #277 / ADR-0037 AC7: the same failures the toast inside loadExplicitSession already
     // consumed — held here (not re-derived, not a second endpoint) and handed to the tree
     // through the same setSession bundle as everything else the session reports.
@@ -1919,9 +1924,17 @@ function armLoadAbort(outputChannel: vscode.LogOutputChannel): { signal: AbortSi
 /** #307: the progressive-load tick handler, wired to this extension's own surfaces. Whether a
  *  tick is worth applying is decided in `medit/sessionProgress.ts` and unit-tested there; this
  *  supplies the hand-off itself, the only part that needs VS Code types. The empty read-only and
- *  master-issue arguments mid-load are deliberate — see `makeLoadProgressHandler`. */
-function makeTreeProgressHandler(): ReturnType<typeof makeLoadProgressHandler> {
-  return makeLoadProgressHandler({
+ *  master-issue arguments mid-load are deliberate — see `makeLoadProgressHandler`.
+ *
+ *  #342: also remembers each tick's own `totalPlugins`. That is the backend's count (implicit
+ *  masters included, since the backend prepends them before this is ever reported) — a different,
+ *  larger number than the frontend's own pre-load request list (`plugins.length` in `enter()`
+ *  below), which never includes them. `applyLoadedSessionToTree`'s completion log needs something
+ *  to compare its own count against; a tick already carries the right number, and it does not
+ *  change over the load, so the last one seen is as good as asking again. */
+function makeTreeProgressHandler(): { onProgress: (status: SessionLoadProgress) => void; lastTotalPlugins: () => number } {
+  let totalPlugins = 0;
+  const applyTick = makeLoadProgressHandler({
     say,
     applySession: (indexedPlugins, failures) => pluginsTree?.setSession(
       new Set(indexedPlugins),
@@ -1930,6 +1943,10 @@ function makeTreeProgressHandler(): ReturnType<typeof makeLoadProgressHandler> {
       new Map(failures.map((f) => [f.name, f.reason] as const)),
     ),
   });
+  return {
+    onProgress: (status) => { totalPlugins = status.totalPlugins; applyTick(status); },
+    lastTotalPlugins: () => totalPlugins,
+  };
 }
 
 interface EnterEditingDeps {
@@ -1961,7 +1978,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
   } = deps;
   const enter = async (): Promise<void> => {
       const { signal, abandoned } = armLoadAbort(outputChannel);
-      const onLoadProgress = makeTreeProgressHandler();
+      const treeProgress = makeTreeProgressHandler();
       revealLog(); // the load can take a while; let the user watch the step log
       const gd = await resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths());
       if (abandoned()) return;
@@ -1991,12 +2008,12 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
         return;
       }
       // load-explicit is one blocking call that indexes every plugin — the slow part. The polled
-      // status takes over from here (onLoadProgress above), naming real counts as they land;
-      // this states the total for the window before the first poll answers.
+      // status takes over from here (treeProgress.onProgress above), naming real counts as they
+      // land; this states the total for the window before the first poll answers.
       say(`Indexing ${plugins.length} plugins… Conflict information is not yet computed.`);
       outputChannel.info(`[extension] backend healthy; loading session (${plugins.length} plugins)`);
       const result = await controller.loadExplicitSession(
-        plugins, gd.dataFolder, undefined, { onProgress: onLoadProgress, signal });
+        plugins, gd.dataFolder, undefined, { onProgress: treeProgress.onProgress, signal });
       // #307 AC7: a load that was deliberately abandoned — superseded by a newer load, or
       // aborted because the user closed the session — leaves *silently*. Nothing to surface
       // (loadExplicitSession only logged it) and, the bug this fixes, nothing to tear down: the
@@ -2024,7 +2041,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       // retain, so a failed entry fetch must clear rather than leak the previous session's
       // decorations in as if they were live.
       void pendingChangeDecorationProvider.refresh(false);
-      await applyLoadedSessionToTree(sessionPluginFiles, result.failures, outputChannel, plugins.length);
+      await applyLoadedSessionToTree(sessionPluginFiles, result.failures, outputChannel, treeProgress.lastTotalPlugins());
       outputChannel.info('[extension] editing session ready');
   };
   return () => withPluginsViewProgress(enter);
