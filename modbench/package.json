@@ -1023,6 +1023,24 @@
     },
     "keybindings": [
       {
+        "command": "modbench.modList.filter",
+        "key": "ctrl+f",
+        "mac": "cmd+f",
+        "when": "focusedView == modbench.modList"
+      },
+      {
+        "command": "modbench.pluginListTree.filter",
+        "key": "ctrl+f",
+        "mac": "cmd+f",
+        "when": "focusedView == modbench.pluginListTree"
+      },
+      {
+        "command": "modbench.downloads.filter",
+        "key": "ctrl+f",
+        "mac": "cmd+f",
+        "when": "focusedView == modbench.downloads"
+      },
+      {
         "command": "modbench.deleteRecord",
         "key": "Delete",
         "when": "focusedView == modbench.pluginListTree && (viewItem == record || viewItem == refr)"

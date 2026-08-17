@@ -258,6 +258,26 @@ describe('package.json filtering is one UX (#247)', () => {
   it.each(DURABLE_FILTERS)('%s clears with $(clear-all)', (_view, _open, clearCommand) => {
     expect(commandTitle(clearCommand)!.icon).toBe('$(clear-all)');
   });
+
+  // #255: `ctrl+F` means find-within-the-focused-surface everywhere else in VS Code (editor,
+  // terminal, Output, debug console). Trees left it unbound when `list.find` moved to
+  // `ctrl+alt+F` in 1.89, so a per-view `focusedView` binding conflicts with nothing and closes
+  // the one surface where the platform's own idiom silently does nothing.
+  it.each(DURABLE_FILTERS)('%s opens its filter on ctrl+F while focused', (view, openCommand) => {
+    const keybindings = pkg.contributes.keybindings as { command: string; key: string; when: string }[];
+    const entry = keybindings.find((k) => k.command === openCommand);
+    expect(entry, `expected a ctrl+F binding for ${openCommand}`).toBeTruthy();
+    expect(entry!.key).toBe('ctrl+f');
+    expect(entry!.when).toBe(`focusedView == ${view}`);
+  });
+
+  // Scoped to the focused view, never the container or the window: an unscoped ctrl+F would
+  // shadow the editor's own Find for the whole workbench.
+  it('never binds ctrl+F outside a specific focused view', () => {
+    const keybindings = pkg.contributes.keybindings as { command: string; key: string; when?: string }[];
+    const unscoped = keybindings.filter((k) => k.key === 'ctrl+f' && !k.when?.startsWith('focusedView == '));
+    expect(unscoped.map((k) => k.command)).toEqual([]);
+  });
 });
 
 describe('package.json Refresh is one command (#247)', () => {
