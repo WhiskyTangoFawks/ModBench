@@ -183,4 +183,48 @@ public class MultiSubclassIndexingTests
         var byEdid = rows.ToDictionary(r => (string)r["editor_id"]!, r => r["winner_value"]);
         Assert.NotNull(byEdid[winnerEdid]); // winner's own data is still readable, now via its shape column
     }
+
+    [Fact]
+    public void Index_Dmgt_BothSubclasses_EachRoundTripsThroughItsOwnShapeColumn()
+    {
+        // #339 D2: distinct from the renamed test above, and does not overlap it — that one pins
+        // "the discovery winner's own data stays readable"; this one pins the AC-literal guarantee
+        // that a DamageType record *and* a DamageTypeIndexed record each land in their own shape
+        // column through the real Index -> DuckDB -> query pipeline (DDL for both split columns,
+        // the appender for both), with the *other* column reading null for that row rather than
+        // throwing. They fail for different reasons: a regression that kept both split columns but
+        // only ever populated the discovery winner's would still pass the renamed test above
+        // (which never looks at the non-winner's column at all) while failing this one.
+        var mod = new Fallout4Mod(ModKey.FromFileName("DmgtSplit339.esp"), Fallout4Release.Fallout4);
+        var structShaped = new DamageType(mod, "PlainDmgt339");
+        structShaped.DamageTypes.Add(new DamageTypeItem
+        {
+            ActorValue = new FormLink<IActorValueInformationGetter>(FormKey.Factory("000001:Test.esp")),
+            Spell = new FormLink<ISpellGetter>(FormKey.Factory("000002:Test.esp")),
+        });
+        mod.DamageTypes.Add(structShaped);
+        var scalarShaped = new DamageTypeIndexed(mod, "IndexedDmgt339") { DamageTypes = new ExtendedList<uint> { 7, 11 } };
+        mod.DamageTypes.Add(scalarShaped);
+
+        var schemas = Reflector.GetSchemas(GameRelease.Fallout4);
+        var structColumnName = DmgtSplitColumns.StructShaped(schemas["dmgt"]).Name;
+        var scalarColumnName = DmgtSplitColumns.ScalarShaped(schemas["dmgt"]).Name;
+
+        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
+        repo.UpdateWinners();
+
+        var rows = Query(repo,
+            $"SELECT editor_id, \"{structColumnName}\" AS struct_value, \"{scalarColumnName}\" AS scalar_value " +
+            "FROM dmgt ORDER BY editor_id");
+        Assert.Equal(2, rows.Count);
+        var byEdid = rows.ToDictionary(r => (string)r["editor_id"]!, r => r);
+
+        Assert.NotNull(byEdid["PlainDmgt339"]["struct_value"]);
+        Assert.Null(byEdid["PlainDmgt339"]["scalar_value"]);
+
+        Assert.NotNull(byEdid["IndexedDmgt339"]["scalar_value"]);
+        Assert.Null(byEdid["IndexedDmgt339"]["struct_value"]);
+    }
 }
