@@ -18,8 +18,10 @@ internal static class HeaderIndexer
 
     /// <summary>
     /// The header's masters column name (issue #86) — single source of truth shared by
-    /// <c>SchemaReflector</c> (column definition), <c>EditOrchestrator</c> (stage-time validation),
-    /// and <c>PluginWriter</c> (write-time master-list-content override).
+    /// <c>SchemaReflector</c> (column definition) and <c>EditOrchestrator</c> (stage-time
+    /// rejection guard, ADR-0038/#335). No longer read by <c>PluginWriter</c> (#337): masters are
+    /// wholly content-derived at write time now, unconditionally, so there is nothing left to key
+    /// a write-time override off of.
     /// </summary>
     internal const string MastersFieldName = "masters";
 

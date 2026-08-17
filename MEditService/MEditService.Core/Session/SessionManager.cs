@@ -380,7 +380,8 @@ public sealed class SessionManager(
     public async Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes)
     {
         var (metadata, _, gameRelease) = RequirePlugin(plugin);
-        var result = await _writer.SaveAsync(metadata.Path, changes, gameRelease, BuildTypedLinkCache(gameRelease));
+        var result = await _writer.SaveAsync(
+            metadata.Path, changes, gameRelease, BuildTypedLinkCache(gameRelease), CurrentLoadOrder(metadata));
         await ReindexPlugin(plugin);
         return result;
     }
@@ -388,7 +389,8 @@ public sealed class SessionManager(
     public async Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes)
     {
         var (metadata, _, gameRelease) = RequirePlugin(plugin);
-        return await _writer.PrepareAsync(metadata.Path, changes, gameRelease, BuildTypedLinkCache(gameRelease));
+        return await _writer.PrepareAsync(
+            metadata.Path, changes, gameRelease, BuildTypedLinkCache(gameRelease), CurrentLoadOrder(metadata));
     }
 
     // Typed link cache over the session's load-order getters; the placed-record write paths in
@@ -407,6 +409,36 @@ public sealed class SessionManager(
                 .OfType<IModGetter>()
                 .ToList();
             return TypedLinkCacheFactory.Create(mods, gameRelease);
+        }
+    }
+
+    // #337/ADR-0038: the load order PluginWriter orders the written masters list by. Every session
+    // plugin (not just InLoadOrder members, unlike BuildTypedLinkCache above — a different concern),
+    // widened with `metadata`'s own already-committed masters.
+    //
+    // That widening is load-bearing, not defensive padding: Mutagen's WithMastersListOrdering
+    // throws MissingModException for any master its content-sync ends up needing that isn't in the
+    // given list, once 2+ masters force an actual comparison (a single one can coincidentally not
+    // throw — List.Sort skips comparisons on a 1-element list — which would make this a landmine
+    // that passes in a small test and detonates on a real profile; verified both shapes directly
+    // against Mutagen before relying on either). A pending edit's FormKey can't cause this —
+    // ValidateReferences already requires its origin be indexed, i.e. already a session member —
+    // but a plugin's own *pre-existing* content can: Mutagen resolves a FormLink's ModKey purely
+    // against the parsed plugin's own MasterReferences metadata, so a load-order member can commit
+    // content referencing a master that was never itself loaded into this session (disabled,
+    // uninstalled, or otherwise absent from the profile — #277's "declared-but-absent master" shape,
+    // just not detected/repaired here). `metadata.Masters` is exactly that plugin's own already-known
+    // master list, so unioning it in is provably total: nothing Iterate could ever need is missing.
+    private List<string> CurrentLoadOrder(PluginMetadata metadata)
+    {
+        lock (_lock)
+        {
+            return _session!.Plugins
+                .OrderBy(p => p.LoadOrderIndex)
+                .Select(p => p.Name)
+                .Concat(metadata.Masters)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
     }
 
