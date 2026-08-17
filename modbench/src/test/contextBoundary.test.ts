@@ -47,6 +47,32 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
     expect(imports).toEqual(['vscode']);
   });
 
+  // #279: drift is a comparison between the session's loaded origin and Mod Management's current
+  // one, so the tracker sits at the composition root for the same reason the two above do — and is
+  // held to the same rule. The temptation here is specific and worth naming: `ResolvedOrigin` is
+  // *declared* in `modmanager/explicitSession.ts`, and importing that type rather than restating
+  // it structurally would be a one-word change that quietly makes this module part of Mod
+  // Management.
+  it('the drift tracker imports from neither context', () => {
+    const imports = importsOf(read('pluginDrift.ts'));
+    expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
+    expect(imports).toEqual(['vscode']);
+  });
+
+  // Drift joins the two contexts, so it may name an *origin* — an opaque string on both sides
+  // (ADR-0036) — but never what an origin is on Mod Management's side, and never what a plugin
+  // contains on Editing's. "This plugin now comes from a different mod" is the sentence this
+  // file's code must not be able to write. Prose is exempt for the same reason the composite is
+  // exempt from this scan entirely: a joining module has to be able to say in words what it joins.
+  it('the drift tracker\'s code carries neither context\'s vocabulary', () => {
+    const code = read('pluginDrift.ts')
+      .split('\n')
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join('\n');
+    expect([...code.matchAll(/\b(mods?|modlists?|loadouts?)\b/gi)].map((m) => m[0])).toEqual([]);
+    expect([...code.matchAll(/\b(records?|formkeys?|editorids?)\b/gi)].map((m) => m[0])).toEqual([]);
+  });
+
   it('the row provider contains no record vocabulary', () => {
     // #276: "immutable"/"read-only" pinned alongside the original record vocabulary — Editing's
     // "Immutable plugin" (read-only-for-editing) is a distinct concept from this row's own

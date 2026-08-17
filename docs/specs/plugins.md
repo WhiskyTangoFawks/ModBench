@@ -127,6 +127,14 @@ there is no separate load-session step.
     Downloads tab.
 14. As a user, I want a clear error state if `plugins.txt` can't be read, so that a corrupt or
     missing file doesn't just silently show an empty list.
+15. As a user, I want a plugin row to tell me when installing, uninstalling or reprioritising a
+    mod has changed *which file* that plugin name resolves to, so that I am never quietly
+    browsing records from bytes my loadout no longer points at.
+16. As a user, I want to be told which origin the session loaded and which one the name resolves
+    to now, so that I can judge whether I care before doing anything about it.
+17. As a user, I want to re-read exactly that one plugin, on request, and to be told first what
+    it costs my staged edits — and I want nothing to be re-read on my behalf, ever, so that a
+    mod-level change can never silently reload a file underneath work in progress.
 
 ### Record navigation (Editing, once a backend session is running)
 
@@ -461,6 +469,69 @@ session-load toast (`SessionController.loadExplicitSession`, one aggregated warn
 unchanged and is not duplicated by this decoration — the same failures reach both, from the same
 response, so there is exactly one notification and one persistent, per-row explanation of why.
 
+### Drift ([#279](https://github.com/WhiskyTangoFawks/ModBench/issues/279), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md) § Live mutation)
+
+Reorder, enable and disable are SQL-only and apply live. **Mod-level changes are not**: installing,
+uninstalling or reprioritising a mod can change which physical file a plugin name resolves to, which
+invalidates that plugin's records. Those changes **flag the affected rows and stop there**. Nothing
+is re-read automatically — silently re-reading a file underneath staged edits is the one operation
+this design refuses.
+
+**What drift is.** A plugin has drifted when the origin its name resolves to *now* differs from the
+origin its records were read from. Uninstalling the only provider of a loaded plugin is drift too:
+the name resolves to nothing, the row says so, and re-read is unavailable because there is nothing
+to read. The loaded records stay browsable either way; removing a gone plugin from the session is
+the load-order machinery's concern, not this.
+
+**How it is computed.** Mod Management owns "which file does this name resolve to"
+(`resolveCurrentPluginOrigins`, the same overwrite → winning mod → `Data/` ladder the session build
+walks, plus an existence check on the last rung). The session owns the loaded origin
+(`PluginMetadata.Origin`). The two are compared in `src/pluginDrift.ts` at the composition root,
+over injected functions, importing from neither context — the pattern `PluginsTreeComposite` and
+`nameFilter` already use, enforced by `src/test/contextBoundary.test.ts`.
+
+Recomputation is triggered by Mod Management's own watchers — `profiles/*/modlist.txt` (rewritten by
+install, uninstall and reprioritise alike) and `mods/**` (a folder appearing or vanishing without
+one). No polling. A recomputation **re-renders** the rows; it never invalidates them, because a
+mod-level change alters no line of `plugins.txt`.
+
+**#334's rule applies at every rung.** A failed walk retains the last known drift state and logs;
+a name the walk could not answer for is omitted rather than reported as resolving to nothing. "No
+drift" and "could not tell" render identically on a row, so a marker must never be the output of a
+computation that did not happen.
+
+**How it renders.** Through the composite's own tooltip/description/icon path, alongside the
+master-issue and load-failure decorations — `⚠ Drifted`, a warning icon, and a tooltip line naming
+both origins ("loaded from ModA, would now resolve to ModB", or "…to nothing"). Additive: anything
+more fundamental about the plugin (a load failure, a master issue) keeps the icon and description,
+and drift still states itself in the tooltip.
+
+Deliberately **not** a `FileDecorationProvider`, unlike the pending-change decorations below. A
+`TreeItem` has exactly one `resourceUri`, #331 already claims plugin rows' for its
+`medit-pending-plugin:` scheme, and VS Code renders one badge per row across all providers — so a
+drift provider would have to answer for the other context's URI scheme and then contend for the
+badge on any row carrying both. That is a platform limitation, which is the one carve-out
+Native-first allows.
+
+**Reveal in Explorer diverges on a drifted row, deliberately.** That command re-resolves the plugin
+name to a path *live* on every invocation, so on a drifted row it reveals the file the name resolves
+to **now**, while the tree is still browsing the copy the session loaded. The two point at different
+files until the row is re-read. This is not an inconsistency to reconcile: "where is this plugin's
+file" is the question that command has always answered, answered freshly, and it is the right answer
+for every undrifted row. Making it reveal the loaded copy instead would change a pre-existing
+command's semantics, which is a separate decision from this one.
+
+**Re-read.** Per plugin and explicit only — no batching, no "re-read all drifted". It re-indexes
+that one plugin from the new origin (`POST /plugins/reread` → unindex the old `(plugin, origin)`,
+open and index the new copy in the same load-order slot, re-sweep winners so conflict badges
+describe the new file). **Staged edits against the replaced copy are discarded**, and the modal
+confirm says so — naming the plugin and the number of edits — before anything happens. They cannot
+be carried over: `pending_changes` is keyed on `(form_key, origin, plugin)` and reads overlay by
+origin, so an edit left behind would be invisible yet still live on the next save, which resolves
+its write target by filename. The confirm is skipped only when there is nothing staged to lose; if
+the count cannot be read, it confirms anyway and does not name a number. A re-read arriving while a
+session load is in flight is refused with 409 — nothing is touched, and it works on retry.
+
 ### Pending-change decoration ([#331](https://github.com/WhiskyTangoFawks/ModBench/issues/331))
 
 Any row (plugin or record) that carries a staged pending change is decorated with the same
@@ -576,6 +647,10 @@ overflow, then native **Collapse All** last.
   to the game's `Data/` folder for an unmanaged vanilla/DLC/CC plugin) and reveals it in the OS
   file manager. Same primitive as the Mods tree's existing "Open in Explorer"
   (`revealFileInOS`).
+- **Re-read Plugin from Its Current File** (drifted plugin rows only, `viewItem ==
+  pluginDrifted`) — see Drift below. Absent on an undrifted row (nothing to re-read) and on a
+  drifted row whose name resolves to nothing (nowhere to read from). Destructive, so no icon and
+  no inline variant — overflow plus a modal confirm, per `modbench/CLAUDE.md` rule 4.
 - Record-scope context menu entries (Copy as Override Into…, Copy as New Record Into…, Remove,
   Create Placed…) are described under Record navigation above — they apply to this tree's
   expanded rows the same way regardless of which side of the composite built the row above them.

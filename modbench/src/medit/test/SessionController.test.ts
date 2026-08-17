@@ -1364,3 +1364,94 @@ describe('SessionController.hasPendingChanges', () => {
     await expect(ctrl.hasPendingChanges()).resolves.toBe(true);
   });
 });
+
+// ── rereadPlugin / stagedChangeCount (#279) ───────────────────────────────────
+
+describe('SessionController.rereadPlugin', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs the plugin, the new path and the new origin, and refreshes the tree', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    const ok = await controller.rereadPlugin('A.esp', '/mods/B/A.esp', 'ModB');
+
+    expect(ok).toBe(true);
+    expect(deps.client.POST).toHaveBeenCalledWith('/plugins/reread', {
+      body: { plugin: 'A.esp', path: '/mods/B/A.esp', origin: 'ModB' },
+    });
+    // A re-read replaces the records behind a row and re-sweeps winners, so everything cached
+    // about that plugin — and every conflict badge — is stale until the tree re-reads it.
+    expect(deps.refreshTree).toHaveBeenCalled();
+    // It also discarded that copy's staged edits, so the Pending Changes tree and the
+    // pending-change decorations are describing changes the backend no longer holds.
+    expect(deps.refreshGroupTree).toHaveBeenCalled();
+  });
+
+  // ADR-0026 "explicit action failed" tier: the user asked for this, so a failure is a
+  // notification, not a log line — and nothing is refreshed, because nothing changed.
+  it('surfaces a failure and reports that it did not happen', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue(drainedError(409, 'A session load is still in flight'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const ok = await controller.rereadPlugin('A.esp', '/mods/B/A.esp', 'ModB');
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('A session load is still in flight'));
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(deps.refreshGroupTree).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a thrown request the same way', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const ok = await controller.rereadPlugin('A.esp', '/mods/B/A.esp', 'ModB');
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
+  });
+});
+
+describe('SessionController.stagedChangeCount', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  const changes = [
+    { plugin: 'A.esp', origin: 'ModA', formKey: '000801:A.esp' },
+    { plugin: 'A.esp', origin: 'ModA', formKey: '000802:A.esp' },
+    { plugin: 'A.esp', origin: 'ModB', formKey: '000803:A.esp' },
+    { plugin: 'B.esp', origin: 'ModA', formKey: '000804:B.esp' },
+  ];
+
+  it('counts only the staged edits of that plugin from that origin', async () => {
+    const client = makeClient();
+    client.GET = vi.fn().mockResolvedValue({ data: changes, response: { ok: true } });
+    const controller = new SessionController(makeDeps({ client }));
+
+    // Not 3 (every A.esp change) and not 4 (every change): the copy being replaced is
+    // (A.esp, ModA), and only its edits are the ones a re-read discards.
+    await expect(controller.stagedChangeCount('A.esp', 'ModA')).resolves.toBe(2);
+  });
+
+  it('matches plugin and origin case-insensitively', async () => {
+    const client = makeClient();
+    client.GET = vi.fn().mockResolvedValue({ data: changes, response: { ok: true } });
+    const controller = new SessionController(makeDeps({ client }));
+
+    await expect(controller.stagedChangeCount('a.esp', 'moda')).resolves.toBe(2);
+  });
+
+  it('throws rather than answering zero when the read fails', async () => {
+    const client = makeClient();
+    client.GET = vi.fn().mockResolvedValue(drainedError(503, 'No session loaded.'));
+    const controller = new SessionController(makeDeps({ client }));
+
+    // Zero would silently skip the re-read confirm, which is the one answer this must never
+    // invent — the caller decides what to do with not knowing (see rereadPlugin.ts).
+    await expect(controller.stagedChangeCount('A.esp', 'ModA')).rejects.toThrow();
+  });
+});

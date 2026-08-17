@@ -6,7 +6,7 @@
 // a base-game plugin no mod provides. Vanilla masters are NOT listed here — the
 // backend prepends them from the game directory.
 
-import { readdir } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { IModlistSource } from './model';
 import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
@@ -60,6 +60,76 @@ async function overwritePluginFiles(instanceRoot: string): Promise<Map<string, s
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return new Map(); // no overwrite folder — nothing wins from it
     throw err;
   }
+}
+
+/** Where a plugin name resolves to right now: the copy that would be loaded, or `null` for a name
+ *  nothing provides any more. Distinct from a name simply being absent from the map — see
+ *  {@link resolveCurrentPluginOrigins}. */
+export type ResolvedOrigin = { origin: string; path: string } | null;
+
+/** Whether `path` is a regular file. Used for the Data-folder fallback, which
+ *  {@link resolvePluginPaths} composes blind: a nested directory sharing a plugin's basename must
+ *  not read as that plugin's file, the same rule `rootLevelWinners` and `overwritePluginFiles`
+ *  already apply on their own rungs. Any failure — missing, unreadable, mid-uninstall — answers
+ *  "not a file", which is the honest reading of all of them for this question. */
+async function isFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** What each plugin name in `names` resolves to *right now* — the Mod Management half of drift
+ *  (#279 / ADR-0035 § Live mutation). Walks the same overwrite → winning mod → Data ladder
+ *  {@link buildExplicitPluginsWithOrigin} does, and differs in exactly one way: the Data rung is
+ *  checked for an actual file, so a name nothing provides answers `null` ("would now resolve to:
+ *  nothing") instead of a Data path that isn't there. A session build never needed that — it
+ *  resolves names that exist — but uninstalling the only provider of a loaded plugin is drift too,
+ *  and it is the one kind no re-read can repair.
+ *
+ *  A name that resolves to nothing is present with a `null` value rather than omitted, so a caller
+ *  can tell "asked, and the answer is nothing" from "could not tell" — the difference between
+ *  flagging drift and failing to compute it (#334). A name is *omitted* only when the ladder could
+ *  not be walked to the end for it, which today means one thing: no resolvable Data folder to check
+ *  the last rung against. Keys are case-folded, plugins.txt casing being no more authoritative here
+ *  than anywhere else in this module. */
+export async function resolveCurrentPluginOrigins(
+  names: string[],
+  index: FileConflictIndex,
+  instanceRoot: string,
+  dataFolder: string | undefined,
+): Promise<Map<string, ResolvedOrigin>> {
+  const [overwriteFiles, winnerByName, winnerModByName] = await Promise.all([
+    overwritePluginFiles(instanceRoot),
+    Promise.resolve(rootLevelWinners(index)),
+    Promise.resolve(rootLevelWinnerMods(index)),
+  ]);
+
+  const resolved = await Promise.all(names.map(async (name): Promise<[string, ResolvedOrigin | undefined]> => {
+    const key = foldPath(name);
+
+    const overwriteFile = overwriteFiles.get(key);
+    if (overwriteFile !== undefined) {
+      return [key, { origin: OVERWRITE_ORIGIN, path: join(instanceRoot, 'overwrite', overwriteFile) }];
+    }
+
+    const winnerMod = winnerModByName.get(key);
+    if (winnerMod !== undefined) {
+      return [key, { origin: winnerMod, path: winnerByName.get(key)! }];
+    }
+
+    // No resolvable Data folder means the last rung cannot be *checked*, not that it is empty —
+    // so the name is left out of the map entirely (unknown) rather than answered `null`. Answering
+    // `null` here would flag every vanilla plugin as "resolves to nothing" the moment the game
+    // directory failed to resolve, which is #334's rule broken at its source: a marker produced by
+    // a computation that did not happen.
+    if (dataFolder === undefined) return [key, undefined];
+    const dataPath = join(dataFolder, name);
+    return [key, (await isFile(dataPath)) ? { origin: DATA_DIRECTORY_ORIGIN, path: dataPath } : null];
+  }));
+
+  return new Map(resolved.filter((e): e is [string, ResolvedOrigin] => e[1] !== undefined));
 }
 
 type Source = Pick<IModlistSource, 'readPluginOrder' | 'readEnabledPlugins' | 'readModlist'>;

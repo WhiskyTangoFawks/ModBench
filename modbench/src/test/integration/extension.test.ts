@@ -411,6 +411,9 @@ describe('modbench command registration', () => {
     'modbench.pluginListTree.filter',
     'modbench.pluginListTree.clearFilter',
     'modbench.pluginListTree.revealInExplorer',
+    // #279: the per-plugin re-read a drifted row offers. Gated to `viewItem == pluginDrifted` in
+    // package.json and hidden from the palette — it needs the clicked row.
+    'modbench.pluginListTree.rereadPlugin',
   ];
 
   it('registers all expected commands on activation', async () => {
@@ -1040,6 +1043,13 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
     resetMockBackend();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-missingmaster-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    // #279: the mock backend reports both of these with origin 'Data', so the Data folder has to
+    // actually hold them — otherwise drift correctly concludes their names now resolve to nothing
+    // and decorates every row accordingly. Production cannot reach that state (load-explicit
+    // refuses a plugin whose file is missing), so a fixture that could is the thing out of step.
+    for (const name of ['TestMod.esp', 'MissingMaster.esp']) {
+      fs.writeFileSync(path.join(gameDir, 'Data', name), '');
+    }
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n');
@@ -1099,6 +1109,13 @@ describe('Reload Session actually reloads (#295)', () => {
     resetMockBackend();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-reload-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    // #279: the mock backend reports both of these with origin 'Data', so the Data folder has to
+    // actually hold them — otherwise drift correctly concludes their names now resolve to nothing
+    // and decorates every row accordingly. Production cannot reach that state (load-explicit
+    // refuses a plugin whose file is missing), so a fixture that could is the thing out of step.
+    for (const name of ['TestMod.esp', 'MissingMaster.esp']) {
+      fs.writeFileSync(path.join(gameDir, 'Data', name), '');
+    }
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n');

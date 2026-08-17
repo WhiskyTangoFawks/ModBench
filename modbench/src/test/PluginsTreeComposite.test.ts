@@ -7,6 +7,7 @@ vi.mock('vscode', () => ({
     tooltip?: string;
     description?: string;
     iconPath?: unknown;
+    contextValue?: string;
     constructor(label: string, collapsibleState = 0) {
       this.label = label;
       this.collapsibleState = collapsibleState;
@@ -52,7 +53,13 @@ class FakeRows {
   getTreeItem(row: FakeRow): vscode.TreeItem {
     // Mirrors both real providers: the node *is* the TreeItem, returned by identity.
     const cached = (this.items ??= new Map<FakeRow, vscode.TreeItem>());
-    if (!cached.has(row)) cached.set(row, new vscode.TreeItem(row.file ?? row.kind));
+    if (!cached.has(row)) {
+      const item = new vscode.TreeItem(row.file ?? row.kind);
+      // As PluginNode/ImplicitMasterNode do: the row states what kind of thing it is, and that is
+      // what package.json's `view/item/context` clauses gate on.
+      item.contextValue = row.kind;
+      cached.set(row, item);
+    }
     return cached.get(row)!;
   }
   fire(row?: FakeRow) { this.emitter.fire(row); }
@@ -79,13 +86,18 @@ class FakeChildren {
   fire(child?: FakeChild) { this.emitter.fire(child); }
 }
 
-function make(rows: FakeRow[], children = new FakeChildren()) {
+function make(
+  rows: FakeRow[],
+  children = new FakeChildren(),
+  driftOf?: (file: string) => { loadedOrigin: string; currentOrigin: string | null; currentPath: string | null } | undefined,
+) {
   const rowSource = new FakeRows(rows);
   const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
     rows: rowSource,
     children,
     pluginFileOf: (row) => row.file,
     orderIssueMastersOf: (row) => row.orderIssueMasters,
+    driftOf,
   });
   // The composite tells rows from children by having handed the rows out, so every test renders
   // the root first — which is what VS Code does, and what its TreeDataProvider contract
@@ -678,5 +690,145 @@ describe('PluginsTreeComposite — pending-change resourceUri (#331)', () => {
     // Built once and left alone thereafter — the row provider hands back the same mutable node,
     // and the composite's own guard sees a resourceUri already present on every later render.
     expect(pendingChangeUriOf).toHaveBeenCalledTimes(1);
+  });
+});
+
+// #279 / ADR-0035 § Live mutation: a mod-level change can make a plugin name resolve to a
+// different physical file. The row says so and offers a re-read; nothing re-reads on its own.
+//
+// The comparison itself lives in `pluginDrift.ts` and is tested there — what these pin is the
+// rendering contract: which of the row's decorations drift is allowed to touch, and (the part a
+// menu contribution depends on) when the row becomes a re-read target.
+describe('PluginsTreeComposite when a plugin has drifted', () => {
+  const DRIFTED = { loadedOrigin: 'ModA', currentOrigin: 'ModB', currentPath: '/mods/B/A.esp' };
+  const GONE = { loadedOrigin: 'ModA', currentOrigin: null, currentPath: null };
+
+  const withDrift = (drift: Record<string, typeof DRIFTED | typeof GONE>) =>
+    make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), (file) => drift[file]);
+
+  it('states in the tooltip which origin is loaded and which it would now resolve to', async () => {
+    const { composite, render } = withDrift({ 'A.esp': DRIFTED });
+    composite.setSession(new Set(['A.esp', 'B.esp']));
+    await render();
+
+    const tooltip = String(composite.getTreeItem(PLUGIN_ROW).tooltip);
+    expect(tooltip).toContain('ModA');
+    expect(tooltip).toContain('ModB');
+  });
+
+  it('says a plugin whose name resolves to nothing resolves to nothing', async () => {
+    const { composite, render } = withDrift({ 'A.esp': GONE });
+    composite.setSession(new Set(['A.esp', 'B.esp']));
+    await render();
+
+    expect(String(composite.getTreeItem(PLUGIN_ROW).tooltip)).toContain('nothing');
+  });
+
+  it('makes a drifted row a re-read target', async () => {
+    const { composite, render } = withDrift({ 'A.esp': DRIFTED });
+    composite.setSession(new Set(['A.esp', 'B.esp']));
+    await render();
+
+    expect(composite.getTreeItem(PLUGIN_ROW).contextValue).toBe('pluginDrifted');
+  });
+
+  // Nothing to read, so nothing to offer: the row still flags, but the command must not appear.
+  it('does not make a row that resolves to nothing a re-read target', async () => {
+    const { composite, render } = withDrift({ 'A.esp': GONE });
+    composite.setSession(new Set(['A.esp', 'B.esp']));
+    await render();
+
+    expect(composite.getTreeItem(PLUGIN_ROW).contextValue).toBe('plugin');
+  });
+
+  it('leaves a row that has not drifted exactly as its own provider built it', async () => {
+    const { composite, render } = withDrift({ 'A.esp': DRIFTED });
+    composite.setSession(new Set(['A.esp', 'B.esp']));
+    await render();
+
+    const item = composite.getTreeItem(OTHER_ROW);
+    expect(item.contextValue).toBe('plugin');
+    expect(item.description).toBeUndefined();
+    expect(item.tooltip).toBeUndefined();
+  });
+
+  // Drift is about which file backs the row, not about whether it can be browsed: the session
+  // still holds the records it read, and they stay readable until the user chooses otherwise.
+  it('leaves the row expandable', async () => {
+    const { composite, render } = withDrift({ 'A.esp': DRIFTED });
+    composite.setSession(new Set(['A.esp', 'B.esp']));
+    await render();
+
+    expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+  });
+
+  it('adds to the row\'s own tooltip rather than replacing it', async () => {
+    const rowSource = new FakeRows([PLUGIN_ROW]);
+    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
+      rows: rowSource,
+      children: new FakeChildren(),
+      pluginFileOf: (row) => row.file,
+      driftOf: () => DRIFTED,
+    });
+    const built = rowSource.getTreeItem(PLUGIN_ROW);
+    built.tooltip = 'A.esp';
+    composite.setSession(new Set(['A.esp']));
+    await composite.getChildren();
+
+    expect(String(composite.getTreeItem(PLUGIN_ROW).tooltip)).toContain('A.esp');
+  });
+
+  // The mirror of the note above, and the bug #276 hit for the read-only note: rows are the same
+  // mutable objects the tree keeps reusing, so a marker that stops applying has to actually come
+  // back off — a re-read that resolves the drift must not leave the row claiming it forever.
+  it('takes the marker back off once the drift clears', async () => {
+    let drift: typeof DRIFTED | undefined = DRIFTED;
+    const rowSource = new FakeRows([PLUGIN_ROW]);
+    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
+      rows: rowSource,
+      children: new FakeChildren(),
+      pluginFileOf: (row) => row.file,
+      driftOf: () => drift,
+    });
+    composite.setSession(new Set(['A.esp']));
+    await composite.getChildren();
+    expect(composite.getTreeItem(PLUGIN_ROW).contextValue).toBe('pluginDrifted');
+
+    drift = undefined;
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.contextValue).toBe('plugin');
+    expect(item.description).toBeUndefined();
+    expect(item.tooltip).toBeUndefined();
+  });
+
+  it('says nothing about drift on a row with no session behind it', async () => {
+    const { composite, render } = withDrift({ 'A.esp': DRIFTED });
+    await render(); // no setSession
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.contextValue).toBe('plugin');
+    expect(item.tooltip).toBeUndefined();
+  });
+});
+
+// #279: the distinction that a drift recomputation has to respect. A mod-level change alters no
+// line of the load order, so the rows are the same rows — re-decorated, never rebuilt. Wiring drift
+// to the row provider's `invalidate()` instead broke exactly this, and the integration suite caught
+// it as "the row list is unchanged, so this must be the same reused row object".
+describe('PluginsTreeComposite decoration refresh', () => {
+  it('re-renders without asking the row provider to re-read', async () => {
+    const { composite, rowSource, render } = make([PLUGIN_ROW]);
+    await render();
+    const heard: unknown[] = [];
+    composite.onDidChangeTreeData(() => heard.push(true));
+
+    composite.refreshDecorations();
+
+    expect(heard.length).toBe(1);
+    // Re-rendering hands back the rows already built, so a row keeps its identity — which is what
+    // the decoration state (and the tree's selection) is keyed to.
+    expect(await composite.getChildren()).toEqual([PLUGIN_ROW]);
+    expect(rowSource.rows[0]).toBe(PLUGIN_ROW);
   });
 });
