@@ -1333,6 +1333,79 @@ describe('The record-filter readout does not outlive its session (#255)', () => 
   });
 });
 
+// #354: exitToLoadout used to clear only the readout above, directly — never the context key the
+// Clear title-bar action is gated on (`modbench.filterActive`), nor the code lens's own notion of
+// which SQL is active. Both now go through the record filter's single writer (makeSetFilterActive),
+// the same one every in-session filter change already goes through, so `modbench.filterActive`
+// stays written from exactly one place.
+//
+// The context key itself is not asserted here: VS Code exposes no public API to read a context
+// key's value from a test, the same wall `modbench.hasPendingChanges` hit (see its own describe
+// block above, "Pending Changes visibility tracks staged work"). What *is* observable is the code
+// lens, because FilterCodeLensProvider is a genuinely registered `vscode.languages.CodeLensProvider`
+// — `vscode.executeCodeLensProvider` exercises the real instance, not a private field. Proving the
+// code lens clears on Close mEdit proves the single writer ran, and by that writer's own
+// construction the context key cleared with it.
+describe('Close mEdit clears the record filter\'s code lens too, not just the readout (#354)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  // FilterCodeLensProvider only renders a lens for a document inside scriptsPath, and scriptsPath
+  // is resolved once at activate() (config, or ~/.medit/scripts) — not reconfigurable per test the
+  // way mods.gameDirectory is elsewhere in this file. setupScripts already creates and writes into
+  // this real directory on every activation; this file is additive to it, uniquely named so a
+  // leaked file (a crash between write and cleanup) reads as this test's own rather than a mystery
+  // in a real product-facing folder, and removed in `after` without touching anything else there.
+  const scriptsDir = path.join(os.homedir(), '.medit', 'scripts');
+  const scriptsFile = path.join(scriptsDir, `__test-354-filter-lens-${Date.now()}.sql`);
+  const sql = 'SELECT form_key FROM "npc_"';
+  let gameDir = '';
+
+  const codeLensCommandFor = async (uri: vscode.Uri): Promise<string | undefined> => {
+    const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>('vscode.executeCodeLensProvider', uri);
+    return lenses?.[0]?.command?.command;
+  };
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-exit-filter-lens-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
+    fs.mkdirSync(scriptsDir, { recursive: true });
+    fs.writeFileSync(scriptsFile, sql);
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '');
+    fs.rmSync(gameDir, { recursive: true, force: true });
+    // Tolerate the file already being gone; a cleanup failure here must never mask the test's own
+    // assertion result.
+    try { fs.rmSync(scriptsFile, { force: true }); } catch { /* best-effort */ }
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    resetMockBackend();
+  });
+
+  it('an explicit Close mEdit clears the code lens the same way it clears the readout', async () => {
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(scriptsFile));
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand('modbench.setFilterFromDocument');
+
+    assert.strictEqual(await codeLensCommandFor(doc.uri), 'modbench.clearFilter',
+      'sanity: the code lens must report the filter active before Close mEdit, or clearing it proves nothing');
+
+    await vscode.commands.executeCommand('modbench.closeMedit');
+
+    assert.strictEqual(await codeLensCommandFor(doc.uri), 'modbench.setFilterFromDocument',
+      'a session that no longer exists must not leave the code lens still claiming its SQL is active');
+  });
+});
+
 // #295 AC5: Refresh (#247's single Mod-Management refresh) must remain distinct and never
 // trigger a reload — a regression assertion, not new behavior; modbench.refresh's own body
 // never touches enterEditing/loadExplicitSession.

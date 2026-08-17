@@ -139,6 +139,12 @@ let pendingChangeDecorationProvider: PendingChangeDecorationProvider | undefined
 // activation. Assigned exactly once, where `enterEditing` is built; every reader treats it as
 // possibly-absent for that reason, not as a race to guard against.
 let enterEditingFn: (() => Promise<void>) | undefined;
+// #354: module level for the same reason as the above — exitToLoadout has to reach the record
+// filter's single writer (the context key its Clear action is gated on, the code lens's active
+// SQL, and the readout) to end the filter's UI state on session close, and a local `const` inside
+// activate() is structurally unreachable from there. Assigned exactly once, alongside where
+// makeSetFilterActive builds it.
+let setFilterActive: ReturnType<typeof makeSetFilterActive> | undefined;
 
 const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
@@ -225,10 +231,12 @@ function exitToLoadout(): void {
   // #307: so does anything the load was saying about itself. A statement about a session that no
   // longer exists is the same class of silent-wrong-state as a stale chevron.
   say(undefined);
-  // #255: and so does the record-filter half of the Plugins tree's readout — the record filter is
-  // a fact about the session, so it cannot outlive it in the description. (The name filter's half
-  // is untouched: it filters load-order rows, which are still there.)
-  pluginsNameFilter?.setBaseDescription(undefined);
+  // #255 / #354: and so does the record filter's whole UI state — the Clear action's context key,
+  // the code lens's active SQL, and the Plugins tree readout's record-filter half — all through
+  // the same single writer every other record-filter change goes through, so `modbench.filterActive`
+  // stays written from exactly one place. (The name filter's half of the readout is untouched: it
+  // filters load-order rows, which are still there.)
+  setFilterActive?.(false);
   recordBrowserProvider?.setImmutablePlugins([]);
   // #331: a direct reset, not refresh() — see PendingChangeDecorationProvider.clear()'s own
   // comment for why a live re-fetch here would race backendManager.stop() below.
@@ -241,7 +249,12 @@ function exitToLoadout(): void {
  *  tree's readout — where the record filter is one of two independent narrowing axes and is
  *  named by its *source*, never by its SQL, because a `WHERE` clause is not a readout. `SQL` is
  *  the honest fallback for a filter read back off the backend at session start, whose source
- *  this frontend never saw. */
+ *  this frontend never saw.
+ *
+ *  The single writer for all three, called with `false` and nothing else by #354's exitToLoadout
+ *  to end the record filter's UI state on session close, the same way SessionController's own
+ *  setFilter/clearFilter/syncFilterState call it in session. `modbench.filterActive` is written
+ *  from exactly this one place. */
 function makeSetFilterActive(filterProvider: FilterCodeLensProvider) {
   return (active: boolean, sql?: string, label?: string) => {
     void vscode.commands.executeCommand('setContext', 'modbench.filterActive', active);
@@ -323,7 +336,7 @@ export function activate(context: vscode.ExtensionContext) {
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const { scriptsPath, filterProvider } = setupScripts(cfg);
 
-  const setFilterActive = makeSetFilterActive(filterProvider);
+  setFilterActive = makeSetFilterActive(filterProvider);
 
   const controller = new SessionController({
     client,
