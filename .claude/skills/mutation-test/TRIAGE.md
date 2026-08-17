@@ -35,9 +35,15 @@ scope) are normal outcomes, not failures.
   wrappers refuse to start beside a live run.
 - Work from the wrappers' parsed output only; never open the raw report.
 - **A zero-finding result against a diff the review says exists is a mis-scope, not a
-  clean audit** — a `--since` target that no longer matches the tree (moved HEAD, wrong
-  SHA) silently filters every mutant. Verify the target resolves to the diff's fixed
-  point; fall back to `--file` on the changed files before reporting clean.
+  clean audit.** The wrappers now enforce this rather than asking you to remember it:
+  they compute the changed-file set with git themselves, and `parse-report.py` exits 2
+  on a report where no mutant was tested instead of printing "No issues found." Both
+  exist because a review run reported a clean pass having tested **zero** of 5334
+  mutants (#362). If you see that exit-2 message, re-scope with `--file` on the changed
+  files; never report the run as clean.
+- **Read the count, not the success line.** `exit 0` plus "No issues found." is a claim
+  about mutants that *ran*. Before reporting an axis clean, state how many were actually
+  tested — an audit of nothing passes every check that isn't looking for it.
 
 **Done when** every `Survived` and `NoCoverage` finding is listed with file, line, and
 mutator.
@@ -135,6 +141,9 @@ Format (one `###` section per disposition actually used):
 
 ```
 ## Suite review — vs <fixed point>
+
+<N> mutants tested across <files>. (Zero means the run was mis-scoped and there is
+no result to report — see §1.)
 
 Each row is a reviewed finding with a recommended disposition — review target
 sites, not a coverage report. A row closes when its disposition is applied or

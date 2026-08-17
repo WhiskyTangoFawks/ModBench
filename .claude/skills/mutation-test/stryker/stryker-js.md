@@ -28,6 +28,11 @@ Config is `modbench/stryker.config.json`. Reports land in `modbench/reports/muta
 exclusions, passed to `--mutate`. Naming a file with `--file` skips the exclusions —
 naming it *is* the request to mutate it.
 
+That accident of the JS runner turned out to be the correct design on both sides: the
+.NET runner now does the same, because Stryker.NET's own `since` reads the wrong checkout
+from a linked worktree (#362, `stryker.md` §Guardrails). Neither wrapper delegates diff
+resolution to the tool.
+
 ## Scope, and why it stops where it does
 
 Mutation runs against `src/modmanager/` only:
