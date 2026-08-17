@@ -317,6 +317,36 @@ The extension owns the editing backend process
   when the filter clears and is not persisted. This is the **shared filter widget** every
   Modbench list view uses (#247) — the separator toggle is an option on it, not a second
   implementation, and Downloads reuses the same widget rather than VS Code's native tree Find.
+
+  **The filter is durable (#255)** — this section is the canonical description of behavior that
+  is identical on the [Plugins tree](plugins.md) and [Downloads](downloads.md):
+
+  - **Entry**: the slot-1 magnifier, or `ctrl+F` with focus anywhere in the view.
+  - **Typing** narrows live, as it always did.
+  - **The filter survives the box hiding, by every route** — Enter, Escape, clicking a row,
+    clicking away. These are one event at the API (`onDidHide`) and none of them is an intent to
+    discard; the box is an entry mechanism, and the filter lives in `nameFilter.ts` and each
+    view's provider. Reopening the box is prefilled with the active term, so it edits rather
+    than restarts. (The pre-#255 behavior — dismissing restored the full list — made the filter
+    usable only while typing, since clicking a result is the first thing anyone does with one.)
+  - **Clearing is only ever explicit**: slot 1 swaps to a `$(clear-all)` variant while filtered,
+    gated on a per-view `<viewId>.filterActive` context key — the same two-command-plus-context-key
+    template as Sort Direction and Show Hidden. Typing the term back to empty also counts.
+  - **Readout**: the view's own description carries the active term (`"arm"`), composed with
+    whatever else that view says about itself — here the profile name (`"arm" · Default`), on the
+    Plugins tree the record filter axis. **Consequence, deliberate**: because slot 1 is the Clear
+    button while filtered, *editing* an active term is reached by `ctrl+F` (or clear and retype),
+    not by a third title-bar icon. That is the cost of the toggle template, weighed and accepted —
+    a third slot-1-adjacent icon is what rule 2 of `modbench/CLAUDE.md` exists to prevent.
+  - **No matches** shows a message naming the term rather than a bare empty tree, which reads as
+    "there is nothing here". Rows that survive filtering by design — an ADR-0026 error row, this
+    tree's pinned Overwrite row — are content: the message asks the provider what is *showing*,
+    not whether the term matched.
+  - **Lifetime**: durable within the session, across tree refreshes and underlying data changes;
+    not persisted across window reloads. It is a lens, not a setting.
+  - **Icon note**: `$(clear-all)` matches VS Code's own "Clear Extensions Search Results".
+    [#247](https://github.com/WhiskyTangoFawks/ModBench/issues/247) owns the icon rubric and may
+    override it; the choice is recorded here rather than silently inherited.
 - **Profile selector**: reached from the [Loadout header](loadout-header.md)'s Profile row,
   not this tree — switching profile swaps the modlist *and* `plugins.txt` *and* invalidates
   any running session, so its scope is the workspace. It opens a quick pick of directories

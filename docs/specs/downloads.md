@@ -222,7 +222,13 @@ Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeIte
   narrowing to rows whose filename contains what the user types, case-insensitively.
   Render-only: a keystroke never re-scans `downloads/`. An error row survives every filter,
   since hiding the reason the list is wrong behind a name match is exactly the
-  silently-wrong state ADR-0026 forbids.
+  silently-wrong state ADR-0026 forbids — and, for the same reason, a view left showing only
+  that error row is never told "no matches".
+
+  Applied **after hidden-filtering**: Show Hidden decides which rows exist, the name filter
+  narrows what is left. Behavior — durable until explicitly cleared, `ctrl+F` entry, term in the
+  view description, `modbench.downloads.clearFilter` at slot 1 while active — is identical to
+  every other Modbench list view and specified once, in [mods.md](mods.md) (#255).
 
   **This reverses #233's call**, which sent Downloads to VS Code's **native tree Find**
   (`list.find`) on the grounds that the Mods filter's structural-vs-flat toggle has nothing
@@ -231,9 +237,10 @@ Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeIte
   cost of the divergence was that "narrow this list by name" meant three different things
   across five title bars (#247). Downloads now reuses the one widget, with no toggle.
 
-  The widget clears on losing focus, which makes it usable only while typing —
-  [#255](https://github.com/WhiskyTangoFawks/ModBench/issues/255), inherited knowingly. It is
-  now a single fix that lands on all four list views at once.
+  The defect Downloads inherited with that widget — it cleared on losing focus, so it was
+  usable only while typing — was fixed once, for every list view, by
+  [#255](https://github.com/WhiskyTangoFawks/ModBench/issues/255), exactly as adopting one
+  widget was meant to allow.
 - **No manual Refresh** — and since #247, no view has one. Refresh is a single workspace-scope
   command on the [Loadout header](loadout-header.md) that re-reads every Mod-Management source
   together. It remains only a safety net for filesystems with unreliable watch events:

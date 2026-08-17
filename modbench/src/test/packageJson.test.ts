@@ -231,6 +231,53 @@ describe('package.json filtering is one UX (#247)', () => {
   it('keeps $(filter) for the record filter, so the two never read as the same action', () => {
     expect(commandTitle('modbench.setFilter')!.icon).toBe('$(filter)');
   });
+
+  // #255: the filter is durable, so it needs a way out — the established two-command +
+  // context-key toggle template (sort direction, show-hidden), so slot 1 shows exactly one of
+  // the pair at a time. The key is per view: the record filter's `modbench.filterActive` is a
+  // different, independently-clearable axis on the same title bar.
+  const DURABLE_FILTERS = [
+    ['modbench.modList', 'modbench.modList.filter', 'modbench.modList.clearFilter', 'modbench.modList.filterActive'],
+    ['modbench.pluginListTree', 'modbench.pluginListTree.filter', 'modbench.pluginListTree.clearFilter', 'modbench.pluginListTree.filterActive'],
+    ['modbench.downloads', 'modbench.downloads.filter', 'modbench.downloads.clearFilter', 'modbench.downloads.filterActive'],
+  ] as const;
+
+  it.each(DURABLE_FILTERS)('%s swaps slot 1 to its clear variant while a filter is active', (view, open, clearCommand, key) => {
+    const openEntry = titleMenus().find((e) => e.command === open && e.when.includes(`view == ${view}`));
+    const clearEntry = titleMenus().find((e) => e.command === clearCommand && e.when.includes(`view == ${view}`));
+    expect(clearEntry, `expected ${clearCommand} on ${view}`).toBeTruthy();
+    expect(openEntry!.when).toBe(`view == ${view} && !${key}`);
+    expect(clearEntry!.when).toBe(`view == ${view} && ${key}`);
+    expect(clearEntry!.group).toBe('navigation@1');
+  });
+
+  // $(clear-all) is what VS Code's own Extensions view uses for "Clear Extensions Search
+  // Results" — clearing a text filter on a list. $(search-stop) was rejected: it means halting a
+  // search in progress, which would imply the results stay. #247 owns the icon rubric and may
+  // override this; it is recorded here rather than silently inherited.
+  it.each(DURABLE_FILTERS)('%s clears with $(clear-all)', (_view, _open, clearCommand) => {
+    expect(commandTitle(clearCommand)!.icon).toBe('$(clear-all)');
+  });
+
+  // #255: `ctrl+F` means find-within-the-focused-surface everywhere else in VS Code (editor,
+  // terminal, Output, debug console). Trees left it unbound when `list.find` moved to
+  // `ctrl+alt+F` in 1.89, so a per-view `focusedView` binding conflicts with nothing and closes
+  // the one surface where the platform's own idiom silently does nothing.
+  it.each(DURABLE_FILTERS)('%s opens its filter on ctrl+F while focused', (view, openCommand) => {
+    const keybindings = pkg.contributes.keybindings as { command: string; key: string; when: string }[];
+    const entry = keybindings.find((k) => k.command === openCommand);
+    expect(entry, `expected a ctrl+F binding for ${openCommand}`).toBeTruthy();
+    expect(entry!.key).toBe('ctrl+f');
+    expect(entry!.when).toBe(`focusedView == ${view}`);
+  });
+
+  // Scoped to the focused view, never the container or the window: an unscoped ctrl+F would
+  // shadow the editor's own Find for the whole workbench.
+  it('never binds ctrl+F outside a specific focused view', () => {
+    const keybindings = pkg.contributes.keybindings as { command: string; key: string; when?: string }[];
+    const unscoped = keybindings.filter((k) => k.key === 'ctrl+f' && !k.when?.startsWith('focusedView == '));
+    expect(unscoped.map((k) => k.command)).toEqual([]);
+  });
 });
 
 describe('package.json Refresh is one command (#247)', () => {

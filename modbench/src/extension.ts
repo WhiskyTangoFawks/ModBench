@@ -56,6 +56,7 @@ import { HiddenDownloadDecorationProvider } from './modmanager/HiddenDownloadDec
 import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
 import { makeReporter } from './reporter';
 import { LoadoutHeaderProvider } from './LoadoutHeaderProvider';
+import { registerNameFilter, type NameFilter } from './nameFilter';
 
 let backendManager: BackendManager | undefined;
 // #247: the Loadout header re-reads its rows whenever workspace-scope state moves. Module
@@ -71,6 +72,10 @@ let pluginsTree: PluginsTreeComposite<PluginListNode, PluginTreeNode> | undefine
 // (`TreeView.message`). Module level for the same reason as pluginsTree above: enterEditing and
 // exitToLoadout are module-level, and both have to be able to set and clear it.
 let pluginsTreeView: vscode.TreeView<PluginListNode | PluginTreeNode> | undefined;
+// #255: the same view's name filter. Module level for the same reason as the two above — the
+// record filter (a second, independent narrowing axis) has to be able to add itself to this
+// view's readout from `activate`'s own setFilterActive, which runs before the view exists.
+let pluginsNameFilter: NameFilter | undefined;
 // #307 AC7: the in-flight load's abort handle. Module level for the same reason as the above —
 // exitToLoadout is where a load gets deliberately abandoned, and it is module-level. Replaced by
 // each new load; a superseded one does not need aborting, since the backend answers it 409.
@@ -81,7 +86,12 @@ let loadAbort: AbortController | undefined;
  *  so there is no banner row and no bespoke widget). `undefined` clears it, which is the value
  *  the property itself takes. */
 function say(message: string | undefined): void {
-  if (pluginsTreeView) pluginsTreeView.message = message;
+  if (!pluginsTreeView) return;
+  pluginsTreeView.message = message;
+  // #255: one message surface, two things that can want it. The load's statement wins while it
+  // has something to say; when it stops, whatever the name filter had to say comes back — a
+  // no-matches statement must not be silently swallowed by a load that has since finished.
+  if (message === undefined) pluginsNameFilter?.refresh();
 }
 
 /** #307 / ADR-0035 AC2: run `work` with a progress indicator in the **Plugins view's own header**,
@@ -198,6 +208,10 @@ function exitToLoadout(): void {
   // #307: so does anything the load was saying about itself. A statement about a session that no
   // longer exists is the same class of silent-wrong-state as a stale chevron.
   say(undefined);
+  // #255: and so does the record-filter half of the Plugins tree's readout — the record filter is
+  // a fact about the session, so it cannot outlive it in the description. (The name filter's half
+  // is untouched: it filters load-order rows, which are still there.)
+  pluginsNameFilter?.setBaseDescription(undefined);
   recordBrowserProvider?.setImmutablePlugins([]);
   // #331: a direct reset, not refresh() — see PendingChangeDecorationProvider.clear()'s own
   // comment for why a live re-fetch here would race backendManager.stop() below.
@@ -205,43 +219,18 @@ function exitToLoadout(): void {
   backendManager?.stop();
 }
 
-/** The filter widget — one implementation for every list view (Mods, Plugin List, Plugins
- *  tree, Downloads): a transient InputBox that live-narrows as the user types and restores
- *  the unfiltered list on dismiss. Registers `commandId` to open it.
- *
- *  #247: there used to be two of these, the second hand-rolled inside the Mods command body
- *  purely to carry a toggle button — so "filter" meant three different things across five
- *  title bars. `toggle` folds that case in as an option; it is also why `setFilter` takes the
- *  toggle state as a second argument that the three plain call sites ignore.
- *
- *  The clear-on-dismiss below is the whole of #255: the filter does not survive losing focus,
- *  which makes it usable only while typing. It is deliberately still here — fixing it is a
- *  UX decision (a persistent chip and an explicit clear), and now that there is one widget
- *  that fix lands on all four views at once. */
-function registerFilterBoxCommand(
-  commandId: string,
-  placeholder: string,
-  setFilter: (text: string, toggleOn: boolean) => void,
-  toggle?: { icon: string; label: string },
-): vscode.Disposable {
-  return vscode.commands.registerCommand(commandId, () => {
-    const box = vscode.window.createInputBox();
-    box.placeholder = placeholder;
-    let toggleOn = true;
-    const updateButtons = () => {
-      if (!toggle) return;
-      box.buttons = [{ iconPath: new vscode.ThemeIcon(toggle.icon), tooltip: `${toggle.label} (${toggleOn ? 'on' : 'off'})` }];
-    };
-    updateButtons();
-    box.onDidTriggerButton(() => {
-      toggleOn = !toggleOn;
-      updateButtons();
-      setFilter(box.value, toggleOn);
-    });
-    box.onDidChangeValue((text) => setFilter(text, toggleOn));
-    box.onDidHide(() => { setFilter('', true); box.dispose(); });
-    box.show();
-  });
+/** Everything that follows the record filter turning on or off: the context key its Clear
+ *  action is gated on, the code lens's notion of which SQL is live, and (#255) the Plugins
+ *  tree's readout — where the record filter is one of two independent narrowing axes and is
+ *  named by its *source*, never by its SQL, because a `WHERE` clause is not a readout. `SQL` is
+ *  the honest fallback for a filter read back off the backend at session start, whose source
+ *  this frontend never saw. */
+function makeSetFilterActive(filterProvider: FilterCodeLensProvider) {
+  return (active: boolean, sql?: string, label?: string) => {
+    void vscode.commands.executeCommand('setContext', 'modbench.filterActive', active);
+    filterProvider.setActiveSql(active ? (sql ?? null) : null);
+    pluginsNameFilter?.setBaseDescription(active ? `records: ${label ?? 'SQL'}` : undefined);
+  };
 }
 
 /** Game-path resolver: explicit `game.*` overrides if both set, else autodetect.
@@ -317,10 +306,7 @@ export function activate(context: vscode.ExtensionContext) {
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const { scriptsPath, filterProvider } = setupScripts(cfg);
 
-  const setFilterActive = (active: boolean, sql?: string) => {
-    void vscode.commands.executeCommand('setContext', 'modbench.filterActive', active);
-    filterProvider.setActiveSql(active ? (sql ?? null) : null);
-  };
+  const setFilterActive = makeSetFilterActive(filterProvider);
 
   const controller = new SessionController({
     client,
@@ -479,13 +465,13 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       }
       const filePath = path.join(scriptsPath, picked.label);
       const sql = fs.readFileSync(filePath, 'utf8');
-      await controller.setFilter(sql);
+      await controller.setFilter(sql, picked.label);
     }),
     vscode.commands.registerCommand('modbench.setFilterFromDocument', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;
       const sql = editor.document.getText();
-      await controller.setFilter(sql);
+      await controller.setFilter(sql, editor.document.isUntitled ? 'document' : path.basename(editor.document.fileName));
     }),
     vscode.commands.registerCommand('modbench.clearFilter', () => controller.clearFilter()),
     // #273: reaches every plugin-bearing merged-tree row (modmanager's PluginListNode, not
@@ -1063,11 +1049,6 @@ function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[]
         void updateProfileDescription();
         loadoutHeaderProvider?.refresh();
       }),
-      registerFilterBoxCommand(
-        'modbench.modList.filter', 'Filter mods…',
-        (text, grouping) => modListProvider.setFilter(text, grouping),
-        { icon: 'list-tree', label: 'Group by separator' },
-      ),
       vscode.commands.registerCommand('modbench.modList.launchMedit', async () => {
         // #270 / #307: enterEditing now puts chevrons on the merged tree's rows *as each plugin
         // lands* rather than all at once at the end, and owns its own progress indicator — in
@@ -1288,6 +1269,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     showCollapseAll: true,
   });
   pluginsTreeView = pluginListView; // #307: see its declaration — progress and message live here
+  pluginsNameFilter = registerPluginsNameFilter(pluginListView, pluginListProvider);
   return { pluginListProvider, disposables: [
     pluginListView,
     composite,
@@ -1330,8 +1312,23 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
         void vscode.window.showErrorMessage(`Modbench: Failed to reveal "${name}" in Explorer.`);
       }
     }),
-    registerFilterBoxCommand('modbench.pluginListTree.filter', 'Filter plugins…', (text) => pluginListProvider.setFilter(text)),
+    pluginsNameFilter,
   ] };
+}
+
+/** #255: the merged Plugins tree's name filter — the axis that narrows *which plugin rows*
+ *  appear, composing with (never replacing) the record filter's axis over which records appear
+ *  under an expanded row. An error row survives every filter by design (ADR-0026), so it counts
+ *  as content here: a view showing the reason its list is wrong must not also claim the term
+ *  matched nothing. */
+function registerPluginsNameFilter(
+  view: vscode.TreeView<PluginListNode | PluginTreeNode>, provider: PluginListProvider,
+): NameFilter {
+  return registerNameFilter({
+    view, viewId: 'modbench.pluginListTree', placeholder: 'Filter plugins…',
+    setFilter: (text) => provider.setFilter(text),
+    hasRows: async () => (await provider.getChildren()).length > 0,
+  });
 }
 
 /** Overwrite-folder surface (#82): a live watcher that re-renders the Mods tree
@@ -1439,6 +1436,41 @@ function registerLoadoutSurfaces(deps: Omit<LoadoutViewDeps, 'revealLog'>): {
   };
 }
 
+/** The Mods tree, its name filter, and the profile readout — together, because #255 made them
+ *  one thing: the view's description is written by exactly one owner (the filter), and the
+ *  active profile is what it composes the term around. Split apart, the profile update and a
+ *  filter keystroke would race for the same property and the loser would silently vanish. */
+function createModListView(
+  modListProvider: ModListProvider,
+  modlistSource: Mo2ModlistSource,
+  outputChannel: vscode.LogOutputChannel,
+): { modListView: vscode.TreeView<ModlistNode>; modListFilter: NameFilter; updateProfileDescription: () => Promise<void> } {
+  const modListView = vscode.window.createTreeView('modbench.modList', {
+    treeDataProvider: modListProvider,
+    showCollapseAll: true,
+    dragAndDropController: modListProvider,
+  });
+  const modListFilter = registerNameFilter({
+    view: modListView,
+    viewId: 'modbench.modList',
+    placeholder: 'Filter mods…',
+    setFilter: (text, grouping) => modListProvider.setFilter(text, grouping),
+    // The pinned Overwrite row sits outside all filtering (it is a fixture over the folder, not
+    // a modlist entry), so it is not evidence that the term matched anything.
+    hasRows: async () => (await modListProvider.getChildren()).some((n) => !(n instanceof OverwriteNode)),
+    toggle: { icon: 'list-tree', label: 'Group by separator' },
+  });
+  const updateProfileDescription = async () => {
+    try {
+      modListFilter.setBaseDescription(await modlistSource.getActiveProfile());
+    } catch (err) {
+      outputChannel.error(`[extension] reading active profile failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+  void updateProfileDescription();
+  return { modListView, modListFilter, updateProfileDescription };
+}
+
 interface LoadoutViewDeps {
   context: vscode.ExtensionContext;
   log: (msg: string) => void;
@@ -1498,20 +1530,8 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
     const { pluginListProvider, disposables: pluginListDisposables } =
       registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser });
-    const modListView = vscode.window.createTreeView('modbench.modList', {
-      treeDataProvider: modListProvider,
-      showCollapseAll: true,
-      dragAndDropController: modListProvider,
-    });
-
-    const updateProfileDescription = async () => {
-      try {
-        modListView.description = await modlistSource.getActiveProfile();
-      } catch (err) {
-        outputChannel.error(`[extension] reading active profile failed: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    };
-    void updateProfileDescription();
+    const { modListView, modListFilter, updateProfileDescription } =
+      createModListView(modListProvider, modlistSource, outputChannel);
 
     const runModAction = async (logLabel: string, failMessage: string, action: () => Promise<void>) => {
       try {
@@ -1547,6 +1567,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
 
     context.subscriptions.push(
       modListView,
+      modListFilter,
       modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)),
       ...registerModListCoreCommands({ modListProvider, modlistSource, updateProfileDescription, enterEditing, outputChannel }),
       ...registerDeployCommands(instanceRoot, modlistSource, outputChannel),
@@ -1659,7 +1680,11 @@ function registerDownloadsView(
       vscode.window.registerFileDecorationProvider(
         new HiddenDownloadDecorationProvider(instanceRoot, () => downloadsProvider.hiddenNames()),
       ),
-      registerFilterBoxCommand('modbench.downloads.filter', 'Filter downloads…', (text) => downloadsProvider.setFilter(text)),
+      registerNameFilter({
+        view: downloadsView, viewId: 'modbench.downloads', placeholder: 'Filter downloads…',
+        setFilter: (text) => downloadsProvider.setFilter(text),
+        hasRows: async () => (await downloadsProvider.getChildren()).length > 0,
+      }),
       registerDownloadsSortCommand(downloadsProvider),
       ...registerDownloadsHiddenToggleCommands(downloadsProvider),
       ...registerDownloadsSingleRowCommands(instanceRoot, log),

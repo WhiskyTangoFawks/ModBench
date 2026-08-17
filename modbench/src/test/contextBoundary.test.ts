@@ -36,6 +36,17 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
     expect(imports).toEqual(['vscode']);
   });
 
+  // #255: the name filter serves views from both contexts (Mods, the merged Plugins tree,
+  // Downloads), so like the composite it belongs to neither folder and lives at the composition
+  // root. What makes that placement honest is the same property, so it is checked the same way:
+  // structural deps, and nothing imported but `vscode`. Its own docstring cites this test — a
+  // comment naming a guard that isn't guarding is worse than no comment, because it is trusted.
+  it('the name filter imports from neither context', () => {
+    const imports = importsOf(read('nameFilter.ts'));
+    expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
+    expect(imports).toEqual(['vscode']);
+  });
+
   it('the row provider contains no record vocabulary', () => {
     // #276: "immutable"/"read-only" pinned alongside the original record vocabulary — Editing's
     // "Immutable plugin" (read-only-for-editing) is a distinct concept from this row's own

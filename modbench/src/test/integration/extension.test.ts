@@ -366,6 +366,7 @@ describe('modbench command registration', () => {
     'modbench.vmad.setPropertyFlags',
     'modbench.createPlaced',
     'modbench.modList.filter',
+    'modbench.modList.clearFilter',
     'modbench.modList.switchProfile',
     'modbench.modList.launchMedit',
     'modbench.modList.sortDescending',
@@ -400,11 +401,15 @@ describe('modbench command registration', () => {
     // #247: Downloads narrows by name through the same widget as every other list view,
     // superseding #233's native-tree-Find call.
     'modbench.downloads.filter',
+    // #255: every name filter is durable, so every one of them has an explicit clear — the
+    // slot-1 clear variant, gated on that view's own filter-active context key.
+    'modbench.downloads.clearFilter',
     // #238: the view/title Sort by… overflow command and the Show-hidden title-bar toggle.
     'modbench.downloads.sortBy',
     'modbench.downloads.showHidden',
     'modbench.downloads.hideHidden',
     'modbench.pluginListTree.filter',
+    'modbench.pluginListTree.clearFilter',
     'modbench.pluginListTree.revealInExplorer',
   ];
 
@@ -1259,6 +1264,55 @@ describe('Pending-change decoration does not survive exitToLoadout (#331)', () =
 
     assert.strictEqual(decorations()!.provideFileDecoration(stagedUri), undefined,
       'a reload that tears the session down without a replacement must clear the decoration too — SessionManager.LoadExplicitCore disposes the previous session unconditionally, same as an explicit close');
+  });
+});
+
+// #255: the Plugins tree's description names both of its narrowing axes, and the record filter
+// is a fact about the *session* — so it cannot outlive one. Same exitToLoadout path and the same
+// silent-wrong-state class as the decoration above: a readout describing a session that is gone.
+// The name filter's half is deliberately untouched by a close — it narrows load-order rows,
+// which are still there.
+describe('The record-filter readout does not outlive its session (#255)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  const description = () =>
+    (ext?.exports as { pluginListView?: { description?: string } } | undefined)?.pluginListView?.description;
+  let gameDir = '';
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-exit-filter-readout-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '');
+    fs.rmSync(gameDir, { recursive: true, force: true });
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    resetMockBackend();
+  });
+
+  it('an explicit Close mEdit takes the record filter out of the description', async () => {
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    // Applied from an open document — the one record-filter entry point a test can drive; the
+    // other opens a quick pick over the scripts folder.
+    const doc = await vscode.workspace.openTextDocument({ language: 'sql', content: 'SELECT form_key FROM "npc_"' });
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand('modbench.setFilterFromDocument');
+    assert.ok(description()?.includes('records:'),
+      `sanity: the description must name the record filter before Close mEdit, or clearing it proves nothing (was: ${description() ?? 'unset'})`);
+
+    await vscode.commands.executeCommand('modbench.closeMedit');
+
+    assert.ok(!(description() ?? '').includes('records:'),
+      'a session that no longer exists must not leave the view still claiming a record filter');
   });
 });
 
