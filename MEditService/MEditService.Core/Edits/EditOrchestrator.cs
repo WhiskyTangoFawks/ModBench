@@ -363,64 +363,16 @@ public sealed partial class EditOrchestrator(
         var schemas = _schemaReflector.GetSchemas(session!.GameRelease);
         var formRefs = ExtractFormKeyRefs(fields, schemas, recordType!, session!.GameRelease);
 
-        // Issue #86 invariant B: a staged copy must never leave the target referencing a FormKey
-        // whose origin isn't declared in the target's masters — covers both the copied record's own
-        // origin (its FormKey's ModKey — the copy keeps the same FormKey, so target needs that
-        // origin as a master regardless of which plugin's override values were copied) and any
-        // plugin referenced by a FormLink inside the copied content (already-extracted formRefs).
-        StageMissingMasters(formKey, targetPlugin, formRefs, source);
-
+        // #336/ADR-0038: invariant B ("the target ends up referencing every origin it needs") now
+        // holds by construction — RecordQueryService.GetEffectiveMasters answers "what will masters
+        // be" from this staged content directly, and the writer's content-derived sync (default for
+        // every save without a masters edit, unconditional after #337) makes it true on disk.
+        // Nothing is staged here to make that true; the deleted stage-missing-masters step (and the
+        // masters-append pending row it used to write) is simply gone.
         var staged = _changes.Upsert(new PendingChangeUpsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues,
             Origin: ResolveOrigin(targetPlugin), FormRefs: formRefs, ChangeType: PendingChangeConstants.FieldEditChangeType,
             ParentCell: placement?.ParentCell, PlacementGroup: placement?.PlacementGroup));
         return new StageEditResult.Staged(staged);
-    }
-
-    // Issue #86 invariant B: computes which origin plugins the copied FormKey and its FormLink
-    // content reference that the target doesn't already master (pending-aware — a still-unsaved
-    // "Add Master" already counts), and stages one masters-append pending change for them if any are
-    // missing. No group is assigned (#134): the copy and this masters-add are grouped by edge rule 3
-    // (a record reachable only via a master the change adds), and two sequential copy-tos into the
-    // same target land in one group because the upsert's ON CONFLICT collapses onto the one header
-    // row they both depend on — the edge rules rediscover the grouping the old group id declared.
-    private void StageMissingMasters(
-        string copiedFormKey, string targetPlugin, IReadOnlyList<PendingFormRef> formRefs, string source)
-    {
-        var referencedPlugins = new List<string>();
-        if (OriginPluginOf(copiedFormKey) is { } originPlugin) referencedPlugins.Add(originPlugin);
-        foreach (var r in formRefs)
-        {
-            if (OriginPluginOf(r.TargetFormKey) is { } refPlugin) referencedPlugins.Add(refPlugin);
-        }
-
-        var currentMasters = GetEffectiveMasters(targetPlugin);
-        var currentMastersSet = currentMasters.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var missingMasters = referencedPlugins
-            .Where(p => !p.Equals(targetPlugin, StringComparison.OrdinalIgnoreCase) && !currentMastersSet.Contains(p))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        if (missingMasters.Count == 0) return;
-
-        var headerFormKey = Records.HeaderIndexer.FormKeyFor(targetPlugin);
-        var newMasters = currentMasters.Concat(missingMasters).ToList();
-        _changes.Upsert(new PendingChangeUpsert(
-            headerFormKey, targetPlugin, Records.HeaderIndexer.TableName,
-            new Dictionary<string, JsonElement> { [HeaderMastersField] = JsonSerializer.SerializeToElement(newMasters) },
-            source, null,
-            new Dictionary<string, JsonElement> { [HeaderMastersField] = JsonSerializer.SerializeToElement(currentMasters) },
-            Origin: ResolveOrigin(targetPlugin), FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
-            ParentCell: null, PlacementGroup: null));
-    }
-
-    // The plugin substring of a "FormID:Plugin" FormKey string; null when malformed (no colon, or
-    // nothing after it). internal (not private) so it's directly unit-testable — every real caller
-    // passes an already-validated FormKey (DB-resolved or FormLink-extracted), so the malformed
-    // branch is defensive, but the parsing logic itself is simple enough to pin down directly.
-    internal static string? OriginPluginOf(string formKey)
-    {
-        var colon = formKey.IndexOf(':');
-        return colon >= 0 && colon < formKey.Length - 1 ? formKey[(colon + 1)..] : null;
     }
 
     // The change_type of a pending delete or renumber on this record, or null. Editing, copying onto,
@@ -432,23 +384,6 @@ public sealed partial class EditOrchestrator(
             .FirstOrDefault(c => c.ChangeType is PendingChangeConstants.DeleteChangeType
                                             or PendingChangeConstants.RenumberChangeType)
             ?.ChangeType;
-
-    // Issue #86: the target's masters as of right now — a still-pending copy-to auto-add-master
-    // (within the same unsaved session) wins over the committed value, same pending-over-committed
-    // convention as IsPluginEslFlagged. #335/ADR-0038: only StageMissingMasters below still calls
-    // this — CheckMasterEdit no longer needs a baseline, since it rejects every direct edit
-    // outright regardless of content.
-    private List<string> GetEffectiveMasters(string plugin)
-    {
-        var headerFormKey = Records.HeaderIndexer.FormKeyFor(plugin);
-        var pending = _changes.GetPendingFields(headerFormKey, plugin, ResolveOrigin(plugin));
-        if (pending != null && pending.TryGetValue(HeaderMastersField, out var pendingJson))
-            return ReadStringArray(pendingJson);
-
-        var committed = _query.GetRecordForPlugin(headerFormKey, plugin, ResolveOrigin(plugin))?.Fields
-            .FirstOrDefault(fv => fv.Metadata.Name == HeaderMastersField);
-        return committed != null ? ReadStringArray(JsonSerializer.SerializeToElement(committed.Value)) : [];
-    }
 
     public CreateRecordOutcome CreateRecord(
         string plugin, string? recordType, string? templateFormKey, string source,
@@ -889,14 +824,12 @@ public sealed partial class EditOrchestrator(
     // Issue #335/ADR-0038 stage-time guard for the header's masters field: rejects any direct
     // edit outright, unconditionally — ADR-0038 decides nothing may declare a master except
     // content that references it, so there is nothing left to validate about a proposed value,
-    // shape included. This slice only closes the direct-edit path; it does not itself derive
-    // masters from content — GetEffectiveMasters below still returns whatever was last staged or
-    // committed, not a live union over the plugin's content (that derivation is #336). Was issue
-    // #86's validated, add-only plugin-reference array; #283 design review found a real but
-    // out-of-scope use for a manually-declared master (load-order pinning) and ADR-0038 closed
-    // the direct-edit path entirely rather than keep validating it. Never runs against
-    // StageMissingMasters' own auto-add-master pending change below — that upserts the pending
-    // change directly, bypassing StageEdit (and this guard) entirely, per invariant B.
+    // shape included. Was issue #86's validated, add-only plugin-reference array; #283 design
+    // review found a real but out-of-scope use for a manually-declared master (load-order
+    // pinning) and ADR-0038 closed the direct-edit path entirely rather than keep validating it.
+    // #336: masters is now wholly derived (RecordQueryService.GetEffectiveMasters) and nothing —
+    // not even CopyRecordTo's invariant-B auto-add — stages a pending change on this field
+    // anymore, so this guard's "nothing left to validate" is now also "nothing left to bypass".
     private static StageEditResult.InvalidReferences? CheckMasterEdit(
         string recordType, Dictionary<string, JsonElement> fields)
     {
@@ -907,11 +840,6 @@ public sealed partial class EditOrchestrator(
             new ReferenceValidationError(HeaderMastersField, newMastersJson.GetRawText(), "read_only", [])
         ]);
     }
-
-    private static List<string> ReadStringArray(JsonElement el) =>
-        el.ValueKind == JsonValueKind.Array
-            ? el.EnumerateArray().Select(e => e.GetString() ?? "").ToList()
-            : [];
 
     // Issue #98: the committed record index alone misses pending creates/renumbers, so a plugin
     // could be flagged ESL while a not-yet-saved change would make it invalid. Unions the committed

@@ -67,6 +67,7 @@ public sealed class EditOrchestratorVmadTests
             => inner.GetRecords(type, plugin, search, limit, offset, origin);
         public RecordDetail? GetRecord(string formKey) => inner.GetRecord(formKey);
         public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => inner.GetRecordForPlugin(formKey, plugin, origin);
+        public IReadOnlyList<string> GetEffectiveMasters(string plugin, string origin) => inner.GetEffectiveMasters(plugin, origin);
         public string? GetRecordType(string formKey) => inner.GetRecordType(formKey);
         public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => inner.GetNativeFormKeys(plugin, origin);
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);
@@ -129,6 +130,7 @@ public sealed class EditOrchestratorVmadTests
             => inner.GetRecords(type, plugin, search, limit, offset, origin);
         public RecordDetail? GetRecord(string formKey) => inner.GetRecord(formKey);
         public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => inner.GetRecordForPlugin(formKey, plugin, origin);
+        public IReadOnlyList<string> GetEffectiveMasters(string plugin, string origin) => inner.GetEffectiveMasters(plugin, origin);
         public string? GetRecordType(string formKey) => inner.GetRecordType(formKey);
         public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => inner.GetNativeFormKeys(plugin, origin);
         public CompareResult? GetCompare(string formKey) => inner.GetCompare(formKey);

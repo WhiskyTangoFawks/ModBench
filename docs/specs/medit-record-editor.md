@@ -186,7 +186,11 @@ better idea.
   positioned at the click like the retired in-webview list. #335/ADR-0038: Add Master… (and its
   own, deliberately-not-mutable-filtered QuickPick) is gone — masters is lifecycle-derived now,
   never a direct user edit; the header record's masters field still shows on this same column
-  header, read-only.
+  header, read-only. #336: the value shown is **Effective masters** — the plugin's committed
+  masters unioned with the origins of everything currently staged for it — so copying a record in
+  from a not-yet-mastered plugin updates the displayed list immediately, with no pending change on
+  the masters field, and reverting that copy drops the implied master again. Membership is what
+  this guarantees; the order written to disk is settled at save time (#337).
 - **Ctrl+click** — acknowledged for now as a fourth, navigation-only gesture (follows a FormKey
   reference to its record). Whether it survives once a right-click "Go to Record" exists is still
   undecided — see Further Notes.

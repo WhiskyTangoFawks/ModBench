@@ -95,6 +95,19 @@ public interface IPendingChangeService
     IReadOnlyList<(string FormKey, string RecordType)> GetStagedFormKeys(string plugin, string? recordType = null, string? origin = null);
 
     /// <summary>
+    /// Distinct FormKeys referenced by anything currently staged for <paramref name="plugin"/> —
+    /// every <c>target_form_key</c> in <c>pending_form_references</c> whose <c>source_plugin</c>/
+    /// <c>source_origin</c> match, regardless of which staged record or field carries the
+    /// reference. #336/ADR-0038: this is the reference half of effective masters (the other half
+    /// is each staged record's own origin, from <see cref="GetStagedFormKeys"/>'s FormKeys) — the
+    /// same data the change-group dependency graph already tracks (<c>PendingChangeGraph</c>),
+    /// read here for a different purpose. origin (#333/ADR-0036) scopes it the same as
+    /// <see cref="GetStagedFormKeys"/>'s: two same-filename, different-origin plugins never pool
+    /// their staged references.
+    /// </summary>
+    IReadOnlyList<string> GetStagedFormRefTargets(string plugin, string? origin = null);
+
+    /// <summary>
     /// Returns how pending create/renumber changes modify <paramref name="plugin"/>'s native FormKey
     /// set (issue #98): <c>Added</c> is the reserved FormKey of each pending <c>$create</c> plus the
     /// target FormKey of each pending <c>$renumber</c>; <c>Removed</c> is the pre-renumber FormKey each

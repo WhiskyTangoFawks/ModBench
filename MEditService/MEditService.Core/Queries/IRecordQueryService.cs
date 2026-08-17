@@ -19,6 +19,14 @@ public interface IRecordQueryService
     // EditOrchestrator (the only caller) already resolves it via ResolveOrigin right alongside its
     // neighboring GetVmad/GetConditions/GetPlacement calls.
     RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin);
+
+    // #336/ADR-0038: the header's masters, derived rather than read off a pending-change row —
+    // committed masters unioned with the origin plugins of everything currently staged for
+    // `plugin` (each staged record's own origin, plus every FormKey any staged content
+    // references). origin required, same reasoning as GetRecordForPlugin's: every real caller
+    // (GetCompare below) already resolves it per-column.
+    IReadOnlyList<string> GetEffectiveMasters(string plugin, string origin);
+
     string? GetRecordType(string formKey);
     // origin (#296 / ADR-0036, required): caller-supplied, same reasoning as GetRecordForPlugin's —
     // EditOrchestrator (the only caller) already resolves it via ResolveOrigin right alongside the

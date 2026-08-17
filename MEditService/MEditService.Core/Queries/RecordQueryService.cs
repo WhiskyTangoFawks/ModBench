@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -122,6 +123,80 @@ public sealed class RecordQueryService(
         return tableName == null ? null : repository.GetRecord(tableName, formKey, plugin, origin, winnerOnly: false);
     }
 
+    // #336/ADR-0038: replaces the deleted stage-missing-masters step, which used to stage a real
+    // pending-change row so the header's masters became the union once saved. This instead
+    // answers the union live, every time, with nothing ever staged. Mirrors exactly what that
+    // deleted step used to compute when deciding a master was missing: the record's own origin
+    // plugin (OriginPluginOf) for every staged FormKey, plus the origin plugin of every FormKey
+    // any staged content references.
+    //
+    // Known gap, deliberately out of scope here (#337): this is a *read-time* computation, while
+    // the actual written master order comes from Mutagen's own MastersListContentOption.Iterate at
+    // save time, independently, from the live object graph. PluginWriter.HasMastersEdit can no
+    // longer ever be true (nothing stages a masters field-edit anymore), so every save takes that
+    // path — the two computations happen to agree on *membership* by construction (both derive
+    // from the same staged content) but nothing here guarantees they agree on *order*, and order is
+    // load-bearing (FormID local-master-index resolution). Until #337 unifies them, the compare
+    // grid can display one order while disk ends up with another.
+    public IReadOnlyList<string> GetEffectiveMasters(string plugin, string origin)
+    {
+        var committed = GetRecordForPlugin(HeaderIndexer.FormKeyFor(plugin), plugin, origin)?.Fields
+            .FirstOrDefault(fv => fv.Metadata.Name == HeaderIndexer.MastersFieldName);
+        var masters = committed != null ? ReadStringArray(JsonSerializer.SerializeToElement(committed.Value)) : [];
+        var mastersSet = new HashSet<string>(masters, StringComparer.OrdinalIgnoreCase);
+
+        var referencedPlugins = new List<string>();
+        foreach (var (formKey, _) in _changes.GetStagedFormKeys(plugin, origin: origin))
+            if (OriginPluginOf(formKey) is { } originPlugin) referencedPlugins.Add(originPlugin);
+        foreach (var targetFormKey in _changes.GetStagedFormRefTargets(plugin, origin))
+            if (OriginPluginOf(targetFormKey) is { } refPlugin) referencedPlugins.Add(refPlugin);
+
+        // Sorted, not discovery order: the two queries above have no defined row order, so two
+        // calls over identical real facts (e.g. two same-filename/different-origin columns with
+        // identical staged content — #333/ADR-0036) must still agree byte for byte. Masters order
+        // is itself load-bearing (FormID local-master-index resolution), so an unsorted append
+        // here would risk the compare grid flagging a spurious conflict from ordering alone, not
+        // real content.
+        var missingMasters = referencedPlugins
+            .Where(p => !p.Equals(plugin, StringComparison.OrdinalIgnoreCase) && !mastersSet.Contains(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(p => p, StringComparer.OrdinalIgnoreCase);
+
+        return [.. masters, .. missingMasters];
+    }
+
+    // GetCompare's header-only substitution step: replaces the raw (committed/pending-overlaid)
+    // masters field with GetEffectiveMasters' derived value. `with` on a record hierarchy clones
+    // the runtime type (RecordDetail here is always actually a CompareOverride, since GetCompare
+    // is the only caller), so this stays RecordDetail-typed without a CompareOverride-specific branch.
+    private RecordDetail WithEffectiveMasters(RecordDetail detail)
+    {
+        var mastersJson = JsonSerializer.SerializeToElement(GetEffectiveMasters(detail.Plugin, detail.Origin));
+        return detail with
+        {
+            Fields = [.. detail.Fields.Select(fv =>
+                fv.Metadata.Name == HeaderIndexer.MastersFieldName ? fv with { Value = mastersJson } : fv)],
+        };
+    }
+
+    // The plugin substring of a "FormID:Plugin" FormKey string; null when malformed. Duplicated
+    // (also in PendingChangeGraph) rather than extracted to a shared helper — #338 deletes
+    // PendingChangeGraph's copy along with the added-master edge rule, so consolidating now would
+    // churn code about to vanish; #338 will decide where the survivor lands.
+    // internal (not private), same as the pre-#336 EditOrchestrator copy this replaces, so the
+    // malformed-input branch stays directly unit-testable rather than only reachable through
+    // GetEffectiveMasters' well-formed-FormKey callers.
+    internal static string? OriginPluginOf(string formKey)
+    {
+        var colon = formKey.IndexOf(':');
+        return colon >= 0 && colon < formKey.Length - 1 ? formKey[(colon + 1)..] : null;
+    }
+
+    private static List<string> ReadStringArray(JsonElement el) =>
+        el.ValueKind == JsonValueKind.Array
+            ? el.EnumerateArray().Select(e => e.GetString() ?? "").ToList()
+            : [];
+
     public string? GetRecordType(string formKey) =>
         RequireRepository().FindRecordType(formKey);
 
@@ -142,7 +217,12 @@ public sealed class RecordQueryService(
             var withPending = overrides.Select(o =>
             {
                 var pending = _changes.GetPendingFields(formKey, o.Plugin, o.Origin);
-                return pending == null ? o : (o with { PendingFields = pending.ToDictionary(kv => kv.Key, kv => (object?)kv.Value) });
+                var current = pending == null ? o : (o with { PendingFields = pending.ToDictionary(kv => kv.Key, kv => (object?)kv.Value) });
+                // #336/ADR-0038: the header's masters field is never itself a pending row anymore
+                // (nothing stages one — GetEffectiveMasters is the only source of truth for "what
+                // will masters be"), so it needs its own substitution here rather than riding the
+                // ordinary pending-field overlay above.
+                return tableName == HeaderTableName ? WithEffectiveMasters(current) : current;
             }).ToList();
 
             var sessionPlugins = RequireSession().Plugins;

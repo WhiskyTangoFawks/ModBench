@@ -357,6 +357,60 @@ public sealed class PendingChangeServiceTests : IDisposable
         Assert.Equal("000002:Fallout4.esm", refs[0].TargetFormKey);
     }
 
+    // --- GetStagedFormRefTargets (#336/ADR-0038: the reference half of effective masters) ---
+
+    [Fact]
+    public void GetStagedFormRefTargets_ReturnsDistinctTargetsAcrossRecordsAndFields()
+    {
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, [],
+            [new PendingFormRef("race", "race", "000001:Fallout4.esm")],
+            ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
+        _svc.Upsert(new PendingChangeUpsert("FK2", "A.esp", "npc_",
+            new() { ["outfit"] = J("\"000002:Other.esp\"") }, "user", null, [],
+            [new PendingFormRef("outfit", "outfit", "000002:Other.esp")],
+            ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
+        // Duplicate target on a different field of the same record — collapses to one entry.
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_",
+            new() { ["combatOverride"] = J("\"000001:Fallout4.esm\"") }, "user", null, [],
+            [new PendingFormRef("combatOverride", "combatOverride", "000001:Fallout4.esm")],
+            ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
+
+        var result = _svc.GetStagedFormRefTargets("A.esp");
+
+        Assert.Equal(["000001:Fallout4.esm", "000002:Other.esp"], result.Order());
+    }
+
+    [Fact]
+    public void GetStagedFormRefTargets_ScopedByPluginAndOrigin()
+    {
+        _svc.Upsert(new PendingChangeUpsert("FK1", "A.esp", "npc_",
+            new() { ["race"] = J("\"000001:Fallout4.esm\"") }, "user", null, [],
+            [new PendingFormRef("race", "race", "000001:Fallout4.esm")],
+            ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "ModA"));
+        _svc.Upsert(new PendingChangeUpsert("FK2", "A.esp", "npc_",
+            new() { ["race"] = J("\"000002:Other.esp\"") }, "user", null, [],
+            [new PendingFormRef("race", "race", "000002:Other.esp")],
+            ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "ModB"));
+        _svc.Upsert(new PendingChangeUpsert("FK3", "B.esp", "npc_",
+            new() { ["race"] = J("\"000003:Third.esp\"") }, "user", null, [],
+            [new PendingFormRef("race", "race", "000003:Third.esp")],
+            ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
+
+        // #333/ADR-0036: origin-scoped — ModA's staged references never pool with ModB's, even
+        // though both share the "A.esp" filename, and neither pools with the unrelated "B.esp".
+        var result = _svc.GetStagedFormRefTargets("A.esp", origin: "ModA");
+
+        Assert.Equal(["000001:Fallout4.esm"], result);
+    }
+
+    [Fact]
+    public void GetStagedFormRefTargets_NoStagedRefs_ReturnsEmpty()
+    {
+        var result = _svc.GetStagedFormRefTargets("Untouched.esp");
+        Assert.Empty(result);
+    }
+
     // --- ChangeGroup ---
 
     private static GroupMember MakeMember(string formKey, string plugin, string fieldPath) =>
