@@ -61,6 +61,15 @@ public static class PluginEndpoints
             .ProducesProblem(409)
             .ProducesProblem(503);
 
+        app.MapPost("/plugins/reread", RereadPlugin)
+            .WithName("RereadPlugin")
+            .WithTags(Tag)
+            .Produces<PluginResponse>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(409)
+            .ProducesProblem(503);
+
         return app;
     }
 
@@ -146,6 +155,50 @@ public static class PluginEndpoints
         }
     }
 
+    // #279 / ADR-0035 § Live mutation: re-reads one plugin from the copy a mod-level change has
+    // made its name resolve to. Same division of labour as LoadUnlistedPlugin above — Mod
+    // Management owns "which file does this name resolve to" and states the answer, because the
+    // session cannot map a filename to a mod folder and must never learn how.
+    internal static IResult RereadPlugin(RereadPluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        logger.LogInformation("Received RereadPlugin for {Plugin} from {Origin}", req.Plugin, req.Origin);
+        if (string.IsNullOrWhiteSpace(req.Plugin) || string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("Plugin name, path and origin are required.", statusCode: 400);
+
+        try
+        {
+            return Results.Ok(sessionManager.RereadPlugin(req.Plugin, req.Path, req.Origin));
+        }
+        catch (SessionBusyException ex)
+        {
+            // 409, consistent with the session-load contract's own superseded-load answer: nothing
+            // went wrong and nothing was touched — the same request is answerable once the load
+            // lands. Caught before InvalidOperationException deliberately; see SessionBusyException
+            // for why it is not a subclass of one.
+            logger.LogWarning(ex, "Refused to re-read {Plugin} while a load is in flight", req.Plugin);
+            return Results.Problem(ex.Message, statusCode: 409);
+        }
+        catch (FileNotFoundException ex)
+        {
+            logger.LogWarning(ex, "Re-read target not found for {Plugin}: {Path}", req.Plugin, req.Path);
+            return Results.Problem(ex.Message, statusCode: 404);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            // 404, unlike /plugins/unload's 409: the only way here is naming a plugin the load
+            // order does not have, which is a missing resource rather than a conflict with what
+            // the named plugin is.
+            logger.LogWarning(ex, "No load-order plugin {Plugin} to re-read", req.Plugin);
+            return Results.Problem(ex.Message, statusCode: 404);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "No session when re-reading {Plugin}", req.Plugin);
+            return Results.Problem(ex.Message, statusCode: 503);
+        }
+    }
+
     internal static IResult CreatePlugin(CreatePluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
@@ -181,3 +234,7 @@ public record CreatePluginRequest(string Name);
 public record LoadPluginRequest(string Path, string Origin);
 
 public record UnloadPluginRequest(string Plugin, string Origin);
+
+// #279: Path and Origin are the copy the plugin name resolves to *now*, resolved by Mod
+// Management. Plugin is the filename, which is what the load order names and what does not change.
+public record RereadPluginRequest(string Plugin, string Path, string Origin);

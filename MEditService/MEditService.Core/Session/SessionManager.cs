@@ -466,7 +466,7 @@ public sealed class SessionManager(
     /// made its name resolve to, and re-indexes only that plugin. Never automatic — the drifted row
     /// offers this, the user asks for it, and the confirm has already stated what it costs.
     /// </summary>
-    public void RereadPlugin(string plugin, string newPath, string newOrigin)
+    public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin)
     {
         if (string.IsNullOrWhiteSpace(newPath))
             throw new ArgumentException("A re-read needs the path of the copy to read.", nameof(newPath));
@@ -522,6 +522,8 @@ public sealed class SessionManager(
             // The reservation counter belongs to the file, not the name — the new copy has its own
             // NextFormID, and keeping the old one would hand out FormKeys it has already used.
             if (!metadata.IsImmutable) _nextFormIds[metadata.Name] = SafeNextFormId(mod);
+
+            return PluginResponse.FromMetadata(metadata);
         }
     }
 

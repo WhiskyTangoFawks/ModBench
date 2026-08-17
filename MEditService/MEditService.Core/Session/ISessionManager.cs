@@ -97,7 +97,7 @@ public interface ISessionManager
     /// Throws <see cref="KeyNotFoundException"/> if the load order does not name the plugin.
     /// Throws <see cref="System.IO.FileNotFoundException"/> if the new file does not exist.
     /// </summary>
-    void RereadPlugin(string plugin, string newPath, string newOrigin);
+    PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin);
 
     /// <summary>
     /// Re-reads <paramref name="plugin"/> from disk and re-indexes it into the record repository,

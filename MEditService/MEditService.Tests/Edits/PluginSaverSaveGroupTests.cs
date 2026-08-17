@@ -361,7 +361,7 @@ public sealed class PluginSaverSaveGroupTests
             return Task.FromResult(new PreparedPluginSave(tmp, dest, EmptySaveResult()));
         }
 
-        public void RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
+        public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
 
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
         public Task ReindexPlugins(IReadOnlyList<string> plugins)
