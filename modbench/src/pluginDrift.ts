@@ -48,6 +48,32 @@ export interface DriftTracker extends vscode.Disposable {
   onDidChange: vscode.Event<void>;
 }
 
+const fold = (name: string) => name.toLowerCase();
+
+/** The comparison itself: every held plugin whose name no longer resolves to the origin it was
+ *  loaded from. Neither map's casing is authoritative — plugins.txt and the folders behind an
+ *  origin both come off a case-insensitive filesystem in practice. */
+function compare(
+  held: ReadonlyMap<string, string>,
+  current: ReadonlyMap<string, ResolvedOrigin>,
+): Map<string, PluginDrift> {
+  const drifted = new Map<string, PluginDrift>();
+  for (const [file, loadedOrigin] of held) {
+    // `has` before reading the value: a name the answer did not cover at all is *unknown*, and
+    // unknown must not read as "resolves to nothing" — that would flag a drift-to-nothing on
+    // every plugin a partial answer happened to omit (#334, one row wide).
+    if (!current.has(file)) continue;
+    const resolved = current.get(file)!;
+    if (resolved !== null && fold(resolved.origin) === fold(loadedOrigin)) continue;
+    drifted.set(file, {
+      loadedOrigin,
+      currentOrigin: resolved?.origin ?? null,
+      currentPath: resolved?.path ?? null,
+    });
+  }
+  return drifted;
+}
+
 /** Drift, computed where the two bounded contexts are allowed to meet.
  *
  *  Drift is a comparison between two facts that must not live in one place: **where a plugin's
@@ -78,19 +104,11 @@ export function createDriftTracker(deps: DriftTrackerDeps): DriftTracker {
   let loadedNames: string[] = [];
   let drifted = new Map<string, PluginDrift>();
 
-  const fold = (name: string) => name.toLowerCase();
-
-  const clear = () => {
-    const had = drifted.size > 0;
-    drifted = new Map();
-    return had;
-  };
-
   return {
     setLoaded(loadedOrigins) {
       loaded = loadedOrigins && new Map([...loadedOrigins].map(([name, origin]) => [fold(name), origin]));
       loadedNames = loadedOrigins ? [...loadedOrigins.keys()] : [];
-      if (loaded === undefined) clear();
+      if (loaded === undefined) drifted = new Map();
       emitter.fire();
     },
 
@@ -114,22 +132,7 @@ export function createDriftTracker(deps: DriftTrackerDeps): DriftTracker {
       // A session close that landed while the walk was in flight owns the answer, not this walk.
       if (loaded !== held) return;
 
-      const next = new Map<string, PluginDrift>();
-      for (const [file, loadedOrigin] of held) {
-        // `has` before `get`: a name Mod Management did not answer for at all is unknown, and
-        // unknown must not read as "resolves to nothing" — that would flag a drift-to-nothing on
-        // every plugin a partial answer omitted.
-        if (!current.has(file)) continue;
-        const resolved = current.get(file)!;
-        if (resolved !== null && fold(resolved.origin) === fold(loadedOrigin)) continue;
-        next.set(file, {
-          loadedOrigin,
-          currentOrigin: resolved?.origin ?? null,
-          currentPath: resolved?.path ?? null,
-        });
-      }
-
-      drifted = next;
+      drifted = compare(held, current);
       emitter.fire();
     },
 
