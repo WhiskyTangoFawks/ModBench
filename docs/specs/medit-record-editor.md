@@ -837,6 +837,25 @@ future surface, VMAD/Condition rows included (#231) since they render through th
 5. **Null / missing fields** render as an empty cell, never "null"/"undefined".
 6. **Read-only cells** in immutable plugin columns are never editable and render no input on
    click.
+7. **A signature backed by several concrete Mutagen subclasses that declare the same list/struct
+   field with genuinely conflicting element shapes** gets one of two treatments, both replacing
+   "one column silently reads null for every subclass but the schema's discovery winner" (#339):
+   - **Structurally different shapes** (no field names in common) get **one column per shape** —
+     e.g. `dmgt`'s `damage_types` (struct elements) and `actor_value_indices` (scalar elements) are
+     two separate columns; a given record's row is populated in whichever one matches its own
+     subclass and empty in the other.
+   - **Structurally identical shapes that disagree only on which member names a shared enum leaf
+     allows** get **one merged column**, whose enum leaf's allowed values become the *union* across
+     every subclass — e.g. `omod`'s `properties` column's `property` sub-field lists
+     `ArmorModification`'s, `NpcModification`'s and `WeaponModification`'s member names together, so
+     an `ArmorModification` row's own `property` metadata includes values (e.g. `ForcedInventory`,
+     `AmmoCapacity`) that are not valid for that record's own subclass. This is a deliberate
+     trade-off, not a display bug: `FieldMetadata` is column-wide (see below), so widening the
+     allowed-value list is the only way every subclass's own values validate against it.
+
+   Both differ from the *identical*-shape case (#263), where a member declared on a shared ancestor
+   already reads correctly off every sibling and needs no special handling at all. `FieldMetadata`
+   itself stays column-wide in every case — there is no per-row element shape.
 
 ### Action logging
 
