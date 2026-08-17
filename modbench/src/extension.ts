@@ -201,6 +201,16 @@ interface SessionPluginFiles {
    *  other half being what Mod Management says the name resolves to now. Carried in the same
    *  hand-off as everything else the session reports about its plugins, for the same reason. */
   origins: Map<string, string>;
+  /** #278 / ADR-0035 amending ADR-0018: lowercased filename → does this plugin own at least one
+   *  record the *current* record filter matches. Carried in the same hand-off, for the same
+   *  reason as `origins` — this call already asked `GET /plugins` the question, and every session
+   *  (re)load reaches it downstream of `SessionController.syncFilterState()`
+   *  (`makeEnterEditing`'s `enter()`, shared by Launch mEdit, the crash-restart handler and
+   *  `modbench.reloadSession` alike), so this is the one hand-off through which the filter state
+   *  a fresh or reloaded session actually has — not the one an in-session `setFilter`/`clearFilter`
+   *  last left behind — reaches `matchingPlugins`. That is what keeps the map from outliving a
+   *  session it no longer describes. */
+  matches: Map<string, boolean>;
 }
 
 function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<SessionPluginFiles> {
@@ -215,18 +225,22 @@ function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<
       // wire contract (`masterIssues?: MasterIssue[] | null`).
       masterIssues: new Map(plugins.map((p) => [p.name, p.masterIssues ?? []] as const)),
       origins: new Map(plugins.map((p) => [p.name, p.origin] as const)),
+      matches: new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)),
     };
   };
 }
 
 /** #278 / ADR-0035 amending ADR-0018: `SessionController.setFilter`/`clearFilter`'s
- *  `refreshMatchingPlugins` — re-derives `matchingPlugins` off a fresh `GET /plugins` (the same
- *  call `sessionPluginFilesFrom` makes at session start) and re-renders, so `PluginsTreeComposite`'s
- *  chevron reads the filter that is active now, not the one that produced the last set. A read
- *  failure degrades to "no data" (matches everywhere) rather than throwing — a chevron guess is
- *  wrong in the same direction `hasMatchingRecords` already treats as safe, and a record filter's
- *  whole *point* is to be applied and inspected, so silently freezing every chevron would be a far
- *  worse failure than briefly over-showing them. */
+ *  `refreshMatchingPlugins` — re-derives `matchingPlugins` off a fresh `GET /plugins` and
+ *  re-renders, so `PluginsTreeComposite`'s chevron reads the filter that is active now, not the
+ *  one that produced the last set. The *other* path that can change which filter is active —
+ *  a session (re)load, which can start already-filtered or unfiltered — does not come through
+ *  here; it is covered by `applyLoadedSessionToTree` reusing this same `GET /plugins` answer via
+ *  `SessionPluginFiles.matches` below, not by a second call site into this function. A read
+ *  failure here degrades to "no data" (matches everywhere) rather than throwing — a chevron guess
+ *  is wrong in the same direction `hasMatchingRecords` already treats as safe, and a record
+ *  filter's whole *point* is to be applied and inspected, so silently freezing every chevron would
+ *  be a far worse failure than briefly over-showing them. */
 async function refreshMatchingPlugins(repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel): Promise<void> {
   try {
     const plugins = await repository.getPlugins();
@@ -1919,6 +1933,11 @@ async function applyLoadedSessionToTree(
     // consumed — held here (not re-derived, not a second endpoint) and handed to the tree
     // through the same setSession bundle as everything else the session reports.
     const loadFailures = new Map(failures.map((f) => [f.name ?? '?', f.reason ?? 'Unknown error'] as const));
+    // #278 / ADR-0035 amending ADR-0018: set before setSession fires its re-render, so no row
+    // renders off a match set stale from whatever session (if any) preceded this one — this is
+    // the fix for a stale `matchingPlugins` surviving a session (re)load, `modbench.reloadSession`
+    // included, since that command re-runs this exact hand-off (`makeEnterEditing`'s `enter()`).
+    matchingPlugins = session.matches;
     pluginsTree?.setSession(session.files, session.readOnly, session.masterIssues, loadFailures);
     // #279: the loaded half of the drift comparison. Handed over at the same moment as everything
     // else the completed load reports, then computed once against the loadout as it stands — so a

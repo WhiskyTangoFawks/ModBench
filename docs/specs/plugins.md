@@ -787,10 +787,14 @@ overflow, then native **Collapse All** last.
 - **Integration seam** (`npm run test:integration`, real VS Code process): the tree renders from
   `plugins.txt` with no session; checkbox toggle, drag-reorder and the name filter round-trip
   with and without a session running; starting/stopping a session puts chevrons on and takes
-  them off without disturbing the load order; navigation opens a record panel; the record filter
-  prunes record types and records but never a plugin row; Reveal in Explorer dispatches; read
-  failure renders the error tree node. Add new command id(s) to `EXPECTED_COMMANDS`
-  (`modbench/CLAUDE.md`).
+  them off without disturbing the load order; navigation opens a record panel; a plugin
+  `GET /plugins` reports with no matching records keeps its row and loses only its chevron,
+  restored once a reload reports no filter at all rather than staying stuck suppressed (#278) —
+  the pruning rule itself (record types and records pruned, a plugin row never removed) is
+  backend-tested (`MEditService.Tests`), not re-proven here, since this suite's mock backend
+  drives `GET /plugins` directly rather than through a real `POST /session/filter`; Reveal in
+  Explorer dispatches; read failure renders the error tree node. Add new command id(s) to
+  `EXPECTED_COMMANDS` (`modbench/CLAUDE.md`).
 
 ## Out of Scope
 
