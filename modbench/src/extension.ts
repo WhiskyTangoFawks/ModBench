@@ -19,6 +19,7 @@ import {
 } from './medit/ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
 import { ApiPluginRepository } from './medit/PluginRepository';
+import { copyTargetPlugins, type CopyGesture } from './medit/copyTargetPlugins';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
 import {
@@ -784,15 +785,15 @@ const NEW_PLUGIN_LABEL = '$(add) New Plugin…';
 
 // #209: extracted from modbench.copyAsOverrideInto's command body (previously the only caller)
 // so Copy as New Record can share it too — "no second picker implementation survives" applies
-// to this QuickPick construction, not just the deleted React components. Candidates are every
-// mutable plugin minus `excludePlugin` (the column-header menu's own right-clicked column, when
-// invoked that way; the plugins-tree call site passes none, matching its pre-#209 behavior
-// exactly).
+// to this QuickPick construction, not just the deleted React components. #347: the two gestures'
+// candidate lists differ (copyTargetPlugins), so callers name their own gesture rather than
+// passing a bare exclusion string — a mixed-up boolean at a call site reads as "false", a
+// mixed-up gesture name reads as wrong.
 async function pickTargetPlugin(
-  repository: ApiPluginRepository, controller: SessionController, excludePlugin?: string,
+  repository: ApiPluginRepository, controller: SessionController, sourcePlugin: string, gesture: CopyGesture,
 ): Promise<string | undefined> {
   const allPlugins = await repository.getPlugins();
-  const mutablePlugins = allPlugins.filter(p => !p.isImmutable && p.name !== excludePlugin);
+  const mutablePlugins = copyTargetPlugins(allPlugins, sourcePlugin, gesture);
   const items: vscode.QuickPickItem[] = [
     { label: NEW_PLUGIN_LABEL, description: 'Create a new plugin and copy into it' },
     ...mutablePlugins.map(p => ({ label: p.name, description: `[${p.loadOrderIndex}]` })),
@@ -843,7 +844,7 @@ function registerCopyCreateCommands(deps: EditorCommandDeps): vscode.Disposable[
       }
       const source = recordSourceOf(arg);
 
-      const targetPlugin = await pickTargetPlugin(repository, controller, source.plugin);
+      const targetPlugin = await pickTargetPlugin(repository, controller, source.plugin, 'copy-as-override');
       if (!targetPlugin) return;
 
       if (arg instanceof RecordNode || arg instanceof PlacedNode) {
@@ -893,7 +894,7 @@ function registerColumnHeaderCommands(deps: EditorCommandDeps): vscode.Disposabl
         return;
       }
       const source = recordSourceOf(arg);
-      const targetPlugin = await pickTargetPlugin(repository, controller, source.plugin);
+      const targetPlugin = await pickTargetPlugin(repository, controller, source.plugin, 'copy-as-new');
       if (!targetPlugin) return;
       if (arg instanceof RecordNode || arg instanceof PlacedNode) {
         await controller.copyAsNewRecord(source.formKey, targetPlugin, source.plugin, source.origin);

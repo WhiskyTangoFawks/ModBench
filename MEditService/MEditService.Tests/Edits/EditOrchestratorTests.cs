@@ -1160,6 +1160,50 @@ public sealed class EditOrchestratorTests
         }
     }
 
+    // #347 regression guard, not a fix: nothing here changed to make this pass — CreateRecordCore
+    // allocates the new FormKey from the *target* plugin's own counter (ReserveFormKey) and never
+    // compares it to templateSourcePlugin, so target == source already worked. This pins that
+    // absence of an assumption so a future change can't quietly introduce a target != source
+    // check without a test noticing — the scenario Copy as New Record's own-plugin fix (#347,
+    // the frontend picker) now actually reaches.
+    [Fact]
+    public void CreateRecord_TargetEqualsTemplateSourcePlugin_NewFormKeyCoexistsWithUnchangedSource()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("cr-template-source-is-target")
+            .WithPlugin("Source.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("TestNPC");
+                npc.Aggression = Npc.AggressionType.Frenzied;
+                npcKey = npc.FormKey;
+            })
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, changes) = MakeOrchestratorWithChanges();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                var result = Assert.IsType<CreateRecordOutcome.Success>(
+                    orchestrator.CreateRecord("Source.esp", "npc_", npcKey.ToString(), "user",
+                        templateSourcePlugin: "Source.esp"));
+
+                // A fresh FormID from Source.esp's own sequence — the copy coexists with the
+                // template rather than reusing or renumbering it.
+                Assert.NotEqual(npcKey.ToString(), result.FormKey);
+
+                var staged = changes.GetChanges(formKey: result.FormKey);
+                Assert.Contains(staged, c =>
+                    c.FieldPath == "aggression" && c.NewValue.GetString() == "Frenzied");
+
+                // The source record itself has no pending changes staged against it — "the source
+                // is unchanged" as a real check, not a hope.
+                Assert.Empty(changes.GetChanges(formKey: npcKey.ToString()));
+            }
+        }
+    }
+
     // #281: the Plugins tree's record row knows only its FormKey — the record type is derivable
     // from the template record, so a caller with a template may omit it.
     [Fact]

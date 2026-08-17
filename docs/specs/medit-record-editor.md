@@ -310,7 +310,12 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   `modbench.copyAsOverrideInto` command the plugins tree uses — #281: the tree row names its own
   copy as the source the same way, so the gesture means "copy *this* version" on every surface) /
   **Copy as New Record Into…** (same values, a fresh FormKey in the target — one backend call,
-  `CreateRecord`'s template-source pair; #281) / **Remove** (the same `modbench.deleteRecord`
+  `CreateRecord`'s template-source pair; #281. The destination list **includes the source
+  record's own plugin**: a new record gets its own FormKey, so template and copy coexist, and
+  copying a record in your own patch as a template for a variant is the ordinary way to author
+  one. Copy as Override's list still excludes it — a plugin cannot override itself — which is
+  the same split xEdit makes, gating its source-file exclusion on `not (AsNew or AsWrapper)`;
+  #347) / **Remove** (the same `modbench.deleteRecord`
   command and modal confirm as the tree's record rows — one operation, one name, per xEdit's
   `mniNavRemove`/`mniViewHeaderRemove`; #281), absent rather than merely disabled for an immutable
   column. The grid's scroll region is bound to the
