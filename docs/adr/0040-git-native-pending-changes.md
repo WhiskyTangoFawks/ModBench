@@ -1,12 +1,13 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Pending changes move to git: text ledger, commit = save, merge = acceptance
 
 Drafted from spike #359's findings
 ([spike-359-git-native-pending-changes.md](../research/spike-359-git-native-pending-changes.md));
-proposed, not accepted — the spike's go-in-stages recommendation awaits the maintainer's verdict.
+accepted with the go-in-stages recommendation. The migration epic is milestone
+"5 — Git-native pending changes".
 
 ## Context
 
