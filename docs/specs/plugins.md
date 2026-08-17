@@ -625,7 +625,10 @@ overflow, then native **Collapse All** last.
 - **Slot 2 — record filter and its Clear** — the SQL record filter described above; a no-op
   with no session running (there is nothing to filter yet). Its own gate is
   `modbench.filterActive` — a separate key from slot 1's, because the two axes are cleared
-  independently.
+  independently. **Closing mEdit clears the whole of the record filter's state** — gate,
+  code lens and readout — through the one writer every in-session filter change already
+  goes through, so the Clear action cannot outlive the session that gave it something to
+  clear (#354).
 - **Both axes read out in the view description** when both are active — `"arm" · records:
   cells.sql`. The record filter is named by its **source** (the `.sql` filename, or `document`
   when applied from an open editor; `SQL` when a session-start sync reports a filter this
