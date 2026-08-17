@@ -17,13 +17,13 @@ output goes to a log file and never reaches agent context.
 | ---- | ----- |
 | 0 | every mutant killed |
 | 1 | survivors await disposition — **not** a failure |
-| 2 | tool error (bad ref, concurrent run, no report produced) |
+| 2 | tool error (bad ref, concurrent run, no report produced, **nothing audited**) |
 | 3 | nothing in scope: the diff held no mutable C#. A clean skip. |
 
 Scopes:
 
 ```bash
-# default: C# changed vs since.target (main), falling back to the working tree
+# default: Core C# changed vs the merge-base with since.target (main), committed or not
 bash ../.claude/skills/mutation-test/stryker/run.sh
 
 # explicit target — the post-merge batch form, e.g. the commit before a landed epic
@@ -32,15 +32,20 @@ bash ../.claude/skills/mutation-test/stryker/run.sh --since <ref-or-sha>
 # narrow the report to survivors whose lines intersect the git diff
 bash ../.claude/skills/mutation-test/stryker/run.sh --diff-only
 
-# full MEditService.Core corpus, since disabled — see the cost model below
+# full MEditService.Core corpus — see the cost model below
 bash ../.claude/skills/mutation-test/stryker/run.sh --all
 
-# one file, since disabled so it runs whether or not that file has a diff
+# one file, run whether or not that file has a diff
 bash ../.claude/skills/mutation-test/stryker/run.sh --file ConflictClassifier.cs
 ```
 
+**`run.sh` computes the diff itself and hands Stryker an explicit mutate list; Stryker's
+own `since` is never enabled** (see the worktree guardrail below, and #362). `since.target`
+in `stryker-config.json` survives only as the *default diff target* both wrappers read;
+`since.enabled` is `false` so a bare `dotnet-stryker` can't reach the broken path either.
+
 **Scope is file-level, not diff-level.** Touching one line makes *every* testable line in
-that file eligible for mutation — Stryker has no line-level diff filter. This is intentional
+that file eligible for mutation — mutate globs name files, not lines. This is intentional
 (a full entropy audit of files you touch, not a diff-coverage gate), but means survivor
 counts on a large touched file can look alarming for a small mechanical change. `--diff-only`
 is the narrower "did my actual diff introduce anything new" view.
@@ -102,11 +107,30 @@ put it back in scope — but naming one via `--file` does, since that is an expl
 > spawns anything, so backgrounding is now both safe and required. Never `pkill dotnet` —
 > that kills VS Code's C# servers; match `dotnet-stryker` specifically.
 
-> ⚠️ **A bad `since` target costs ~8 minutes of silence.** Stryker validates the git ref
-> only *after* building, mutating and capturing coverage, then exits leaving an output
+> ⚠️ **Stryker's `since` resolves against the wrong checkout inside a linked worktree,
+> and reports the miss as a clean pass** (#362). `GitInfoProvider.RepositoryPath` is
+> `Repository.Discover(projectPath).Split(".git")[0]`; in a linked worktree `Discover`
+> returns `<main>/.git/worktrees/<name>`, so the split yields **`<main>/`** and Stryker
+> diffs the *main checkout's* working directory. A review run in a detached worktree
+> therefore scoped itself against the maintainer's unrelated ambient edits, ignored all
+> 5334 mutants as "Removed by since filter", tested **zero**, and exited 0 — and the
+> orchestrated review that trusted it lost an axis silently. There is no config or CLI
+> knob for the repository path, and the split would mangle any path containing `.git`
+> regardless. This is why `run.sh` computes the changed-file set with git itself and
+> strips `since` from the generated config unconditionally, exactly as `run-js.sh`
+> always has. Don't hand diff resolution back to Stryker.
+
+> ⚠️ **A bad diff target used to cost ~8 minutes of silence.** Stryker validates its git
+> ref only *after* building, mutating and capturing coverage, then exits leaving an output
 > directory with no report in it. Short SHAs do not resolve (`2fc21c8` fails, its full SHA
 > works). `run.sh` resolves and verifies the ref up front, and refuses an empty scope with
 > exit 3, so neither costs more than a second.
+
+> ⚠️ **Zero audited mutants is exit 2, never "No issues found."** `parse-report.py`
+> refuses to report on a run in which nothing was `Killed`/`Survived`/`Timeout`/
+> `NoCoverage`, printing the status and ignore-reason breakdown instead. A filtered-out
+> run and a clean run are otherwise indistinguishable from the outside, and the failure
+> reads in the reassuring direction — which is how #362 went unnoticed.
 
 > ⚠️ **One run at a time.** Two concurrent runs contend for the same build output and one
 > dies with no report — which is easy to cause, because a silent run looks hung. `run.sh`

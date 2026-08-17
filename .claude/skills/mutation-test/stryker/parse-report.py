@@ -9,16 +9,18 @@ Usage (from MEditService/ for .NET reports, modbench/ for StrykerJS reports):
   python ../.claude/skills/mutation-test/stryker/parse-report.py --diff-only
   python ../.claude/skills/mutation-test/stryker/parse-report.py --diff-only --target main
 
---diff-only narrows the report (which Stryker's `since` scopes at the *file* level,
+--diff-only narrows the report (which the runners scope at the *file* level,
 mutating every testable line in any touched file) down to survivors whose lines
 actually intersect the git diff against --target (default: stryker-config.json's
 since.target). Use it to check "did my diff introduce anything new" without
 re-running Stryker; the unfiltered report remains the full-file entropy audit.
 
-Exit 0 if all mutants killed, 1 if any Survived/NoCoverage remain, 2 on error.
+Exit 0 if all mutants killed, 1 if any Survived/NoCoverage remain, 2 on error —
+including a report in which nothing was actually tested (see audit_or_die).
 """
 
 import argparse
+import collections
 import glob
 import json
 import os
@@ -26,6 +28,11 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+
+# Statuses that mean a mutant was actually put in front of the suite (or found to
+# have no test in front of it at all). Everything else — Ignored, CompileError —
+# means the mutant was never an observation.
+AUDITED_STATUSES = ("Killed", "Survived", "Timeout", "NoCoverage")
 
 
 def find_latest_report(base: Path) -> Path | None:
@@ -130,6 +137,36 @@ def collect_results(data: dict, diff_only: bool, repo_root: Path | None, target:
     return total, results
 
 
+def audit_or_die(data: dict, report_path: Path) -> None:
+    """A report in which no mutant was tested is a mis-scope, not a pass.
+
+    This is the exact shape of #362: Stryker filtered all 5334 candidates out and
+    exited 0, and "No issues found." read as a clean bill of health. Zero audited
+    mutants must therefore be louder than any survivor, never quieter."""
+    statuses = collections.Counter()
+    reasons = collections.Counter()
+    for fd in data.get("files", {}).values():
+        for m in fd.get("mutants", []):
+            status = m.get("status", "?")
+            statuses[status] += 1
+            if status == "Ignored":
+                reasons[m.get("statusReason") or "(no reason given)"] += 1
+
+    if sum(statuses[s] for s in AUDITED_STATUSES):
+        return
+
+    print(f"ERROR: nothing was audited — 0 of {sum(statuses.values())} mutants in "
+          f"{report_path} were tested, so this run says nothing about the suite. "
+          f"It is a mis-scope, not a clean pass.", file=sys.stderr)
+    for status, count in statuses.most_common():
+        print(f"  {count:6d}  {status}", file=sys.stderr)
+    for reason, count in reasons.most_common(5):
+        print(f"  {count:6d}  Ignored: {reason}", file=sys.stderr)
+    print("Re-scope the run — name the files with --file, or check the diff target "
+          "resolves against this working tree.", file=sys.stderr)
+    sys.exit(2)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("report_path", nargs="?", help="Path to mutation-report.json (default: latest under StrykerOutput/)")
@@ -142,6 +179,8 @@ def main() -> None:
     report_path = resolve_report_path(args.report_path)
     with open(report_path) as f:
         data = json.load(f)
+
+    audit_or_die(data, report_path)
 
     repo_root, target = None, args.target
     if args.diff_only:

@@ -23,14 +23,20 @@ Two dispatch rules, both learned from the executor still committing to the branc
 while this axis ran:
 
 - **Resolve the fixed point to an immutable SHA before dispatch** (`git rev-parse`),
-  never a symbolic ref or branch name. A `--since` run against a moving HEAD counted
-  0 changed files and `since`-filtered every mutant, reporting an empty audit as a
-  clean one.
+  never a symbolic ref or branch name. A run against a moving HEAD counted 0 changed
+  files and filtered every mutant, reporting an empty audit as a clean one.
 - **The axis never shares a worktree with a live executor.** Give it its own
   throwaway worktree pinned at that SHA — `git worktree add --detach <path> <sha>` —
   and remove it after the report. Pinning is then free and a destructive reset is
   structurally impossible; one axis briefed "change no files" ran `git reset --hard`
   on the shared worktree to pin itself and discarded another agent's commit.
+
+Both of those failed the same way — an empty audit read as a clean one — so the
+wrappers now refuse it rather than trusting the reader: they resolve the diff with git
+in the worktree they're run from, and `parse-report.py` exits 2 when no mutant was
+tested (#362, `stryker/stryker.md` §Guardrails). **The axis reports how many mutants
+were tested, not just its exit code** — that number is what makes "clean" mean
+anything, and its absence is what let a zero-mutant run pass for a pass.
 
 Brief:
 
@@ -41,7 +47,7 @@ Brief:
 > the findings table in TRIAGE.md's format.
 > **Propose only — change no files, and no ref or history operations: `git reset`,
 > `git checkout`, `git rebase`, `git branch -f` are forbidden, not just file edits.**
-> Report the table and nothing else.
+> Report the table, and above it the count of mutants actually tested — nothing else.
 
 Pass the review's own fixed point as that SHA, so the mutants and the diff under
 review are the same set of files. Report the returned table as a third section beside

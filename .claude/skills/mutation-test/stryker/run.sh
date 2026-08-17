@@ -46,49 +46,56 @@ trap 'rm -f "$RUN_CONFIG"' EXIT
 
 # --- resolve scope, and refuse to spend the ~8min fixed cost on an empty one ---
 #
-# Stryker validates its `since` target only *after* building, mutating and capturing
-# coverage — an unresolvable ref costs ~8 minutes and leaves an output directory with no
-# report at all. Short SHAs do not resolve; a full SHA does. Both checks below are the
-# difference between an instant message and an eight-minute silence.
+# Diff scoping is computed *here*, with git, and handed to Stryker as an explicit mutate
+# list. Stryker's own `since` is never enabled — #362: its GitInfoProvider derives the
+# repository root as `Repository.Discover(projectPath).Split(".git")[0]`, which inside a
+# linked worktree yields `<main-checkout>/` (the git dir is
+# `<main>/.git/worktrees/<name>`). It then diffs *that* checkout's working directory, so a
+# run in a detached review worktree scoped itself against the maintainer's unrelated
+# ambient edits, filtered out all 5334 mutants, and exited 0. There is no config or CLI
+# knob for the repository path. Computing the diff ourselves is also what run-js.sh has
+# always done.
+#
+# The target ref is still resolved up front. That began as protection against Stryker
+# validating its own `since` target only *after* building, mutating and capturing coverage
+# — a bad ref cost ~8 minutes and left an output directory with no report at all. Stryker
+# no longer sees the ref, but resolving it here is still what turns a typo into an instant
+# message instead of a silently empty scope. Short SHAs do not resolve; a full SHA does.
 MUTATE_JSON="null"
-SINCE_JSON="null"
 KEEP_NEGATIONS="true"
 
 if $ALL; then
-    SCOPE="all of MEditService.Core (since disabled)"
+    SCOPE="all of MEditService.Core"
 elif [[ -n "$FILE_FILTER" ]]; then
-    # since stays disabled: an explicit file request must run whether or not that file has
-    # a diff vs the target, or it silently produces zero mutants and no report. The base
-    # config's exclusions are dropped too — naming a file *is* the request to mutate it.
-    SCOPE="$FILE_FILTER (since disabled — file requested explicitly)"
+    # An explicit file request must run whether or not that file has a diff vs the target.
+    # The base config's exclusions are dropped too — naming a file *is* the request to
+    # mutate it.
+    SCOPE="$FILE_FILTER (file requested explicitly)"
     MUTATE_JSON="[\"**/$FILE_FILTER\"]"
     KEEP_NEGATIONS="false"
 else
     TARGET="${SINCE_REF:-$(python3 -c "import json;print(json.load(open('$BASE_CONFIG'))['stryker-config']['since']['target'])")}"
     FULL_SHA=$(git rev-parse --verify --quiet "${TARGET}^{commit}" || true)
     if [[ -z "$FULL_SHA" ]]; then
-        echo "ERROR: since target '$TARGET' does not resolve to a commit." >&2
+        echo "ERROR: diff target '$TARGET' does not resolve to a commit." >&2
         exit 2
     fi
-
-    COMMITTED=$(git diff --name-only "${FULL_SHA}...HEAD" -- "*.cs" 2>/dev/null || true)
-    if [[ -n "$COMMITTED" ]]; then
-        SCOPE="committed C# changes vs ${TARGET} (${FULL_SHA:0:8})"
-        SINCE_JSON="\"$FULL_SHA\""
-    else
-        # Nothing committed ahead of the target: fall back to the working tree, so
-        # uncommitted Core changes are still covered.
-        WORKTREE=$( { git diff --name-only "$FULL_SHA" -- "*.cs" || true; \
-                      git ls-files --others --exclude-standard -- "*.cs" || true; } \
-                    | grep "MEditService.Core/.*\.cs$" | sort -u || true)
-        if [[ -z "$WORKTREE" ]]; then
-            echo "Scope: nothing to mutate — no C# changes vs ${TARGET} (${FULL_SHA:0:8}), committed or working-tree."
-            exit 3
-        fi
-        SCOPE="uncommitted Core changes vs ${TARGET} (since disabled, explicit mutate list)"
-        MUTATE_JSON=$(printf '%s\n' "$WORKTREE" | sed 's|.*/MEditService.Core/|**/|' \
-                      | python3 -c "import json,sys;print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))")
+    # Merge-base, so a target that has moved on since the branch was cut doesn't drag
+    # everyone else's landed work into scope. `git diff <base>` spans committed *and*
+    # uncommitted changes in one pass, which is the union the old two-branch form was
+    # reaching for. `--diff-filter=d` drops deletions: a deleted file's glob would match
+    # nothing and only make the scope line lie.
+    BASE_SHA=$(git merge-base "$FULL_SHA" HEAD 2>/dev/null || echo "$FULL_SHA")
+    CHANGED=$( { git diff --name-only --diff-filter=d "$BASE_SHA" -- "*.cs" || true; \
+                 git ls-files --others --exclude-standard -- "*.cs" || true; } \
+               | grep "MEditService.Core/.*\.cs$" | sort -u || true)
+    if [[ -z "$CHANGED" ]]; then
+        echo "Scope: nothing to mutate — no MEditService.Core C# changes vs ${TARGET} (${BASE_SHA:0:8})."
+        exit 3
     fi
+    SCOPE="Core changes vs ${TARGET} (${BASE_SHA:0:8}): $(printf '%s\n' "$CHANGED" | tr '\n' ' ')"
+    MUTATE_JSON=$(printf '%s\n' "$CHANGED" | sed 's|.*/MEditService.Core/|**/|' \
+                  | python3 -c "import json,sys;print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))")
 fi
 
 echo "Scope: $SCOPE"
@@ -96,7 +103,7 @@ echo "Scope: $SCOPE"
 # --- generate the run config; never patch the checked-in one ---
 # The previous version edited stryker-config.json in place and restored it from a trap, so
 # a killed run left the repo's config mutated. A generated file cannot corrupt the original.
-MUTATE_JSON="$MUTATE_JSON" SINCE_JSON="$SINCE_JSON" KEEP_NEGATIONS="$KEEP_NEGATIONS" \
+MUTATE_JSON="$MUTATE_JSON" KEEP_NEGATIONS="$KEEP_NEGATIONS" \
 python3 - "$BASE_CONFIG" "$RUN_CONFIG" <<'PY'
 import json, os, sys
 base, out = sys.argv[1], sys.argv[2]
@@ -104,7 +111,6 @@ cfg = json.load(open(base))
 sc = cfg["stryker-config"]
 
 mutate = json.loads(os.environ["MUTATE_JSON"])
-since = json.loads(os.environ["SINCE_JSON"])
 
 if mutate is not None:
     # An explicit mutate list replaces the base globs, but the base config's `!` exclusions
@@ -113,10 +119,11 @@ if mutate is not None:
     if os.environ["KEEP_NEGATIONS"] == "true":
         mutate = mutate + [p for p in sc.get("mutate", []) if p.startswith("!")]
     sc["mutate"] = mutate
-if since is not None:
-    sc["since"] = {"enabled": True, "target": since}
-else:
-    sc.pop("since", None)
+
+# Unconditional, and the point of #362: scope is already decided above, by git in *this*
+# worktree. Leaving `since` in the generated config would hand that decision back to a
+# resolver that reads the wrong checkout.
+sc.pop("since", None)
 
 # Dots is the only progress signal that survives redirection: plain characters, no ANSI
 # repaint. The `progress` reporter draws a ShellProgressBar that throws
