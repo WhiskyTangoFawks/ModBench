@@ -541,15 +541,25 @@ Fixed slot order (`modbench/CLAUDE.md` rule 5): name filter, then the view's sta
 (here, the record filter — a second, independent narrowing axis), then domain actions, then
 overflow, then native **Collapse All** last.
 
-- **Slot 1 — name filter**: the shared Modbench filter widget (`registerFilterBoxCommand`, a
-  transient `InputBox`), live-narrowing plugin rows by case-insensitive substring match against
-  filename; dismissing the box (`onDidHide`) restores the full list. One widget spans every
-  Modbench list surface: Mods, Downloads, and here (#247). It is a **distinct axis** from the
-  record filter: this narrows *which plugin rows* appear; the record filter narrows *which
-  records* appear under an expanded row. The two compose, and their icons say which is which —
-  `$(search)` narrows by name, `$(filter)` narrows by condition.
+- **Slot 1 — name filter**: the shared Modbench filter widget (`registerNameFilter`,
+  `modbench/src/nameFilter.ts`), live-narrowing plugin rows by case-insensitive substring match
+  against filename. One widget spans every Modbench list surface: Mods, Downloads, and here
+  (#247), with one behavior — durable until explicitly cleared, term in the view description,
+  `ctrl+F` as a second entry point (#255; full description in [mods.md](mods.md)). It is a
+  **distinct axis** from the record filter: this narrows *which plugin rows* appear; the record
+  filter narrows *which records* appear under an expanded row. The two compose, and their icons
+  say which is which — `$(search)` narrows by name, `$(filter)` narrows by condition. Slot 1
+  swaps to `$(clear-all)` while a name filter is active, gated on
+  `modbench.pluginListTree.filterActive`.
 - **Slot 2 — record filter and its Clear** — the SQL record filter described above; a no-op
-  with no session running (there is nothing to filter yet).
+  with no session running (there is nothing to filter yet). Its own gate is
+  `modbench.filterActive` — a separate key from slot 1's, because the two axes are cleared
+  independently.
+- **Both axes read out in the view description** when both are active — `"arm" · records:
+  cells.sql`. The record filter is named by its **source** (the `.sql` filename, or `document`
+  when applied from an open editor; `SQL` when a session-start sync reports a filter this
+  frontend never saw it applied), never by its SQL text: a `WHERE` clause is not a readout.
+  Clearing either axis leaves the other applied and still named.
 - **Slot 3 — New Plugin…**.
 - **Native Collapse All** — this became the deepest tree in the product once #270 merged it
   (plugin → record type → record), so it earns the affordance the pre-merge Editing tree
@@ -737,7 +747,9 @@ overflow, then native **Collapse All** last.
   description matches: the Editing session's plugin *order* comes from Plugin load order, not
   Modlist order (Modlist only resolves each plugin *name* to its winning physical file).
 - **Filter box is a declared cross-surface convention**, not a per-surface bespoke choice: Mods
-  tree, Downloads, and this surface all use `registerFilterBoxCommand`.
+  tree, Downloads, and this surface all use `registerNameFilter`, which derives each view's two
+  command ids and its filter-active context key from the view id so the three cannot drift into
+  three conventions.
 - The conflict badge on a record node (the two-axis model, [ADR-0016](../adr/0016-two-axis-conflict-model.md))
   is planned but not yet built on this tree — see [#285](https://github.com/WhiskyTangoFawks/ModBench/issues/285),
   which also tracks the missing Conflicts node; both were recorded as spec drift by #270 and
