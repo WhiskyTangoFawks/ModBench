@@ -1658,5 +1658,14 @@ describe('Progressive load states its own incompleteness (#307)', () => {
     const immutable = await itemFor('Immutable.esm');
     assert.ok(typeof immutable.tooltip === 'string' && immutable.tooltip.includes('read-only'),
       `expected the read-only note once the load completed, got: ${String(immutable.tooltip)}`);
+    // #342: Immutable.esm never appeared in any progress tick's indexedPlugins — its chevron can
+    // only come from the completion hand-off's own `session.files`. The tooltip check above proves
+    // the readOnly/masterIssues half of that payload landed; without this, a hand-off that applied
+    // readOnly/masterIssues but silently dropped (or never reached) the chevron-bearing file set
+    // would pass this test while leaving the row exactly as #342 found it: no chevron, unexpandable.
+    assert.strictEqual(
+      immutable.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
+      'Immutable.esm was indexed but never named in a progress tick — its chevron must still come from the completion hand-off',
+    );
   });
 });
