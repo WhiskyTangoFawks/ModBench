@@ -79,6 +79,27 @@ public interface ISessionManager
     Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes);
 
     /// <summary>
+    /// Re-reads <paramref name="plugin"/> from a <em>different</em> physical copy — the one a
+    /// mod-level change has made its name resolve to — and re-indexes only that plugin, then
+    /// recomputes winners so conflict state describes the new file (#279 / ADR-0035 § Live
+    /// mutation). The caller supplies <paramref name="newPath"/> and <paramref name="newOrigin"/>
+    /// for the same reason <see cref="LoadUnlistedPlugin"/> does: resolving a filename to a mod
+    /// folder is Mod Management's job, and this side never learns how.
+    /// <para>
+    /// Staged edits against the copy being replaced are <b>discarded</b> — they were authored
+    /// against bytes the session no longer holds, and leaving them would make them invisible (reads
+    /// overlay by origin) yet still live on the next save (which resolves its target by filename).
+    /// Never called on the system's own initiative: a mod-level change flags the row and stops
+    /// there; this runs only once the user has been told what it costs and has agreed.
+    /// </para>
+    /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
+    /// Throws <see cref="SessionBusyException"/> if a session load is in flight.
+    /// Throws <see cref="KeyNotFoundException"/> if the load order does not name the plugin.
+    /// Throws <see cref="System.IO.FileNotFoundException"/> if the new file does not exist.
+    /// </summary>
+    void RereadPlugin(string plugin, string newPath, string newOrigin);
+
+    /// <summary>
     /// Re-reads <paramref name="plugin"/> from disk and re-indexes it into the record repository,
     /// then recomputes winners. Call after committing a prepared save to disk.
     /// Throws <see cref="InvalidOperationException"/> if no session is loaded.

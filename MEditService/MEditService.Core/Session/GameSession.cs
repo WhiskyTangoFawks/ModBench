@@ -285,6 +285,72 @@ public sealed class GameSession : IGameSession
         return true;
     }
 
+    /// <summary>
+    /// Points a plugin the load order names at a different physical file — the session half of
+    /// #279's per-plugin re-read (ADR-0035 § Live mutation). A mod-level change can make a plugin
+    /// name resolve to a copy from a different mod; the caller (Mod Management, through
+    /// <c>SessionManager.RereadPlugin</c>) supplies the new path and the origin it resolved it
+    /// from, since nothing here can map a filename to a mod folder.
+    /// <para>
+    /// The mirror image of <see cref="RemoveUnlistedPlugin"/>'s refusal to drop a load-order
+    /// member. That refusal stands, and for the reason stated there — it would change which file a
+    /// filename resolves to underneath staged edits. This does exactly that, but only at the user's
+    /// explicit request and after they have been told what it costs.
+    /// </para>
+    /// <para>
+    /// Load-order slot, participation, immutability and load-order membership all survive: none of
+    /// them is a property of *which copy* provides the file, and re-deriving them here would let a
+    /// re-read silently reorder the session. Only the path, the origin, and what is read out of the
+    /// file itself (masters, record count) change.
+    /// </para>
+    /// </summary>
+    public PluginMetadata RebindPlugin(PluginMetadata previous, string newPath, string newOrigin)
+    {
+        var fileName = previous.Name;
+        var modKey = ModKey.FromFileName(fileName);
+
+        // Opened before anything is torn down, so a file that cannot be opened or parsed leaves the
+        // session exactly as it was — still serving the copy it loaded, rather than holding neither.
+        // That is the whole reason the open is not folded into the swap below.
+        var mod = ModFactory.ImportGetter(new ModPath(modKey, newPath), GameRelease);
+        var metadata = BuildPluginMetadata(
+            mod,
+            new ResolvedPlugin(fileName, newPath, previous.IsImmutable, previous.Participates, newOrigin),
+            previous.LoadOrderIndex,
+            previous.InLoadOrder);
+
+        lock (_mutation)
+        {
+            var index = _plugins.FindIndex(p =>
+                p.InLoadOrder == previous.InLoadOrder
+                && p.Name.Equals(fileName, StringComparison.OrdinalIgnoreCase)
+                && p.Origin.Equals(previous.Origin, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+            {
+                // Never append as a fallback: two PluginMetadata under one (origin, filename) makes
+                // every ColumnKey-keyed lookup ambiguous — see AddUnlistedPlugin's own note.
+                // Disposing what we just opened keeps a refused rebind from leaking a getter.
+                mod.Dispose();
+                throw new KeyNotFoundException($"No plugin '{fileName}' from origin '{previous.Origin}' is loaded.");
+            }
+
+            if (_modsByKey.Remove(KeyOf(previous.Origin, fileName), out var stale) && stale is IModDisposeGetter disposable)
+            {
+                _mods.Remove(disposable);
+                disposable.Dispose();
+            }
+
+            _mods.Add(mod);
+            _modsByKey[KeyOf(newOrigin, fileName)] = mod;
+            _plugins[index] = metadata;
+            Volatile.Write(ref _pluginsSnapshot, [.. _plugins]);
+        }
+
+        _logger.LogInformation("Rebound {FileName}: {OldOrigin} → {NewOrigin} ({Path})",
+            fileName, previous.Origin, newOrigin, newPath);
+        return metadata;
+    }
+
     private PluginMetadata Open(
         string filePath, string origin, int loadOrderIndex, bool isImmutable, bool participates, bool inLoadOrder = true)
     {

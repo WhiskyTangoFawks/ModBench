@@ -22,6 +22,9 @@ public sealed class SessionManager(
     private readonly IRecordRepositoryFactory _repositoryFactory = repositoryFactory;
     private readonly IPluginWriter _writer = writer;
     private readonly IPendingChangeLifecycle? _changeLifecycle = pendingChanges as IPendingChangeLifecycle;
+    // #279: a re-read discards the staged edits belonging to the copy it replaces, so this needs
+    // the service itself, not only its lifecycle half.
+    private readonly IPendingChangeService? _pendingChanges = pendingChanges;
     private readonly IModImporter _modImporter = modImporter ?? new DefaultModImporter();
     private GameSession? _session;
     private IRecordRepository? _repository;
@@ -455,6 +458,70 @@ public sealed class SessionManager(
                 .Concat(ordered.SelectMany(p => p.Masters))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+    }
+
+    /// <summary>
+    /// #279 / ADR-0035 § Live mutation: re-reads one plugin from the copy a mod-level change has
+    /// made its name resolve to, and re-indexes only that plugin. Never automatic — the drifted row
+    /// offers this, the user asks for it, and the confirm has already stated what it costs.
+    /// </summary>
+    public void RereadPlugin(string plugin, string newPath, string newOrigin)
+    {
+        if (string.IsNullOrWhiteSpace(newPath))
+            throw new ArgumentException("A re-read needs the path of the copy to read.", nameof(newPath));
+        if (string.IsNullOrWhiteSpace(newOrigin))
+            throw new ArgumentException("A re-read needs the origin the new copy was resolved from.", nameof(newOrigin));
+        // Checked here rather than left to Mutagen: this is the ordinary case (the user re-read
+        // after the file moved again), and it must be a clean refusal that touches nothing.
+        if (!File.Exists(newPath))
+            throw new FileNotFoundException($"Plugin file not found: {newPath}", newPath);
+
+        // Refused, never queued behind the load and *never* EnterExclusive(): that call cancels
+        // whatever load is in flight, so joining the gate would let a re-read destroy a load the
+        // user is sitting and watching. The indexing loop also writes to the very repository this
+        // would unindex from. The caller retries once the load has landed; the endpoint answers 409.
+        // Refused for the whole load, including the window before the partial session is published:
+        // a re-read is not answerable against a load order that is still being assembled, and
+        // "there is no session yet" would be a misleading way to say so.
+        lock (_lock)
+        {
+            if (_loadCancellation is not null)
+                throw new SessionBusyException("A session load is still in flight; re-read this plugin once it has finished.");
+        }
+
+        var (previous, repository, _) = RequirePlugin(plugin);
+
+        lock (_lock)
+        {
+            _logger.LogInformation("Re-reading {Plugin}: {OldOrigin} → {NewOrigin}", plugin, previous.Origin, newOrigin);
+
+            // Rebind first — it opens the new file, which is the failure-prone half, and it leaves
+            // the session untouched if that open throws.
+            var metadata = _session!.RebindPlugin(previous, newPath, newOrigin);
+
+            // Then the staged edits belonging to the copy that just went away. Discarded, not
+            // migrated and not left alone: pending_changes is keyed on (form_key, origin, plugin)
+            // and reads overlay by origin, so a change left behind is invisible yet still live —
+            // and SavePlugin resolves its write target by *filename*, so it would later be written
+            // into the new copy's file having been authored against bytes that no longer exist
+            // (ADR-0026's silent-wrong-state tier). Migrating them is worse still: their OldValue
+            // describes those same vanished bytes. Deliberately before the re-index rather than
+            // after it: if indexing then throws, staged edits are gone but nothing is left
+            // invisible-but-live, which is the safer of the two bad outcomes.
+            var discarded = _pendingChanges?.Revert(metadata.Name, formKey: null, origin: previous.Origin) ?? 0;
+            if (discarded > 0)
+                _logger.LogInformation("Discarded {Count} staged change(s) against {Plugin} from {Origin}", discarded, plugin, previous.Origin);
+
+            repository.Unindex(previous.Name, previous.Origin);
+            var mod = _session.GetMod(metadata.Name, metadata.Origin)!;
+            repository.Index(mod, metadata.LoadOrderIndex, metadata.Participates, metadata.Origin);
+            // AC7: the whole-set sweep, so winner status and conflict badges describe the new file.
+            repository.UpdateWinners();
+
+            // The reservation counter belongs to the file, not the name — the new copy has its own
+            // NextFormID, and keeping the old one would hand out FormKeys it has already used.
+            if (!metadata.IsImmutable) _nextFormIds[metadata.Name] = SafeNextFormId(mod);
         }
     }
 

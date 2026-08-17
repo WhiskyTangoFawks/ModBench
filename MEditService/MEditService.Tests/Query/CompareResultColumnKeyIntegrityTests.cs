@@ -176,6 +176,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
         public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
+        public void RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
         public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new NotSupportedException();
         public string ReserveFormKey(string plugin) => throw new NotSupportedException();
