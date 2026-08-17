@@ -39,6 +39,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | `Records/` | DuckDB record index: insert committed records, query, DDL | `IRecordRepository`, `DuckDbRecordRepository`, `TableDdlBuilder`, `SessionCache` |
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
 | `Edits/` | Staging and persisting user edits | `PendingChangeService`, `PluginWriter`, `SaveResult` |
+| `Serialization/` | Per-record text ledger codec (ADR-0040 stage 1) | `RecordTextCodec`, `RecordTextCodecCustomization` |
 
 Place code by ownership: `ColumnSpec` (`Schema/`) carries both read extractor + write Apply delegate; `PluginWriter` writes to disk, doesn't call back into the repository; DTOs in `Queries/Models.cs`. Delete dead code.
 
