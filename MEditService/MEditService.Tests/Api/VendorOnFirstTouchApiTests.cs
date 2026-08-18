@@ -383,4 +383,90 @@ public class VendorOnFirstTouchApiTests
         var dirt = await File.ReadAllTextAsync(Path.Combine(originFolder, relativePath));
         Assert.Contains("500", dirt, StringComparison.Ordinal);
     }
+
+    // #389 AC1: a VMAD struct-op edit (a different payload shape than the plain fields branch above
+    // — path -> op object, not path -> value) vendors on first touch too, driven end to end through
+    // the same PATCH endpoint with changeType: "vmad_struct_op".
+    [Fact]
+    public async Task PatchingUntrackedRecordWithVmadStructOp_CreatesRepoVendorsPristineOnMainAndStagesEditAsDirt()
+    {
+        using var host = VendoringTestHost.Create();
+        var client = host.Client;
+        var ledgerRoot = host.LedgerRoot;
+        using var fx = BuildTwoNpcFixture(out var npc1, out _);
+        await LoadAsync(client, fx);
+
+        var resp = await client.PatchAsJsonAsync($"/records/{Uri.EscapeDataString(npc1)}", new
+        {
+            plugin = "Vendor.esp",
+            fields = new Dictionary<string, object?>
+            {
+                [@"VMAD\NewScript"] = new { op = "add_script", name = "NewScript", flags = "Local", properties = Array.Empty<object>() },
+            },
+            source = "user",
+            changeType = "vmad_struct_op",
+        });
+        resp.EnsureSuccessStatusCode();
+
+        var originFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "VendorMod").Path)!;
+        var ledger = LedgerFor(ledgerRoot);
+        var (gitDir, workTree) = ledger.PathsFor(originFolder);
+        var relativePath = LedgerRecordPath.For("Vendor.esp", "npc_", npc1).Replace('\\', '/');
+
+        Assert.True(Directory.Exists(gitDir));
+        Assert.True(File.Exists(Path.Combine(gitDir, "HEAD")));
+
+        var committed = GitCli.Run(gitDir, workTree, "show", $"main:{relativePath}");
+        Assert.DoesNotContain("NewScript", committed, StringComparison.Ordinal);
+
+        var status = GitCli.Run(gitDir, workTree, "status", "--porcelain");
+        Assert.Contains(relativePath, status, StringComparison.Ordinal);
+        Assert.StartsWith(" M ", status.TrimEnd('\n'), StringComparison.Ordinal);
+
+        var diff = GitCli.Run(gitDir, workTree, "diff");
+        Assert.Contains("NewScript", diff, StringComparison.Ordinal);
+    }
+
+    // #389 AC3: a record already vendored by a plain field edit is not re-baselined by a subsequent
+    // VMAD struct-op edit — IsTrackedAtHead's existing "no-op-safe to call repeatedly" contract
+    // (AC3 of #370) covers this for free once the struct-op branch reaches VendorOnFirstTouch at
+    // all, but it must actually be exercised through this shape, not merely assumed.
+    [Fact]
+    public async Task AVmadStructOpEditOnARecordAlreadyVendoredByAPlainFieldEdit_AddsNoNewBaselineCommit()
+    {
+        using var host = VendoringTestHost.Create();
+        var client = host.Client;
+        var ledgerRoot = host.LedgerRoot;
+        using var fx = BuildTwoNpcFixture(out var npc1, out _);
+        await LoadAsync(client, fx);
+
+        await PatchAsync(client, npc1, "Vendor.esp", "aggression", "Frenzied");
+
+        var structOpResp = await client.PatchAsJsonAsync($"/records/{Uri.EscapeDataString(npc1)}", new
+        {
+            plugin = "Vendor.esp",
+            fields = new Dictionary<string, object?>
+            {
+                [@"VMAD\NewScript"] = new { op = "add_script", name = "NewScript", flags = "Local", properties = Array.Empty<object>() },
+            },
+            source = "user",
+            changeType = "vmad_struct_op",
+        });
+        structOpResp.EnsureSuccessStatusCode();
+
+        var originFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "VendorMod").Path)!;
+        var ledger = LedgerFor(ledgerRoot);
+        var (gitDir, workTree) = ledger.PathsFor(originFolder);
+        var relativePath = LedgerRecordPath.For("Vendor.esp", "npc_", npc1).Replace('\\', '/');
+
+        // Still exactly one commit touching this record's path — the original vendor baseline, not
+        // a second one fabricated by the struct-op edit.
+        var log = GitCli.Run(gitDir, workTree, "log", "--oneline", "main", "--", relativePath);
+        Assert.Single(log.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+
+        // Both edits' effects landed as (still uncommitted) working-tree dirt, cumulatively.
+        var diff = GitCli.Run(gitDir, workTree, "diff");
+        Assert.Contains("Frenzied", diff, StringComparison.Ordinal);
+        Assert.Contains("NewScript", diff, StringComparison.Ordinal);
+    }
 }

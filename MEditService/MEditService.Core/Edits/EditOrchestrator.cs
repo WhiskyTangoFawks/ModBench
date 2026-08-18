@@ -45,14 +45,15 @@ public sealed partial class EditOrchestrator(
         if (PendingLifecycleChangeType(formKey, plugin) is { } blockingType)
             return new StageEditResult.RecordPendingDeleteOrRenumber(blockingType);
 
-        // #370 scope cut (documented, not an oversight — orchestrator-approved): VMAD struct-op
-        // edits never reach VendorOnFirstTouch below, so a record whose first-ever edit arrives as
-        // a struct-op (attach/detach/reorder a script) is never vendored by it, and no later plain
-        // field edit retroactively fixes that — the "first touch" moment already passed. Vendoring
-        // this change type has its own write shape (struct ops, not a flat field dict) and is
-        // tracked as a follow-up, not built here.
+        // VMAD struct-op edits (attach/detach/reorder a script, add/remove a property) carry a
+        // different payload shape than a plain field dict — path -> op object, not path -> value —
+        // so they're routed to their own stage method rather than the plain branch below. #389:
+        // StageVmadStructOps vendors on first touch too, via the same VendorOnFirstTouch/RecordVendor
+        // plumbing the plain branch uses, tagged with VmadStructOpChangeType so RecordVendor.ApplyFields
+        // dispatches through PluginWriter.TryApplyField's own VmadStructOpChangeType branch instead of
+        // misreading the op payload as a plain field value.
         if (changeType == PendingChangeConstants.VmadStructOpChangeType)
-            return StageVmadStructOps(formKey, plugin, recordType!, fields, source, description);
+            return StageVmadStructOps(formKey, plugin, recordType!, session!, fields, source, description);
 
         var readOnlyFields = fields.Keys
             .Where(f => _writer.IsReadOnly(session!.GameRelease, recordType!, f))
@@ -122,7 +123,8 @@ public sealed partial class EditOrchestrator(
     // convention (no silent catch{}).
     private void VendorOnFirstTouch(
         string formKey, string plugin, string recordType, Dictionary<string, JsonElement> fields,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, IGameSession session)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, IGameSession session,
+        string changeType = PendingChangeConstants.FieldEditChangeType)
     {
         var origin = ResolveOrigin(plugin);
 
@@ -160,7 +162,7 @@ public sealed partial class EditOrchestrator(
         {
             _recordVendor.VendorAndStageDirtAsync(
                 originFolder, pluginMeta.Path, pluginMeta.Name, recordType, concreteType,
-                formKey, fields, schemas, session.GameRelease).GetAwaiter().GetResult();
+                formKey, fields, schemas, session.GameRelease, changeType).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
@@ -238,7 +240,7 @@ public sealed partial class EditOrchestrator(
     // Phase 13.8 structural ops: each field value is an op payload { op, ... } rather than a plain
     // value, so the normal scalar validation/ref-extraction is bypassed in favour of op-aware handling.
     private StageEditResult StageVmadStructOps(
-        string formKey, string plugin, string recordType,
+        string formKey, string plugin, string recordType, IGameSession session,
         Dictionary<string, JsonElement> fields, string source, string? description)
     {
         var vmadData = _query.GetVmad(formKey, plugin, ResolveOrigin(plugin));
@@ -255,6 +257,14 @@ public sealed partial class EditOrchestrator(
             formKey, plugin, recordType, fields, source, description, oldValues,
             Origin: ResolveOrigin(plugin), FormRefs: formRefs, ChangeType: PendingChangeConstants.VmadStructOpChangeType,
             ParentCell: null, PlacementGroup: null));
+
+        // #389: reuses VendorOnFirstTouch/RecordVendor exactly as the plain field-edit branch does —
+        // the struct-op payload (path -> op object) passes through unchanged, tagged with
+        // VmadStructOpChangeType so RecordVendor.ApplyFields dispatches it through
+        // PluginWriter.TryApplyField's own struct-op branch rather than the plain-value one.
+        var schemas = _schemaReflector.GetSchemas(session.GameRelease);
+        VendorOnFirstTouch(formKey, plugin, recordType, fields, schemas, session, PendingChangeConstants.VmadStructOpChangeType);
+
         return new StageEditResult.Staged(staged);
     }
 
