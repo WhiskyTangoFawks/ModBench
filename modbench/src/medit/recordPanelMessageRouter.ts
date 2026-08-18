@@ -401,11 +401,11 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
     await vscode.commands.executeCommand('modbench.openEditor', { formKey: m.formKey, label: m.formKey });
   } else if (m.type === WEBVIEW_TO_EXTENSION.PENDING_CHANGED) {
     if (deps.reveal) {
-      refreshPendingState({
+      await refreshPendingState({
         changeGroupTree: deps.reveal.provider,
         pendingChangeDecoration: deps.reveal.decorations,
         ledgerScm: deps.reveal.ledgerScm,
-      });
+      }, true, (msg) => deps.channel.warn(msg));
     }
   } else if (m.type === WEBVIEW_TO_EXTENSION.LOG) {
     deps.channel[m.level](m.message);

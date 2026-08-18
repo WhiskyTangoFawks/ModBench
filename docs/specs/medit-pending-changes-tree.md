@@ -209,6 +209,9 @@ exactly what it will carry.
 - The design rationale — why grouping rather than a record hierarchy, why two scopes rather
   than five — lives in [ADR-0029](../adr/0029-pending-changes-tree-is-a-grouping-view.md), not
   here.
-- This surface and the Record editor panel's Pending column are the two pending-changes
-  surfaces. Neither browses records by plugin; that is the Plugins tree under the
-  `pending-changes` filter.
+- This surface, the Record editor panel's Pending column, and the aggregate SCM provider
+  ([scm.md](scm.md)) are the three pending-changes surfaces. None of the three browses records by
+  plugin; that is the Plugins tree under the `pending-changes` filter. The SCM provider reads a
+  different layer of pending state (committed working-tree ledger dirt, ADR-0040) than this tree
+  and the Pending column do (the staged-but-unsaved pending-change table) — a correction of fact,
+  not a statement that this tree is retired; that is stage 3 (#383/#384), not yet done.

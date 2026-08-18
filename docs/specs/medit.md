@@ -96,7 +96,7 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   whichever direction applies — and neither appears on any tree's title bar: starting and
   stopping a session is workspace-scope, and with every view always on screen there is no single
   tree it could sensibly belong to.
-- The mEdit view is composed of the five surfaces listed above. There is no toolbar or
+- The mEdit view is composed of the six surfaces listed above. There is no toolbar or
   top-level menu bar — every action is reachable from a tree context menu, the command palette,
   or the record editor panel itself.
 - **One spec per surface** (see [README.md](README.md)). A surface is a top-level UI unit the

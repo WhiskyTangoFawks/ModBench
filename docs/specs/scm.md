@@ -74,27 +74,55 @@ record's committed (`HEAD`) text against its current working-tree text.
   are one small YAML file each, and nothing else consumes ledger state to justify the extra route.
   This does mean the response payload scales with the number of changed records — acceptable at
   today's realistic staged-edit counts, worth revisiting if a very large change set ever makes it
-  the wrong tradeoff.
-- **Record label**: `{recordType} {formKey}` — the raw type signature and FormKey, not a resolved
-  EditorID. A FormKey is always unambiguous; resolving a friendlier label would pull in a query
-  against the record index for a surface whose whole job, this stage, is reading real repo state.
-  Deferred deliberately, not an oversight — a readability follow-up needs its own observation
-  behind it, not a guess made here.
-- **Change-kind decoration**: each resource's `SourceControlResourceDecorations.tooltip` names the
-  kind (`Modified`, `Added`, `Deleted`, `Renamed`, or `Unknown`), and a `FileDecorationProvider`
-  (same pattern as `PendingChangeDecorationProvider`, #331) badges the matching row with git's own
-  single-letter vocabulary (`M`/`A`/`D`/`R`/`U`). `Modified` is the only kind today's write paths
-  can actually produce — `RecordVendor` always commits a record's pristine baseline before any
-  dirt is ever written, so a tracked record is never "added" or "deleted" from the ledger's own
-  perspective — but the kind is read honestly off git's real porcelain status code rather than
-  hardcoded, so a future write path (or an external edit to ledger text) reports as what it is.
+  the wrong tradeoff. Status reads use `git status --porcelain -z`, not plain `--porcelain` — `-z`
+  disables git's default path-quoting, which otherwise C-quotes and octal-escapes any non-ASCII
+  byte (routine in this modding scene: accented, Cyrillic, CJK plugin names) and would silently
+  drop the record from the panel. A single origin folder's git read failing (a corrupt gitdir, a
+  filesystem fault) is isolated to that origin — logged and omitted, every other origin's entries
+  still returned — so one broken repo never blanks the panel for plugins it doesn't touch.
+- **Row presentation is native, not constructed.** `SourceControlResourceState` has no label
+  field — VS Code derives what a row shows from its `resourceUri` alone: the file's basename as
+  the row text, its containing folder as native dimmed context. A resource's `resourceUri` is the
+  record's real ledger file (`<plugin>.ledger/<recordType>/<originModKey>/<hex6>.yaml`), so the row
+  reads as that file's own name (e.g. `000800.yaml`) with its path as context — never a constructed
+  `{recordType} {formKey}` string. That string exists only as the diff tab's title (see below). The
+  ledger path itself is not reshaped to force a friendlier basename, and no separate label
+  mechanism is invented to fight this — the path is committed history #370/#371 depend on, and
+  bending the native surface to fit a wish is exactly what the native-first invariant forbids. If
+  `000800.yaml` proves hard to scan once it's actually in front of users, that is a real,
+  observation-backed follow-up, not a guess made here.
+- **Full identity lives in the tooltip.** `SourceControlResourceDecorations.tooltip` genuinely
+  supports it, so each resource's tooltip carries record type, FormKey, plugin, and change kind
+  together (`{recordType} {formKey} · {plugin} ({kind})`) — the identity the row itself can't show.
+  EditorID is not resolved into this string; a FormKey is always unambiguous, and resolving a
+  friendlier form would pull a record-index query into a surface whose whole job, this stage, is
+  reading real repo state. Deferred deliberately, not an oversight.
+- **Change-kind decoration**: the same tooltip string above names the kind (`Modified`, `Added`,
+  `Deleted`, `Renamed`, or `Unknown`), and a `FileDecorationProvider` (same pattern as
+  `PendingChangeDecorationProvider`, #331) badges the matching row with git's own single-letter
+  vocabulary (`M`/`A`/`D`/`R`/`U`) plus its own, kind-only tooltip. `Modified` is the only kind
+  today's write paths can actually produce — `RecordVendor` always commits a record's pristine
+  baseline before any dirt is ever written, so a tracked record is never "added" or "deleted" from
+  the ledger's own perspective — but the kind is read honestly off git's real porcelain status code
+  rather than hardcoded, so a future write path (or an external edit to ledger text) reports as
+  what it is.
 - **The diff is raw text, committed vs. dirty** — `vscode.diff(committedUri, dirtyUri, title)`, VS
   Code's own two-URI diff-editor command, the same one every SCM extension (including git's own)
   drives this interaction through. The dirty side is the real working-tree file on disk
   (`vscode.Uri.file`, no further backend round trip — `RecordVendor` already wrote it there); the
   committed side is served from a `modbench-ledger-committed:` scheme by a
   `TextDocumentContentProvider` (the same class), backed by the committed text `GET /ledger/status`
-  already returned — never a second fetch.
+  already returned — never a second fetch. **The diff tab's title is `{recordType} {formKey}
+  (Working Tree)`** — this is the one place the constructed identity string actually appears; the
+  row itself, per Row presentation above, never shows it.
+- **The committed-text provider fires `onDidChange`** on every refresh, for the union of
+  committed-side URIs it showed before and after — a diff tab left open updates when a later
+  refresh changes what's committed (a save-then-re-edit), or clears when the record drops out of
+  the working-tree group entirely (reverted), rather than silently going stale.
+- **Refresh is generation-guarded**: stage/save/revert can fire in quick succession, and two
+  overlapping `refresh()` calls' own `GET /ledger/status` responses can resolve out of order. Only
+  the result belonging to the most-recently-started call is ever applied; an older one that
+  resolves later is discarded rather than overwriting newer state with stale state.
 - **Refresh is event-driven**, wired into the same shared signal path every other pending-change
   provider uses (`refreshPendingState`, `modbench/src/medit/refreshPendingState.ts`) — the
   `SessionController` save/revert/create/copy/delete callback, the webview's `PENDING_CHANGED`

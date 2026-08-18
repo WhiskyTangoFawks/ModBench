@@ -36,6 +36,17 @@ function tooltipFor(kind: LedgerChangeKind): string {
   }
 }
 
+// #368 review finding 3: SourceControlResourceState has no label field — VS Code derives the row
+// text from resourceUri (basename + containing folder as context, the native list-mode SCM
+// rendering), so a row actually reads as its ledger filename ("000800.yaml"), not
+// "{recordType} {formKey}". Reshaping the ledger path to force a friendlier basename is out —
+// that path is committed history #370/#371 depend on — and inventing a label mechanism would
+// fight the native surface (root CLAUDE.md's native-first invariant). The full identity instead
+// goes where SourceControlResourceDecorations genuinely supports it: the row's hover tooltip.
+function resourceTooltipFor(entry: LedgerStatusEntry): string {
+  return `${entry.recordType} ${entry.formKey} · ${entry.plugin} (${tooltipFor(entry.changeKind)})`;
+}
+
 // Git's own SCM extension badge vocabulary — only 'Modified' is reachable through today's write
 // paths (see LedgerChangeKind's own remarks, MEditService.Core.Ledger), the rest read honestly
 // for whichever future write path or external edit eventually produces them.
@@ -63,10 +74,21 @@ export class LedgerScmProvider implements vscode.FileDecorationProvider, vscode.
   private readonly _onDidChangeFileDecorations = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
   readonly onDidChangeFileDecorations = this._onDidChangeFileDecorations.event;
 
+  // #368 review finding 4: a diff tab left open must not keep showing stale committed text after a
+  // later refresh — TextDocumentContentProvider.onDidChange is the native signal VS Code re-queries
+  // provideTextDocumentContent on.
+  private readonly _onDidChangeTextDocument = new vscode.EventEmitter<vscode.Uri>();
+  readonly onDidChange = this._onDidChangeTextDocument.event;
+
   private readonly sourceControl: vscode.SourceControl;
   private readonly workingTreeGroup: vscode.SourceControlResourceGroup;
   private entries: LedgerStatusEntry[] = [];
   private readonly log: (msg: string) => void;
+  // #368 review finding 7: stage/save/revert can fire in quick succession, and two overlapping
+  // refresh() calls' own GET /ledger/status responses can resolve out of order — without this, an
+  // older, slower response applying *after* a newer, faster one would leave the panel showing
+  // stale state. Only the most-recently-started refresh's own result is ever applied.
+  private generation = 0;
 
   constructor(
     private readonly repository: PluginRepository,
@@ -89,25 +111,54 @@ export class LedgerScmProvider implements vscode.FileDecorationProvider, vscode.
    *  still-terminating process and read one more momentarily-live response before the connection
    *  actually drops. */
   clear(): void {
+    const previousEntries = this.entries;
+    this.generation++; // supersede any refresh() still in flight — its result must not land after this
     this.entries = [];
     this.workingTreeGroup.resourceStates = [];
     this._onDidChangeFileDecorations.fire(undefined);
+    this.fireCommittedTextChanged(previousEntries, this.entries);
   }
 
   /** Re-reads `/ledger/status` and rebuilds the working-tree group's resource states. Called from
    *  the same signal every other pending-change-aware provider already refreshes on (#368 AC3) —
    *  never a timer of its own. A failed fetch degrades to an empty group rather than throwing: the
    *  panel going momentarily blank on a backend hiccup is preferable to an unhandled rejection
-   *  breaking whichever call site triggered the refresh. */
+   *  breaking whichever call site triggered the refresh.
+   *
+   *  Generation-guarded (review finding 7): stage/save/revert can fire in quick succession, and
+   *  two overlapping calls' own GET /ledger/status responses can resolve out of order. Only the
+   *  result belonging to the most-recently-started call is ever applied — an older one that
+   *  resolves later is silently discarded rather than overwriting newer state. */
   async refresh(): Promise<void> {
+    const myGeneration = ++this.generation;
+    let nextEntries: LedgerStatusEntry[];
     try {
-      this.entries = await this.repository.getLedgerStatus();
+      nextEntries = await this.repository.getLedgerStatus();
     } catch (e) {
       this.log(`[LedgerScmProvider] getLedgerStatus failed: ${e instanceof Error ? e.message : String(e)}`);
-      this.entries = [];
+      nextEntries = [];
     }
-    this.workingTreeGroup.resourceStates = this.entries.map((entry) => this.toResourceState(entry));
+    if (myGeneration !== this.generation) return; // superseded by a later refresh()/clear() while awaiting
+
+    const previousEntries = this.entries;
+    this.entries = nextEntries;
+    this.workingTreeGroup.resourceStates = nextEntries.map((entry) => this.toResourceState(entry));
     this._onDidChangeFileDecorations.fire(undefined);
+    this.fireCommittedTextChanged(previousEntries, nextEntries);
+  }
+
+  // Fires onDidChange for every committed-side URI that changed identity or content across a
+  // refresh — the union of what was showing before and what's showing now, not just the new set:
+  // a record that dropped out (reverted, or its plugin left the load order) must still invalidate
+  // an already-open diff tab's stale content, which provideTextDocumentContent then answers
+  // `undefined` for.
+  private fireCommittedTextChanged(previous: LedgerStatusEntry[], current: LedgerStatusEntry[]): void {
+    const uris = new Map<string, vscode.Uri>();
+    for (const entry of [...previous, ...current]) {
+      const uri = committedUriFor(entry);
+      uris.set(uri.toString(), uri);
+    }
+    for (const uri of uris.values()) this._onDidChangeTextDocument.fire(uri);
   }
 
   private toResourceState(entry: LedgerStatusEntry): vscode.SourceControlResourceState {
@@ -120,7 +171,7 @@ export class LedgerScmProvider implements vscode.FileDecorationProvider, vscode.
         title: 'Open Diff',
         arguments: [entry],
       },
-      decorations: { tooltip: tooltipFor(entry.changeKind) },
+      decorations: { tooltip: resourceTooltipFor(entry) },
     };
   }
 

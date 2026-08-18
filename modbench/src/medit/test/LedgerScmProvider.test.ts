@@ -137,13 +137,39 @@ describe('LedgerScmProvider.refresh', () => {
     expect(states[0].command).toEqual({ command: LEDGER_OPEN_DIFF_COMMAND, title: 'Open Diff', arguments: [entries[0]] });
   });
 
-  it('sets each resource state\'s decoration tooltip from its change kind', async () => {
-    const provider = new LedgerScmProvider(makeRepository([entry({ changeKind: 'Modified' })]));
+  // #368 review finding 3: SourceControlResourceState has no label field — VS Code derives the
+  // row's own text from resourceUri (basename, with its containing folder as native context), so
+  // the row literally reads as the ledger filename, never a constructed string. This is the test
+  // asserting what the row actually presents, not what we might wish it said.
+  it('presents the row as the record\'s real working-tree file — resourceUri, not a fabricated label', async () => {
+    const e = entry({ recordPath: '/mods/VendorMod/Vendor.esp.ledger/npc_/Vendor.esp/000800.yaml' });
+    const provider = new LedgerScmProvider(makeRepository([e]));
+
+    await provider.refresh();
+
+    const states = fakeSourceControl().groups[0].resourceStates as Array<{ resourceUri: { fsPath: string } }>;
+    // VS Code renders this URI's basename ("000800.yaml") as the row text and its containing path
+    // as context — there is no separate label field to assert against; the URI itself *is* what's
+    // shown, so asserting the URI is asserting the presentation.
+    expect(states[0].resourceUri.fsPath).toBe(e.recordPath);
+    expect(states[0].resourceUri.fsPath.endsWith('/000800.yaml')).toBe(true);
+  });
+
+  // Since the row itself can only ever show the filename, the full identity — record type,
+  // FormKey, and plugin — has to live in the one place SourceControlResourceDecorations actually
+  // supports it: the tooltip (review finding 3).
+  it('carries the full identity — record type, FormKey, and plugin — in the resource tooltip, alongside the change kind', async () => {
+    const e = entry({ recordType: 'npc_', formKey: '000800:Vendor.esp', plugin: 'Vendor.esp', changeKind: 'Modified' });
+    const provider = new LedgerScmProvider(makeRepository([e]));
 
     await provider.refresh();
 
     const states = fakeSourceControl().groups[0].resourceStates as Array<{ decorations: { tooltip: string } }>;
-    expect(states[0].decorations.tooltip).toBe('Modified');
+    const tooltip = states[0].decorations.tooltip;
+    expect(tooltip).toContain('npc_');
+    expect(tooltip).toContain('000800:Vendor.esp');
+    expect(tooltip).toContain('Vendor.esp');
+    expect(tooltip).toContain('Modified');
   });
 
   it('degrades to an empty group, without throwing, when the status fetch fails', async () => {
@@ -162,6 +188,70 @@ describe('LedgerScmProvider.refresh', () => {
     await provider.refresh();
 
     expect(fired).toHaveLength(1);
+  });
+
+  // #368 review finding 7: stage/save/revert can fire in quick succession; two overlapping
+  // refresh() calls' own GET /ledger/status responses can resolve out of order. Without a
+  // generation guard, an older, slower response landing *after* a newer, faster one would leave
+  // the panel showing stale state.
+  it('discards an older refresh\'s result if a newer refresh has already resolved', async () => {
+    let resolveFirst!: (entries: LedgerStatusEntry[]) => void;
+    const first = new Promise<LedgerStatusEntry[]>((resolve) => { resolveFirst = resolve; });
+    const repository = {
+      getLedgerStatus: vi.fn()
+        .mockImplementationOnce(() => first)
+        .mockImplementationOnce(() => Promise.resolve([entry({ formKey: '000801:Vendor.esp' })])),
+    } as unknown as PluginRepository;
+    const provider = new LedgerScmProvider(repository);
+
+    const firstRefresh = provider.refresh(); // starts, but its own fetch hasn't resolved yet
+    await provider.refresh(); // starts and resolves first — this is the newer state
+    resolveFirst([entry({ formKey: '000800:Vendor.esp' })]); // now let the older, slower one land
+    await firstRefresh;
+
+    const states = fakeSourceControl().groups[0].resourceStates as Array<{ command: { arguments: LedgerStatusEntry[] } }>;
+    expect(states).toHaveLength(1);
+    expect(states[0].command.arguments[0].formKey).toBe('000801:Vendor.esp'); // the newer result, not the older one that resolved later
+  });
+
+  // #368 review finding 4: a diff tab left open on a record's committed side must not keep
+  // showing stale text after a later refresh (e.g. save-then-re-edit) changes what's committed.
+  it('fires onDidChange for a record\'s committed URI when its committed text changes across a refresh', async () => {
+    const repository = {
+      getLedgerStatus: vi.fn()
+        .mockResolvedValueOnce([entry({ committedText: 'first commit\n' })])
+        .mockResolvedValueOnce([entry({ committedText: 'second commit\n' })]),
+    } as unknown as PluginRepository;
+    const provider = new LedgerScmProvider(repository);
+    await provider.refresh();
+    const fired: unknown[] = [];
+    provider.onDidChange((uri) => fired.push(uri));
+
+    await provider.refresh();
+
+    expect(fired.length).toBeGreaterThanOrEqual(1);
+    // Whichever URI(s) fired, the provider's own answer for it is the new text, not the old one —
+    // proving the fired event actually corresponds to content that changed.
+    const stillStale = fired.some((uri) => provider.provideTextDocumentContent(uri as never) === 'first commit\n');
+    expect(stillStale).toBe(false);
+  });
+
+  it('fires onDidChange for a record\'s committed URI that drops out of a refresh entirely (reverted)', async () => {
+    const e = entry();
+    const repository = {
+      getLedgerStatus: vi.fn()
+        .mockResolvedValueOnce([e])
+        .mockResolvedValueOnce([]),
+    } as unknown as PluginRepository;
+    const provider = new LedgerScmProvider(repository);
+    await provider.refresh();
+    const fired: unknown[] = [];
+    provider.onDidChange((uri) => fired.push(uri));
+
+    await provider.refresh();
+
+    expect(fired).toHaveLength(1);
+    expect(provider.provideTextDocumentContent(fired[0] as never)).toBeUndefined();
   });
 });
 

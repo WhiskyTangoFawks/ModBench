@@ -15,7 +15,7 @@ import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type Pen
 import { PendingChangeDecorationProvider } from './medit/PendingChangeDecorationProvider';
 import { pluginRowUri } from './medit/pendingChangeRowUri';
 import { LedgerScmProvider, LEDGER_COMMITTED_SCHEME, LEDGER_OPEN_DIFF_COMMAND } from './medit/LedgerScmProvider';
-import { refreshPendingState } from './medit/refreshPendingState';
+import { refreshPendingState, buildPendingStateTargets, type PendingStateRefreshTargets } from './medit/refreshPendingState';
 import {
   ReferencedByTreeProvider, ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode,
 } from './medit/ReferencedByTreeProvider';
@@ -399,6 +399,7 @@ export function activate(context: vscode.ExtensionContext) {
     client, log, makePendingStateHandler(() => changeGroupTreeView));
   pendingChangeDecorationProvider = new PendingChangeDecorationProvider(client, log); // #331 — module-level, see its declaration
   ledgerScmProvider = registerLedgerScmProvider(context, repository, log); // #368 — module-level, see its declaration
+  const pendingStateTargets = buildPendingStateTargets(changeGroupTreeProvider, pendingChangeDecorationProvider, ledgerScmProvider); // #368 review AC3 gap
   const openPanels = new Map<string, vscode.WebviewPanel>();
   const recordPanels = new Set<vscode.WebviewPanel>();
   // #282: the Referenced By view's input — which record panel is active and what FormKey it
@@ -413,8 +414,7 @@ export function activate(context: vscode.ExtensionContext) {
     repository,
     log,
     refreshTree: () => treeProvider.refresh(),
-    // #331/#368: refreshPendingState is the one shared signal path — see its own doc comment.
-    refreshGroupTree: () => refreshPendingState({ changeGroupTree: changeGroupTreeProvider, pendingChangeDecoration: pendingChangeDecorationProvider, ledgerScm: ledgerScmProvider }),
+    refreshGroupTree: () => { void refreshPendingState(pendingStateTargets, true, log); }, // #331/#368: see refreshPendingState's own doc comment
     setStatusText: (t) => { statusBarItem.text = t; },
     showWarning: (msg) => { void vscode.window.showWarningMessage(msg); },
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
@@ -429,7 +429,7 @@ export function activate(context: vscode.ExtensionContext) {
     showCollapseAll: true,
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
-  const { modListProvider, downloadsProvider, pluginListProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, changeGroupTreeProvider, pendingChangeDecorationProvider, ledgerScmProvider, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository) });
+  const { modListProvider, downloadsProvider, pluginListProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, pendingStateTargets, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository) });
 
   context.subscriptions.push(
     changeGroupTreeView,
@@ -1750,13 +1750,11 @@ interface LoadoutViewDeps {
   outputChannel: vscode.LogOutputChannel;
   revealLog: () => void;
   controller: SessionController;
-  changeGroupTreeProvider: PendingChangesTreeProvider;
-  // #331: refreshed alongside changeGroupTreeProvider once a session finishes loading (a fresh
-  // session starts with no pending changes, but any decoration left over from the previous one
-  // must clear) — see makeEnterEditing.
-  pendingChangeDecorationProvider: PendingChangeDecorationProvider;
-  // #368: same reasoning as pendingChangeDecorationProvider directly above.
-  ledgerScmProvider: LedgerScmProvider | undefined;
+  // #368 review (AC3 gap): the one shared bundle every refreshPendingState call site now draws
+  // from — see its own construction site in `activate` and buildPendingStateTargets's doc comment.
+  // Replaces what used to be three separate provider fields threaded down to the one place in this
+  // chain that used any of them (makeEnterEditing's own refresh call).
+  pendingStateTargets: PendingStateRefreshTargets;
   /** #270: the record browser the Plugins tree's rows expand into. Threaded from `activate`,
    *  which owns the single instance both plugin trees read through. */
   recordBrowser: PluginTreeProvider;
@@ -1769,7 +1767,7 @@ interface LoadoutViewDeps {
  *  tests), or undefined with a neutral log when no workspace is open, or when the
  *  workspace isn't an MO2 instance (#192 — the Mods view shows welcome content instead). */
 function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void } | undefined {
-  const { context, log, outputChannel, revealLog, controller, changeGroupTreeProvider, pendingChangeDecorationProvider, ledgerScmProvider, recordBrowser, sessionPluginFiles } = deps;
+  const { context, log, outputChannel, revealLog, controller, pendingStateTargets, recordBrowser, sessionPluginFiles } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
     outputChannel.info('[extension] No workspace folder open — Mod List view not registered.');
@@ -1809,7 +1807,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
       createModListView(modListProvider, modlistSource, outputChannel);
 
     const { runModAction, promptModName, warnIfFomod } = makeModActionHelpers(modListProvider, outputChannel);
-    const enterEditing = makeEnterEditing({ instanceRoot, modlistSource, controller, changeGroupTreeProvider, pendingChangeDecorationProvider, ledgerScmProvider, outputChannel, revealLog, sessionPluginFiles });
+    const enterEditing = makeEnterEditing({ instanceRoot, modlistSource, controller, pendingStateTargets, outputChannel, revealLog, sessionPluginFiles });
     // #295: the one assignment — see the module-level declaration's comment for why this can't
     // be threaded as a parameter instead.
     enterEditingFn = enterEditing;
@@ -2072,12 +2070,9 @@ interface EnterEditingDeps {
   instanceRoot: string;
   modlistSource: Mo2ModlistSource;
   controller: SessionController;
-  changeGroupTreeProvider: PendingChangesTreeProvider;
-  // #331: cleared alongside changeGroupTreeProvider once the session load completes — see the
-  // call site below.
-  pendingChangeDecorationProvider: PendingChangeDecorationProvider;
-  // #368: same reasoning as pendingChangeDecorationProvider directly above.
-  ledgerScmProvider: LedgerScmProvider | undefined;
+  // #368 review (AC3 gap): see LoadoutViewDeps' own comment — one shared bundle, refreshed (with
+  // retainOnFailure: false) once the session load completes, replacing three separate fields.
+  pendingStateTargets: PendingStateRefreshTargets;
   outputChannel: vscode.LogOutputChannel;
   /** #270: the plugin files the loaded session holds — read once the session is up, to decide
    *  which rows can expand. */
@@ -2094,7 +2089,7 @@ interface EnterEditingDeps {
  *  Takes no progress reporter as a result. */
 function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
   const {
-    instanceRoot, modlistSource, controller, changeGroupTreeProvider, pendingChangeDecorationProvider, ledgerScmProvider,
+    instanceRoot, modlistSource, controller, pendingStateTargets,
     outputChannel, revealLog, sessionPluginFiles,
   } = deps;
   const enter = async (): Promise<void> => {
@@ -2157,11 +2152,10 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       await controller.syncFilterState();
       // #331/#368: a fresh session starts with no pending changes and no ledger working-tree
       // dirt, but state left over from a previous session (or a crash-restart reload mid-edit)
-      // must not survive into this one — refreshPendingState(..., false) is retainOnFailure:
-      // false, since there is no trustworthy baseline from *this* session to fall back on.
-      refreshPendingState({
-        changeGroupTree: changeGroupTreeProvider, pendingChangeDecoration: pendingChangeDecorationProvider, ledgerScm: ledgerScmProvider,
-      }, false);
+      // must not survive into this one — retainOnFailure: false, since there is no trustworthy
+      // baseline from *this* session to fall back on. pendingStateTargets (built once in
+      // `activate`) is the same bundle refreshGroupTree above shares — see its own comment.
+      void refreshPendingState(pendingStateTargets, false, (msg) => outputChannel.warn(msg));
       await applyLoadedSessionToTree(sessionPluginFiles, result.failures, outputChannel, treeProgress.lastTotalPlugins());
       outputChannel.info('[extension] editing session ready');
   };
