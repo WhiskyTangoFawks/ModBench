@@ -112,6 +112,27 @@ export interface WorldspaceBlocks {
   topCell: CellSummary | null;
 }
 
+// #368: one changed record on the working-tree group of the aggregate SCM provider. `changeKind`
+// only ever arrives as 'Modified' through today's write paths (RecordVendor/LedgerGroupCommitter
+// always commit a record's baseline before any dirt is written) — the other variants exist so the
+// backend can report a future write path (or an external tool editing ledger text directly)
+// honestly instead of mislabeling it (see LedgerChangeKind's own remarks, MEditService.Core.Ledger).
+export type LedgerChangeKind = 'Modified' | 'Added' | 'Deleted' | 'Renamed' | 'Unknown';
+
+export interface LedgerStatusEntry {
+  plugin: string;
+  origin: string;
+  recordType: string;
+  formKey: string;
+  changeKind: LedgerChangeKind;
+  /** Absolute path to the record's real working-tree ledger file — opened directly as the diff's
+   *  "dirty" side, no backend round-trip needed (RecordVendor already writes dirt here). */
+  recordPath: string;
+  /** The record's text as committed at HEAD — the diff's "committed" side, which exists only in
+   *  git history and so has no file of its own to point at. */
+  committedText: string;
+}
+
 export function createApiClient(port: number) {
   return createClient<paths>({ baseUrl: `http://localhost:${port}` });
 }

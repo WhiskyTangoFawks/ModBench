@@ -81,6 +81,7 @@ try
     builder.Services.AddSingleton<LedgerGroupCommitter>();
     builder.Services.AddSingleton<LedgerRecordFieldReader>();
     builder.Services.AddSingleton<RecordReverter>();
+    builder.Services.AddSingleton<LedgerStatusQuery>();
     builder.Services.AddSingleton<IEditOrchestrator, EditOrchestrator>();
     builder.Services.AddSingleton<PluginSaver>();
 
@@ -120,6 +121,7 @@ try
     app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapChangeEndpoints();
+    app.MapLedgerEndpoints();
 
     var cliArgs = CliArgs.Parse(args);
     if (cliArgs.DataFolderPath != null)

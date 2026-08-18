@@ -45,6 +45,7 @@ session over the active loadout:
 | **Pending Changes tree** | Sidebar tree below it, visible while there is staged work; staged work grouped into the units that must be saved or reverted together | [medit-pending-changes-tree.md](medit-pending-changes-tree.md) |
 | **Record editor panel** | Editor-tab webview; the per-field, per-plugin compare grid with conflict color coding and in-place editing that stages pending changes | [medit-record-editor.md](medit-record-editor.md) |
 | **Referenced By tree** | Panel-container tree that follows the active record editor; what points at this record | [medit-referenced-by.md](medit-referenced-by.md) |
+| **Aggregate SCM provider** | Native Source Control panel; working-tree group of changed records across every tracked plugin, read-only, click-to-diff (ADR-0040 stage 1) | [scm.md](scm.md) |
 | **Status bar item** | Backend/session state | This document |
 
 **Launch mEdit** (from the Loadout header) spawns the backend and builds the session from every
@@ -95,7 +96,7 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   whichever direction applies — and neither appears on any tree's title bar: starting and
   stopping a session is workspace-scope, and with every view always on screen there is no single
   tree it could sensibly belong to.
-- The mEdit view is composed of the five surfaces listed above. There is no toolbar or
+- The mEdit view is composed of the six surfaces listed above. There is no toolbar or
   top-level menu bar — every action is reachable from a tree context menu, the command palette,
   or the record editor panel itself.
 - **One spec per surface** (see [README.md](README.md)). A surface is a top-level UI unit the

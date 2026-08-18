@@ -203,6 +203,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.ledger.openDiff",
+        "title": "Open Diff",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.deleteRecord",
         "title": "Remove",
         "category": "Modbench"

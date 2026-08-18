@@ -196,6 +196,15 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify(pendingChanges));
       return;
     }
+    // #368: the aggregate SCM provider's own read, refreshed alongside /change-groups and
+    // /changes above at every one of refreshPendingState's call sites — a real route (rather than
+    // falling through to the 404 below) so a suite exercising session load or PENDING_CHANGED
+    // doesn't spuriously log a fetch failure this suite isn't testing for.
+    if (url === '/ledger/status') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('[]');
+      return;
+    }
     res.writeHead(404);
     res.end();
   });
@@ -418,6 +427,11 @@ describe('modbench command registration', () => {
     // #279: the per-plugin re-read a drifted row offers. Gated to `viewItem == pluginDrifted` in
     // package.json and hidden from the palette — it needs the clicked row.
     'modbench.pluginListTree.rereadPlugin',
+    // #368: the aggregate SCM provider's resource-click command — opens the record's
+    // committed-vs-dirty raw text diff. Reached from a SourceControlResourceState's own
+    // `command`, not a menu contribution, but still registered (and palette-visible) like every
+    // other click-triggered command here (modbench.openEditor, ...).
+    'modbench.ledger.openDiff',
   ];
 
   it('registers all expected commands on activation', async () => {
@@ -425,6 +439,37 @@ describe('modbench command registration', () => {
     for (const cmd of EXPECTED_COMMANDS) {
       assert.ok(all.includes(cmd), `Command not registered: ${cmd}`);
     }
+  });
+});
+
+// ── Aggregate SCM provider registration (#368) ──────────────────────────────
+// Registration only — a stateless mock server can't prove the working-tree group actually
+// reflects staged/saved/reverted edits (that's refreshPendingState's own unit coverage); this
+// proves the provider is constructed and its native-surface registrations (FileDecorationProvider,
+// TextDocumentContentProvider, the diff command already asserted above) hold with no session.
+interface LedgerScmProviderLike {
+  refresh(): Promise<void>;
+  provideFileDecoration(uri: vscode.Uri): { badge?: string } | undefined;
+  provideTextDocumentContent(uri: vscode.Uri): string | undefined;
+}
+
+describe('Aggregate SCM provider construction (#368)', () => {
+  const provider = () =>
+    (ext?.exports as { ledgerScmProvider?: LedgerScmProviderLike } | undefined)?.ledgerScmProvider;
+
+  it('is constructed at activation', () => {
+    assert.ok(provider(), 'expected ledgerScmProvider to be exported from activate()');
+  });
+
+  it('answers a real GET /ledger/status without throwing, with no session loaded', async () => {
+    await assert.doesNotReject(provider()!.refresh());
+  });
+
+  it('provideFileDecoration and provideTextDocumentContent are reachable (FileDecorationProvider / TextDocumentContentProvider registration)', () => {
+    assert.strictEqual(
+      provider()!.provideFileDecoration(vscode.Uri.file('/nowhere.yaml')), undefined);
+    assert.strictEqual(
+      provider()!.provideTextDocumentContent(vscode.Uri.parse('modbench-ledger-committed:/nowhere')), undefined);
   });
 });
 

@@ -2,6 +2,10 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Ledger;
 
+/// <summary>A record's identity as recovered from its own ledger path — the inverse of
+/// <see cref="LedgerRecordPath.For"/>.</summary>
+internal sealed record LedgerRecordIdentity(string PluginFileName, string RecordType, string FormKey);
+
 /// <summary>
 /// The ledger's own file layout policy: one record, one file, always — including a container
 /// record's own (shallow) file, per <see cref="ContainerStripFields"/>. Flat, not nested under a
@@ -32,9 +36,42 @@ namespace MEditService.Core.Ledger;
 /// </summary>
 internal static class LedgerRecordPath
 {
+    private const string LedgerSuffix = ".ledger";
+    private const string YamlSuffix = ".yaml";
+
     internal static string For(string pluginFileName, string recordType, string formKeyString)
     {
         var formKey = FormKey.Factory(formKeyString);
         return Path.Combine($"{pluginFileName}.ledger", recordType, formKey.ModKey.FileName.String, $"{formKey.ID:X6}.yaml");
+    }
+
+    /// <summary>Recovers a record's identity straight from its own path text — no YAML parse, no
+    /// git read (#368: a status listing needs to name every changed record, not read its content).
+    /// Lossless by construction: every segment <see cref="For"/> writes is exactly what this reads
+    /// back, and a FormKey's wire format (<c>&lt;hex6&gt;:&lt;ModKeyFileName&gt;</c>) is assembled
+    /// from the same two path segments <see cref="For"/> derived it from. Fails closed (returns
+    /// <see langword="false"/>) on anything not shaped like a path this layout could have produced —
+    /// git status scoped to <c>*.ledger/*</c> (<see cref="LedgerRepository.WorkingTreeStatus"/>)
+    /// should never hand this a non-conforming path, but a caller must not silently misreport one
+    /// as belonging to a record it doesn't.</summary>
+    internal static bool TryParse(string relativePath, out LedgerRecordIdentity identity)
+    {
+        identity = null!;
+        var segments = relativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length != 4) return false;
+
+        var (pluginSegment, recordType, originModKey, fileSegment) = (segments[0], segments[1], segments[2], segments[3]);
+        if (!pluginSegment.EndsWith(LedgerSuffix, StringComparison.Ordinal)) return false;
+        if (!fileSegment.EndsWith(YamlSuffix, StringComparison.Ordinal)) return false;
+
+        var pluginFileName = pluginSegment[..^LedgerSuffix.Length];
+        var localId = fileSegment[..^YamlSuffix.Length];
+        // No originModKey.Length == 0 check: RemoveEmptyEntries above already guarantees every
+        // segment (this one included) is non-empty — provably unreachable, not merely untested
+        // (mutation review, #368), so it isn't pinned in place with a test that can never fail it.
+        if (pluginFileName.Length == 0 || localId.Length == 0) return false;
+
+        identity = new LedgerRecordIdentity(pluginFileName, recordType, $"{localId}:{originModKey}");
+        return true;
     }
 }

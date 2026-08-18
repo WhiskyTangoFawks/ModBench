@@ -1,7 +1,7 @@
 import type { components } from './generated/api';
 import type {
   ApiClient, PluginMetadata, MasterIssue, RecordSummary, SessionStatus,
-  WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
+  WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks, LedgerStatusEntry,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 
@@ -9,6 +9,19 @@ type PluginResponse = components['schemas']['PluginResponse'];
 type GeneratedMasterIssue = components['schemas']['MasterIssue'];
 type GeneratedRecordSummary = components['schemas']['RecordSummary'];
 type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
+type GeneratedLedgerStatusEntry = components['schemas']['LedgerStatusEntry'];
+
+function toLedgerStatusEntry(e: GeneratedLedgerStatusEntry): LedgerStatusEntry {
+  return {
+    plugin: e.plugin ?? '',
+    origin: e.origin ?? '',
+    recordType: e.recordType ?? '',
+    formKey: e.formKey ?? '',
+    changeKind: e.changeKind ?? 'Unknown',
+    recordPath: e.recordPath ?? '',
+    committedText: e.committedText ?? '',
+  };
+}
 
 function toMasterIssue(i: GeneratedMasterIssue): MasterIssue {
   return { masterName: i.masterName ?? '', kind: i.kind ?? 'DirectlyMissing' };
@@ -133,6 +146,12 @@ export interface PluginRepository {
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;
   getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences>;
   getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage>;
+
+  // #368: the aggregate SCM provider's working-tree group — every changed record across every
+  // tracked plugin in the current session, read from real ledger repo state. Never throws on "no
+  // session": GET /ledger/status always answers 200 (empty list is a true, complete answer, same
+  // as /session/status's own read-projection shape), so this has no ensureOk-then-throw guard.
+  getLedgerStatus(): Promise<LedgerStatusEntry[]>;
 }
 
 export class ApiPluginRepository implements PluginRepository {
@@ -311,5 +330,11 @@ export class ApiPluginRepository implements PluginRepository {
       items: (data?.items ?? []).map(toCellSummary),
       total: data?.total ?? 0,
     };
+  }
+
+  async getLedgerStatus(): Promise<LedgerStatusEntry[]> {
+    const { data, error, response } = await this.client.GET('/ledger/status', {});
+    this.ensureOk('getLedgerStatus', response, error);
+    return (data ?? []).map(toLedgerStatusEntry);
   }
 }

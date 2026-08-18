@@ -65,12 +65,77 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
     public void EnsureRepo(string originFolder)
     {
         var (gitDir, workTree) = PathsFor(originFolder);
-        if (File.Exists(Path.Combine(gitDir, "HEAD"))) return;
+        if (RepoExists(originFolder)) return;
 
         Directory.CreateDirectory(gitDir);
         Directory.CreateDirectory(workTree);
         GitCli.Run(gitDir, workTree, "init", "-q", "-b", "main");
         logger.LogInformation("Ledger created for {OriginFolder} at {GitDir}", workTree, gitDir);
+    }
+
+    /// <summary>Read-only sibling of <see cref="EnsureRepo"/>'s own check-then-create guard — never
+    /// creates anything. What a status read (#368) needs: "has this origin folder ever been
+    /// vendored into at all", answered the same way <see cref="EnsureRepo"/> already does (the
+    /// gitdir's own <c>HEAD</c> file), so a status read against an origin folder nothing has ever
+    /// touched skips it rather than fabricating an empty repo just to ask it for its own status.</summary>
+    public bool RepoExists(string originFolder)
+    {
+        var (gitDir, _) = PathsFor(originFolder);
+        return File.Exists(Path.Combine(gitDir, "HEAD"));
+    }
+
+    /// <summary>Working-tree changes against this origin's ledger repo — <c>git status --porcelain -z</c>,
+    /// scoped to <c>*.ledger/*</c> paths only (#368). That scoping is load-bearing, not decoration:
+    /// the repo's working tree *is* the origin folder itself (<see cref="PathsFor"/>), which already
+    /// holds the plugin binary, <c>.bak</c> backups, <c>meta.ini</c> and whatever else Mod Management
+    /// put there — with no pathspec, every one of those shows up as an untracked (<c>??</c>) "change"
+    /// alongside genuine ledger dirt, since <see cref="EnsureRepo"/> never writes a <c>.gitignore</c>.
+    /// Confirmed empirically (not assumed) before landing this: an unscoped <c>git status --porcelain</c>
+    /// over a fixture folder reported the plugin file, its backup and an unrelated loose file as
+    /// changes; scoping with <c>-- "*.ledger/*"</c> reported only the genuine ledger entry. Git's own
+    /// pathspec glob crosses <c>/</c> (unlike a shell glob), so this one pattern matches at any depth
+    /// under any <c>&lt;plugin&gt;.ledger/</c> root — verified against <see cref="LedgerRecordPath"/>'s
+    /// three-level-deep layout, not assumed from the pattern reading right.
+    ///
+    /// <c>-z</c> is load-bearing too, not a formatting nicety (review finding, #368): the plain
+    /// <c>--porcelain</c> form C-quotes and octal-escapes any path containing a non-ASCII byte under
+    /// git's default <c>core.quotePath=true</c> (confirmed empirically: a record under
+    /// <c>Café.esp</c> came back as <c>"Caf\303\251.esp.ledger/..."</c>, quotes included) — a modding
+    /// scene with routinely accented/Cyrillic/CJK plugin names would silently fail
+    /// <see cref="LedgerRecordPath.TryParse"/>'s <c>.yaml</c> suffix check on the trailing quote and
+    /// the record would vanish from the panel with no error, the worst kind of bug this class can
+    /// produce. <c>-z</c> NUL-terminates entries instead of newline-terminating them and disables
+    /// quoting entirely, so the raw UTF-8 bytes come through unescaped.</summary>
+    public IReadOnlyList<(char StatusCode, string RelativePath)> WorkingTreeStatus(string originFolder)
+    {
+        var (gitDir, workTree) = PathsFor(originFolder);
+        var output = GitCli.Run(gitDir, workTree, "status", "--porcelain", "-z", "--", "*.ledger/*");
+        var fields = new Queue<string>(output.Split('\0', StringSplitOptions.RemoveEmptyEntries));
+        var entries = new List<(char, string)>();
+        while (fields.TryDequeue(out var field))
+        {
+            if (field.Length < 4) continue;
+
+            // Porcelain v1: "XY <path>" — X is the index status, Y the working-tree status. Every
+            // path this method can ever see is unstaged dirt (RecordVendor/LedgerGroupCommitter
+            // always stage-then-commit atomically, per LedgerRepository's own class remarks — see
+            // ResetIndexToHead), so Y is the one that carries real information; X is read as a
+            // fallback only for the crash-recovery edge case those remarks describe (a stray staged
+            // entry an earlier attempt's own UnstagePath never reached).
+            var indexStatus = field[0];
+            var worktreeStatus = field[1];
+            var path = field[3..].Replace('/', Path.DirectorySeparatorChar);
+            var code = worktreeStatus != ' ' ? worktreeStatus : indexStatus;
+            entries.Add((code, path));
+
+            // Under -z, a rename/copy entry (R/C in either status column) carries the origin path as
+            // a second NUL-terminated field immediately after the current one — not a change this
+            // class's own callers ever produce today (nothing here renames a ledger path), but the
+            // field must still be consumed rather than misread as the next entry's own status line.
+            if (indexStatus is 'R' or 'C' || worktreeStatus is 'R' or 'C') fields.TryDequeue(out _);
+        }
+
+        return entries;
     }
 
     /// <summary>Whether <paramref name="relativePath"/> already exists at <c>HEAD</c> on

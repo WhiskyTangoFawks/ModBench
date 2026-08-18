@@ -86,6 +86,7 @@ function makeRepository(overrides: Partial<{
     getWorldspaceBlocks: vi.fn().mockResolvedValue({ blocks: [], topCell: null }),
     getCellReferences: vi.fn().mockResolvedValue({ persistent: [], temporary: [] }),
     getInteriorCells: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    getLedgerStatus: vi.fn().mockResolvedValue([]),
   };
 }
 

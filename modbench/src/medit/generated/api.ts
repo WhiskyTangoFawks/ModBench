@@ -196,6 +196,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ledger/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetLedgerStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins": {
         parameters: {
             query?: never;
@@ -701,6 +717,17 @@ export interface components {
         IndexedPlugin: {
             name?: string | null;
             origin?: string | null;
+        };
+        /** @enum {string} */
+        LedgerChangeKind: "Modified" | "Added" | "Deleted" | "Renamed" | "Unknown";
+        LedgerStatusEntry: {
+            plugin?: string | null;
+            origin?: string | null;
+            recordType?: string | null;
+            formKey?: string | null;
+            changeKind?: components["schemas"]["LedgerChangeKind"];
+            recordPath?: string | null;
+            committedText?: string | null;
         };
         LoadPluginRequest: {
             path?: string | null;
@@ -1549,6 +1576,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    GetLedgerStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerStatusEntry"][];
+                };
             };
         };
     };

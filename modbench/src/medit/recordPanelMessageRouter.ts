@@ -5,6 +5,7 @@ import type { Reporter } from '../modmanager/deployer';
 import type { RecordSummary } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
 import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
+import { refreshPendingState } from './refreshPendingState';
 
 // Issue #140: reveal deps bundled into one optional param so a record panel not wired for
 // reveal (there is exactly one, but keeping the seam explicit) still compiles — and so
@@ -20,6 +21,11 @@ export interface RevealDeps {
   // depending on the Pending Changes view being visible (that view's own fetch is; this one
   // performs its own — see PendingChangeDecorationProvider's doc comment).
   decorations: { refresh(): void };
+  // #368: the aggregate SCM provider's working-tree group — same reasoning as `decorations`
+  // above, refreshed through the same shared call (refreshPendingState) rather than paired by
+  // hand a second time. Optional: a record panel opened before the provider exists (there is
+  // none today, but the seam stays honest) still compiles.
+  ledgerScm?: { refresh(): void };
 }
 
 // Issue #140/#208: resolves a pending change id to a tree node and reveals it, expanding a
@@ -394,8 +400,13 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
   if (m.type === WEBVIEW_TO_EXTENSION.OPEN_RECORD) {
     await vscode.commands.executeCommand('modbench.openEditor', { formKey: m.formKey, label: m.formKey });
   } else if (m.type === WEBVIEW_TO_EXTENSION.PENDING_CHANGED) {
-    deps.reveal?.provider.refresh();
-    deps.reveal?.decorations.refresh();
+    if (deps.reveal) {
+      await refreshPendingState({
+        changeGroupTree: deps.reveal.provider,
+        pendingChangeDecoration: deps.reveal.decorations,
+        ledgerScm: deps.reveal.ledgerScm,
+      }, true, (msg) => deps.channel.warn(msg));
+    }
   } else if (m.type === WEBVIEW_TO_EXTENSION.LOG) {
     deps.channel[m.level](m.message);
   } else if (m.type === WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD) {
