@@ -78,6 +78,9 @@ try
     builder.Services.AddSingleton<LedgerRepository>();
     builder.Services.AddSingleton<RecordTextCodec>();
     builder.Services.AddSingleton<RecordVendor>();
+    builder.Services.AddSingleton<LedgerGroupCommitter>();
+    builder.Services.AddSingleton<LedgerRecordFieldReader>();
+    builder.Services.AddSingleton<RecordReverter>();
     builder.Services.AddSingleton<IEditOrchestrator, EditOrchestrator>();
     builder.Services.AddSingleton<PluginSaver>();
 

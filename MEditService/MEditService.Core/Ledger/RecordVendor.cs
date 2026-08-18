@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
@@ -28,22 +27,13 @@ namespace MEditService.Core.Ledger;
 /// </summary>
 public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec, ILogger<RecordVendor> logger)
 {
-    // Per-origin-folder mutex (#370 review finding 4): git's own index.lock makes two concurrent
-    // git-add/commit sequences against the same gitdir race (one throws), and EnsureRepo's
-    // check-then-create has no lock of its own either. A minimal keyed semaphore closes both —
-    // deliberately not a general locking abstraction, just enough to serialize the one shared
-    // resource (the gitdir) two concurrent PATCH requests touching the same origin folder could
-    // otherwise race on.
-    private static readonly ConcurrentDictionary<string, SemaphoreSlim> Gates = new(StringComparer.Ordinal);
-
-    private static SemaphoreSlim GateFor(string originFolder) =>
-        Gates.GetOrAdd(Path.GetFullPath(originFolder), static _ => new SemaphoreSlim(1, 1));
-
     /// <summary>
     /// Vendors <paramref name="formKeyString"/> if it is not already tracked, then writes
     /// <paramref name="fields"/> applied on top as uncommitted working-tree dirt. No-op-safe to call
     /// repeatedly: a second call for an already-tracked record adds no new baseline commit (AC3).
-    /// Serialized per <paramref name="originFolder"/> — see <see cref="Gates"/>.
+    /// Serialized per <paramref name="originFolder"/> — see <see cref="LedgerOriginGate"/>, shared
+    /// with <c>LedgerGroupCommitter</c>'s save-time commit (#371) since both stage into the same
+    /// gitdir/index.
     /// </summary>
     public async Task VendorAndStageDirtAsync(
         string originFolder,
@@ -57,7 +47,7 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         GameRelease release,
         CancellationToken cancel = default)
     {
-        var gate = GateFor(originFolder);
+        var gate = LedgerOriginGate.GateFor(originFolder);
         await gate.WaitAsync(cancel).ConfigureAwait(false);
         try
         {
@@ -86,17 +76,20 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         }
     }
 
-    // First touch. Order is load-bearing (#370 review finding 3): write + stage the pristine text
-    // first, then do everything that can still fail (apply the staged fields, write dirt), and only
-    // commit — the operation that makes the record permanently tracked (IsTrackedAtHead gates the
-    // deep-parse branch on "not yet tracked", so a tracked-but-half-vendored record would never be
-    // retried) — once all of that has succeeded. This works with plain `git add` + `git commit`
-    // rather than needing plumbing: `git commit` always commits the *index* state, never the
-    // working-tree file's content at commit time, so staging the pristine blob here and overwriting
-    // the working-tree file with dirt afterward still leaves the commit holding pristine — see
+    // First touch. Order is load-bearing (#370 review finding 3): reset the index to a known-clean
+    // state (#371 review finding — see LedgerRepository.ResetIndexToHead's own remarks: without
+    // this, a stray entry an earlier, unrelated failed attempt against this same origin folder left
+    // behind would get folded into *this* commit), then write + stage the pristine text, then do
+    // everything that can still fail (apply the staged fields, write dirt), and only commit — the
+    // operation that makes the record permanently tracked (IsTrackedAtHead gates the deep-parse
+    // branch on "not yet tracked", so a tracked-but-half-vendored record would never be retried) —
+    // once all of that has succeeded. This works with plain `git add` + `git commit` rather than
+    // needing plumbing: `git commit` always commits the *index* state, never the working-tree
+    // file's content at commit time, so staging the pristine blob here and overwriting the
+    // working-tree file with dirt afterward still leaves the commit holding pristine — see
     // LedgerRepository's own remarks. A failure anywhere below leaves no commit at all: at worst an
-    // inert staged-but-uncommitted index entry, silently superseded the next time this record is
-    // touched (still gated on "not yet tracked" at HEAD, so nothing is skipped).
+    // inert staged-but-uncommitted index entry, cleaned up by the *next* attempt's own
+    // ResetIndexToHead rather than merely superseded by luck.
     private async Task VendorPristineThenDirtAsync(
         string originFolder, string pluginFilePath, string formKeyString, string recordType,
         string relativePath, string absolutePath,
@@ -119,9 +112,11 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         // without a defensive copy.
         ContainerStripFields.StripInPlace(pristine);
 
+        ledger.ResetIndexToHead(originFolder);
+
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
         await codec.SerializeAsync((IMajorRecordGetter)pristine, absolutePath, release, cancel).ConfigureAwait(false);
-        ledger.StagePristine(originFolder, relativePath);
+        ledger.StagePath(originFolder, relativePath);
 
         // Everything from here down can still fail — deliberately staged (above) but not yet
         // committed. On failure, unstage rather than leave the pristine blob sitting in the index:

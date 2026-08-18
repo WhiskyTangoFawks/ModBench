@@ -166,6 +166,7 @@ public sealed class EndpointReceptionLoggingTests
             string source, string? description, string? changeType = null) =>
             new StageEditResult.NoSession();
         public StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source, string? sourcePlugin = null, string? sourceOrigin = null) => throw new NotSupportedException();
+        public Task<StageEditResult> RevertRecordToLedgerCommitAsync(string formKey, string plugin, string commitish, string source) => throw new NotSupportedException();
         public CreateRecordOutcome CreateRecord(string plugin, string? recordType, string? templateFormKey, string source,
             string? templateSourcePlugin = null, string? templateSourceOrigin = null) =>
             throw new NotSupportedException();

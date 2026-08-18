@@ -19,6 +19,7 @@ public sealed partial class EditOrchestrator(
     IPendingChangeService changes,
     ISchemaReflector schemaReflector,
     RecordVendor recordVendor,
+    RecordReverter recordReverter,
     ILogger<EditOrchestrator> logger) : IEditOrchestrator
 {
     private readonly ISessionManager _sessionManager = sessionManager;
@@ -27,6 +28,7 @@ public sealed partial class EditOrchestrator(
     private readonly IPendingChangeService _changes = changes;
     private readonly ISchemaReflector _schemaReflector = schemaReflector;
     private readonly RecordVendor _recordVendor = recordVendor;
+    private readonly RecordReverter _recordReverter = recordReverter;
     private readonly ILogger<EditOrchestrator> _logger = logger;
 
     public StageEditResult StageEdit(
@@ -463,6 +465,105 @@ public sealed partial class EditOrchestrator(
         var staged = _changes.Upsert(new PendingChangeUpsert(formKey, targetPlugin, recordType!, fields, source, null, oldValues,
             Origin: ResolveOrigin(targetPlugin), FormRefs: formRefs, ChangeType: PendingChangeConstants.FieldEditChangeType,
             ParentCell: placement?.ParentCell, PlacementGroup: placement?.PlacementGroup));
+        return new StageEditResult.Staged(staged);
+    }
+
+    /// <summary>
+    /// Reverts <paramref name="formKey"/>'s fields to how they stood at <paramref name="commitish"/>
+    /// in its own ledger (#371 AC3): reads that historical text (<see cref="RecordReverter"/>),
+    /// diffs it against the record's current state, and stages only what actually differs — a
+    /// direct <see cref="IPendingChangeService.Upsert"/>, like <see cref="CopyRecordTo"/> uses, not
+    /// <see cref="StageEdit"/>'s narrower editable-subset guard, since these are the record's own
+    /// historical values, not a new external edit proposal — so the existing, unmodified Save path
+    /// does the binary write and the new ledger commit; nothing here writes to either. Unlike
+    /// <see cref="CopyRecordTo"/>, this does not stage the historical record's *entire* field set:
+    /// see the diffing step's own remarks for why that would fragment one conceptual revert into as
+    /// many independent one-field <c>ChangeGroup</c>s as the record has columns.
+    ///
+    /// Unlike <see cref="CopyRecordTo"/>, this does call <see cref="VendorOnFirstTouch"/> (when
+    /// anything actually changed): the target record is already ledger-tracked (that is where
+    /// <paramref name="commitish"/> came from), so its working-tree dirt must be refreshed to the
+    /// reverted values here — otherwise a later Save would commit whatever dirt happened to already
+    /// be sitting in the ledger (stale, or the *previous* edit's), silently diverging from what the
+    /// binary write just wrote from this same staged change.
+    ///
+    /// Returns <see cref="StageEditResult.RecordNotFound"/> when the plugin has no resolvable ledger
+    /// origin folder, its record type has no concrete/AddExisting mapping, or the read itself fails
+    /// (an unknown <paramref name="commitish"/>, a path never committed at that commit, ...) — a
+    /// revert target that cannot be read is exactly "not found" from this method's own contract, not
+    /// a distinct outcome worth its own case. Returns an empty <see cref="StageEditResult.Staged"/>
+    /// (not a distinct case either) when <paramref name="commitish"/>'s state already matches the
+    /// record's current state — there is nothing to revert, not an error.
+    /// </summary>
+    public async Task<StageEditResult> RevertRecordToLedgerCommitAsync(
+        string formKey, string plugin, string commitish, string source)
+    {
+        var (earlyOut, sessionOrNull, recordTypeOrNull) = ValidateEditContext(formKey, plugin);
+        if (earlyOut != null) return earlyOut;
+        var session = sessionOrNull!;
+        var recordType = recordTypeOrNull!;
+
+        if (PendingLifecycleChangeType(formKey, plugin) is { } blockingType)
+            return new StageEditResult.RecordPendingDeleteOrRenumber(blockingType);
+
+        var pluginMeta = session.LoadOrderPlugin(plugin);
+        var originFolder = pluginMeta == null ? null : Path.GetDirectoryName(pluginMeta.Path);
+        if (pluginMeta == null || string.IsNullOrEmpty(originFolder))
+            return new StageEditResult.RecordNotFound();
+
+        var schemas = _schemaReflector.GetSchemas(session.GameRelease);
+        if (!schemas.TryGetValue(recordType, out var schema) || ResolveConcreteRecordType(schema.RecordType) is not { } concreteType)
+            return new StageEditResult.RecordNotFound();
+
+        Dictionary<string, JsonElement> fields;
+        try
+        {
+            fields = await _recordReverter.ReadFieldsAtCommitAsync(
+                originFolder, pluginMeta.Name, recordType, concreteType, formKey, commitish, schema, session.GameRelease)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Revert failed for {FormKey} in {Plugin} at {Commitish}", formKey, plugin, commitish);
+            return new StageEditResult.RecordNotFound();
+        }
+
+        var currentRecord = _query.GetRecordForPlugin(formKey, plugin, ResolveOrigin(plugin));
+        var oldValues = new Dictionary<string, JsonElement>();
+        if (currentRecord != null)
+        {
+            foreach (var fv in currentRecord.Fields)
+                oldValues[fv.Metadata.Name] = JsonSerializer.SerializeToElement(fv.Value);
+        }
+
+        // Stage only what actually changed between the reverted historical state and the record's
+        // current state — not the historical record's entire field set. Git's own model: no delta
+        // is stored anywhere, "delta" exists only as the rendering of two states (ADR-0040); this
+        // is that rendering. Staging every column regardless of whether it changed would fragment
+        // into as many independent one-field ChangeGroups as the record has columns — two field
+        // edits on one record depend on nothing of each other's and are never unioned just for
+        // sharing a FormKey (ADR-0028, proven by DerivedChangeGroupTests) — turning one conceptual
+        // revert into dozens of unrelated ones the caller would have to save one at a time.
+        // Comparable via raw JSON text rather than a value-aware diff: both sides ultimately
+        // serialize through the very same GetRecord/JsonSerializer path (RecordQueryService here,
+        // LedgerRecordFieldReader for the historical side — the whole point of Q1's scratch-index
+        // reuse), so an unchanged field's text is byte-identical, not merely semantically equal.
+        var changedFields = fields
+            .Where(kv => !oldValues.TryGetValue(kv.Key, out var current) || current.GetRawText() != kv.Value.GetRawText())
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+        if (changedFields.Count == 0)
+            return new StageEditResult.Staged([]); // already at that historical state — nothing to revert
+
+        var formRefs = ExtractFormKeyRefs(changedFields, schemas, recordType, session.GameRelease);
+
+        var staged = _changes.Upsert(new PendingChangeUpsert(
+            formKey, plugin, recordType, changedFields, source, $"revert to {commitish}", oldValues,
+            Origin: ResolveOrigin(plugin), FormRefs: formRefs, ChangeType: PendingChangeConstants.FieldEditChangeType,
+            ParentCell: null, PlacementGroup: null));
+
+        VendorOnFirstTouch(formKey, plugin, recordType, changedFields, schemas, session);
+
         return new StageEditResult.Staged(staged);
     }
 

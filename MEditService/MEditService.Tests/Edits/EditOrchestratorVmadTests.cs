@@ -26,7 +26,7 @@ public sealed class EditOrchestratorVmadTests
         var query = queryOverride
             ?? new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
         return (orchestrator, manager, changes);
     }
 
@@ -41,7 +41,7 @@ public sealed class EditOrchestratorVmadTests
         var (changes, connection) = DuckDbTestFactory.MakePendingChangeServiceWithConnection();
         var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+        var orchestrator = new EditOrchestrator(manager, query, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
         return (orchestrator, manager, changes, connection);
     }
 
@@ -107,7 +107,7 @@ public sealed class EditOrchestratorVmadTests
         var realQuery = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var spyQuery = new ThrowOnGetVmadSpy(realQuery);
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(manager, spyQuery, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+        var orchestrator = new EditOrchestrator(manager, spyQuery, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
 
         using (manager)
         {
@@ -176,7 +176,7 @@ public sealed class EditOrchestratorVmadTests
         var realQuery = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
         var fakeQuery = new FakeQueryWithVariableVmad(realQuery, npcFk.ToString());
         var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
-        var orchestrator = new EditOrchestrator(manager, fakeQuery, writer, changes, reflector, TestRecordVendor.Create(), NullLogger<EditOrchestrator>.Instance);
+        var orchestrator = new EditOrchestrator(manager, fakeQuery, writer, changes, reflector, TestRecordVendor.Create(), TestRecordReverter.Create(), NullLogger<EditOrchestrator>.Instance);
 
         using (manager)
         {

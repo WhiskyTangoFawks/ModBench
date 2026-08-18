@@ -1,3 +1,4 @@
+using MEditService.Core.Ledger;
 using MEditService.Core.Session;
 using Microsoft.Extensions.Logging;
 
@@ -19,7 +20,8 @@ public abstract record SaveGroupResult
     public sealed record ImmutablePlugin(string Plugin) : SaveGroupResult;
 }
 
-public sealed class PluginSaver(IPendingChangeService changes, ISessionManager session, ILogger<PluginSaver> logger)
+public sealed class PluginSaver(
+    IPendingChangeService changes, ISessionManager session, LedgerGroupCommitter ledgerCommitter, ILogger<PluginSaver> logger)
 {
     public async Task<SaveGroupResult> Save(Guid memberChangeId)
     {
@@ -41,6 +43,12 @@ public sealed class PluginSaver(IPendingChangeService changes, ISessionManager s
         // PendingChange.Plugin (never by parsing the compound key) and captured here as
         // writtenPlugins, since saved.ByPlugin's own keys are compound from this point on.
         var writtenPlugins = new List<string>();
+
+        // #371: the group's own pending rows are ExecuteGroupSaveAsync's to delete (before this
+        // callback even runs) — byColumn's PendingChange rows are the only place left to read
+        // "what did this group touch" from, so they're captured here, inside the callback, not
+        // re-derived after the call returns.
+        var touchedRecords = new List<LedgerTouchedRecord>();
         var result = await changes.ExecuteGroupSaveAsync(memberChangeId, async byColumn =>
         {
             var prepared = new List<(string Column, PreparedPluginSave Prepared)>();
@@ -51,6 +59,7 @@ public sealed class PluginSaver(IPendingChangeService changes, ISessionManager s
                     var realPlugin = columnChanges[0].Plugin;
                     writtenPlugins.Add(realPlugin);
                     prepared.Add((column, await session.PreparePluginSave(realPlugin, columnChanges)));
+                    CollectTouchedRecords(columnChanges, touchedRecords);
                 }
             }
             catch
@@ -64,6 +73,15 @@ public sealed class PluginSaver(IPendingChangeService changes, ISessionManager s
 
         if (result is SaveGroupResult.Saved saved)
         {
+            // #371: only reached once the binary write and the pending-change DB transaction have
+            // both durably succeeded (ExecuteGroupSaveAsync only returns Saved after its own
+            // txn.CommitAsync()) — a validation refusal or a mid-save failure never reaches this
+            // line, so the ledger stays unadvanced for those by construction (AC2). Best-effort,
+            // never blocking, same as ReindexPlugins below: a git failure must not turn an
+            // already-completed save into a reported failure — see LedgerGroupCommitter's own
+            // remarks for why it never throws past this call.
+            ledgerCommitter.CommitGroupSave(touchedRecords);
+
             var plugins = writtenPlugins.ToArray();
             try
             {
@@ -80,5 +98,24 @@ public sealed class PluginSaver(IPendingChangeService changes, ISessionManager s
         }
 
         return result;
+    }
+
+    // Same physical-origin-folder resolution EditOrchestrator.VendorOnFirstTouch already does for
+    // stage-time vendoring — save-time commit needs the identical (originFolder, pluginFileName)
+    // pair to reach the same ledger paths. A plugin with no resolvable origin folder (not in the
+    // load order, or a DataDirectory-origin plugin sharing the game's Data folder — #370 Q3) is
+    // skipped here exactly as it is at stage time: LedgerGroupCommitter never sees it, so it can
+    // never be (mis)reported as ledger-tracked.
+    private void CollectTouchedRecords(IReadOnlyList<PendingChange> columnChanges, List<LedgerTouchedRecord> into)
+    {
+        var s = session.Session;
+        foreach (var change in columnChanges)
+        {
+            var meta = s.LoadOrderPlugin(change.Plugin);
+            var originFolder = meta == null ? null : Path.GetDirectoryName(meta.Path);
+            if (meta == null || string.IsNullOrEmpty(originFolder)) continue;
+
+            into.Add(new LedgerTouchedRecord(originFolder, meta.Name, change.RecordType, change.FormKey));
+        }
     }
 }
