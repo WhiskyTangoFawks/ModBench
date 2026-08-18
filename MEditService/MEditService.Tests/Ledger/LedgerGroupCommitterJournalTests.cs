@@ -149,6 +149,16 @@ public sealed class LedgerGroupCommitterJournalTests
                 Assert.Equal(actual, entry.ExpectedContentHash);
             }
 
+            // Mutation-testing finding (#372 review): nothing asserted the deterministic origin
+            // order the lock-ordering invariant depends on was actually ascending (a mutant flipping
+            // PrepareAsync's own OrderBy to descending survived). Expected order computed
+            // independently here, not by calling the same sort under test.
+            var expectedOrder = new[] { Path.GetFullPath(origin1), Path.GetFullPath(origin2) }
+                .OrderBy(x => x, StringComparer.Ordinal)
+                .ToList();
+            Assert.Equal(expectedOrder, prepared.Attempts.Select(a => a.Attempt.OriginFolder).ToList());
+            Assert.Equal(expectedOrder, journal.Entries.Select(e => e.OriginFolder).ToList());
+
             // Clean up: actually advance so the temp dirs' gitdirs don't leak a held gate/lock —
             // not asserted on, just hygiene for the next test in the process.
             await committer.AdvanceAsync(prepared);
@@ -158,6 +168,39 @@ public sealed class LedgerGroupCommitterJournalTests
             Directory.Delete(ledgerRoot, recursive: true);
             Directory.Delete(origin1, recursive: true);
             Directory.Delete(origin2, recursive: true);
+        }
+    }
+
+    // Mutation-testing finding (#372 review): the "nothing committed" branch's attempt.Dispose()
+    // call had nothing asserting the per-origin gate it holds was actually released — a mutant
+    // deleting that Dispose() survived. BeginAttemptAsync on the same origin, run right after,
+    // must complete promptly rather than hang waiting on a gate PrepareAsync never released (same
+    // WaitAsync(timeout)-fails-loudly idiom LedgerCommitAttemptTests already uses for this).
+    [Fact]
+    public async Task PrepareAsync_NothingLedgerTrackedInTheOrigin_ReleasesTheGate()
+    {
+        var ledgerRoot = Directory.CreateTempSubdirectory("medit-journal-ledger-").FullName;
+        var originFolder = Directory.CreateTempSubdirectory("medit-journal-origin-").FullName;
+        try
+        {
+            var (_, committer, ledger) = MakeCollaborators(ledgerRoot);
+            const string pluginFileName = "NeverVendored.esp";
+            WritePlugin(originFolder, pluginFileName, out var npcFormKey);
+
+            // Never vendored — nothing this touches is ledger-tracked, so PrepareAsync's own
+            // "committed.Count == 0" branch runs and disposes the attempt without ever staging or
+            // journaling anything.
+            var prepared = await committer.PrepareAsync(
+                [new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npcFormKey)], GameRelease.Fallout4);
+            Assert.Empty(prepared.Attempts);
+            Assert.Empty(prepared.Entries);
+
+            using var second = await ledger.BeginAttemptAsync(originFolder).WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            Directory.Delete(ledgerRoot, recursive: true);
+            Directory.Delete(originFolder, recursive: true);
         }
     }
 
@@ -260,6 +303,107 @@ public sealed class LedgerGroupCommitterJournalTests
 
             // Clean up the still-open in-memory attempt from PrepareAsync so its gate is released.
             prepared.Attempts[0].Attempt.Dispose();
+        }
+        finally
+        {
+            Directory.Delete(ledgerRoot, recursive: true);
+            Directory.Delete(originFolder, recursive: true);
+        }
+    }
+
+    // Mutation-testing finding (#372 review): the journal-rewrite branch (some entries resolved,
+    // some refused) was only ever exercised where the rewritten content happened to be
+    // byte-identical to what was already on disk (a one-entry journal whose only entry refuses) —
+    // a mutant that rewrites the wrong content, or the wrong count, could still pass. A genuinely
+    // mixed two-entry batch — one resolves, one refuses — makes the rewritten file's content a
+    // strict, checkable subset of what Prepare originally journaled.
+    [Fact]
+    public async Task Recover_MixedBatchOneResolvesOneRefuses_JournalAfterwardsContainsExactlyTheRefusedEntry()
+    {
+        var ledgerRoot = Directory.CreateTempSubdirectory("medit-journal-ledger-").FullName;
+        var origin1 = Directory.CreateTempSubdirectory("medit-journal-origin1-").FullName;
+        var origin2 = Directory.CreateTempSubdirectory("medit-journal-origin2-").FullName;
+        try
+        {
+            var (vendor, committer, ledger) = MakeCollaborators(ledgerRoot);
+            var plugin1Path = WritePlugin(origin1, "Origin1.esp", out var npc1FormKey);
+            var plugin2Path = WritePlugin(origin2, "Origin2.esp", out var npc2FormKey);
+            await VendorAsync(vendor, origin1, plugin1Path, "Origin1.esp", npc1FormKey);
+            await VendorAsync(vendor, origin2, plugin2Path, "Origin2.esp", npc2FormKey);
+
+            var prepared = await committer.PrepareAsync([
+                new LedgerTouchedRecord(origin1, "Origin1.esp", "npc_", npc1FormKey),
+                new LedgerTouchedRecord(origin2, "Origin2.esp", "npc_", npc2FormKey),
+            ], GameRelease.Fallout4);
+            Assert.Equal(2, prepared.Entries.Count);
+
+            // origin1 is left exactly as Prepare staged it — untouched, so its staged index still
+            // matches the journal: Recover resolves it by completing the commit directly. origin2's
+            // index is disturbed before recovery runs — a genuine divergence, so it refuses.
+            var origin2Full = Path.GetFullPath(origin2);
+            var origin2Entry = prepared.Entries.Single(e => e.OriginFolder == origin2Full);
+            ledger.ResetIndexToHead(origin2);
+
+            var freshLedger = new LedgerRepository(new LedgerOptions(ledgerRoot), NullLogger<LedgerRepository>.Instance);
+            freshLedger.Recover();
+
+            var journal = Assert.Single(freshLedger.ReadJournals(), j => j.GroupId == prepared.GroupId);
+            var remainingEntry = Assert.Single(journal.Entries);
+            Assert.Equal(origin2Entry, remainingEntry);
+
+            // Clean up: origin1's PreparedOrigin was resolved by Recover's own direct commit, not
+            // through AdvanceOneAsync — its attempt object never disposed, so it still holds the
+            // gate. Releasing it here is a harmless no-op against a repo already at the state
+            // Recover committed it to (git reset on an already-committed path is a no-op).
+            prepared.Attempts.Single(a => a.Attempt.OriginFolder != origin2Full).Attempt.Dispose();
+        }
+        finally
+        {
+            Directory.Delete(ledgerRoot, recursive: true);
+            Directory.Delete(origin1, recursive: true);
+            Directory.Delete(origin2, recursive: true);
+        }
+    }
+
+    // Mutation-testing finding (#372 review): a crash landing *after* the real git commit succeeds
+    // but *before* this process gets to remove the journal entry — recovery must classify this as
+    // already-advanced (HEAD's tree already matches) and drop the entry, never retry CommitStaged
+    // against a repo with nothing new to commit (which would itself fail and leave the entry stuck
+    // as a false "refused"). One test for both the HEAD-tree read and its equality check.
+    [Fact]
+    public async Task Recover_CommitAlreadyLandedButJournalEntryNotYetRemoved_ClassifiesAlreadyAdvanced_DropsEntryWithoutError()
+    {
+        var ledgerRoot = Directory.CreateTempSubdirectory("medit-journal-ledger-").FullName;
+        var originFolder = Directory.CreateTempSubdirectory("medit-journal-origin-").FullName;
+        try
+        {
+            var (vendor, committer, ledger) = MakeCollaborators(ledgerRoot);
+            const string pluginFileName = "AlreadyAdvanced.esp";
+            var pluginPath = WritePlugin(originFolder, pluginFileName, out var npcFormKey);
+            await VendorAsync(vendor, originFolder, pluginPath, pluginFileName, npcFormKey);
+            Assert.Equal(1, CommitCount(ledger, originFolder));
+
+            var prepared = await committer.PrepareAsync(
+                [new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npcFormKey)], GameRelease.Fallout4);
+            var entry = Assert.Single(prepared.Entries);
+            Assert.Equal(Path.GetFullPath(originFolder), entry.OriginFolder);
+
+            // The real commit lands — via the attempt directly, not AdvanceOneAsync — so the
+            // journal entry Prepare wrote is deliberately left on disk: exactly the "crash after
+            // the commit succeeded but before this process removed the entry" window.
+            prepared.Attempts[0].Attempt.Commit(prepared.Attempts[0].Message);
+            Assert.Equal(2, CommitCount(ledger, originFolder));
+            Assert.Single(ledger.ReadJournals(), j => j.GroupId == prepared.GroupId); // still there
+
+            var (freshLedger, log) = FreshLedgerWithLog(ledgerRoot);
+            freshLedger.Recover();
+
+            // No second commit was attempted — exactly the one the real commit above produced.
+            Assert.Equal(2, CommitCount(freshLedger, originFolder));
+            Assert.Empty(freshLedger.ReadJournals()); // dropped, not left behind as "refused"
+            Assert.DoesNotContain(log, e => e.Level >= LogLevel.Warning);
+
+            prepared.Attempts[0].Attempt.Dispose(); // release the gate the still-open attempt holds
         }
         finally
         {
