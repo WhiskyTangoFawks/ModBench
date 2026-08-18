@@ -176,8 +176,12 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
         var (gitDir, workTree) = PathsFor(originFolder);
         if (RepoExists(originFolder)) return;
 
+        // No Directory.CreateDirectory(workTree) (suite-axis review, #393): the work tree *is* the
+        // origin folder, and every path here runs only after a plugin binary was read out of that
+        // very folder — it exists by construction. If it ever doesn't, git (or Process.Start)
+        // fails into the callers' existing best-effort catch rather than this class fabricating an
+        // empty origin folder to init into.
         Directory.CreateDirectory(gitDir);
-        Directory.CreateDirectory(workTree);
         GitCli.Run(gitDir, workTree, "init", "-q", "-b", "main");
         logger.LogInformation("Ledger created for {OriginFolder} at {GitDir}", workTree, gitDir);
     }
