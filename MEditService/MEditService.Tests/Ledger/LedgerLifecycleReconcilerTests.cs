@@ -188,4 +188,55 @@ public sealed class LedgerLifecycleReconcilerTests
             Directory.Delete(originFolder, recursive: true);
         }
     }
+
+    // #392 review finding 1 (Spec): the candidate pool must be consumed as orphans claim it — two
+    // orphans that both independently qualify for the same single candidate (realistic: two patches
+    // merged into one plugin that now carries both overrides) must not both try to rename onto it.
+    // The first claims it; the second, seeing zero candidates left in the pool, degrades to removal
+    // per the class's own documented bias — never a second Directory.Move onto an already-occupied
+    // destination, which would throw mid-attempt and leave HEAD and the working tree disagreeing.
+    [Fact]
+    public async Task TwoOrphansQualifyForOneCandidate_FirstRenames_SecondDegradesToRemoval()
+    {
+        var ledgerRoot = Directory.CreateTempSubdirectory("medit-reconcile-ledger-").FullName;
+        var originFolder = Directory.CreateTempSubdirectory("medit-reconcile-origin-").FullName;
+        try
+        {
+            var ledger = new LedgerRepository(new LedgerOptions(ledgerRoot), NullLogger<LedgerRepository>.Instance);
+            ledger.EnsureRepo(originFolder);
+            var patchARelative = LedgerRecordPath.For("PatchA.esp", "npc_", "000800:SomeMaster.esm");
+            var patchBRelative = LedgerRecordPath.For("PatchB.esp", "npc_", "000900:SomeMaster.esm");
+            VendorRawRecord(ledger, originFolder, patchARelative, "FormKey: 000800:SomeMaster.esm\n");
+            VendorRawRecord(ledger, originFolder, patchBRelative, "FormKey: 000900:SomeMaster.esm\n");
+            ledger.CommitStaged(originFolder, "vendor: baseline");
+
+            var reconciler = MakeReconciler(ledger);
+            // Merged.esp legitimately carries both patches' overrides — every FormKey either orphan
+            // tracks resolves against it, so both independently "qualify" unless the pool is
+            // consumed once the first orphan claims it.
+            await reconciler.ReconcileAsync(
+                [Present("Merged.esp", originFolder)],
+                (_, _, plugin, _) => plugin == "Merged.esp");
+
+            Assert.False(Directory.Exists(Path.Combine(originFolder, "PatchA.esp.ledger")));
+            Assert.False(Directory.Exists(Path.Combine(originFolder, "PatchB.esp.ledger")));
+            Assert.False(ledger.IsTrackedAtHead(originFolder, patchARelative));
+            Assert.False(ledger.IsTrackedAtHead(originFolder, patchBRelative));
+
+            // Exactly one of the two actually made it into Merged.esp.ledger (the rename); the
+            // other was removed outright rather than the pass throwing trying to double-occupy the
+            // same destination.
+            var mergedRelativeA = LedgerRecordPath.For("Merged.esp", "npc_", "000800:SomeMaster.esm");
+            var mergedRelativeB = LedgerRecordPath.For("Merged.esp", "npc_", "000900:SomeMaster.esm");
+            var trackedA = ledger.IsTrackedAtHead(originFolder, mergedRelativeA);
+            var trackedB = ledger.IsTrackedAtHead(originFolder, mergedRelativeB);
+            Assert.True(trackedA ^ trackedB, "expected exactly one of the two orphans to have renamed into Merged.esp.ledger");
+            Assert.True(Directory.Exists(Path.Combine(originFolder, "Merged.esp.ledger")));
+        }
+        finally
+        {
+            Directory.Delete(ledgerRoot, recursive: true);
+            Directory.Delete(originFolder, recursive: true);
+        }
+    }
 }

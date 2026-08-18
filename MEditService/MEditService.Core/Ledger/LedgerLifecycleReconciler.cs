@@ -7,11 +7,12 @@ namespace MEditService.Core.Ledger;
 /// <summary>Answers whether <paramref name="formKeyString"/> resolves in
 /// <paramref name="plugin"/>'s own indexed records (<paramref name="origin"/>-scoped) —
 /// <see cref="LedgerLifecycleReconciler"/>'s one collaborator across the <c>Session/</c>/
-/// <c>Records/</c> boundary (#392), kept a delegate rather than a dependency on
-/// <c>IRecordReader</c>/<c>IGameSession</c> directly: <c>Ledger/</c> has no dependency on
-/// <c>Session/</c> (<see cref="LedgerGroupCommitter"/>'s own class remarks) and this reconciler is
-/// no exception — resolving FormKey existence against the session's real indexed records is
-/// <c>SessionManager</c>'s job, not this class's.</summary>
+/// <c>Records/</c> boundary (#392), kept a delegate rather than a dependency on the record-query
+/// surface itself (<c>IRecordReader</c>/<c>IGameSession</c>): resolving FormKey existence against
+/// the session's real indexed records is <c>SessionManager</c>'s job, not this class's. This
+/// reconciler still takes <c>Session/</c>'s own <see cref="PluginMetadata"/> directly in its public
+/// API — established precedent, not a boundary this delegate is standing in for; sibling
+/// <c>LedgerStatusQuery</c> already does the same.</summary>
 public delegate bool LedgerRenameCandidateFormKeyExists(string recordType, string formKeyString, string plugin, string origin);
 
 /// <summary>
@@ -93,7 +94,14 @@ public sealed class LedgerLifecycleReconciler(LedgerRepository ledger, ILogger<L
         // A candidate is a present plugin that does not already have a ledger tree of its own —
         // one already tracked is never a rename target, whatever its content (AC: "the fix belongs
         // at the lifecycle" — this is what stops the reconciler from ever merging two plugins'
-        // independently tracked histories together).
+        // independently tracked histories together). A List<T>, not the query result held once:
+        // consumed as orphans claim it (review finding, #392) — two orphans can each independently
+        // qualify for the same one candidate (two patches merged into a plugin that now legitimately
+        // carries both overrides), and the second one seeing it already taken is what makes "exactly
+        // one qualifying candidate" mean something once more than one orphan is in play. Without
+        // this, a second Directory.Move onto a destination the first rename already created would
+        // throw mid-attempt, and CommitAttempt's own unstage-on-dispose cannot undo a physical move
+        // that already succeeded.
         var candidates = present.Where(p => !trackedNames.Contains(p.Name)).ToList();
 
         using var attempt = await ledger.BeginAttemptAsync(originFolder, cancel).ConfigureAwait(false);
@@ -108,8 +116,10 @@ public sealed class LedgerLifecycleReconciler(LedgerRepository ledger, ILogger<L
 
             if (qualifying.Count == 1)
             {
-                RenameLedgerTree(attempt, originFolder, orphanName, qualifying[0].Name);
-                actions.Add($"renamed ledger tree: {orphanName} -> {qualifying[0].Name}");
+                var target = qualifying[0];
+                candidates.Remove(target); // claimed — unavailable to any later orphan in this pass
+                RenameLedgerTree(attempt, originFolder, orphanName, target.Name);
+                actions.Add($"renamed ledger tree: {orphanName} -> {target.Name}");
             }
             else
             {
@@ -173,6 +183,17 @@ public sealed class LedgerLifecycleReconciler(LedgerRepository ledger, ILogger<L
         var newRelative = newPluginName + LedgerRecordPath.LedgerSuffix;
         var oldAbsolute = Path.Combine(originFolder, oldRelative);
         var newAbsolute = Path.Combine(originFolder, newRelative);
+
+        // Guard (review finding, #392), independent of the candidate-pool consumption above: this
+        // method must never blindly write into a destination that already exists — Directory.Move
+        // would throw there regardless, but only after any earlier orphan in this same pass already
+        // landed on disk, a physical move CommitAttempt's own unstage-on-dispose can never reverse.
+        // Refusing here, before touching anything for *this* orphan, keeps that failure mode
+        // impossible even if some future caller ever reaches this with a taken destination.
+        if (Directory.Exists(newAbsolute))
+            throw new InvalidOperationException(
+                $"Refusing to rename ledger tree '{oldRelative}' onto '{newRelative}': the destination already exists.");
+
         if (Directory.Exists(oldAbsolute)) Directory.Move(oldAbsolute, newAbsolute);
         attempt.Stage(oldRelative); // captures the removal
         attempt.Stage(newRelative); // captures the add
