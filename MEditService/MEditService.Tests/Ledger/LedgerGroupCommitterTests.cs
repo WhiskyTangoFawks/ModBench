@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Edits;
 using MEditService.Core.Ledger;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -29,7 +30,7 @@ public sealed class LedgerGroupCommitterTests
         var ledger = new LedgerRepository(new LedgerOptions(ledgerRoot), NullLogger<LedgerRepository>.Instance);
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var vendor = new RecordVendor(ledger, codec, NullLogger<RecordVendor>.Instance);
-        var committer = new LedgerGroupCommitter(ledger, NullLogger<LedgerGroupCommitter>.Instance);
+        var committer = new LedgerGroupCommitter(ledger, codec, SharedSchemaReflector.Instance, NullLogger<LedgerGroupCommitter>.Instance);
         return (vendor, committer, ledger);
     }
 
@@ -80,10 +81,10 @@ public sealed class LedgerGroupCommitterTests
             await VendorAsync(vendor, originFolder, pluginPath, pluginFileName, npc2FormKey);
             Assert.Equal(2, CommitCount(ledger, originFolder)); // two vendor baselines, nothing saved yet
 
-            committer.CommitGroupSave([
+            await committer.CommitGroupSaveAsync([
                 new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc1FormKey),
                 new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc2FormKey),
-            ]);
+            ], GameRelease.Fallout4);
 
             // Exactly one new commit — not two — covering both records.
             Assert.Equal(3, CommitCount(ledger, originFolder));
@@ -138,10 +139,10 @@ public sealed class LedgerGroupCommitterTests
             await VendorAsync(vendor, originFolder, pluginPath, pluginFileName, npc1FormKey);
             Assert.Equal(1, CommitCount(ledger, originFolder));
 
-            committer.CommitGroupSave([
+            await committer.CommitGroupSaveAsync([
                 new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc1FormKey),
                 new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc2FormKey),
-            ]);
+            ], GameRelease.Fallout4);
 
             // Exactly one new commit, for the tracked record only — the untracked one never
             // poisoned the batch.
@@ -179,10 +180,10 @@ public sealed class LedgerGroupCommitterTests
             await VendorAsync(vendor, origin1, plugin1Path, "Origin1.esp", npc1FormKey);
             await VendorAsync(vendor, origin2, plugin2Path, "Origin2.esp", npc3FormKey);
 
-            committer.CommitGroupSave([
+            await committer.CommitGroupSaveAsync([
                 new LedgerTouchedRecord(origin1, "Origin1.esp", "npc_", npc1FormKey),
                 new LedgerTouchedRecord(origin2, "Origin2.esp", "npc_", npc3FormKey),
-            ]);
+            ], GameRelease.Fallout4);
 
             // Each origin gets its own commit, on its own independent history — two gitdirs, not one.
             Assert.Equal(2, CommitCount(ledger, origin1)); // vendor + this save
@@ -237,10 +238,10 @@ public sealed class LedgerGroupCommitterTests
             Assert.NotEqual(originFolder, differentlyFormatted, StringComparer.Ordinal);
             Assert.Equal(Path.GetFullPath(originFolder), Path.GetFullPath(differentlyFormatted));
 
-            committer.CommitGroupSave([
+            await committer.CommitGroupSaveAsync([
                 new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc1FormKey),
                 new LedgerTouchedRecord(differentlyFormatted, pluginFileName, "npc_", npc2FormKey),
-            ]);
+            ], GameRelease.Fallout4);
 
             // Exactly one new commit covering both records — not two independent ones into the
             // same gitdir.
@@ -282,7 +283,7 @@ public sealed class LedgerGroupCommitterTests
             await File.WriteAllTextAsync(strayAbsolutePath, "FormKey: stray-never-committed\n");
             ledger.StagePath(originFolder, strayRelativePath);
 
-            committer.CommitGroupSave([new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc1FormKey)]);
+            await committer.CommitGroupSaveAsync([new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc1FormKey)], GameRelease.Fallout4);
 
             Assert.False(ledger.IsTrackedAtHead(originFolder, strayRelativePath));
 
@@ -321,10 +322,10 @@ public sealed class LedgerGroupCommitterTests
             // npc1 stages successfully; the second entry's FormKey is malformed, so
             // LedgerRecordPath.For throws before it ever reaches IsTrackedAtHead/StagePath —
             // exercising CommitOrigin's catch with npc1 already in `staged`.
-            committer.CommitGroupSave([
+            await committer.CommitGroupSaveAsync([
                 new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc1FormKey),
                 new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", "not-a-valid-form-key"),
-            ]);
+            ], GameRelease.Fallout4);
 
             // Best-effort: never throws past the caller, and nothing committed for this attempt.
             Assert.Equal(1, CommitCount(ledger, originFolder));
@@ -338,13 +339,105 @@ public sealed class LedgerGroupCommitterTests
 
             // A later, clean save for npc1 alone must be unaffected — exactly one commit, exactly
             // npc1's own file, nothing left over from the rolled-back attempt.
-            committer.CommitGroupSave([new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc1FormKey)]);
+            await committer.CommitGroupSaveAsync([new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc1FormKey)], GameRelease.Fallout4);
             Assert.Equal(2, CommitCount(ledger, originFolder));
 
             var (gitDir, workTree) = ledger.PathsFor(originFolder);
             var committedFiles = GitCli.Run(gitDir, workTree, "show", "--stat", "--format=", "HEAD").Trim();
             var npc1RelativePath = LedgerRecordPath.For(pluginFileName, "npc_", npc1FormKey).Replace('\\', '/');
             Assert.Equal(npc1RelativePath, committedFiles.Split('|')[0].Trim());
+        }
+        finally
+        {
+            Directory.Delete(ledgerRoot, recursive: true);
+            Directory.Delete(originFolder, recursive: true);
+        }
+    }
+
+    // #373: a group can touch create/delete/renumber alongside each other in one origin (e.g. #372's
+    // eventual cross-repo groups aside, nothing stops a single-origin group's own dependency graph
+    // from entangling all three) — must still be exactly one commit, same "one commit per origin
+    // folder" invariant #371 already pins for a batch of plain field edits. npc1/npc2 are vendored
+    // first (the stage-time precondition #373's own EditOrchestrator.DeleteRecords/Renumber calls
+    // establish for real callers); the created FormKey has never existed anywhere.
+    [Fact]
+    public async Task CommitGroupSaveAsync_MixedCreateDeleteRenumberInOneOrigin_ProducesExactlyOneCommit()
+    {
+        var ledgerRoot = Directory.CreateTempSubdirectory("medit-group-committer-ledger-").FullName;
+        var originFolder = Directory.CreateTempSubdirectory("medit-group-committer-origin-").FullName;
+        try
+        {
+            var (vendor, committer, ledger) = MakeCollaborators(ledgerRoot);
+            const string pluginFileName = "Mixed.esp";
+            var pluginPath = WritePlugin(originFolder, pluginFileName, out var npc1FormKey, out var npc2FormKey);
+
+            await VendorAsync(vendor, originFolder, pluginPath, pluginFileName, npc1FormKey); // delete target
+            await VendorAsync(vendor, originFolder, pluginPath, pluginFileName, npc2FormKey); // renumber target
+            Assert.Equal(2, CommitCount(ledger, originFolder)); // two vendor baselines, nothing saved yet
+
+            const string createdFormKey = "000900:Mixed.esp";
+            const string renumberedFormKey = "000901:Mixed.esp";
+
+            await committer.CommitGroupSaveAsync([
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", createdFormKey,
+                    ChangeType: PendingChangeConstants.CreateChangeType),
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc1FormKey,
+                    ChangeType: PendingChangeConstants.DeleteChangeType),
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc2FormKey,
+                    ChangeType: PendingChangeConstants.RenumberChangeType, NewFormKey: renumberedFormKey),
+            ], GameRelease.Fallout4);
+
+            // Exactly one new commit — not three — covering all three lifecycle shapes.
+            Assert.Equal(3, CommitCount(ledger, originFolder));
+
+            var (gitDir, workTree) = ledger.PathsFor(originFolder);
+            var summary = GitCli.Run(gitDir, workTree, "show", "--summary", "-M", "--format=", "HEAD");
+            var createdRelativePath = LedgerRecordPath.For(pluginFileName, "npc_", createdFormKey).Replace('\\', '/');
+            var npc1RelativePath = LedgerRecordPath.For(pluginFileName, "npc_", npc1FormKey).Replace('\\', '/');
+            Assert.Contains($"create mode 100644 {createdRelativePath}", summary, StringComparison.Ordinal);
+            Assert.Contains($"delete mode 100644 {npc1RelativePath}", summary, StringComparison.Ordinal);
+            Assert.Contains("rename", summary, StringComparison.Ordinal); // the renumbered npc2
+
+            AssertNoStagedEntries(gitDir, workTree);
+        }
+        finally
+        {
+            Directory.Delete(ledgerRoot, recursive: true);
+            Directory.Delete(originFolder, recursive: true);
+        }
+    }
+
+    // Mirrors CommitGroupSave_MixedTrackedAndUntrackedRecordsInOneBatch_StillCommitsTheTrackedOne
+    // for the three new lifecycle branches: a delete/renumber target that was never actually
+    // vendored (best-effort vendoring failed upstream, or — as here — simply never touched) has
+    // nothing tracked to act on and must be skipped exactly like an untracked field edit is, not
+    // throw and not fabricate a commit.
+    [Fact]
+    public async Task CommitGroupSaveAsync_DeleteAndRenumberOfNeverVendoredRecords_AreSkipped_NoCommitProduced()
+    {
+        var ledgerRoot = Directory.CreateTempSubdirectory("medit-group-committer-ledger-").FullName;
+        var originFolder = Directory.CreateTempSubdirectory("medit-group-committer-origin-").FullName;
+        try
+        {
+            var (_, committer, ledger) = MakeCollaborators(ledgerRoot);
+            const string pluginFileName = "NeverVendored.esp";
+            WritePlugin(originFolder, pluginFileName, out var npc1FormKey, out var npc2FormKey);
+
+            await committer.CommitGroupSaveAsync([
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc1FormKey,
+                    ChangeType: PendingChangeConstants.DeleteChangeType),
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc2FormKey,
+                    ChangeType: PendingChangeConstants.RenumberChangeType, NewFormKey: "000901:NeverVendored.esp"),
+            ], GameRelease.Fallout4);
+
+            // No repo was ever created for this origin — EnsureRepo only runs when the batch
+            // includes a create, and nothing here ever vendored either target, so
+            // ResetIndexToHead's own attempt against a nonexistent gitdir fails exactly the same
+            // pre-existing way an all-untracked batch of plain field edits already does (caught by
+            // the outer best-effort catch, logged, never thrown past this call) — not a new failure
+            // mode #373 introduces.
+            var (gitDir, _) = ledger.PathsFor(originFolder);
+            Assert.False(Directory.Exists(gitDir));
         }
         finally
         {

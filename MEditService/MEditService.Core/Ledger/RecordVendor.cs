@@ -153,7 +153,13 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
     //   ordering (finding 6): reused directly (PluginWriter.OrderForConditionListRestage, also
     //   widened internal) rather than reimplemented, so a batched PATCH mixing a whole-list restage
     //   with a nested per-index edit vendors the same result the eventual real save would produce.
-    private static void ApplyFields(
+    //
+    // internal, not private (#373): LedgerGroupCommitter's own $create write reuses this exact
+    // batch-apply path to apply a pending create's staged field_edit rows onto the freshly
+    // instantiated blank record — the same "no re-implementation, no drift from what a real save
+    // would produce" reasoning above, applied to the one write shape this method didn't originally
+    // need to cover (there was no live record to deep-parse before the create itself lands).
+    internal static void ApplyFields(
         IMajorRecord record,
         IReadOnlyDictionary<string, JsonElement> fields,
         string recordType,

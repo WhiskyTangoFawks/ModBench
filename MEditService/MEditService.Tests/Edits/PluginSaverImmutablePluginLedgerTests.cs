@@ -83,7 +83,7 @@ public sealed class PluginSaverImmutablePluginLedgerTests
                     ParentCell: null, PlacementGroup: null, Origin: PluginOrigin.DataDirectory),
             ]);
 
-            var ledgerCommitter = new LedgerGroupCommitter(ledger, NullLogger<LedgerGroupCommitter>.Instance);
+            var ledgerCommitter = new LedgerGroupCommitter(ledger, codec, reflector, NullLogger<LedgerGroupCommitter>.Instance);
             var saver = new PluginSaver(changes, manager, ledgerCommitter, NullLogger<PluginSaver>.Instance);
 
             var result = await saver.Save(group.Id);

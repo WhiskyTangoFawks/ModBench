@@ -3,6 +3,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Serialization;
 using MEditService.Core.Session;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -14,7 +15,7 @@ namespace MEditService.Tests.Edits;
 public sealed class PluginSaverSaveGroupTests
 {
     // #371: none of this file's fixture plugins carry a resolvable origin folder (MakeLoadOrderPlugin
-    // leaves Path empty), so LedgerGroupCommitter.CommitGroupSave is always called with an empty
+    // leaves Path empty), so LedgerGroupCommitter.CommitGroupSaveAsync is always called with an empty
     // touched-record list here and never actually reaches the ledger repo — a shared instance over a
     // scratch root is enough; the save-time ledger commit itself is covered end to end (real git,
     // real save endpoint) by SaveChangeGroupLedgerCommitApiTests.
@@ -22,6 +23,8 @@ public sealed class PluginSaverSaveGroupTests
         new LedgerRepository(
             new LedgerOptions(Path.Combine(Path.GetTempPath(), "medit-pluginsaver-tests-ledger")),
             NullLogger<LedgerRepository>.Instance),
+        new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
+        SharedSchemaReflector.Instance,
         NullLogger<LedgerGroupCommitter>.Instance);
 
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
@@ -415,7 +418,12 @@ public sealed class PluginSaverSaveGroupTests
         public IReadOnlyList<PluginMetadata> Plugins => plugins;
         public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
         public string DataFolderPath => throw new NotSupportedException();
-        public GameRelease GameRelease => throw new NotSupportedException();
+
+        // #373: PluginSaver.Save now reads GameRelease unconditionally (to pass to
+        // LedgerGroupCommitter.CommitGroupSaveAsync) rather than only on paths this stub already
+        // supported — a harmless concrete value, same convention every other fixture in this repo
+        // uses, not a behavior this class's own tests exercise.
+        public GameRelease GameRelease => GameRelease.Fallout4;
         public string? FilterSql { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
         public IModGetter? GetMod(string pluginName, string origin) => throw new NotSupportedException();
         public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();

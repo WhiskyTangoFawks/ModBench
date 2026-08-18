@@ -148,7 +148,7 @@ public sealed partial class EditOrchestrator(
             return;
         }
 
-        if (!schemas.TryGetValue(recordType, out var schema) || ResolveConcreteRecordType(schema.RecordType) is not { } concreteType)
+        if (!schemas.TryGetValue(recordType, out var schema) || ConcreteRecordTypeResolver.Resolve(schema.RecordType) is not { } concreteType)
         {
             _logger.LogWarning(
                 "Skipped vendoring for {FormKey} in {Plugin}: could not resolve a concrete record type for '{RecordType}'",
@@ -170,24 +170,6 @@ public sealed partial class EditOrchestrator(
             // from its dirt — "ledger unchanged" is true again, not just asserted.
             _logger.LogWarning(ex, "Vendoring failed for {FormKey} in {Plugin}; edit is staged, no ledger commit was made", formKey, plugin);
         }
-    }
-
-    // Mutagen's own stable naming convention (I<Type>Getter <-> <Type>) — the same one
-    // RecordTextCodec's dispatch relies on for the direct (non-overlay) case. Null when
-    // schema.RecordType isn't shaped that way (defensive; every FO4 major-record getter is).
-    private static Type? ResolveConcreteRecordType(Type getterType)
-    {
-        const string Prefix = "I";
-        const string Suffix = "Getter";
-        var name = getterType.Name;
-        if (name.Length <= Prefix.Length + Suffix.Length || !name.StartsWith(Prefix, StringComparison.Ordinal)
-            || !name.EndsWith(Suffix, StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        var concreteName = name[Prefix.Length..^Suffix.Length];
-        return Type.GetType($"Mutagen.Bethesda.Fallout4.{concreteName}, Mutagen.Bethesda.Fallout4");
     }
 
     private void ClearSupersededConditionListFields(
@@ -512,7 +494,7 @@ public sealed partial class EditOrchestrator(
             return new StageEditResult.RecordNotFound();
 
         var schemas = _schemaReflector.GetSchemas(session.GameRelease);
-        if (!schemas.TryGetValue(recordType, out var schema) || ResolveConcreteRecordType(schema.RecordType) is not { } concreteType)
+        if (!schemas.TryGetValue(recordType, out var schema) || ConcreteRecordTypeResolver.Resolve(schema.RecordType) is not { } concreteType)
             return new StageEditResult.RecordNotFound();
 
         Dictionary<string, JsonElement> fields;
@@ -712,7 +694,7 @@ public sealed partial class EditOrchestrator(
 
         return plainTargets.Count == 0
             ? new DeleteRecordsResult.Reverted(revertedFormKeys)
-            : StagePlainDeletes(plainTargets, source, toNullify, revertedFormKeys);
+            : StagePlainDeletes(plainTargets, source, toNullify, revertedFormKeys, session);
     }
 
     // The plugin name of the first target that isn't a legitimate write target, or null. #306: no
@@ -755,15 +737,46 @@ public sealed partial class EditOrchestrator(
         IReadOnlyList<(string FormKey, string Plugin)> plainTargets,
         string source,
         List<(string SourceFormKey, string SourcePlugin, string FieldPath, string RecordType)> toNullify,
-        List<string> revertedFormKeys)
+        List<string> revertedFormKeys,
+        IGameSession session)
     {
         var members = BuildDeleteMembers(plainTargets, source);
         AddNullificationMembers(members, toNullify, source);
 
         var group = _changes.StageChanges(members);
+
+        // #373: vendors the deleted record's own pristine baseline (empty fields — a no-op-safe
+        // reuse of the same VendorOnFirstTouch call StageEdit already makes per field, see its own
+        // remarks) plus every nullified referrer's updated field — both bypass StageEdit entirely
+        // (StageChanges, not Upsert), so without this a tracked referrer's ledger file would keep
+        // stale content while its binary field genuinely changed. Must happen now, before Save's own
+        // binary write erases the deleted record's pristine content from disk — see
+        // LedgerGroupCommitter's own class remarks for why that ordering is load-bearing, not a
+        // preference.
+        VendorLifecycleMembers(members, _schemaReflector.GetSchemas(session.GameRelease), session);
+
         return revertedFormKeys.Count > 0
             ? new DeleteRecordsResult.Mixed(group, revertedFormKeys)
             : new DeleteRecordsResult.Staged(group);
+    }
+
+    // Shared by StagePlainDeletes and Renumber (#373): vendors every group member's own ledger
+    // state via the exact same VendorOnFirstTouch call StageEdit already makes per field — a
+    // lifecycle member (delete/renumber's own change) with an empty fields dict is a no-op-safe
+    // vendor-only call (RecordVendor.ApplyFields loops zero times), while a field_edit member (a
+    // delete's nullification, or a renumber's cross-plugin FormLink remap) vendors that one field's
+    // new value, same as an ordinary StageEdit PATCH would. Reuse, not a parallel mechanism — see
+    // ADR-0040/#373's own "equivalent guarantee" requirement.
+    private void VendorLifecycleMembers(
+        IReadOnlyList<GroupMember> members, IReadOnlyDictionary<string, RecordTableSchema> schemas, IGameSession session)
+    {
+        foreach (var member in members)
+        {
+            var fields = member.ChangeType == PendingChangeConstants.FieldEditChangeType
+                ? new Dictionary<string, JsonElement> { [member.FieldPath] = member.NewValue }
+                : new Dictionary<string, JsonElement>();
+            VendorOnFirstTouch(member.FormKey, member.Plugin, member.RecordType, fields, schemas, session);
+        }
     }
 
     // Build group members: one delete change per target
@@ -936,6 +949,15 @@ public sealed partial class EditOrchestrator(
         }
 
         var group = _changes.StageChanges(members);
+
+        // #373: vendors the renumbered record's own pristine baseline under its *old* FormKey/path
+        // (empty fields — no-op-safe reuse of StageEdit's own VendorOnFirstTouch call) plus every
+        // cross-plugin referrer's remapped FormLink field — both bypass StageEdit entirely
+        // (StageChanges, not Upsert). Must happen now, before Save's own binary write erases the old
+        // FormKey's content from disk — LedgerGroupCommitter's renumber write reads this old-path
+        // baseline back at save time and Duplicates it onto the new FormKey.
+        VendorLifecycleMembers(members, _schemaReflector.GetSchemas(session.GameRelease), session);
+
         return new RenumberResult.Staged(group);
     }
 
