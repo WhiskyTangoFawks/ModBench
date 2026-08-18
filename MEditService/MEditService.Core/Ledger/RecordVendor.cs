@@ -31,8 +31,9 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
     /// Vendors <paramref name="formKeyString"/> if it is not already tracked, then writes
     /// <paramref name="fields"/> applied on top as uncommitted working-tree dirt. No-op-safe to call
     /// repeatedly: a second call for an already-tracked record adds no new baseline commit (AC3).
-    /// Serialized per <paramref name="originFolder"/> — see <see cref="LedgerOriginGate"/>, shared
-    /// with <c>LedgerGroupCommitter</c>'s save-time commit (#371) since both stage into the same
+    /// Serialized per <paramref name="originFolder"/> by the attempt scope's own gate
+    /// (<see cref="LedgerRepository.BeginAttemptAsync"/>), shared with
+    /// <c>LedgerGroupCommitter</c>'s save-time commit (#371) since both stage into the same
     /// gitdir/index.
     /// </summary>
     public async Task VendorAndStageDirtAsync(
@@ -47,51 +48,42 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         GameRelease release,
         CancellationToken cancel = default)
     {
-        var gate = LedgerOriginGate.GateFor(originFolder);
-        await gate.WaitAsync(cancel).ConfigureAwait(false);
-        try
-        {
-            ledger.EnsureRepo(originFolder);
-            var relativePath = LedgerRecordPath.For(pluginFileName, recordType, formKeyString);
-            var absolutePath = Path.Combine(originFolder, relativePath);
+        using var attempt = await ledger.BeginAttemptAsync(originFolder, cancel).ConfigureAwait(false);
+        attempt.EnsureRepo();
+        var relativePath = LedgerRecordPath.For(pluginFileName, recordType, formKeyString);
+        var absolutePath = Path.Combine(originFolder, relativePath);
 
-            if (ledger.IsTrackedAtHead(originFolder, relativePath))
-            {
-                var record = await codec.DeserializeAsync(absolutePath, concreteRecordType, release, cancel).ConfigureAwait(false);
-                ApplyFields(record, fields, recordType, schemas, release);
-                await codec.SerializeAsync((IMajorRecordGetter)record, absolutePath, release, cancel).ConfigureAwait(false);
-            }
-            else
-            {
-                await VendorPristineThenDirtAsync(
-                    originFolder, pluginFilePath, formKeyString, recordType, relativePath, absolutePath,
-                    fields, schemas, release, cancel).ConfigureAwait(false);
-            }
-
-            logger.LogTrace("Staged dirt for {FormKey} at {Path}", formKeyString, absolutePath);
-        }
-        finally
+        if (ledger.IsTrackedAtHead(originFolder, relativePath))
         {
-            gate.Release();
+            var record = await codec.DeserializeAsync(absolutePath, concreteRecordType, release, cancel).ConfigureAwait(false);
+            ApplyFields(record, fields, recordType, schemas, release);
+            await codec.SerializeAsync((IMajorRecordGetter)record, absolutePath, release, cancel).ConfigureAwait(false);
         }
+        else
+        {
+            await VendorPristineThenDirtAsync(
+                attempt, pluginFilePath, formKeyString, recordType, relativePath, absolutePath,
+                fields, schemas, release, cancel).ConfigureAwait(false);
+        }
+
+        logger.LogTrace("Staged dirt for {FormKey} at {Path}", formKeyString, absolutePath);
     }
 
-    // First touch. Order is load-bearing (#370 review finding 3): reset the index to a known-clean
-    // state (#371 review finding — see LedgerRepository.ResetIndexToHead's own remarks: without
-    // this, a stray entry an earlier, unrelated failed attempt against this same origin folder left
-    // behind would get folded into *this* commit), then write + stage the pristine text, then do
-    // everything that can still fail (apply the staged fields, write dirt), and only commit — the
-    // operation that makes the record permanently tracked (IsTrackedAtHead gates the deep-parse
-    // branch on "not yet tracked", so a tracked-but-half-vendored record would never be retried) —
-    // once all of that has succeeded. This works with plain `git add` + `git commit` rather than
-    // needing plumbing: `git commit` always commits the *index* state, never the working-tree
-    // file's content at commit time, so staging the pristine blob here and overwriting the
-    // working-tree file with dirt afterward still leaves the commit holding pristine — see
-    // LedgerRepository's own remarks. A failure anywhere below leaves no commit at all: at worst an
-    // inert staged-but-uncommitted index entry, cleaned up by the *next* attempt's own
-    // ResetIndexToHead rather than merely superseded by luck.
+    // First touch. Order is load-bearing (#370 review finding 3): write + stage the pristine
+    // text, then do everything that can still fail (apply the staged fields, write dirt), and only
+    // commit — the operation that makes the record permanently tracked (IsTrackedAtHead gates the
+    // deep-parse branch on "not yet tracked", so a tracked-but-half-vendored record would never be
+    // retried) — once all of that has succeeded. This works with plain `git add` + `git commit`
+    // rather than needing plumbing: `git commit` always commits the *index* state, never the
+    // working-tree file's content at commit time, so staging the pristine blob here and
+    // overwriting the working-tree file with dirt afterward still leaves the commit holding
+    // pristine — see LedgerRepository's own remarks. The known-clean index reset and the
+    // unstage-on-failure are the attempt scope's own contract (#393), not steps sequenced here: a
+    // failure anywhere below leaves no commit at all, and the scope's dispose unstages the
+    // pristine blob rather than leaving it for a later, unrelated commit to sweep in.
     private async Task VendorPristineThenDirtAsync(
-        string originFolder, string pluginFilePath, string formKeyString, string recordType,
+        LedgerRepository.CommitAttempt attempt,
+        string pluginFilePath, string formKeyString, string recordType,
         string relativePath, string absolutePath,
         IReadOnlyDictionary<string, JsonElement> fields, IReadOnlyDictionary<string, RecordTableSchema> schemas,
         GameRelease release, CancellationToken cancel)
@@ -112,29 +104,18 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         // without a defensive copy.
         ContainerStripFields.StripInPlace(pristine);
 
-        ledger.ResetIndexToHead(originFolder);
-
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
         await codec.SerializeAsync((IMajorRecordGetter)pristine, absolutePath, release, cancel).ConfigureAwait(false);
-        ledger.StagePath(originFolder, relativePath);
+        attempt.Stage(relativePath);
 
         // Everything from here down can still fail — deliberately staged (above) but not yet
-        // committed. On failure, unstage rather than leave the pristine blob sitting in the index:
-        // CommitStaged commits the index as a whole (see its own remarks on why it takes no
-        // pathspec), so an un-cleared stray entry here would otherwise get swept into some later,
-        // unrelated successful commit in this same origin folder.
-        try
-        {
-            ApplyFields(pristine, fields, recordType, schemas, release);
-            await codec.SerializeAsync((IMajorRecordGetter)pristine, absolutePath, release, cancel).ConfigureAwait(false);
-        }
-        catch
-        {
-            ledger.UnstagePath(originFolder, relativePath);
-            throw;
-        }
+        // committed. On a throw, the attempt scope's dispose unstages the pristine blob rather
+        // than leaving it in the index for some later, unrelated successful commit in this same
+        // origin folder to sweep in.
+        ApplyFields(pristine, fields, recordType, schemas, release);
+        await codec.SerializeAsync((IMajorRecordGetter)pristine, absolutePath, release, cancel).ConfigureAwait(false);
 
-        ledger.CommitStaged(originFolder, $"vendor: {recordType} {formKeyString}");
+        attempt.Commit($"vendor: {recordType} {formKeyString}");
     }
 
     // Reuses PluginWriter's own per-field apply path (TryApplyField, widened private -> internal
