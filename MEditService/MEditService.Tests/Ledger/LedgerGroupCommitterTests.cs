@@ -153,6 +153,15 @@ public sealed class LedgerGroupCommitterTests
             var npc1RelativePath = LedgerRecordPath.For(pluginFileName, "npc_", npc1FormKey).Replace('\\', '/');
             Assert.Equal(npc1RelativePath, committedFiles.Split('|')[0].Trim());
 
+            // Mutation-testing finding: the tree check above doesn't rule out the untracked record's
+            // FormKey also appearing in the commit *message* (BuildMessage iterates `committed`,
+            // which a flipped guard could still include npc2 in even if its file were correctly
+            // skipped from the tree) — history naming a record it didn't touch is exactly the kind
+            // of quiet lie this ledger exists not to tell.
+            var message = GitCli.Run(gitDir, workTree, "log", "-1", "--format=%B", "main");
+            Assert.Contains(npc1FormKey, message, StringComparison.Ordinal);
+            Assert.DoesNotContain(npc2FormKey, message, StringComparison.Ordinal);
+
             Assert.False(ledger.IsTrackedAtHead(originFolder, LedgerRecordPath.For(pluginFileName, "npc_", npc2FormKey)));
         }
         finally
@@ -446,6 +455,74 @@ public sealed class LedgerGroupCommitterTests
         }
     }
 
+    // #373 review (mutation axis): the EnsureRepo Any-gate and its two paired per-record skips
+    // (IsTrackedAtHead in TryStageDelete/TryStageRenumberAsync) were each only exercised in
+    // isolation — a never-vendored target with no repo at all (CommitGroupSaveAsync_
+    // DeleteAndRenumberOfNeverVendoredRecords_AreSkipped_NoCommitProduced above, which short-
+    // circuits before the EnsureRepo gate matters) and a create with nothing else in the batch
+    // (CommitGroupSaveAsync_MixedCreateDeleteRenumberInOneOrigin above, where every target actually
+    // is tracked). The combination that actually exercises the gate doing something (repo already
+    // present from an unrelated earlier vendor) alongside both per-record skips in the same batch as
+    // a create was untested in either direction.
+    [Fact]
+    public async Task CommitGroupSaveAsync_CreateAlongsideUntrackedDeleteAndRenumberInAnOriginWithAnExistingRepo_CommitsOnlyTheCreate()
+    {
+        var ledgerRoot = Directory.CreateTempSubdirectory("medit-group-committer-ledger-").FullName;
+        var originFolder = Directory.CreateTempSubdirectory("medit-group-committer-origin-").FullName;
+        try
+        {
+            var (vendor, committer, ledger) = MakeCollaborators(ledgerRoot);
+            const string pluginFileName = "ExistingRepo.esp";
+            var pluginPath = Path.Combine(originFolder, pluginFileName);
+            var mod = new Fallout4Mod(ModKey.FromFileName(pluginFileName), Fallout4Release.Fallout4);
+            var vendoredFormKey = mod.Npcs.AddNew("VendoredNpc").FormKey.ToString();
+            var untrackedDeleteFormKey = mod.Npcs.AddNew("UntrackedDeleteNpc").FormKey.ToString();
+            var untrackedRenumberFormKey = mod.Npcs.AddNew("UntrackedRenumberNpc").FormKey.ToString();
+            mod.WriteToBinary(pluginPath);
+
+            // Repo already exists from an unrelated earlier touch — EnsureRepo's own Any-gate must
+            // be a true no-op here, not a fresh re-init that would clobber existing history.
+            await VendorAsync(vendor, originFolder, pluginPath, pluginFileName, vendoredFormKey);
+            Assert.Equal(1, CommitCount(ledger, originFolder));
+
+            const string createdFormKey = "000900:ExistingRepo.esp";
+
+            await committer.CommitGroupSaveAsync([
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", createdFormKey,
+                    ChangeType: PendingChangeConstants.CreateChangeType),
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", untrackedDeleteFormKey,
+                    ChangeType: PendingChangeConstants.DeleteChangeType),
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", untrackedRenumberFormKey,
+                    ChangeType: PendingChangeConstants.RenumberChangeType, NewFormKey: "000902:ExistingRepo.esp"),
+            ], GameRelease.Fallout4);
+
+            // One new commit — the create alone; neither untracked target contributed anything.
+            Assert.Equal(2, CommitCount(ledger, originFolder));
+
+            var (gitDir, workTree) = ledger.PathsFor(originFolder);
+            var committedFiles = GitCli.Run(gitDir, workTree, "show", "--stat", "--format=", "HEAD").Trim();
+            var createdRelativePath = LedgerRecordPath.For(pluginFileName, "npc_", createdFormKey).Replace('\\', '/');
+            Assert.Equal(createdRelativePath, committedFiles.Split('|')[0].Trim());
+
+            // No phantom entries: neither untracked target's FormKey reaches the commit message...
+            var message = GitCli.Run(gitDir, workTree, "log", "-1", "--format=%B", "main");
+            Assert.Contains(createdFormKey, message, StringComparison.Ordinal);
+            Assert.DoesNotContain(untrackedDeleteFormKey, message, StringComparison.Ordinal);
+            Assert.DoesNotContain(untrackedRenumberFormKey, message, StringComparison.Ordinal);
+
+            // ...nor does the ledger fabricate tracking for either of them.
+            Assert.False(ledger.IsTrackedAtHead(originFolder, LedgerRecordPath.For(pluginFileName, "npc_", untrackedDeleteFormKey)));
+            Assert.False(ledger.IsTrackedAtHead(originFolder, LedgerRecordPath.For(pluginFileName, "npc_", untrackedRenumberFormKey)));
+
+            AssertNoStagedEntries(gitDir, workTree);
+        }
+        finally
+        {
+            Directory.Delete(ledgerRoot, recursive: true);
+            Directory.Delete(originFolder, recursive: true);
+        }
+    }
+
     // #373 review (Major): TryUnstage alone is index-only rollback, which is sufficient for an
     // ordinary field edit (its working-tree dirt was written independently at stage time, untouched
     // by this attempt) but not for a delete: the working-tree File.Delete *is* this attempt's own
@@ -533,6 +610,49 @@ public sealed class LedgerGroupCommitterTests
             Assert.Equal(originalContent, await File.ReadAllTextAsync(npc1AbsolutePath));
 
             var (gitDir, workTree) = ledger.PathsFor(originFolder);
+            AssertNoStagedEntries(gitDir, workTree);
+        }
+        finally
+        {
+            Directory.Delete(ledgerRoot, recursive: true);
+            Directory.Delete(originFolder, recursive: true);
+        }
+    }
+
+    // #373 review (mutation axis): the two rollback tests above cover Delete and Renumber's own
+    // stagedPaths.Add calls (verified directly — a mutant silencing either one makes its own test
+    // fail), but neither exercises Create's: a mutant removing TryStageCreateAsync's own
+    // stagedPaths.Add survived undetected. The create stages a brand-new file successfully first;
+    // the second entry's malformed FormKey throws before ever reaching IsTrackedAtHead/StagePath,
+    // exercising the catch with the create's own path already staged.
+    [Fact]
+    public async Task CommitGroupSaveAsync_CreateStagesAFileThenALaterRecordThrows_RollsBackTheStagedEntry()
+    {
+        var ledgerRoot = Directory.CreateTempSubdirectory("medit-group-committer-ledger-").FullName;
+        var originFolder = Directory.CreateTempSubdirectory("medit-group-committer-origin-").FullName;
+        try
+        {
+            var (_, committer, ledger) = MakeCollaborators(ledgerRoot);
+            const string pluginFileName = "CreateRollback.esp";
+            WritePlugin(originFolder, pluginFileName, out _, out _); // only needs to exist on disk
+
+            const string createdFormKey = "000900:CreateRollback.esp";
+
+            await committer.CommitGroupSaveAsync([
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", createdFormKey,
+                    ChangeType: PendingChangeConstants.CreateChangeType),
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", "not-a-valid-form-key",
+                    ChangeType: PendingChangeConstants.DeleteChangeType),
+            ], GameRelease.Fallout4);
+
+            // Best-effort: never throws past the caller. EnsureRepo did run (a create was present in
+            // the batch), so the repo exists — but with an unborn HEAD (no commit ever landed), so
+            // `git log` has no valid ref to read yet; git status is the seam that still works here.
+            var (gitDir, workTree) = ledger.PathsFor(originFolder);
+            Assert.True(Directory.Exists(gitDir));
+
+            // The create's own file was written and staged before the later record threw — it must
+            // not be left sitting in the index for some later, unrelated commit to silently sweep in.
             AssertNoStagedEntries(gitDir, workTree);
         }
         finally
