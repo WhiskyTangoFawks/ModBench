@@ -237,3 +237,68 @@ describe.skipIf(process.platform === 'win32')('buildFileConflictIndex — non-re
     expect(log).toHaveBeenCalledWith(expect.stringContaining('linked-pipe'));
   });
 });
+
+// #374: MEditService's per-plugin ledger text tree lands inside the mod folder itself
+// (`<pluginFileName>.ledger/...`, ADR-0040) and must not deploy or appear as mod content. The
+// gitdir itself needs no test here — it lives entirely outside mods/ (LedgerOptions,
+// %LOCALAPPDATA%/mEdit/ledgers/) and is invisible to this walk by construction. Three-outcome
+// shape mirrors the #324 hazard-class pattern: the real thing is excluded, a look-alike with no
+// sibling plugin is not (over-match guard), and a plain file sharing the name is not
+// (directory-only guard).
+describe('buildFileConflictIndex — ledger text tree exclusion (#374)', () => {
+  let instanceRoot: string;
+  let modARoot: string;
+
+  beforeEach(async () => {
+    instanceRoot = await mkdtemp(join(tmpdir(), 'medit-conflict-ledger-'));
+    modARoot = join(instanceRoot, 'mods', 'ModA');
+    await mkdir(modARoot, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(instanceRoot, { recursive: true, force: true });
+  });
+
+  it('excludes the ledger text tree of a plugin actually present in the mod', async () => {
+    await writeFile(join(modARoot, 'Foo.esp'), 'PLUGINBYTES');
+    const ledgerRecordDir = join(modARoot, 'Foo.esp.ledger', 'records', 'Foo.esp');
+    await mkdir(ledgerRecordDir, { recursive: true });
+    await writeFile(join(ledgerRecordDir, '00001E.yaml'), 'record: text');
+
+    const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
+
+    expect(index.files.has('Foo.esp')).toBe(true);
+    expect([...index.files].map((e) => e.relativePath)).toEqual(['Foo.esp']);
+    expect(index.filesByMod.get('ModA')?.map((f) => f.relativePath)).toEqual(['Foo.esp']);
+  });
+
+  it('matches the sibling plugin case-insensitively (Bethesda plugin casing is inconsistent)', async () => {
+    await writeFile(join(modARoot, 'Foo.ESP'), 'PLUGINBYTES');
+    const ledgerRecordDir = join(modARoot, 'foo.esp.ledger', 'records', 'foo.esp');
+    await mkdir(ledgerRecordDir, { recursive: true });
+    await writeFile(join(ledgerRecordDir, '00001E.yaml'), 'record: text');
+
+    const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
+
+    expect([...index.files].map((e) => e.relativePath)).toEqual(['Foo.ESP']);
+  });
+
+  it('does NOT exclude a "*.ledger" folder with no matching plugin file — an author-named folder is ordinary content (#324 over-match guard)', async () => {
+    const lookalikeDir = join(modARoot, 'Bar.ledger');
+    await mkdir(lookalikeDir, { recursive: true });
+    await writeFile(join(lookalikeDir, 'notes.txt'), 'not ledger state');
+
+    const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
+
+    expect(index.files.has('Bar.ledger/notes.txt')).toBe(true);
+  });
+
+  it('does NOT exclude a plain file (not a directory) literally named "<plugin>.ledger" (directory-only guard)', async () => {
+    await writeFile(join(modARoot, 'Foo.esp'), 'PLUGINBYTES');
+    await writeFile(join(modARoot, 'Foo.esp.ledger'), 'just a file, not a ledger tree');
+
+    const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
+
+    expect(index.files.has('Foo.esp.ledger')).toBe(true);
+  });
+});

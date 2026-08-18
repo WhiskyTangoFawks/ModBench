@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { link, lstat, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { deploy, isDeployed, purge } from './deployer';
+import { deploy, isDeployed, listRelativeFiles, purge } from './deployer';
 import { makeDeployerFixture, makeIndex, type DeployerFixture } from './test/deployerFixture';
 import { buildFileConflictIndex } from './fileConflictIndex';
 import type { ModlistEntry } from './model';
@@ -60,6 +60,55 @@ describe('deploy', () => {
       expect(await readFile(deployedPath, 'utf8')).toBe('REAL');
     },
   );
+
+  // #374 (AC1): a tracked mod deploys byte-identically to the untracked equivalent — no vcs
+  // state, no ledger text tree in the game directory. The gitdir needs no test here — it lives
+  // outside mods/ entirely (LedgerOptions) and this walk never reaches it; the ledger text tree
+  // does land inside the mod folder and is what fileConflictIndex.ts's exclusion (#374) keeps
+  // out of the index deploy() consumes.
+  it('deploys only the plugin, never its ledger text tree, when a mod has acquired a repo', async () => {
+    fx = await makeDeployerFixture();
+    await fx.writeModFile('ModA', 'Foo.esp', 'PLUGINBYTES');
+    await fx.writeModFile('ModA', 'Foo.esp.ledger/records/Foo.esp/00001E.yaml', 'record: text');
+    const entries: ModlistEntry[] = [{ kind: 'mod', name: 'ModA', enabled: true }];
+    const index = await buildFileConflictIndex(entries, fx.instanceRoot, () => {});
+
+    await deploy(fx.instanceRoot, fx.gameDirectory, index, fakeReporter());
+
+    const deployedFiles = await listRelativeFiles(fx.gameDirectory.dataFolder);
+    expect(deployedFiles).toEqual(['Foo.esp']);
+    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    expect(manifest.links).toEqual(['Foo.esp']);
+  });
+
+  // #374 (AC2): "manifest hashing yields identical results... before and after a mod acquires a
+  // repo" — there is no manifest hashing anywhere in Mod Management today (#388 owns hashing
+  // pristine binaries for provenance, a different job), so this reads the criterion as *manifest
+  // identity* across the tracked/untracked boundary and proves that directly: same plugin bytes,
+  // same manifest, whether or not the ledger tree exists alongside it.
+  it('produces an identical manifest before and after the same mod acquires a repo, and never rewrites the plugin bytes', async () => {
+    fx = await makeDeployerFixture();
+    const pluginPath = await fx.writeModFile('ModA', 'Foo.esp', 'PLUGINBYTES');
+    const entries: ModlistEntry[] = [{ kind: 'mod', name: 'ModA', enabled: true }];
+
+    const beforeIndex = await buildFileConflictIndex(entries, fx.instanceRoot, () => {});
+    await deploy(fx.instanceRoot, fx.gameDirectory, beforeIndex, fakeReporter());
+    const manifestBefore = await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8');
+    const pluginBytesBefore = await readFile(pluginPath, 'utf8');
+    await purge(fx.instanceRoot, fx.gameDirectory, fakeReporter());
+
+    // Simulate the mod acquiring a repo: RecordVendor never rewrites the plugin binary (traced
+    // in MEditService.Core/Ledger/RecordVendor.cs — it serializes only to the ledger text path),
+    // it only adds the text tree alongside the untouched plugin.
+    await fx.writeModFile('ModA', 'Foo.esp.ledger/records/Foo.esp/00001E.yaml', 'record: text');
+    const afterIndex = await buildFileConflictIndex(entries, fx.instanceRoot, () => {});
+    await deploy(fx.instanceRoot, fx.gameDirectory, afterIndex, fakeReporter());
+    const manifestAfter = await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8');
+    const pluginBytesAfter = await readFile(pluginPath, 'utf8');
+
+    expect(manifestAfter).toBe(manifestBefore);
+    expect(pluginBytesAfter).toBe(pluginBytesBefore);
+  });
 
   it('reports the cross-volume-specific message (and does not throw, and never the "already exists" message) when a winner\'s link fails with EXDEV — e.g. a symlinked file resolving onto another volume (#322)', async () => {
     fx = await makeDeployerFixture();
