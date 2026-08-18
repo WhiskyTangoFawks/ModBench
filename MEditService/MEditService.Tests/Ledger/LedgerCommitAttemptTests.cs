@@ -66,7 +66,7 @@ public sealed class LedgerCommitAttemptTests
 
         var (gitDir, workTree) = ledger.PathsFor(originFolder);
         Assert.Equal("", GitCli.Run(gitDir, workTree, "diff", "--cached", "--name-only").Trim());
-        Assert.Equal(pristine, File.ReadAllText(absolutePath));
+        Assert.Equal(pristine, await File.ReadAllTextAsync(absolutePath));
     }
 
     [Fact]
@@ -113,16 +113,54 @@ public sealed class LedgerCommitAttemptTests
         var (ledger, originFolder) = (fixture.Ledger, fixture.OriginFolder);
 
         var first = await ledger.BeginAttemptAsync(originFolder);
-        var secondTask = ledger.BeginAttemptAsync(originFolder);
+        try
+        {
+            var secondTask = ledger.BeginAttemptAsync(originFolder);
 
-        // git's own index.lock makes two interleaved staging sequences against one gitdir race
-        // (one throws) — the scope must hold the second attempt at the door, not let it in to
-        // lose that race.
-        await Task.Delay(100);
-        Assert.False(secondTask.IsCompleted);
+            // git's own index.lock makes two interleaved staging sequences against one gitdir race
+            // (one throws) — the scope must hold the second attempt at the door, not let it in to
+            // lose that race. Timing-based by necessity (the wait is the behavior under test); the
+            // delay only ever risks a false PASS under extreme load, never a flaky failure, and the
+            // WaitAsync below fails loudly if the gate is never released.
+            await Task.Delay(100);
+            Assert.False(secondTask.IsCompleted);
 
-        first.Dispose();
-        using var second = await secondTask.WaitAsync(TimeSpan.FromSeconds(5));
+            first.Dispose();
+            using var second = await secondTask.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch
+        {
+            // On assertion failure the gate must not leak into other tests sharing this origin
+            // folder's static gate map entry (unique temp dirs make this near-inert, but a leaked
+            // hold would turn a real failure into a cascade of confusing timeouts).
+            first.Dispose();
+            throw;
+        }
+    }
+
+    [Fact]
+    public async Task CommitWithoutAnyStage_RefusesLoudly_NeverSweepsAStrayIndexEntry()
+    {
+        using var fixture = new Fixture("commit-without-stage");
+        var (ledger, originFolder) = (fixture.Ledger, fixture.OriginFolder);
+        var strayPath = LedgerRecordPath.For("Vendor.esp", "npc_", "000900:Vendor.esp");
+        var strayAbsolute = Path.Combine(originFolder, strayPath);
+
+        // A crashed earlier attempt's orphan sits in the index. An attempt that stages nothing
+        // never runs the known-clean reset (by design — it must not touch a repo it isn't writing
+        // to), so a bare Commit here would commit the stray under a message that never mentions
+        // it. The scope must refuse instead.
+        ledger.EnsureRepo(originFolder);
+        Directory.CreateDirectory(Path.GetDirectoryName(strayAbsolute)!);
+        await File.WriteAllTextAsync(strayAbsolute, "FormKey: 000900:Vendor.esp\n");
+        ledger.StagePath(originFolder, strayPath);
+
+        using (var attempt = await ledger.BeginAttemptAsync(originFolder))
+        {
+            Assert.Throws<InvalidOperationException>(() => attempt.Commit("save: nothing"));
+        }
+
+        Assert.False(ledger.IsTrackedAtHead(originFolder, strayPath));
     }
 
     private sealed class Fixture : IDisposable

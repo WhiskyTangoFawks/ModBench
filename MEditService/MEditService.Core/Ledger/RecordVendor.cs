@@ -53,7 +53,7 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         var relativePath = LedgerRecordPath.For(pluginFileName, recordType, formKeyString);
         var absolutePath = Path.Combine(originFolder, relativePath);
 
-        if (ledger.IsTrackedAtHead(originFolder, relativePath))
+        if (attempt.IsTrackedAtHead(relativePath))
         {
             var record = await codec.DeserializeAsync(absolutePath, concreteRecordType, release, cancel).ConfigureAwait(false);
             ApplyFields(record, fields, recordType, schemas, release);

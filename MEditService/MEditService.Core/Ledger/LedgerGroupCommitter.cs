@@ -100,7 +100,7 @@ public sealed class LedgerGroupCommitter(
             // interleave with it. Disposing after CommitOriginAsync's own best-effort catch also
             // unstages whatever a failed attempt staged, after the catch's working-tree restores.
             using var attempt = await ledger.BeginAttemptAsync(group.Key).ConfigureAwait(false);
-            await CommitOriginAsync(attempt, group.Key, [.. group.DistinctBy(t => (t.PluginFileName, t.RecordType, t.FormKey))], release)
+            await CommitOriginAsync(attempt, [.. group.DistinctBy(t => (t.PluginFileName, t.RecordType, t.FormKey))], release)
                 .ConfigureAwait(false);
         }
     }
@@ -108,7 +108,7 @@ public sealed class LedgerGroupCommitter(
     // Non-atomic across origins by design (see class remarks) — a throw for one origin folder must
     // not stop the loop from attempting the rest, and never bubbles to the caller (best-effort).
     private async Task CommitOriginAsync(
-        LedgerRepository.CommitAttempt attempt, string originFolder, IReadOnlyList<LedgerTouchedRecord> records, GameRelease release)
+        LedgerRepository.CommitAttempt attempt, IReadOnlyList<LedgerTouchedRecord> records, GameRelease release)
     {
         var removedFiles = new List<RemovedFileBackup>();
         var committed = new List<LedgerTouchedRecord>();
@@ -136,12 +136,12 @@ public sealed class LedgerGroupCommitter(
                 var handled = record.ChangeType switch
                 {
                     PendingChangeConstants.CreateChangeType =>
-                        await TryStageCreateAsync(attempt, originFolder, record, schemas, release).ConfigureAwait(false),
+                        await TryStageCreateAsync(attempt, record, schemas, release).ConfigureAwait(false),
                     PendingChangeConstants.DeleteChangeType =>
-                        TryStageDelete(attempt, originFolder, record, removedFiles),
+                        TryStageDelete(attempt, record, removedFiles),
                     PendingChangeConstants.RenumberChangeType =>
-                        await TryStageRenumberAsync(attempt, originFolder, record, schemas, release, removedFiles).ConfigureAwait(false),
-                    _ => TryStageFieldEdit(attempt, originFolder, record),
+                        await TryStageRenumberAsync(attempt, record, schemas, release, removedFiles).ConfigureAwait(false),
+                    _ => TryStageFieldEdit(attempt, record),
                 };
 
                 if (handled) committed.Add(record);
@@ -157,7 +157,7 @@ public sealed class LedgerGroupCommitter(
                 // no commit must be findable, never silently treated internally as "committed".
                 logger.LogInformation(
                     "Save touched {Count} record(s) in {OriginFolder} but none are ledger-tracked; no ledger commit was made for this save",
-                    records.Count, originFolder);
+                    records.Count, attempt.OriginFolder);
                 return;
             }
 
@@ -183,7 +183,7 @@ public sealed class LedgerGroupCommitter(
 
             logger.LogWarning(ex,
                 "Ledger commit failed for a saved group touching {OriginFolder}; the binary write and pending-change save already succeeded, ledger history was not advanced for this save",
-                originFolder);
+                attempt.OriginFolder);
         }
     }
 
@@ -198,10 +198,10 @@ public sealed class LedgerGroupCommitter(
     // The pre-#373 behaviour, unchanged: not every touched record is ledger-tracked (a change type
     // the ledger never represents e.g. a VMAD struct-op-only edit — #389 — or a DataDirectory-origin
     // plugin with no repo at all). Skipping those is correct, not a gap being papered over.
-    private bool TryStageFieldEdit(LedgerRepository.CommitAttempt attempt, string originFolder, LedgerTouchedRecord record)
+    private static bool TryStageFieldEdit(LedgerRepository.CommitAttempt attempt, LedgerTouchedRecord record)
     {
         var relativePath = LedgerRecordPath.For(record.PluginFileName, record.RecordType, record.FormKey);
-        if (!ledger.IsTrackedAtHead(originFolder, relativePath)) return false;
+        if (!attempt.IsTrackedAtHead(relativePath)) return false;
 
         attempt.Stage(relativePath);
         return true;
@@ -217,7 +217,7 @@ public sealed class LedgerGroupCommitter(
     // strip container fields defensively (ADR-0040/#387 amendment), and stage the brand-new path
     // unconditionally — there is no earlier commit at this path to check against.
     private async Task<bool> TryStageCreateAsync(
-        LedgerRepository.CommitAttempt attempt, string originFolder, LedgerTouchedRecord record,
+        LedgerRepository.CommitAttempt attempt, LedgerTouchedRecord record,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
         if (!schemas.TryGetValue(record.RecordType, out var schema)) return false;
@@ -230,7 +230,7 @@ public sealed class LedgerGroupCommitter(
         ContainerStripFields.StripInPlace(created);
 
         var relativePath = LedgerRecordPath.For(record.PluginFileName, record.RecordType, record.FormKey);
-        var absolutePath = Path.Combine(originFolder, relativePath);
+        var absolutePath = Path.Combine(attempt.OriginFolder, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
         await codec.SerializeAsync(created, absolutePath, release).ConfigureAwait(false);
 
@@ -245,14 +245,14 @@ public sealed class LedgerGroupCommitter(
     // "skip, not a gap" contract TryStageFieldEdit already has. Removing the working-tree file and
     // staging the (now tracked) path captures the removal — `git add` on a removed tracked path
     // stages the deletion, no separate `git rm` needed.
-    private bool TryStageDelete(
-        LedgerRepository.CommitAttempt attempt, string originFolder, LedgerTouchedRecord record,
+    private static bool TryStageDelete(
+        LedgerRepository.CommitAttempt attempt, LedgerTouchedRecord record,
         List<RemovedFileBackup> removedFiles)
     {
         var relativePath = LedgerRecordPath.For(record.PluginFileName, record.RecordType, record.FormKey);
-        if (!ledger.IsTrackedAtHead(originFolder, relativePath)) return false;
+        if (!attempt.IsTrackedAtHead(relativePath)) return false;
 
-        var absolutePath = Path.Combine(originFolder, relativePath);
+        var absolutePath = Path.Combine(attempt.OriginFolder, relativePath);
         if (File.Exists(absolutePath))
         {
             // Captured before deletion — see RemovedFileBackup's own remarks.
@@ -279,7 +279,7 @@ public sealed class LedgerGroupCommitter(
     // known, structural boundary (git's own default threshold, deliberately not overridden — #373
     // orchestrator decision Q1), not a defect here.
     private async Task<bool> TryStageRenumberAsync(
-        LedgerRepository.CommitAttempt attempt, string originFolder, LedgerTouchedRecord record,
+        LedgerRepository.CommitAttempt attempt, LedgerTouchedRecord record,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release, List<RemovedFileBackup> removedFiles)
     {
         if (record.NewFormKey is not { } newFormKeyString) return false;
@@ -288,15 +288,15 @@ public sealed class LedgerGroupCommitter(
         if (!FormKey.TryFactory(newFormKeyString, out var newFormKey)) return false;
 
         var oldRelativePath = LedgerRecordPath.For(record.PluginFileName, record.RecordType, record.FormKey);
-        if (!ledger.IsTrackedAtHead(originFolder, oldRelativePath)) return false;
+        if (!attempt.IsTrackedAtHead(oldRelativePath)) return false;
 
-        var oldAbsolutePath = Path.Combine(originFolder, oldRelativePath);
+        var oldAbsolutePath = Path.Combine(attempt.OriginFolder, oldRelativePath);
         var current = await codec.DeserializeAsync(oldAbsolutePath, concreteType, release).ConfigureAwait(false);
         var renumbered = (IMajorRecord)current.Duplicate(newFormKey);
         ContainerStripFields.StripInPlace(renumbered);
 
         var newRelativePath = LedgerRecordPath.For(record.PluginFileName, record.RecordType, newFormKeyString);
-        var newAbsolutePath = Path.Combine(originFolder, newRelativePath);
+        var newAbsolutePath = Path.Combine(attempt.OriginFolder, newRelativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(newAbsolutePath)!);
         await codec.SerializeAsync(renumbered, newAbsolutePath, release).ConfigureAwait(false);
 

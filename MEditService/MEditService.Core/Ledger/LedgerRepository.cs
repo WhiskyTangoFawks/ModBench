@@ -77,7 +77,17 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
             this.logger = logger;
         }
 
+        /// <summary>The origin folder this attempt is scoped to — exposed so helpers a caller
+        /// splits its work into can take the attempt alone instead of the attempt and the folder
+        /// travelling as a pair.</summary>
+        public string OriginFolder => originFolder;
+
         public void EnsureRepo() => repository.EnsureRepo(originFolder);
+
+        /// <summary>See <see cref="LedgerRepository.IsTrackedAtHead"/> — same read, scoped to this
+        /// attempt's origin folder, so the stage-or-skip decision every committing caller makes
+        /// goes through the same door as the staging itself.</summary>
+        public bool IsTrackedAtHead(string relativePath) => repository.IsTrackedAtHead(originFolder, relativePath);
 
         private bool indexReset;
 
@@ -100,8 +110,18 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
             stagedPaths.Add(relativePath);
         }
 
+        /// <summary>Refuses when this attempt staged nothing (spec-review finding, #393): an
+        /// attempt that never staged also never ran the known-clean index reset (see
+        /// <see cref="Stage"/>), so a bare commit here would commit whatever the index happens to
+        /// hold — a crashed earlier attempt's orphan, under a message that never mentions it. No
+        /// production caller commits without staging; refusing keeps that a loud contract instead
+        /// of a silent hazard.</summary>
         public void Commit(string message)
         {
+            if (stagedPaths.Count == 0)
+                throw new InvalidOperationException(
+                    "Nothing was staged in this attempt; refusing to commit whatever the index happens to hold.");
+
             repository.CommitStaged(originFolder, message);
             stagedPaths.Clear();
         }
@@ -149,8 +169,8 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
     /// the gitdir's own <c>HEAD</c> file rather than tracking "already initialized" anywhere else —
     /// the filesystem is the only source of truth here, same as the truth-partition model's DB. Not
     /// safe to call concurrently against the same origin folder from two threads without an external
-    /// lock — see <c>RecordVendor</c>'s per-origin-folder gate, which is what actually makes this
-    /// check-then-create sequence race-free in production.</summary>
+    /// lock — the attempt scope's per-origin gate (<see cref="BeginAttemptAsync"/>) is what
+    /// actually makes this check-then-create sequence race-free in production.</summary>
     internal void EnsureRepo(string originFolder)
     {
         var (gitDir, workTree) = PathsFor(originFolder);
@@ -293,8 +313,9 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
     /// <c>git commit</c> commits the index as a whole, which is what actually produces "the staged
     /// pristine blob, not today's working-tree content" — verified directly (two shell probes, one
     /// per form) before landing this, not assumed from a plausible-sounding pathspec-narrowing
-    /// analogy to <c>add</c>/<c>reset</c>. <see cref="UnstagePath"/> is the caller's guard against
-    /// this now committing an unrelated stray index entry from an earlier failed attempt.</summary>
+    /// analogy to <c>add</c>/<c>reset</c>. The attempt scope's unstage-on-dispose (and the reset
+    /// before its first stage) is the guard against this committing an unrelated stray index entry
+    /// from an earlier failed attempt.</summary>
     internal void CommitStaged(string originFolder, string message)
     {
         var (gitDir, workTree) = PathsFor(originFolder);
