@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
+using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -234,11 +235,28 @@ public class SaveChangeGroupLedgerCommitApiTests
         var committed = GitCli.Run(gitDir, workTree, "show", $"main:{relativePath}");
         Assert.Contains("SomeScript", committed, StringComparison.Ordinal);
 
-        // What the ledger now holds at HEAD is what the save actually wrote to the binary: a fresh
-        // deep-parse of the saved plugin shows the same script attached to the same NPC.
+        // AC2, two-sided: what the ledger committed must *equal* what the save actually wrote to the
+        // binary, not merely both happen to mention the script name. A fresh deep-parse of the saved
+        // plugin — an entirely independent read of the real binary bytes on disk, not the in-memory
+        // record RecordVendor already had staged — run back through the very same RecordTextCodec the
+        // ledger itself uses must reproduce the committed text byte-for-byte; a script vendored with
+        // wrong flags, wrong/extra properties, or misapplied via the wrong ChangeType (this ticket's
+        // own bug class) would diverge here even though both blobs still mention "SomeScript".
         var modPath = new ModPath(ModKey.FromFileName("SaveTarget.esp"), pluginPath);
         var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
         var npc = mod.Npcs.First(n => n.FormKey.ToString() == npcFormKey);
-        Assert.Contains(npc.VirtualMachineAdapter!.Scripts, s => s.Name == "SomeScript");
+
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+        var reparsedPath = Path.Combine(Path.GetTempPath(), $"medit-vmad-reparsed-{Guid.NewGuid()}.yaml");
+        try
+        {
+            await codec.SerializeAsync(npc, reparsedPath, GameRelease.Fallout4);
+            var reparsedText = await File.ReadAllTextAsync(reparsedPath);
+            Assert.Equal(committed, reparsedText);
+        }
+        finally
+        {
+            File.Delete(reparsedPath);
+        }
     }
 }
