@@ -169,8 +169,10 @@ record's committed (`HEAD`) text against its current working-tree text.
 - **Routing a resource click to the compare grid in review mode** — #380. This stage's diff is
   always the native raw-text diff editor.
 - **EditorID-resolved record labels** — plain FormKey for now; see Implementation Decisions.
-- **Cross-repo atomic commit, upstream anchors, drift detection** — later ADR-0040 stages
-  (#372, #382, #387's own follow-ups), not read by this surface at all.
+- **Upstream anchors, drift detection** — later ADR-0040 stages (#382, #388), not read by
+  this surface at all. Cross-repo atomic saves shipped with #372 (journaled prepare/advance
+  behind `LedgerGroupCommitter.CommitGroupSaveAsync`, startup recovery replaying the journal —
+  loud refusal on divergence, never a silent half-apply); also not read by this surface.
 
 ## Further Notes
 
