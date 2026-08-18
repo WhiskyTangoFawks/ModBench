@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace MEditService.Core.Ledger;
@@ -36,6 +38,20 @@ namespace MEditService.Core.Ledger;
 /// <see cref="ResetIndexToHead"/>/<see cref="EnsureRepo"/>) are <c>internal</c>: production code
 /// cannot sequence them by hand; tests reach them directly for fixture setup, the same
 /// <c>InternalsVisibleTo</c> discipline <see cref="GitCli"/> already uses.
+///
+/// <b>Cross-repo atomicity (#372).</b> A change group spanning several origin folders used to produce
+/// one independent, non-atomic commit per origin with no coordination between them — a real,
+/// bounded inconsistency window if one origin's commit failed after another's had already succeeded.
+/// That window is closed by a journal, not by making git itself transactional across repos (it
+/// isn't): <see cref="LedgerGroupCommitter"/> stages every touched origin and records each one's
+/// <see cref="JournalEntry"/> — <see cref="WriteTree"/>'s content hash, the exact tree the pending
+/// commit will produce — before advancing (committing) any of them, via <see cref="WriteJournal"/>.
+/// <see cref="Recover"/>, run once at startup, replays whatever journal a prior process left behind:
+/// a repo whose <c>HEAD</c> already matches its journaled hash advanced before the crash; one whose
+/// staged index still matches was interrupted before its own commit ran and is completed directly;
+/// one that matches neither refuses loudly rather than guessing. A live (non-crashed) failure never
+/// leaves a journal behind — the entry is removed the moment this process gives up on it, precisely
+/// because only a genuine crash leaves the on-disk index in the state the journal describes.
 /// </summary>
 public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerRepository> logger)
 {
@@ -382,4 +398,161 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
     }
 
     private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
+
+    // ---- Cross-repo atomicity journal (#372) ----------------------------------------------------
+
+    /// <summary>One repo's intended advance, as the spike prototype shaped it (<c>{ repo,
+    /// expectedContentHash }</c>) plus <see cref="Message"/> — a faithful completion of that shape,
+    /// not a deviation from it (orchestrator-directed, #372): the spike's own finding only names the
+    /// decision-rich part (what a caller must validate and persist before advancing anything), and
+    /// recovering a lagging repo still needs the exact commit message the interrupted attempt would
+    /// have used — inventing a placeholder here would misrepresent history for no reason.
+    /// <see cref="OriginFolder"/> serializes as <c>repo</c> to match that shape literally.</summary>
+    internal sealed record JournalEntry(
+        [property: JsonPropertyName("repo")] string OriginFolder,
+        string ExpectedContentHash,
+        string Message);
+
+    private static readonly JsonSerializerOptions JournalJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+    /// <summary>The tree object SHA the current index would produce if committed right now
+    /// (<c>git write-tree</c>) — computed from the index, not the working tree, so it reflects
+    /// exactly what a following <see cref="CommitStaged"/> would commit. This is the journal's
+    /// "expected content hash": deterministic regardless of commit timestamp/author, so recovery can
+    /// compare it against a HEAD produced at a different wall-clock time than the crashed attempt's
+    /// own would have been.</summary>
+    internal string WriteTree(string originFolder)
+    {
+        var (gitDir, workTree) = PathsFor(originFolder);
+        return GitCli.Run(gitDir, workTree, "write-tree").Trim();
+    }
+
+    private string JournalDirectory => Path.Combine(options.RootPath, "_journal");
+
+    private string JournalPath(Guid groupId) => Path.Combine(JournalDirectory, $"{groupId:N}.json");
+
+    /// <summary>Persists <paramref name="entries"/> as <paramref name="groupId"/>'s journal —
+    /// overwrites whatever was there before (the caller passes the *current* full set each time, not
+    /// a delta). Temp-file-then-rename (review discipline already used elsewhere in this class for
+    /// durable writes): a crash mid-write of the journal file itself leaves either the old complete
+    /// content or the new complete content, never a torn one recovery would fail to parse.</summary>
+    internal void WriteJournal(Guid groupId, IReadOnlyList<JournalEntry> entries)
+    {
+        Directory.CreateDirectory(JournalDirectory);
+        var path = JournalPath(groupId);
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, JsonSerializer.Serialize(entries, JournalJsonOptions));
+        File.Move(tmp, path, overwrite: true);
+    }
+
+    internal void DeleteJournal(Guid groupId)
+    {
+        var path = JournalPath(groupId);
+        if (File.Exists(path)) File.Delete(path);
+    }
+
+    /// <summary>Every leftover journal file — each one a group save that still had at least one repo
+    /// unresolved the last time this process ran. Empty (not a throw) when the journal directory
+    /// doesn't exist at all — the common case, a clean prior shutdown (AC4). A file whose name isn't
+    /// a bare GUID, or whose content isn't valid JSON, is skipped rather than crashing the whole
+    /// read — this directory holds nothing but journals this class itself writes, but a corrupt file
+    /// must not block recovering every *other* one.</summary>
+    internal IReadOnlyList<(string Path, Guid GroupId, List<JournalEntry> Entries)> ReadJournals()
+    {
+        if (!Directory.Exists(JournalDirectory)) return [];
+
+        var result = new List<(string, Guid, List<JournalEntry>)>();
+        foreach (var file in Directory.GetFiles(JournalDirectory, "*.json"))
+        {
+            if (!Guid.TryParseExact(Path.GetFileNameWithoutExtension(file), "N", out var groupId)) continue;
+            try
+            {
+                var entries = JsonSerializer.Deserialize<List<JournalEntry>>(File.ReadAllText(file), JournalJsonOptions) ?? [];
+                result.Add((file, groupId, entries));
+            }
+            catch (JsonException ex)
+            {
+                logger.LogWarning(ex, "Ledger journal {Path} is not valid JSON; skipped by recovery", file);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>Replays every leftover journal at startup (#372) — the recovery half of the
+    /// prepare/journal/advance protocol <see cref="LedgerGroupCommitter"/> drives. Per entry: a repo
+    /// whose <c>HEAD</c> tree already matches the journaled <see cref="JournalEntry.ExpectedContentHash"/>
+    /// already advanced (no-op — the crash landed after the real commit but before this process got to
+    /// remove the entry, or after a prior recovery pass already completed it); one whose *currently
+    /// staged* index tree matches instead was interrupted before its own <c>git commit</c> ever ran —
+    /// completed here via <see cref="CommitStaged"/> directly, bypassing <see cref="CommitAttempt"/>'s
+    /// normal in-memory staged-path bookkeeping (that bookkeeping belongs to a live caller sequencing
+    /// its own stage/commit calls; recovery instead independently re-verifies the index against the
+    /// journaled hash immediately before acting, which is what makes this bypass safe rather than a
+    /// hole in the "one door" discipline). Anything else — neither matches — refuses loudly: logs the
+    /// divergence at Error and leaves the entry (and its journal file) in place for manual inspection,
+    /// never guessing at what to commit.
+    ///
+    /// Best-effort per entry and per file, same discipline as <see cref="LedgerLifecycleReconciler"/>
+    /// — one bad entry must not stop recovery from resolving every other one, or crash startup
+    /// entirely.</summary>
+    public void Recover()
+    {
+        foreach (var (path, groupId, entries) in ReadJournals())
+        {
+            var remaining = new List<JournalEntry>();
+            foreach (var entry in entries)
+            {
+                try
+                {
+                    if (!TryRecoverEntry(entry)) remaining.Add(entry);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex,
+                        "Ledger recovery failed for {OriginFolder} (group {GroupId}); leaving its journal entry in place",
+                        entry.OriginFolder, groupId);
+                    remaining.Add(entry);
+                }
+            }
+
+            if (remaining.Count == 0) File.Delete(path);
+            else File.WriteAllText(path, JsonSerializer.Serialize(remaining, JournalJsonOptions));
+        }
+    }
+
+    // Returns true once the entry is resolved (already advanced, or completed here) — false means
+    // "refused", and the caller keeps it in the journal.
+    private bool TryRecoverEntry(JournalEntry entry)
+    {
+        if (!RepoExists(entry.OriginFolder))
+        {
+            logger.LogError(
+                "Ledger recovery: {OriginFolder} has no repo at all but was journaled to advance to {ExpectedContentHash}; refusing — nothing to complete",
+                entry.OriginFolder, entry.ExpectedContentHash);
+            return false;
+        }
+
+        var (gitDir, workTree) = PathsFor(entry.OriginFolder);
+        if (GitCli.TryRun(gitDir, workTree, out var headTreeRaw, "rev-parse", "HEAD^{tree}"))
+        {
+            var headTree = headTreeRaw.Trim();
+            if (headTree == entry.ExpectedContentHash) return true; // already advanced
+        }
+
+        var stagedTree = WriteTree(entry.OriginFolder);
+        if (stagedTree == entry.ExpectedContentHash)
+        {
+            CommitStaged(entry.OriginFolder, entry.Message);
+            logger.LogInformation(
+                "Ledger recovery: completed an interrupted commit for {OriginFolder} ({ExpectedContentHash})",
+                entry.OriginFolder, entry.ExpectedContentHash);
+            return true;
+        }
+
+        logger.LogError(
+            "Ledger recovery: {OriginFolder} diverged from its journaled intent (expected tree {ExpectedContentHash}, staged tree {StagedTree}); refusing to complete this commit automatically",
+            entry.OriginFolder, entry.ExpectedContentHash, stagedTree);
+        return false;
+    }
 }

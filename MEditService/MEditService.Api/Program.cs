@@ -88,6 +88,12 @@ try
 
     var app = builder.Build();
 
+    // #372: replays whatever cross-repo-save journal a prior process left behind — before any
+    // request is served (RunAsync hasn't been called yet), so recovery always finishes ahead of the
+    // first attempt that could touch the same origins. Best-effort/non-throwing by construction (see
+    // LedgerRepository.Recover's own remarks); no extra try/catch needed here.
+    app.Services.GetRequiredService<LedgerRepository>().Recover();
+
     // #343: one summary line per request instead of ASP.NET Core's own six-line pipeline log (now
     // silenced by appsettings.json's Microsoft.AspNetCore: Warning override — a different category
     // than this middleware writes under, so the override doesn't touch it and no second override is

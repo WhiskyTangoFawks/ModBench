@@ -62,12 +62,15 @@ public sealed record LedgerTouchedRecord(
 /// folder (an origin folder providing more than one plugin file) share one ledger repo, so their
 /// touched records — if both changed in the same group — land in the same commit rather than two
 /// independent ones. A group spanning several origin folders (legal per ADR-0028's
-/// <c>ChangeGroup</c>; cross-repo atomicity is #372, out of scope here) produces one independent,
-/// non-atomic commit per origin folder touched — no journal, no rollback coordinating them
-/// (orchestrator-directed, #371 Q2): if one origin's commit fails after another's already
-/// succeeded, the binary has already moved for both (the write already happened before this class
-/// runs at all) while only one origin's ledger advanced — a real but bounded inconsistency window,
-/// left for #372 to close, not concealed by refusing to commit at all.
+/// <c>ChangeGroup</c>) still produces one independent commit per origin folder touched — git itself
+/// has no cross-repo transaction to lean on — but #372 closes the inconsistency window that used to
+/// leave open: every touched origin is staged and its intended commit journaled
+/// (<see cref="LedgerRepository.WriteJournal"/>) before any of them actually commits, so a crash
+/// between two origins' commits is recoverable rather than silent (<see cref="LedgerRepository.Recover"/>,
+/// run once at startup). The binary has already moved for every touched plugin by the time this
+/// class runs at all (see the ordering contract above); what used to be an unrecorded gap between
+/// that and each origin's ledger commit is now a journal entry naming exactly which repo is still
+/// owed one.
 ///
 /// <b>#373 — create/delete/renumber.</b> Unlike an ordinary field edit, a lifecycle change's own
 /// ledger write cannot always be produced by "read what's already sitting in the working tree" —
@@ -85,107 +88,205 @@ public sealed record LedgerTouchedRecord(
 public sealed class LedgerGroupCommitter(
     LedgerRepository ledger, RecordTextCodec codec, ISchemaReflector schemaReflector, ILogger<LedgerGroupCommitter> logger)
 {
+    // One origin folder's staged-but-not-yet-committed attempt, carrying what Advance needs: the
+    // commit message Prepare already derived from what actually got staged, and the delete/renumber
+    // backups a *commit-phase* failure (not just a staging-phase one) must still be able to restore
+    // (#372 review: moving the commit call out of Prepare's own try/catch means a `git commit`
+    // failure is no longer caught by the same block that captured these). Internal, not private —
+    // PrepareAsync/AdvanceAsync/AdvanceOneAsync are the #372 test seam (InternalsVisibleTo, same
+    // discipline as CommitAttempt's own raw primitives), and a type in their signature must be at
+    // least as visible as they are.
+    internal sealed record PreparedOrigin(
+        LedgerRepository.CommitAttempt Attempt, string Message, List<RemovedFileBackup> RemovedFiles);
+
+    // The journal Entries list is intentionally mutable and shared with every PreparedOrigin in the
+    // same group — Advance shrinks it in place (one entry removed per resolved origin) and rewrites
+    // the on-disk journal after each one, so the file on disk always reflects exactly what is still
+    // genuinely at risk, never a stale entry a live (non-crashed) resolution has already invalidated.
+    internal sealed record GroupPrepareResult(
+        Guid GroupId, IReadOnlyList<PreparedOrigin> Attempts, List<LedgerRepository.JournalEntry> Entries);
+
     public async Task CommitGroupSaveAsync(IReadOnlyList<LedgerTouchedRecord> touched, GameRelease release)
     {
-        // Path.GetFullPath, not the raw OriginFolder string: the attempt scope's gate and
-        // LedgerRepository.PathsFor both normalize the origin folder before keying off it (review
-        // finding, #371) — grouping on the raw string here would let two touched records naming the
-        // same physical folder in differently-formatted ways split into two groups and produce two
-        // commits into what is actually one gitdir, a second way "exactly one commit" could break.
-        foreach (var group in touched.GroupBy(t => Path.GetFullPath(t.OriginFolder), StringComparer.Ordinal))
-        {
-            // One attempt scope per origin (#393): the per-origin gate it holds is shared with
-            // RecordVendor — both stage into the same gitdir/index, so a StageEdit vendoring a
-            // different record in this same origin folder while this save is committing must not
-            // interleave with it. Disposing after CommitOriginAsync's own best-effort catch also
-            // unstages whatever a failed attempt staged, after the catch's working-tree restores.
-            using var attempt = await ledger.BeginAttemptAsync(group.Key).ConfigureAwait(false);
-            await CommitOriginAsync(attempt, [.. group.DistinctBy(t => (t.PluginFileName, t.RecordType, t.FormKey))], release)
-                .ConfigureAwait(false);
-        }
+        var prepared = await PrepareAsync(touched, release).ConfigureAwait(false);
+        await AdvanceAsync(prepared).ConfigureAwait(false);
     }
 
-    // Non-atomic across origins by design (see class remarks) — a throw for one origin folder must
-    // not stop the loop from attempting the rest, and never bubbles to the caller (best-effort).
-    private async Task CommitOriginAsync(
-        LedgerRepository.CommitAttempt attempt, IReadOnlyList<LedgerTouchedRecord> records, GameRelease release)
+    // Prepare (#372): stages every touched origin and journals each one's expected content hash
+    // *before* any origin commits — so a crash anywhere in Advance still leaves a complete record of
+    // every repo this group intended to advance, not just the ones it got to first. Non-atomic
+    // across origins was already the design (see class remarks); this phase is what makes that
+    // window recoverable instead of silent.
+    internal async Task<GroupPrepareResult> PrepareAsync(IReadOnlyList<LedgerTouchedRecord> touched, GameRelease release)
     {
-        var removedFiles = new List<RemovedFileBackup>();
-        var committed = new List<LedgerTouchedRecord>();
-        try
+        var groupId = Guid.NewGuid();
+        var attempts = new List<PreparedOrigin>();
+        var entries = new List<LedgerRepository.JournalEntry>();
+
+        // Deterministic origin order (review-directed, #372) — a lock-ordering invariant the code
+        // itself can't show: Prepare now holds every touched origin's gate open simultaneously
+        // (unlike the old one-origin-at-a-time loop), so two concurrent group-saves sharing two
+        // origins could deadlock if they acquired those gates in opposite orders. Sorting by the
+        // same canonical key every acquirer already normalizes to gives every multi-gate acquirer
+        // the same total order; a future second one must follow it too, or this guarantee breaks.
+        var groups = touched
+            .GroupBy(t => Path.GetFullPath(t.OriginFolder), StringComparer.Ordinal)
+            .OrderBy(g => g.Key, StringComparer.Ordinal);
+
+        foreach (var group in groups)
         {
-            // #373: a create can be the very first thing this origin folder's ledger ever sees —
-            // unlike delete/renumber (which require IsTrackedAtHead, so their stage-time vendor call
-            // already guarantees a repo exists) a create has no earlier touch to have created one.
-            // EnsureRepo is idempotent (a no-op once the repo exists), so this is free for every
-            // other case — but deliberately *not* unconditional: a group whose only touched records
-            // are untracked for a legitimate reason (e.g. every one is a DataDirectory-origin plugin —
-            // EditOrchestrator.VendorOnFirstTouch's own Q3 branch, #370 — which never vendors at all,
-            // since a VMAD struct-op edit now does, #389) must still produce no repo at all, not one
-            // fabricated just to discover there was nothing to commit.
-            // The known-clean index reset that used to sit here is the attempt scope's own contract
-            // now (#393), lazily before its first Stage — which is also what lets an all-untracked
-            // batch against a repo-less origin fall through to the "none are ledger-tracked" path
-            // below instead of tripping over a reset against a gitdir that doesn't exist.
-            if (records.Any(r => r.ChangeType == PendingChangeConstants.CreateChangeType))
-                attempt.EnsureRepo();
-
-            var schemas = schemaReflector.GetSchemas(release);
-
-            foreach (var record in records)
+            var attempt = await ledger.BeginAttemptAsync(group.Key).ConfigureAwait(false);
+            var removedFiles = new List<RemovedFileBackup>();
+            try
             {
-                var handled = record.ChangeType switch
+                var committed = await StageOriginAsync(
+                    attempt, [.. group.DistinctBy(t => (t.PluginFileName, t.RecordType, t.FormKey))], release, removedFiles)
+                    .ConfigureAwait(false);
+
+                if (committed.Count == 0)
                 {
-                    PendingChangeConstants.CreateChangeType =>
-                        await TryStageCreateAsync(attempt, record, schemas, release).ConfigureAwait(false),
-                    PendingChangeConstants.DeleteChangeType =>
-                        TryStageDelete(attempt, record, removedFiles),
-                    PendingChangeConstants.RenumberChangeType =>
-                        await TryStageRenumberAsync(attempt, record, schemas, release, removedFiles).ConfigureAwait(false),
-                    _ => TryStageFieldEdit(attempt, record),
-                };
+                    // Not necessarily a problem by itself — the common case (nothing this group
+                    // touched in this origin is ledger-tracked, e.g. every touched record is
+                    // DataDirectory-origin) is expected, legal truth-partition state (ADR-0040), same
+                    // as VendorOnFirstTouch's own DataDirectory branch. Still logged unconditionally
+                    // (orchestrator-directed, #371 Q3): a group that touched real content but
+                    // produced no commit must be findable, never silently treated as "committed".
+                    logger.LogInformation(
+                        "Save touched {Count} record(s) in {OriginFolder} but none are ledger-tracked; no ledger commit was made for this save",
+                        group.Count(), attempt.OriginFolder);
+                    attempt.Dispose();
+                    continue;
+                }
 
-                if (handled) committed.Add(record);
+                var message = BuildMessage(committed);
+                var expectedHash = ledger.WriteTree(attempt.OriginFolder);
+                entries.Add(new LedgerRepository.JournalEntry(attempt.OriginFolder, expectedHash, message));
+                ledger.WriteJournal(groupId, entries);
+                attempts.Add(new PreparedOrigin(attempt, message, removedFiles));
             }
-
-            if (committed.Count == 0)
+            catch (Exception ex)
             {
-                // Not necessarily a problem by itself — the common case (nothing this group touched
-                // in this origin is ledger-tracked, e.g. every touched record is DataDirectory-
-                // origin) is expected, legal truth-partition state (ADR-0040), same as
-                // VendorOnFirstTouch's own DataDirectory branch. Still logged unconditionally
-                // (orchestrator-directed, #371 Q3): a group that touched real content but produced
-                // no commit must be findable, never silently treated internally as "committed".
-                logger.LogInformation(
-                    "Save touched {Count} record(s) in {OriginFolder} but none are ledger-tracked; no ledger commit was made for this save",
-                    records.Count, attempt.OriginFolder);
-                return;
+                RestoreAndLogStagingFailure(attempt, removedFiles, ex);
+                attempt.Dispose();
             }
-
-            attempt.Commit(BuildMessage(committed));
         }
-        catch (Exception ex)
+
+        return new GroupPrepareResult(groupId, attempts, entries);
+    }
+
+    // Advance (#372): commits every origin Prepare staged and journaled. A commit-phase failure here
+    // is still best-effort/non-blocking (see class remarks) — it resolves and logs immediately, the
+    // same way a staging-phase failure always has, and its journal entry is removed right along with
+    // it: only a genuine process crash (nothing here runs at all) leaves an entry for Recover to find.
+    internal async Task AdvanceAsync(GroupPrepareResult prepared)
+    {
+        foreach (var origin in prepared.Attempts)
+            await AdvanceOneAsync(prepared.GroupId, origin, prepared.Entries).ConfigureAwait(false);
+
+        if (prepared.Entries.Count == 0) ledger.DeleteJournal(prepared.GroupId);
+    }
+
+    // Split out from AdvanceAsync (#372 test seam): a crash test drives this directly for a subset
+    // of a group's prepared origins, leaving the rest exactly as Prepare left them (staged, staged
+    // journal entry, attempt neither committed nor disposed) — the same state a real process crash
+    // between two Advance iterations would leave, without a real process kill (the existing Ledger/
+    // test suite's own idiom: internal primitives reached via InternalsVisibleTo, real git throughout,
+    // never a mocked one).
+    internal Task AdvanceOneAsync(Guid groupId, PreparedOrigin origin, List<LedgerRepository.JournalEntry> entries)
+    {
+        using (origin.Attempt)
         {
-            // Working-tree deletions restored here (review finding, #373): a delete/renumber's
-            // own File.Delete *is* this attempt's mutation, not a re-statement of dirt that was
-            // already written independently at stage time the way an ordinary field edit's is — so
-            // unlike the attempt scope's index-only unstage-on-dispose (sufficient for a plain
-            // modify, since the working-tree file it un-stages was never touched by this attempt),
-            // a removed file has nothing to fall back on except what this attempt itself saved
-            // before deleting it. There is no second chance either: the binary write and
-            // pending-change DB transaction have already succeeded and the pending delete/renumber
-            // is consumed by the time this runs, so a removed-but-unrestored file would sit that
-            // way in the origin's ledger repo permanently — tracked at HEAD, absent from disk —
-            // until some unrelated future edit happened to touch the same path. Restores run
-            // before the scope's dispose unstages (dispose sits outside this catch), preserving
-            // the working-tree-first, index-second rollback order.
-            foreach (var backup in removedFiles)
-                TryRestoreRemovedFile(backup, ex);
+            try
+            {
+                origin.Attempt.Commit(origin.Message);
+            }
+            catch (Exception ex)
+            {
+                foreach (var backup in origin.RemovedFiles)
+                    TryRestoreRemovedFile(backup, ex);
 
-            logger.LogWarning(ex,
-                "Ledger commit failed for a saved group touching {OriginFolder}; the binary write and pending-change save already succeeded, ledger history was not advanced for this save",
-                attempt.OriginFolder);
+                logger.LogWarning(ex,
+                    "Ledger commit failed for a saved group touching {OriginFolder}; the binary write and pending-change save already succeeded, ledger history was not advanced for this save",
+                    origin.Attempt.OriginFolder);
+            }
         }
+
+        entries.RemoveAll(e => e.OriginFolder == origin.Attempt.OriginFolder);
+        ledger.WriteJournal(groupId, entries);
+        return Task.CompletedTask;
+    }
+
+    // Stages every record for one origin folder — the pre-#372 CommitOriginAsync minus the final
+    // attempt.Commit() call, which Advance now owns separately so Prepare can journal every touched
+    // origin before any of them commits. Returns which records actually landed something staged
+    // (never every touched record — an untracked one is legitimately skipped, see TryStageFieldEdit).
+    private async Task<List<LedgerTouchedRecord>> StageOriginAsync(
+        LedgerRepository.CommitAttempt attempt, IReadOnlyList<LedgerTouchedRecord> records, GameRelease release,
+        List<RemovedFileBackup> removedFiles)
+    {
+        // #373: a create can be the very first thing this origin folder's ledger ever sees —
+        // unlike delete/renumber (which require IsTrackedAtHead, so their stage-time vendor call
+        // already guarantees a repo exists) a create has no earlier touch to have created one.
+        // EnsureRepo is idempotent (a no-op once the repo exists), so this is free for every
+        // other case — but deliberately *not* unconditional: a group whose only touched records
+        // are untracked for a legitimate reason (e.g. every one is a DataDirectory-origin plugin —
+        // EditOrchestrator.VendorOnFirstTouch's own Q3 branch, #370 — which never vendors at all,
+        // since a VMAD struct-op edit now does, #389) must still produce no repo at all, not one
+        // fabricated just to discover there was nothing to commit.
+        // The known-clean index reset that used to sit here is the attempt scope's own contract
+        // now (#393), lazily before its first Stage — which is also what lets an all-untracked
+        // batch against a repo-less origin fall through to the "none are ledger-tracked" path
+        // below instead of tripping over a reset against a gitdir that doesn't exist.
+        if (records.Any(r => r.ChangeType == PendingChangeConstants.CreateChangeType))
+            attempt.EnsureRepo();
+
+        var schemas = schemaReflector.GetSchemas(release);
+        var committed = new List<LedgerTouchedRecord>();
+
+        foreach (var record in records)
+        {
+            var handled = record.ChangeType switch
+            {
+                PendingChangeConstants.CreateChangeType =>
+                    await TryStageCreateAsync(attempt, record, schemas, release).ConfigureAwait(false),
+                PendingChangeConstants.DeleteChangeType =>
+                    TryStageDelete(attempt, record, removedFiles),
+                PendingChangeConstants.RenumberChangeType =>
+                    await TryStageRenumberAsync(attempt, record, schemas, release, removedFiles).ConfigureAwait(false),
+                _ => TryStageFieldEdit(attempt, record),
+            };
+
+            if (handled) committed.Add(record);
+        }
+
+        return committed;
+    }
+
+    // Staging-phase failure (record processing itself threw, e.g. a malformed FormKey) — same
+    // restore-then-log contract StageOriginAsync's predecessor (CommitOriginAsync) always had for
+    // this case; a commit-phase failure now goes through AdvanceOneAsync's own catch instead, since
+    // that call happens later, outside this method entirely.
+    private void RestoreAndLogStagingFailure(LedgerRepository.CommitAttempt attempt, List<RemovedFileBackup> removedFiles, Exception ex)
+    {
+        // Working-tree deletions restored here (review finding, #373): a delete/renumber's
+        // own File.Delete *is* this attempt's mutation, not a re-statement of dirt that was
+        // already written independently at stage time the way an ordinary field edit's is — so
+        // unlike the attempt scope's index-only unstage-on-dispose (sufficient for a plain
+        // modify, since the working-tree file it un-stages was never touched by this attempt),
+        // a removed file has nothing to fall back on except what this attempt itself saved
+        // before deleting it. There is no second chance either: the binary write and
+        // pending-change DB transaction have already succeeded and the pending delete/renumber
+        // is consumed by the time this runs, so a removed-but-unrestored file would sit that
+        // way in the origin's ledger repo permanently — tracked at HEAD, absent from disk —
+        // until some unrelated future edit happened to touch the same path. Restores run
+        // before the scope's dispose unstages (dispose sits outside this catch), preserving
+        // the working-tree-first, index-second rollback order.
+        foreach (var backup in removedFiles)
+            TryRestoreRemovedFile(backup, ex);
+
+        logger.LogWarning(ex,
+            "Ledger commit failed for a saved group touching {OriginFolder}; the binary write and pending-change save already succeeded, ledger history was not advanced for this save",
+            attempt.OriginFolder);
     }
 
     // Captured immediately before a File.Delete this attempt performs (TryStageDelete/
@@ -194,7 +295,8 @@ public sealed class LedgerGroupCommitter(
     // legitimate, unrelated uncommitted dirt sitting in the same origin folder. The raw text as it
     // stood on disk, not a re-serialization of the in-memory record object: this must reproduce
     // byte-for-byte what was actually lost, not merely something semantically equivalent to it.
-    private sealed record RemovedFileBackup(string AbsolutePath, string Content);
+    // Internal, not private — see PreparedOrigin's own remarks on why (#372 test seam).
+    internal sealed record RemovedFileBackup(string AbsolutePath, string Content);
 
     // The pre-#373 behaviour, unchanged: not every touched record is ledger-tracked (a
     // DataDirectory-origin plugin has no repo at all — EditOrchestrator.VendorOnFirstTouch's own Q3
