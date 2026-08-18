@@ -82,6 +82,7 @@ try
     builder.Services.AddSingleton<LedgerRecordFieldReader>();
     builder.Services.AddSingleton<RecordReverter>();
     builder.Services.AddSingleton<LedgerStatusQuery>();
+    builder.Services.AddSingleton<LedgerLifecycleReconciler>();
     builder.Services.AddSingleton<IEditOrchestrator, EditOrchestrator>();
     builder.Services.AddSingleton<PluginSaver>();
 

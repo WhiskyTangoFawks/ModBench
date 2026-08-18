@@ -261,6 +261,48 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
         return GitCli.TryRun(gitDir, workTree, out _, "cat-file", "-e", $"HEAD:{ToGitPath(relativePath)}");
     }
 
+    /// <summary>Top-level <c>&lt;plugin&gt;.ledger</c> directory names tracked at <c>HEAD</c> —
+    /// what a lifecycle-reconciliation pass (#392) needs to know which plugins this origin's repo
+    /// currently has a ledger tree for, read from git history rather than the working tree (a
+    /// removed plugin's tree may already be gone from disk, or may still be sitting there as the
+    /// orphan reconciliation exists to catch — either way, HEAD is the source of truth for "does the
+    /// ledger still consider this tracked"). <c>git ls-tree</c> with no <c>-r</c> lists only the
+    /// tree-ish's immediate children; <c>-d</c> restricts those to directories, so a same-named
+    /// ordinary file at the root (not a shape the ledger's own writers ever produce, but not this
+    /// method's job to assume) is excluded rather than misread as a ledger tree. Empty, not a
+    /// throw, on an unborn <c>HEAD</c> (a repo whose <see cref="EnsureRepo"/> ran but nothing has
+    /// been staged and committed into it yet) — the same "ask git, tolerate no answer" shape
+    /// <see cref="RepoExists"/> already applies to a repo that was never created at all.</summary>
+    public IReadOnlyList<string> LedgerTreeNamesAtHead(string originFolder)
+    {
+        var (gitDir, workTree) = PathsFor(originFolder);
+        if (!GitCli.TryRun(gitDir, workTree, out var output, "ls-tree", "-d", "--name-only", "-z", "HEAD"))
+            return [];
+
+        return output.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Where(name => name.EndsWith(LedgerRecordPath.LedgerSuffix, StringComparison.Ordinal))
+            .ToList();
+    }
+
+    /// <summary>Every record path tracked at <c>HEAD</c> under one <c>&lt;plugin&gt;.ledger</c>
+    /// directory (<c>git ls-tree -r</c>, pathspec-scoped) — what a reconciliation pass needs to
+    /// recover an orphan's own tracked FormKeys (via <see cref="LedgerRecordPath.TryParse"/>)
+    /// without walking a working tree that, for an already-removed plugin, may hold nothing to
+    /// walk. Sibling of <see cref="LedgerTreeNamesAtHead"/> (that one lists the trees; this one
+    /// lists one tree's own leaves) — kept separate rather than folded into a single "give me
+    /// everything" call, since every caller so far has needed exactly one or the other, never
+    /// both from one HEAD read.</summary>
+    public IReadOnlyList<string> TrackedRecordPaths(string originFolder, string ledgerTreeDirName)
+    {
+        var (gitDir, workTree) = PathsFor(originFolder);
+        if (!GitCli.TryRun(gitDir, workTree, out var output, "ls-tree", "-r", "--name-only", "-z", "HEAD", "--", ledgerTreeDirName))
+            return [];
+
+        return output.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Replace('/', Path.DirectorySeparatorChar))
+            .ToList();
+    }
+
     /// <summary>Resets the index to <c>HEAD</c> (<c>git reset</c>, no pathspec — the working tree is
     /// untouched) — establishes a known-clean index before a staging sequence begins, rather than
     /// assuming one was inherited from whatever the previous attempt against this origin folder

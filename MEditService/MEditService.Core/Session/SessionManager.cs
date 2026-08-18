@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using Microsoft.Extensions.Logging;
@@ -15,7 +16,11 @@ public sealed class SessionManager(
     IPluginWriter writer,
     IPendingChangeService? pendingChanges = null,
     ILogger<SessionManager>? logger = null,
-    IModImporter? modImporter = null) : ISessionManager, IDisposable
+    IModImporter? modImporter = null,
+    // #392: optional the same way pendingChanges/modImporter are — every production DI registration
+    // supplies one (Program.cs), but a test constructing SessionManager directly for a scenario that
+    // has nothing to do with the ledger shouldn't have to.
+    LedgerLifecycleReconciler? ledgerReconciler = null) : ISessionManager, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger<SessionManager> _logger = logger ?? NullLogger<SessionManager>.Instance;
@@ -26,6 +31,7 @@ public sealed class SessionManager(
     // the service itself, not only its lifecycle half.
     private readonly IPendingChangeService? _pendingChanges = pendingChanges;
     private readonly IModImporter _modImporter = modImporter ?? new DefaultModImporter();
+    private readonly LedgerLifecycleReconciler? _ledgerReconciler = ledgerReconciler;
     private GameSession? _session;
     private IRecordRepository? _repository;
     private readonly Dictionary<string, uint> _nextFormIds = new(StringComparer.OrdinalIgnoreCase);
@@ -289,6 +295,35 @@ public sealed class SessionManager(
         _logger.LogDebug("Computing winners");
         repository.UpdateWinners();
         lock (_lock) _conflictsComputed = true;
+
+        ReconcileLedgerLifecycle(session, repository);
+    }
+
+    // #392: session load is the only point Editing re-observes each origin folder's current
+    // physical contents — nothing in Modbench deletes or renames a plugin file itself, so there is
+    // no hook to fire on a delete that never happens. Best-effort, same convention as
+    // EditOrchestrator.VendorOnFirstTouch and LedgerGroupCommitter: a failure here must never turn
+    // an already-successful load into a reported one, and the reconciler's own per-origin-folder
+    // loop already isolates one folder's failure from the rest — this catch is only the outermost
+    // safety net. GetAwaiter().GetResult() bridges the reconciler's async API into this fully
+    // synchronous load path, the same bridge EditOrchestrator.VendorOnFirstTouch already uses for
+    // RecordVendor's own async ledger call.
+    private void ReconcileLedgerLifecycle(GameSession session, IRecordRepository repository)
+    {
+        if (_ledgerReconciler == null) return;
+
+        try
+        {
+            _ledgerReconciler.ReconcileAsync(
+                session.Plugins,
+                (recordType, formKeyString, plugin, origin) =>
+                    repository.GetRecord(recordType, formKeyString, plugin, origin, winnerOnly: false) != null)
+                .GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Ledger lifecycle reconciliation failed for this session load; left for the next one");
+        }
     }
 
     public PluginResponse CreatePlugin(string name)
