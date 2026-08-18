@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Core.Ledger;
 using MEditService.Core.Session;
 using Microsoft.Extensions.Logging;
@@ -80,7 +81,7 @@ public sealed class PluginSaver(
             // never blocking, same as ReindexPlugins below: a git failure must not turn an
             // already-completed save into a reported failure — see LedgerGroupCommitter's own
             // remarks for why it never throws past this call.
-            ledgerCommitter.CommitGroupSave(touchedRecords);
+            await ledgerCommitter.CommitGroupSaveAsync(touchedRecords, session.Session!.GameRelease).ConfigureAwait(false);
 
             var plugins = writtenPlugins.ToArray();
             try
@@ -106,16 +107,70 @@ public sealed class PluginSaver(
     // load order, or a DataDirectory-origin plugin sharing the game's Data folder — #370 Q3) is
     // skipped here exactly as it is at stage time: LedgerGroupCommitter never sees it, so it can
     // never be (mis)reported as ledger-tracked.
+    //
+    // #373: grouped by FormKey rather than one LedgerTouchedRecord per raw PendingChange row — the
+    // same grouping PluginWriter.ApplyFieldChanges/ApplyCreateChanges already do by FormKey for the
+    // binary write, needed here because a lifecycle change type is decided per *record*, not per
+    // row, and a create's own ledger write (LedgerGroupCommitter.TryStageCreateAsync) needs every
+    // field_edit row still pending for that FormKey collected together (template fields, plus any
+    // subsequent pre-save edit) rather than handed one at a time.
     private void CollectTouchedRecords(IReadOnlyList<PendingChange> columnChanges, List<LedgerTouchedRecord> into)
     {
         var s = session.Session;
-        foreach (var change in columnChanges)
+        foreach (var groupIterator in columnChanges.GroupBy(c => c.FormKey, StringComparer.OrdinalIgnoreCase))
         {
-            var meta = s.LoadOrderPlugin(change.Plugin);
+            var group = groupIterator.ToList();
+            var first = group[0];
+
+            // #373 review: Renumber() has no guard against a target that also has a pending delete
+            // (DeleteRecords() does block on a pending renumber, but not the reverse), so two
+            // lifecycle rows can legally coexist in the DB for one FormKey today. Silently picking
+            // one (FirstOrDefault) would make the ledger's own choice depend on staging order — it
+            // happens to agree with PluginWriter's own fixed Apply-pass order (create, then delete,
+            // then renumber) today, but that agreement is a coincidence this code does not enforce
+            // and must not quietly rely on. Checked unconditionally, before the origin-folder
+            // resolution below (deliberately — the ambiguity is a pending-change data problem, not
+            // a ledger-reachability one, so a FormKey with no resolvable origin folder must not
+            // skip past it unnoticed): failing loudly here — before either the binary write's temp
+            // files are committed or the pending-change transaction commits (both roll back cleanly
+            // on a throw from inside this callback: see ExecuteGroupSaveAsync) — converts a silent,
+            // possibly-wrong pick into a save that visibly fails instead of a ledger that silently
+            // misrepresents which lifecycle change actually happened.
+            var lifecycleTypes = group
+                .Where(c => PendingChangeConstants.IsLifecycle(c.ChangeType))
+                .Select(c => c.ChangeType)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (lifecycleTypes.Count > 1)
+            {
+                throw new InvalidOperationException(
+                    $"FormKey '{first.FormKey}' has more than one lifecycle change type pending " +
+                    $"({string.Join(", ", lifecycleTypes)}) — there is no rule for which one the " +
+                    "ledger should represent, and picking one silently would risk the ledger " +
+                    "disagreeing with what the save actually did to the binary.");
+            }
+
+            var meta = s.LoadOrderPlugin(first.Plugin);
             var originFolder = meta == null ? null : Path.GetDirectoryName(meta.Path);
             if (meta == null || string.IsNullOrEmpty(originFolder)) continue;
 
-            into.Add(new LedgerTouchedRecord(originFolder, meta.Name, change.RecordType, change.FormKey));
+            var lifecycle = group.FirstOrDefault(c => PendingChangeConstants.IsLifecycle(c.ChangeType));
+            var changeType = lifecycle?.ChangeType ?? PendingChangeConstants.FieldEditChangeType;
+
+            IReadOnlyDictionary<string, JsonElement>? createFields = null;
+            if (changeType == PendingChangeConstants.CreateChangeType)
+            {
+                createFields = group
+                    .Where(c => c.ChangeType == PendingChangeConstants.FieldEditChangeType)
+                    .ToDictionary(c => c.FieldPath, c => c.NewValue);
+            }
+
+            var newFormKey = changeType == PendingChangeConstants.RenumberChangeType
+                ? lifecycle!.NewValue.GetString()
+                : null;
+
+            into.Add(new LedgerTouchedRecord(
+                originFolder, meta.Name, first.RecordType, first.FormKey, changeType, newFormKey, createFields));
         }
     }
 }
