@@ -65,12 +65,59 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
     public void EnsureRepo(string originFolder)
     {
         var (gitDir, workTree) = PathsFor(originFolder);
-        if (File.Exists(Path.Combine(gitDir, "HEAD"))) return;
+        if (RepoExists(originFolder)) return;
 
         Directory.CreateDirectory(gitDir);
         Directory.CreateDirectory(workTree);
         GitCli.Run(gitDir, workTree, "init", "-q", "-b", "main");
         logger.LogInformation("Ledger created for {OriginFolder} at {GitDir}", workTree, gitDir);
+    }
+
+    /// <summary>Read-only sibling of <see cref="EnsureRepo"/>'s own check-then-create guard — never
+    /// creates anything. What a status read (#368) needs: "has this origin folder ever been
+    /// vendored into at all", answered the same way <see cref="EnsureRepo"/> already does (the
+    /// gitdir's own <c>HEAD</c> file), so a status read against an origin folder nothing has ever
+    /// touched skips it rather than fabricating an empty repo just to ask it for its own status.</summary>
+    public bool RepoExists(string originFolder)
+    {
+        var (gitDir, _) = PathsFor(originFolder);
+        return File.Exists(Path.Combine(gitDir, "HEAD"));
+    }
+
+    /// <summary>Working-tree changes against this origin's ledger repo — <c>git status --porcelain</c>,
+    /// scoped to <c>*.ledger/*</c> paths only (#368). That scoping is load-bearing, not decoration:
+    /// the repo's working tree *is* the origin folder itself (<see cref="PathsFor"/>), which already
+    /// holds the plugin binary, <c>.bak</c> backups, <c>meta.ini</c> and whatever else Mod Management
+    /// put there — with no pathspec, every one of those shows up as an untracked (<c>??</c>) "change"
+    /// alongside genuine ledger dirt, since <see cref="EnsureRepo"/> never writes a <c>.gitignore</c>.
+    /// Confirmed empirically (not assumed) before landing this: an unscoped <c>git status --porcelain</c>
+    /// over a fixture folder reported the plugin file, its backup and an unrelated loose file as
+    /// changes; scoping with <c>-- "*.ledger/*"</c> reported only the genuine ledger entry. Git's own
+    /// pathspec glob crosses <c>/</c> (unlike a shell glob), so this one pattern matches at any depth
+    /// under any <c>&lt;plugin&gt;.ledger/</c> root — verified against <see cref="LedgerRecordPath"/>'s
+    /// three-level-deep layout, not assumed from the pattern reading right.</summary>
+    public IReadOnlyList<(char StatusCode, string RelativePath)> WorkingTreeStatus(string originFolder)
+    {
+        var (gitDir, workTree) = PathsFor(originFolder);
+        var output = GitCli.Run(gitDir, workTree, "status", "--porcelain", "--", "*.ledger/*");
+        var entries = new List<(char, string)>();
+        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            // Porcelain v1: "XY <path>" — X is the index status, Y the working-tree status. Every
+            // path this method can ever see is unstaged dirt (RecordVendor/LedgerGroupCommitter
+            // always stage-then-commit atomically, per LedgerRepository's own class remarks — see
+            // ResetIndexToHead), so Y is the one that carries real information; X is read as a
+            // fallback only for the crash-recovery edge case those remarks describe (a stray staged
+            // entry an earlier attempt's own UnstagePath never reached).
+            if (line.Length < 4) continue;
+            var indexStatus = line[0];
+            var worktreeStatus = line[1];
+            var path = line[3..].Replace('/', Path.DirectorySeparatorChar);
+            var code = worktreeStatus != ' ' ? worktreeStatus : indexStatus;
+            entries.Add((code, path));
+        }
+
+        return entries;
     }
 
     /// <summary>Whether <paramref name="relativePath"/> already exists at <c>HEAD</c> on
