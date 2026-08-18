@@ -433,9 +433,13 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
 
     /// <summary>Persists <paramref name="entries"/> as <paramref name="groupId"/>'s journal —
     /// overwrites whatever was there before (the caller passes the *current* full set each time, not
-    /// a delta). Temp-file-then-rename (review discipline already used elsewhere in this class for
-    /// durable writes): a crash mid-write of the journal file itself leaves either the old complete
-    /// content or the new complete content, never a torn one recovery would fail to parse.</summary>
+    /// a delta). Temp-file-then-rename, not a direct write: a crash mid-write of the journal file
+    /// itself must leave either the old complete content or the new complete content, never a torn
+    /// one <see cref="Recover"/> would fail to parse — the same constraint <c>Edits/PreparedPluginSave.cs</c>
+    /// meets the same way for the plugin binary itself, not a pattern already present elsewhere in
+    /// this class. Every caller that persists a journal — including <see cref="Recover"/>'s own
+    /// rewrite of a partially-resolved one — must go through this (and <see cref="DeleteJournal"/>)
+    /// rather than writing the file directly, or that guarantee only holds for some writers.</summary>
     internal void WriteJournal(Guid groupId, IReadOnlyList<JournalEntry> entries)
     {
         Directory.CreateDirectory(JournalDirectory);
@@ -498,7 +502,7 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
     /// entirely.</summary>
     public void Recover()
     {
-        foreach (var (path, groupId, entries) in ReadJournals())
+        foreach (var (_, groupId, entries) in ReadJournals())
         {
             var remaining = new List<JournalEntry>();
             foreach (var entry in entries)
@@ -516,8 +520,12 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
                 }
             }
 
-            if (remaining.Count == 0) File.Delete(path);
-            else File.WriteAllText(path, JsonSerializer.Serialize(remaining, JournalJsonOptions));
+            // Through the same door every other journal write goes through (review finding): a
+            // hand-rolled File.WriteAllText/File.Delete here would skip WriteJournal's temp-file-
+            // then-rename discipline and reintroduce the torn-write risk in exactly the path most
+            // exposed to it — recovery running again after a crash mid-rewrite of its own output.
+            if (remaining.Count == 0) DeleteJournal(groupId);
+            else WriteJournal(groupId, remaining);
         }
     }
 
