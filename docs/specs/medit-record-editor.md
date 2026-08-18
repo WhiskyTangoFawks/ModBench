@@ -285,7 +285,9 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   (`{FormID}:{OriginPlugin}`). On a mutable record the FormID is a 6-hex-char input with a
   **Renumber** button (enabled only when the value changed); on an immutable one it is plain
   text. Renumber stages a ChangeGroup. An in-use FormID surfaces an inline error; an
-  immutable-reference block surfaces a notification naming the blocking plugins.
+  immutable-reference block surfaces a notification naming the blocking plugins. A record
+  that already carries a pending delete or renumber refuses a new renumber with a 409 naming
+  the pending change — the mirror of delete's own pending-lifecycle guard (#134, #391).
 - **Compare grid** (the primary view): one **row per field** (fields with no value in any
   plugin hidden by default); one **column per plugin** that contains the record's FormKey, in
   load order (left = master, right = winning override), plus a **Pending** column for any plugin

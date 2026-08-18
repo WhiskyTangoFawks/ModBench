@@ -99,6 +99,37 @@ public sealed class RenumberRecordTests
         }
     }
 
+    // --- 409: target already pending a delete (#391 — mirrors DeleteRecords' own guard against a
+    // target already pending a renumber: DeleteRecordsTests.DeleteRecords_TargetPendingRenumber_
+    // ReturnsTargetPendingDeleteOrRenumber). Both directions now refuse through the shared
+    // PendingLifecycleChangeType helper, so a FormKey can never carry both a $delete and a
+    // $renumber row at once via the public API. ---
+
+    [Fact]
+    public void Renumber_TargetPendingDelete_ReturnsRecordPendingDeleteOrRenumber()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rn-pending-delete")
+            .WithPlugin("Target.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC_RnPendingDelete").FormKey)
+            .Build();
+        using (data)
+        {
+            var (orchestrator, manager, _) = MakeOrchestrator();
+            using (manager)
+            {
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+                Assert.IsType<DeleteRecordsResult.Staged>(
+                    orchestrator.DeleteRecords([(npcKey.ToString(), "Target.esp")], "user"));
+
+                var result = orchestrator.Renumber(npcKey.ToString(), 0xABC, "Target.esp", "user");
+
+                var blocked = Assert.IsType<RenumberResult.RecordPendingDeleteOrRenumber>(result);
+                Assert.Equal("delete", blocked.ChangeType);
+            }
+        }
+    }
+
     // --- Successful renumber ---
 
     [Fact]

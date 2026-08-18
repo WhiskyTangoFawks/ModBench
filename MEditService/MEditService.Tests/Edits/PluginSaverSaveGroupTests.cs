@@ -276,11 +276,13 @@ public sealed class PluginSaverSaveGroupTests
         File.Delete(session.LastDestPath!);
     }
 
-    // #373 review: Renumber() has no guard against a target that already has a pending delete
-    // (DeleteRecords() blocks the reverse, but not this direction), so two lifecycle rows can
-    // legally coexist in the DB for one FormKey. Neither row alone unions with the other (ADR-0028:
-    // a node's own identity match isn't an edge) — a referrer's pending reference to the target
-    // bridges both into one component via edge rule 1, exactly the shape a real cascade
+    // #373 review, closed by #391: EditOrchestrator now refuses both directions (Renumber() blocks
+    // a target with a pending delete; DeleteRecords() blocks a target with a pending renumber), so
+    // this ambiguous state can no longer arise through the public API — this test instead reaches
+    // it the only way still available, by staging both lifecycle rows directly via StageChanges,
+    // bypassing EditOrchestrator's guard entirely. Neither row alone unions with the other
+    // (ADR-0028: a node's own identity match isn't an edge) — a referrer's pending reference to the
+    // target bridges both into one component via edge rule 1, exactly the shape a real cascade
     // (AddNullificationMembers / Renumber's own crossPluginRefs) produces and the only way both
     // lifecycle rows reach one Save() call together. PluginSaver.CollectTouchedRecords must fail
     // loudly rather than silently pick one — and the failure must happen where nothing durable has

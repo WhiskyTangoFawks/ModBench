@@ -363,6 +363,8 @@ public static class ChangeEndpoints
         {
             RenumberResult.Staged ok => Results.Ok(ok.Group),
             RenumberResult.RecordNotFound => Results.NotFound(),
+            RenumberResult.RecordPendingDeleteOrRenumber b => Results.Problem(
+                $"This record is pending {b.ChangeType}; revert that change before renumbering it.", statusCode: 409),
             RenumberResult.PluginImmutable p => Results.Problem(
                 $"'{p.Plugin}' is immutable and cannot be edited.", statusCode: 409),
             RenumberResult.ImmutableReferences blocked => Results.Problem(
