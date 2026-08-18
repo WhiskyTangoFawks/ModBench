@@ -84,7 +84,7 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
         return File.Exists(Path.Combine(gitDir, "HEAD"));
     }
 
-    /// <summary>Working-tree changes against this origin's ledger repo — <c>git status --porcelain</c>,
+    /// <summary>Working-tree changes against this origin's ledger repo — <c>git status --porcelain -z</c>,
     /// scoped to <c>*.ledger/*</c> paths only (#368). That scoping is load-bearing, not decoration:
     /// the repo's working tree *is* the origin folder itself (<see cref="PathsFor"/>), which already
     /// holds the plugin binary, <c>.bak</c> backups, <c>meta.ini</c> and whatever else Mod Management
@@ -95,26 +95,44 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
     /// changes; scoping with <c>-- "*.ledger/*"</c> reported only the genuine ledger entry. Git's own
     /// pathspec glob crosses <c>/</c> (unlike a shell glob), so this one pattern matches at any depth
     /// under any <c>&lt;plugin&gt;.ledger/</c> root — verified against <see cref="LedgerRecordPath"/>'s
-    /// three-level-deep layout, not assumed from the pattern reading right.</summary>
+    /// three-level-deep layout, not assumed from the pattern reading right.
+    ///
+    /// <c>-z</c> is load-bearing too, not a formatting nicety (review finding, #368): the plain
+    /// <c>--porcelain</c> form C-quotes and octal-escapes any path containing a non-ASCII byte under
+    /// git's default <c>core.quotePath=true</c> (confirmed empirically: a record under
+    /// <c>Café.esp</c> came back as <c>"Caf\303\251.esp.ledger/..."</c>, quotes included) — a modding
+    /// scene with routinely accented/Cyrillic/CJK plugin names would silently fail
+    /// <see cref="LedgerRecordPath.TryParse"/>'s <c>.yaml</c> suffix check on the trailing quote and
+    /// the record would vanish from the panel with no error, the worst kind of bug this class can
+    /// produce. <c>-z</c> NUL-terminates entries instead of newline-terminating them and disables
+    /// quoting entirely, so the raw UTF-8 bytes come through unescaped.</summary>
     public IReadOnlyList<(char StatusCode, string RelativePath)> WorkingTreeStatus(string originFolder)
     {
         var (gitDir, workTree) = PathsFor(originFolder);
-        var output = GitCli.Run(gitDir, workTree, "status", "--porcelain", "--", "*.ledger/*");
+        var output = GitCli.Run(gitDir, workTree, "status", "--porcelain", "-z", "--", "*.ledger/*");
+        var fields = new Queue<string>(output.Split('\0', StringSplitOptions.RemoveEmptyEntries));
         var entries = new List<(char, string)>();
-        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        while (fields.TryDequeue(out var field))
         {
+            if (field.Length < 4) continue;
+
             // Porcelain v1: "XY <path>" — X is the index status, Y the working-tree status. Every
             // path this method can ever see is unstaged dirt (RecordVendor/LedgerGroupCommitter
             // always stage-then-commit atomically, per LedgerRepository's own class remarks — see
             // ResetIndexToHead), so Y is the one that carries real information; X is read as a
             // fallback only for the crash-recovery edge case those remarks describe (a stray staged
             // entry an earlier attempt's own UnstagePath never reached).
-            if (line.Length < 4) continue;
-            var indexStatus = line[0];
-            var worktreeStatus = line[1];
-            var path = line[3..].Replace('/', Path.DirectorySeparatorChar);
+            var indexStatus = field[0];
+            var worktreeStatus = field[1];
+            var path = field[3..].Replace('/', Path.DirectorySeparatorChar);
             var code = worktreeStatus != ' ' ? worktreeStatus : indexStatus;
             entries.Add((code, path));
+
+            // Under -z, a rename/copy entry (R/C in either status column) carries the origin path as
+            // a second NUL-terminated field immediately after the current one — not a change this
+            // class's own callers ever produce today (nothing here renames a ledger path), but the
+            // field must still be consumed rather than misread as the next entry's own status line.
+            if (indexStatus is 'R' or 'C' || worktreeStatus is 'R' or 'C') fields.TryDequeue(out _);
         }
 
         return entries;

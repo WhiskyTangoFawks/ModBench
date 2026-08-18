@@ -166,4 +166,37 @@ public class LedgerStatusApiTests
         var entry = Assert.Single(entries);
         Assert.Equal(npcFk.ToString(), entry.FormKey);
     }
+
+    // Review finding 1 (#368, highest severity): git's default core.quotePath=true C-quotes and
+    // octal-escapes any non-ASCII byte in `git status --porcelain`'s plain (non -z) output — a
+    // plugin named "Café.esp" came back as `" M \"Café.esp.ledger/...\""`, and the trailing quote
+    // broke LedgerRecordPath.TryParse's own .yaml suffix check, so the record silently never
+    // appeared. Bethesda modding is heavily international (accented/Cyrillic/CJK plugin names are
+    // ordinary), so this was reachable in normal use, and the failure mode — the panel looking
+    // clean while quietly dropping a genuinely dirty record — is exactly what ADR-0026 exists to
+    // prevent. WorkingTreeStatus now uses `-z`, which disables quoting entirely; this is the test
+    // that would have caught the regression, driven through the real endpoint end to end.
+    [Fact]
+    public async Task DirtiedRecordUnderANonAsciiPluginName_StillAppears()
+    {
+        using var host = VendoringTestHost.Create();
+        var client = host.Client;
+
+        Mutagen.Bethesda.Plugins.FormKey npcFk = default;
+        using var fx = new PluginFixtureBuilder("ledger-status-non-ascii")
+            .WithPlugin("Café.esp", mod => npcFk = mod.Npcs.AddNew("CaféNpc").FormKey, origin: "CaféMod")
+            .BuildScattered();
+        var npcFormKey = npcFk.ToString();
+        await LoadAsync(client, fx);
+
+        await PatchAsync(client, npcFormKey, "Café.esp", "aggression", "Frenzied");
+
+        var entries = await GetStatusAsync(client);
+        var entry = Assert.Single(entries);
+        Assert.Equal("Café.esp", entry.Plugin);
+        Assert.Equal("CaféMod", entry.Origin);
+        Assert.Equal(npcFormKey, entry.FormKey);
+        Assert.Equal(LedgerChangeKind.Modified, entry.ChangeKind);
+        Assert.True(File.Exists(entry.RecordPath));
+    }
 }

@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using MEditService.Core.Session;
+using Microsoft.Extensions.Logging;
 
 namespace MEditService.Core.Ledger;
 
@@ -50,7 +51,7 @@ public sealed record LedgerStatusEntry(
 /// (<see cref="LedgerRecordPath.TryParse"/>, <see cref="LedgerRepository.ReadTextAtCommit"/>);
 /// nothing here re-derives what <see cref="RecordVendor"/>/<see cref="LedgerGroupCommitter"/>
 /// already committed.</summary>
-public sealed class LedgerStatusQuery(LedgerRepository ledger)
+public sealed class LedgerStatusQuery(LedgerRepository ledger, ILogger<LedgerStatusQuery> logger)
 {
     public IReadOnlyList<LedgerStatusEntry> GetWorkingTreeChanges(IGameSession? session)
     {
@@ -71,36 +72,75 @@ public sealed class LedgerStatusQuery(LedgerRepository ledger)
         foreach (var group in byOriginFolder)
         {
             var originFolder = group.Key;
-            if (!ledger.RepoExists(originFolder)) continue;
-
-            var pluginsByFileName = group
-                .Select(x => x.Plugin)
-                .ToDictionary(p => p.Name, p => p, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var (statusCode, relativePath) in ledger.WorkingTreeStatus(originFolder))
+            try
             {
-                if (!LedgerRecordPath.TryParse(relativePath, out var identity)) continue;
-                if (!pluginsByFileName.TryGetValue(identity.PluginFileName, out var plugin)) continue;
-
-                // A record whose ledger path parses but was never committed (not reachable through
-                // today's write paths — see LedgerChangeKind's own remarks — but this listing must
-                // not assert a HEAD reading that doesn't exist) has nothing to read a committed side
-                // from; skipped rather than reported with a fabricated "committed" text.
-                if (!ledger.IsTrackedAtHead(originFolder, relativePath)) continue;
-
-                var committedText = ledger.ReadTextAtCommit(originFolder, relativePath, "HEAD");
-                entries.Add(new LedgerStatusEntry(
-                    plugin.Name,
-                    plugin.Origin,
-                    identity.RecordType,
-                    identity.FormKey,
-                    ToChangeKind(statusCode),
-                    Path.Combine(originFolder, relativePath),
-                    committedText));
+                // #368 review finding 6: this endpoint is specified always-200 (a read-only status
+                // projection, not a mutation) — a single origin's git read throwing (a corrupt
+                // gitdir, a filesystem hiccup, #372/#373's own future git operations landing behind
+                // this) must not blank the whole panel for every *other* plugin too. Per-origin
+                // isolation, not per-record: a partial read within one origin folder is no more
+                // trustworthy than none, so a mid-origin failure drops that origin's entries as a
+                // unit rather than reporting a possibly-incomplete subset of them — ToList() forces
+                // CollectForOrigin's lazy iterator to run to completion *before* anything reaches
+                // `entries`, so a throw partway through never leaks the records collected ahead of
+                // it (AddRange alone would add them one at a time as it enumerates, which a
+                // mid-enumeration exception would leave stranded in `entries`).
+                var collected = CollectForOrigin(originFolder, group.Select(x => x.Plugin)).ToList();
+                entries.AddRange(collected);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Ledger status read failed for {OriginFolder}; omitted from this response, other origins unaffected",
+                    originFolder);
             }
         }
 
         return entries;
+    }
+
+    private IEnumerable<LedgerStatusEntry> CollectForOrigin(string originFolder, IEnumerable<PluginMetadata> plugins)
+    {
+        if (!ledger.RepoExists(originFolder)) yield break;
+
+        var pluginsByFileName = plugins.ToDictionary(p => p.Name, p => p, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (statusCode, relativePath) in ledger.WorkingTreeStatus(originFolder))
+        {
+            // #368 review (mutation axis): a git status line under *.ledger/* that doesn't parse
+            // as a record path is exactly the shape of failure that let the non-ASCII quoting bug
+            // (review finding 1) drop a genuinely dirty record with nothing anywhere saying so —
+            // logged here, not silently skipped, so the next input nobody anticipated is at least
+            // observable instead of repeating that exact failure mode.
+            if (!LedgerRecordPath.TryParse(relativePath, out var identity))
+            {
+                logger.LogWarning(
+                    "Ledger status entry under {OriginFolder} did not parse as a record path; omitted: {RelativePath}",
+                    originFolder, relativePath);
+                continue;
+            }
+
+            // A record whose ledger path parses cleanly but names a plugin the current session no
+            // longer lists in the load order (renamed away, removed from plugins.txt) is a
+            // legitimate, ordinary state — not a failure — so no log here, only the skip.
+            if (!pluginsByFileName.TryGetValue(identity.PluginFileName, out var plugin)) continue;
+
+            // A record whose ledger path parses but was never committed (not reachable through
+            // today's write paths — see LedgerChangeKind's own remarks — but this listing must
+            // not assert a HEAD reading that doesn't exist) has nothing to read a committed side
+            // from; skipped rather than reported with a fabricated "committed" text.
+            if (!ledger.IsTrackedAtHead(originFolder, relativePath)) continue;
+
+            var committedText = ledger.ReadTextAtCommit(originFolder, relativePath, "HEAD");
+            yield return new LedgerStatusEntry(
+                plugin.Name,
+                plugin.Origin,
+                identity.RecordType,
+                identity.FormKey,
+                ToChangeKind(statusCode),
+                Path.Combine(originFolder, relativePath),
+                committedText);
+        }
     }
 
     private static LedgerChangeKind ToChangeKind(char statusCode) => statusCode switch

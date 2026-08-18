@@ -2,6 +2,10 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Ledger;
 
+/// <summary>A record's identity as recovered from its own ledger path — the inverse of
+/// <see cref="LedgerRecordPath.For"/>.</summary>
+internal sealed record LedgerRecordIdentity(string PluginFileName, string RecordType, string FormKey);
+
 /// <summary>
 /// The ledger's own file layout policy: one record, one file, always — including a container
 /// record's own (shallow) file, per <see cref="ContainerStripFields"/>. Flat, not nested under a
@@ -30,10 +34,6 @@ namespace MEditService.Core.Ledger;
 /// is no containment relationship to encode here today; a future ticket that does can revisit the
 /// layout without this one's own paths moving.
 /// </summary>
-/// <summary>A record's identity as recovered from its own ledger path — the inverse of
-/// <see cref="LedgerRecordPath.For"/>.</summary>
-internal sealed record LedgerRecordIdentity(string PluginFileName, string RecordType, string FormKey);
-
 internal static class LedgerRecordPath
 {
     private const string LedgerSuffix = ".ledger";
@@ -66,7 +66,10 @@ internal static class LedgerRecordPath
 
         var pluginFileName = pluginSegment[..^LedgerSuffix.Length];
         var localId = fileSegment[..^YamlSuffix.Length];
-        if (pluginFileName.Length == 0 || localId.Length == 0 || originModKey.Length == 0) return false;
+        // No originModKey.Length == 0 check: RemoveEmptyEntries above already guarantees every
+        // segment (this one included) is non-empty — provably unreachable, not merely untested
+        // (mutation review, #368), so it isn't pinned in place with a test that can never fail it.
+        if (pluginFileName.Length == 0 || localId.Length == 0) return false;
 
         identity = new LedgerRecordIdentity(pluginFileName, recordType, $"{localId}:{originModKey}");
         return true;
