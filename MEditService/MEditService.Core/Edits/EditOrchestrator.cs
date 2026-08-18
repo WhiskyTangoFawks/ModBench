@@ -886,6 +886,12 @@ public sealed partial class EditOrchestrator(
         var recordType = _query.GetRecordType(formKey);
         if (recordType == null) return new RenumberResult.RecordNotFound();
 
+        // #391: the mirror of DeleteRecords' own guard (see TargetPendingDeleteOrRenumber there) —
+        // without this, a record could carry both a pending $delete and a pending $renumber row at
+        // once, which PluginSaver.CollectTouchedRecords has no rule for reconciling at save time.
+        if (PendingLifecycleChangeType(formKey, plugin) is { } blockingType)
+            return new RenumberResult.RecordPendingDeleteOrRenumber(blockingType);
+
         var newFormKey = $"{newFormId:X6}:{plugin}";
 
         // Issue #98 reverse guard: a renumber onto an already ESL-flagged (or pending-flagged)

@@ -7,6 +7,7 @@ public abstract record RenumberResult
     public sealed record NoSession : RenumberResult;
     public sealed record PluginImmutable(string Plugin) : RenumberResult;
     public sealed record RecordNotFound : RenumberResult;
+    public sealed record RecordPendingDeleteOrRenumber(string ChangeType) : RenumberResult;
     public sealed record ImmutableReferences(IReadOnlyList<ReferenceResult> Blockers) : RenumberResult;
     public sealed record FormIdInUse : RenumberResult;
     public sealed record EslIneligible(string Plugin, IReadOnlyList<string> FormKeys) : RenumberResult;
