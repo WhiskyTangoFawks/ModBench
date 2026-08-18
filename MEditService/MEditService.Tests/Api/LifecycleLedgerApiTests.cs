@@ -243,11 +243,13 @@ public sealed class LifecycleLedgerApiTests
 
         await SaveAllGroupsAsync(client);
 
-        // History shows vendor-then-remove: two commits total.
+        // History shows vendor-then-remove: two commits total. `git log` lists newest-first by
+        // default, so the vendor baseline (the older of the two) is subjects[1].
         var log = GitCli.Run(gitDir, workTree, "log", "--format=%s", "main");
         var subjects = log.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal(2, subjects.Length);
-        Assert.StartsWith("vendor:", subjects[1], StringComparison.Ordinal); // oldest first in --format order? verify below
+        Assert.StartsWith("save:", subjects[0], StringComparison.Ordinal);
+        Assert.StartsWith("vendor:", subjects[1], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -325,7 +327,7 @@ public sealed class LifecycleLedgerApiTests
         // Default threshold, no -M override anywhere (#373 orchestrator decision Q1) — git's own
         // `-M` bare form (default 50%) is enough for a record carrying real content beyond its own
         // identity line.
-        var summary = GitCli.Run(gitDir, workTree, "show", "--summary", "-M", "--format=", "HEAD");
+        var summary = GitCli.Run(gitDir, workTree, "show", "--summary", "--format=", "HEAD");
         Assert.Contains("rename", summary, StringComparison.Ordinal);
         Assert.Contains(Path.GetFileName(oldRelativePath), summary, StringComparison.Ordinal);
         Assert.Contains(Path.GetFileName(newRelativePath), summary, StringComparison.Ordinal);
@@ -361,7 +363,7 @@ public sealed class LifecycleLedgerApiTests
         var oldRelativePath = LedgerRecordPath.For(Plugin, "kywd", bareKeywordFormKey).Replace('\\', '/');
         var newRelativePath = LedgerRecordPath.For(Plugin, "kywd", newFormKey).Replace('\\', '/');
 
-        var summary = GitCli.Run(gitDir, workTree, "show", "--summary", "-M", "--format=", "HEAD");
+        var summary = GitCli.Run(gitDir, workTree, "show", "--summary", "--format=", "HEAD");
         Assert.DoesNotContain("rename", summary, StringComparison.Ordinal);
         Assert.Contains($"delete mode 100644 {oldRelativePath}", summary, StringComparison.Ordinal);
         Assert.Contains($"create mode 100644 {newRelativePath}", summary, StringComparison.Ordinal);

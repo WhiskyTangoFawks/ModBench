@@ -116,6 +116,7 @@ public sealed class LedgerGroupCommitter(
     private async Task CommitOriginAsync(string originFolder, IReadOnlyList<LedgerTouchedRecord> records, GameRelease release)
     {
         var stagedPaths = new List<string>();
+        var removedFiles = new List<RemovedFileBackup>();
         var committed = new List<LedgerTouchedRecord>();
         try
         {
@@ -147,9 +148,9 @@ public sealed class LedgerGroupCommitter(
                     PendingChangeConstants.CreateChangeType =>
                         await TryStageCreateAsync(originFolder, record, schemas, release, stagedPaths).ConfigureAwait(false),
                     PendingChangeConstants.DeleteChangeType =>
-                        TryStageDelete(originFolder, record, stagedPaths),
+                        TryStageDelete(originFolder, record, stagedPaths, removedFiles),
                     PendingChangeConstants.RenumberChangeType =>
-                        await TryStageRenumberAsync(originFolder, record, schemas, release, stagedPaths).ConfigureAwait(false),
+                        await TryStageRenumberAsync(originFolder, record, schemas, release, stagedPaths, removedFiles).ConfigureAwait(false),
                     _ => TryStageFieldEdit(originFolder, record, stagedPaths),
                 };
 
@@ -174,6 +175,20 @@ public sealed class LedgerGroupCommitter(
         }
         catch (Exception ex)
         {
+            // Working-tree deletions first, then index (review finding, #373): a delete/renumber's
+            // own File.Delete *is* this attempt's mutation, not a re-statement of dirt that was
+            // already written independently at stage time the way an ordinary field edit's is — so
+            // unlike TryUnstage's index-only rollback (sufficient for a plain modify, since the
+            // working-tree file it un-stages was never touched by this attempt), a removed file has
+            // nothing to fall back on except what this attempt itself saved before deleting it.
+            // There is no second chance either: the binary write and pending-change DB transaction
+            // have already succeeded and the pending delete/renumber is consumed by the time this
+            // runs, so a removed-but-unrestored file would sit that way in the origin's ledger repo
+            // permanently — tracked at HEAD, absent from disk — until some unrelated future edit
+            // happened to touch the same path.
+            foreach (var backup in removedFiles)
+                TryRestoreRemovedFile(backup, ex);
+
             foreach (var path in stagedPaths)
                 TryUnstage(originFolder, path, ex);
 
@@ -182,6 +197,14 @@ public sealed class LedgerGroupCommitter(
                 originFolder);
         }
     }
+
+    // Captured immediately before a File.Delete this attempt performs (TryStageDelete/
+    // TryStageRenumberAsync) so a *later* record's failure in the same attempt can restore exactly
+    // this file — never a blunt whole-tree reset, which would also destroy any other record's
+    // legitimate, unrelated uncommitted dirt sitting in the same origin folder. The raw text as it
+    // stood on disk, not a re-serialization of the in-memory record object: this must reproduce
+    // byte-for-byte what was actually lost, not merely something semantically equivalent to it.
+    private sealed record RemovedFileBackup(string AbsolutePath, string Content);
 
     // The pre-#373 behaviour, unchanged: not every touched record is ledger-tracked (a change type
     // the ledger never represents e.g. a VMAD struct-op-only edit — #389 — or a DataDirectory-origin
@@ -235,13 +258,19 @@ public sealed class LedgerGroupCommitter(
     // "skip, not a gap" contract TryStageFieldEdit already has. Removing the working-tree file and
     // staging the (now tracked) path captures the removal — `git add` on a removed tracked path
     // stages the deletion, no separate `git rm` needed.
-    private bool TryStageDelete(string originFolder, LedgerTouchedRecord record, List<string> stagedPaths)
+    private bool TryStageDelete(
+        string originFolder, LedgerTouchedRecord record, List<string> stagedPaths, List<RemovedFileBackup> removedFiles)
     {
         var relativePath = LedgerRecordPath.For(record.PluginFileName, record.RecordType, record.FormKey);
         if (!ledger.IsTrackedAtHead(originFolder, relativePath)) return false;
 
         var absolutePath = Path.Combine(originFolder, relativePath);
-        if (File.Exists(absolutePath)) File.Delete(absolutePath);
+        if (File.Exists(absolutePath))
+        {
+            // Captured before deletion — see RemovedFileBackup's own remarks.
+            removedFiles.Add(new RemovedFileBackup(absolutePath, File.ReadAllText(absolutePath)));
+            File.Delete(absolutePath);
+        }
 
         ledger.StagePath(originFolder, relativePath);
         stagedPaths.Add(relativePath);
@@ -264,7 +293,7 @@ public sealed class LedgerGroupCommitter(
     // orchestrator decision Q1), not a defect here.
     private async Task<bool> TryStageRenumberAsync(
         string originFolder, LedgerTouchedRecord record, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        GameRelease release, List<string> stagedPaths)
+        GameRelease release, List<string> stagedPaths, List<RemovedFileBackup> removedFiles)
     {
         if (record.NewFormKey is not { } newFormKeyString) return false;
         if (!schemas.TryGetValue(record.RecordType, out var schema)) return false;
@@ -284,7 +313,12 @@ public sealed class LedgerGroupCommitter(
         Directory.CreateDirectory(Path.GetDirectoryName(newAbsolutePath)!);
         await codec.SerializeAsync(renumbered, newAbsolutePath, release).ConfigureAwait(false);
 
-        if (File.Exists(oldAbsolutePath)) File.Delete(oldAbsolutePath);
+        if (File.Exists(oldAbsolutePath))
+        {
+            // Captured before deletion — see RemovedFileBackup's own remarks.
+            removedFiles.Add(new RemovedFileBackup(oldAbsolutePath, await File.ReadAllTextAsync(oldAbsolutePath).ConfigureAwait(false)));
+            File.Delete(oldAbsolutePath);
+        }
 
         ledger.StagePath(originFolder, oldRelativePath); // captures the removal
         stagedPaths.Add(oldRelativePath);
@@ -306,6 +340,25 @@ public sealed class LedgerGroupCommitter(
             logger.LogWarning(ex,
                 "Failed to unstage {RelativePath} in {OriginFolder} after a failed ledger commit (original failure: {Original})",
                 relativePath, originFolder, original.Message);
+        }
+    }
+
+    // Best-effort within a best-effort, mirroring TryUnstage (review finding, #373): a restore
+    // failure here must not mask the original exception CommitOriginAsync is already unwinding
+    // from, nor throw past it — a rollback step that itself throws would leave the caller worse off
+    // than one that simply logs and moves on.
+    private void TryRestoreRemovedFile(RemovedFileBackup backup, Exception original)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(backup.AbsolutePath)!);
+            File.WriteAllText(backup.AbsolutePath, backup.Content);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to restore {AbsolutePath} after a failed ledger commit (original failure: {Original})",
+                backup.AbsolutePath, original.Message);
         }
     }
 

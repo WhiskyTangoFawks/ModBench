@@ -276,6 +276,51 @@ public sealed class PluginSaverSaveGroupTests
         File.Delete(session.LastDestPath!);
     }
 
+    // #373 review: Renumber() has no guard against a target that already has a pending delete
+    // (DeleteRecords() blocks the reverse, but not this direction), so two lifecycle rows can
+    // legally coexist in the DB for one FormKey. Neither row alone unions with the other (ADR-0028:
+    // a node's own identity match isn't an edge) — a referrer's pending reference to the target
+    // bridges both into one component via edge rule 1, exactly the shape a real cascade
+    // (AddNullificationMembers / Renumber's own crossPluginRefs) produces and the only way both
+    // lifecycle rows reach one Save() call together. PluginSaver.CollectTouchedRecords must fail
+    // loudly rather than silently pick one — and the failure must happen where nothing durable has
+    // committed yet, so the pending changes survive for the caller to actually resolve.
+    [Fact]
+    public async Task Save_FormKeyHasBothAPendingDeleteAndAPendingRenumber_ThrowsAndPreservesPendingChanges()
+    {
+        var changes = DuckDbTestFactory.MakePendingChangeService();
+        const string targetFormKey = "000001:A.esp";
+
+        // A.esp/B.esp — the default StubSession's own known, mutable load-order plugins (see its
+        // own remarks below); anything else is refused before ever reaching CollectTouchedRecords.
+        var members = new[]
+        {
+            new GroupMember(targetFormKey, "A.esp", "npc_", PendingChangeConstants.DeleteChangeType,
+                PendingChangeConstants.DeleteFieldPath, J("null"), J("null"), Source: "user", ParentCell: null, PlacementGroup: null, Origin: "Data"),
+            new GroupMember(targetFormKey, "A.esp", "npc_", PendingChangeConstants.RenumberChangeType,
+                PendingChangeConstants.RenumberFieldPath, J($"\"{targetFormKey}\""), J("\"000002:A.esp\""), Source: "user", ParentCell: null, PlacementGroup: null, Origin: "Data"),
+        };
+        var group = changes.StageChanges(members);
+
+        changes.Upsert(new PendingChangeUpsert(
+            "000003:B.esp", "B.esp", "npc_",
+            new Dictionary<string, JsonElement> { ["keywords"] = J($"[\"{targetFormKey}\"]") },
+            "user", null, [],
+            FormRefs: [new PendingFormRef("keywords", "keywords", targetFormKey)],
+            ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
+
+        // Precondition sanity check: all three rows (delete, renumber, referrer) really did land in
+        // one component before Save runs — otherwise this test would prove nothing about the guard.
+        Assert.Equal(3, changes.GetChanges(memberChangeId: group.Id).Count);
+
+        var session = new StubSession();
+        var saver = new PluginSaver(changes, session, LedgerCommitter, NullLogger<PluginSaver>.Instance);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => saver.Save(group.Id));
+
+        Assert.NotEmpty(changes.GetChanges(memberChangeId: group.Id));
+    }
+
     // C9
     [Fact]
     public async Task Save_ImmutablePlugin_ReturnsImmutablePluginResult()

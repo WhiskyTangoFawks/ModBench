@@ -117,9 +117,39 @@ public sealed class PluginSaver(
     private void CollectTouchedRecords(IReadOnlyList<PendingChange> columnChanges, List<LedgerTouchedRecord> into)
     {
         var s = session.Session;
-        foreach (var group in columnChanges.GroupBy(c => c.FormKey, StringComparer.OrdinalIgnoreCase))
+        foreach (var groupIterator in columnChanges.GroupBy(c => c.FormKey, StringComparer.OrdinalIgnoreCase))
         {
-            var first = group.First();
+            var group = groupIterator.ToList();
+            var first = group[0];
+
+            // #373 review: Renumber() has no guard against a target that also has a pending delete
+            // (DeleteRecords() does block on a pending renumber, but not the reverse), so two
+            // lifecycle rows can legally coexist in the DB for one FormKey today. Silently picking
+            // one (FirstOrDefault) would make the ledger's own choice depend on staging order — it
+            // happens to agree with PluginWriter's own fixed Apply-pass order (create, then delete,
+            // then renumber) today, but that agreement is a coincidence this code does not enforce
+            // and must not quietly rely on. Checked unconditionally, before the origin-folder
+            // resolution below (deliberately — the ambiguity is a pending-change data problem, not
+            // a ledger-reachability one, so a FormKey with no resolvable origin folder must not
+            // skip past it unnoticed): failing loudly here — before either the binary write's temp
+            // files are committed or the pending-change transaction commits (both roll back cleanly
+            // on a throw from inside this callback: see ExecuteGroupSaveAsync) — converts a silent,
+            // possibly-wrong pick into a save that visibly fails instead of a ledger that silently
+            // misrepresents which lifecycle change actually happened.
+            var lifecycleTypes = group
+                .Where(c => PendingChangeConstants.IsLifecycle(c.ChangeType))
+                .Select(c => c.ChangeType)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (lifecycleTypes.Count > 1)
+            {
+                throw new InvalidOperationException(
+                    $"FormKey '{first.FormKey}' has more than one lifecycle change type pending " +
+                    $"({string.Join(", ", lifecycleTypes)}) — there is no rule for which one the " +
+                    "ledger should represent, and picking one silently would risk the ledger " +
+                    "disagreeing with what the save actually did to the binary.");
+            }
+
             var meta = s.LoadOrderPlugin(first.Plugin);
             var originFolder = meta == null ? null : Path.GetDirectoryName(meta.Path);
             if (meta == null || string.IsNullOrEmpty(originFolder)) continue;

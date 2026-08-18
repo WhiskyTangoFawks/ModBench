@@ -391,7 +391,7 @@ public sealed class LedgerGroupCommitterTests
             Assert.Equal(3, CommitCount(ledger, originFolder));
 
             var (gitDir, workTree) = ledger.PathsFor(originFolder);
-            var summary = GitCli.Run(gitDir, workTree, "show", "--summary", "-M", "--format=", "HEAD");
+            var summary = GitCli.Run(gitDir, workTree, "show", "--summary", "--format=", "HEAD");
             var createdRelativePath = LedgerRecordPath.For(pluginFileName, "npc_", createdFormKey).Replace('\\', '/');
             var npc1RelativePath = LedgerRecordPath.For(pluginFileName, "npc_", npc1FormKey).Replace('\\', '/');
             Assert.Contains($"create mode 100644 {createdRelativePath}", summary, StringComparison.Ordinal);
@@ -438,6 +438,102 @@ public sealed class LedgerGroupCommitterTests
             // mode #373 introduces.
             var (gitDir, _) = ledger.PathsFor(originFolder);
             Assert.False(Directory.Exists(gitDir));
+        }
+        finally
+        {
+            Directory.Delete(ledgerRoot, recursive: true);
+            Directory.Delete(originFolder, recursive: true);
+        }
+    }
+
+    // #373 review (Major): TryUnstage alone is index-only rollback, which is sufficient for an
+    // ordinary field edit (its working-tree dirt was written independently at stage time, untouched
+    // by this attempt) but not for a delete: the working-tree File.Delete *is* this attempt's own
+    // mutation, and there is no second chance — the binary write and pending-change DB transaction
+    // have already succeeded and the pending delete is consumed by the time this runs. npc1 (delete,
+    // mutates disk) processes successfully first; the second entry's malformed FormKey makes
+    // LedgerRecordPath.For throw before it ever reaches IsTrackedAtHead/StagePath, exercising the
+    // catch with npc1's file already removed from disk.
+    [Fact]
+    public async Task CommitGroupSaveAsync_DeleteMutatesDiskThenALaterRecordThrows_RestoresTheDeletedFile()
+    {
+        var ledgerRoot = Directory.CreateTempSubdirectory("medit-group-committer-ledger-").FullName;
+        var originFolder = Directory.CreateTempSubdirectory("medit-group-committer-origin-").FullName;
+        try
+        {
+            var (vendor, committer, ledger) = MakeCollaborators(ledgerRoot);
+            const string pluginFileName = "Rollback.esp";
+            var pluginPath = WritePlugin(originFolder, pluginFileName, out var npc1FormKey, out _);
+            await VendorAsync(vendor, originFolder, pluginPath, pluginFileName, npc1FormKey);
+            Assert.Equal(1, CommitCount(ledger, originFolder));
+
+            var npc1RelativePath = LedgerRecordPath.For(pluginFileName, "npc_", npc1FormKey);
+            var npc1AbsolutePath = Path.Combine(originFolder, npc1RelativePath);
+            var originalContent = await File.ReadAllTextAsync(npc1AbsolutePath);
+
+            await committer.CommitGroupSaveAsync([
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc1FormKey,
+                    ChangeType: PendingChangeConstants.DeleteChangeType),
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", "not-a-valid-form-key",
+                    ChangeType: PendingChangeConstants.DeleteChangeType),
+            ], GameRelease.Fallout4);
+
+            // Best-effort: never throws past the caller, and nothing new committed for this attempt.
+            Assert.Equal(1, CommitCount(ledger, originFolder));
+
+            // The file this attempt deleted must be restored — byte-for-byte — not left permanently
+            // as "tracked at HEAD, absent from disk".
+            Assert.True(File.Exists(npc1AbsolutePath));
+            Assert.Equal(originalContent, await File.ReadAllTextAsync(npc1AbsolutePath));
+
+            // Path-scoped: nothing left staged anywhere in this origin either (the index rollback
+            // TryUnstage already provided still holds alongside the new file-restore step).
+            var (gitDir, workTree) = ledger.PathsFor(originFolder);
+            AssertNoStagedEntries(gitDir, workTree);
+        }
+        finally
+        {
+            Directory.Delete(ledgerRoot, recursive: true);
+            Directory.Delete(originFolder, recursive: true);
+        }
+    }
+
+    // Renumber's own version of the same defect: the *old* path's File.Delete is this attempt's own
+    // mutation (the new path's write is comparatively harmless — an uncommitted, untracked file is
+    // the same benign leftover an ordinary rolled-back attempt already tolerates, per
+    // CommitGroupSave_FailureAfterPartialStaging_RollsBackAndDoesNotPolluteALaterCommit's own
+    // remarks — it is the *removed*, previously-tracked file that must not be permanently lost).
+    [Fact]
+    public async Task CommitGroupSaveAsync_RenumberMutatesDiskThenALaterRecordThrows_RestoresTheOldFile()
+    {
+        var ledgerRoot = Directory.CreateTempSubdirectory("medit-group-committer-ledger-").FullName;
+        var originFolder = Directory.CreateTempSubdirectory("medit-group-committer-origin-").FullName;
+        try
+        {
+            var (vendor, committer, ledger) = MakeCollaborators(ledgerRoot);
+            const string pluginFileName = "Rollback.esp";
+            var pluginPath = WritePlugin(originFolder, pluginFileName, out var npc1FormKey, out _);
+            await VendorAsync(vendor, originFolder, pluginPath, pluginFileName, npc1FormKey);
+            Assert.Equal(1, CommitCount(ledger, originFolder));
+
+            var npc1RelativePath = LedgerRecordPath.For(pluginFileName, "npc_", npc1FormKey);
+            var npc1AbsolutePath = Path.Combine(originFolder, npc1RelativePath);
+            var originalContent = await File.ReadAllTextAsync(npc1AbsolutePath);
+
+            await committer.CommitGroupSaveAsync([
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", npc1FormKey,
+                    ChangeType: PendingChangeConstants.RenumberChangeType, NewFormKey: "000901:Rollback.esp"),
+                new LedgerTouchedRecord(originFolder, pluginFileName, "npc_", "not-a-valid-form-key",
+                    ChangeType: PendingChangeConstants.DeleteChangeType),
+            ], GameRelease.Fallout4);
+
+            Assert.Equal(1, CommitCount(ledger, originFolder));
+
+            Assert.True(File.Exists(npc1AbsolutePath));
+            Assert.Equal(originalContent, await File.ReadAllTextAsync(npc1AbsolutePath));
+
+            var (gitDir, workTree) = ledger.PathsFor(originFolder);
+            AssertNoStagedEntries(gitDir, workTree);
         }
         finally
         {
