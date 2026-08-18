@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using MEditService.Core.Session;
 
 namespace MEditService.Core.Ledger;
@@ -8,7 +9,16 @@ namespace MEditService.Core.Ledger;
 /// baseline before any dirt is ever written, so <see cref="Modified"/> is the only value the
 /// current backend can ever actually produce; the others exist so a future write path (or an
 /// external tool editing ledger text directly) is reported for what it is instead of silently
-/// mislabeled as a modification.</summary>
+/// mislabeled as a modification.
+///
+/// <c>[JsonConverter]</c> on the enum itself (not just the global <c>ConfigureHttpJsonOptions</c>
+/// converter in <c>Program.cs</c>) is what Swashbuckle's schema generator honors — without it the
+/// enum round-trips as a string at runtime but the OpenAPI schema (and therefore generated
+/// <c>api.ts</c>) still describes it as an int, same precedent as
+/// <c>FormKeyResolutionState</c>/<c>ConflictThis</c>/<c>ConflictAll</c>. Confirmed by regenerating
+/// the client before adding this attribute: it emitted <c>0 | 1 | 2 | 3 | 4</c>, not the string
+/// literals a caller would actually receive.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum LedgerChangeKind
 {
     Modified,

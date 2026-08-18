@@ -1,6 +1,4 @@
 using System.Net.Http.Json;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using MEditService.Core.Ledger;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -39,17 +37,12 @@ public class LedgerStatusApiTests
         resp.EnsureSuccessStatusCode();
     }
 
-    // The server's own JSON options (Program.cs) add JsonStringEnumConverter so LedgerChangeKind
-    // travels as "Modified" rather than a raw int; System.Net.Http.Json's client-side default
-    // options don't share that config, so ChangeKind needs the same converter here to round-trip.
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new JsonStringEnumConverter() },
-    };
-
+    // LedgerChangeKind carries its own [JsonConverter(typeof(JsonStringEnumConverter))] (see its
+    // own remarks), so a plain client-side deserialize round-trips it correctly with no options of
+    // its own — the attribute applies regardless of which JsonSerializerOptions instance is used.
     private static async Task<List<LedgerStatusEntry>> GetStatusAsync(HttpClient client)
     {
-        var entries = await client.GetFromJsonAsync<List<LedgerStatusEntry>>("/ledger/status", JsonOptions);
+        var entries = await client.GetFromJsonAsync<List<LedgerStatusEntry>>("/ledger/status");
         return entries ?? [];
     }
 
