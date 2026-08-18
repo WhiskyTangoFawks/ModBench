@@ -87,35 +87,29 @@ public sealed class LedgerGroupCommitter(
 {
     public async Task CommitGroupSaveAsync(IReadOnlyList<LedgerTouchedRecord> touched, GameRelease release)
     {
-        // Path.GetFullPath, not the raw OriginFolder string: LedgerOriginGate.GateFor and
+        // Path.GetFullPath, not the raw OriginFolder string: the attempt scope's gate and
         // LedgerRepository.PathsFor both normalize the origin folder before keying off it (review
         // finding, #371) — grouping on the raw string here would let two touched records naming the
         // same physical folder in differently-formatted ways split into two groups and produce two
         // commits into what is actually one gitdir, a second way "exactly one commit" could break.
         foreach (var group in touched.GroupBy(t => Path.GetFullPath(t.OriginFolder), StringComparer.Ordinal))
         {
-            // Shared with RecordVendor (LedgerOriginGate) — both stage into the same gitdir/index,
-            // so a StageEdit vendoring a different record in this same origin folder while this
-            // save is committing must not interleave with it.
-            var gate = LedgerOriginGate.GateFor(group.Key);
-            await gate.WaitAsync().ConfigureAwait(false);
-            try
-            {
-                await CommitOriginAsync(group.Key, [.. group.DistinctBy(t => (t.PluginFileName, t.RecordType, t.FormKey))], release)
-                    .ConfigureAwait(false);
-            }
-            finally
-            {
-                gate.Release();
-            }
+            // One attempt scope per origin (#393): the per-origin gate it holds is shared with
+            // RecordVendor — both stage into the same gitdir/index, so a StageEdit vendoring a
+            // different record in this same origin folder while this save is committing must not
+            // interleave with it. Disposing after CommitOriginAsync's own best-effort catch also
+            // unstages whatever a failed attempt staged, after the catch's working-tree restores.
+            using var attempt = await ledger.BeginAttemptAsync(group.Key).ConfigureAwait(false);
+            await CommitOriginAsync(attempt, [.. group.DistinctBy(t => (t.PluginFileName, t.RecordType, t.FormKey))], release)
+                .ConfigureAwait(false);
         }
     }
 
     // Non-atomic across origins by design (see class remarks) — a throw for one origin folder must
     // not stop the loop from attempting the rest, and never bubbles to the caller (best-effort).
-    private async Task CommitOriginAsync(string originFolder, IReadOnlyList<LedgerTouchedRecord> records, GameRelease release)
+    private async Task CommitOriginAsync(
+        LedgerRepository.CommitAttempt attempt, IReadOnlyList<LedgerTouchedRecord> records, GameRelease release)
     {
-        var stagedPaths = new List<string>();
         var removedFiles = new List<RemovedFileBackup>();
         var committed = new List<LedgerTouchedRecord>();
         try
@@ -128,16 +122,12 @@ public sealed class LedgerGroupCommitter(
             // are untracked for a legitimate reason (e.g. a VMAD-struct-op-only edit, #389) must
             // still produce no repo at all, not one fabricated just to discover there was nothing to
             // commit (SaveChangeGroup_TouchingOnlyAnUnvendoredVmadStructOp_ProducesNoLedgerCommit).
+            // The known-clean index reset that used to sit here is the attempt scope's own contract
+            // now (#393), lazily before its first Stage — which is also what lets an all-untracked
+            // batch against a repo-less origin fall through to the "none are ledger-tracked" path
+            // below instead of tripping over a reset against a gitdir that doesn't exist.
             if (records.Any(r => r.ChangeType == PendingChangeConstants.CreateChangeType))
-                ledger.EnsureRepo(originFolder);
-
-            // Known-clean index before staging anything for this attempt (review finding, #371 —
-            // see LedgerRepository.ResetIndexToHead's own remarks): without this, a stray entry an
-            // earlier, unrelated failed attempt against this same origin folder left behind — its
-            // own UnstagePath never ran, or failed — would get folded into *this* commit, silently
-            // including a file this save never touched. A removal and a rename are index operations
-            // too (#373) — the same guarantee has to hold for them, not just an ordinary modify.
-            ledger.ResetIndexToHead(originFolder);
+                attempt.EnsureRepo();
 
             var schemas = schemaReflector.GetSchemas(release);
 
@@ -146,12 +136,12 @@ public sealed class LedgerGroupCommitter(
                 var handled = record.ChangeType switch
                 {
                     PendingChangeConstants.CreateChangeType =>
-                        await TryStageCreateAsync(originFolder, record, schemas, release, stagedPaths).ConfigureAwait(false),
+                        await TryStageCreateAsync(attempt, record, schemas, release).ConfigureAwait(false),
                     PendingChangeConstants.DeleteChangeType =>
-                        TryStageDelete(originFolder, record, stagedPaths, removedFiles),
+                        TryStageDelete(attempt, record, removedFiles),
                     PendingChangeConstants.RenumberChangeType =>
-                        await TryStageRenumberAsync(originFolder, record, schemas, release, stagedPaths, removedFiles).ConfigureAwait(false),
-                    _ => TryStageFieldEdit(originFolder, record, stagedPaths),
+                        await TryStageRenumberAsync(attempt, record, schemas, release, removedFiles).ConfigureAwait(false),
+                    _ => TryStageFieldEdit(attempt, record),
                 };
 
                 if (handled) committed.Add(record);
@@ -167,34 +157,33 @@ public sealed class LedgerGroupCommitter(
                 // no commit must be findable, never silently treated internally as "committed".
                 logger.LogInformation(
                     "Save touched {Count} record(s) in {OriginFolder} but none are ledger-tracked; no ledger commit was made for this save",
-                    records.Count, originFolder);
+                    records.Count, attempt.OriginFolder);
                 return;
             }
 
-            ledger.CommitStaged(originFolder, BuildMessage(committed));
+            attempt.Commit(BuildMessage(committed));
         }
         catch (Exception ex)
         {
-            // Working-tree deletions first, then index (review finding, #373): a delete/renumber's
+            // Working-tree deletions restored here (review finding, #373): a delete/renumber's
             // own File.Delete *is* this attempt's mutation, not a re-statement of dirt that was
             // already written independently at stage time the way an ordinary field edit's is — so
-            // unlike TryUnstage's index-only rollback (sufficient for a plain modify, since the
-            // working-tree file it un-stages was never touched by this attempt), a removed file has
-            // nothing to fall back on except what this attempt itself saved before deleting it.
-            // There is no second chance either: the binary write and pending-change DB transaction
-            // have already succeeded and the pending delete/renumber is consumed by the time this
-            // runs, so a removed-but-unrestored file would sit that way in the origin's ledger repo
-            // permanently — tracked at HEAD, absent from disk — until some unrelated future edit
-            // happened to touch the same path.
+            // unlike the attempt scope's index-only unstage-on-dispose (sufficient for a plain
+            // modify, since the working-tree file it un-stages was never touched by this attempt),
+            // a removed file has nothing to fall back on except what this attempt itself saved
+            // before deleting it. There is no second chance either: the binary write and
+            // pending-change DB transaction have already succeeded and the pending delete/renumber
+            // is consumed by the time this runs, so a removed-but-unrestored file would sit that
+            // way in the origin's ledger repo permanently — tracked at HEAD, absent from disk —
+            // until some unrelated future edit happened to touch the same path. Restores run
+            // before the scope's dispose unstages (dispose sits outside this catch), preserving
+            // the working-tree-first, index-second rollback order.
             foreach (var backup in removedFiles)
                 TryRestoreRemovedFile(backup, ex);
 
-            foreach (var path in stagedPaths)
-                TryUnstage(originFolder, path, ex);
-
             logger.LogWarning(ex,
                 "Ledger commit failed for a saved group touching {OriginFolder}; the binary write and pending-change save already succeeded, ledger history was not advanced for this save",
-                originFolder);
+                attempt.OriginFolder);
         }
     }
 
@@ -209,13 +198,12 @@ public sealed class LedgerGroupCommitter(
     // The pre-#373 behaviour, unchanged: not every touched record is ledger-tracked (a change type
     // the ledger never represents e.g. a VMAD struct-op-only edit — #389 — or a DataDirectory-origin
     // plugin with no repo at all). Skipping those is correct, not a gap being papered over.
-    private bool TryStageFieldEdit(string originFolder, LedgerTouchedRecord record, List<string> stagedPaths)
+    private static bool TryStageFieldEdit(LedgerRepository.CommitAttempt attempt, LedgerTouchedRecord record)
     {
         var relativePath = LedgerRecordPath.For(record.PluginFileName, record.RecordType, record.FormKey);
-        if (!ledger.IsTrackedAtHead(originFolder, relativePath)) return false;
+        if (!attempt.IsTrackedAtHead(relativePath)) return false;
 
-        ledger.StagePath(originFolder, relativePath);
-        stagedPaths.Add(relativePath);
+        attempt.Stage(relativePath);
         return true;
     }
 
@@ -229,8 +217,8 @@ public sealed class LedgerGroupCommitter(
     // strip container fields defensively (ADR-0040/#387 amendment), and stage the brand-new path
     // unconditionally — there is no earlier commit at this path to check against.
     private async Task<bool> TryStageCreateAsync(
-        string originFolder, LedgerTouchedRecord record, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        GameRelease release, List<string> stagedPaths)
+        LedgerRepository.CommitAttempt attempt, LedgerTouchedRecord record,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
         if (!schemas.TryGetValue(record.RecordType, out var schema)) return false;
         if (!FormKey.TryFactory(record.FormKey, out var formKey)) return false;
@@ -242,12 +230,11 @@ public sealed class LedgerGroupCommitter(
         ContainerStripFields.StripInPlace(created);
 
         var relativePath = LedgerRecordPath.For(record.PluginFileName, record.RecordType, record.FormKey);
-        var absolutePath = Path.Combine(originFolder, relativePath);
+        var absolutePath = Path.Combine(attempt.OriginFolder, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
         await codec.SerializeAsync(created, absolutePath, release).ConfigureAwait(false);
 
-        ledger.StagePath(originFolder, relativePath);
-        stagedPaths.Add(relativePath);
+        attempt.Stage(relativePath);
         return true;
     }
 
@@ -258,13 +245,14 @@ public sealed class LedgerGroupCommitter(
     // "skip, not a gap" contract TryStageFieldEdit already has. Removing the working-tree file and
     // staging the (now tracked) path captures the removal — `git add` on a removed tracked path
     // stages the deletion, no separate `git rm` needed.
-    private bool TryStageDelete(
-        string originFolder, LedgerTouchedRecord record, List<string> stagedPaths, List<RemovedFileBackup> removedFiles)
+    private static bool TryStageDelete(
+        LedgerRepository.CommitAttempt attempt, LedgerTouchedRecord record,
+        List<RemovedFileBackup> removedFiles)
     {
         var relativePath = LedgerRecordPath.For(record.PluginFileName, record.RecordType, record.FormKey);
-        if (!ledger.IsTrackedAtHead(originFolder, relativePath)) return false;
+        if (!attempt.IsTrackedAtHead(relativePath)) return false;
 
-        var absolutePath = Path.Combine(originFolder, relativePath);
+        var absolutePath = Path.Combine(attempt.OriginFolder, relativePath);
         if (File.Exists(absolutePath))
         {
             // Captured before deletion — see RemovedFileBackup's own remarks.
@@ -272,8 +260,7 @@ public sealed class LedgerGroupCommitter(
             File.Delete(absolutePath);
         }
 
-        ledger.StagePath(originFolder, relativePath);
-        stagedPaths.Add(relativePath);
+        attempt.Stage(relativePath);
         return true;
     }
 
@@ -292,8 +279,8 @@ public sealed class LedgerGroupCommitter(
     // known, structural boundary (git's own default threshold, deliberately not overridden — #373
     // orchestrator decision Q1), not a defect here.
     private async Task<bool> TryStageRenumberAsync(
-        string originFolder, LedgerTouchedRecord record, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        GameRelease release, List<string> stagedPaths, List<RemovedFileBackup> removedFiles)
+        LedgerRepository.CommitAttempt attempt, LedgerTouchedRecord record,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release, List<RemovedFileBackup> removedFiles)
     {
         if (record.NewFormKey is not { } newFormKeyString) return false;
         if (!schemas.TryGetValue(record.RecordType, out var schema)) return false;
@@ -301,15 +288,15 @@ public sealed class LedgerGroupCommitter(
         if (!FormKey.TryFactory(newFormKeyString, out var newFormKey)) return false;
 
         var oldRelativePath = LedgerRecordPath.For(record.PluginFileName, record.RecordType, record.FormKey);
-        if (!ledger.IsTrackedAtHead(originFolder, oldRelativePath)) return false;
+        if (!attempt.IsTrackedAtHead(oldRelativePath)) return false;
 
-        var oldAbsolutePath = Path.Combine(originFolder, oldRelativePath);
+        var oldAbsolutePath = Path.Combine(attempt.OriginFolder, oldRelativePath);
         var current = await codec.DeserializeAsync(oldAbsolutePath, concreteType, release).ConfigureAwait(false);
         var renumbered = (IMajorRecord)current.Duplicate(newFormKey);
         ContainerStripFields.StripInPlace(renumbered);
 
         var newRelativePath = LedgerRecordPath.For(record.PluginFileName, record.RecordType, newFormKeyString);
-        var newAbsolutePath = Path.Combine(originFolder, newRelativePath);
+        var newAbsolutePath = Path.Combine(attempt.OriginFolder, newRelativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(newAbsolutePath)!);
         await codec.SerializeAsync(renumbered, newAbsolutePath, release).ConfigureAwait(false);
 
@@ -320,30 +307,12 @@ public sealed class LedgerGroupCommitter(
             File.Delete(oldAbsolutePath);
         }
 
-        ledger.StagePath(originFolder, oldRelativePath); // captures the removal
-        stagedPaths.Add(oldRelativePath);
-        ledger.StagePath(originFolder, newRelativePath); // captures the add
-        stagedPaths.Add(newRelativePath);
+        attempt.Stage(oldRelativePath); // captures the removal
+        attempt.Stage(newRelativePath); // captures the add
         return true;
     }
 
-    // Best-effort within a best-effort: an UnstagePath failure here must not mask the original
-    // exception CommitOriginAsync is already unwinding from, nor throw past it.
-    private void TryUnstage(string originFolder, string relativePath, Exception original)
-    {
-        try
-        {
-            ledger.UnstagePath(originFolder, relativePath);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex,
-                "Failed to unstage {RelativePath} in {OriginFolder} after a failed ledger commit (original failure: {Original})",
-                relativePath, originFolder, original.Message);
-        }
-    }
-
-    // Best-effort within a best-effort, mirroring TryUnstage (review finding, #373): a restore
+    // Best-effort within a best-effort (review finding, #373): a restore
     // failure here must not mask the original exception CommitOriginAsync is already unwinding
     // from, nor throw past it — a rollback step that itself throws would leave the caller worse off
     // than one that simply logs and moves on.

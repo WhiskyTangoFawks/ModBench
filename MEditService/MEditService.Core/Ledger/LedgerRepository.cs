@@ -13,36 +13,145 @@ namespace MEditService.Core.Ledger;
 /// guaranteed filename-safe) — reused across every record vendored from that origin, created once
 /// (<see cref="EnsureRepo"/> is idempotent).
 ///
-/// Staging and committing are deliberately separate operations (<see cref="StagePath"/> /
-/// <see cref="CommitStaged"/>), not one atomic "commit this text" call: a caller stages a path's
-/// current working-tree content into the index immediately after writing it, then does the work
-/// that can still fail, and only calls <see cref="CommitStaged"/> (a bare <c>git commit</c>,
-/// deliberately no pathspec — see its own remarks) once all of that has succeeded, or
-/// <see cref="UnstagePath"/> if it didn't. A bare <c>git commit</c> commits whatever is in the
-/// index — not whatever the working-tree file currently holds — so the working-tree file can be
-/// overwritten *between* staging and committing without the commit ever capturing that later
-/// content: it still commits what was staged earlier. A failure between the two calls leaves
-/// nothing committed and, once <see cref="UnstagePath"/> runs, nothing staged either — not a
-/// commit orphaned from work that never finished, and not a stray index entry a later, unrelated
-/// commit could accidentally sweep in.
+/// Committing goes through one door (#393): <see cref="BeginAttemptAsync"/> returns a
+/// <see cref="CommitAttempt"/> scope that owns the whole staging protocol — the per-origin gate,
+/// a known-clean index before the attempt's first <see cref="CommitAttempt.Stage"/> (review
+/// finding, #371: a stray entry a crashed earlier attempt left in the index would otherwise be
+/// swept silently into whichever commit against this origin folder happens next), and
+/// unstage-on-abandonment when the risky work between stage and commit throws. Staging and
+/// committing stay separate operations underneath, not one atomic "commit this text" call,
+/// because the split is what the protocol's guarantee is made of: a bare <c>git commit</c>
+/// commits whatever is in the <i>index</i> — not whatever the working-tree file currently holds —
+/// so a caller stages a path's content immediately after writing it, does the work that can still
+/// fail (which may overwrite the working-tree file), and commits knowing the commit still carries
+/// what was staged earlier. A failure in between leaves nothing committed and, once the scope's
+/// dispose runs, nothing staged either.
 ///
-/// Two callers share this split (#371): <c>RecordVendor</c> stages a freshly-written pristine
+/// Two callers share the scope (#371/#393): <c>RecordVendor</c> stages a freshly-written pristine
 /// blob before applying the risky field edits on top of it; <c>Ledger/LedgerGroupCommitter</c>
 /// stages one or more already-tracked records' current dirt (written by <c>RecordVendor</c> on
-/// every prior stage, per ADR-0040) right before a save's own commit. One stage primitive, reused
-/// for both — never two parallel ones.
-///
-/// <see cref="UnstagePath"/> alone is not the whole guarantee (review finding, #371): it only
-/// protects the attempt that calls it. If the process dies between <see cref="StagePath"/> and
-/// <see cref="CommitStaged"/>/<see cref="UnstagePath"/> — or <see cref="UnstagePath"/> itself
-/// throws — the orphaned index entry survives *this* attempt and sits waiting for whichever
-/// commit against this origin folder happens next, vendor or save, to sweep it in silently. Both
-/// callers close that gap the same way: <see cref="ResetIndexToHead"/> first, establishing a
-/// known-clean index before staging anything for the current attempt, rather than assuming one
-/// was inherited.
+/// every prior stage, per ADR-0040) right before a save's own commit. One protocol object, reused
+/// for both — never two parallel choreographies. The raw primitives
+/// (<see cref="StagePath"/>/<see cref="CommitStaged"/>/<see cref="UnstagePath"/>/
+/// <see cref="ResetIndexToHead"/>/<see cref="EnsureRepo"/>) are <c>internal</c>: production code
+/// cannot sequence them by hand; tests reach them directly for fixture setup, the same
+/// <c>InternalsVisibleTo</c> discipline <see cref="GitCli"/> already uses.
 /// </summary>
 public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerRepository> logger)
 {
+    /// <summary>Opens the staging protocol as one object (#393): everything a committing caller
+    /// used to sequence by hand across five primitives, owned by the returned scope instead.</summary>
+    public async Task<CommitAttempt> BeginAttemptAsync(string originFolder, CancellationToken cancel = default)
+    {
+        var gate = GateFor(originFolder);
+        await gate.WaitAsync(cancel).ConfigureAwait(false);
+        return new CommitAttempt(this, originFolder, gate, logger);
+    }
+
+    // Per-origin-folder mutex (#370 review finding 4, folded in from the former LedgerOriginGate
+    // for #393 — the attempt scope is its only user now): git's own index.lock makes two concurrent
+    // add/commit sequences against the same gitdir race (one throws), and EnsureRepo's
+    // check-then-create has no lock of its own either. Keyed by the folder's canonical path, same
+    // normalization PathsFor applies. Deliberately not a general locking abstraction — just enough
+    // to serialize the one shared resource (the gitdir).
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> Gates =
+        new(StringComparer.Ordinal);
+
+    private static SemaphoreSlim GateFor(string originFolder) =>
+        Gates.GetOrAdd(Path.GetFullPath(originFolder), static _ => new SemaphoreSlim(1, 1));
+
+    /// <summary>One committing attempt against one origin folder's ledger repo.</summary>
+    public sealed class CommitAttempt : IDisposable
+    {
+        private readonly LedgerRepository repository;
+        private readonly string originFolder;
+        private readonly SemaphoreSlim gate;
+        private readonly ILogger logger;
+        private readonly List<string> stagedPaths = [];
+
+        internal CommitAttempt(LedgerRepository repository, string originFolder, SemaphoreSlim gate, ILogger logger)
+        {
+            this.repository = repository;
+            this.originFolder = originFolder;
+            this.gate = gate;
+            this.logger = logger;
+        }
+
+        /// <summary>The origin folder this attempt is scoped to — exposed so helpers a caller
+        /// splits its work into can take the attempt alone instead of the attempt and the folder
+        /// travelling as a pair.</summary>
+        public string OriginFolder => originFolder;
+
+        public void EnsureRepo() => repository.EnsureRepo(originFolder);
+
+        /// <summary>See <see cref="LedgerRepository.IsTrackedAtHead"/> — same read, scoped to this
+        /// attempt's origin folder, so the stage-or-skip decision every committing caller makes
+        /// goes through the same door as the staging itself.</summary>
+        public bool IsTrackedAtHead(string relativePath) => repository.IsTrackedAtHead(originFolder, relativePath);
+
+        private bool indexReset;
+
+        /// <summary>The first <see cref="Stage"/> of an attempt resets the index to <c>HEAD</c>
+        /// first (see <see cref="ResetIndexToHead"/>'s remarks) — lazily, not at
+        /// <see cref="LedgerRepository.BeginAttemptAsync"/>, because an attempt may legitimately
+        /// open against an origin folder whose repo does not exist yet (and, if it stages nothing,
+        /// must never create one — <c>LedgerGroupCommitter</c>'s conditional
+        /// <see cref="EnsureRepo"/>). An attempt that never stages never touches the index at
+        /// all.</summary>
+        public void Stage(string relativePath)
+        {
+            if (!indexReset)
+            {
+                repository.ResetIndexToHead(originFolder);
+                indexReset = true;
+            }
+
+            repository.StagePath(originFolder, relativePath);
+            stagedPaths.Add(relativePath);
+        }
+
+        /// <summary>Refuses when this attempt staged nothing (spec-review finding, #393): an
+        /// attempt that never staged also never ran the known-clean index reset (see
+        /// <see cref="Stage"/>), so a bare commit here would commit whatever the index happens to
+        /// hold — a crashed earlier attempt's orphan, under a message that never mentions it. No
+        /// production caller commits without staging; refusing keeps that a loud contract instead
+        /// of a silent hazard.</summary>
+        public void Commit(string message)
+        {
+            if (stagedPaths.Count == 0)
+                throw new InvalidOperationException(
+                    "Nothing was staged in this attempt; refusing to commit whatever the index happens to hold.");
+
+            repository.CommitStaged(originFolder, message);
+            stagedPaths.Clear();
+        }
+
+        /// <summary>Abandonment is the default: anything staged that never reached
+        /// <see cref="Commit"/> is unstaged here, so the exception path of the risky work between
+        /// the two is nothing the caller has to choreograph. Best-effort per path — a cleanup
+        /// failure must not throw out of a <c>using</c> exit and mask the original exception; a
+        /// survivor is the next attempt's <c>ResetIndexToHead</c> problem, exactly as before.</summary>
+        public void Dispose()
+        {
+            foreach (var relativePath in stagedPaths)
+            {
+                try
+                {
+                    repository.UnstagePath(originFolder, relativePath);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex,
+                        "Failed to unstage {RelativePath} in {OriginFolder} while abandoning a ledger commit attempt",
+                        relativePath, originFolder);
+                }
+            }
+
+            stagedPaths.Clear();
+            gate.Release();
+        }
+    }
+
     /// <summary>The gitdir/worktree pair for an origin folder — deterministic from the folder's own
     /// canonical path, so the same origin always resolves to the same repo without any durable
     /// state beyond the filesystem itself (the ledger's own commits are the only "is this vendored
@@ -60,15 +169,19 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
     /// the gitdir's own <c>HEAD</c> file rather than tracking "already initialized" anywhere else —
     /// the filesystem is the only source of truth here, same as the truth-partition model's DB. Not
     /// safe to call concurrently against the same origin folder from two threads without an external
-    /// lock — see <c>RecordVendor</c>'s per-origin-folder gate, which is what actually makes this
-    /// check-then-create sequence race-free in production.</summary>
-    public void EnsureRepo(string originFolder)
+    /// lock — the attempt scope's per-origin gate (<see cref="BeginAttemptAsync"/>) is what
+    /// actually makes this check-then-create sequence race-free in production.</summary>
+    internal void EnsureRepo(string originFolder)
     {
         var (gitDir, workTree) = PathsFor(originFolder);
         if (RepoExists(originFolder)) return;
 
+        // No Directory.CreateDirectory(workTree) (suite-axis review, #393): the work tree *is* the
+        // origin folder, and every path here runs only after a plugin binary was read out of that
+        // very folder — it exists by construction. If it ever doesn't, git (or Process.Start)
+        // fails into the callers' existing best-effort catch rather than this class fabricating an
+        // empty origin folder to init into.
         Directory.CreateDirectory(gitDir);
-        Directory.CreateDirectory(workTree);
         GitCli.Run(gitDir, workTree, "init", "-q", "-b", "main");
         logger.LogInformation("Ledger created for {OriginFolder} at {GitDir}", workTree, gitDir);
     }
@@ -162,7 +275,7 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
     /// paths. Safe even before any commit exists (an unborn <c>HEAD</c>): verified directly, not
     /// assumed — <c>git reset</c> with no ref argument clears the index to empty in that case
     /// rather than erroring.</summary>
-    public void ResetIndexToHead(string originFolder)
+    internal void ResetIndexToHead(string originFolder)
     {
         var (gitDir, workTree) = PathsFor(originFolder);
         GitCli.Run(gitDir, workTree, "reset", "-q");
@@ -184,7 +297,7 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
     /// index (<c>git add</c>) — captures it for a later <see cref="CommitStaged"/> regardless of
     /// what the working-tree file holds by the time that call happens. Caller is responsible for
     /// having written the text to be captured to that path first.</summary>
-    public void StagePath(string originFolder, string relativePath)
+    internal void StagePath(string originFolder, string relativePath)
     {
         var (gitDir, workTree) = PathsFor(originFolder);
         GitCli.Run(gitDir, workTree, "add", "--", ToGitPath(relativePath));
@@ -204,9 +317,10 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
     /// <c>git commit</c> commits the index as a whole, which is what actually produces "the staged
     /// pristine blob, not today's working-tree content" — verified directly (two shell probes, one
     /// per form) before landing this, not assumed from a plausible-sounding pathspec-narrowing
-    /// analogy to <c>add</c>/<c>reset</c>. <see cref="UnstagePath"/> is the caller's guard against
-    /// this now committing an unrelated stray index entry from an earlier failed attempt.</summary>
-    public void CommitStaged(string originFolder, string message)
+    /// analogy to <c>add</c>/<c>reset</c>. The attempt scope's unstage-on-dispose (and the reset
+    /// before its first stage) is the guard against this committing an unrelated stray index entry
+    /// from an earlier failed attempt.</summary>
+    internal void CommitStaged(string originFolder, string message)
     {
         var (gitDir, workTree) = PathsFor(originFolder);
         GitCli.Run(gitDir, workTree,
@@ -219,7 +333,7 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
     /// commit exists. Without this, a failed attempt's staged-but-uncommitted content would sit
     /// in the index until some *later*, unrelated successful commit swept it in too (since
     /// <see cref="CommitStaged"/> commits the whole index, by design — see its own remarks).</summary>
-    public void UnstagePath(string originFolder, string relativePath)
+    internal void UnstagePath(string originFolder, string relativePath)
     {
         var (gitDir, workTree) = PathsFor(originFolder);
         GitCli.Run(gitDir, workTree, "reset", "-q", "--", ToGitPath(relativePath));
