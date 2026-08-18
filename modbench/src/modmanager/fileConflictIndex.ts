@@ -2,6 +2,7 @@
 // Pure over ModlistEntry[] + instanceRoot; no vscode import, unit-testable
 // standalone like modlistTree.ts.
 
+import type { Dirent } from 'node:fs';
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import type { ModlistEntry } from './model';
@@ -9,6 +10,50 @@ import type { ModlistEntry } from './model';
 /** Never deployed into Data/ by MO2 — excluded so every mod (nearly all of
  *  which have one) doesn't spuriously "conflict" with every other mod on it. */
 const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
+
+/** ADR-0040/#374: MEditService's per-plugin ledger text tree (`<pluginFileName>.ledger/...`,
+ *  `LedgerRecordPath.For` in `MEditService.Core/Ledger/`) is internal Modbench state that lands
+ *  inside the mod folder itself — unlike the ledger's gitdir, which lives entirely outside
+ *  `mods/` (`LedgerOptions`, `%LOCALAPPDATA%/mEdit/ledgers/`) and is therefore already invisible
+ *  to this walk by construction, needing no exclusion here. The text tree genuinely is walked and
+ *  must be excluded explicitly.
+ *
+ *  Matched at the mod root only — the layout is never nested (`LedgerRecordPath.For` always
+ *  builds root-relative paths) — and only when a sibling *file* of the exact stripped name also
+ *  exists at that same root: a `.ledger`-suffixed folder with no matching plugin alongside it is
+ *  ordinary mod content an author happened to name that way, not ledger state. An exclusion that
+ *  fired on the bare suffix alone would over-match exactly that folder — the #324 hazard-class
+ *  pattern this guards against: a match must mean "this is the thing", not "this looks like the
+ *  thing". Directory-only: a plain *file* sharing the same name (`Foo.esp.ledger` as a file, not
+ *  a folder) is never touched by this rule — MEditService never creates one. Sibling comparison
+ *  is case-folded (`foldPath`) like the rest of this module, since Bethesda plugin filenames are
+ *  inconsistently cased and Proton/ext4 casing must not defeat the match.
+ *
+ *  The sibling candidate set counts a symlink dirent as much as a real file (review finding,
+ *  #374): this walker's own symlink policy (see `walk()`'s doc comment, #322) treats a symlinked
+ *  plugin as equivalent to a real one everywhere else — an MO2-style layout that shares a plugin
+ *  into a mod folder via symlink is a supported, not exotic, shape. Matching without resolving
+ *  the link (no `stat`) is deliberate, not a missed case: a *dangling* symlink named `X` then
+ *  also satisfies the sibling check for `X.ledger`, which is accepted rather than guarded
+ *  against — the ledger belongs to that plugin whether or not the link currently resolves, and
+ *  excluding it is the safer error. By contrast, a symlinked *directory* named `<plugin>.ledger`
+ *  is not handled here — deliberately: nothing in MEditService ever creates the ledger tree as a
+ *  symlink (only `Directory.CreateDirectory`, a real directory), so unlike the plugin side, there
+ *  is no genuine shape here to support. */
+const LEDGER_TREE_SUFFIX = '.ledger';
+
+function ledgerTreeDirNames(dirents: Dirent[]): Set<string> {
+  const fileNames = new Set(
+    dirents.filter((d) => d.isFile() || d.isSymbolicLink()).map((d) => foldPath(d.name)),
+  );
+  const names = new Set<string>();
+  for (const dirent of dirents) {
+    if (!dirent.isDirectory() || !dirent.name.endsWith(LEDGER_TREE_SUFFIX)) continue;
+    const pluginFileName = dirent.name.slice(0, -LEDGER_TREE_SUFFIX.length);
+    if (fileNames.has(foldPath(pluginFileName))) names.add(dirent.name);
+  }
+  return names;
+}
 
 export interface ConflictEntry {
   /** The winning provider's own relative path, in its original on-disk casing —
@@ -134,9 +179,12 @@ async function walk(
 ): Promise<{ relativePath: string; absolutePath: string }[]> {
   const dirents = await readdir(dir, { withFileTypes: true });
   const results: { relativePath: string; absolutePath: string }[] = [];
+  // Ledger-tree exclusion only ever applies at the mod root — see ledgerTreeDirNames' own doc.
+  const ledgerDirNames = dir === root ? ledgerTreeDirNames(dirents) : null;
   for (const dirent of dirents) {
     const absolutePath = join(dir, dirent.name);
     if (dirent.isDirectory()) {
+      if (ledgerDirNames?.has(dirent.name)) continue;
       results.push(...(await descend(absolutePath, root, ancestors, log)));
     } else if (dirent.isFile()) {
       pushEntry(results, root, absolutePath);
