@@ -21,6 +21,11 @@
     "!src/modmanager/ModListProvider.ts",
     "!src/modmanager/PluginListProvider.ts",
     "!src/modmanager/DownloadsProvider.ts",
-    "!src/modmanager/DownloadsPanel.ts"
+    "!src/modmanager/DownloadsPanel.ts",
+    "src/medit/**/*.ts",
+    "!src/medit/**/*.test.ts",
+    "!src/medit/test/**",
+    "!src/medit/generated/**",
+    "!src/medit/Spike359ScmProbe.ts"
   ]
 }

@@ -23,10 +23,18 @@ score table, and a score in context becomes a target (`TRIAGE.md` §Why disposit
 Config is `modbench/stryker.config.json`. Reports land in `modbench/reports/mutation/`
 (gitignored).
 
-**StrykerJS has no `--since`**, so `run-js.sh` computes it: changed + untracked
-`src/modmanager` files vs the target from `git diff`, filtered through the config's `!`
+**StrykerJS has no `--since`**, so `run-js.sh` computes it: changed + untracked files
+under the mutated roots vs the target from `git diff`, filtered through the config's `!`
 exclusions, passed to `--mutate`. Naming a file with `--file` skips the exclusions —
-naming it *is* the request to mutate it.
+naming it *is* the request to mutate it. Those roots are listed twice — the `mutate`
+array and the script's `git diff` pathspec — and must stay in step; a root in one but
+not the other mutates on `--all` and silently never on a diff.
+
+**The runner invokes `node_modules/.bin/stryker`, never `npx stryker`**, and runs
+`npm ci` first when `node_modules` is absent. `npx` falls back to the registry when
+nothing local matches, and the registry's `stryker` is an unrelated abandoned package
+(#374). Detached review worktrees are the case that bites: they never carry
+`node_modules`.
 
 That accident of the JS runner turned out to be the correct design on both sides: the
 .NET runner now does the same, because Stryker.NET's own `since` reads the wrong checkout
@@ -35,19 +43,31 @@ resolution to the tool.
 
 ## Scope, and why it stops where it does
 
-Mutation runs against `src/modmanager/` only:
+Mutation runs against `src/modmanager/` and `src/medit/`:
 
 - **`src/modmanager/mo2/*.ts` and friends are the payload** — pure transforms by invariant
   (`modbench/CLAUDE.md`: byte-faithful surgical edits, never model→re-serialization). Parsers,
   an index, a conflict resolver: real branching, real boundaries. The bug history is the
   argument — #17 "modlist BOM drops first mod" and #47 "modlist write BOM" are exactly the
   boundary class that survives a green suite and dies to a mutant.
-- **`src/medit/` is excluded** — a thin extension-side view by architectural rule; its logic
-  lives in `MEditService/` and is mutated there instead. Mutating a message router mostly
-  surfaces glue.
-- **`*Provider.ts` / `*Panel.ts` are excluded** — VS Code tree and webview plumbing.
-- **`src/modmanager/test/**` is excluded** — fixture builders. Mutating a fixture tells you
-  nothing about the code under test; an early run wasted 24 findings proving it.
+- **`src/medit/` is in scope since #374**, having been excluded until then. The original
+  reason was architectural, not technical: mEdit is a thin extension-side view whose logic
+  lives in `MEditService/` and is mutated there. That invariant still holds for anything
+  crossing to the backend — but `medit/` has since grown genuine extension-side logic
+  (decoration state, save classification, row URIs, message routing), 21 of its 25 modules
+  carry unit tests, and #368 shipped ~800 lines of it with no mutation axis able to see
+  them. Coverage here is also how drift from the thin-view rule gets noticed: a `medit/`
+  module rich enough to produce interesting mutants is a module worth asking about.
+- **`*Provider.ts` / `*Panel.ts` are excluded under `modmanager/` only** — VS Code tree and
+  webview plumbing with no unit tests. Their `medit/` counterparts stay in scope because
+  they *do* have tests, mocking `vscode` per file with `vi.mock('vscode')`.
+- **Test code is excluded on both sides** (`**/*.test.ts`, `*/test/**`) — fixture builders.
+  Mutating a fixture tells you nothing about the code under test; an early run wasted 24
+  findings proving it.
+- **`src/medit/generated/**` is excluded** — `api.ts` is regenerated from the OpenAPI spec
+  (`/regenerate-api`). A surviving mutant there is a finding against the generator's input,
+  which no test in this repo should be pinning.
+- **`Spike359ScmProbe.ts` is excluded** — spike code, deleted when the spike lands.
 
 ## Cost model
 
@@ -58,6 +78,10 @@ this is cheap enough to run per-ticket:
 | ----- | ------- | ---------- |
 | One file (`fileConflictIndex.ts`) | 71 | ~1m30s |
 | All of `src/modmanager/` (30 files) | 1799 | **3m40s** |
+
+⚠️ **Measured before `src/medit/` entered scope (#374).** `--all` now mutates roughly
+twice the corpus and has not been re-timed; the per-file and per-diff figures are
+unaffected. Re-measure on the next `--all` run and replace this note with the number.
 
 The cap is nearly free: the old 11-worker default finished the same corpus only ~30s
 faster, by thrashing all 15 GiB — it was never CPU-bound. The initial test run is 563
