@@ -36,7 +36,7 @@ internal sealed record LedgerRecordIdentity(string PluginFileName, string Record
 /// </summary>
 internal static class LedgerRecordPath
 {
-    private const string LedgerSuffix = ".ledger";
+    internal const string LedgerSuffix = ".ledger";
     private const string YamlSuffix = ".yaml";
 
     internal static string For(string pluginFileName, string recordType, string formKeyString)

@@ -102,6 +102,10 @@ public sealed class SessionManagerLoadExplicitTests
         Assert.Contains(manager.Session!.LoadFailures, f => f.Name == "Bad.esp");
         Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "Good.esp", "Data"));
         Assert.Equal(0, manager.Repository!.CountRecordsForPlugin("npc_", "Bad.esp", "Data"));
+        // The failed plugin's own indexing throw must hit the `continue` in IndexProgressively's
+        // catch, not fall through into the "recorded once Index() has returned" block below it —
+        // it never returned.
+        Assert.DoesNotContain(manager.Status.IndexedPlugins, p => p.Name == "Bad.esp");
     }
 
     private sealed class ThrowingOnIndexRepositoryFactory(IRecordRepositoryFactory inner, string poisonPlugin)
