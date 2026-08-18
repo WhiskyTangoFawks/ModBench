@@ -27,11 +27,25 @@ const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
  *  thing". Directory-only: a plain *file* sharing the same name (`Foo.esp.ledger` as a file, not
  *  a folder) is never touched by this rule — MEditService never creates one. Sibling comparison
  *  is case-folded (`foldPath`) like the rest of this module, since Bethesda plugin filenames are
- *  inconsistently cased and Proton/ext4 casing must not defeat the match. */
+ *  inconsistently cased and Proton/ext4 casing must not defeat the match.
+ *
+ *  The sibling candidate set counts a symlink dirent as much as a real file (review finding,
+ *  #374): this walker's own symlink policy (see `walk()`'s doc comment, #322) treats a symlinked
+ *  plugin as equivalent to a real one everywhere else — an MO2-style layout that shares a plugin
+ *  into a mod folder via symlink is a supported, not exotic, shape. Matching without resolving
+ *  the link (no `stat`) is deliberate, not a missed case: a *dangling* symlink named `X` then
+ *  also satisfies the sibling check for `X.ledger`, which is accepted rather than guarded
+ *  against — the ledger belongs to that plugin whether or not the link currently resolves, and
+ *  excluding it is the safer error. By contrast, a symlinked *directory* named `<plugin>.ledger`
+ *  is not handled here — deliberately: nothing in MEditService ever creates the ledger tree as a
+ *  symlink (only `Directory.CreateDirectory`, a real directory), so unlike the plugin side, there
+ *  is no genuine shape here to support. */
 const LEDGER_TREE_SUFFIX = '.ledger';
 
 function ledgerTreeDirNames(dirents: Dirent[]): Set<string> {
-  const fileNames = new Set(dirents.filter((d) => d.isFile()).map((d) => foldPath(d.name)));
+  const fileNames = new Set(
+    dirents.filter((d) => d.isFile() || d.isSymbolicLink()).map((d) => foldPath(d.name)),
+  );
   const names = new Set<string>();
   for (const dirent of dirents) {
     if (!dirent.isDirectory() || !dirent.name.endsWith(LEDGER_TREE_SUFFIX)) continue;

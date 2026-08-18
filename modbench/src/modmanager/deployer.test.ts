@@ -68,17 +68,19 @@ describe('deploy', () => {
   // out of the index deploy() consumes.
   it('deploys only the plugin, never its ledger text tree, when a mod has acquired a repo', async () => {
     fx = await makeDeployerFixture();
-    await fx.writeModFile('ModA', 'Foo.esp', 'PLUGINBYTES');
-    await fx.writeModFile('ModA', 'Foo.esp.ledger/records/Foo.esp/00001E.yaml', 'record: text');
+    // "MyMod.esp" (9 chars), deliberately not 7 — see fileConflictIndex.test.ts's #374 ledger
+    // block for why a 7-char plugin name (matching ".ledger"'s own length) can hide a real bug.
+    await fx.writeModFile('ModA', 'MyMod.esp', 'PLUGINBYTES');
+    await fx.writeModFile('ModA', 'MyMod.esp.ledger/records/MyMod.esp/00001E.yaml', 'record: text');
     const entries: ModlistEntry[] = [{ kind: 'mod', name: 'ModA', enabled: true }];
     const index = await buildFileConflictIndex(entries, fx.instanceRoot, () => {});
 
     await deploy(fx.instanceRoot, fx.gameDirectory, index, fakeReporter());
 
     const deployedFiles = await listRelativeFiles(fx.gameDirectory.dataFolder);
-    expect(deployedFiles).toEqual(['Foo.esp']);
+    expect(deployedFiles).toEqual(['MyMod.esp']);
     const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
-    expect(manifest.links).toEqual(['Foo.esp']);
+    expect(manifest.links).toEqual(['MyMod.esp']);
   });
 
   // #374 (AC2): "manifest hashing yields identical results... before and after a mod acquires a
@@ -88,7 +90,8 @@ describe('deploy', () => {
   // same manifest, whether or not the ledger tree exists alongside it.
   it('produces an identical manifest before and after the same mod acquires a repo, and never rewrites the plugin bytes', async () => {
     fx = await makeDeployerFixture();
-    const pluginPath = await fx.writeModFile('ModA', 'Foo.esp', 'PLUGINBYTES');
+    // "MyMod.esp" (9 chars), deliberately not 7 — same reason as the test above.
+    const pluginPath = await fx.writeModFile('ModA', 'MyMod.esp', 'PLUGINBYTES');
     const entries: ModlistEntry[] = [{ kind: 'mod', name: 'ModA', enabled: true }];
 
     const beforeIndex = await buildFileConflictIndex(entries, fx.instanceRoot, () => {});
@@ -100,7 +103,7 @@ describe('deploy', () => {
     // Simulate the mod acquiring a repo: RecordVendor never rewrites the plugin binary (traced
     // in MEditService.Core/Ledger/RecordVendor.cs — it serializes only to the ledger text path),
     // it only adds the text tree alongside the untouched plugin.
-    await fx.writeModFile('ModA', 'Foo.esp.ledger/records/Foo.esp/00001E.yaml', 'record: text');
+    await fx.writeModFile('ModA', 'MyMod.esp.ledger/records/MyMod.esp/00001E.yaml', 'record: text');
     const afterIndex = await buildFileConflictIndex(entries, fx.instanceRoot, () => {});
     await deploy(fx.instanceRoot, fx.gameDirectory, afterIndex, fakeReporter());
     const manifestAfter = await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8');
