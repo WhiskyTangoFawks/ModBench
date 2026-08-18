@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
+using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -185,11 +186,14 @@ public class SaveChangeGroupLedgerCommitApiTests
         Assert.Equal(2, entries.Count(e => e[0].StartsWith("save:", StringComparison.Ordinal)));
     }
 
-    // AC1/#389: a group whose only touched record was never ledger-vendored (VMAD struct-op edits
-    // never reach VendorOnFirstTouch — #370 scope cut, #389) must not silently look committed: no
-    // commit lands, and the caller can find out why (logged, not swallowed).
+    // AC2/#389: a VMAD struct-op edit now vendors on first touch (EditOrchestrator.
+    // StageVmadStructOps), so a group whose only touched record was staged as a struct op is no
+    // longer ledger-untracked — the save commits the already-staged dirt (LedgerGroupCommitter's
+    // generic TryStageFieldEdit branch, unmodified by #389) exactly like an ordinary field edit
+    // would, and what lands in the ledger's committed text must match what the save actually wrote
+    // to the binary for the same edit, not merely "some commit landed".
     [Fact]
-    public async Task SaveChangeGroup_TouchingOnlyAnUnvendoredVmadStructOp_ProducesNoLedgerCommit()
+    public async Task SaveChangeGroup_TouchingAVmadStructOpEdit_CommitsLedgerTextMatchingTheSavedBinary()
     {
         using var host = VendoringTestHost.Create();
         var client = host.Client;
@@ -209,18 +213,50 @@ public class SaveChangeGroupLedgerCommitApiTests
         });
         structOpResp.EnsureSuccessStatusCode();
 
-        var originFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "SaveMod").Path)!;
+        var pluginPath = fx.Plugins.Single(p => p.Origin == "SaveMod").Path;
+        var originFolder = Path.GetDirectoryName(pluginPath)!;
         var ledger = LedgerFor(ledgerRoot);
         var (gitDir, workTree) = ledger.PathsFor(originFolder);
+        var relativePath = LedgerRecordPath.For("SaveTarget.esp", "npc_", npcFormKey).Replace('\\', '/');
 
-        // Nothing vendored yet — no repo at all for this origin.
-        Assert.False(Directory.Exists(gitDir));
+        // Vendored at stage time: repo exists, baseline committed, no script in it yet.
+        Assert.True(Directory.Exists(gitDir));
+        var pristine = GitCli.Run(gitDir, workTree, "show", $"main:{relativePath}");
+        Assert.DoesNotContain("SomeScript", pristine, StringComparison.Ordinal);
 
         var groupId = await SingleGroupIdAsync(client);
         var saveResp = await client.PostAsync($"/change-groups/{groupId}/save", null);
         saveResp.EnsureSuccessStatusCode();
 
-        // Still no repo: the save must not fabricate ledger tracking for a record it never vendored.
-        Assert.False(Directory.Exists(gitDir));
+        // The save produced a new commit — the struct-op's dirt, generically staged and committed by
+        // LedgerGroupCommitter the same way an ordinary field edit's dirt would be.
+        var log = GitCli.Run(gitDir, workTree, "log", "--oneline", "main");
+        Assert.Equal(2, log.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+        var committed = GitCli.Run(gitDir, workTree, "show", $"main:{relativePath}");
+        Assert.Contains("SomeScript", committed, StringComparison.Ordinal);
+
+        // AC2, two-sided: what the ledger committed must *equal* what the save actually wrote to the
+        // binary, not merely both happen to mention the script name. A fresh deep-parse of the saved
+        // plugin — an entirely independent read of the real binary bytes on disk, not the in-memory
+        // record RecordVendor already had staged — run back through the very same RecordTextCodec the
+        // ledger itself uses must reproduce the committed text byte-for-byte; a script vendored with
+        // wrong flags, wrong/extra properties, or misapplied via the wrong ChangeType (this ticket's
+        // own bug class) would diverge here even though both blobs still mention "SomeScript".
+        var modPath = new ModPath(ModKey.FromFileName("SaveTarget.esp"), pluginPath);
+        var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
+        var npc = mod.Npcs.First(n => n.FormKey.ToString() == npcFormKey);
+
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+        var reparsedPath = Path.Combine(Path.GetTempPath(), $"medit-vmad-reparsed-{Guid.NewGuid()}.yaml");
+        try
+        {
+            await codec.SerializeAsync(npc, reparsedPath, GameRelease.Fallout4);
+            var reparsedText = await File.ReadAllTextAsync(reparsedPath);
+            Assert.Equal(committed, reparsedText);
+        }
+        finally
+        {
+            File.Delete(reparsedPath);
+        }
     }
 }

@@ -46,6 +46,7 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         IReadOnlyDictionary<string, JsonElement> fields,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         GameRelease release,
+        string changeType = PendingChangeConstants.FieldEditChangeType,
         CancellationToken cancel = default)
     {
         using var attempt = await ledger.BeginAttemptAsync(originFolder, cancel).ConfigureAwait(false);
@@ -56,14 +57,14 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         if (attempt.IsTrackedAtHead(relativePath))
         {
             var record = await codec.DeserializeAsync(absolutePath, concreteRecordType, release, cancel).ConfigureAwait(false);
-            ApplyFields(record, fields, recordType, schemas, release);
+            ApplyFields(record, fields, recordType, schemas, release, changeType);
             await codec.SerializeAsync((IMajorRecordGetter)record, absolutePath, release, cancel).ConfigureAwait(false);
         }
         else
         {
             await VendorPristineThenDirtAsync(
                 attempt, pluginFilePath, formKeyString, recordType, relativePath, absolutePath,
-                fields, schemas, release, cancel).ConfigureAwait(false);
+                fields, schemas, release, changeType, cancel).ConfigureAwait(false);
         }
 
         logger.LogTrace("Staged dirt for {FormKey} at {Path}", formKeyString, absolutePath);
@@ -86,7 +87,7 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         string pluginFilePath, string formKeyString, string recordType,
         string relativePath, string absolutePath,
         IReadOnlyDictionary<string, JsonElement> fields, IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        GameRelease release, CancellationToken cancel)
+        GameRelease release, string changeType, CancellationToken cancel)
     {
         if (!FormKey.TryFactory(formKeyString, out var formKey))
             throw new ArgumentException($"'{formKeyString}' is not a valid FormKey.", nameof(formKeyString));
@@ -112,7 +113,7 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         // committed. On a throw, the attempt scope's dispose unstages the pristine blob rather
         // than leaving it in the index for some later, unrelated successful commit in this same
         // origin folder to sweep in.
-        ApplyFields(pristine, fields, recordType, schemas, release);
+        ApplyFields(pristine, fields, recordType, schemas, release, changeType);
         await codec.SerializeAsync((IMajorRecordGetter)pristine, absolutePath, release, cancel).ConfigureAwait(false);
 
         attempt.Commit($"vendor: {recordType} {formKeyString}");
@@ -145,7 +146,8 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         IReadOnlyDictionary<string, JsonElement> fields,
         string recordType,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        GameRelease release)
+        GameRelease release,
+        string changeType = PendingChangeConstants.FieldEditChangeType)
     {
         var changes = fields.Select(kv => new PendingChange(
             Id: Guid.NewGuid(),
@@ -158,7 +160,7 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
             Source: "vendor",
             Description: null,
             ChangedAt: DateTime.UtcNow,
-            ChangeType: PendingChangeConstants.FieldEditChangeType,
+            ChangeType: changeType,
             ParentCell: null,
             PlacementGroup: null,
             Resolutions: null,

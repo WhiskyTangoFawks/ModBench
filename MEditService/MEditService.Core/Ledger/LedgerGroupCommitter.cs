@@ -119,9 +119,10 @@ public sealed class LedgerGroupCommitter(
             // already guarantees a repo exists) a create has no earlier touch to have created one.
             // EnsureRepo is idempotent (a no-op once the repo exists), so this is free for every
             // other case — but deliberately *not* unconditional: a group whose only touched records
-            // are untracked for a legitimate reason (e.g. a VMAD-struct-op-only edit, #389) must
-            // still produce no repo at all, not one fabricated just to discover there was nothing to
-            // commit (SaveChangeGroup_TouchingOnlyAnUnvendoredVmadStructOp_ProducesNoLedgerCommit).
+            // are untracked for a legitimate reason (e.g. every one is a DataDirectory-origin plugin —
+            // EditOrchestrator.VendorOnFirstTouch's own Q3 branch, #370 — which never vendors at all,
+            // since a VMAD struct-op edit now does, #389) must still produce no repo at all, not one
+            // fabricated just to discover there was nothing to commit.
             // The known-clean index reset that used to sit here is the attempt scope's own contract
             // now (#393), lazily before its first Stage — which is also what lets an all-untracked
             // batch against a repo-less origin fall through to the "none are ledger-tracked" path
@@ -195,9 +196,12 @@ public sealed class LedgerGroupCommitter(
     // byte-for-byte what was actually lost, not merely something semantically equivalent to it.
     private sealed record RemovedFileBackup(string AbsolutePath, string Content);
 
-    // The pre-#373 behaviour, unchanged: not every touched record is ledger-tracked (a change type
-    // the ledger never represents e.g. a VMAD struct-op-only edit — #389 — or a DataDirectory-origin
-    // plugin with no repo at all). Skipping those is correct, not a gap being papered over.
+    // The pre-#373 behaviour, unchanged: not every touched record is ledger-tracked (a
+    // DataDirectory-origin plugin has no repo at all — EditOrchestrator.VendorOnFirstTouch's own Q3
+    // branch, #370 — and best-effort vendoring can fail at stage time and leave a real edit staged
+    // but never reaching the ledger, #370's own VendorOnFirstTouch remarks). A VMAD struct-op edit is
+    // no longer an example of this — it vendors on first touch same as a plain field edit, #389.
+    // Skipping an untracked record here is correct, not a gap being papered over.
     private static bool TryStageFieldEdit(LedgerRepository.CommitAttempt attempt, LedgerTouchedRecord record)
     {
         var relativePath = LedgerRecordPath.For(record.PluginFileName, record.RecordType, record.FormKey);

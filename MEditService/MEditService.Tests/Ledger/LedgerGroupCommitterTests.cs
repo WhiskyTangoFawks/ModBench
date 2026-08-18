@@ -115,9 +115,11 @@ public sealed class LedgerGroupCommitterTests
         }
     }
 
-    // Mutation-testing finding: a mixed batch — one ledger-tracked record, one that is not (the
-    // realistic shape #389 produces: a group with an ordinary field edit alongside a VMAD
-    // struct-op edit, which is never vendored) — must still commit the tracked record. The risk a
+    // Mutation-testing finding: a mixed batch — one ledger-tracked record, one that is not (e.g. a
+    // group spanning a normal, ledger-tracked plugin alongside a DataDirectory-origin one, which
+    // never vendors at all — EditOrchestrator.VendorOnFirstTouch's own Q3 branch, #370; not a VMAD
+    // struct-op edit any more, since #389 vendors those on first touch too) — must still commit the
+    // tracked record. The risk a
     // surviving mutant exposed isn't "the untracked record is mishandled", it's "the untracked
     // record's presence silently drops the *whole batch's* commit" (IsTrackedAtHead's skip removed
     // would make LedgerRecordPath's path a ledger file that was never written, so `git add` on it
@@ -135,7 +137,8 @@ public sealed class LedgerGroupCommitterTests
             var pluginPath = WritePlugin(originFolder, pluginFileName, out var npc1FormKey, out var npc2FormKey);
 
             // Only npc1 is ever vendored — npc2 stands in for a record whose only touch this group
-            // never reached the ledger (e.g. a VMAD-struct-op-only edit, #389).
+            // never reached the ledger (e.g. a DataDirectory-origin plugin, which never vendors at
+            // all, or a best-effort vendoring failure at stage time).
             await VendorAsync(vendor, originFolder, pluginPath, pluginFileName, npc1FormKey);
             Assert.Equal(1, CommitCount(ledger, originFolder));
 
