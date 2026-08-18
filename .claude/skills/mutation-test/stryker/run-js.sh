@@ -36,6 +36,19 @@ done
 
 [[ -f "$CONFIG" ]] || { echo "ERROR: run from modbench/ (no $CONFIG here)." >&2; exit 2; }
 
+# Never `npx stryker`: with no local match npx fetches a same-named package from the
+# registry, and `stryker` there is an unrelated abandoned package, not this project's
+# @stryker-mutator toolchain. It failed loudly once (#374, fresh detached worktree:
+# `Cannot find module 'rx'`) but the quiet version of that is a mutation report full of
+# plausible garbage. Same pinning rule `npm run package` already applies to vsce.
+# Detached review worktrees never carry node_modules, so install rather than fail.
+STRYKER="node_modules/.bin/stryker"
+if [[ ! -x "$STRYKER" ]]; then
+    echo "No local Stryker binary — installing dependencies (npm ci)..."
+    npm ci >/dev/null 2>&1 || { echo "ERROR: npm ci failed; cannot run Stryker." >&2; exit 2; }
+    [[ -x "$STRYKER" ]] || { echo "ERROR: $STRYKER missing after npm ci." >&2; exit 2; }
+fi
+
 # One mutation run at a time, across both runtimes: a second run is what pushed the
 # machine over the edge on Aug 14. Matches "stryker run" (JS) and "dotnet-stryker" (.NET);
 # neither pattern matches this script's own command line.
@@ -46,7 +59,7 @@ fi
 
 MUTATE_CSV=""
 if $ALL; then
-    SCOPE="all of src/modmanager (config scope)"
+    SCOPE="config scope (src/modmanager + src/medit)"
 elif [[ -n "$FILE_FILTER" ]]; then
     # Config exclusions are not applied: naming a file *is* the request to mutate it.
     [[ "$FILE_FILTER" == */* ]] && MUTATE_CSV="$FILE_FILTER" || MUTATE_CSV="src/**/$FILE_FILTER"
@@ -57,12 +70,14 @@ else
         echo "ERROR: since target '$SINCE_REF' does not resolve to a commit." >&2
         exit 2
     fi
-    # Changed + untracked .ts under src/modmanager, minus the config's `!` exclusions
-    # (providers/panels and test code stay out of scope even when dirty). The pathspec is
-    # deliberately not `**/*.ts`: git's default matching needs a literal `/` after `**`,
-    # which silently skips files at the top of the directory; a bare `*` crosses slashes.
-    CHANGED=$( { git diff --name-only --relative "$FULL_SHA" -- 'src/modmanager/*.ts' || true; \
-                 git ls-files --others --exclude-standard -- 'src/modmanager/*.ts' || true; } | sort -u)
+    # Changed + untracked .ts under the mutated roots, minus the config's `!` exclusions
+    # (providers/panels, generated code and test code stay out of scope even when dirty).
+    # The pathspec is deliberately not `**/*.ts`: git's default matching needs a literal
+    # `/` after `**`, which silently skips files at the top of the directory; a bare `*`
+    # crosses slashes. Keep these roots in step with `mutate` in stryker.config.json — a
+    # root listed there but missing here mutates on `--all` and never on a diff.
+    CHANGED=$( { git diff --name-only --relative "$FULL_SHA" -- 'src/modmanager/*.ts' 'src/medit/*.ts' || true; \
+                 git ls-files --others --exclude-standard -- 'src/modmanager/*.ts' 'src/medit/*.ts' || true; } | sort -u)
     MUTATE_LIST=$(printf '%s\n' "$CHANGED" | python3 -c '
 import fnmatch, json, sys
 neg = [p[1:] for p in json.load(open(sys.argv[1]))["mutate"] if p.startswith("!")]
@@ -88,9 +103,9 @@ LOG=$(mktemp /tmp/stryker-js-run-XXXXXX.log)
 
 set +e
 if [[ -n "$MUTATE_CSV" ]]; then
-    npx stryker run --mutate "$MUTATE_CSV" >"$LOG" 2>&1
+    "$STRYKER" run --mutate "$MUTATE_CSV" >"$LOG" 2>&1
 else
-    npx stryker run >"$LOG" 2>&1
+    "$STRYKER" run >"$LOG" 2>&1
 fi
 STRYKER_RC=$?
 set -e
