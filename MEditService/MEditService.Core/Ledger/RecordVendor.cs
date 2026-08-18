@@ -76,17 +76,20 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         }
     }
 
-    // First touch. Order is load-bearing (#370 review finding 3): write + stage the pristine text
-    // first, then do everything that can still fail (apply the staged fields, write dirt), and only
-    // commit — the operation that makes the record permanently tracked (IsTrackedAtHead gates the
-    // deep-parse branch on "not yet tracked", so a tracked-but-half-vendored record would never be
-    // retried) — once all of that has succeeded. This works with plain `git add` + `git commit`
-    // rather than needing plumbing: `git commit` always commits the *index* state, never the
-    // working-tree file's content at commit time, so staging the pristine blob here and overwriting
-    // the working-tree file with dirt afterward still leaves the commit holding pristine — see
+    // First touch. Order is load-bearing (#370 review finding 3): reset the index to a known-clean
+    // state (#371 review finding — see LedgerRepository.ResetIndexToHead's own remarks: without
+    // this, a stray entry an earlier, unrelated failed attempt against this same origin folder left
+    // behind would get folded into *this* commit), then write + stage the pristine text, then do
+    // everything that can still fail (apply the staged fields, write dirt), and only commit — the
+    // operation that makes the record permanently tracked (IsTrackedAtHead gates the deep-parse
+    // branch on "not yet tracked", so a tracked-but-half-vendored record would never be retried) —
+    // once all of that has succeeded. This works with plain `git add` + `git commit` rather than
+    // needing plumbing: `git commit` always commits the *index* state, never the working-tree
+    // file's content at commit time, so staging the pristine blob here and overwriting the
+    // working-tree file with dirt afterward still leaves the commit holding pristine — see
     // LedgerRepository's own remarks. A failure anywhere below leaves no commit at all: at worst an
-    // inert staged-but-uncommitted index entry, silently superseded the next time this record is
-    // touched (still gated on "not yet tracked" at HEAD, so nothing is skipped).
+    // inert staged-but-uncommitted index entry, cleaned up by the *next* attempt's own
+    // ResetIndexToHead rather than merely superseded by luck.
     private async Task VendorPristineThenDirtAsync(
         string originFolder, string pluginFilePath, string formKeyString, string recordType,
         string relativePath, string absolutePath,
@@ -108,6 +111,8 @@ public sealed class RecordVendor(LedgerRepository ledger, RecordTextCodec codec,
         // single-use deep-parsed object; see ContainerStripFields' own remarks for why that's safe
         // without a defensive copy.
         ContainerStripFields.StripInPlace(pristine);
+
+        ledger.ResetIndexToHead(originFolder);
 
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
         await codec.SerializeAsync((IMajorRecordGetter)pristine, absolutePath, release, cancel).ConfigureAwait(false);

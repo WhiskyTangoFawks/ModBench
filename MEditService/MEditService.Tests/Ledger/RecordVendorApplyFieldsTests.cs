@@ -140,6 +140,71 @@ public class RecordVendorApplyFieldsTests
         }
     }
 
+    // #371 review finding 1 (the headline one): a stray index entry an *earlier* attempt against
+    // this same origin folder left behind — its own UnstagePath never ran, e.g. because the process
+    // died between StagePath and CommitStaged/UnstagePath — must not get folded into a *later*
+    // vendor's baseline commit. Simulated directly (staging a second record's content without ever
+    // committing or unstaging it, standing in for that dead-process window) rather than by actually
+    // killing a process mid-flight, which isn't reproducible from a test.
+    [Fact]
+    public async Task StrayStagedEntryFromAnEarlierUnfinishedAttempt_IsNotSweptIntoTheNextVendorCommit()
+    {
+        var ledgerRoot = Directory.CreateTempSubdirectory("medit-vendor-apply-ledger-").FullName;
+        var originFolder = Directory.CreateTempSubdirectory("medit-vendor-apply-origin-").FullName;
+        try
+        {
+            var (vendor, ledger) = MakeVendor(ledgerRoot);
+            const string pluginFileName = "Vendor.esp";
+            var (pluginPath, npc1FormKey, npc2FormKey) = WriteTwoNpcPlugin(originFolder, pluginFileName);
+
+            // Simulate the dead-process window: npc2's content written and staged, but the sequence
+            // that should have followed (apply fields, serialize, CommitStaged/UnstagePath) never
+            // ran — exactly the state LedgerRepository.ResetIndexToHead's remarks describe.
+            ledger.EnsureRepo(originFolder);
+            var strayRelativePath = GetRelativePath(pluginFileName, npc2FormKey);
+            var strayAbsolutePath = Path.Combine(originFolder, strayRelativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(strayAbsolutePath)!);
+            await File.WriteAllTextAsync(strayAbsolutePath, "FormKey: stray-never-committed\n");
+            ledger.StagePath(originFolder, strayRelativePath);
+
+            // A genuine, successful vendor call for a *different* record in the same origin folder.
+            await vendor.VendorAndStageDirtAsync(
+                originFolder, pluginPath, pluginFileName, "npc_", typeof(Npc), npc1FormKey,
+                new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
+                Schemas, GameRelease.Fallout4);
+
+            // The stray record must not have been silently committed alongside npc1's own baseline.
+            Assert.False(ledger.IsTrackedAtHead(originFolder, strayRelativePath));
+
+            var npc1RelativePath = GetRelativePath(pluginFileName, npc1FormKey);
+            var (gitDir, workTree) = ledger.PathsFor(originFolder);
+            var committedFiles = GitCli.Run(gitDir, workTree, "show", "--stat", "--format=", "HEAD").Trim();
+            Assert.Equal(npc1RelativePath.Replace('\\', '/'), committedFiles.Split('|')[0].Trim());
+
+            // No data loss either: the stray file is still on disk, just correctly unstaged/untracked.
+            Assert.True(File.Exists(strayAbsolutePath));
+            var status = GitCli.Run(gitDir, workTree, "status", "--porcelain");
+            Assert.Contains(strayRelativePath.Replace('\\', '/'), status, StringComparison.Ordinal);
+            Assert.StartsWith("??", status.Split('\n').Single(l => l.Contains(strayRelativePath.Replace('\\', '/'), StringComparison.Ordinal)), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(ledgerRoot, recursive: true);
+            Directory.Delete(originFolder, recursive: true);
+        }
+    }
+
+    private static (string PluginPath, string Npc1FormKey, string Npc2FormKey) WriteTwoNpcPlugin(
+        string originFolder, string pluginFileName)
+    {
+        var pluginPath = Path.Combine(originFolder, pluginFileName);
+        var mod = new Fallout4Mod(ModKey.FromFileName(pluginFileName), Fallout4Release.Fallout4);
+        var npc1 = mod.Npcs.AddNew("VendorNpc1");
+        var npc2 = mod.Npcs.AddNew("VendorNpc2");
+        mod.WriteToBinary(pluginPath);
+        return (pluginPath, npc1.FormKey.ToString(), npc2.FormKey.ToString());
+    }
+
     // Mirrors LedgerRecordPath.For's own (internal) policy without depending on it directly, so this
     // test still tells us something if that policy ever changes shape — it's asserting on
     // IsTrackedAtHead's outcome for *a* path this vendoring call is known to have used, not on the

@@ -31,6 +31,15 @@ namespace MEditService.Core.Ledger;
 /// stages one or more already-tracked records' current dirt (written by <c>RecordVendor</c> on
 /// every prior stage, per ADR-0040) right before a save's own commit. One stage primitive, reused
 /// for both — never two parallel ones.
+///
+/// <see cref="UnstagePath"/> alone is not the whole guarantee (review finding, #371): it only
+/// protects the attempt that calls it. If the process dies between <see cref="StagePath"/> and
+/// <see cref="CommitStaged"/>/<see cref="UnstagePath"/> — or <see cref="UnstagePath"/> itself
+/// throws — the orphaned index entry survives *this* attempt and sits waiting for whichever
+/// commit against this origin folder happens next, vendor or save, to sweep it in silently. Both
+/// callers close that gap the same way: <see cref="ResetIndexToHead"/> first, establishing a
+/// known-clean index before staging anything for the current attempt, rather than assuming one
+/// was inherited.
 /// </summary>
 public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerRepository> logger)
 {
@@ -72,6 +81,26 @@ public sealed class LedgerRepository(LedgerOptions options, ILogger<LedgerReposi
     {
         var (gitDir, workTree) = PathsFor(originFolder);
         return GitCli.TryRun(gitDir, workTree, out _, "cat-file", "-e", $"HEAD:{ToGitPath(relativePath)}");
+    }
+
+    /// <summary>Resets the index to <c>HEAD</c> (<c>git reset</c>, no pathspec — the working tree is
+    /// untouched) — establishes a known-clean index before a staging sequence begins, rather than
+    /// assuming one was inherited from whatever the previous attempt against this origin folder
+    /// left behind (review finding, #371 — see the class remarks). Without this, a stray
+    /// staged-but-never-committed entry from an earlier attempt whose own <see cref="UnstagePath"/>
+    /// never ran (the process died between <see cref="StagePath"/> and
+    /// <see cref="CommitStaged"/>/<see cref="UnstagePath"/>, or <see cref="UnstagePath"/> itself
+    /// failed) would sit in the index until *some* later, unrelated successful commit against this
+    /// origin folder swept it in too — silently including a file it never touched, under a message
+    /// that never mentions it. Call it once, before the first <see cref="StagePath"/> of an
+    /// attempt — calling it again partway through would also wipe out that attempt's own staged
+    /// paths. Safe even before any commit exists (an unborn <c>HEAD</c>): verified directly, not
+    /// assumed — <c>git reset</c> with no ref argument clears the index to empty in that case
+    /// rather than erroring.</summary>
+    public void ResetIndexToHead(string originFolder)
+    {
+        var (gitDir, workTree) = PathsFor(originFolder);
+        GitCli.Run(gitDir, workTree, "reset", "-q");
     }
 
     /// <summary>Reads <paramref name="relativePath"/>'s text as it stood at <paramref name="commitish"/>

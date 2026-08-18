@@ -32,7 +32,7 @@ public sealed record LedgerTouchedRecord(string OriginFolder, string PluginFileN
 /// #368); a caller that needs to know what happened reads the log, not the response body.
 ///
 /// One commit per *origin folder*, not per (plugin, origin) column: two plugins sharing one origin
-/// folder (a single mod providing more than one plugin file) share one ledger repo, so their
+/// folder (an origin folder providing more than one plugin file) share one ledger repo, so their
 /// touched records — if both changed in the same group — land in the same commit rather than two
 /// independent ones. A group spanning several origin folders (legal per ADR-0028's
 /// <c>ChangeGroup</c>; cross-repo atomicity is #372, out of scope here) produces one independent,
@@ -46,7 +46,12 @@ public sealed class LedgerGroupCommitter(LedgerRepository ledger, ILogger<Ledger
 {
     public void CommitGroupSave(IReadOnlyList<LedgerTouchedRecord> touched)
     {
-        foreach (var group in touched.GroupBy(t => t.OriginFolder, StringComparer.Ordinal))
+        // Path.GetFullPath, not the raw OriginFolder string: LedgerOriginGate.GateFor and
+        // LedgerRepository.PathsFor both normalize the origin folder before keying off it (review
+        // finding, #371) — grouping on the raw string here would let two touched records naming the
+        // same physical folder in differently-formatted ways split into two groups and produce two
+        // commits into what is actually one gitdir, a second way "exactly one commit" could break.
+        foreach (var group in touched.GroupBy(t => Path.GetFullPath(t.OriginFolder), StringComparer.Ordinal))
         {
             // Shared with RecordVendor (LedgerOriginGate) — both stage into the same gitdir/index,
             // so a StageEdit vendoring a different record in this same origin folder while this
@@ -71,6 +76,13 @@ public sealed class LedgerGroupCommitter(LedgerRepository ledger, ILogger<Ledger
         var staged = new List<LedgerTouchedRecord>();
         try
         {
+            // Known-clean index before staging anything for this attempt (review finding, #371 —
+            // see LedgerRepository.ResetIndexToHead's own remarks): without this, a stray entry an
+            // earlier, unrelated failed attempt against this same origin folder left behind — its
+            // own UnstagePath never ran, or failed — would get folded into *this* commit, silently
+            // including a file this save never touched.
+            ledger.ResetIndexToHead(originFolder);
+
             foreach (var record in records)
             {
                 var relativePath = LedgerRecordPath.For(record.PluginFileName, record.RecordType, record.FormKey);

@@ -1,11 +1,16 @@
+using System.Text.Json;
+using DuckDB.NET.Data;
 using MEditService.Core.Edits;
+using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Core.Session;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Cache;
 
@@ -83,6 +88,84 @@ public sealed class RevertRecordToLedgerCommitTests
             var result = await orchestrator.RevertRecordToLedgerCommitAsync("FFFFFF:TestPlugin.esp", "TestPlugin.esp", "HEAD", "user");
 
             Assert.IsType<StageEditResult.RecordNotFound>(result);
+        }
+    }
+
+    private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
+
+    // #371 review (mutation axis + spec reviewer): "a field changing from null" — the current
+    // (committed) state is null, the historical (ledger) state is a real value, revert must stage
+    // that historical value back. Every top-level scalar FormLink column on NPC_ is read-only
+    // (probed directly: 29 of 29 nullable ones), and ApplyListJson no-ops on a JSON null for array
+    // columns — so a committed *array* field can never legitimately reach null through the normal
+    // save path at all; this manipulates the committed index directly (never git, never the ledger)
+    // to reach that state, rather than pretending an unreachable write happened through PluginWriter.
+    [Fact]
+    public async Task RevertRecordToLedgerCommitAsync_FieldChangingFromNull_StagesTheHistoricalValue()
+    {
+        var ledgerRoot = Directory.CreateTempSubdirectory("medit-revert-fromnull-ledger-").FullName;
+        FormKey npcFk = default, kwFk = default;
+        using var data = new PluginFixtureBuilder("revert-fromnull")
+            .WithPlugin("TestPlugin.esp", mod =>
+            {
+                var kw = mod.Keywords.AddNew();
+                kwFk = kw.FormKey;
+                var npc = mod.Npcs.AddNew("RevertNpc");
+                npc.Keywords = [new FormLink<IKeywordGetter>(kw.FormKey)]; // pristine non-null
+                npcFk = npc.FormKey;
+            })
+            .Build();
+        var npcFormKey = npcFk.ToString();
+
+        try
+        {
+            var reflector = SharedSchemaReflector.Instance;
+            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            var changes = DuckDbTestFactory.MakePendingChangeService();
+            var query = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
+            var writer = new PluginWriter(reflector, NullLogger<PluginWriter>.Instance);
+
+            var ledger = new LedgerRepository(new LedgerOptions(ledgerRoot), NullLogger<LedgerRepository>.Instance);
+            var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+            var recordVendor = new RecordVendor(ledger, codec, NullLogger<RecordVendor>.Instance);
+            var recordReverter = new RecordReverter(ledger, codec, new LedgerRecordFieldReader(factory));
+
+            var orchestrator = new EditOrchestrator(
+                manager, query, writer, changes, reflector, recordVendor, recordReverter, NullLogger<EditOrchestrator>.Instance);
+
+            var pluginMeta = manager.Session!.LoadOrderPlugin("TestPlugin.esp")!;
+            var schemas = reflector.GetSchemas(GameRelease.Fallout4);
+
+            // Commit A: vendors the pristine record (keywords = [kwFk]) — an unrelated field
+            // triggers it; the vendor baseline still captures every field's pristine value.
+            await recordVendor.VendorAndStageDirtAsync(
+                data.DataFolder, pluginMeta.Path, "TestPlugin.esp", "npc_", typeof(Npc), npcFormKey,
+                new Dictionary<string, JsonElement> { ["aggression"] = J("\"Frenzied\"") },
+                schemas, GameRelease.Fallout4);
+            var (gitDir, workTree) = ledger.PathsFor(data.DataFolder);
+            var commitA = GitCli.Run(gitDir, workTree, "log", "-1", "--format=%H", "main").Trim();
+
+            // Current (committed index): keywords forced to null directly.
+            var repo = (IRecordRepository)manager.Repository!;
+            using (var cmd = repo.Connection.CreateCommand())
+            {
+                cmd.CommandText = "UPDATE \"npc_\" SET keywords = NULL WHERE form_key = $1";
+                cmd.Parameters.Add(new DuckDBParameter { Value = npcFormKey });
+                cmd.ExecuteNonQuery();
+            }
+
+            var revertResult = await orchestrator.RevertRecordToLedgerCommitAsync(npcFormKey, "TestPlugin.esp", commitA, "user");
+
+            var staged = Assert.IsType<StageEditResult.Staged>(revertResult);
+            var change = Assert.Single(staged.Changes, c => c.FieldPath == "keywords");
+            Assert.Equal(kwFk.ToString(), Assert.Single(change.NewValue.EnumerateArray()).GetString());
+        }
+        finally
+        {
+            Directory.Delete(ledgerRoot, recursive: true);
         }
     }
 }

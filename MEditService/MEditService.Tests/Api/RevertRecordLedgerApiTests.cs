@@ -45,7 +45,7 @@ public class RevertRecordLedgerApiTests
         load.EnsureSuccessStatusCode();
     }
 
-    private static async Task PatchAsync(HttpClient client, string formKey, string plugin, string field, object value)
+    private static async Task PatchAsync(HttpClient client, string formKey, string plugin, string field, object? value)
     {
         var resp = await client.PatchAsJsonAsync($"/records/{Uri.EscapeDataString(formKey)}", new
         {
@@ -126,4 +126,135 @@ public class RevertRecordLedgerApiTests
         detail.GetProperty("fields").EnumerateArray()
             .First(f => f.GetProperty("metadata").GetProperty("name").GetString() == fieldName)
             .GetProperty("value").GetString();
+
+    // #371 review (mutation axis + spec reviewer): the diff-and-stage *decision* itself, not just
+    // the read leg's round-trip fidelity (LedgerRecordFieldReaderTests) — a field changing to
+    // null, a field changing from null, an array changing length, and the null-vs-empty-array
+    // distinction. Both sides of the diff serialize through the identical GetRecord/JsonSerializer
+    // path (Q1), so these assert on the *decision* (which field(s) got staged, and with what
+    // value) via StageEditResult.Staged.Changes directly — no Save needed to prove this half.
+
+    // "A field changing to null": pristine keywords is unset (Mutagen null, never assigned);
+    // staging a real value moves it away from that; reverting must stage null back.
+    [Fact]
+    public async Task RevertToAnEarlierCommit_FieldChangingToNull_StagesNull()
+    {
+        using var host = VendoringTestHost.Create();
+        var client = host.Client;
+        Mutagen.Bethesda.Plugins.FormKey npcFk = default, kwFk = default;
+        using var fx = new PluginFixtureBuilder("revert-to-null")
+            .WithPlugin("RevertTarget.esp", mod =>
+            {
+                kwFk = mod.Keywords.AddNew().FormKey;
+                npcFk = mod.Npcs.AddNew("RevertNpc").FormKey; // Keywords left unset — pristine is null.
+            }, origin: "RevertMod")
+            .BuildScattered();
+        var npcFormKey = npcFk.ToString();
+        await LoadAsync(client, fx);
+
+        // Commit A: vendors pristine (keywords unset/null) — captured before the save below moves
+        // the *committed* state away from it (RecordQueryService.GetRecordForPlugin, what the diff
+        // reads for "current", is committed-only — ADR-0025's overlay view was never implemented,
+        // per ADR-0040's own "Relation to existing ADRs" section; confirmed empirically here).
+        await PatchAsync(client, npcFormKey, "RevertTarget.esp", "keywords", new[] { kwFk.ToString() });
+        var originFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "RevertMod").Path)!;
+        var (gitDir, workTree) = LedgerFor(host.LedgerRoot).PathsFor(originFolder);
+        var commitA = GitCli.Run(gitDir, workTree, "log", "-1", "--format=%H", "main").Trim();
+        await SaveSingleGroupAsync(client);
+
+        var orchestrator = host.App.Services.GetRequiredService<IEditOrchestrator>();
+        var revertResult = await orchestrator.RevertRecordToLedgerCommitAsync(npcFormKey, "RevertTarget.esp", commitA, "user");
+
+        var staged = Assert.IsType<StageEditResult.Staged>(revertResult);
+        var change = Assert.Single(staged.Changes);
+        Assert.Equal("keywords", change.FieldPath);
+        Assert.Equal(JsonValueKind.Null, change.NewValue.ValueKind);
+    }
+
+    // "A field changing from null" moved to
+    // MEditService.Tests.Edits.RevertRecordToLedgerCommitTests.RevertRecordToLedgerCommitAsync_FieldChangingFromNull_StagesTheHistoricalValue:
+    // every writable field nullable enough to reach that transition through a real save turned out
+    // not to exist on NPC_ (probed directly — every nullable top-level scalar FormLink column is
+    // read-only, and ApplyListJson no-ops on a null array value by design), so that test manipulates
+    // the committed index directly rather than pretending an unreachable write happened through
+    // PluginWriter — a technique that needs the repository's own connection, not available through
+    // this file's API-host seam.
+
+    // "An array changing length": pristine keywords has two elements; the current, staged value
+    // clears it to empty; reverting must stage the full two-element array back, not a truncated one.
+    [Fact]
+    public async Task RevertToAnEarlierCommit_ArrayLengthChange_StagesTheLongerHistoricalArray()
+    {
+        using var host = VendoringTestHost.Create();
+        var client = host.Client;
+        Mutagen.Bethesda.Plugins.FormKey npcFk = default, kw1Fk = default, kw2Fk = default;
+        using var fx = new PluginFixtureBuilder("revert-array-length")
+            .WithPlugin("RevertTarget.esp", mod =>
+            {
+                var kw1 = mod.Keywords.AddNew();
+                kw1Fk = kw1.FormKey;
+                var kw2 = mod.Keywords.AddNew();
+                kw2Fk = kw2.FormKey;
+                var npc = mod.Npcs.AddNew("RevertNpc");
+                npc.Keywords = [new FormLink<IKeywordGetter>(kw1.FormKey), new FormLink<IKeywordGetter>(kw2.FormKey)]; // pristine length 2
+                npcFk = npc.FormKey;
+            }, origin: "RevertMod")
+            .BuildScattered();
+        var npcFormKey = npcFk.ToString();
+        await LoadAsync(client, fx);
+
+        await PatchAsync(client, npcFormKey, "RevertTarget.esp", "keywords", Array.Empty<string>());
+        var originFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "RevertMod").Path)!;
+        var (gitDir, workTree) = LedgerFor(host.LedgerRoot).PathsFor(originFolder);
+        var commitA = GitCli.Run(gitDir, workTree, "log", "-1", "--format=%H", "main").Trim();
+        await SaveSingleGroupAsync(client);
+
+        var orchestrator = host.App.Services.GetRequiredService<IEditOrchestrator>();
+        var revertResult = await orchestrator.RevertRecordToLedgerCommitAsync(npcFormKey, "RevertTarget.esp", commitA, "user");
+
+        var staged = Assert.IsType<StageEditResult.Staged>(revertResult);
+        var change = Assert.Single(staged.Changes);
+        Assert.Equal("keywords", change.FieldPath);
+        Assert.Equal(
+            [kw1Fk.ToString(), kw2Fk.ToString()],
+            change.NewValue.EnumerateArray().Select(e => e.GetString()));
+    }
+
+    // The null-vs-empty-array distinction, on the diff/staging decision itself (LedgerRecordFieldReaderTests
+    // already proved it on the read leg): pristine keywords is *explicitly* empty (assigned `[]`,
+    // not left unset/null), so reverting to it must stage an empty array — never null, and never
+    // silently omitted as "nothing to revert".
+    [Fact]
+    public async Task RevertToAnEarlierCommit_EmptyArrayNotNull_StagesAnEmptyArray_NotNullOrOmitted()
+    {
+        using var host = VendoringTestHost.Create();
+        var client = host.Client;
+        Mutagen.Bethesda.Plugins.FormKey npcFk = default, kwFk = default;
+        using var fx = new PluginFixtureBuilder("revert-empty-not-null")
+            .WithPlugin("RevertTarget.esp", mod =>
+            {
+                kwFk = mod.Keywords.AddNew().FormKey;
+                var npc = mod.Npcs.AddNew("RevertNpc");
+                npc.Keywords = []; // pristine explicitly empty
+                npcFk = npc.FormKey;
+            }, origin: "RevertMod")
+            .BuildScattered();
+        var npcFormKey = npcFk.ToString();
+        await LoadAsync(client, fx);
+
+        await PatchAsync(client, npcFormKey, "RevertTarget.esp", "keywords", new[] { kwFk.ToString() });
+        var originFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "RevertMod").Path)!;
+        var (gitDir, workTree) = LedgerFor(host.LedgerRoot).PathsFor(originFolder);
+        var commitA = GitCli.Run(gitDir, workTree, "log", "-1", "--format=%H", "main").Trim();
+        await SaveSingleGroupAsync(client);
+
+        var orchestrator = host.App.Services.GetRequiredService<IEditOrchestrator>();
+        var revertResult = await orchestrator.RevertRecordToLedgerCommitAsync(npcFormKey, "RevertTarget.esp", commitA, "user");
+
+        var staged = Assert.IsType<StageEditResult.Staged>(revertResult);
+        var change = Assert.Single(staged.Changes);
+        Assert.Equal("keywords", change.FieldPath);
+        Assert.Equal(JsonValueKind.Array, change.NewValue.ValueKind);
+        Assert.Empty(change.NewValue.EnumerateArray());
+    }
 }
