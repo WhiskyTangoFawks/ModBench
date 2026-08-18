@@ -80,7 +80,16 @@ record's committed (`HEAD`) text against its current working-tree text.
   drop the record from the panel. A single origin folder's git read failing (a corrupt gitdir, a
   filesystem fault) is isolated to that origin — logged and omitted, every other origin's entries
   still returned — so one broken repo never blanks the panel for plugins it doesn't touch.
-- **Row presentation is native, not constructed.** `SourceControlResourceState` has no label
+- **Ledger-tree lifetime follows its plugin's** (#392): session load reconciles each origin
+  folder's ledger trees against the plugins actually present. A tree orphaned by a plugin
+  removed outside Modbench is committed-removed (history stays reachable in the repo); a
+  rename carries the tree — with history surviving under `git log --follow` — only when
+  exactly one present, untracked plugin's indexed records satisfy every FormKey the orphan
+  tracks (authored FormKeys remapped to the candidate's name). Anything ambiguous degrades
+  to removal, never a guessed rename. Reconciliation is best-effort per origin (a git
+  failure logs and skips, never blocks load) and commits nothing on a clean load. This is
+  what keeps #374's precise sibling-match deploy exclusion sufficient: an orphan never
+  survives to the next deploy, so the exclusion rule never needed loosening. `SourceControlResourceState` has no label
   field — VS Code derives what a row shows from its `resourceUri` alone: the file's basename as
   the row text, its containing folder as native dimmed context. A resource's `resourceUri` is the
   record's real ledger file (`<plugin>.ledger/<recordType>/<originModKey>/<hex6>.yaml`), so the row
