@@ -45,6 +45,7 @@ session over the active loadout:
 | **Pending Changes tree** | Sidebar tree below it, visible while there is staged work; staged work grouped into the units that must be saved or reverted together | [medit-pending-changes-tree.md](medit-pending-changes-tree.md) |
 | **Record editor panel** | Editor-tab webview; the per-field, per-plugin compare grid with conflict color coding and in-place editing that stages pending changes | [medit-record-editor.md](medit-record-editor.md) |
 | **Referenced By tree** | Panel-container tree that follows the active record editor; what points at this record | [medit-referenced-by.md](medit-referenced-by.md) |
+| **Aggregate SCM provider** | Native Source Control panel; working-tree group of changed records across every tracked plugin, read-only, click-to-diff (ADR-0040 stage 1) | [scm.md](scm.md) |
 | **Status bar item** | Backend/session state | This document |
 
 **Launch mEdit** (from the Loadout header) spawns the backend and builds the session from every

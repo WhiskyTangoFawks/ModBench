@@ -101,11 +101,13 @@ function fakeReveal(overrides: Partial<{
 }> = {}): {
   reveal: RevealDeps; log: ReturnType<typeof vi.fn>; report: ReturnType<typeof vi.fn>;
   revealFn: ReturnType<typeof vi.fn>; refresh: ReturnType<typeof vi.fn>; decorationsRefresh: ReturnType<typeof vi.fn>;
+  ledgerScmRefresh: ReturnType<typeof vi.fn>;
 } {
   const log = vi.fn();
   const report = vi.fn();
   const refresh = vi.fn();
   const decorationsRefresh = vi.fn();
+  const ledgerScmRefresh = vi.fn();
   const revealFn = vi.fn(overrides.reveal ?? (() => Promise.resolve()));
   const resolveChange = overrides.resolveChange ?? (() => Promise.resolve({ id: 'node' } as unknown as PendingTreeNode));
   return {
@@ -115,8 +117,9 @@ function fakeReveal(overrides: Partial<{
       log,
       reporter: { report },
       decorations: { refresh: decorationsRefresh },
+      ledgerScm: { refresh: ledgerScmRefresh },
     },
-    log, report, revealFn, refresh, decorationsRefresh,
+    log, report, revealFn, refresh, decorationsRefresh, ledgerScmRefresh,
   };
 }
 
@@ -194,6 +197,18 @@ describe('routeRecordPanelMessage', () => {
     await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, makeDeps({ reveal }));
 
     expect(decorationsRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  // #368: the aggregate SCM provider needs the same signal, at the same call site, for the same
+  // reason #331 gave the decoration provider one — otherwise a field edit staged through the
+  // webview would never appear on the Source Control panel until some unrelated refresh happened
+  // to fire. Goes through refreshPendingState (the shared signal path), not a hand-paired call.
+  it('PENDING_CHANGED also refreshes the ledger SCM provider', async () => {
+    const { reveal, ledgerScmRefresh } = fakeReveal();
+
+    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, makeDeps({ reveal }));
+
+    expect(ledgerScmRefresh).toHaveBeenCalledTimes(1);
   });
 
   it('PENDING_CHANGED with reveal deps undefined is a no-op, not a throw', async () => {
