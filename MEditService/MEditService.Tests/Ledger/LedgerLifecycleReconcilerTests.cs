@@ -1,5 +1,7 @@
 using MEditService.Core.Ledger;
 using MEditService.Core.Session;
+using MEditService.Tests.TestSupport;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Ledger;
@@ -16,6 +18,27 @@ public sealed class LedgerLifecycleReconcilerTests
 {
     private static LedgerLifecycleReconciler MakeReconciler(LedgerRepository ledger) =>
         new(ledger, NullLogger<LedgerLifecycleReconciler>.Instance);
+
+    // #392 review finding 1: a reconciler that swallows a Commit([]) failure (the guard at
+    // ReconcileOriginAsync deleted) still passes NothingOrphaned_NoCommitIsMade's own commit-count
+    // assertion — the count is unchanged either way, for the wrong reason. Capturing the log is what
+    // makes "and nothing went wrong either" a real assertion instead of an assumption.
+    private static (LedgerLifecycleReconciler Reconciler, List<LogEntry> Log) MakeReconcilerWithLog(LedgerRepository ledger)
+    {
+        var entries = new List<LogEntry>();
+        var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Debug);
+            b.AddProvider(new CollectingLoggerProvider(entries));
+        });
+        return (new LedgerLifecycleReconciler(ledger, loggerFactory.CreateLogger<LedgerLifecycleReconciler>()), entries);
+    }
+
+    private static string LastCommitMessage(LedgerRepository ledger, string originFolder)
+    {
+        var (gitDir, workTree) = ledger.PathsFor(originFolder);
+        return GitCli.Run(gitDir, workTree, "log", "-1", "--format=%B", "main");
+    }
 
     private static PluginMetadata Present(string name, string originFolder, string origin = "SomeMod") =>
         new(name, Path.Combine(originFolder, name), LoadOrderIndex: 0, IsLight: false, IsMaster: false,
@@ -94,12 +117,17 @@ public sealed class LedgerLifecycleReconcilerTests
             ledger.CommitStaged(originFolder, "vendor: baseline");
             Assert.Equal(1, CommitCount(ledger, originFolder));
 
-            var reconciler = MakeReconciler(ledger);
+            var (reconciler, log) = MakeReconcilerWithLog(ledger);
             await reconciler.ReconcileAsync(
                 [Present("Present.esp", originFolder)],
                 static (_, _, _, _) => throw new InvalidOperationException("no candidate should ever be checked here"));
 
             Assert.Equal(1, CommitCount(ledger, originFolder));
+            // A clean pass with nothing orphaned must return before ever opening an attempt — not
+            // open one, find nothing to stage, and swallow a Commit([]) failure through the
+            // per-origin catch (same final commit count, but every clean session load would then log
+            // failure-shaped noise).
+            Assert.DoesNotContain(log, e => e.Level >= LogLevel.Warning);
         }
         finally
         {
@@ -134,6 +162,8 @@ public sealed class LedgerLifecycleReconcilerTests
             Assert.False(Directory.Exists(Path.Combine(originFolder, "MyMod.esp.ledger")));
             Assert.False(ledger.IsTrackedAtHead(originFolder, orphanRelative));
             Assert.False(Directory.Exists(Path.Combine(originFolder, "MyPatch.esp.ledger")));
+            // Not just "some commit happened" — it names the removal it actually made, not a rename.
+            Assert.Contains("removed orphaned ledger tree: MyMod.esp", LastCommitMessage(ledger, originFolder), StringComparison.Ordinal);
         }
         finally
         {
@@ -181,6 +211,8 @@ public sealed class LedgerLifecycleReconcilerTests
             var followedLog = CommitLogFollow(ledger, originFolder, newAuthoredRelative);
             Assert.Contains("vendor: baseline", followedLog, StringComparison.Ordinal);
             Assert.Contains("reconcile:", followedLog, StringComparison.Ordinal);
+            // Not just "some reconcile commit happened" — it names the rename it actually made.
+            Assert.Contains("renamed ledger tree: Old.esp -> New.esp", LastCommitMessage(ledger, originFolder), StringComparison.Ordinal);
         }
         finally
         {
@@ -232,6 +264,52 @@ public sealed class LedgerLifecycleReconcilerTests
             var trackedB = ledger.IsTrackedAtHead(originFolder, mergedRelativeB);
             Assert.True(trackedA ^ trackedB, "expected exactly one of the two orphans to have renamed into Merged.esp.ledger");
             Assert.True(Directory.Exists(Path.Combine(originFolder, "Merged.esp.ledger")));
+
+            // The pass produced two actions (one rename, one removal) in a single commit — the
+            // pluralized message shape, not the singular one.
+            var message = LastCommitMessage(ledger, originFolder);
+            Assert.Contains("reconcile: 2 ledger tree(s)", message, StringComparison.Ordinal);
+            Assert.Contains("- renamed ledger tree:", message, StringComparison.Ordinal);
+            Assert.Contains("- removed orphaned ledger tree:", message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(ledgerRoot, recursive: true);
+            Directory.Delete(originFolder, recursive: true);
+        }
+    }
+
+    // #392 review finding 4: a stray entry under an orphan's ledger tree that does not parse as a
+    // record path (LedgerRecordPath.TryParse fails) must be skipped, not disqualifying — the class's
+    // own remarks on AllFormKeysResolveForCandidate already state this; this pins it directly rather
+    // than leaving it only implied by the other tests never happening to exercise it.
+    [Fact]
+    public async Task OrphanWithStrayUnparseableEntry_IsSkipped_CandidateStillQualifiesAndRenames()
+    {
+        var ledgerRoot = Directory.CreateTempSubdirectory("medit-reconcile-ledger-").FullName;
+        var originFolder = Directory.CreateTempSubdirectory("medit-reconcile-origin-").FullName;
+        try
+        {
+            var ledger = new LedgerRepository(new LedgerOptions(ledgerRoot), NullLogger<LedgerRepository>.Instance);
+            ledger.EnsureRepo(originFolder);
+            var recordRelative = LedgerRecordPath.For("Old.esp", "npc_", "000900:SomeMaster.esm");
+            VendorRawRecord(ledger, originFolder, recordRelative, "FormKey: 000900:SomeMaster.esm\n");
+            // Not a shape any writer in this class ever produces — three levels deep, ending
+            // .yaml — but git (or an external tool touching the working tree directly) has no such
+            // constraint, and this must not break the candidate check for the record that does parse.
+            VendorRawRecord(ledger, originFolder, Path.Combine("Old.esp.ledger", "stray.txt"), "not a record\n");
+            ledger.CommitStaged(originFolder, "vendor: baseline");
+
+            var reconciler = MakeReconciler(ledger);
+            await reconciler.ReconcileAsync(
+                [Present("New.esp", originFolder)],
+                (_, formKey, plugin, _) => plugin == "New.esp" && formKey == "000900:SomeMaster.esm");
+
+            Assert.False(Directory.Exists(Path.Combine(originFolder, "Old.esp.ledger")));
+            Assert.True(Directory.Exists(Path.Combine(originFolder, "New.esp.ledger")));
+            var newRelative = LedgerRecordPath.For("New.esp", "npc_", "000900:SomeMaster.esm");
+            Assert.True(ledger.IsTrackedAtHead(originFolder, newRelative));
+            Assert.Contains("renamed ledger tree: Old.esp -> New.esp", LastCommitMessage(ledger, originFolder), StringComparison.Ordinal);
         }
         finally
         {
