@@ -714,3 +714,75 @@ describe('SessionController.rereadPlugin', () => {
   });
 });
 
+// ── resolveOrigin (#414) ─────────────────────────────────────────────────────
+
+describe('SessionController.resolveOrigin', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('finds the loaded origin for a plugin name', async () => {
+    const repository = makeRepository({ plugins: makePlugins(2) });
+    const deps = makeDeps({ repository });
+    const controller = new SessionController(deps);
+
+    const origin = await controller.resolveOrigin('Plugin1.esp');
+
+    expect(origin).toBe('Data');
+  });
+
+  it('answers undefined for a name the session has not loaded', async () => {
+    const repository = makeRepository({ plugins: makePlugins(2) });
+    const deps = makeDeps({ repository });
+    const controller = new SessionController(deps);
+
+    const origin = await controller.resolveOrigin('NotLoaded.esp');
+
+    expect(origin).toBeUndefined();
+  });
+});
+
+// ── track (#414) ────────────────────────────────────────────────────────────
+
+describe('SessionController.track', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs the origin and preset, and refreshes the tree', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    const ok = await controller.track('ModA', 'Edits');
+
+    expect(ok).toBe(true);
+    expect(deps.client.POST).toHaveBeenCalledWith('/plugins/track', {
+      body: { origin: 'ModA', preset: 'Edits' },
+    });
+    expect(deps.refreshTree).toHaveBeenCalled();
+  });
+
+  // ADR-0026 "explicit action failed" tier: the user asked for this, so a failure is a
+  // notification, not a log line — and nothing is refreshed, because nothing changed.
+  it('surfaces a failure and reports that it did not happen', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue(drainedError(409, 'This mod folder is already tracked.'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const ok = await controller.track('ModA', 'Edits');
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('already tracked'));
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a thrown request the same way', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const ok = await controller.track('ModA', 'Edits');
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
+  });
+});
+

@@ -265,6 +265,15 @@ export class SessionController {
     this.deps.setFilterActive(sql !== null, sql ?? undefined, undefined);
   }
 
+  /** #414: the origin (mod folder identity) the session actually loaded this plugin name from —
+   *  what the Track command needs to know which mod folder to track, resolved off the same
+   *  already-fetched plugin list the tree itself reads, not a stale/current MO2 resolution.
+   *  `undefined` when the session has no plugin by this name at all. */
+  async resolveOrigin(pluginName: string): Promise<string | undefined> {
+    const plugins = await this.deps.repository.getPlugins();
+    return plugins.find((p) => p.name === pluginName)?.origin;
+  }
+
   /** #279 / ADR-0035 § Live mutation: re-read one plugin from the copy its name resolves to now.
    *  The path and origin come from the caller — Mod Management resolved them; the backend cannot
    *  and must not.
@@ -296,4 +305,32 @@ export class SessionController {
     return true;
   }
 
+  /** #414/ADR-0041: the Track gesture. Origin names the mod folder — every loaded plugin sharing
+   *  it is tracked together, resolved backend-side, same division of labour as `rereadPlugin`.
+   *
+   *  Returns whether it happened. A failure is ADR-0026's "explicit action failed" tier: the user
+   *  ran a command, so it is notified rather than only logged, and nothing is refreshed since
+   *  nothing changed (a 409 here means the mod folder was already tracked). */
+  async track(origin: string, preset: 'Edits' | 'Everything'): Promise<boolean> {
+    try {
+      const { error, response } = await this.deps.client.POST('/plugins/track', {
+        body: { origin, preset },
+      });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[SessionController] track(${origin}) failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Could not track "${origin}" — ${text}`);
+        return false;
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[SessionController] track(${origin}) threw: ${message}`);
+      this.deps.showError(`mEdit: Could not track "${origin}" — ${message}`);
+      return false;
+    }
+    // Tracked-ness (.git presence) isn't plugin metadata the tree renders itself, but the caller
+    // still needs a chance to re-register the new repo with vscode.git's SCM panel.
+    this.deps.refreshTree();
+    return true;
+  }
 }
