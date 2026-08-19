@@ -3,6 +3,7 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Tests.Api;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
@@ -75,14 +76,50 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
         var deleted = Assert.Single(only.Fields, f => f.Metadata.Name == "is_deleted");
         Assert.Equal("False", deleted.Value?.ToString());
     }
+}
+
+/// <summary>
+/// #410/ADR-0041: the references read is committed-only. Split from the class above because it
+/// needs a fixture that actually declares a reference — <see cref="ReferencePluginFixture"/>, the
+/// same one the API-level reference tests use — where the class above deliberately loads a plugin
+/// whose records reference nothing.
+/// </summary>
+public sealed class CommittedOnlyReferencesTests : IDisposable
+{
+    private readonly SessionManager _manager;
+    private readonly RecordQueryService _svc;
+    private readonly ReferencePluginFixture _fixture = new();
+
+    public CommittedOnlyReferencesTests()
+    {
+        var reflector = SharedSchemaReflector.Instance;
+        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        _manager = new SessionManager(factory);
+        _manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
+    }
+
+    public void Dispose()
+    {
+        _manager.Dispose();
+        _fixture.Dispose();
+    }
 
     [Fact]
-    public void GetReferences_ReturnsOnlyReferencesTheIndexedPluginsDeclare()
+    public void GetReferences_ReturnsWhatThePluginDeclares_AndNothingElse()
     {
-        // TestPlugin.esp's two NPCs reference nothing, so every reference query over it is empty —
-        // the state a staged reference used to be able to add a row to.
-        var formKey = _svc.GetRecords("npc_", TestPluginFixture.PluginName, "TestNPC01", 1, 0).Items[0].FormKey;
+        // Positive control first, through the identical call path: a reference the indexed plugin
+        // really declares must come back. Without it the absence half below would pass just as
+        // happily against a broken query, a wrong connection or an empty index — exactly the shape
+        // the staged-reference union used to be able to hide behind.
+        var referenced = _svc.GetReferences(_fixture.KeywordFormKey.ToString());
 
-        Assert.Empty(_svc.GetReferences(formKey));
+        var hit = Assert.Single(referenced);
+        Assert.Equal(_fixture.NpcWithKeywordFormKey.ToString(), hit.FormKey);
+        Assert.Equal(ReferencePluginFixture.PluginName, hit.Plugin);
+
+        // And nothing beyond it: the NPC that declares no keyword is not a referencing source —
+        // the row a staged reference used to be able to add here.
+        Assert.DoesNotContain(referenced, r => r.FormKey == _fixture.NpcWithoutKeywordFormKey.ToString());
     }
 }

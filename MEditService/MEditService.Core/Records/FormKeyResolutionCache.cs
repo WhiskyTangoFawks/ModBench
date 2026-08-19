@@ -4,7 +4,7 @@ namespace MEditService.Core.Records;
 // not a query per value." A duplicate FormKey commonly recurs across sibling cells/plugins/leaves
 // within one response (e.g. the same keyword referenced by two overrides) — wrapping the resolver
 // once per response in this cache means each distinct FormKey is queried at most once, regardless
-// of how many FieldDiff/VmadPropertyDiff/PendingChange leaves share it.
+// of how many FieldDiff/VmadPropertyDiff leaves share it.
 public static class FormKeyResolutionCache
 {
     public static Func<string, RecordLookupEntry?> Memoize(Func<string, RecordLookupEntry?> resolve)

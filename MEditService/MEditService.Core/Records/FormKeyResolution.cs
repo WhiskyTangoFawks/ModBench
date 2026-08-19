@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace MEditService.Core.Records;
 
 // The three-way distinction CheckErrorBuilder already computes (not found / found, wrong type /
-// found, valid type) — reused as a shared signal by FieldDiff, VmadPropertyDiff, and PendingChange
+// found, valid type) — reused as a shared signal by FieldDiff and VmadPropertyDiff
 // so a resolvable-but-wrong-type reference stays distinguishable from a genuinely dangling one
 // (ADR-0031). A resolved-wrong-type reference still gets the Ctrl-hover/hyperlink affordance,
 // matching xEdit — only Unresolved withholds it.

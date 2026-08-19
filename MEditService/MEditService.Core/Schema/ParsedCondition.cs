@@ -21,7 +21,7 @@ public interface IConditionCodec
     // recognized consistently everywhere.
     bool IsConditionListField(Type recordType, string fieldPath);
 
-    // Stage-time shape check for a composed indexed path of arbitrary depth (#182/#184: e.g.
+    // Validation-time shape check for a composed indexed path of arbitrary depth (#182/#184: e.g.
     // "Effects[2].Conditions" one level deep, or "Effects[2].Conditions[1].Conditions" two levels
     // deep — the numeric indices are write-time-only, per #169's AC — existence/range are enforced
     // at write, not here). Takes the raw composed field path rather than pre-parsed pieces: every
@@ -47,7 +47,7 @@ public interface IConditionCodec
     ConditionApplyResult ApplyFieldValue(IMajorRecord record, string fieldPath, int index, string subField, JsonElement value);
 
     // Write-back (#153): replaces fieldPath's entire condition list with newList, a JSON array of
-    // ParsedCondition-shaped objects — the whole-subtree restage an add/remove/reorder stages
+    // ParsedCondition-shaped objects — the whole-subtree rewrite an add/remove/reorder produces
     // (ADR-0019: array indices have no stable identity, so arity/order changes replace the whole
     // list rather than address one element).
     ConditionApplyResult ApplyListValue(IMajorRecord record, string fieldPath, JsonElement newList);

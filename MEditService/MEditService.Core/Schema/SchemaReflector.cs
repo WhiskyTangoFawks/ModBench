@@ -231,7 +231,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         columns.Add(new ColumnSpec(HeaderIndexer.MastersFieldName, "MasterReferences", "VARCHAR", _ => null, "array",
             Empty, Empty, Apply: null, IsArray: true, ElementType: mastersElement));
         extracts.Add(mod => JsonSerializer.Serialize(mod.MasterReferences.Select(r => r.Master.FileName.ToString()).ToList()));
-        applies.Add(HeaderMastersApply()); // Issue #86: Add-only master list; stage-time validation lives in EditOrchestrator
+        applies.Add(HeaderMastersApply()); // Issue #86: add-only master list; validation is the caller's
 
         return new RecordTableSchema
         {
@@ -248,9 +248,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     // Write counterpart to the masters extract: MasterReferences lives directly on IMod (not under
     // ModHeader, unlike author/flags), so this doesn't go through HeaderPropertyApply's
-    // modHeaderProp.GetValue indirection — it rebuilds mod.MasterReferences in place from the staged
-    // JSON array of plugin filenames. Add-only / loaded-plugin validation happens at stage time
-    // (EditOrchestrator, issue #86); this apply trusts whatever array it's handed.
+    // modHeaderProp.GetValue indirection — it rebuilds mod.MasterReferences in place from the
+    // incoming JSON array of plugin filenames. Validating that array is the caller's job
+    // (issue #86) — this apply trusts whatever it is handed.
     private static Action<IMod, JsonElement> HeaderMastersApply() => (mod, json) =>
     {
         if (json.ValueKind != JsonValueKind.Array) return;

@@ -13,7 +13,7 @@ namespace MEditService.Tests.Api;
 
 /// <summary>
 /// A loaded NPC session whose post-commit reindex always throws. Drives #127's stale-index case
-/// through the real save path (file swap + pending-changes commit still happen) and the
+/// through the real save path (the file swap still happens) and the
 /// <see cref="ISessionManager.ReindexPlugins"/> seam — not by reaching into PluginSaver internals.
 /// </summary>
 public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposable

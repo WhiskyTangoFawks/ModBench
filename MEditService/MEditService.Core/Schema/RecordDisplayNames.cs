@@ -158,8 +158,8 @@ public static class RecordTableSchemaLookupExtensions
     /// <summary>
     /// The xEdit-parity display name for <paramref name="tableName"/>, read off the reflected
     /// schema when known. Falls back to <paramref name="tableName"/> itself (the raw signature)
-    /// when the type isn't a known schema — e.g. a staged change whose RecordType predates a
-    /// schema change. Single home for this fallback rule (PendingChangeResolver, RecordQueryService).
+    /// when the type isn't a known schema — e.g. a record whose RecordType predates a schema
+    /// change. Single home for this fallback rule (RecordQueryService).
     /// </summary>
     public static string DisplayNameFor(
         this IReadOnlyDictionary<string, RecordTableSchema> schemas, string tableName) =>

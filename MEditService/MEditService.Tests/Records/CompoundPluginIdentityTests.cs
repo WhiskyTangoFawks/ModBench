@@ -59,7 +59,7 @@ public class CompoundPluginIdentityTests
     // #296 / ADR-0036: GetRecord's own plugin filter couldn't pick one origin's copy over another's
     // even though the RecordDetail it returns has carried Origin since #272 — the one piece #272/#275
     // left unclosed for this method. origin is required (not defaulted) here: every real caller
-    // (GetRecordForPlugin, GetPluginRecordTypes's staged-reconciliation lookup) already has plugin in
+    // (GetRecordForPlugin, GetPluginRecordTypes) already has plugin in
     // hand as a concrete, non-optional value, so this mirrors GetVmad/GetConditions/GetPlacement's
     // #275 precedent, not GetRecords' nullable filter — the compiler must enumerate every call site.
     [Fact]

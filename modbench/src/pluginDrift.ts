@@ -84,13 +84,11 @@ function compare(
  *  `PluginsTreeComposite` and `nameFilter` already use, and the reason all three live in `src/`
  *  rather than in either context's folder.
  *
- *  **Why this is not a `FileDecorationProvider`.** #331's pending-change decorations are one, and
- *  #279 was specified to match them. It cannot: a `TreeItem` has exactly one `resourceUri`, #331
- *  already claims plugin rows' for its `medit-pending-plugin:` scheme, and VS Code renders a single
- *  badge per row across all providers — so a drift provider would have to answer for a scheme named
- *  after the other context's pending changes, and then fight #331 for the badge on any row that has
- *  both. Drift therefore renders through `PluginsTreeComposite`'s own icon/description/tooltip path,
- *  where #277's master issues and #277's load failures already render, and where AC3's tooltip
+ *  **Why this is not a `FileDecorationProvider`.** A `TreeItem` has exactly one `resourceUri` and
+ *  VS Code renders a single badge per row across all providers, so a drift provider would have to
+ *  contend for both with anything else that wants them. Drift therefore renders through
+ *  `PluginsTreeComposite`'s own icon/description/tooltip path, where #277's master issues and
+ *  #277's load failures already render, and where AC3's tooltip
  *  requirement has to land anyway. This is a platform limitation, which is the one carve-out
  *  Native-first allows (`modbench/CLAUDE.md`) — not a preference, and not an oversight to
  *  "fix" back into a badge. */

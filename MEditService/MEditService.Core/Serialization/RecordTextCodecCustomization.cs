@@ -4,7 +4,7 @@ namespace MEditService.Core.Serialization;
 
 /// <summary>
 /// Replicates the Spriggit-compatible customization from spike #359
-/// (<c>spike/Spriggit.Spike/Customization.cs</c> on branch <c>spike-359-git-native-pending-changes</c>),
+/// (<c>spike/Spriggit.Spike/Customization.cs</c> on the #359 spike branch),
 /// which itself mirrors Spriggit's own "Translation Packages/Spriggit.Yaml.Fallout4/Customization.cs"
 /// exactly for its three base settings. ADR-0040 calls for replicating this ~10-line base
 /// customization, not Spriggit's full production customization suite (its

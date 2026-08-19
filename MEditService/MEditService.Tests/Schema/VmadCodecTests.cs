@@ -587,7 +587,7 @@ public class VmadCodecTests
         Assert.Equal(json, VmadCodec.Parse(rebuilt)!.StructJson);
     }
 
-    // Issue #116: the same round trip, but the Object member is null — staging an edit on a
+    // Issue #116: the same round trip, but the Object member is null — writing a value on a
     // property that reads as null must not be misread as "delete this property".
     [Fact]
     public void Parse_ThenApplyValue_RoundTripsAStructWithNullObjectMember()
@@ -604,7 +604,7 @@ public class VmadCodecTests
         Assert.Equal(json, VmadCodec.Parse(rebuilt)!.StructJson);
     }
 
-    // ---- FormKeys in staged values ----
+    // ---- FormKeys in VMAD values ----
 
     [Fact]
     public void ValueFormKeys_ObjectValue_ReturnsItsFormKey() =>
@@ -627,7 +627,7 @@ public class VmadCodecTests
     public void ValueFormKeys_ValueWithoutFormKeys_ReturnsNone(string json) =>
         Assert.Empty(VmadCodec.ValueFormKeys(J(json)));
 
-    // #160: a Struct's staged NewValue is a bare array of member-node objects (the same shape
+    // #160: a Struct's value is a bare array of member-node objects (the same shape
     // ApplyStructProperty/TryBuildMemberProperty consume), not a { "members": [...] } wrapper.
     [Fact]
     public void ValueFormKeys_StructValue_ReturnsMemberFormKey() =>

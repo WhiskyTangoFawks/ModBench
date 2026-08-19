@@ -134,6 +134,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         setResult(null);
         setError(null);
         setFocusedCell(null);
+        // Unconditional, not left to the [formKey] effect: a LOAD_RECORD naming the record already
+        // open must still re-load (the effect never fires, formKey didn't change) — the
+        // skipNextRefreshEffect guard above is what keeps a *changed* formKey from loading twice.
+        void refreshRef.current(msg.formKey);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED) {
         // #308 / ADR-0035 AC4: a panel already open when the sweep lands must reflect the settled
         // data, not just clear its own banner over stale content — refresh() re-runs client.load()

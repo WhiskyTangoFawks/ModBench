@@ -13,7 +13,7 @@
 // VmadSection always restaged at the property's own top path), which is exactly what a
 // `wirePath`-bearing FieldDiff triggers in RecordPanel's row-builder (subtreeFor): a fresh
 // restage root starts there, so a struct/array member many levels below still collapses back to
-// one atomic PendingChange at the property's path, never the property's own container script.
+// one atomic write at the property's path, never the property's own container script.
 //
 // Struct and ArrayOfStruct (structList) properties are VMAD's one genuine exception to "the
 // generic setAtPath already produces the right wire shape": their wire value is the backend's own
@@ -209,7 +209,7 @@ function buildScript(s: VmadScriptDiff): { diff: FieldDiff; meta: FieldMetadata 
   const propertyBuilds = s.properties.map(p => ({ name: p.name, ...buildProperty(p) }));
   const children: FieldDiff[] = [
     buildFlagsChild(s),
-    ...propertyBuilds.map(({ name, diff }) => ({ ...diff, wirePath: `VMAD\\${s.name}\\${name}`, vmadOpKind: 'property' as const })),
+    ...propertyBuilds.map(({ name, diff }) => ({ ...diff, wirePath: `VMAD\\${s.name}\\${name}` })),
   ];
   const fields: FieldMetadata[] = [FLAGS_META, ...propertyBuilds.map(({ name, meta }) => ({ ...meta, name }))];
   return {
@@ -220,8 +220,7 @@ function buildScript(s: VmadScriptDiff): { diff: FieldDiff; meta: FieldMetadata 
       winnerValue: s.flags[s.winnerColumn] ?? null,
       cellStates: s.cellStates,
       conflictAll: aggregateConflictAll(s.cellStates, children),
-      children,
-      vmadOpKind: 'script' },
+      children },
     meta: { name: s.name, type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields } };
 }
 
@@ -256,8 +255,7 @@ export function buildVmadRows(vmad: VmadCompare | null | undefined): VmadTreeRow
     winnerValue: null,
     cellStates: {},
     conflictAll: aggregateConflictAll({}, scriptDiffs),
-    children: scriptDiffs,
-    vmadOpKind: 'scripts' };
+    children: scriptDiffs };
   const wrapperMeta: FieldMetadata = {
     name: WRAPPER_NAME, type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
     fields: scriptBuilds.map(b => b.meta) };

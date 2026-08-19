@@ -217,8 +217,8 @@ async function refreshMatchingPlugins(repository: ApiPluginRepository, outputCha
 }
 
 /** Leave editing: tear down the editing backend. #273: there is no separate loadout view mode
- *  to switch back to any more — the loadout views were never hidden (#268), and Pending Changes /
- *  Referenced By govern their own visibility (staged work, always-present respectively). */
+ *  to switch back to any more — the loadout views were never hidden (#268), and Referenced By
+ *  governs its own visibility. */
 function exitToLoadout(): void {
   // #307 AC7: abandon any load still in flight *first* — it aborts the POST outright, so the
   // load stops polling and returns 'abandoned' rather than discovering a killed backend as a
@@ -230,7 +230,7 @@ function exitToLoadout(): void {
   pluginsTree?.setSession(undefined);
   // #279: and so does drift — it is a statement about the plugins *this* session read, so it
   // cannot outlive it. Cleared directly rather than recomputed, for the same reason as the
-  // pending-change decorations below: with no session there is nothing to compare against, so the
+  // decorations below: with no session there is nothing to compare against, so the
   // answer is known without asking.
   driftTracker?.setLoaded(undefined);
   // #307: so does anything the load was saying about itself. A statement about a session that no
@@ -384,8 +384,7 @@ export function activate(context: vscode.ExtensionContext) {
 interface EditorCommandDeps {
   context: vscode.ExtensionContext;
   openPanels: Map<string, vscode.WebviewPanel>;
-  // #208: every open 'modbench'-viewType record panel — see openRecordPanel's recordPanels
-  // param and modbench.pendingCell.saveGroup/revertGroup below.
+  // Every open 'modbench'-viewType record panel — see openRecordPanel's recordPanels param.
   recordPanels: Set<vscode.WebviewPanel>;
   // #282: which of recordPanels is active, and what FormKey each shows — openRecordPanel keeps
   // this current; the Referenced By view retargets from it, not from a command argument.
@@ -511,7 +510,7 @@ function registerFilterCommands(scriptsPath: string, controller: SessionControll
 // #295: modbench.reloadSession — pulled out of registerRecordViewCommands purely for its line
 // budget, same reasoning as registerReferencedByCopyCommand below. Re-runs the session load
 // (makeEnterEditing — the same path Launch mEdit and the crash-restart handler take), not a
-// tree re-read; confirms modally first only when there's staged work to lose (reloadSession).
+// tree re-read.
 // Guarded on enterEditingFn: registerLoadoutView (which builds it) runs before this command is
 // even registered, so a set-but-not-yet-assigned race isn't the risk — the guard covers
 // enterEditingFn staying permanently unset, which happens when registerLoadoutView returns
@@ -527,7 +526,7 @@ function registerReloadSessionCommand(controller: SessionController, outputChann
       return;
     }
     // #410/ADR-0041: reloads outright, with no confirm. #295's confirm existed only to warn that
-    // a reload discards staged edits; with the pending model gone a reload rebuilds read state and
+    // a reload discards uncommitted work; with that model gone a reload rebuilds read state and
     // destroys nothing.
     //
     // #295 AC4: matches modbench.modList.launchMedit's own try/catch — enterEditing's own
@@ -821,7 +820,7 @@ interface PluginListDeps {
   /** The record browser that supplies a plugin row's children (#270). Passed as the composite's
    *  child source and never touched directly here. */
   recordBrowser: PluginTreeProvider;
-  /** #279: the per-plugin re-read's HTTP half, plus the staged-edit count its confirm states. */
+  /** #279: the per-plugin re-read's HTTP half. */
   controller: SessionController;
 }
 /** The Plugins tree: a view of plugins.txt, stacked below the Mods tree. A row's checkbox toggles
@@ -1630,11 +1629,6 @@ function setupScripts(cfg: vscode.WorkspaceConfiguration): { scriptsPath: string
   const scriptsPath = scriptsPathCfg || path.join(os.homedir(), '.medit', 'scripts');
   fs.mkdirSync(scriptsPath, { recursive: true });
 
-  const pendingChangesSql = path.join(scriptsPath, 'pending-changes.sql');
-  const presetSrc = path.join(__dirname, '..', 'extension', 'scripts', 'pending-changes.sql');
-  if (!fs.existsSync(pendingChangesSql) && fs.existsSync(presetSrc))
-    fs.copyFileSync(presetSrc, pendingChangesSql);
-
   const filterProvider = new FilterCodeLensProvider(scriptsPath);
   return { scriptsPath, filterProvider };
 }
@@ -1773,10 +1767,6 @@ function promptPluginName(): Thenable<string | undefined> {
 }
 
 const RECORD_PANEL_KEY = '__record_view__';
-
-// Issue #230: the extended editor's temp files live under here — one directory for the whole
-// session (extendedFieldEditor.ts keys the actual per-field path off it), computed once rather
-// than per panel/per open, since it never varies within a run.
 
 // #282: pulled out of openRecordPanel purely for its line budget (same reasoning as
 // createReferencedByTree/registerReferencedByCopyCommand above) — wires a freshly created panel

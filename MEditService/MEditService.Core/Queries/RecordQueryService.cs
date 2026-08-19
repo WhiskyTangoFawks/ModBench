@@ -93,7 +93,7 @@ public sealed class RecordQueryService(
     }
 
     // #410/ADR-0041: the read-time derived-masters step (#336/ADR-0038) retires with the pending
-    // model it derived from — with nothing staged there is nothing to derive, so the header's
+    // model it derived from — with no uncommitted edits there is nothing to derive, so the header's
     // masters field is simply what the plugin committed. ADR-0038's derivation survives where
     // plugin validity is actually at stake: inside compile, which must emit a masters list the
     // format can encode FormIDs against.

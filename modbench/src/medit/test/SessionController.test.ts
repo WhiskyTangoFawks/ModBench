@@ -666,9 +666,7 @@ describe('SessionController.loadExplicitSession abandonment', () => {
   });
 });
 
-// ── hasPendingChanges ──────────────────────────────────────────────────────────
-
-// ── rereadPlugin / stagedChangeCount (#279) ───────────────────────────────────
+// ── rereadPlugin (#279) ───────────────────────────────────────────────────────
 
 describe('SessionController.rereadPlugin', () => {
   beforeEach(() => vi.resetAllMocks());

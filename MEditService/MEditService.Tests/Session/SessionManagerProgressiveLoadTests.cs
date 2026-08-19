@@ -204,7 +204,7 @@ public sealed class SessionManagerProgressiveLoadTests
 
         // Unload has to wait for the load to stop touching the repository before disposing it —
         // disposing a DuckDB connection out from under an in-flight index is a native crash, not an
-        // exception, and it would take the whole backend down with the user's staged edits.
+        // exception, and it would take the whole backend down with the user's loaded session.
         var unload = Task.Run(manager.Unload);
         var premature = await Task.WhenAny(unload, Task.Delay(TimeSpan.FromMilliseconds(500)));
         Assert.NotSame(unload, premature); // disposed while the load was still running

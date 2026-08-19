@@ -512,14 +512,14 @@ public static class VmadCodec
         foreach (var p in sorted) script.Properties.Add(p);
     }
 
-    // The FormKeys carried by a staged VMAD value, in the { formKey, alias } shape used for
+    // The FormKeys carried by a VMAD value, in the { formKey, alias } shape used for
     // Object and ArrayOfObject edits. Any other value shape references nothing.
     public static IEnumerable<string> ValueFormKeys(JsonElement value) =>
         ValueFormKeysWithPaths(value).Select(p => p.FormKey);
 
     // Same FormKeys as ValueFormKeys, paired with a sub-path within value ("" for a scalar Object,
     // "[i]" for an ArrayOfObject element, "\Member"/"[i]\Member" for a Struct/ArrayOfStruct member)
-    // so callers can key a per-leaf signal independently (ADR-0031's PendingChangeResolver). #160:
+    // so callers can key a per-leaf signal independently (ADR-0031). #160:
     // there's no type/kind parameter here — Object vs ArrayOfObject vs Struct vs ArrayOfStruct is
     // told apart purely by JSON shape, same trick the original Object/ArrayOfObject split already
     // used (scalar vs array). A Struct's NewValue is a bare array of member-node objects (no

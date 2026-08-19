@@ -5,9 +5,7 @@ import {
   readOnlyReason,
   collidingFilenames,
   parseElementIndex,
-  pendingIfChanged,
   getAtPath,
-  pendingValueAtPath,
   reduceConflictAll,
   aggregateConflictAll,
   type PathSegment,
@@ -29,7 +27,7 @@ function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): Com
 }
 
 describe('buildColumns', () => {
-  it('produces one disk column per override when there are no pending changes', () => {
+  it('produces one disk column per override', () => {
     const cols = buildColumns([makeOverride('Fallout4.esm'), makeOverride('MyMod.esp')]);
     expect(cols).toHaveLength(2);
     expect(cols.every(c => c.kind === 'disk')).toBe(true);
@@ -94,23 +92,6 @@ describe('parseElementIndex', () => {
   });
 });
 
-describe('pendingIfChanged', () => {
-  it('returns undefined when pending is undefined', () => {
-    expect(pendingIfChanged(undefined, 'disk')).toBeUndefined();
-  });
-
-  it('returns undefined when pending === disk (reference/primitive equal)', () => {
-    expect(pendingIfChanged('same', 'same')).toBeUndefined();
-  });
-
-  it('returns undefined when pending deep-equals disk (structural)', () => {
-    expect(pendingIfChanged({ X1: 0 }, { X1: 0 })).toBeUndefined();
-  });
-
-  it('returns pending when it differs from disk', () => {
-    expect(pendingIfChanged({ X1: 5 }, { X1: 0 })).toEqual({ X1: 5 });
-  });
-});
 
 // Issue #231: the generalized, path-based replacement for the old top-level/array-element/
 // struct-child/grandchild switch DiffRow used to extract a row's own pending value out of the
@@ -119,56 +100,6 @@ describe('pendingIfChanged', () => {
 // member). Supersedes the old extractPendingElementValue (array-element case) and the struct-
 // child/grandchild cases the old DiffRow switch hand-rolled directly — deleted along with its own
 // call site, now that this one function covers every depth those three used to split across.
-describe('pendingValueAtPath', () => {
-  it('returns the whole rawPending value for the root (empty path)', () => {
-    expect(pendingValueAtPath({ X: 1 }, [])).toEqual({ X: 1 });
-  });
-
-  it('returns undefined at the root when rawPending itself is undefined (no pending change)', () => {
-    expect(pendingValueAtPath(undefined, [])).toBeUndefined();
-  });
-
-  it('struct member: reads the member off rawPending', () => {
-    const path: PathSegment[] = [{ kind: 'member', name: 'Target' }];
-    expect(pendingValueAtPath({ Target: '000030:Fallout4.esm' }, path)).toBe('000030:Fallout4.esm');
-  });
-
-  it('positional array element: reads the element at the parsed index', () => {
-    const path: PathSegment[] = [{ kind: 'index', index: 1 }];
-    expect(pendingValueAtPath(['alpha', 'delta'], path)).toBe('delta');
-  });
-
-  it('positional array element: returns undefined when the index is out of range', () => {
-    const path: PathSegment[] = [{ kind: 'index', index: 3 }];
-    expect(pendingValueAtPath(['alpha'], path)).toBeUndefined();
-  });
-
-  it('sorted array element: returns the key itself when still present in rawPending', () => {
-    const path: PathSegment[] = [{ kind: 'sortKey', key: 'KwdC' }];
-    expect(pendingValueAtPath(['KwdA', 'KwdC'], path)).toBe('KwdC');
-  });
-
-  it('sorted array element: returns undefined when absent from rawPending', () => {
-    const path: PathSegment[] = [{ kind: 'sortKey', key: 'KwdC' }];
-    expect(pendingValueAtPath(['KwdA'], path)).toBeUndefined();
-  });
-
-  it('grandchild (index then member): reads the struct member of the array element', () => {
-    const path: PathSegment[] = [{ kind: 'index', index: 2 }, { kind: 'member', name: 'Target' }];
-    const rawPending = [{}, {}, { Target: '000077:Fallout4.esm' }];
-    expect(pendingValueAtPath(rawPending, path)).toBe('000077:Fallout4.esm');
-  });
-
-  it('a depth the old switch could not express: member, then index, then member', () => {
-    const path: PathSegment[] = [
-      { kind: 'member', name: 'Outer' },
-      { kind: 'index', index: 1 },
-      { kind: 'member', name: 'Inner' },
-    ];
-    const rawPending = { Outer: [{ Inner: 'a' }, { Inner: 'b' }] };
-    expect(pendingValueAtPath(rawPending, path)).toBe('b');
-  });
-});
 
 
 // Issue #231: the generic path-based node accessors that replace RecordPanel/DiffRow's old

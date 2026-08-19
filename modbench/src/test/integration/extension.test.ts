@@ -303,24 +303,6 @@ describe('modbench command registration', () => {
     // #282: the Referenced By view's own copy command — see packageJson.test.ts for its
     // view/item/context and keybinding contributions (declarative, not exercised here).
     'modbench.referencedByTree.copy',
-    // #209: the column-header's native `webview/context` menu commands — same shape as #208's
-    // pendingCell.* above (package.json's contributes.menus["webview/context"], gated on
-    // webviewId/webviewSection/immutable, not testable from this harness; and RecordPanel's
-    // data-vscode-context wiring, unit-tested). modbench.copyAsOverrideInto and
-    // modbench.deleteRecord (already listed above) are reused from this same menu — no separate
-    // command ids (#281: columnHeader.removeOverride folded into deleteRecord; Copy as New
-    // Record is one all-surface id). #202: modbench.columnHeader.copyAllToPending deleted
-    // outright — Copy as Override now covers that case via sourcePlugin instead of a fourth,
-    // near-duplicate action. #335/ADR-0038: modbench.columnHeader.addMaster is gone too — nothing
-    // may declare a master directly (content-derivation itself is #336, not yet built).
-    // #227: the array-element/array-parent native `webview/context` menu commands — same shape
-    // as #208/#209 above (package.json's contributes.menus["webview/context"], gated on
-    // webviewId/webviewSection, not testable from this harness; and DiffRow's data-vscode-context
-    // wiring, unit-tested in DiffRow.test.tsx/ArrayDiffRows.test.tsx).
-    // #231: VMAD's own structural-op native `webview/context` menu commands — same shape as
-    // #227's array.* above (package.json gating, RecordPanel.test.tsx's own unit coverage).
-    // #231 (review): Set Script Flags/Set Property Flags — restores capability lost when
-    // VmadSection's always-visible flag `<select>`s were deleted (AC7 regression).
     'modbench.modList.filter',
     'modbench.modList.clearFilter',
     'modbench.modList.switchProfile',
@@ -580,15 +562,6 @@ describe('Overwrite row (#82)', () => {
   });
 });
 
-// ── Pending Changes visible exactly when there is staged work (#273 Slice A) ────
-// The declarative gate itself (view.when === 'modbench.hasPendingChanges') is proven statically
-// in packageJson.test.ts. What only a live host can show is that the key actually toggles both
-// directions as staged work appears and clears — makePendingStateHandler sets the context key
-// and the view's badge from the same stagedGroups number in the same call, so the badge (public,
-// already exported on changeGroupTreeView) is the observable proxy for the key: they cannot
-// disagree by construction, and VS Code exposes no public API to read a context key's value
-// directly from a test.
-
 // ── Launch mEdit → editing plugin tree populated (#75) ──────────────────────────
 
 interface TreeLike {
@@ -664,7 +637,7 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
 // removed outright, not adapted — modbench.pluginTree (the view whose title it swapped) and
 // modbench.viewMode (the key it swapped on) are both gone, so there is no mode left to reflect
 // and nothing left to assert. This comment is the suite's own tombstone; the merged tree's own
-// identity is covered by the #270 suite below, and Pending Changes' title is covered by Slice B's
+// identity is covered by the #270 suite below, and
 // packageJson.test.ts assertion (its declared name never changes at runtime).
 
 // ── Loadout stays visible through an editing session (#268) ────────────────────
@@ -1025,7 +998,7 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
 });
 
 // #295: modbench.reloadSession through the real wiring — reloadSession backed by
-// SessionController.hasPendingChanges and the reused makeEnterEditing path, not just
+// the reused makeEnterEditing path, not just
 // reloadSession's own unit seam (already covered directly, confirm/cancel included, since
 // showWarningMessage can't be driven headlessly here).
 describe('Reload Session actually reloads (#295)', () => {
@@ -1064,7 +1037,7 @@ describe('Reload Session actually reloads (#295)', () => {
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  // #410: reload no longer confirms at all (there is no staged work to lose), so this must
+  // #410: reload no longer confirms at all (there is no uncommitted work to lose), so this must
   // re-run the session load with no modal in the way — a real showWarningMessage would hang a
   // headless test, so this doubles as proof the confirm is genuinely gone.
   it('re-POSTs /session/load-explicit, no prompt required', async () => {
@@ -1238,8 +1211,7 @@ describe('The record-filter readout does not outlive its session (#255)', () => 
 // stays written from exactly one place.
 //
 // The context key itself is not asserted here: VS Code exposes no public API to read a context
-// key's value from a test, the same wall `modbench.hasPendingChanges` hit (see its own describe
-// block above, "Pending Changes visibility tracks staged work"). What *is* observable is the code
+// key's value from a test. What *is* observable is the code
 // lens, because FilterCodeLensProvider is a genuinely registered `vscode.languages.CodeLensProvider`
 // — `vscode.executeCodeLensProvider` exercises the real instance, not a private field. Proving the
 // code lens clears on Close mEdit proves the single writer ran, and by that writer's own

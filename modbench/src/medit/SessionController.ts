@@ -271,7 +271,7 @@ export class SessionController {
    *
    *  Returns whether it happened. A failure is ADR-0026's "explicit action failed" tier (the user
    *  ran a command), so it is notified as well as logged, and nothing is refreshed: the session is
-   *  exactly as it was, staged edits included. A 409 here is the ordinary "a load is still in
+   *  exactly as it was. A 409 here is the ordinary "a load is still in
    *  flight" answer, which is worth telling the user precisely because retrying will work. */
   async rereadPlugin(plugin: string, path: string, origin: string): Promise<boolean> {
     try {

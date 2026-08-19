@@ -1,0 +1,347 @@
+import '@testing-library/jest-dom';
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
+
+import { RecordPanel } from './RecordPanel';
+import type { FieldMetadata } from './types';
+import { columnKey } from './types';
+import type { LoadResult, RecordSessionClient } from './RecordSessionClient';
+
+// #410 review: the read-path half of the deleted ArrayDiffRows.test.tsx. Array/struct *rendering*
+// — collapsed counts, expand-to-children, the dimmed em-dash for a null element, deep nesting, and
+// #114's collapsed-aggregate / expanded-defers-to-children conflict-colour rule (CONTEXT.md's own
+// ConflictAll entry states that rule; DiffRow.tsx implements it) — is untouched by #410 and had
+// zero coverage after that file was deleted for its editing content. Restored here without the
+// staging half.
+
+const sortedArrayMeta: FieldMetadata = {
+  name: 'Keywords',
+  type: 'array',
+  isArray: true,
+  validFormKeyTypes: [],
+  enumValues: [],
+  elementType: {
+    name: '',
+    type: 'formKey',
+    isArray: false,
+    validFormKeyTypes: [],
+    enumValues: [],
+    isSortable: true,
+  },
+};
+
+const pluginsResponse = [
+  { name: 'Fallout4.esm', isImmutable: true,  loadOrderIndex: 0 },
+  { name: 'MyMod.esp',    isImmutable: false, loadOrderIndex: 1 },
+];
+
+const sortedArrayCompareResult = {
+  conflictAll: 'Override',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: sortedArrayMeta, value: ['KwdA', 'KwdB'] }], conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: sortedArrayMeta, value: ['KwdA', 'KwdC'] }], conflictThis: 'Override',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Keywords',
+    values: { 'Fallout4.esm': ['KwdA', 'KwdB'], 'MyMod.esp': ['KwdA', 'KwdC'] },
+    winnerColumn: 'MyMod.esp',
+    winnerValue: ['KwdA', 'KwdC'],
+    cellStates: { 'MyMod.esp': 'Override' },
+    children: [
+      {
+        fieldName: 'KwdA',
+        values: { 'Fallout4.esm': 'KwdA', 'MyMod.esp': 'KwdA' },
+        winnerColumn: 'Fallout4.esm', winnerValue: 'KwdA',
+        cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
+      },
+      {
+        fieldName: 'KwdB',
+        values: { 'Fallout4.esm': 'KwdB', 'MyMod.esp': null },
+        winnerColumn: 'Fallout4.esm', winnerValue: 'KwdB',
+        cellStates: {},
+      },
+      {
+        fieldName: 'KwdC',
+        values: { 'Fallout4.esm': null, 'MyMod.esp': 'KwdC' },
+        winnerColumn: 'MyMod.esp', winnerValue: 'KwdC',
+        cellStates: { 'MyMod.esp': 'Override' },
+      },
+    ],
+  }],
+};
+
+const structMeta: FieldMetadata = {
+  name: 'ObjectBounds',
+  type: 'struct',
+  isArray: false,
+  validFormKeyTypes: [],
+  enumValues: [],
+  fields: [
+    { name: 'X1', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+    { name: 'X2', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+  ],
+};
+
+const structCollapseExpandResult = {
+  conflictAll: 'Override',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: structMeta, value: { X1: 0, X2: 100 } }], conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: structMeta, value: { X1: 5, X2: 100 } }], conflictThis: 'Override',
+    },
+  ],
+  diffs: [{
+    fieldName: 'ObjectBounds',
+    values: { 'Fallout4.esm': { X1: 0, X2: 100 }, 'MyMod.esp': { X1: 5, X2: 100 } },
+    winnerColumn: 'MyMod.esp', winnerValue: { X1: 5, X2: 100 },
+    cellStates: { 'MyMod.esp': 'Override' },
+    conflictAll: 'Override',
+    children: [
+      {
+        fieldName: 'X1',
+        values: { 'Fallout4.esm': 0, 'MyMod.esp': 5 },
+        winnerColumn: 'MyMod.esp', winnerValue: 5,
+        cellStates: { 'MyMod.esp': 'Override' },
+        conflictAll: 'Override',
+      },
+      {
+        fieldName: 'X2',
+        values: { 'Fallout4.esm': 100, 'MyMod.esp': 100 },
+        winnerColumn: 'Fallout4.esm', winnerValue: 100,
+        cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
+        conflictAll: 'NoConflict',
+      },
+    ],
+  }],
+};
+
+const nestedStructArrayMeta: FieldMetadata = {
+  name: 'Container',
+  type: 'struct',
+  isArray: false,
+  validFormKeyTypes: [],
+  enumValues: [],
+  fields: [
+    {
+      name: 'Entries',
+      type: 'array',
+      isArray: true,
+      validFormKeyTypes: [],
+      enumValues: [],
+      elementType: {
+        name: '',
+        type: 'struct',
+        isArray: false,
+        validFormKeyTypes: [],
+        enumValues: [],
+        fields: [
+          { name: 'Id', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] },
+          { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+        ],
+      },
+    },
+  ],
+};
+
+const nestedStructArrayResult = {
+  conflictAll: 'NoConflict',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm',
+      loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
+      fields: [{ metadata: nestedStructArrayMeta, value: { Entries: [{ Id: 'A', Weight: 1 }] } }], conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: nestedStructArrayMeta, value: { Entries: [{ Id: 'A', Weight: 1 }] } }], conflictThis: 'IdenticalToMaster',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Container',
+    values: {
+      'Fallout4.esm': { Entries: [{ Id: 'A', Weight: 1 }] },
+      'MyMod.esp': { Entries: [{ Id: 'A', Weight: 1 }] },
+    },
+    winnerColumn: 'Fallout4.esm', winnerValue: { Entries: [{ Id: 'A', Weight: 1 }] },
+    cellStates: {},
+    children: [{
+      fieldName: 'Entries',
+      values: { 'Fallout4.esm': [{ Id: 'A', Weight: 1 }], 'MyMod.esp': [{ Id: 'A', Weight: 1 }] },
+      winnerColumn: 'Fallout4.esm', winnerValue: [{ Id: 'A', Weight: 1 }],
+      cellStates: {},
+      children: [{
+        fieldName: '[0]',
+        values: { 'Fallout4.esm': { Id: 'A', Weight: 1 }, 'MyMod.esp': { Id: 'A', Weight: 1 } },
+        winnerColumn: 'Fallout4.esm', winnerValue: { Id: 'A', Weight: 1 },
+        cellStates: {},
+        children: [
+          {
+            fieldName: 'Id',
+            values: { 'Fallout4.esm': 'A', 'MyMod.esp': 'A' },
+            winnerColumn: 'Fallout4.esm', winnerValue: 'A',
+            cellStates: {},
+          },
+          {
+            fieldName: 'Weight',
+            values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 },
+            winnerColumn: 'Fallout4.esm', winnerValue: 1,
+            cellStates: {},
+          },
+        ],
+      }],
+    }],
+  }],
+};
+
+let currentCompare: unknown = null;
+
+function fakeClient(): RecordSessionClient {
+  return {
+    load: vi.fn().mockImplementation(() => Promise.resolve({
+      ok: true,
+      result: currentCompare,
+      immutableSet: new Set(pluginsResponse.filter(p => p.isImmutable).map(p => columnKey(p.name, null))),
+      notInLoadOrderSet: new Set(),
+      conflictsComputed: true,
+    } as unknown as LoadResult)),
+    conditionRunOnTargets: vi.fn().mockResolvedValue([]),
+  };
+}
+
+function renderPanel() {
+  const client = fakeClient();
+  return { client, ...render(<RecordPanel client={client} />) };
+}
+
+describe('RecordPanel — array child rows (sorted)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    currentCompare = sortedArrayCompareResult;
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('parent array row shows [2] when collapsed', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('Keywords'));
+    // Both plugin columns have 2-element arrays; at least one [2] must be visible
+    expect(screen.getAllByText('[2]').length).toBeGreaterThan(0);
+    // No {…} placeholder for array parent
+    expect(screen.queryByText('{…}')).not.toBeInTheDocument();
+  });
+
+  it('clicking ▶ expands to show 3 child rows for the sorted array', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    // Field name TDs contain the element keys; use getAllByText since FormKey also renders them as links
+    await waitFor(() => screen.getAllByText('KwdA').length > 0);
+    expect(screen.getAllByText('KwdB').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('KwdC').length).toBeGreaterThan(0);
+  });
+
+  it('KwdB child row has dimmed em-dash for MyMod.esp (null value)', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => screen.getAllByText('KwdB').length > 0);
+    const kwdBTd = screen.getAllByText('KwdB').find(el => el.tagName === 'TD');
+    expect(kwdBTd).toBeTruthy();
+    const kwdBRow = kwdBTd!.closest('tr')!;
+    const dimSpan = Array.from(kwdBRow.querySelectorAll('span')).find(
+      s => s.textContent === '—' && s.style.opacity === '0.35',
+    );
+    expect(dimSpan).toBeTruthy();
+  });
+});
+
+
+describe('RecordPanel — struct row conflict color follows collapse state (#114)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    currentCompare = structCollapseExpandResult;
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('collapsed: the struct row shows the aggregate tint from its conflicting child', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('▶'));
+    const structRow = screen.getByText('ObjectBounds').closest('tr')!;
+    expect(structRow.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
+  });
+
+  it('expanded: the struct row loses its own background, and only the differing child is tinted', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶'));
+    await waitFor(() => screen.getByText('X1'));
+
+    const structRow = screen.getByText('ObjectBounds').closest('tr')!;
+    const x1Row = screen.getByText('X1').closest('tr')!;
+    const x2Row = screen.getByText('X2').closest('tr')!;
+    expect(structRow.style.backgroundColor).toBe('');
+    expect(x1Row.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
+    expect(x2Row.style.backgroundColor).toBe('');
+  });
+
+  it('re-collapsed: the aggregate tint returns to the struct row', async () => {
+    renderPanel();
+    await waitFor(() => screen.getByText('▶'));
+    fireEvent.click(screen.getByText('▶')); // expand
+    await waitFor(() => screen.getByText('X1'));
+    fireEvent.click(screen.getByText('▼')); // collapse again
+    await waitFor(() => expect(screen.queryByText('X1')).not.toBeInTheDocument());
+
+    const structRow = screen.getByText('ObjectBounds').closest('tr')!;
+    expect(structRow.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
+  });
+});
+
+
+describe('RecordPanel — a struct member that is itself an array of structs (issue #231)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    currentCompare = nestedStructArrayResult;
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function expandToDepth4() {
+    await waitFor(() => screen.getByText('Container'));
+    fireEvent.click(screen.getAllByText('▶')[0]); // expand Container -> Entries
+    await waitFor(() => screen.getByText('Entries'));
+    fireEvent.click(screen.getAllByText('▶')[0]); // expand Entries -> [0]
+    await waitFor(() => {
+      const td = screen.getAllByText('[0]').find(el => el.tagName === 'TD');
+      if (!td) throw new Error('[0] TD not found yet');
+    });
+    fireEvent.click(screen.getAllByText('▶')[0]); // expand [0] -> Id/Weight
+    await waitFor(() => screen.getByText('Weight'));
+  }
+
+  it('renders all four levels: Container, Entries, [0], and its Id/Weight members', async () => {
+    renderPanel();
+    await expandToDepth4();
+    expect(screen.getByText('Container')).toBeInTheDocument();
+    expect(screen.getByText('Entries')).toBeInTheDocument();
+    expect(screen.getByText('Weight')).toBeInTheDocument();
+    expect(screen.getByText('Id')).toBeInTheDocument();
+  });
+
+});

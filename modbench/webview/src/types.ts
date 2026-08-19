@@ -180,26 +180,6 @@ export interface FieldDiff {
   // longer wire path ("VMAD\ScriptA\Health", "CTDA\Conditions\0\Function") that the two frictions
   // in #231 ("wire paths differ") call out by name.
   wirePath?: string;
-  // Issue #231: the write-side analog of `wirePath`, needed only where the *staged value's own
-  // shape* also differs from the unified tree's plain nested-object/array model — currently just
-  // VMAD's Struct/ArrayOfStruct properties, whose wire value is the backend's raw node format
-  // (VmadStructEntry[]/VmadStructInstance[]: `{name, type, boolValue, ..., members}`), unchanged
-  // by this issue (no backend/API change). A plain nested object/array (every ordinary field,
-  // every Condition field, and VMAD's own scalar/object/array-of-scalar properties) never sets
-  // this — RecordPanel's generic `setAtPath` (recordUtils.ts) already produces the right shape for
-  // all of those. Present only on a `wirePath`-bearing root; called with the root's own current
-  // (pending-or-disk) raw value, this row's path within it, and the new leaf value, and must
-  // return the new raw root value to stage — the one place a subtree's commit mechanics can
-  // differ from the shared default without a second row/cell renderer existing to hide it in.
-  // Issue #231: marks a row as a target for VMAD's own structural (named-op) commands — Add/
-  // Remove Script live on the "Scripts (VMAD)" wrapper/a script row; Add/Remove Property on a
-  // script/property row — reached the same way every other structural op is (the right-click
-  // menu), consistent with array operations. RecordPanel derives each command's own identity
-  // from this row's own `fieldName` (a script/wrapper row's own name) or `wirePath`
-  // (`parseVmadPath`, vmadOps.ts — a property row's own `VMAD\Script\Prop`) rather than this field
-  // carrying it directly, so the adapter that sets it stays a plain marker, not a second copy of
-  // that identity. Absent for every ordinary/Condition row.
-  vmadOpKind?: 'scripts' | 'script' | 'property';
   // Issue #231 (review, design call): a per-plugin xEdit-style one-line prose summary
   // (`wbConditionToStr`, references/TES5Edit/Core/wbDefinitionsCommon.pas) for this row's
   // collapsed label — set only by conditionTreeAdapter.ts's condition rows, whose own values are

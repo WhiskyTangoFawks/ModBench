@@ -41,12 +41,12 @@ export type CheckRecordDetail = AssertNoMissingKeys<KeysContainedIn<RecordDetail
 export type CheckCompareOverride =
   AssertNoMissingKeys<KeysContainedIn<CompareOverride, WireSchemas['CompareOverride']>>;
 
-// FieldDiff: `wirePath`/`vmadOpKind`/`collapsedSummary` are all synthesized by
+// FieldDiff: `wirePath`/`collapsedSummary` are synthesized by
 // vmadTreeAdapter.ts/conditionTreeAdapter.ts (#231, see each field's own doc comment in types.ts)
 // for rows the backend never sends this shape for — excluded for the same reason as
 // FieldMetadata's readOnly/defaultValue above.
 export type CheckFieldDiff = AssertNoMissingKeys<
-  KeysContainedIn<Omit<FieldDiff, 'wirePath' | 'vmadOpKind' | 'collapsedSummary'>, WireSchemas['FieldDiff']>
+  KeysContainedIn<Omit<FieldDiff, 'wirePath' | 'collapsedSummary'>, WireSchemas['FieldDiff']>
 >;
 export type CheckVmadPropertyDiff =
   AssertNoMissingKeys<KeysContainedIn<VmadPropertyDiff, WireSchemas['VmadPropertyDiff']>>;

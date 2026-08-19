@@ -20,7 +20,7 @@ public sealed class LedgerRecordPathTests
     // strips a trailing ".ledger", never splits on the first dot) — a patch-plugin-shaped filename
     // proves this for real rather than by argument.
     [InlineData("Vendor.patch.esp", "cell", "0012AB:Vendor.patch.esp")]
-    // The record's origin ModKey legitimately differs from the plugin it's staged onto (an
+    // The record's origin ModKey legitimately differs from the plugin holding it (an
     // override edited through a patch plugin, RecordQueryService.GetRecordForPlugin's own reason
     // for existing) — the two segments must recombine into the *origin's* FormKey, not the target
     // plugin's.

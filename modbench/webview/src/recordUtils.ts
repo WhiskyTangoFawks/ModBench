@@ -54,13 +54,6 @@ export function parseElementIndex(fieldName: string): number {
   return Number.parseInt(fieldName.slice(1, -1), 10);
 }
 
-export function pendingIfChanged(pending: unknown, disk: unknown): unknown {
-  if (pending === undefined) return undefined;
-  if (pending === disk) return undefined;
-  if (JSON.stringify(pending) === JSON.stringify(disk)) return undefined;
-  return pending;
-}
-
 // Issue #168: shared by VMAD's and Condition's tree adapters (vmadTreeAdapter.ts/
 // conditionTreeAdapter.ts) — both align their own array elements positionally across plugins
 // (VmadConflictClassifier.IndexedChildren / ConditionConflictClassifier.BuildDiff), and both
@@ -160,25 +153,6 @@ export function getAtPath(root: unknown, path: readonly PathSegment[]): unknown 
     else cur = seg.key;
   }
   return cur;
-}
-
-// Issue #231: extracts a row's own pending value out of the root's raw pending value, generalizing
-// DiffRow's old top-level/array-element/struct-child/grandchild switch (each hand-coded one
-// nesting level) to any depth. Every hop but the last is a plain, bounds-safe read (getAtPath);
-// the last hop needs one of three different "is there really a pending value here" rules, which
-// is why it isn't just `getAtPath(rawPending, path)`: a struct member is a plain lookup, a
-// positional array element is bounds-checked (out of range → undefined, matching a shrunk pending
-// array), and a sorted-array element is checked by *value* (its own key must still be an element
-// of the pending array at all — the array's own order carries no identity for it, unlike a
-// positional element). Callers wrap the result in pendingIfChanged themselves, same as the old
-// switch's per-case call.
-export function pendingValueAtPath(rawPending: unknown, path: readonly PathSegment[]): unknown {
-  if (path.length === 0) return rawPending;
-  const parent = getAtPath(rawPending, path.slice(0, -1));
-  const last = path.at(-1)!;
-  if (last.kind === 'member') return (parent as Record<string, unknown> | undefined)?.[last.name];
-  if (last.kind === 'index') return Array.isArray(parent) ? (parent as unknown[])[last.index] : undefined;
-  return Array.isArray(parent) && (parent as unknown[]).includes(last.key) ? last.key : undefined;
 }
 
 // mirrors VmadSection's defaultElementValue/defaultNode pair, but keyed off the compare grid's

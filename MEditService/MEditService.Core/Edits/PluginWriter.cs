@@ -11,7 +11,7 @@ namespace MEditService.Core.Edits;
 /// timestamped <c>.bak</c> beside it (ADR-0008), prune the oldest.
 ///
 /// #410/ADR-0041 reduced this to exactly that. Its other half — applying a list of
-/// <c>PendingChange</c> to the imported mod (field, header, create, delete, renumber, VMAD and
+/// a change list to the imported mod (field, header, create, delete, renumber, VMAD and
 /// condition paths, plus the read-only-field rule) — retired with the pending model it consumed.
 /// What remains is the mechanism the text-first write path needs: ADR-0041's Save &amp; Compile
 /// serializes a working tree into a mod and hands it here to become bytes on disk.

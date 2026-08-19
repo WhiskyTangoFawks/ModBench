@@ -90,7 +90,7 @@ public sealed class RecordTableSchema
     /// <summary>
     /// The bit value of the light-master ("ESL") flag within the header's <c>flags</c> bitmask
     /// (e.g. Fallout4 <c>Small</c>, Skyrim <c>LightMaster</c>). Null when the flags column or a
-    /// recognised light-master member is absent. Used for stage-time ESL-eligibility validation.
+    /// recognised light-master member is absent. Used for ESL-eligibility validation.
     /// </summary>
     public long? EslFlagValue { get; init; }
 }

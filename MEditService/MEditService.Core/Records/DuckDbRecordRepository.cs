@@ -834,7 +834,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             : ", " + string.Join(", ", schema.RecordColumns.Select(c => $"\"{c.Name}\""));
 
     // origin (#296 / ADR-0036): nullable and independent of plugin — a *filter*, not an identity
-    // field, mirroring DuckDbPendingChangeService.BuildFilter's own origin. Defaults to "no
+    // field. Defaults to "no
     // constraint" so a plugin-only or filter-less call keeps returning every origin's rows, same as
     // before this parameter existed.
     private static (string where, List<string> paramValues) BuildWhere(string? plugin, string? search, bool filterActive = false, string? origin = null)
@@ -1103,7 +1103,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey)
     {
         // #410/ADR-0041: committed references only. The pending overlay this query used to carry
-        // (subtracting references a staged edit had superseded, then unioning the staged edit's own
+        // (subtracting references an uncommitted edit had superseded, then unioning that edit's own
         // references back in) retires with the pending model — a reference is what the indexed
         // plugin actually declares.
         const string sql = """

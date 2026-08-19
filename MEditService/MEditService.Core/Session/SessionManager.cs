@@ -31,7 +31,7 @@ public sealed class SessionManager(
     // another arrives. Two mechanisms, because one is not enough: the token *asks* the loop to stop,
     // and the gate waits until it actually has. Cancelling without draining is the dangerous half —
     // it would let a teardown dispose the DuckDB connection while the loop is still writing to it,
-    // which is a native crash rather than an exception, taking the backend and any staged edits with
+    // which is a native crash rather than an exception, taking the backend and the loaded session with
     // it. Deliberately not _lock: the loading thread takes _lock briefly on every plugin, so a
     // waiter holding it could never be signalled.
     private readonly SemaphoreSlim _loadGate = new(1, 1);
@@ -199,8 +199,6 @@ public sealed class SessionManager(
             _nextFormIds.Clear();
             _indexed.Clear();
             _conflictsComputed = false;
-            // Before the loop: pending changes rebind to this connection and ensure their table, and
-            // a read arriving mid-load must not find that table missing.
             _session = session;
             _repository = repository;
             _dataFolderPath = dataFolderPath;

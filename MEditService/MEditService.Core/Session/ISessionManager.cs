@@ -58,7 +58,7 @@ public interface ISessionManager
     /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
     /// Throws <see cref="KeyNotFoundException"/> if no such copy is loaded, including when the
     /// named copy is a load-order member: those are never unloadable, since dropping one would
-    /// change winners underneath staged edits.
+    /// change winners underneath a loaded session.
     /// </summary>
     void UnloadUnlistedPlugin(string plugin, string origin);
 
@@ -71,11 +71,8 @@ public interface ISessionManager
     /// for the same reason <see cref="LoadUnlistedPlugin"/> does: resolving a filename to a mod
     /// folder is Mod Management's job, and this side never learns how.
     /// <para>
-    /// Staged edits against the copy being replaced are <b>discarded</b> — they were authored
-    /// against bytes the session no longer holds, and leaving them would make them invisible (reads
-    /// overlay by origin) yet still live on the next save (which resolves its target by filename).
     /// Never called on the system's own initiative: a mod-level change flags the row and stops
-    /// there; this runs only once the user has been told what it costs and has agreed.
+    /// there; this runs only at the user's explicit request.
     /// </para>
     /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
     /// Throws <see cref="SessionBusyException"/> if a session load is in flight.
