@@ -92,4 +92,18 @@ public sealed class RetiredEditingWireSurfaceTests
         ];
         Assert.Equal([], retired.Where(schemas.Contains).ToArray());
     }
+
+    [Fact]
+    public async Task OpenApiDocument_CompareOverride_CarriesNoPendingFieldOverlay()
+    {
+        var root = await GetSchemaAsync();
+        var properties = root.GetProperty("components").GetProperty("schemas")
+            .GetProperty("CompareOverride").GetProperty("properties")
+            .EnumerateObject().Select(p => p.Name).ToList();
+
+        // Positive control, same object: the committed compare payload is still declared here.
+        Assert.Contains("plugin", properties);
+        Assert.Contains("fields", properties);
+        Assert.DoesNotContain("pendingFields", properties);
+    }
 }

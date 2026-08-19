@@ -1,4 +1,3 @@
-using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
@@ -20,12 +19,6 @@ public interface IRecordQueryService
     // neighboring GetVmad/GetConditions/GetPlacement calls.
     RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin);
 
-    // #336/ADR-0038: the header's masters, derived rather than read off a pending-change row —
-    // committed masters unioned with the origin plugins of everything currently staged for
-    // `plugin` (each staged record's own origin, plus every FormKey any staged content
-    // references). origin required, same reasoning as GetRecordForPlugin's: every real caller
-    // (GetCompare below) already resolves it per-column.
-    IReadOnlyList<string> GetEffectiveMasters(string plugin, string origin);
 
     string? GetRecordType(string formKey);
     // origin (#296 / ADR-0036, required): caller-supplied, same reasoning as GetRecordForPlugin's —
@@ -50,13 +43,4 @@ public interface IRecordQueryService
 
     PlacementRow? GetPlacement(string formKey, string plugin, string origin);
 
-    // ADR-0031: the /changes read surface (Pending Changes tree, pending-column rendering) — each
-    // PendingChange's NewValue gets its FormKey-typed leaves resolved in one batched pass via
-    // PendingChangeResolver, same lookup as GetCompare's FieldDiff resolution.
-    // #296: `plugin` is deliberately absent — no caller (frontend, MCP, or otherwise) ever filtered
-    // by it, so it was a filename-only-keyed parameter with no requirement behind it (the
-    // NOT-a-caller-so-not-a-gap distinction the issue itself draws for this endpoint). Deleting it
-    // removes the problem outright rather than threading an origin only this parameter would need.
-    // If a real caller needs plugin-filtered changes later, add it back with origin from the start.
-    IReadOnlyList<PendingChange> GetChanges(string? formKey = null, Guid? memberChangeId = null);
 }

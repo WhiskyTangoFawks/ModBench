@@ -24,7 +24,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         _manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
         _manager.Load(fixture.DataFolder, fixture.PluginsTxtPath, GameRelease.Fallout4);
-        _svc = new RecordQueryService(_manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+        _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 
     public void Dispose() => _manager.Dispose();
@@ -59,7 +59,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)),
             new PluginWriter(SharedSchemaReflector.Instance, NullLogger<PluginWriter>.Instance));
         manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
-        var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), SharedSchemaReflector.Instance, new ConflictClassifier());
+        var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var plugins = svc.GetPlugins();
 
@@ -91,7 +91,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)),
             new PluginWriter(SharedSchemaReflector.Instance, NullLogger<PluginWriter>.Instance));
         manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
-        var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), SharedSchemaReflector.Instance, new ConflictClassifier());
+        var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var detail = svc.GetRecord(npcFormKey.ToString());
 
@@ -342,7 +342,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+            var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare(npcKey.ToString());
 
@@ -437,7 +437,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+            var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare(npcKey.ToString());
 
@@ -703,7 +703,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
         manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-        test(new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier()));
+        test(new RecordQueryService(manager, reflector, new ConflictClassifier()));
     }
 
     private static FormKey MakeScriptedNpc(IFallout4Mod mod, int power)
@@ -842,31 +842,6 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Null(type);
     }
 
-    // --- GET /records/{formKey}/compare — with pending changes ---
-
-    [Fact]
-    public void GetCompare_WithPendingChanges_IncludesPendingFieldsInOverride()
-    {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var fk = all.Items[0].FormKey;
-
-        // Stage a pending change for this record
-        var changes = DuckDbTestFactory.MakePendingChangeService();
-        var newVal = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement;
-        changes.Upsert(new PendingChangeUpsert(fk, TestPluginFixture.PluginName, "npc_",
-            new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = newVal },
-            "test", null,
-            [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-
-        var svcWithChanges = new RecordQueryService(_manager, changes, SharedSchemaReflector.Instance, new ConflictClassifier());
-        var compare = svcWithChanges.GetCompare(fk);
-
-        Assert.NotNull(compare);
-        var override_ = compare.Overrides.Single(o => o.Plugin == TestPluginFixture.PluginName);
-        Assert.NotNull(override_.PendingFields);
-        Assert.True(override_.PendingFields!.ContainsKey("aggression"));
-    }
-
     // --- No-session guard clauses ---
 
     [Fact]
@@ -901,7 +876,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+            var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var result = svc.GetRecords(type: null, plugin: null, search: null, limit: 10, offset: 0);
 
@@ -940,7 +915,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+            var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var detail = svc.GetRecord("000000:HeaderQuery.esp");
 
@@ -969,7 +944,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+            var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare("000000:CompareA.esp");
 
@@ -979,232 +954,12 @@ public sealed class RecordQueryServiceTests : IDisposable
         }
     }
 
-    // --- GetEffectiveMasters (#336/ADR-0038: committed masters unioned with the origin plugins of
-    // everything currently staged for the plugin — the derived replacement for the deleted
-    // stage-missing-masters pending row) ---
-
-    private static (RecordQueryService Svc, SessionManager Manager, DuckDbPendingChangeService Changes)
-        MakeSvcWithRealChanges(PluginFixtureData data)
-    {
-        var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-        var changes = DuckDbTestFactory.MakePendingChangeService();
-        var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);
-        manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-        var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
-        return (svc, manager, changes);
-    }
-
-    [Fact]
-    public void GetEffectiveMasters_NoStagedContent_ReturnsCommittedMasters()
-    {
-        var data = new PluginFixtureBuilder("rqs-effmasters-committed")
-            .WithPlugin("Target.esp", mod =>
-                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esm") }),
-                writeParams: new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
-                {
-                    MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,
-                })
-            .Build();
-        using (data)
-        {
-            var (svc, manager, _) = MakeSvcWithRealChanges(data);
-            using (manager)
-            {
-                var masters = svc.GetEffectiveMasters("Target.esp", "Data");
-
-                Assert.Equal(["Base.esm"], masters);
-            }
-        }
-    }
-
-    [Fact]
-    public void GetEffectiveMasters_StagedRecordsOwnOrigin_IncludesItEvenWithNoCommittedMasters()
-    {
-        var data = new PluginFixtureBuilder("rqs-effmasters-own-origin").WithPlugin("Target.esp").Build();
-        using (data)
-        {
-            var (svc, manager, changes) = MakeSvcWithRealChanges(data);
-            using (manager)
-            {
-                // Simulates a copied record's own FormKey (originating in Base.esm) landing in
-                // Target.esp — the same shape CopyRecordTo's own upsert produces, staged directly
-                // here to isolate GetEffectiveMasters from the orchestrator.
-                changes.Upsert(new PendingChangeUpsert(
-                    "000001:Base.esm", "Target.esp", "npc_",
-                    new() { ["editorId"] = J("\"Copied\"") }, "user", null, [],
-                    FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
-                    ParentCell: null, PlacementGroup: null, Origin: "Data"));
-
-                var masters = svc.GetEffectiveMasters("Target.esp", "Data");
-
-                Assert.Equal(["Base.esm"], masters);
-            }
-        }
-    }
-
-    [Fact]
-    public void GetEffectiveMasters_StagedFormRefTarget_IncludesReferencedOriginNotTheRecordsOwnPlugin()
-    {
-        var data = new PluginFixtureBuilder("rqs-effmasters-formref").WithPlugin("Target.esp").Build();
-        using (data)
-        {
-            var (svc, manager, changes) = MakeSvcWithRealChanges(data);
-            using (manager)
-            {
-                changes.Upsert(new PendingChangeUpsert(
-                    "000800:Target.esp", "Target.esp", "npc_",
-                    new() { ["race"] = J("\"000001:RaceProvider.esm\"") }, "user", null, [],
-                    FormRefs: [new PendingFormRef("race", "race", "000001:RaceProvider.esm")],
-                    ChangeType: PendingChangeConstants.FieldEditChangeType,
-                    ParentCell: null, PlacementGroup: null, Origin: "Data"));
-
-                var masters = svc.GetEffectiveMasters("Target.esp", "Data");
-
-                // RaceProvider.esm (the reference target's origin) is included; Target.esp (the
-                // staged record's own plugin — never a master of itself) is not.
-                Assert.Equal(["RaceProvider.esm"], masters);
-            }
-        }
-    }
-
-    [Fact]
-    public void GetEffectiveMasters_ScopedByOrigin_DoesNotPoolAnotherOriginsStagedContent()
-    {
-        var data = new PluginFixtureBuilder("rqs-effmasters-origin-scope").WithPlugin("Target.esp").Build();
-        using (data)
-        {
-            var (svc, manager, changes) = MakeSvcWithRealChanges(data);
-            using (manager)
-            {
-                changes.Upsert(new PendingChangeUpsert(
-                    "000001:Alpha.esm", "Target.esp", "npc_", new() { ["editorId"] = J("\"A\"") },
-                    "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
-                    ParentCell: null, PlacementGroup: null, Origin: "ModA"));
-                changes.Upsert(new PendingChangeUpsert(
-                    "000001:Beta.esm", "Target.esp", "npc_", new() { ["editorId"] = J("\"B\"") },
-                    "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
-                    ParentCell: null, PlacementGroup: null, Origin: "ModB"));
-
-                // #333/ADR-0036: ModA's and ModB's staged content never pool, even though they
-                // share the "Target.esp" filename.
-                Assert.Equal(["Alpha.esm"], svc.GetEffectiveMasters("Target.esp", "ModA"));
-                Assert.Equal(["Beta.esm"], svc.GetEffectiveMasters("Target.esp", "ModB"));
-            }
-        }
-    }
-
-    [Fact]
-    public void GetEffectiveMasters_MultipleMissingMasters_ReturnsDeterministicSortedOrder()
-    {
-        var data = new PluginFixtureBuilder("rqs-effmasters-order").WithPlugin("Target.esp").Build();
-        using (data)
-        {
-            var (svc, manager, changes) = MakeSvcWithRealChanges(data);
-            using (manager)
-            {
-                // Staged in an order that would expose an unsorted `SELECT DISTINCT` row order —
-                // GetCompare feeds this straight into per-plugin FieldDiff comparison (masters is
-                // not a sortable field, since master order is load-bearing for FormID resolution),
-                // so two independently-derived lists over the *same* real facts must agree byte for
-                // byte or the classifier would flag a spurious conflict purely from ordering.
-                changes.Upsert(new PendingChangeUpsert(
-                    "000001:Zeta.esm", "Target.esp", "npc_", new() { ["editorId"] = J("\"Z\"") },
-                    "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
-                    ParentCell: null, PlacementGroup: null, Origin: "Data"));
-                changes.Upsert(new PendingChangeUpsert(
-                    "000002:Zeta.esm", "Target.esp", "npc_", new() { ["race"] = J("\"000001:Alpha.esm\"") },
-                    "user", null, [],
-                    FormRefs: [new PendingFormRef("race", "race", "000001:Alpha.esm")],
-                    ChangeType: PendingChangeConstants.FieldEditChangeType,
-                    ParentCell: null, PlacementGroup: null, Origin: "Data"));
-
-                var masters = svc.GetEffectiveMasters("Target.esp", "Data");
-
-                Assert.Equal(["Alpha.esm", "Zeta.esm"], masters);
-            }
-        }
-    }
-
-    // --- GetCompare's header masters row (#336/ADR-0038 AC1/AC3: the compare grid reads the same
-    // derived value GetEffectiveMasters computes, not a raw committed/pending field) ---
-
-    [Fact]
-    public void GetCompare_StagedContentNeedingNewMaster_HeaderMastersReflectsItImmediately()
-    {
-        var data = new PluginFixtureBuilder("rqs-getcompare-derived-masters")
-            .WithPlugin("Target.esp", mod =>
-            {
-                mod.ModHeader.Author = "Test Author";
-                mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small;
-            })
-            .Build();
-        using (data)
-        {
-            var (svc, manager, changes) = MakeSvcWithRealChanges(data);
-            using (manager)
-            {
-                changes.Upsert(new PendingChangeUpsert(
-                    "000001:Base.esm", "Target.esp", "npc_", new() { ["editorId"] = J("\"Copied\"") },
-                    "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
-                    ParentCell: null, PlacementGroup: null, Origin: "Data"));
-
-                var compare = svc.GetCompare("000000:Target.esp");
-
-                Assert.NotNull(compare);
-                var single = Assert.Single(compare.Overrides);
-                var masters = single.Fields.Single(f => f.Metadata.Name == "masters");
-                Assert.Equal(["Base.esm"], JsonSerializer.Deserialize<List<string>>(JsonSerializer.Serialize(masters.Value)));
-
-                // The substitution's selectivity is the thing WithEffectiveMasters must get right —
-                // sibling header fields must survive untouched, not get overwritten with the same
-                // masters array (a mutant flipping the field-name check to always-true would leave
-                // every assertion above green while corrupting author/flags on every header read).
-                var author = single.Fields.Single(f => f.Metadata.Name == "author");
-                Assert.Equal("Test Author", author.Value);
-                var flags = single.Fields.Single(f => f.Metadata.Name == "flags");
-                Assert.Equal(((long)Fallout4ModHeader.HeaderFlag.Small).ToString(System.Globalization.CultureInfo.InvariantCulture), flags.Value);
-
-                // A single column can never be anything but OnlyOne (ConflictClassifier.Classify's
-                // count==1 branch) — pins that substituting the derived value into Fields before
-                // classification doesn't somehow escalate the common single-plugin case.
-                Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
-            }
-        }
-    }
-
-    [Fact]
-    public void GetPluginRecordTypes_WithMultipleTypes_ReturnsInAscendingOrder()
-    {
-        var data = new PluginFixtureBuilder("rqs-sort-types")
-            .WithPlugin("MultiType.esp", mod =>
-            {
-                mod.Npcs.AddNew("TestNPC");
-                mod.Weapons.AddNew("TestWeapon");
-            })
-            .Build();
-        using (data)
-        {
-            var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var svc = new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
-
-            var result = svc.GetPluginRecordTypes("MultiType.esp");
-            var types = result.Select(r => r.Type).ToList();
-
-            Assert.True(types.Count >= 2, "Expected at least 2 record types");
-            Assert.Equal([.. types.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)], types);
-        }
-    }
-
     private static RecordQueryService MakeUnloadedService()
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
-        return new RecordQueryService(manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+        return new RecordQueryService(manager, reflector, new ConflictClassifier());
     }
 
     // --- GetRecord / GetRecordForPlugin use FindRecordType, not table scan ---
@@ -1223,7 +978,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         inner.UpdateWinners();
         var spy = new SpyRecordReader(inner);
         var stubSession = new StubSessionManager(spy, GameRelease.Fallout4);
-        var svc = new RecordQueryService(stubSession, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+        var svc = new RecordQueryService(stubSession, reflector, new ConflictClassifier());
         return (svc, spy, new CompositeDisposable(mod, inner));
     }
 
@@ -1291,272 +1046,6 @@ public sealed class RecordQueryServiceTests : IDisposable
             svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName, "Data");
             Assert.False(spy.LastWinnerOnly);
         }
-    }
-
-    // --- GetPluginRecordTypes — staged records ---
-
-    [Fact]
-    public void GetPluginRecordTypes_IncludesStagedRecordsNotInIndex()
-    {
-        FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-staged-types")
-            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
-            .WithPlugin("Override.esp")
-            .Build();
-        using (data)
-        {
-            var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var changes = DuckDbTestFactory.MakePendingChangeService();
-            changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
-                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-            var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
-
-            var result = svc.GetPluginRecordTypes("Override.esp");
-
-            var npc = Assert.Single(result, r => r.Type == "npc_");
-            Assert.Equal(1, npc.Count);
-        }
-    }
-
-    [Fact]
-    public void GetPluginRecordTypes_StagedCountAddedToCommittedCount()
-    {
-        FormKey npcKey1 = default;
-        FormKey npcKey2 = default;
-        var data = new PluginFixtureBuilder("rqs-staged-types-merge")
-            .WithPlugin("Source.esp", mod =>
-            {
-                npcKey1 = mod.Npcs.AddNew("NPC1").FormKey;
-                npcKey2 = mod.Npcs.AddNew("NPC2").FormKey;
-            })
-            .WithPlugin("Override.esp", mod => mod.Npcs.AddNew("NPC1") /* commits one override */)
-            .Build();
-        using (data)
-        {
-            // Override.esp has 1 committed record; stage a 2nd one
-            var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var changes = DuckDbTestFactory.MakePendingChangeService();
-            // stage npcKey2 into Override.esp (not yet committed)
-            changes.Upsert(new PendingChangeUpsert(npcKey2.ToString(), "Override.esp", "npc_",
-                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-            var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
-
-            var result = svc.GetPluginRecordTypes("Override.esp");
-
-            var npc = Assert.Single(result, r => r.Type == "npc_");
-            Assert.Equal(2, npc.Count);
-        }
-    }
-
-    // #296 review: GetPluginRecordTypes' committed-side CountRecordsForPlugin call is correctly
-    // scoped to the resolved origin, but its staged-side GetStagedFormKeys call originally omitted
-    // origin entirely — every other staged-record fixture in this file (including the three above)
-    // stages at Origin: "Data", which is exactly the elided default the issue warns about, so none
-    // of them could tell a working filter from a missing one. This fixture stages a *second*,
-    // distinct FormKey under a real non-Data origin ("ModA") for the same plugin filename; the
-    // session's own resolved origin for "Override.esp" is "Data" (manager.Load's implicit path), so
-    // only the Data-origin staged record should count.
-    [Fact]
-    public void GetPluginRecordTypes_StagedRecord_ScopesToResolvedOrigin()
-    {
-        FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-staged-types-origin")
-            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
-            .WithPlugin("Override.esp")
-            .Build();
-        using (data)
-        {
-            var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var changes = DuckDbTestFactory.MakePendingChangeService();
-            changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
-                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-            changes.Upsert(new PendingChangeUpsert("001234:Override.esp", "Override.esp", "npc_",
-                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "ModA"));
-            var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
-
-            var result = svc.GetPluginRecordTypes("Override.esp");
-
-            var npc = Assert.Single(result, r => r.Type == "npc_");
-            Assert.Equal(1, npc.Count);
-        }
-    }
-
-    [Fact]
-    public void GetPluginRecordTypes_StagedAlreadyCommittedRecordIsNotCounted()
-    {
-        // Override.esp has a committed NPC override that is NOT the winner (Winner.esp comes later).
-        // Staging a pending edit to that committed key must not double-count it.
-        FormKey baseNpcKey = default;
-        var data = new PluginFixtureBuilder("rqs-staged-types-dedup")
-            .WithPlugin("Base.esp", mod => baseNpcKey = mod.Npcs.AddNew("BaseNPC").FormKey)
-            .WithPlugin("Override.esp", (mod, prev) => mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).EditorID = "OverrideNPC")
-            .WithPlugin("Winner.esp", (mod, prev) => mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).EditorID = "WinnerNPC")
-            .Build();
-        using (data)
-        {
-            var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var changes = DuckDbTestFactory.MakePendingChangeService();
-            changes.Upsert(new PendingChangeUpsert(baseNpcKey.ToString(), "Override.esp", "npc_",
-                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-            var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
-
-            var result = svc.GetPluginRecordTypes("Override.esp");
-
-            var npc = Assert.Single(result, r => r.Type == "npc_");
-            Assert.Equal(1, npc.Count);
-        }
-    }
-
-    // --- GetRecords — staged records ---
-
-    [Fact]
-    public void GetRecords_ByPlugin_IncludesStagedOnlyRecords()
-    {
-        FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-staged-records")
-            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
-            .WithPlugin("Override.esp")
-            .Build();
-        using (data)
-        {
-            var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var changes = DuckDbTestFactory.MakePendingChangeService();
-            changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
-                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-            var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
-
-            var result = svc.GetRecords(type: "npc_", plugin: "Override.esp", search: null, limit: 100, offset: 0);
-
-            Assert.Equal(1, result.Total);
-            Assert.Single(result.Items);
-            Assert.Equal(npcKey.ToString(), result.Items[0].FormKey);
-            Assert.Equal("Override.esp", result.Items[0].Plugin);
-            Assert.False(result.Items[0].IsWinner);
-            Assert.Equal(1, result.Items[0].LoadOrderIndex); // Override.esp is second plugin (index 1)
-        }
-    }
-
-    // #296 review: GetRecords' committed-side repository call is correctly scoped to the resolved
-    // origin, but its staged-side GetStagedFormKeys call originally omitted origin entirely — every
-    // other staged-record fixture in this file (including the one above) stages at Origin: "Data",
-    // exactly the elided default the issue warns about, so none of them could tell a working filter
-    // from a missing one. This fixture stages a *second*, distinct FormKey under a real non-Data
-    // origin ("ModA") for the same plugin filename; the session's own resolved origin for
-    // "Override.esp" is "Data" (manager.Load's implicit path), so only the Data-origin staged record
-    // should surface.
-    [Fact]
-    public void GetRecords_ByPlugin_StagedRecord_ScopesToResolvedOrigin()
-    {
-        FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-staged-records-origin")
-            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
-            .WithPlugin("Override.esp")
-            .Build();
-        using (data)
-        {
-            var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var changes = DuckDbTestFactory.MakePendingChangeService();
-            changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
-                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-            changes.Upsert(new PendingChangeUpsert("001234:Override.esp", "Override.esp", "npc_",
-                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "ModA"));
-            var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
-
-            var result = svc.GetRecords(type: "npc_", plugin: "Override.esp", search: null, limit: 100, offset: 0);
-
-            Assert.Equal(1, result.Total);
-            Assert.Single(result.Items);
-            Assert.Equal(npcKey.ToString(), result.Items[0].FormKey);
-        }
-    }
-
-    [Fact]
-    public void GetRecords_ByPlugin_NonZeroOffset_DoesNotAppendStagedRecords()
-    {
-        FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("rqs-staged-paging")
-            .WithPlugin("Source.esp", mod => npcKey = mod.Npcs.AddNew("TestNPC").FormKey)
-            .WithPlugin("Override.esp")
-            .Build();
-        using (data)
-        {
-            var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var changes = DuckDbTestFactory.MakePendingChangeService();
-            changes.Upsert(new PendingChangeUpsert(npcKey.ToString(), "Override.esp", "npc_",
-                new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-                "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-            var svc = new RecordQueryService(manager, changes, reflector, new ConflictClassifier());
-
-            var result = svc.GetRecords(type: "npc_", plugin: "Override.esp", search: null, limit: 100, offset: 1);
-
-            Assert.Empty(result.Items);
-        }
-    }
-
-    [Fact]
-    public void GetRecords_ByPlugin_StagedOnlyRecords_UnknownPlugin_HasNegativeOneLoadOrderIndex()
-    {
-        // "Unknown.esp" is not in _manager's Plugins list → FirstOrDefault returns null → ?? -1 fires.
-        var fk = FormKey.Factory("000001:Fallout4.esm");
-        var changes = DuckDbTestFactory.MakePendingChangeService();
-        changes.Upsert(new PendingChangeUpsert(fk.ToString(), "Unknown.esp", "npc_",
-            new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-            "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-        var svc = new RecordQueryService(_manager, changes, SharedSchemaReflector.Instance, new ConflictClassifier());
-
-        var result = svc.GetRecords(type: "npc_", plugin: "Unknown.esp", search: null, limit: 100, offset: 0);
-
-        Assert.Single(result.Items);
-        Assert.Equal(-1, result.Items[0].LoadOrderIndex);
-    }
-
-    [Fact]
-    public void GetRecords_ByPlugin_StagedAlreadyCommittedRecordIsNotDuplicated()
-    {
-        // Pick an already-committed record from the loaded fixture, stage a pending change on it,
-        // and verify it appears exactly once (no duplication between committed + staged sources).
-        var committed = _svc.GetRecords(type: "npc_", plugin: TestPluginFixture.PluginName, search: "TestNPC01", limit: 1, offset: 0);
-        var fk = committed.Items[0].FormKey;
-
-        var changes = DuckDbTestFactory.MakePendingChangeService();
-        changes.Upsert(new PendingChangeUpsert(fk, TestPluginFixture.PluginName, "npc_",
-            new Dictionary<string, System.Text.Json.JsonElement> { ["aggression"] = System.Text.Json.JsonDocument.Parse("\"Frenzied\"").RootElement },
-            "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType, ParentCell: null, PlacementGroup: null, Origin: "Data"));
-        var svc = new RecordQueryService(_manager, changes, SharedSchemaReflector.Instance, new ConflictClassifier());
-
-        var result = svc.GetRecords(type: "npc_", plugin: TestPluginFixture.PluginName, search: null, limit: 100, offset: 0);
-
-        Assert.Equal(TestPluginFixture.RecordCount, result.Total);
-        Assert.Equal(TestPluginFixture.RecordCount, result.Items.Count);
     }
 
     // --- GetPlugins: HasMatchingRecords, never row pruning (#278 / ADR-0035 amending ADR-0018) ---

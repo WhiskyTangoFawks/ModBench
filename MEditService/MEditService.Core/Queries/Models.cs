@@ -90,7 +90,6 @@ public record RecordDetail(
     string? EditorId,
     IReadOnlyList<FieldValue> Fields,
     string Origin,
-    Dictionary<string, object?>? PendingFields = null,
     string RecordType = "");
 
 public record CompareOverride(
@@ -100,11 +99,10 @@ public record CompareOverride(
     bool IsWinner,
     string? EditorId,
     IReadOnlyList<FieldValue> Fields,
-    Dictionary<string, object?>? PendingFields,
     ConflictThis ConflictThis,
     string Origin,
     string RecordType = "")
-    : RecordDetail(FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, PendingFields, RecordType);
+    : RecordDetail(FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, RecordType);
 
 // Resolutions (ADR-0031): only populated for a scalar formKey-typed leaf, keyed by plugin like
 // Values/CellStates — one entry per plugin whose cell holds a FormKey value. Never populated on a

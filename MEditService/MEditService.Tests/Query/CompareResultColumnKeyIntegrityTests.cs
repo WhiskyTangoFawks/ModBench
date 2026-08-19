@@ -249,7 +249,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
 
         var plugins = new[] { new PluginMetadata("Shared.esp", "", 0, false, false, [], 1, false, Origin: "Data") };
         var session = new FakeSessionManager(new FakeGameSession(plugins), repo);
-        var svc = new RecordQueryService(session, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+        var svc = new RecordQueryService(session, reflector, new ConflictClassifier());
 
         var compare = svc.GetCompare(perk.FormKey.ToString());
 
@@ -339,7 +339,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
 
         var plugins = new[] { new PluginMetadata("Shared.esp", "", 0, false, false, [], 1, false, Origin: "Data") };
         var session = new FakeSessionManager(new FakeGameSession(plugins), repo);
-        var svc = new RecordQueryService(session, changes, reflector, new ConflictClassifier());
+        var svc = new RecordQueryService(session, reflector, new ConflictClassifier());
 
         var compare = svc.GetCompare(headerFormKey);
 

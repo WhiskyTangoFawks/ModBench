@@ -1102,26 +1102,14 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey)
     {
+        // #410/ADR-0041: committed references only. The pending overlay this query used to carry
+        // (subtracting references a staged edit had superseded, then unioning the staged edit's own
+        // references back in) retires with the pending model — a reference is what the indexed
+        // plugin actually declares.
         const string sql = """
             SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
             FROM form_references fr
             WHERE fr.target_form_key = $1
-              AND NOT EXISTS (
-                SELECT 1 FROM pending_changes pc
-                WHERE pc.form_key = fr.source_form_key
-                  AND pc.plugin   = fr.source_plugin
-                  AND pc.origin   = fr.source_origin
-                  AND (
-                    fr.field_path = pc.field_path
-                    OR fr.field_path LIKE pc.field_path || '[%'
-                  )
-              )
-
-            UNION ALL
-
-            SELECT pfr.source_form_key, pfr.source_plugin, pfr.field_path, pfr.record_type, NULL, pfr.source_origin
-            FROM pending_form_references pfr
-            WHERE pfr.target_form_key = $1
             """;
 
         using var cmd = Connection.CreateCommand();
