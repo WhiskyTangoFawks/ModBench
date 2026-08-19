@@ -1,5 +1,12 @@
 # Aggregate SCM provider — Surface Specification
 
+> **Retiring — superseded by [ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
+> (2026-08-19).** This surface is deleted in the milestone-5 rebuild with no fallback
+> shim: tracked mods become real in-folder git repos displayed by VS Code's own git
+> extension (`vscode.git` `openRepository`, one native SCM group per tracked mod). This
+> spec describes shipped behavior only until the demolition slice lands; fold-on-ship
+> replaces it with the Track/Compile surface spec.
+
 **Status: Implemented (stage 1 of 3, ADR-0040).** [ADR-0040](../adr/0040-git-native-pending-changes.md)
 (git-native pending changes) and [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)
 (native-surface precedent).

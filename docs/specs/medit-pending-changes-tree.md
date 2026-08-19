@@ -1,5 +1,11 @@
 # mEdit Pending Changes tree — Surface Specification
 
+> **Retired — superseded by [ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
+> (2026-08-19).** The pending-change model this tree renders is deleted in the
+> milestone-5 rebuild (ADR-0017/0028/0029 all superseded); the review surface is the
+> native Source Control panel, one git repo per tracked mod. The ADR-0029 target design
+> below is never built; the shipped flat list is deleted in the demolition slice.
+
 **Status: Planned.** [ADR-0029](../adr/0029-pending-changes-tree-is-a-grouping-view.md)
 supersedes ADR-0017 §5, which the shipped tree still reflects. What ships today: a flat,
 non-expandable list of `change_groups` rows with inline Save/Revert. Ordinary field edits are

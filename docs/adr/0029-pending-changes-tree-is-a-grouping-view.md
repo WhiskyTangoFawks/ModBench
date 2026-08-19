@@ -1,8 +1,12 @@
 ---
-status: accepted
+status: superseded by ADR-0041
 ---
 
 # The Pending Changes tree is a grouping view, not a filtered record tree
+
+> **Superseded by [ADR-0041](0041-manual-git-tracking-compile-from-text.md)
+> (2026-08-19):** the Pending Changes tree retires with the pending model it renders;
+> the native Source Control panel (one git repo per tracked mod) is the review surface.
 
 ADR-0017 §5 designed the pending-changes surface as a bottom panel tab containing a
 plugin → record → field tree of every staged edit, with a separate `ChangeGroups` section

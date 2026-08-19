@@ -1,5 +1,12 @@
 # Plugins are the source of truth
 
+> **Amended by [ADR-0041](0041-manual-git-tracking-compile-from-text.md)
+> (2026-08-19):** for a *tracked* mod (manual gesture, `.git` in the mod folder),
+> per-record text is the working source and the binary is the compiled artifact —
+> Save & Compile serializes text to binary, and external binary changes flow back
+> through the bridge. The binary remains the interchange truth with every external
+> tool, and for untracked mods this ADR stands untouched.
+
 The `.esp`/`.esm`/`.esl` binary files on disk are the authoritative source of record data. No intermediate format is introduced. The plugin is what the game reads, what every other tool in the ecosystem understands, and what the user ships — there is no drift problem, no synchronization problem, and no format translation cost.
 
 ## Considered options

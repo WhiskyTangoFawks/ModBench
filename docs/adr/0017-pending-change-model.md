@@ -1,6 +1,9 @@
 # ADR-0017: Pending change model design
 
-**Status:** Accepted  
+**Status:** Superseded by [ADR-0041](0041-manual-git-tracking-compile-from-text.md)
+(2026-08-19) — the pending-change model is retired in full: edits become git
+working-tree text, review becomes the native git UI, and no staged-change store,
+grouping, or gating survives.  
 **Date:** 2026-06-02
 
 ## Context

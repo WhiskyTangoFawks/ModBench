@@ -1,8 +1,14 @@
 ---
-status: accepted
+status: superseded by ADR-0041
 ---
 
 # A change group is a derived dependency closure, not a stored batch
+
+> **Superseded by [ADR-0041](0041-manual-git-tracking-compile-from-text.md)
+> (2026-08-19):** change groups are retired as a user-facing concept — nothing gates
+> commit or save; dependency breakage is a diagnostic, not a refusal. The closure
+> *computation* survives only as compile-internal masters/renumber derivation, where
+> the binary format makes it non-optional.
 
 ADR-0017 introduced the `ChangeGroup` as "a named set of `pending_changes` rows that form a logically indivisible operation", stored as a `change_groups` table plus a nullable `group_id` column, and assigned by whichever staging path created it. Changes with `group_id IS NULL` were "standalone field edits" — a distinct, ungrouped kind.
 

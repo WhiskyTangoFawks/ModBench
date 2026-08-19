@@ -18,7 +18,7 @@
 
 **Null FormLink**: A FormLink holding `FormKey.Null`. Valid on fields that permit null; a data error on fields that don't.
 
-**Dangling FormLink**: A FormLink holding a well-formed FormKey that does not resolve to any record in the current session. Always a data error — creation is blocked at stage time; existing occurrences in loaded plugins are flagged, not hidden. _Avoid: missing reference, broken link._
+**Dangling FormLink**: A FormLink holding a well-formed FormKey that does not resolve to any record in the current session. Always a data error — creation is blocked at edit time; existing occurrences in loaded plugins are flagged, not hidden. _Avoid: missing reference, broken link._
 
 **Type-Mismatched FormLink**: A FormLink that resolves to a record of a type other than the field's declared valid types (e.g. a weapon-typed field pointing to an NPC). Always a data error, handled the same way as a Dangling FormLink. _Avoid: wrong-type reference._
 
@@ -26,9 +26,9 @@
 
 **Master**: Plugin declared as a dependency in another plugin's header, required because the header's own FormIDs are indexed against this list. Derived entirely from what the plugin's content actually references — never directly added, removed, sorted, or cleaned by the user (ADR-0038). A master reference is validated against the loaded plugins — a reference naming no loaded plugin is classified and flagged (`DirectlyMissing` when the file is absent from the session entirely, `Unloadable` when it is present but itself failed to load) while the declaring plugin stays indexed, browsable, and participating in winner computation; it is never deactivated (ADR-0037). _Avoid: parent plugin, base plugin._
 
-**Header record**: A plugin's ModHeader (author, masters, flags) modeled as a first-class, single-column record at synthetic FormKey `000000:<plugin>`. Not an override of any other plugin's header — headers do not conflict across plugins. Editing its author or ESL/ESM flags stages through the normal pending-change / change-group machinery; its masters do not — they're read-only, computed from content (see Master, Effective masters). _Avoid: TES4 record (internal jargon), plugin metadata._
+**Header record**: A plugin's ModHeader (author, masters, flags) modeled as a first-class, single-column record at synthetic FormKey `000000:<plugin>`. Not an override of any other plugin's header — headers do not conflict across plugins. Editing its author or ESL/ESM flags goes through the normal edit path (working-tree text, ADR-0041); its masters do not — they're read-only, computed from content at compile (see Master, Effective masters). _Avoid: TES4 record (internal jargon), plugin metadata._
 
-**Effective masters**: The masters a plugin will actually have once its currently staged edits are saved — committed masters unioned with the origin plugins referenced by pending content changes. What validation and the header panel read before save; never itself a pending change, since masters are never staged. _Avoid: pending masters, staged masters._
+**Effective masters**: The masters a plugin will actually have once its current working-tree edits are compiled — compiled masters unioned with the origin plugins referenced by uncommitted ledger changes. What validation and the header panel read before compile; never itself an edit, since masters are derived, not authored (ADR-0038). _Avoid: pending masters, staged masters._
 
 **Immutable plugin**: Plugin mEdit treats as read-only — base-game files per Mutagen. Not a property of the file itself. _Avoid: read-only plugin, locked plugin._
 
@@ -78,21 +78,25 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 **Session**: Active game environment: chosen game release + plugin load order, loaded and indexed. _Avoid: workspace, environment._
 
-**Index**: DuckDB read model of committed record data. Rebuilt on session load. Cache, not source of truth — deleting it loses nothing. _Avoid: database, store._
+**Index**: DuckDB read model of record data: one documents table (each record's ledger JSON as its body) plus extracted index tables (FormKey lookup, references, placements) and generated `json_extract` views that preserve filter SQL (ADR-0041). Rebuilt on session load. Cache, not source of truth — deleting it loses nothing. _Avoid: database, store._
 
-**Ledger**: The hidden git repository of per-record text that carries durable history and review state for a plugin's records, handed to the backend as opaque physical paths (working tree + gitdir), never discovered by it (ADR-0040). For every record it tracks, text at its `main` is authoritative and the plugin binary is a build artifact; for untracked records the binary remains authoritative. _Avoid: text mirror, Spriggit repo._
+**Ledger**: The per-record JSON text tree (`<plugin>.ledger/**`, one record = one file) inside a tracked mod's folder, versioned by that folder's own `.git` repository (ADR-0041). A tracked mod's ledger is *complete*: text is the working source and the plugin binary is the compiled artifact. Container-shaped records serialize *shallow*: Child records are entries of their own and the parent's file carries only the parent's fields, containment expressed in the ledger path (#387). _Avoid: text mirror, Spriggit repo, hidden ledger (the pre-ADR-0041 design)._
 
-**Tracked record**: A record whose text lives in a ledger. Tracking is monotonic — a record becomes tracked at first touch (see Vendor) and nothing untracks it. _Avoid: vendored record (vendoring is the act), versioned record._
+**Tracked mod**: A mod whose folder contains a `.git` repository — tracking *is* the presence of `.git`, stateless, no registry (ADR-0041). Created only by the user's explicit Track gesture; destroyed with the folder (or the `.git` within it), at which point the mod simply reads as untracked again. Editing requires tracking; viewing never does — untracked plugins are hard read-only in the editor. _Avoid: tracked record (tracking is per-mod), vendored mod._
 
-**Vendor**: Commit a record's pristine text to the ledger, copy-on-write at first touch, before the user's first edit lands. Container-shaped records vendor *shallow*: their Child records are vendored as entries of their own and the parent's file carries only the parent's fields, containment expressed in the ledger path — one record is always exactly one file (ADR-0040 amendment, #387). _Avoid: import, snapshot._
+**Track**: The explicit user gesture that creates a mod's repository: eagerly serialize every record of its plugins to the ledger, commit the complete pristine state to `main` (with provenance trailers), generate the `.gitignore` from a preset (Edits or Everything), then create and check out the edit branch. One-time, progress-reported cost. _Avoid: vendor (the retired first-touch mechanism), init._
 
-**Baseline**: The vendored pristine-text commit a tracked record's edits diff against. Advances only when the pristine content itself changes, by vendoring the new pristine text and rebasing the user's commits onto it. _Avoid: original, base version._
+**Edit branch**: The checked-out branch a tracked Downloaded mod's edits live on, created at track time; `main` holds pristine upstream state and is never checked out in normal use. `git diff main <branch>` is "everything I changed"; checking out `main` and compiling restores the pristine plugin. An Authored mod has no pristine to preserve and works on `main` directly — Modified vs Authored is repo topology. _Avoid: working branch, dev branch._
 
-**Pending change**: Staged field edit held in memory; not yet written to disk. For complex fields, stores the entire new field value atomically — no per-element pending change. _Avoid: draft, unsaved edit._
+**Baseline**: A pristine-state commit on a tracked mod's `main` — the complete serialization at track time, or the re-serialization of an upstream update. Carries provenance trailers. User edits diff and rebase against it via ordinary git. _Avoid: original, base version._
 
-**ChangeGroup**: Set of pending changes that must be saved or reverted atomically because reverting a subset would invalidate the rest — possibly spanning plugins (e.g. a renumber's cascading reference updates). Derived, not stored: a connected component of the pending-change dependency graph, never a batch labelled by whichever command staged it. Every pending change is in exactly one group; a change nothing depends on is a group of one. There is no such thing as an ungrouped change. Surfaced in the Pending Changes tree. See ADR-0028. _Avoid: transaction, batch edit, standalone/ungrouped change._
+**Provenance**: Informational commit trailers on `main` baselines — the pristine binary's SHA-256 and the upstream version string — read by humans and agents, never by classification machinery (ADR-0041 retired the opaque cross-context payload). _Avoid: metadata, Anchor (Mod Management's term)._
 
-**Complex field**: Field of type `array` or `struct`. Always committed as one atomic pending change; revert is all-or-nothing at the column level. _Avoid: compound field, nested field._
+**Save & Compile**: The gesture that writes a tracked plugin's binary: serialize the working-tree ledger text to the binary, deriving the masters list and renumber cascades (the format makes those non-optional — ADR-0038), refusing only what it structurally cannot emit, and reporting everything else as Problems-panel diagnostics. Compile is to the ledger what a compiler is to source; commit is git's own gesture, ungated and orthogonal — history may hold states that don't build. _Avoid: save (alone — it hides the compile), apply, rebuild (pre-ADR-0041 term)._
+
+**Working-tree change**: An edit not yet committed — ordinary git dirt in the ledger, shown by the native Source Control panel per tracked mod. This is the only "pending" state that exists; the staged pending-change model and change groups are retired (ADR-0041 superseding ADR-0017/0028). _Avoid: pending change, staged edit, change group._
+
+**Complex field**: Field of type `array` or `struct`. Always edited as one atomic value — a field-level write to the ledger document, never per-element; revert is all-or-nothing at the column level. _Avoid: compound field, nested field._
 
 **Sorted array**: Array with a stable sort key (e.g. `Keywords`, `Perks`, keyed by FormKey). In compare grid: elements aligned by sort key across columns. See ADR-0019. _Avoid: keyed array._
 
@@ -110,6 +114,6 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 **Filter file**: `.sql` file in `modbench.scriptsPath` returning a `form_key` column. Shares folder/UX surface with scripts but has no Python body. _Avoid: filter script._
 
-**Script**: Plain `.py` file, no special syntax — imports `medit` and calls `medit.query(sql)` (optional; a script may drive several queries across record types, or none) and `edit()`/`row.set()` to stage changes. All `edit()` calls route through `PendingChangeService`. Runs as a normal Python process (any interpreter, any tool) since it's an HTTP client of the backend, not a backend-spawned subprocess — ADR-0024. Preferred agent output for complex multi-record operations — reviewable, rerunnable, deterministic. See Phase 15, issue #2. _Avoid: macro, automation, frontmatter script (superseded design)._
+**Script**: Plain `.py` file, no special syntax — imports `medit` and calls `medit.query(sql)` (optional; a script may drive several queries across record types, or none) and `edit()`/`row.set()` to make edits. All `edit()` calls route through the normal edit path (working-tree text on the mod's edit branch, ADR-0041). Runs as a normal Python process (any interpreter, any tool) since it's an HTTP client of the backend, not a backend-spawned subprocess — ADR-0024. Preferred agent output for complex multi-record operations — reviewable, rerunnable, deterministic. See Phase 15, issue #2. _Avoid: macro, automation, frontmatter script (superseded design)._
 
-**Agent**: VS Code chat participant or LM tool. May call the HTTP API directly for simple tasks or generate a script for complex ones. All edits land in pending changes. See ADR-0012, ADR-0013.
+**Agent**: VS Code chat participant or LM tool. May call the HTTP API directly for simple tasks or generate a script for complex ones. All edits land as working-tree changes, reviewable in the native git UI. See ADR-0012, ADR-0013.
