@@ -1,5 +1,14 @@
 # mEdit Record editor panel — Surface Specification
 
+> **⚠ Retired mid-arc by [ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md).**
+> Everything below describing *editing* — pending changes, staging, the Pending column, per-cell
+> editors, the copy/remove/array/VMAD record actions and the Pending Changes tree — was deleted by
+> [#410](https://github.com/WhiskyTangoFawks/ModBench/issues/410). The editor is a **viewer** until
+> the text-first edit path returns. The current model is
+> [Version control — Track, branch, compile](medit-version-control.md); #418 folds this document
+> back into a true statement of what ships. Read-path statements (the grid, conflict colouring,
+> references, filters, navigation) are unaffected.
+
 **Status: Implemented, but the interaction model below is newly specified and only partly built.**
 The grid, conflict colouring, type-appropriate editors, pending changes, drag-to-copy and the
 column-header menu all ship and work. What does not yet fully match this document is the

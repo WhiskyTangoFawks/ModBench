@@ -293,7 +293,6 @@ describe('modbench command registration', () => {
     // modbench.modList.refresh and modbench.pluginListTree.refresh — same need, three ids.
     'modbench.refresh',
     'modbench.newPlugin',
-    'modbench.copyAsOverrideInto',
     // #273 Slice D: modbench.filterPluginTree (issue #70) is gone — it duplicated
     // modbench.pluginListTree.filter over the same rows once the merged tree made this
     // command's own view (modbench.pluginTree) unreachable.
@@ -304,7 +303,6 @@ describe('modbench command registration', () => {
     // #282: the Referenced By view's own copy command — see packageJson.test.ts for its
     // view/item/context and keybinding contributions (declarative, not exercised here).
     'modbench.referencedByTree.copy',
-    'modbench.deleteRecord',
     // #209: the column-header's native `webview/context` menu commands — same shape as #208's
     // pendingCell.* above (package.json's contributes.menus["webview/context"], gated on
     // webviewId/webviewSection/immutable, not testable from this harness; and RecordPanel's
@@ -315,26 +313,14 @@ describe('modbench command registration', () => {
     // outright — Copy as Override now covers that case via sourcePlugin instead of a fourth,
     // near-duplicate action. #335/ADR-0038: modbench.columnHeader.addMaster is gone too — nothing
     // may declare a master directly (content-derivation itself is #336, not yet built).
-    'modbench.copyAsNewRecord',
     // #227: the array-element/array-parent native `webview/context` menu commands — same shape
     // as #208/#209 above (package.json's contributes.menus["webview/context"], gated on
     // webviewId/webviewSection, not testable from this harness; and DiffRow's data-vscode-context
     // wiring, unit-tested in DiffRow.test.tsx/ArrayDiffRows.test.tsx).
-    'modbench.array.add',
-    'modbench.array.remove',
-    'modbench.array.moveUp',
-    'modbench.array.moveDown',
     // #231: VMAD's own structural-op native `webview/context` menu commands — same shape as
     // #227's array.* above (package.json gating, RecordPanel.test.tsx's own unit coverage).
-    'modbench.vmad.addScript',
-    'modbench.vmad.removeScript',
-    'modbench.vmad.addProperty',
-    'modbench.vmad.removeProperty',
     // #231 (review): Set Script Flags/Set Property Flags — restores capability lost when
     // VmadSection's always-visible flag `<select>`s were deleted (AC7 regression).
-    'modbench.vmad.setScriptFlags',
-    'modbench.vmad.setPropertyFlags',
-    'modbench.createPlaced',
     'modbench.modList.filter',
     'modbench.modList.clearFilter',
     'modbench.modList.switchProfile',

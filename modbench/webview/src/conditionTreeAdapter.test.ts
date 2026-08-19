@@ -62,13 +62,6 @@ describe('buildConditionRows — sparse per-plugin alignment', () => {
     expect(values['Fallout4.esm']).toHaveLength(2);
     expect(values['MyMod.esp'][1]).toBeUndefined();
   });
-
-  it('commitOverride compacts a sparse array (drops holes) before staging', () => {
-    const { diffs } = buildConditionRows({ groups: [{ fieldPath: 'Conditions', conditions: [conditionDiff()] }] });
-    const sparse = [condition({ function: 'A' }), undefined, condition({ function: 'C' })];
-    const result = diffs[0].commitOverride!(undefined, [], sparse);
-    expect(result).toEqual([condition({ function: 'A' }), condition({ function: 'C' })]);
-  });
 });
 
 describe('buildConditionRows — condition (array element) shape', () => {

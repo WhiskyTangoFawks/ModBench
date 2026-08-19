@@ -24,9 +24,7 @@
 // same way the deleted VmadSection's nodeAt/setNodeValue always did, just addressed by the shared
 // PathSegment chain instead of a VMAD-only (string | number)[] convention.
 import type {
-  FieldDiff, FieldMetadata, PathSegment,
-  VmadCompare, VmadPropertyDiff, VmadScriptDiff,
-} from './types';
+  FieldDiff, FieldMetadata, VmadCompare, VmadPropertyDiff, VmadScriptDiff } from './types';
 import { opScalarKind, SCRIPT_FLAGS } from './vmadOps';
 import { sparseArrayByPlugin, aggregateConflictAll } from './recordUtils';
 
@@ -67,10 +65,8 @@ function buildScalarOrObject(p: VmadPropertyDiff): Built {
       winnerValue: p.values[p.winnerColumn] ?? null,
       cellStates: p.cellStates,
       conflictAll: aggregateConflictAll(p.cellStates),
-      resolutions: isObject ? p.resolutions : undefined,
-    },
-    meta: isObject ? OBJECT_META : scalarMeta(scalarKindOf(p)),
-  };
+      resolutions: isObject ? p.resolutions : undefined },
+    meta: isObject ? OBJECT_META : scalarMeta(scalarKindOf(p)) };
 }
 
 // ── variable (never editable — VmadSection's renderLeafCell always fell through to plain `read`
@@ -90,10 +86,8 @@ function buildVariable(p: VmadPropertyDiff): Built {
     diff: {
       fieldName: p.name, values, winnerColumn: p.winnerColumn,
       winnerValue: values[p.winnerColumn] ?? null, cellStates: p.cellStates,
-      conflictAll: aggregateConflictAll(p.cellStates),
-    },
-    meta: { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [], readOnly: true },
-  };
+      conflictAll: aggregateConflictAll(p.cellStates) },
+    meta: { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [], readOnly: true } };
 }
 
 // ── array (ArrayOf Bool/Int/Float/String/Object — scalar/object elements only; ArrayOfStruct is
@@ -123,10 +117,8 @@ function buildArray(p: VmadPropertyDiff): Built {
       fieldName: p.name, values, winnerColumn: p.winnerColumn, winnerValue: values[p.winnerColumn] ?? null,
       cellStates: p.cellStates,
       conflictAll: aggregateConflictAll(p.cellStates, arrayChildren),
-      children: arrayChildren,
-    },
-    meta: { name: '', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [], elementType },
-  };
+      children: arrayChildren },
+    meta: { name: '', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [], elementType } };
 }
 
 // ── struct / structList — the raw-node exception ────────────────────────────────────────────────
@@ -140,69 +132,6 @@ function buildArray(p: VmadPropertyDiff): Built {
 // dispatch in RecordPanel, so an instance's own path hop is always `index`; every hop inside an
 // instance is a struct dispatch, always `member`) — `sortKey` never appears in a struct/structList
 // path, since nothing inside one is a sorted array.
-
-function nodeAt(root: unknown, path: PathSegment[]): Record<string, unknown> | undefined {
-  const startsWithIndex = path[0]?.kind === 'index';
-  let list = (startsWithIndex ? (root as unknown[])[(path[0] as { index: number }).index] : root) as Record<string, unknown>[];
-  let node: Record<string, unknown> | undefined;
-  for (let k = startsWithIndex ? 1 : 0; k < path.length; k++) {
-    const name = (path[k] as { name: string }).name;
-    node = list.find(n => n.name === name);
-    if (node && k < path.length - 1) list = node.members as Record<string, unknown>[];
-  }
-  return node;
-}
-
-// The VmadPropertyDiff describing the leaf at `path` within `p`'s own member tree — needed to
-// know which raw field (boolValue/intValue/floatValue/stringValue, or formKeyValue+aliasValue) a
-// commit writes into. Walks the same shape nodeAt does, over VmadPropertyDiff.children instead of
-// raw JSON nodes.
-function propertyAt(p: VmadPropertyDiff, path: PathSegment[]): VmadPropertyDiff | undefined {
-  const startsWithIndex = path[0]?.kind === 'index';
-  let list = (startsWithIndex ? p.children?.[(path[0] as { index: number }).index]?.children : p.children) ?? [];
-  let node: VmadPropertyDiff | undefined;
-  for (let k = startsWithIndex ? 1 : 0; k < path.length; k++) {
-    const name = (path[k] as { name: string }).name;
-    node = list.find(n => n.name === name);
-    if (node && k < path.length - 1) list = node.children ?? [];
-  }
-  return node;
-}
-
-function setNodeValue(node: Record<string, unknown>, leaf: VmadPropertyDiff, value: unknown): void {
-  if (leaf.kind === 'object') {
-    const o = value as { formKey: string; alias: number };
-    node.formKeyValue = o.formKey;
-    node.aliasValue = o.alias;
-    return;
-  }
-  switch (scalarKindOf(leaf)) {
-    case 'bool': node.boolValue = value; break;
-    case 'int': node.intValue = value; break;
-    case 'float': node.floatValue = value; break;
-    default: node.stringValue = value;
-  }
-}
-
-// Builds the `commitOverride` for a struct/structList property: clones the current raw value,
-// locates the target node (and, for a container-kind target — a nested struct/structList member
-// being replaced wholesale rather than one of its own scalar leaves — the whole node), sets it,
-// and returns the cloned root. Mirrors the deleted VmadSection's per-commit structuredClone.
-//
-// An empty `path` is the generic array machinery's own "restage the whole array" call (Remove/
-// Move on a structList instance — the parent structList's own commitHere, not one member's) —
-// there is no node to locate for it, the caller's `value` already *is* the new whole array, so
-// this returns it verbatim, the same short-circuit setAtPath itself uses for an empty path.
-function structCommitOverride(p: VmadPropertyDiff): (currentRaw: unknown, path: PathSegment[], value: unknown) => unknown {
-  return (currentRaw, path, value) => {
-    if (path.length === 0) return value;
-    const root = structuredClone(currentRaw ?? []);
-    const leaf = propertyAt(p, path);
-    const node = nodeAt(root, path);
-    if (node && leaf) setNodeValue(node, leaf, value);
-    return root;
-  };
-}
 
 // A struct member's own FieldMetadata needs its own `name` set (the generic per-kind builders
 // above return a reusable, unnamed meta) — this is the one place that naming happens for a
@@ -223,11 +152,8 @@ function buildStruct(p: VmadPropertyDiff): Built {
       winnerValue: p.raw?.[p.winnerColumn] ?? null,
       cellStates: p.cellStates,
       conflictAll: aggregateConflictAll(p.cellStates, memberDiffs),
-      children: memberDiffs,
-      commitOverride: structCommitOverride(p),
-    },
-    meta: { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: members.map(m => m.meta) },
-  };
+      children: memberDiffs },
+    meta: { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: members.map(m => m.meta) } };
 }
 
 function buildStructList(p: VmadPropertyDiff): Built {
@@ -243,14 +169,10 @@ function buildStructList(p: VmadPropertyDiff): Built {
       winnerValue: values[p.winnerColumn] ?? null,
       cellStates: p.cellStates,
       conflictAll: aggregateConflictAll(p.cellStates, instanceChildren),
-      children: instanceChildren,
-      commitOverride: structCommitOverride(p),
-    },
+      children: instanceChildren },
     meta: {
       name: '', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
-      elementType: instanceBuilds[0]?.meta ?? { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: [] },
-    },
-  };
+      elementType: instanceBuilds[0]?.meta ?? { name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: [] } } };
 }
 
 function buildProperty(p: VmadPropertyDiff): Built {
@@ -272,13 +194,11 @@ function buildFlagsChild(s: VmadScriptDiff): FieldDiff {
     winnerColumn: s.winnerColumn,
     winnerValue: s.flags[s.winnerColumn] ?? null,
     cellStates: s.cellStates,
-    conflictAll: aggregateConflictAll(s.cellStates),
-  };
+    conflictAll: aggregateConflictAll(s.cellStates) };
 }
 
 const FLAGS_META: FieldMetadata = {
-  name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [], enumValues: [...SCRIPT_FLAGS], readOnly: true,
-};
+  name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [], enumValues: [...SCRIPT_FLAGS], readOnly: true };
 
 // One script → one top-level synthesized FieldDiff (a struct-like container row: `{…}` collapsed,
 // no value of its own — script/property structural ops, including this row's own Add
@@ -301,10 +221,8 @@ function buildScript(s: VmadScriptDiff): { diff: FieldDiff; meta: FieldMetadata 
       cellStates: s.cellStates,
       conflictAll: aggregateConflictAll(s.cellStates, children),
       children,
-      vmadOpKind: 'script',
-    },
-    meta: { name: s.name, type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields },
-  };
+      vmadOpKind: 'script' },
+    meta: { name: s.name, type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields } };
 }
 
 export interface VmadTreeRows {
@@ -339,11 +257,9 @@ export function buildVmadRows(vmad: VmadCompare | null | undefined): VmadTreeRow
     cellStates: {},
     conflictAll: aggregateConflictAll({}, scriptDiffs),
     children: scriptDiffs,
-    vmadOpKind: 'scripts',
-  };
+    vmadOpKind: 'scripts' };
   const wrapperMeta: FieldMetadata = {
     name: WRAPPER_NAME, type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [],
-    fields: scriptBuilds.map(b => b.meta),
-  };
+    fields: scriptBuilds.map(b => b.meta) };
   return { diffs: [wrapper], metaMap: { [WRAPPER_NAME]: wrapperMeta } };
 }

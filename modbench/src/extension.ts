@@ -415,18 +415,15 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
 function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
     context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, scriptsPath,
-    referencedByTreeView, outputChannel, repository,
+    referencedByTreeView, outputChannel,
   } = deps;
-  // #210/#211/#212/#225/#230: formKeyPicker/conditionFunctionPicker/revertGroupConfirm/
-  // addScriptName/clipboardRead/extendedFieldEditor are left undefined here — each `reply` must
-  // post back to the one panel that asked (never a broadcast), so openRecordPanel rebuilds these
-  // bundles per panel at the onDidReceiveMessage call site rather than sharing one instance the
-  // way reveal/channel are.
+  // #410/ADR-0041: every per-panel reply bundle (the FormKey picker, the condition-function
+  // picker, the revert-group confirm, the add-script input, the clipboard read, the extended
+  // field editor) retired with the write path it served, so this bundle is shared outright now —
+  // nothing left here needs a per-panel reply target.
   const routerDeps: RouteRecordPanelMessageDeps = {
-    channel: outputChannel, formKeyPicker: undefined, conditionFunctionPicker: undefined,
-    revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, extendedFieldEditor: undefined,
-    // Issue #224: COPY_TO_CLIPBOARD's ADR-0026 surfacing on a failed clipboard write — shared
-    // like `channel` above, not rebuilt per panel, since there's no per-panel reply to route.
+    channel: outputChannel,
+    // Issue #224: COPY_TO_CLIPBOARD's ADR-0026 surfacing on a failed clipboard write.
     reporter: makeReporter(outputChannel, 'copyToClipboard'),
   };
   return [
@@ -434,16 +431,16 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     registerReloadSessionCommand(controller, outputChannel),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
-        vscode.ViewColumn.One, { routerDeps, recordPanels, repository, activeRecordTracker });
+        vscode.ViewColumn.One, { routerDeps, recordPanels, activeRecordTracker });
     }),
     // Issue #213: Referenced By's named "Open to the Side" (ADR-0033), not a right-click side effect.
     vscode.commands.registerCommand('modbench.openEditorBeside', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
-        vscode.ViewColumn.Beside, { routerDeps, recordPanels, repository, activeRecordTracker });
+        vscode.ViewColumn.Beside, { routerDeps, recordPanels, activeRecordTracker });
     }),
     vscode.commands.registerCommand('modbench.openCompare', () => {
       openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One,
-        { routerDeps, recordPanels, repository, activeRecordTracker });
+        { routerDeps, recordPanels, activeRecordTracker });
     }),
     vscode.commands.registerCommand('modbench.loadMore', (node: LoadMoreNode) => treeProvider.loadMore(node)),
     vscode.commands.registerCommand('modbench.newPlugin', async () => {
@@ -1780,7 +1777,6 @@ const RECORD_PANEL_KEY = '__record_view__';
 // Issue #230: the extended editor's temp files live under here — one directory for the whole
 // session (extendedFieldEditor.ts keys the actual per-field path off it), computed once rather
 // than per panel/per open, since it never varies within a run.
-const extendedFieldEditorTempRoot = path.join(os.tmpdir(), 'modbench-medit-fields');
 
 // #282: pulled out of openRecordPanel purely for its line budget (same reasoning as
 // createReferencedByTree/registerReferencedByCopyCommand above) — wires a freshly created panel
@@ -1813,8 +1809,6 @@ interface OpenRecordPanelDeps {
   recordPanels: Set<vscode.WebviewPanel>;
   // #210: threaded through so the FormKey picker's search (PluginRepository.searchRecords) is
   // available per panel — see the onDidReceiveMessage wiring below for why it's rebuilt per
-  // panel/per message rather than folded into the shared routerDeps.
-  repository: ApiPluginRepository;
   // #282: kept current at both branches below (reuse-and-retarget, create) — the Referenced By
   // view's whole input, replacing the old showReferencedBy(node) command argument.
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
@@ -1827,7 +1821,7 @@ function openRecordPanel(
   formKey: string | undefined,
   port: number,
   viewColumn: vscode.ViewColumn = vscode.ViewColumn.One,
-  { routerDeps, recordPanels, repository, activeRecordTracker }: OpenRecordPanelDeps,
+  { routerDeps, recordPanels, activeRecordTracker }: OpenRecordPanelDeps,
 ) {
   if (viewColumn !== vscode.ViewColumn.Beside) {
     const existing = openPanels.get(RECORD_PANEL_KEY);
@@ -1860,28 +1854,8 @@ function openRecordPanel(
 
   wireActiveRecordTracking(panel, formKey, activeRecordTracker);
 
-  // #210/#211/#212: every *Picker/*Confirm/*Name .reply is bound to this specific panel — the
-  // native prompt a request opens only ever exists for the one click that asked, so the reply is
-  // never broadcast to recordPanels the way #208/#209's commands are.
   panel.webview.onDidReceiveMessage((msg: unknown) => {
-    void routeRecordPanelMessage(msg, {
-      ...routerDeps,
-      formKeyPicker: { repository, reply: (m) => void panel.webview.postMessage(m) },
-      conditionFunctionPicker: { repository, reply: (m) => void panel.webview.postMessage(m) },
-      revertGroupConfirm: { reply: (m) => void panel.webview.postMessage(m) },
-      addScriptName: { reply: (m) => void panel.webview.postMessage(m) },
-      clipboardRead: { reply: (m) => void panel.webview.postMessage(m) },
-      // Issue #230: tempRoot/log/reporter are session-static (the same values every panel would
-      // get), only `reply` genuinely varies per panel — bundled here anyway, matching every other
-      // *Picker/*Confirm/*Name/clipboardRead reconstruction on this object, rather than splitting
-      // "static" fields onto routerDeps and "per-panel" fields onto a second bundle.
-      extendedFieldEditor: {
-        tempRoot: extendedFieldEditorTempRoot,
-        reply: (m) => void panel.webview.postMessage(m),
-        log: (msg) => routerDeps.channel.debug(msg),
-        reporter: routerDeps.reporter,
-      },
-    });
+    void routeRecordPanelMessage(msg, routerDeps);
   });
 
   const scriptUri = panel.webview.asWebviewUri(

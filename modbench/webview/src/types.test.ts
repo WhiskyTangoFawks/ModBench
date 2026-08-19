@@ -1,11 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { columnKey } from './types';
-import type {
-  CompareOverride, CompareResult, ConditionCompare, ConditionDiff, ConditionGroupDiff, FieldDiff,
-  FieldMetadata, FieldValue, FormKeyResolution, ParsedCondition, ParsedConditionParam,
-  PatchRecordValidationError, PendingChange, RecordDetail, ReferenceValidationError, VmadCompare,
-  VmadPropertyDiff, VmadScriptDiff,
-} from './types';
+import type {   CompareOverride, CompareResult, ConditionCompare, ConditionDiff, ConditionGroupDiff, FieldDiff,   FieldMetadata, FieldValue, FormKeyResolution, ParsedCondition, ParsedConditionParam, RecordDetail, VmadCompare,   VmadPropertyDiff, VmadScriptDiff, } from './types';
 import type { PluginInfo } from './RecordSessionClient';
 import type { components } from '../../src/medit/generated/api';
 
@@ -46,12 +41,12 @@ export type CheckRecordDetail = AssertNoMissingKeys<KeysContainedIn<RecordDetail
 export type CheckCompareOverride =
   AssertNoMissingKeys<KeysContainedIn<CompareOverride, WireSchemas['CompareOverride']>>;
 
-// FieldDiff: `wirePath`/`commitOverride`/`vmadOpKind`/`collapsedSummary` are all synthesized by
+// FieldDiff: `wirePath`/`vmadOpKind`/`collapsedSummary` are all synthesized by
 // vmadTreeAdapter.ts/conditionTreeAdapter.ts (#231, see each field's own doc comment in types.ts)
 // for rows the backend never sends this shape for — excluded for the same reason as
 // FieldMetadata's readOnly/defaultValue above.
 export type CheckFieldDiff = AssertNoMissingKeys<
-  KeysContainedIn<Omit<FieldDiff, 'wirePath' | 'commitOverride' | 'vmadOpKind' | 'collapsedSummary'>, WireSchemas['FieldDiff']>
+  KeysContainedIn<Omit<FieldDiff, 'wirePath' | 'vmadOpKind' | 'collapsedSummary'>, WireSchemas['FieldDiff']>
 >;
 export type CheckVmadPropertyDiff =
   AssertNoMissingKeys<KeysContainedIn<VmadPropertyDiff, WireSchemas['VmadPropertyDiff']>>;
@@ -68,11 +63,6 @@ export type CheckConditionGroupDiff =
 export type CheckConditionCompare =
   AssertNoMissingKeys<KeysContainedIn<ConditionCompare, WireSchemas['ConditionCompare']>>;
 export type CheckCompareResult = AssertNoMissingKeys<KeysContainedIn<CompareResult, WireSchemas['CompareResult']>>;
-export type CheckPendingChange = AssertNoMissingKeys<KeysContainedIn<PendingChange, WireSchemas['PendingChange']>>;
-export type CheckReferenceValidationError =
-  AssertNoMissingKeys<KeysContainedIn<ReferenceValidationError, WireSchemas['ReferenceValidationError']>>;
-export type CheckPatchRecordValidationError =
-  AssertNoMissingKeys<KeysContainedIn<PatchRecordValidationError, WireSchemas['PatchRecordValidationError']>>;
 
 // PluginInfo (RecordSessionClient.ts): a deliberate structural subset of the backend's
 // PluginResponse (its own doc comment) — every key it does declare must still exist on the wire.

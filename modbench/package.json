@@ -166,11 +166,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.copyAsOverrideInto",
-        "title": "Copy as Override Into…",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.setFilter",
         "title": "Filter Records…",
         "icon": "$(filter)",
@@ -195,71 +190,6 @@
       {
         "command": "modbench.referencedByTree.copy",
         "title": "Copy",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.deleteRecord",
-        "title": "Remove",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.createPlaced",
-        "title": "Create Placed…",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.copyAsNewRecord",
-        "title": "Copy as New Record Into…",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.array.add",
-        "title": "Add",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.array.remove",
-        "title": "Remove",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.array.moveUp",
-        "title": "Move Up",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.array.moveDown",
-        "title": "Move Down",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.vmad.addScript",
-        "title": "Add Script…",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.vmad.removeScript",
-        "title": "Remove Script",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.vmad.addProperty",
-        "title": "Add Property…",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.vmad.removeProperty",
-        "title": "Remove Property",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.vmad.setScriptFlags",
-        "title": "Set Script Flags…",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.vmad.setPropertyFlags",
-        "title": "Set Property Flags…",
         "category": "Modbench"
       },
       {
@@ -483,58 +413,6 @@
           "when": "false"
         },
         {
-          "command": "modbench.createPlaced",
-          "when": "false"
-        },
-        {
-          "command": "modbench.copyAsOverrideInto",
-          "when": "false"
-        },
-        {
-          "command": "modbench.copyAsNewRecord",
-          "when": "false"
-        },
-        {
-          "command": "modbench.array.add",
-          "when": "false"
-        },
-        {
-          "command": "modbench.array.remove",
-          "when": "false"
-        },
-        {
-          "command": "modbench.array.moveUp",
-          "when": "false"
-        },
-        {
-          "command": "modbench.array.moveDown",
-          "when": "false"
-        },
-        {
-          "command": "modbench.vmad.addScript",
-          "when": "false"
-        },
-        {
-          "command": "modbench.vmad.removeScript",
-          "when": "false"
-        },
-        {
-          "command": "modbench.vmad.addProperty",
-          "when": "false"
-        },
-        {
-          "command": "modbench.vmad.removeProperty",
-          "when": "false"
-        },
-        {
-          "command": "modbench.vmad.setScriptFlags",
-          "when": "false"
-        },
-        {
-          "command": "modbench.vmad.setPropertyFlags",
-          "when": "false"
-        },
-        {
           "command": "modbench.downloads.install",
           "when": "false"
         },
@@ -723,26 +601,6 @@
           "group": "inline"
         },
         {
-          "command": "modbench.copyAsOverrideInto",
-          "when": "view == modbench.pluginListTree && (viewItem == record || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)",
-          "group": "modbench@1"
-        },
-        {
-          "command": "modbench.copyAsNewRecord",
-          "when": "view == modbench.pluginListTree && (viewItem == record || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)",
-          "group": "modbench@2"
-        },
-        {
-          "command": "modbench.deleteRecord",
-          "when": "view == modbench.pluginListTree && (viewItem == record || viewItem == refr)",
-          "group": "modbench@3"
-        },
-        {
-          "command": "modbench.createPlaced",
-          "when": "view == modbench.pluginListTree && (viewItem == placedGroup-persistent || viewItem == placedGroup-temporary)",
-          "group": "modbench@1"
-        },
-        {
           "command": "modbench.openEditor",
           "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",
           "group": "modbench@1"
@@ -867,73 +725,6 @@
           "when": "view == modbench.pluginListTree && viewItem == pluginDrifted",
           "group": "pluginActions@2"
         }
-      ],
-      "webview/context": [
-        {
-          "command": "modbench.copyAsOverrideInto",
-          "when": "webviewId == 'modbench' && webviewSection == 'columnHeader'",
-          "group": "modbench@5"
-        },
-        {
-          "command": "modbench.copyAsNewRecord",
-          "when": "webviewId == 'modbench' && webviewSection == 'columnHeader'",
-          "group": "modbench@6"
-        },
-        {
-          "command": "modbench.deleteRecord",
-          "when": "webviewId == 'modbench' && webviewSection == 'columnHeader' && !immutable",
-          "group": "modbench@8"
-        },
-        {
-          "command": "modbench.array.add",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayParent\\b/",
-          "group": "modbench@9"
-        },
-        {
-          "command": "modbench.array.remove",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/",
-          "group": "modbench@10"
-        },
-        {
-          "command": "modbench.array.moveUp",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/ && canMoveUp",
-          "group": "modbench@11"
-        },
-        {
-          "command": "modbench.array.moveDown",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/ && canMoveDown",
-          "group": "modbench@12"
-        },
-        {
-          "command": "modbench.vmad.addScript",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadScripts\\b/",
-          "group": "modbench@13"
-        },
-        {
-          "command": "modbench.vmad.addProperty",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadScript\\b/",
-          "group": "modbench@14"
-        },
-        {
-          "command": "modbench.vmad.removeScript",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadScript\\b/",
-          "group": "modbench@15"
-        },
-        {
-          "command": "modbench.vmad.removeProperty",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadProperty\\b/",
-          "group": "modbench@16"
-        },
-        {
-          "command": "modbench.vmad.setScriptFlags",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadScript\\b/",
-          "group": "modbench@17"
-        },
-        {
-          "command": "modbench.vmad.setPropertyFlags",
-          "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadProperty\\b/",
-          "group": "modbench@18"
-        }
       ]
     },
     "keybindings": [
@@ -954,11 +745,6 @@
         "key": "ctrl+f",
         "mac": "cmd+f",
         "when": "focusedView == modbench.downloads"
-      },
-      {
-        "command": "modbench.deleteRecord",
-        "key": "Delete",
-        "when": "focusedView == modbench.pluginListTree && (viewItem == record || viewItem == refr)"
       },
       {
         "command": "modbench.referencedByTree.copy",

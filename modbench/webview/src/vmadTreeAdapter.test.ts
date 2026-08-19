@@ -230,71 +230,8 @@ describe('buildVmadRows — struct property (raw-node commitOverride)', () => {
   it('carries the raw per-plugin node array as its disk value', () => {
     expect(child?.values['Fallout4.esm']).toEqual(structProp.raw!['Fallout4.esm']);
   });
-
-  it("commitOverride sets the target member's intValue in place, preserving its sibling node", () => {
-    const current = structProp.raw!['Fallout4.esm'];
-    const next = child!.commitOverride!(current, [{ kind: 'member', name: 'X' }], 99) as Array<Record<string, unknown>>;
-    expect(next.find(n => n.name === 'X')?.intValue).toBe(99);
-    expect(next.find(n => n.name === 'Y')?.intValue).toBe(10);
-  });
-
-  it('commitOverride does not mutate the source raw array', () => {
-    const current = structProp.raw!['Fallout4.esm'];
-    child!.commitOverride!(current, [{ kind: 'member', name: 'X' }], 99);
-    expect((current as Array<Record<string, unknown>>).find(n => n.name === 'X')?.intValue).toBe(5);
-  });
 });
 
-// Issue #231 (review, item 6): the deleted VmadSection.test.tsx proved commitOverride's node-walk
-// at two chained `member` hops (a struct member that is itself a struct); the replacement suite
-// above only proves one hop. nodeAt/propertyAt (vmadTreeAdapter.ts) are written generically for N
-// hops — this pins that the generalization actually holds at depth 2, not merely at depth 1.
-describe('buildVmadRows — struct-in-struct property (nested member commitOverride, issue #231 review)', () => {
-  const nestedStructProp: VmadPropertyDiff = {
-    name: 'Bounds', kind: 'struct',
-    values: {}, types: { 'Fallout4.esm': 'Struct' }, winnerColumn: 'Fallout4.esm', cellStates: {},
-    raw: {
-      'Fallout4.esm': [
-        { name: 'X', type: 'Int', intValue: 5 },
-        { name: 'Inner', type: 'Struct', members: [{ name: 'Depth', type: 'Int', intValue: 7 }] },
-      ],
-    },
-    children: [
-      { name: 'X', kind: 'scalar', values: { 'Fallout4.esm': 5 }, types: { 'Fallout4.esm': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
-      {
-        name: 'Inner', kind: 'struct', values: {}, types: {}, winnerColumn: 'Fallout4.esm', cellStates: {},
-        children: [
-          { name: 'Depth', kind: 'scalar', values: { 'Fallout4.esm': 7 }, types: { 'Fallout4.esm': 'Int' }, winnerColumn: 'Fallout4.esm', cellStates: {} },
-        ],
-      },
-    ],
-  };
-  const { diff: scriptDiff } = scriptRowFor([script({ properties: [nestedStructProp] })]);
-  const child = scriptDiff?.children?.find(c => c.fieldName === 'Bounds');
-
-  it("commitOverride at two chained member hops sets the nested struct member's own intValue in place", () => {
-    const current = nestedStructProp.raw!['Fallout4.esm'];
-    const path = [{ kind: 'member' as const, name: 'Inner' }, { kind: 'member' as const, name: 'Depth' }];
-    const next = child!.commitOverride!(current, path, 99) as Array<Record<string, unknown>>;
-    const inner = next.find(n => n.name === 'Inner');
-    expect((inner!.members as Array<Record<string, unknown>>).find(n => n.name === 'Depth')?.intValue).toBe(99);
-  });
-
-  it('preserves the outer struct\'s sibling member (X) untouched by a nested-member commit', () => {
-    const current = nestedStructProp.raw!['Fallout4.esm'];
-    const path = [{ kind: 'member' as const, name: 'Inner' }, { kind: 'member' as const, name: 'Depth' }];
-    const next = child!.commitOverride!(current, path, 99) as Array<Record<string, unknown>>;
-    expect(next.find(n => n.name === 'X')?.intValue).toBe(5);
-  });
-
-  it('does not mutate the source raw array', () => {
-    const current = nestedStructProp.raw!['Fallout4.esm'];
-    const path = [{ kind: 'member' as const, name: 'Inner' }, { kind: 'member' as const, name: 'Depth' }];
-    child!.commitOverride!(current, path, 99);
-    const inner = (current as Array<Record<string, unknown>>).find(n => n.name === 'Inner');
-    expect((inner!.members as Array<Record<string, unknown>>).find(n => n.name === 'Depth')?.intValue).toBe(7);
-  });
-});
 
 describe('buildVmadRows — structList property (ArrayOfStruct)', () => {
   const instanceMembers = (x: number, y: number) => [
@@ -330,13 +267,6 @@ describe('buildVmadRows — structList property (ArrayOfStruct)', () => {
     expect(meta?.type).toBe('array');
     expect(meta?.elementType?.type).toBe('struct');
     expect(child?.children?.map(c => c.fieldName)).toEqual(['[0]', '[1]']);
-  });
-
-  it('commitOverride sets a member inside a specific instance, leaving the other instance untouched', () => {
-    const current = structListProp.raw!['Fallout4.esm'];
-    const next = child!.commitOverride!(current, [{ kind: 'index', index: 1 }, { kind: 'member', name: 'X' }], 30) as unknown[][];
-    expect((next[1].find((n): n is Record<string, unknown> => (n as Record<string, unknown>).name === 'X') as Record<string, unknown>).intValue).toBe(30);
-    expect((next[0].find((n): n is Record<string, unknown> => (n as Record<string, unknown>).name === 'X') as Record<string, unknown>).intValue).toBe(1);
   });
 });
 

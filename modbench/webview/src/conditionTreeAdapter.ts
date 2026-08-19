@@ -26,7 +26,7 @@
 // editor; Run On is a target enum plus a conditional FormKey; Comparison and a parameter each pick
 // FormKey vs plain scalar from their own current value. The AND/OR gate is `readOnly` — it was
 // never editable under the pre-#231 model either.
-import type { FieldDiff, FieldMetadata, ConditionCompare, ConditionDiff, ConditionGroupDiff, ParsedCondition, PathSegment } from './types';
+import type { FieldDiff, FieldMetadata, ConditionCompare, ConditionDiff, ConditionGroupDiff, ParsedCondition } from './types';
 import { conditionFieldPath, conditionParamPath } from './conditionPath';
 import { defaultCondition } from './conditionOps';
 import { sparseArrayByPlugin, aggregateConflictAll } from './recordUtils';
@@ -196,22 +196,6 @@ function buildCondition(
   };
 }
 
-// A condition list is positionally aligned across plugins by its own canonical index (ADR-0019's
-// unsorted-array rule, applied to conditions the same way VmadConflictClassifier already applies
-// it to VMAD arrays) — a sparse array, holes where a plugin lacks that condition, gives the
-// collapsed "[n]" summary and the generic array machinery's read side a real, correctly-shaped
-// value. `commitOverride` strips those holes back out before staging (add/remove/move all
-// restage the whole list as one plain `ParsedCondition[]`, which has no concept of a hole for "the
-// plugin didn't have this one") — a JS array hole would otherwise serialize as `null` into a list
-// the backend expects dense.
-//
-// Issue #168: this per-plugin reconstruction is sparseArrayByPlugin (recordUtils.ts) now — shared
-// with vmadTreeAdapter's own identical need (VMAD's own version of this used to carry a null
-// through as filler instead of skipping it, corrupting a shorter plugin's array on Remove/Move).
-function compactCommitOverride(_currentRaw: unknown, _path: PathSegment[], value: unknown): unknown {
-  return Array.isArray(value) ? value.filter(v => v != null) : value;
-}
-
 function buildGroup(group: ConditionGroupDiff, runOnTargets: string[]): { diff: FieldDiff; meta: FieldMetadata } {
   const lastIndexForPlugin = lastIndexByPlugin(group.conditions);
   const conditionBuilds = group.conditions.map(c => buildCondition(c, group.fieldPath, lastIndexForPlugin, runOnTargets));
@@ -232,7 +216,6 @@ function buildGroup(group: ConditionGroupDiff, runOnTargets: string[]): { diff: 
       // of its own, so this is purely the worst of its condition elements.
       conflictAll: aggregateConflictAll({}, conditionDiffs),
       children: conditionDiffs,
-      commitOverride: compactCommitOverride,
     },
     meta: {
       name: group.fieldPath, type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],

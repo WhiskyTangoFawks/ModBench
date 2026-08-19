@@ -128,9 +128,8 @@ export interface RecordDetail {
   isWinner: boolean;
   editorId: string | null;
   fields: FieldValue[];
-  pendingFields?: Record<string, unknown>;
   // Issue #3: the schema table name (e.g. "npc_"), needed for "Copy as New Record" — CreateRecord
-  // requires it up front. Optional (like pendingFields) so existing fixtures/callers don't break;
+  // requires it up front. Optional so existing fixtures/callers don't break;
   // always populated by the real backend response.
   recordType?: string;
   // #272 / ADR-0036: the mod folder (or reserved PluginOrigin value) this override was resolved
@@ -192,7 +191,6 @@ export interface FieldDiff {
   // (pending-or-disk) raw value, this row's path within it, and the new leaf value, and must
   // return the new raw root value to stage — the one place a subtree's commit mechanics can
   // differ from the shared default without a second row/cell renderer existing to hide it in.
-  commitOverride?: (currentRaw: unknown, path: PathSegment[], value: unknown) => unknown;
   // Issue #231: marks a row as a target for VMAD's own structural (named-op) commands — Add/
   // Remove Script live on the "Scripts (VMAD)" wrapper/a script row; Add/Remove Property on a
   // script/property row — reached the same way every other structural op is (the right-click
@@ -305,48 +303,3 @@ export interface CompareResult {
   conditions?: ConditionCompare | null;
 }
 
-export interface PendingChange {
-  id: string;
-  formKey: string;
-  plugin: string;
-  fieldPath: string;
-  recordType: string;
-  oldValue: unknown;
-  newValue: unknown;
-  source: string;
-  description: string | null;
-  changedAt: string;
-  // ADR-0031: resolution signal for every FormKey-typed value inside newValue, keyed by the
-  // sub-path within newValue ("" for a scalar formKey field itself, matching FormRefPathBuilder).
-  resolutions?: Record<string, FormKeyResolution>;
-  // ADR-0031 / #159: resolution signal for the change's own FormKey (record identity) — distinct
-  // from `resolutions` above, which is scoped to leaves inside newValue. Drives the Pending
-  // Changes tree's `{RecordType} / {EditorID}` leaf label.
-  recordResolution?: FormKeyResolution;
-  // #272 / ADR-0036: parallel sibling to `plugin`, mirroring RecordDetail.origin — a staged
-  // change is attributed to a column's compound identity end to end, not just its filename.
-  // Required (#275), same reasoning as RecordDetail.origin.
-  origin: string;
-}
-
-export interface ReferenceValidationError {
-  fieldPath: string;
-  value?: string;
-  // #335/ADR-0038: 'read_only' replaces 'not_append_only' — the header's masters field rejects
-  // every direct edit outright now (EditOrchestrator.CheckMasterEdit), not just non-append ones,
-  // so a reason naming "append-only" would be false the moment a proposal actually was a pure
-  // append. Still reachable from this webview via cross-column drag-and-drop onto the masters row
-  // (RecordPanel.handleCellDrop gates only on the target column's own mutability, never a field's
-  // readOnly — deliberate, issue #3: "dragging is a copy, only the drop target's mutability
-  // matters" — so the backend guard is what actually stops it).
-  reason?: 'not_in_session' | 'read_only' | 'type_mismatch' | 'null_not_allowed';
-  expectedTypes?: string[];
-}
-
-// #147: PATCH /records/{formKey}'s single 422 shape — fieldErrors for reference/append-only/
-// type-mismatch/null-not-allowed failures, detail for everything else (ESL-ineligible, read-only
-// fields). Never both. Mirrors the backend's PatchRecordValidationError envelope.
-export interface PatchRecordValidationError {
-  fieldErrors?: ReferenceValidationError[] | null;
-  detail?: string | null;
-}
