@@ -1,4 +1,4 @@
-import type { ApiClient, SessionStatus } from './ApiClient';
+import type { ApiClient, SessionStatus, TrackStatus } from './ApiClient';
 import { errorText } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
 import { reportSkippedPlugins } from './sessionFailures';
@@ -231,6 +231,33 @@ export class SessionController {
     return () => { stopped = true; clearTimeout(timer); };
   }
 
+  /** #414 review F2: `track`'s own poller — identical shape to `pollSessionStatus` above (same
+   *  self-rescheduling `setTimeout`, same "no `onProgress` polls nothing" contract, same reasons),
+   *  reading `GET /plugins/track/status` instead. No `signal`: Track has no cancellation (out of
+   *  scope, per the finding this exists to close). */
+  private pollTrackStatus(onProgress: ((status: TrackStatus) => void) | undefined): () => void {
+    if (!onProgress) return () => {};
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = async () => {
+      try {
+        const status = await this.deps.repository.getTrackStatus();
+        // Re-checked after the await: the track can settle while this read is in flight, and a
+        // tick landing after that would report a track nobody is waiting on.
+        if (stopped) return;
+        onProgress(status);
+      } catch (e) {
+        // ADR-0026 background/recoverable tier: a poll is frequent and non-essential, so a blip
+        // gets a log line and the next tick — never a toast. The track POST itself is the
+        // completion signal and is unaffected by this.
+        this.log(`[SessionController] GET /plugins/track/status poll failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      if (!stopped) timer = setTimeout(() => { void tick(); }, SESSION_STATUS_POLL_INTERVAL_MS);
+    };
+    timer = setTimeout(() => { void tick(); }, SESSION_STATUS_POLL_INTERVAL_MS);
+    return () => { stopped = true; clearTimeout(timer); };
+  }
+
   async setFilter(sql: string, label?: string): Promise<boolean> {
     const error = await this.deps.repository.setFilter(sql);
     if (error) {
@@ -265,6 +292,15 @@ export class SessionController {
     this.deps.setFilterActive(sql !== null, sql ?? undefined, undefined);
   }
 
+  /** #414: the origin (mod folder identity) the session actually loaded this plugin name from —
+   *  what the Track command needs to know which mod folder to track, resolved off the same
+   *  already-fetched plugin list the tree itself reads, not a stale/current MO2 resolution.
+   *  `undefined` when the session has no plugin by this name at all. */
+  async resolveOrigin(pluginName: string): Promise<string | undefined> {
+    const plugins = await this.deps.repository.getPlugins();
+    return plugins.find((p) => p.name === pluginName)?.origin;
+  }
+
   /** #279 / ADR-0035 § Live mutation: re-read one plugin from the copy its name resolves to now.
    *  The path and origin come from the caller — Mod Management resolved them; the backend cannot
    *  and must not.
@@ -296,4 +332,41 @@ export class SessionController {
     return true;
   }
 
+  /** #414/ADR-0041: the Track gesture. Origin names the mod folder — every loaded plugin sharing
+   *  it is tracked together, resolved backend-side, same division of labour as `rereadPlugin`.
+   *
+   *  Returns whether it happened. A failure is ADR-0026's "explicit action failed" tier: the user
+   *  ran a command, so it is notified rather than only logged, and nothing is refreshed since
+   *  nothing changed (a 409 here means the mod folder was already tracked). */
+  async track(
+    origin: string, preset: 'Edits' | 'Everything', options: { onProgress?: (status: TrackStatus) => void } = {},
+  ): Promise<boolean> {
+    // #414 review F2: the POST stays blocking, same contract as loadExplicitSession's own — so
+    // progress is polled off GET /plugins/track/status *alongside* the still in-flight POST.
+    // Started before the await, stopped in the finally: the poll's whole reason to exist is the
+    // window this await covers.
+    const stopPolling = this.pollTrackStatus(options.onProgress);
+    try {
+      const { error, response } = await this.deps.client.POST('/plugins/track', {
+        body: { origin, preset },
+      });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[SessionController] track(${origin}) failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Could not track "${origin}" — ${text}`);
+        return false;
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[SessionController] track(${origin}) threw: ${message}`);
+      this.deps.showError(`mEdit: Could not track "${origin}" — ${message}`);
+      return false;
+    } finally {
+      stopPolling();
+    }
+    // Tracked-ness (.git presence) isn't plugin metadata the tree renders itself, but the caller
+    // still needs a chance to re-register the new repo with vscode.git's SCM panel.
+    this.deps.refreshTree();
+    return true;
+  }
 }

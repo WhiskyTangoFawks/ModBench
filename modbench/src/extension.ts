@@ -15,6 +15,8 @@ import {
 } from './medit/ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
 import { ApiPluginRepository } from './medit/PluginRepository';
+import { trackedModFoldersOf, registerTrackedRepositories } from './medit/trackedRepositories';
+import { trackProgressMessage } from './medit/trackProgress';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './medit/messages';
@@ -216,6 +218,41 @@ async function refreshMatchingPlugins(repository: ApiPluginRepository, outputCha
   pluginsTree?.refreshDecorations();
 }
 
+/** The one shape this extension needs from `vscode.git`'s exported API (ADR-0041: "the native git
+ *  UI is the review surface") — deliberately not the full upstream `git.d.ts`, just the two members
+ *  actually called, so there is nothing here to drift out of sync with an API surface this
+ *  extension otherwise never touches. */
+interface MinimalGitApi {
+  openRepository(uri: vscode.Uri): Thenable<unknown>;
+}
+interface GitExtensionExports {
+  getAPI(version: 1): MinimalGitApi;
+}
+
+/** #414/ADR-0041: one `openRepository` per distinct tracked mod folder, so each shows its own
+ *  native Source Control group — re-run whenever the session becomes newly readable
+ *  (`notifyConflictsComputed`'s own call site) and immediately after a successful Track, so a
+ *  freshly tracked repo appears without waiting for the next activation. Silent no-op (logged, not
+ *  surfaced) when `vscode.git` isn't installed/enabled: this only ever narrows the native UI this
+ *  ticket adds, never blocks reading or editing. */
+async function registerTrackedRepositoriesForSession(repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel): Promise<void> {
+  try {
+    const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
+    if (!gitExtension) {
+      outputChannel.warn('[extension] vscode.git extension not found — tracked mods will not appear in Source Control');
+      return;
+    }
+    const exports = gitExtension.isActive ? gitExtension.exports : await gitExtension.activate();
+    const gitApi = exports.getAPI(1);
+
+    const plugins = await repository.getPlugins();
+    const folders = trackedModFoldersOf(plugins);
+    await registerTrackedRepositories((folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), folders);
+  } catch (err) {
+    outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 /** Leave editing: tear down the editing backend. #273: there is no separate loadout view mode
  *  to switch back to any more — the loadout views were never hidden (#268), and Referenced By
  *  governs its own visibility. */
@@ -350,7 +387,12 @@ export function activate(context: vscode.ExtensionContext) {
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
     setFilterActive,
     refreshMatchingPlugins: () => { void refreshMatchingPlugins(repository, outputChannel); },
-    notifyConflictsComputed: () => broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED }),
+    notifyConflictsComputed: () => {
+      broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED });
+      // #414/ADR-0041: the session just became newly readable — the one reliable point (see this
+      // dep's own doc comment) to (re-)register every tracked mod's repo with vscode.git.
+      void registerTrackedRepositoriesForSession(repository, outputChannel);
+    },
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
   const { modListProvider, downloadsProvider, pluginListProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository) });
@@ -359,6 +401,7 @@ export function activate(context: vscode.ExtensionContext) {
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
+    registerTrackCommand(controller, outputChannel, () => registerTrackedRepositoriesForSession(repository, outputChannel)),
     ...registerEditorCommands({
       context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, log, outputChannel,
     }),
@@ -918,6 +961,53 @@ function registerRevealInExplorerCommand(
       outputChannel.error(`[extension] revealInExplorer for "${name}" failed: ${err instanceof Error ? err.message : String(err)}`);
       void vscode.window.showErrorMessage(`Modbench: Failed to reveal "${name}" in Explorer.`);
     }
+  });
+}
+
+/** #414/ADR-0041: the Track gesture. Resolves the clicked row's plugin name to the mod folder the
+ *  session actually loaded it from, asks which `.gitignore` preset to generate (Edits is the
+ *  default — Everything is the opt-in authoring choice), then delegates the HTTP call to
+ *  `SessionController`. `onTracked` re-registers the native SCM panel for the newly tracked repo
+ *  immediately, without waiting for the next activation.
+ *
+ *  AC: "reports progress" — a mega-plugin's complete serialization is a one-time, worst-case
+ *  tens-of-seconds cost (ADR-0041), so the whole `track` call runs under the same Plugins-view
+ *  progress indicator #307 already built for the other long, blocking-POST operation this view
+ *  has (the session load) — same surface, same `say` narration, no second bespoke indicator. */
+function registerTrackCommand(
+  controller: SessionController, outputChannel: vscode.LogOutputChannel, onTracked: () => Promise<void>,
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.pluginListTree.track', async (node: PluginListNode) => {
+    if (node?.kind !== 'plugin') return;
+    const name = node.plugin.name;
+    const origin = await controller.resolveOrigin(name);
+    if (!origin) {
+      // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
+      outputChannel.error(`[extension] track could not resolve an origin for "${name}"`);
+      void vscode.window.showErrorMessage(`Modbench: Could not resolve which mod "${name}" belongs to.`);
+      return;
+    }
+
+    const choice = await vscode.window.showQuickPick(
+      [
+        { label: 'Edits', description: 'Ledger only — recommended for downloaded mods' },
+        { label: 'Everything', description: 'Ledger + assets — for authoring a mod from scratch' },
+      ],
+      { placeHolder: `Track "${name}" — what should its .gitignore include?` },
+    );
+    if (!choice) return;
+
+    await withPluginsViewProgress(async () => {
+      say(trackProgressMessage(origin, { phase: 'Idle', recordsDone: 0, recordsTotal: 0 }));
+      const ok = await controller.track(origin, choice.label as 'Edits' | 'Everything', {
+        // #414 review F2: "reports progress" (AC4) — narrates the same Plugins-view message this
+        // command already showed a static version of, updated on each poll tick.
+        onProgress: (status) => say(trackProgressMessage(origin, status)),
+      });
+      if (!ok) return;
+      void vscode.window.showInformationMessage(`Modbench: Tracked "${origin}".`);
+      await onTracked();
+    });
   });
 }
 

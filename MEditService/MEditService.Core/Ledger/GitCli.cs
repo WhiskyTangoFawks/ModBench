@@ -13,6 +13,28 @@ namespace MEditService.Core.Ledger;
 /// </summary>
 internal static class GitCli
 {
+    // Checked once, early, by every entry point about to run git for the first time in a call
+    // (LedgerRepository.Track) — a missing git-on-PATH must surface as one named, actionable
+    // failure, never as a raw exception cascade (comment 1, #414 / ADR-0026). `Process.Start` throws
+    // Win32Exception ("No such file or directory") when the executable can't be found on PATH; that
+    // is the one expected failure mode this wraps — anything else (git present but broken) still
+    // surfaces here rather than at a random later `Run` call, since the check runs before any of
+    // those.
+    internal static void EnsureOnPath()
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("git", "--version") { RedirectStandardOutput = true, RedirectStandardError = true };
+            using var process = Process.Start(psi) ?? throw new GitUnavailableException();
+            process.WaitForExit();
+            if (process.ExitCode != 0) throw new GitUnavailableException();
+        }
+        catch (Exception ex) when (ex is not GitUnavailableException)
+        {
+            throw new GitUnavailableException(ex);
+        }
+    }
+
     internal static string Run(string gitDir, string workTree, params string[] args)
     {
         var (exitCode, stdout, stderr) = Execute(gitDir, workTree, args);
@@ -53,5 +75,33 @@ internal static class GitCli
         Task.WaitAll(stdoutTask, stderrTask);
         process.WaitForExit();
         return (process.ExitCode, stdoutTask.Result, stderrTask.Result);
+    }
+}
+
+/// <summary>Thrown by <see cref="GitCli.EnsureOnPath"/> when git cannot be run at all — named and
+/// actionable (the message names the product requirement, ADR-0041: "git on PATH is a stated
+/// product requirement") rather than surfacing as whatever raw exception the OS gave for a missing
+/// executable.</summary>
+public sealed class GitUnavailableException : Exception
+{
+    private const string DefaultMessage = "git was not found on PATH. Modbench's tracking features require git to be installed and on PATH.";
+
+    // RCS1194: the three standard exception constructors, for well-behaved rethrow/serialization
+    // callers generally — not how GitCli.EnsureOnPath itself throws this (the Exception?-taking
+    // constructor below), which pins the one actionable message every caller should see.
+    public GitUnavailableException() : base(DefaultMessage)
+    {
+    }
+
+    public GitUnavailableException(string message) : base(message)
+    {
+    }
+
+    public GitUnavailableException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
+
+    internal GitUnavailableException(Exception? inner) : base(DefaultMessage, inner)
+    {
     }
 }

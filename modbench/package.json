@@ -19,6 +19,9 @@
   "activationEvents": [
     "onStartupFinished"
   ],
+  "extensionDependencies": [
+    "vscode.git"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "configuration": {
@@ -392,6 +395,11 @@
         "command": "modbench.pluginListTree.rereadPlugin",
         "title": "Re-read Plugin from Its Current File",
         "category": "Modbench"
+      },
+      {
+        "command": "modbench.pluginListTree.track",
+        "title": "Track…",
+        "category": "Modbench"
       }
     ],
     "menus": {
@@ -482,6 +490,10 @@
         },
         {
           "command": "modbench.pluginListTree.rereadPlugin",
+          "when": "false"
+        },
+        {
+          "command": "modbench.pluginListTree.track",
           "when": "false"
         }
       ],
@@ -724,6 +736,11 @@
           "command": "modbench.pluginListTree.rereadPlugin",
           "when": "view == modbench.pluginListTree && viewItem == pluginDrifted",
           "group": "pluginActions@2"
+        },
+        {
+          "command": "modbench.pluginListTree.track",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
+          "group": "pluginActions@3"
         }
       ]
     },

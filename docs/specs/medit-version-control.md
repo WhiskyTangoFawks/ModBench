@@ -1,6 +1,10 @@
 # Version control — Surface Specification (Track, branch, compile)
 
-**Status: Designed, not yet implemented.** This is the Track/Compile surface spec the
+**Status: partially implemented — Track shipped (#414); everything else designed, not yet
+implemented.** Track is live end to end: preset QuickPick, progress-reported eager
+serialization, pristine `main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256`
+trailers, checked-out `edit` branch, parked `refs/medit/last-compile/<plugin>` ref, and
+native SCM registration via `vscode.git` `openRepository`. This is the Track/Compile surface spec the
 milestone-5 rebuild names ([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
 and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417). It is written ahead of
 implementation deliberately — the closeout slice (#418) trues it up to **Implemented**,
@@ -42,6 +46,40 @@ review work:
 | **Save & Compile** | Command from the record editor, plugin row, and palette; diagnostics to the Problems panel |
 | **External change** | One modal dialog per affected repo; rebase offer as a follow-up notification |
 
+## The workflows
+
+The point of this surface is to express mod editing in terms of git workflows that
+already exist. Nothing below is enforced, stored, or branched on (ADR-0041 amendment:
+Track is uniform; Authored vs Modified is workflow, not a mode) — each is an ordinary git
+topology the user drives with ordinary git gestures, and drifting between them is just
+using git.
+
+- **Modify a downloaded mod** — the maintain-a-patch-branch workflow. Track (Edits
+  preset); pristine upstream sits on `main`, never merged into and never checked out in
+  normal use; all work happens on the edit branch. Edit → review dirt in the panel →
+  commit → Save & Compile → test in game, repeat. `git diff main <branch>` stays
+  "everything I changed against upstream" for exactly as long as `main` stays pristine —
+  which is this workflow's one discipline, kept by the user, not by Modbench.
+- **Take an upstream update** — a standard rebase: the branch stands still, `main` moves
+  under it. The update lands as an external binary change; `Absorb Upstream Update`
+  commits the new pristine state to `main` as new baselines, and the offered rebase is
+  `git rebase` with the platform's merge editor for conflicts. Uncommitted dirt refuses
+  the rebase exactly as git would — commit, stash, or discard first is ordinary git
+  hygiene, not a Modbench rule. Under the Everything preset the update also overwrites
+  tracked assets in place, arriving as working-tree changes to be sorted with the same
+  gestures.
+- **Author a mod** — feature-branch-and-merge, the default workflow of every codebase.
+  Identical to modifying with one difference: the user merges the edit branch into `main`
+  at will, because `main` is the release line, not a pristine record. Nothing selects
+  this — it is simply what merging to `main` means, and the first merge is the moment a
+  mod stops having a pristine baseline to diff against.
+- **Review an agent's changes** — reviewing a contributor's diff. Every edit, whether a
+  human's, a script's, or an agent's, lands as working-tree dirt; nothing becomes history
+  until someone commits. The panel is therefore the review gate for agentic work by
+  construction — inspect the diff, revert the wrong, commit the accepted — with commit as
+  the acceptance gesture. (Agent runs as branches with merge = acceptance is the deferred
+  richer form; this is the mechanism that ships now.)
+
 ## User Stories
 
 1. As a user, I want to track a mod with one explicit gesture and a clear preset choice, so
@@ -64,6 +102,9 @@ review work:
    forked mod is ordinary git work, structured for me.
 8. As a user, I want a corrupt or stale binary detected at load with a loud offer to
    rebuild it from my text, so that a crash never silently costs me work.
+9. As a user, I want edits made by an agent or script to land as ordinary working-tree
+   changes, so that I review, revert, or commit them in the panel like any contributor's
+   diff before they become history.
 
 ## The surfaces
 
@@ -138,8 +179,11 @@ review work:
   panel against the ledger files; only structurally unemittable states refuse, as a typed
   message naming the reason — including states that cannot be emitted without changing
   FormKeys (no silent renumber; ADR-0041 amendment).
-- **Pristine restore**: compiling at ref `main` (no checkout — the edit branch and its
-  dirt are untouched) restores the pristine binary behind one confirmation.
+- **Compile at `main`**: compiling at ref `main` (no checkout — the edit branch and its
+  dirt are untouched) writes the binary as `main` has it, behind one confirmation. In the
+  Modified workflow that is the pristine restore; in the Authored workflow it rebuilds
+  the release line. No mode is stored, so the confirmation names the ref, never
+  "pristine".
 - Each compile parks a snapshot commit at `refs/medit/last-compile/<plugin>` — invisible
   here, load-bearing for the dialog below and for crash repair.
 
@@ -154,10 +198,14 @@ Modbench (bridge watcher live, hash check at load — both compare against the p
   (version <old> → <new>)`).
 - **Buttons**: `Absorb Upstream Update` / `Keep as My Edit` / Esc. The default (first)
   button follows the `Meta-SHA256` compare — trailers may inform defaults, never actions
-  (ADR-0041 amendment); the human always answers.
+  (ADR-0041 amendment); the human always answers. The dialog is uniform across
+  workflows: for an authored mod's own xEdit session the meta tell doesn't fire and the
+  default is already `Keep as My Edit`.
 - **Absorb Upstream Update**: new baselines committed to `main` by plumbing (no checkout,
   fresh trailers), then a non-modal notification offers the rebase (`Rebase Now` /
-  `Later`). Rebase with any uncommitted dirt refuses, naming the paths — commit, stash, or
+  `Later`). Absorb commits to `main` as it stands: if the user has merged into `main`
+  (the Authored workflow), there is no pristine left to diff against — that is the
+  topology they chose, not a state Modbench detects or repairs. Rebase with any uncommitted dirt refuses, naming the paths — commit, stash, or
   discard is the user's move, then re-run via `Modbench: Rebase onto Updated Baseline`.
   Conflicts open in VS Code's native merge editor on the ledger JSON.
 - **Keep as My Edit**: the change deserializes into working-tree dirt on the affected

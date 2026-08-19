@@ -82,6 +82,8 @@ function makeRepository({
     getActiveFilter: vi.fn().mockResolvedValue(activeFilter),
     getPlugins: vi.fn().mockResolvedValue(plugins),
     getSessionStatus: vi.fn().mockResolvedValue(makeStatus()),
+    // #414 review F2.
+    getTrackStatus: vi.fn().mockResolvedValue({ phase: 'Idle', recordsDone: 0, recordsTotal: 0 }),
     getRecordTypes: vi.fn().mockResolvedValue([]),
     getRecords: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   } as any;
@@ -711,6 +713,153 @@ describe('SessionController.rereadPlugin', () => {
 
     expect(ok).toBe(false);
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
+  });
+});
+
+// ── resolveOrigin (#414) ─────────────────────────────────────────────────────
+
+describe('SessionController.resolveOrigin', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('finds the loaded origin for a plugin name', async () => {
+    const repository = makeRepository({ plugins: makePlugins(2) });
+    const deps = makeDeps({ repository });
+    const controller = new SessionController(deps);
+
+    const origin = await controller.resolveOrigin('Plugin1.esp');
+
+    expect(origin).toBe('Data');
+  });
+
+  it('answers undefined for a name the session has not loaded', async () => {
+    const repository = makeRepository({ plugins: makePlugins(2) });
+    const deps = makeDeps({ repository });
+    const controller = new SessionController(deps);
+
+    const origin = await controller.resolveOrigin('NotLoaded.esp');
+
+    expect(origin).toBeUndefined();
+  });
+});
+
+// ── track (#414) ────────────────────────────────────────────────────────────
+
+describe('SessionController.track', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs the origin and preset, and refreshes the tree', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    const ok = await controller.track('ModA', 'Edits');
+
+    expect(ok).toBe(true);
+    expect(deps.client.POST).toHaveBeenCalledWith('/plugins/track', {
+      body: { origin: 'ModA', preset: 'Edits' },
+    });
+    expect(deps.refreshTree).toHaveBeenCalled();
+  });
+
+  // ADR-0026 "explicit action failed" tier: the user asked for this, so a failure is a
+  // notification, not a log line — and nothing is refreshed, because nothing changed.
+  it('surfaces a failure and reports that it did not happen', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue(drainedError(409, 'This mod folder is already tracked.'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const ok = await controller.track('ModA', 'Edits');
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('already tracked'));
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a thrown request the same way', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const ok = await controller.track('ModA', 'Edits');
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
+  });
+});
+
+// #414 review F2: "reports progress" (AC4) — polled off GET /plugins/track/status alongside the
+// still in-flight track POST, the identical seam/idiom the load-progress suite above tests
+// (a held POST + fake timers, no VS Code types).
+describe('SessionController.track progress polling', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  /** A track POST that stays in flight until the returned `finish` is called — mirrors
+   *  `heldLoad()` above; the whole point is what happens *during* that window. */
+  function heldTrack() {
+    let finish!: () => void;
+    const held = new Promise((resolve) => {
+      finish = () => resolve({ response: { ok: true }, data: { origin: 'ModA' } });
+    });
+    return { POST: vi.fn().mockReturnValue(held), finish };
+  }
+
+  it('reports each poll\'s progress to onProgress while the track POST is still in flight', async () => {
+    const { POST, finish } = heldTrack();
+    const repository = makeRepository();
+    repository.getTrackStatus
+      .mockResolvedValueOnce({ phase: 'Serializing', recordsDone: 10, recordsTotal: 100 })
+      .mockResolvedValueOnce({ phase: 'Serializing', recordsDone: 50, recordsTotal: 100 });
+    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST }, repository }));
+    const onProgress = vi.fn();
+
+    const track = ctrl.track('ModA', 'Edits', { onProgress });
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(onProgress).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: 'Serializing', recordsDone: 10, recordsTotal: 100 }),
+    );
+    await vi.advanceTimersByTimeAsync(500);
+    expect(onProgress).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: 'Serializing', recordsDone: 50, recordsTotal: 100 }),
+    );
+    expect(onProgress).toHaveBeenCalledTimes(2);
+
+    finish();
+    await track;
+  });
+
+  it('stops polling once the track POST settles, so a finished track leaves no timer running', async () => {
+    const { POST, finish } = heldTrack();
+    const repository = makeRepository();
+    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST }, repository }));
+    const onProgress = vi.fn();
+
+    const track = ctrl.track('ModA', 'Edits', { onProgress });
+    finish();
+    await track;
+    repository.getTrackStatus.mockClear();
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(repository.getTrackStatus).not.toHaveBeenCalled();
+  });
+
+  it('a track with no onProgress polls nothing at all', async () => {
+    const { POST, finish } = heldTrack();
+    const repository = makeRepository();
+    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST }, repository }));
+
+    const track = ctrl.track('ModA', 'Edits');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(repository.getTrackStatus).not.toHaveBeenCalled();
+
+    finish();
+    await track;
   });
 });
 

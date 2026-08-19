@@ -69,6 +69,7 @@ try
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
     builder.Services.AddSingleton<RecordTextCodec>();
+    builder.Services.AddSingleton<TrackService>();
 
     var app = builder.Build();
 
