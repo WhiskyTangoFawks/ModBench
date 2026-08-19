@@ -19,24 +19,22 @@ One subagent, dispatched in parallel with the other two review axes — **first*
 it runs the mutation tool itself and costs tens of minutes (C# ~17, TS ~4) where they
 cost a couple. It is fine that it reports last.
 
-Two dispatch rules, both learned from the executor still committing to the branch
-while this axis ran:
+Two dispatch rules:
 
 - **Resolve the fixed point to an immutable SHA before dispatch** (`git rev-parse`),
-  never a symbolic ref or branch name. A run against a moving HEAD counted 0 changed
-  files and filtered every mutant, reporting an empty audit as a clean one.
+  never a symbolic ref or branch name — a symbolic ref can move mid-run and change
+  what the diff resolves to.
 - **The axis never shares a worktree with a live executor.** Give it its own
   throwaway worktree pinned at that SHA — `git worktree add --detach <path> <sha>` —
-  and remove it after the report. Pinning is then free and a destructive reset is
-  structurally impossible; one axis briefed "change no files" ran `git reset --hard`
-  on the shared worktree to pin itself and discarded another agent's commit.
+  and remove it after the report. Pinning is then free, and a destructive ref/history
+  operation in that worktree is then structurally incapable of touching anyone else's
+  work.
 
-Both of those failed the same way — an empty audit read as a clean one — so the
-wrappers now refuse it rather than trusting the reader: they resolve the diff with git
-in the worktree they're run from, and `parse-report.py` exits 2 when no mutant was
-tested (#362, `stryker/stryker.md` §Guardrails). **The axis reports how many mutants
-were tested, not just its exit code** — that number is what makes "clean" mean
-anything, and its absence is what let a zero-mutant run pass for a pass.
+The wrappers resolve the diff with git themselves rather than trusting the tool's own
+scoping, and `parse-report.py` exits 2 when no mutant was tested rather than reporting
+"No issues found" (`stryker/stryker.md` §Guardrails). **The axis reports how many
+mutants were tested, not just its exit code** — that number is what makes "clean" mean
+anything.
 
 Brief:
 

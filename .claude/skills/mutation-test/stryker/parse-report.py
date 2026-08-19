@@ -140,9 +140,9 @@ def collect_results(data: dict, diff_only: bool, repo_root: Path | None, target:
 def audit_or_die(data: dict, report_path: Path) -> None:
     """A report in which no mutant was tested is a mis-scope, not a pass.
 
-    This is the exact shape of #362: Stryker filtered all 5334 candidates out and
-    exited 0, and "No issues found." read as a clean bill of health. Zero audited
-    mutants must therefore be louder than any survivor, never quieter."""
+    A filtered-out run and a clean run both print "No issues found" otherwise, and
+    the failure reads in the reassuring direction. Zero audited mutants must
+    therefore be louder than any survivor, never quieter."""
     statuses = collections.Counter()
     reasons = collections.Counter()
     for fd in data.get("files", {}).values():

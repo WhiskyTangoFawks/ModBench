@@ -15,10 +15,10 @@ cd modbench && bash ../.claude/skills/mutation-test/stryker/run-js.sh --file dep
 ```
 
 `run-js.sh` prints its scope, then the report path, then the parsed survivors — same
-exit codes as the .NET side's `run.sh` (0 killed, 1 survivors await disposition, 2 tool
-error, 3 nothing in scope). Raw Stryker output goes to a log file and never reaches
-agent context; that matters here because a bare `npx stryker run` prints the mutation
-score table, and a score in context becomes a target (`TRIAGE.md` §Why dispositions).
+exit-code contract as the .NET side's `run.sh` (`stryker.md`'s table). Raw Stryker
+output goes to a log file and never reaches agent context; that matters here because a
+bare `npx stryker run` prints the mutation score table, and a score in context becomes
+a target (`TRIAGE.md` §Why dispositions).
 
 Config is `modbench/stryker.config.json`. Reports land in `modbench/reports/mutation/`
 (gitignored).
@@ -32,14 +32,12 @@ not the other mutates on `--all` and silently never on a diff.
 
 **The runner invokes `node_modules/.bin/stryker`, never `npx stryker`**, and runs
 `npm ci` first when `node_modules` is absent. `npx` falls back to the registry when
-nothing local matches, and the registry's `stryker` is an unrelated abandoned package
-(#374). Detached review worktrees are the case that bites: they never carry
-`node_modules`.
+nothing local matches, and the registry's `stryker` is an unrelated abandoned package.
+Detached review worktrees are the case that bites: they never carry `node_modules`.
 
-That accident of the JS runner turned out to be the correct design on both sides: the
-.NET runner now does the same, because Stryker.NET's own `since` reads the wrong checkout
-from a linked worktree (#362, `stryker.md` §Guardrails). Neither wrapper delegates diff
-resolution to the tool.
+The .NET runner follows the same design, computing its own diff rather than delegating
+to Stryker.NET's `since` — which reads the wrong checkout from a linked worktree
+(`stryker.md` §Guardrails). Neither wrapper delegates diff resolution to the tool.
 
 ## Scope, and why it stops where it does
 
@@ -116,13 +114,12 @@ survivor list reaches context.
 > trap — it writes timestamped `StrykerOutput/<date>/` directories.
 
 > ⚠️ **Concurrency is capped in `stryker.config.json` (`concurrency: 4`,
-> `maxTestRunnerReuse: 40`) because the default OOMed the machine.** At the default
-> (cpus−1 = 11 workers here) each vitest worker grows toward ~3 GB over a full run, and
-> the kernel OOM killer picks VS Code as its preferred victim — it killed VS Code twice
-> in the week of 2026-08-14 and took down the whole desktop session on the 16th.
-> `maxTestRunnerReuse` restarts each worker after 40 runs, bounding the growth. Raising
-> either value is how the crash comes back. One mutation run at a time, machine-wide:
-> `run-js.sh` refuses to start beside a live run of either runtime.
+> `maxTestRunnerReuse: 40`) — do not raise either value.** At the default (cpus−1 = 11
+> workers here) each vitest worker grows toward ~3 GB over a full run, and the kernel
+> OOM killer targets VS Code before it targets the runaway workers.
+> `maxTestRunnerReuse` restarts each worker after 40 runs, bounding the growth. One
+> mutation run at a time, machine-wide: `run-js.sh` refuses to start beside a live run
+> of either runtime.
 
 ## Baseline
 

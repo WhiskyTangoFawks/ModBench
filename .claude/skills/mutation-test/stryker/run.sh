@@ -9,9 +9,8 @@
 #   bash ../.claude/skills/mutation-test/stryker/run.sh --file Foo.cs      # one file
 #   bash ../.claude/skills/mutation-test/stryker/run.sh --diff-only        # narrow to diffed lines
 #
-# Exit: 0 all killed | 1 survivors await disposition | 2 tool error | 3 nothing in scope.
-# Exit 1 means *survivors await disposition*, not *failure*. Exit 3 means the diff held no
-# mutable C#, which is a clean skip, not a problem.
+# Exit: 0/1/2/3 — see stryker.md's table. 1 and 3 are not failures (survivors await
+# disposition; nothing in scope is a clean skip).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,7 +33,9 @@ done
 
 # A second concurrent run contends for the same build output and one of the two dies with
 # no report. Observed in the wild: a run started because the first looked hung.
-if pgrep -f "dotnet-stryker" >/dev/null 2>&1; then
+# The match must be a real runner process: a shell whose command line merely quotes the
+# pattern (a watcher/poll loop) must not trip this guard, so filter matches by comm.
+if pgrep -f "dotnet-stryker" 2>/dev/null | xargs -r ps -o comm= -p 2>/dev/null | grep -qvE '^(bash|sh|zsh)$'; then
     echo "ERROR: a dotnet-stryker run is already in progress. Wait for it or kill it." >&2
     exit 2
 fi
@@ -47,20 +48,13 @@ trap 'rm -f "$RUN_CONFIG"' EXIT
 # --- resolve scope, and refuse to spend the ~8min fixed cost on an empty one ---
 #
 # Diff scoping is computed *here*, with git, and handed to Stryker as an explicit mutate
-# list. Stryker's own `since` is never enabled — #362: its GitInfoProvider derives the
-# repository root as `Repository.Discover(projectPath).Split(".git")[0]`, which inside a
-# linked worktree yields `<main-checkout>/` (the git dir is
-# `<main>/.git/worktrees/<name>`). It then diffs *that* checkout's working directory, so a
-# run in a detached review worktree scoped itself against the maintainer's unrelated
-# ambient edits, filtered out all 5334 mutants, and exited 0. There is no config or CLI
-# knob for the repository path. Computing the diff ourselves is also what run-js.sh has
-# always done.
+# list. Stryker's own `since` is never enabled — it reads the wrong repository root
+# inside a linked worktree, with no config/CLI knob to fix it (stryker.md
+# §Guardrails). Computing the diff ourselves is also what run-js.sh has always done.
 #
-# The target ref is still resolved up front. That began as protection against Stryker
-# validating its own `since` target only *after* building, mutating and capturing coverage
-# — a bad ref cost ~8 minutes and left an output directory with no report at all. Stryker
-# no longer sees the ref, but resolving it here is still what turns a typo into an instant
-# message instead of a silently empty scope. Short SHAs do not resolve; a full SHA does.
+# The target ref is still resolved and verified up front, so a bad ref fails in under a
+# second instead of after paying the full build+mutate+coverage cost. Short SHAs do not
+# resolve; a full SHA does.
 MUTATE_JSON="null"
 KEEP_NEGATIONS="true"
 
@@ -120,9 +114,9 @@ if mutate is not None:
         mutate = mutate + [p for p in sc.get("mutate", []) if p.startswith("!")]
     sc["mutate"] = mutate
 
-# Unconditional, and the point of #362: scope is already decided above, by git in *this*
-# worktree. Leaving `since` in the generated config would hand that decision back to a
-# resolver that reads the wrong checkout.
+# Unconditional: scope is already decided above, by git in *this* worktree. Leaving
+# `since` in the generated config would hand that decision back to a resolver that
+# reads the wrong checkout (stryker.md §Guardrails).
 sc.pop("since", None)
 
 # Dots is the only progress signal that survives redirection: plain characters, no ANSI

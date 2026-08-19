@@ -35,12 +35,11 @@ scope) are normal outcomes, not failures.
   wrappers refuse to start beside a live run.
 - Work from the wrappers' parsed output only; never open the raw report.
 - **A zero-finding result against a diff the review says exists is a mis-scope, not a
-  clean audit.** The wrappers now enforce this rather than asking you to remember it:
-  they compute the changed-file set with git themselves, and `parse-report.py` exits 2
-  on a report where no mutant was tested instead of printing "No issues found." Both
-  exist because a review run reported a clean pass having tested **zero** of 5334
-  mutants (#362). If you see that exit-2 message, re-scope with `--file` on the changed
-  files; never report the run as clean.
+  clean audit.** The wrappers enforce this rather than asking you to remember it: they
+  compute the changed-file set with git themselves, and `parse-report.py` exits 2 on a
+  report where no mutant was tested instead of printing "No issues found." If you see
+  that exit-2 message, re-scope with `--file` on the changed files; never report the
+  run as clean.
 - **Read the count, not the success line.** `exit 0` plus "No issues found." is a claim
   about mutants that *ran*. Before reporting an axis clean, state how many were actually
   tested — an audit of nothing passes every check that isn't looking for it.
@@ -162,8 +161,8 @@ rejected; there is no score to reach.
 ### Accept / Equivalent (stay open by design)
 - file:line — invariant: <why no test can observe the behavior>.
 
-N findings: a delete, b fix-assertion, c red-green, d accept — sums to the parsed
-report's N.
+N findings: a <disposition>, b <disposition>, ... — one count per disposition
+section actually used above, summing to the parsed report's N.
 ```
 
 Before reporting, the table must survive its own gate:

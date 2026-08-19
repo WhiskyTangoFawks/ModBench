@@ -9,13 +9,11 @@
 #   bash ../.claude/skills/mutation-test/stryker/run-js.sh --all           # full corpus + baseline snapshot
 #   bash ../.claude/skills/mutation-test/stryker/run-js.sh --file deployer.ts
 #
-# Exit: 0 all killed | 1 survivors await disposition | 2 tool error | 3 nothing in scope.
-# Exit 1 means *survivors await disposition*, not *failure*. Exit 3 means the diff held
-# no mutable TypeScript, which is a clean skip, not a problem.
+# Exit: 0/1/2/3, same contract as run.sh (stryker.md's table). 1 and 3 are not failures.
 #
-# Memory: concurrency and maxTestRunnerReuse are capped in stryker.config.json because
-# the default (cpus-1 workers, unbounded reuse) OOMed the machine three times in one
-# week, taking VS Code and once the whole session with it. Do not raise them.
+# Memory: concurrency and maxTestRunnerReuse are capped in stryker.config.json — the
+# default (cpus-1 workers, unbounded reuse) OOMs the machine. Do not raise them; see
+# stryker-js.md.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,11 +35,11 @@ done
 [[ -f "$CONFIG" ]] || { echo "ERROR: run from modbench/ (no $CONFIG here)." >&2; exit 2; }
 
 # Never `npx stryker`: with no local match npx fetches a same-named package from the
-# registry, and `stryker` there is an unrelated abandoned package, not this project's
-# @stryker-mutator toolchain. It failed loudly once (#374, fresh detached worktree:
-# `Cannot find module 'rx'`) but the quiet version of that is a mutation report full of
-# plausible garbage. Same pinning rule `npm run package` already applies to vsce.
-# Detached review worktrees never carry node_modules, so install rather than fail.
+# registry, and the package there is unrelated to this project's @stryker-mutator
+# toolchain. A missing dependency fails loudly; a mismatched one produces a mutation
+# report full of plausible garbage instead. Same pinning rule `npm run package`
+# already applies to vsce. Detached review worktrees never carry node_modules, so
+# install rather than fail.
 STRYKER="node_modules/.bin/stryker"
 if [[ ! -x "$STRYKER" ]]; then
     echo "No local Stryker binary — installing dependencies (npm ci)..."
@@ -50,9 +48,10 @@ if [[ ! -x "$STRYKER" ]]; then
 fi
 
 # One mutation run at a time, across both runtimes: a second run is what pushed the
-# machine over the edge on Aug 14. Matches "stryker run" (JS) and "dotnet-stryker" (.NET);
-# neither pattern matches this script's own command line.
-if pgrep -f "stryker run|dotnet-stryker" >/dev/null 2>&1; then
+# machine over the edge on Aug 14. Matches "stryker run" (JS) and "dotnet-stryker" (.NET).
+# The match must be a real runner process: a shell whose command line merely quotes the
+# pattern (a watcher/poll loop) must not trip this guard, so filter matches by comm.
+if pgrep -f "stryker run|dotnet-stryker" 2>/dev/null | xargs -r ps -o comm= -p 2>/dev/null | grep -qvE '^(bash|sh|zsh)$'; then
     echo "ERROR: a mutation run is already in progress. Wait for it to finish." >&2
     exit 2
 fi
