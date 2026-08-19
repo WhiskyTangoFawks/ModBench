@@ -45,39 +45,30 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     private static readonly ConcurrentDictionary<Type, MethodInfo> SerializeMethods = new();
     private static readonly ConcurrentDictionary<(Type Record, Type Reader), MethodInfo> DeserializeMethods = new();
 
+    /// <summary>
+    /// The record's ledger text as bytes, without touching the filesystem — the same bytes
+    /// <see cref="SerializeAsync"/> writes, which is what lets the index store a document that is
+    /// byte-identical to the ledger file (ADR-0041) and lets a byte compare stand in for
+    /// dirty/ITM detection. Indexing a load order produces one of these per record, millions of
+    /// times, so a temp-file round trip per record is not an option.
+    /// </summary>
+    public async Task<byte[]> SerializeToBytesAsync(IMajorRecordGetter record, GameRelease gameRelease, CancellationToken cancel = default)
+    {
+        // No directory: nothing here writes a file, so there is no folder for the serializer to
+        // resolve anything against. SerializeAsync passes its target's folder instead, and
+        // RecordTextCodecInMemoryTests pins that the two produce identical bytes for a real record
+        // — if that ever stops holding, the difference is a real one and shows up there.
+        var bytes = await SerializeCoreAsync(record, gameRelease, directory: string.Empty, cancel).ConfigureAwait(false);
+        logger.LogTrace("Serialized record {FormKey} to {ByteCount} bytes", record.FormKey, bytes.Length);
+        return bytes;
+    }
+
     public async Task SerializeAsync(IMajorRecordGetter record, string filePath, GameRelease gameRelease, CancellationToken cancel = default)
     {
-        // No Directory.CreateDirectory here, deliberately: RecordTextCodec has no production
-        // caller yet (that's #370, and the ACs say nothing about directory-creation policy) — this
-        // is exactly the "machinery now, use it later" shape the root CLAUDE.md's Minimal-by-Default
-        // rule rejects. #370's caller decides that policy with its own test.
-        //
-        // Buffered in memory rather than streamed straight to filePath, deliberately: AC4's
-        // identical-state-identical-bytes promise is cross-platform (#414 pins the other half of
-        // this same invariant, core.autocrlf=false at repo init), but Newtonsoft's JsonTextWriter
-        // has no public NewLine of its own to pin — confirmed by reflection (JsonTextWriter declares
-        // no NewLine property at all) and by decompiling WriteIndent(), which reads
-        // `_writer.NewLine` off its own *private*, unreachable inner TextWriter. JsonWritingUnit
-        // builds that inner writer itself with no injection point, so there is no supported way to
-        // reach in and pin it before the first indent is written. Buffering and normalizing after
-        // the fact is therefore this codec's own responsibility, not a kernel configuration knob —
-        // same shape as the trailing newline below, which the kernel also doesn't provide.
+        // No Directory.CreateDirectory here, deliberately: this codec's file-writing caller decides
+        // directory-creation policy with its own test (#370's original note; still true).
         var directory = Path.GetDirectoryName(filePath);
-        using var buffer = new MemoryStream();
-        var streamPackage = new StreamPackage(buffer, directory ?? string.Empty);
-        var writer = WriterKernel.GetNewObject(streamPackage);
-        var metaData = new SerializationMetaData(gameRelease, null, null, null, cancel);
-
-        var serialize = ResolveSerializeMethod(record.GetType());
-        var task = (Task)serialize.Invoke(null, [writer, record, WriterKernel, metaData])!;
-        await task.ConfigureAwait(false);
-        WriterKernel.Finalize(streamPackage, writer);
-
-        // Two canonical-formatting guarantees the kernel itself doesn't make (AC4): no \r anywhere
-        // (normalizes whatever the platform's Environment.NewLine produced for the kernel's own
-        // indentation to bare \n — see the buffering comment above) and exactly one trailing \n
-        // (the kernel's own Finalize writes the closing brace and nothing after it).
-        var normalized = buffer.ToArray().Where(b => b != (byte)'\r').ToArray();
+        var bytes = await SerializeCoreAsync(record, gameRelease, directory ?? string.Empty, cancel).ConfigureAwait(false);
 
         // Write-then-rename, not a direct write to filePath: File.Create truncates its target
         // immediately, before any new byte lands, so a direct write leaves a previously-valid
@@ -93,10 +84,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         try
         {
             await using (var output = File.Create(tempPath))
-            {
-                await output.WriteAsync(normalized, cancel).ConfigureAwait(false);
-                output.WriteByte((byte)'\n');
-            }
+                await output.WriteAsync(bytes, cancel).ConfigureAwait(false);
 
             File.Move(tempPath, filePath, overwrite: true);
         }
@@ -109,7 +97,41 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         logger.LogTrace("Serialized record {FormKey} to {FilePath}", record.FormKey, filePath);
     }
 
-    /// <summary>Reads a record back from its JSON text.</summary>
+    /// <summary>
+    /// The one serialization path — both public entry points are this method plus a destination.
+    ///
+    /// Buffered in memory rather than streamed, deliberately: AC4's identical-state-identical-bytes
+    /// promise is cross-platform (#414 pins the other half of this same invariant,
+    /// core.autocrlf=false at repo init), but Newtonsoft's JsonTextWriter has no public NewLine of
+    /// its own to pin — confirmed by reflection (JsonTextWriter declares no NewLine property at
+    /// all) and by decompiling WriteIndent(), which reads `_writer.NewLine` off its own *private*,
+    /// unreachable inner TextWriter. JsonWritingUnit builds that inner writer itself with no
+    /// injection point, so there is no supported way to reach in and pin it before the first indent
+    /// is written. Buffering and normalizing after the fact is therefore this codec's own
+    /// responsibility, not a kernel configuration knob — same shape as the trailing newline below,
+    /// which the kernel also doesn't provide.
+    /// </summary>
+    private static async Task<byte[]> SerializeCoreAsync(
+        IMajorRecordGetter record, GameRelease gameRelease, string directory, CancellationToken cancel)
+    {
+        using var buffer = new MemoryStream();
+        var streamPackage = new StreamPackage(buffer, directory);
+        var writer = WriterKernel.GetNewObject(streamPackage);
+        var metaData = new SerializationMetaData(gameRelease, null, null, null, cancel);
+
+        var serialize = ResolveSerializeMethod(record.GetType());
+        var task = (Task)serialize.Invoke(null, [writer, record, WriterKernel, metaData])!;
+        await task.ConfigureAwait(false);
+        WriterKernel.Finalize(streamPackage, writer);
+
+        // Two canonical-formatting guarantees the kernel itself doesn't make (AC4): no \r anywhere
+        // (normalizes whatever the platform's Environment.NewLine produced for the kernel's own
+        // indentation to bare \n — see the buffering note above) and exactly one trailing \n (the
+        // kernel's own Finalize writes the closing brace and nothing after it).
+        return [.. buffer.ToArray().Where(b => b != (byte)'\r'), (byte)'\n'];
+    }
+
+    /// <summary>Reads a record back from its JSON text on disk.</summary>
     /// <param name="filePath">Path to read the record's JSON text from.</param>
     /// <param name="recordType">The concrete record type to construct (e.g. <c>typeof(Npc)</c>) —
     /// the text itself carries no self-describing type tag, so the caller (which already knows the
@@ -119,17 +141,47 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     public async Task<IMajorRecord> DeserializeAsync(string filePath, Type recordType, GameRelease gameRelease, CancellationToken cancel = default)
     {
         using var stream = File.OpenRead(filePath);
-        var streamPackage = new StreamPackage(stream, Path.GetDirectoryName(filePath) ?? string.Empty);
+        var record = await DeserializeCoreAsync(
+            stream, Path.GetDirectoryName(filePath) ?? string.Empty, recordType, gameRelease, cancel).ConfigureAwait(false);
+
+        logger.LogTrace("Deserialized record {FormKey} from {FilePath}", record.FormKey, filePath);
+        return record;
+    }
+
+    /// <summary>
+    /// Reads a record back from ledger text already in hand — the inverse of
+    /// <see cref="SerializeToBytesAsync"/>. This is how a typed read reconstitutes a record from
+    /// its stored document: the index holds the bytes, never a parsed object graph, and the
+    /// reflected <c>ColumnSpec</c> extractors run against the record this returns, so a field's
+    /// value is produced by exactly the same delegate whether it came from a plugin binary or from
+    /// its own ledger text.
+    /// </summary>
+    /// <param name="bytes">The record's JSON text.</param>
+    /// <param name="recordType">The concrete record type to construct (e.g. <c>typeof(Npc)</c>) —
+    /// the text itself carries no self-describing type tag, so the caller (which already knows the
+    /// type from its own ledger path/schema) states it.</param>
+    /// <param name="gameRelease">Game release the text was serialized under.</param>
+    /// <param name="cancel">Cancellation token.</param>
+    public async Task<IMajorRecord> DeserializeFromBytesAsync(byte[] bytes, Type recordType, GameRelease gameRelease, CancellationToken cancel = default)
+    {
+        using var stream = new MemoryStream(bytes, writable: false);
+        var record = await DeserializeCoreAsync(stream, string.Empty, recordType, gameRelease, cancel).ConfigureAwait(false);
+
+        logger.LogTrace("Deserialized record {FormKey} from {ByteCount} bytes", record.FormKey, bytes.Length);
+        return record;
+    }
+
+    private static async Task<IMajorRecord> DeserializeCoreAsync(
+        Stream stream, string directory, Type recordType, GameRelease gameRelease, CancellationToken cancel)
+    {
+        var streamPackage = new StreamPackage(stream, directory);
         var reader = ReaderKernel.GetNewObject(streamPackage);
         var metaData = new SerializationMetaData(gameRelease, null, null, null, cancel);
 
         var deserialize = ResolveDeserializeMethod(recordType, reader.GetType());
         var task = (Task)deserialize.Invoke(null, [reader, ReaderKernel, metaData])!;
         await task.ConfigureAwait(false);
-        var record = (IMajorRecord)task.GetType().GetProperty(nameof(Task<object>.Result))!.GetValue(task)!;
-
-        logger.LogTrace("Deserialized record {FormKey} from {FilePath}", record.FormKey, filePath);
-        return record;
+        return (IMajorRecord)task.GetType().GetProperty(nameof(Task<object>.Result))!.GetValue(task)!;
     }
 
     private static MethodInfo ResolveSerializeMethod(Type recordType) =>
