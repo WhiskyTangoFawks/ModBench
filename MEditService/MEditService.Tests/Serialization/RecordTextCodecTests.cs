@@ -131,9 +131,13 @@ public class RecordTextCodecTests
     // reproduces the *same* wrong output on every run of the golden test itself (the exact
     // "round-trip passes trivially when both directions share the same bug" shape flagged for this
     // ticket). This test instead serializes the same in-memory record twice, straight to bytes, with
-    // no golden fixture in the loop at all — a defect that made output depend on wall-clock time,
-    // object hash-code-ordered dictionary iteration, or any other non-content-driven source would
-    // show up here even if the golden fixture happened to be stale or wrong.
+    // no golden fixture in the loop at all — a defect that made output depend on wall-clock time or
+    // any other non-content-driven source would show up here even if the golden fixture happened to
+    // be stale or wrong. (MakeWeapon() has no dictionary-backed field, so this does not exercise
+    // hash-order-dependent iteration specifically — Weapon's own field order comes from the
+    // source-generated dispatch, not runtime enumeration, so there is nothing hash-order-dependent
+    // to catch on this fixture; a record type with a dictionary-backed field would extend this
+    // claim, not this one.)
     [Fact]
     public async Task SerializeAsync_CalledTwiceOnTheSameRecordState_ProducesByteIdenticalOutput()
     {
@@ -166,12 +170,13 @@ public class RecordTextCodecTests
     // JSON kernel's own indentation newlines are sourced from its private inner TextWriter's
     // NewLine, which this codec cannot reach to configure (confirmed by reflection and by
     // decompiling JsonTextWriter.WriteIndent — see RecordTextCodec.SerializeAsync's own comment) —
-    // so this codec normalizes after the fact instead. This test is green on arrival on this
-    // (Linux) platform regardless of whether that normalization exists, because
-    // Environment.NewLine is already "\n" here — see the vacuity note on the mutation-tested rival
-    // in the #412 report; a real failure was observed by applying the rival by hand
-    // (temporarily reintroducing a raw "\r\n" into the write path) rather than by relying on this
-    // assertion alone to prove itself.
+    // so this codec normalizes after the fact instead. On this (Linux) platform,
+    // Environment.NewLine is already "\n", so the normalization this test guards happens to be a
+    // no-op here today — but the guard itself is real: applying the rival by hand (temporarily
+    // reintroducing a raw "\r\n" into the write path) produced a genuine, observed failure
+    // (Assert.DoesNotContain found byte 13 in the output), not a pass-either-way assertion. This
+    // is the platform this codec's own normalization exists to protect against, demonstrated
+    // directly rather than inferred from the fact that it's currently a no-op.
     [Fact]
     public async Task SerializeAsync_NeverEmitsACarriageReturn()
     {
@@ -185,6 +190,45 @@ public class RecordTextCodecTests
             var bytes = await File.ReadAllBytesAsync(filePath);
 
             Assert.DoesNotContain((byte)'\r', bytes);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    // Atomicity: a failure partway through the write must not destroy a previously-valid ledger
+    // record. A pre-cancelled CancellationToken cannot reach this window and so cannot rival it —
+    // the generated Serialize call checks cancellation before any file is touched, in *both* the
+    // old direct-write implementation and the current write-then-rename one, so it throws (and
+    // leaves the destination alone) identically either way; a test built on it would pass whether
+    // or not the atomicity fix existed, which is exactly the vacuous-guard shape this ticket is on
+    // watch for. This test instead injects a deterministic, non-timing-dependent failure squarely
+    // inside the one window that differs: /dev/full is a Linux device that always answers a write
+    // with ENOSPC. Pre-creating this codec's own temp-file path (filePath + ".tmp") as a symlink to
+    // it means File.Create opens the device successfully (the open itself doesn't write) and the
+    // very first WriteAsync then fails — deterministically, every run, no race. Under the old
+    // direct-write implementation this same injection would have already truncated filePath itself
+    // before failing; under write-then-rename, filePath is never opened for writing at all until
+    // the (never-reached) final rename, so it survives untouched.
+    [Fact]
+    public async Task SerializeAsync_WhenTheWriteFailsBeforeTheRename_LeavesThePreexistingFileIntact()
+    {
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+        var dir = Directory.CreateTempSubdirectory("medit-codec-atomicity-");
+        try
+        {
+            var filePath = Path.Combine(dir.FullName, "weapon.json");
+            var originalBytes = "{\"original\":\"content\"}\n"u8.ToArray();
+            await File.WriteAllBytesAsync(filePath, originalBytes);
+
+            File.CreateSymbolicLink(filePath + ".tmp", "/dev/full");
+
+            await Assert.ThrowsAnyAsync<IOException>(
+                () => codec.SerializeAsync(MakeWeapon(), filePath, GameRelease.Fallout4));
+
+            var survivingBytes = await File.ReadAllBytesAsync(filePath);
+            Assert.Equal(originalBytes, survivingBytes);
         }
         finally
         {

@@ -78,9 +78,33 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         // indentation to bare \n — see the buffering comment above) and exactly one trailing \n
         // (the kernel's own Finalize writes the closing brace and nothing after it).
         var normalized = buffer.ToArray().Where(b => b != (byte)'\r').ToArray();
-        await using var output = File.Create(filePath);
-        await output.WriteAsync(normalized, cancel).ConfigureAwait(false);
-        output.WriteByte((byte)'\n');
+
+        // Write-then-rename, not a direct write to filePath: File.Create truncates its target
+        // immediately, before any new byte lands, so a direct write leaves a previously-valid
+        // ledger record 0-byte or partial if cancellation or an IO failure lands in the window
+        // between that truncation and the write completing — exactly the state #413's byte-compare
+        // dirty/ITM detection, #414's commits, and #417's rebases would then all read as a
+        // legitimate content change rather than damage (CLAUDE.md's never-assume-exclusive-
+        // ownership rule, with Modbench itself as the corrupting writer here). tempPath sits beside
+        // filePath (same volume), so File.Move is an atomic rename, not a copy — the destination
+        // is either the old bytes or the new ones, in full, never anything in between. On failure,
+        // the temp file is cleaned up and the original — untouched by any of this — survives.
+        var tempPath = filePath + ".tmp";
+        try
+        {
+            await using (var output = File.Create(tempPath))
+            {
+                await output.WriteAsync(normalized, cancel).ConfigureAwait(false);
+                output.WriteByte((byte)'\n');
+            }
+
+            File.Move(tempPath, filePath, overwrite: true);
+        }
+        catch
+        {
+            File.Delete(tempPath);
+            throw;
+        }
 
         logger.LogTrace("Serialized record {FormKey} to {FilePath}", record.FormKey, filePath);
     }
