@@ -1,0 +1,103 @@
+using MEditService.Core.Ledger;
+
+namespace MEditService.Tests.Ledger;
+
+/// <summary>
+/// #414/ADR-0041: Track generates <c>.gitignore</c> from the chosen preset. Edits (default for
+/// downloaded mods) ignores everything except the ledger; Everything additionally tracks assets.
+/// Plugin binaries are ignored in both presets (AC: "plugin binaries ignored in both") — they are
+/// compiled artifacts, never written by this module. <c>meta.ini</c> is excluded in both, too
+/// (ADR-0041 amendment: "never track a file that changes for non-content reasons") — asserted
+/// against the committed tree itself, not just the generated text, with a sibling ledger file as
+/// the positive control through the identical query path (coordinator ruling #5/#7 on #414).
+/// </summary>
+public sealed class LedgerRepositoryTrackGitignoreTests
+{
+    private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-gitignore-").FullName;
+
+    private static PristineFile LedgerFile() =>
+        new(Path.Combine("Test.esp.ledger", "npc_", "Test.esp", "000001.json"), "{}"u8.ToArray());
+
+    private static void WriteMetaIniBesideTheLedger(string modFolder) =>
+        File.WriteAllText(Path.Combine(modFolder, "meta.ini"), "[General]\nversion=1.0\n");
+
+    private static void WritePluginBinaryBesideTheLedger(string modFolder) =>
+        File.WriteAllBytes(Path.Combine(modFolder, "Test.esp"), [0x01, 0x02]);
+
+    [Theory]
+    [InlineData(LedgerPreset.Edits)]
+    [InlineData(LedgerPreset.Everything)]
+    public void Track_ExcludesMetaIniAndPluginBinaryFromTheCommit_RegardlessOfPreset(LedgerPreset preset)
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            WriteMetaIniBesideTheLedger(modFolder);
+            WritePluginBinaryBesideTheLedger(modFolder);
+
+            LedgerRepository.Track(modFolder, preset, [LedgerFile()], new TrackProvenance(null, null, new Dictionary<string, string>()));
+
+            var gitDir = Path.Combine(modFolder, ".git");
+            var committedPaths = GitCli.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
+
+            // Positive control: the sibling ledger file the same commit really carries, checked
+            // through the identical `ls-tree` query — proves absence below means "excluded", not
+            // "the commit is empty" or "the query is wrong".
+            Assert.Contains("Test.esp.ledger/npc_/Test.esp/000001.json", committedPaths);
+
+            Assert.DoesNotContain("meta.ini", committedPaths);
+            Assert.DoesNotContain("Test.esp\n", committedPaths + "\n");
+
+            // Belt and braces: git itself agrees these paths are ignored, not merely never staged.
+            Assert.True(GitCli.TryRun(gitDir, modFolder, out _, "check-ignore", "meta.ini"));
+            Assert.True(GitCli.TryRun(gitDir, modFolder, out _, "check-ignore", "Test.esp"));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Track_EditsPreset_IgnoresEverythingExceptTheLedger()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
+
+            LedgerRepository.Track(modFolder, LedgerPreset.Edits, [LedgerFile()], new TrackProvenance(null, null, new Dictionary<string, string>()));
+
+            var gitDir = Path.Combine(modFolder, ".git");
+            var committedPaths = GitCli.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
+            Assert.Contains("Test.esp.ledger/npc_/Test.esp/000001.json", committedPaths);
+            Assert.DoesNotContain("texture.dds", committedPaths);
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Track_EverythingPreset_TracksAssetsButStillIgnoresThePluginBinary()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
+            WritePluginBinaryBesideTheLedger(modFolder);
+
+            LedgerRepository.Track(modFolder, LedgerPreset.Everything, [LedgerFile()], new TrackProvenance(null, null, new Dictionary<string, string>()));
+
+            var gitDir = Path.Combine(modFolder, ".git");
+            var committedPaths = GitCli.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
+            Assert.Contains("texture.dds", committedPaths);
+            Assert.DoesNotContain("Test.esp\n", committedPaths + "\n");
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+}

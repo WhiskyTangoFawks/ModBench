@@ -442,10 +442,12 @@ describe('package.json command titles and categories (#280)', () => {
     'modbench.pluginListTree.revealInExplorer',
     // #279: needs the clicked row for its plugin name and its drift, and has no ambient fallback.
     'modbench.pluginListTree.rereadPlugin',
+    // #414: needs the clicked row's plugin name to resolve which mod folder to track.
+    'modbench.pluginListTree.track',
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(19);
+    expect(PALETTE_GATED).toHaveLength(20);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));
@@ -496,7 +498,31 @@ describe('package.json per-plugin Re-read on a drifted row (#279)', () => {
       // name points at now — the same question it always answered, not a stale one.
       ['modbench.pluginListTree.revealInExplorer', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)'],
       ['modbench.pluginListTree.rereadPlugin', 'view == modbench.pluginListTree && viewItem == pluginDrifted'],
+      // Track: serializes whatever the session actually loaded for this origin, regardless of
+      // whether the name's *current* MO2 resolution has drifted since — never offered on an
+      // implicit master, which is immutable base-game content with no mod folder to track.
+      ['modbench.pluginListTree.track', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)'],
     ]);
+  });
+});
+
+// #414/ADR-0041: the Track gesture's own menu contribution.
+describe('package.json per-plugin Track (#414)', () => {
+  const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
+
+  it('sits below the other row actions in the same row-action group', () => {
+    const entry = contextMenus().find((e) => e.command === 'modbench.pluginListTree.track');
+    expect(entry).toBeTruthy();
+    expect(entry!.group).toBe('pluginActions@3');
+  });
+
+  // No icon: Track is a one-time, deliberately weighty gesture (ADR-0041: "deliberate friction"),
+  // not a quick inline action.
+  it('never appears as an inline or navigation icon', () => {
+    const inline = contextMenus().filter((e) => e.command === 'modbench.pluginListTree.track' && e.group === 'inline');
+    const title = (pkg.contributes.menus['view/title'] as { command: string }[])
+      .filter((e) => e.command === 'modbench.pluginListTree.track');
+    expect([...inline, ...title]).toEqual([]);
   });
 });
 

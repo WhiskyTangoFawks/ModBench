@@ -352,6 +352,9 @@ describe('modbench command registration', () => {
     // #279: the per-plugin re-read a drifted row offers. Gated to `viewItem == pluginDrifted` in
     // package.json and hidden from the palette — it needs the clicked row.
     'modbench.pluginListTree.rereadPlugin',
+    // #414/ADR-0041: the Track gesture. Gated to `viewItem == plugin`/`pluginDrifted` in
+    // package.json and hidden from the palette — it needs the clicked row's plugin name.
+    'modbench.pluginListTree.track',
     // #368: the aggregate SCM provider's resource-click command — opens the record's
     // committed-vs-dirty raw text diff. Reached from a SourceControlResourceState's own
     // `command`, not a menu contribution, but still registered (and palette-visible) like every

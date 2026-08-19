@@ -1,3 +1,4 @@
+using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Session;
 
@@ -69,6 +70,29 @@ public static class PluginEndpoints
             .ProducesProblem(404)
             .ProducesProblem(409)
             .ProducesProblem(503);
+
+        app.MapPost("/plugins/track", Track)
+            .WithName("Track")
+            .WithTags(Tag)
+            .Produces<TrackResponse>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(409)
+            .ProducesProblem(500)
+            .ProducesProblem(503);
+
+        // #414 review F2: polled alongside the still in-flight POST /plugins/track, same idiom
+        // GET /session/status already established for the session load — always 200 (TrackProgress.
+        // Idle when nothing is running), no session dependency, since progress lives on the
+        // singleton TrackService itself.
+        app.MapGet("/plugins/track/status", (TrackService trackService, ILoggerFactory loggerFactory) =>
+        {
+            loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogTrace("Received GetTrackStatus");
+            return Results.Ok(trackService.Progress);
+        })
+            .WithName("GetTrackStatus")
+            .WithTags(Tag)
+            .Produces<TrackProgress>();
 
         return app;
     }
@@ -227,6 +251,46 @@ public static class PluginEndpoints
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
+
+    // #414/ADR-0041: the Track gesture. Origin names the mod folder (every loaded plugin sharing
+    // it gets tracked together — a mod can hold more than one plugin); the session resolves which
+    // physical folder that is, same division of labour as RereadPlugin/LoadUnlistedPlugin above.
+    internal static async Task<IResult> Track(TrackRequest req, ISessionManager sessionManager, TrackService trackService, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        logger.LogInformation("Received Track for {Origin} ({Preset})", req.Origin, req.Preset);
+        if (string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("Origin is required.", statusCode: 400);
+        if (!Enum.TryParse<LedgerPreset>(req.Preset, ignoreCase: true, out var preset))
+            return Results.Problem($"Unknown ledger preset '{req.Preset}'.", statusCode: 400);
+
+        if (sessionManager.Session is not { } session)
+        {
+            logger.LogError("No session when tracking {Origin}", req.Origin);
+            return Results.Problem("No session loaded.", statusCode: 503);
+        }
+
+        try
+        {
+            await trackService.TrackAsync(session, req.Origin, preset);
+            return Results.Ok(new TrackResponse(req.Origin));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            logger.LogWarning(ex, "No loaded plugin has origin {Origin} to track", req.Origin);
+            return Results.Problem(ex.Message, statusCode: 404);
+        }
+        catch (LedgerAlreadyTrackedException ex)
+        {
+            logger.LogWarning(ex, "Refused to re-track {Origin}", req.Origin);
+            return Results.Problem(ex.Message, statusCode: 409);
+        }
+        catch (GitUnavailableException ex)
+        {
+            logger.LogError(ex, "git unavailable while tracking {Origin}", req.Origin);
+            return Results.Problem(ex.Message, statusCode: 500);
+        }
+    }
 }
 
 public record CreatePluginRequest(string Name);
@@ -238,3 +302,10 @@ public record UnloadPluginRequest(string Plugin, string Origin);
 // #279: Path and Origin are the copy the plugin name resolves to *now*, resolved by Mod
 // Management. Plugin is the filename, which is what the load order names and what does not change.
 public record RereadPluginRequest(string Plugin, string Path, string Origin);
+
+// #414: Preset is the wire-safe string form of LedgerPreset ("Edits"/"Everything") — Plugin/Path
+// aren't needed here, unlike RereadPluginRequest's: Origin alone is enough for TrackService to
+// resolve every plugin sharing that mod folder.
+public record TrackRequest(string Origin, string Preset);
+
+public record TrackResponse(string Origin);
