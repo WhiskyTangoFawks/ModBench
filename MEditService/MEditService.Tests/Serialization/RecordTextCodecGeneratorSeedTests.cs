@@ -46,16 +46,16 @@ public class RecordTextCodecGeneratorSeedTests
     // The reflection check above cannot see a *call* to the generated whole-mod mixin — only a
     // public signature naming a mod type. #381's crash-repair path adding
     // `RebuildAsync(string ledgerDir, string outputPath)` over
-    // `MutagenYamlConverterFallout4ModMixIns.DeserializeInto` would have an all-string signature and
+    // `MutagenJsonConverterFallout4ModMixIns.DeserializeInto` would have an all-string signature and
     // stay invisible to it, while shipping exactly the 21 s / 132,787-file / 106 MB path ADR-0040
     // rejected. So this scans source text directly: the mixin's type name may appear in
     // MEditService.Core's own .cs files only inside RecordTextCodecGeneratorSeed.cs, which is
     // documented and expected to name it.
     //
     // Deliberately checking the type name only, not the containing namespace
-    // (Mutagen.Bethesda.Serialization.Yaml) as originally proposed: that namespace also holds the
-    // Yaml kernels RecordTextCodec.cs legitimately imports for unrelated reasons (its own
-    // `using Mutagen.Bethesda.Serialization.Yaml;`), so checking the bare namespace string is a
+    // (Mutagen.Bethesda.Serialization.Newtonsoft) as originally proposed: that namespace also holds
+    // the JSON kernel types RecordTextCodec.cs legitimately imports for unrelated reasons (its own
+    // `using Mutagen.Bethesda.Serialization.Newtonsoft;`), so checking the bare namespace string is a
     // false positive there, not a signal — narrowed to the one thing that is actually dangerous.
     //
     // [CallerFilePath] locates MEditService.Core relative to this test file's own compile-time
@@ -66,7 +66,7 @@ public class RecordTextCodecGeneratorSeedTests
     [Fact]
     public void CoreSources_NameTheWholeModMixinOnlyInTheSeedFile()
     {
-        const string mixinTypeName = "MutagenYamlConverterFallout4ModMixIns";
+        const string mixinTypeName = "MutagenJsonConverterFallout4ModMixIns";
         const string expectedFile = "RecordTextCodecGeneratorSeed.cs";
 
         var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
@@ -93,7 +93,10 @@ public class RecordTextCodecGeneratorSeedTests
             .Select(t => t.FullName)
             .ToList();
 
-        Assert.Equal(["Mutagen.Bethesda.Serialization.Yaml.MutagenYamlConverterFallout4ModMixIns"], alienPublicTypes);
+        // #412: name confirmed empirically, not by naming-convention guesswork — a scratch project
+        // seeded with MutagenJsonConverter.Instance.Serialize(mod, folder) and built with
+        // -p:EmitCompilerGeneratedFiles=true actually emits this exact type, in this exact namespace.
+        Assert.Equal(["Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterFallout4ModMixIns"], alienPublicTypes);
     }
 
     private static string CoreSourceRoot([CallerFilePath] string here = "") =>

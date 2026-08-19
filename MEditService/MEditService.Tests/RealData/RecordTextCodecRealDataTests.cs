@@ -27,9 +27,14 @@ namespace MEditService.Tests.RealData;
 /// manually (not asserted — asserting it would require taking the 0.54.0 dependency this repo
 /// cannot take) that flipping the Mutagen.Bethesda.Fallout4 pin to 0.54.0 makes this test fail: the
 /// overlay-read weapon's ObjectTemplates split from 2 to 3 entries while the deep-parsed weapon
-/// stays at 2, and the two serialized YAML texts diverge starting inside the ObjectTemplates block
-/// (first divergent text: expected "...FirstPersonModel:\n  F..." vs actual "...- Name:\n    TargetLan...").
-/// See the #367 report for the full verbatim failure output.
+/// stays at 2, and the two serialized texts diverge starting inside the ObjectTemplates block. The
+/// verbatim divergent snippet recorded in the #367 report is YAML text (this test predates #412's
+/// swap to the JSON kernel) — the mechanism it demonstrates (a lazy-overlay read producing a
+/// structurally different object graph than a deep parse, which this codec then faithfully
+/// serializes either way) is format-independent and re-checked by this test's own assertions below
+/// on every run; the literal snippet itself was never re-derived under JSON, since doing so would
+/// require the same disallowed 0.54.0 dependency. See the #367 report for the original verbatim
+/// failure output.
 ///
 /// The round-trip fidelity assertion applies the same <c>GetEqualsMask</c> technique
 /// <c>RecordTextCodecTests</c> uses on a synthetic weapon, but here against this real, dense fixture
@@ -74,8 +79,8 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
             Assert.True(deepParsedTemplateCount > 0,
                 "Expected this fixture weapon to carry ObjectTemplates content; pick a different affected weapon if it no longer does.");
 
-            var overlayPath = Path.Combine(dir.FullName, "overlay.yaml");
-            var deepParsedPath = Path.Combine(dir.FullName, "deep-parsed.yaml");
+            var overlayPath = Path.Combine(dir.FullName, "overlay.json");
+            var deepParsedPath = Path.Combine(dir.FullName, "deep-parsed.json");
 
             var swSerializeOverlay = Stopwatch.StartNew();
             await codec.SerializeAsync(overlayWeapon, overlayPath, GameRelease.Fallout4);

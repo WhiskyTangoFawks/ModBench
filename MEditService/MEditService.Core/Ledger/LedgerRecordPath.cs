@@ -11,7 +11,7 @@ internal sealed record LedgerRecordIdentity(string PluginFileName, string Record
 /// record's own (shallow) file, per <see cref="ContainerStripFields"/>. Flat, not nested under a
 /// parent's own path:
 /// <c>&lt;pluginFileName&gt;.ledger/&lt;recordType&gt;/&lt;originModKey&gt;/&lt;localFormID
-/// hex6&gt;.yaml</c>, relative to the origin folder (the ledger's working tree).
+/// hex6&gt;.json</c>, relative to the origin folder (the ledger's working tree).
 ///
 /// Two path segments are load-bearing, not decoration:
 /// - The <c>.ledger</c> suffix on the first segment: the working tree *is* the origin folder,
@@ -37,15 +37,15 @@ internal sealed record LedgerRecordIdentity(string PluginFileName, string Record
 internal static class LedgerRecordPath
 {
     internal const string LedgerSuffix = ".ledger";
-    private const string YamlSuffix = ".yaml";
+    private const string JsonSuffix = ".json";
 
     internal static string For(string pluginFileName, string recordType, string formKeyString)
     {
         var formKey = FormKey.Factory(formKeyString);
-        return Path.Combine($"{pluginFileName}.ledger", recordType, formKey.ModKey.FileName.String, $"{formKey.ID:X6}.yaml");
+        return Path.Combine($"{pluginFileName}.ledger", recordType, formKey.ModKey.FileName.String, $"{formKey.ID:X6}.json");
     }
 
-    /// <summary>Recovers a record's identity straight from its own path text — no YAML parse, no
+    /// <summary>Recovers a record's identity straight from its own path text — no JSON parse, no
     /// git read (#368: a status listing needs to name every changed record, not read its content).
     /// Lossless by construction: every segment <see cref="For"/> writes is exactly what this reads
     /// back, and a FormKey's wire format (<c>&lt;hex6&gt;:&lt;ModKeyFileName&gt;</c>) is assembled
@@ -62,10 +62,10 @@ internal static class LedgerRecordPath
 
         var (pluginSegment, recordType, originModKey, fileSegment) = (segments[0], segments[1], segments[2], segments[3]);
         if (!pluginSegment.EndsWith(LedgerSuffix, StringComparison.Ordinal)) return false;
-        if (!fileSegment.EndsWith(YamlSuffix, StringComparison.Ordinal)) return false;
+        if (!fileSegment.EndsWith(JsonSuffix, StringComparison.Ordinal)) return false;
 
         var pluginFileName = pluginSegment[..^LedgerSuffix.Length];
-        var localId = fileSegment[..^YamlSuffix.Length];
+        var localId = fileSegment[..^JsonSuffix.Length];
         // No originModKey.Length == 0 check: RemoveEmptyEntries above already guarantees every
         // segment (this one included) is non-empty — provably unreachable, not merely untested
         // (mutation review, #368), so it isn't pinned in place with a test that can never fail it.

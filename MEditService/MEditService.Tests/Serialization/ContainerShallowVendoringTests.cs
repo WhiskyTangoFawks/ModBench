@@ -40,7 +40,7 @@ public class ContainerShallowVendoringTests
         var dir = Directory.CreateTempSubdirectory("medit-shallow-cell-");
         try
         {
-            var filePath = Path.Combine(dir.FullName, "cell.yaml");
+            var filePath = Path.Combine(dir.FullName, "cell.json");
             await codec.SerializeAsync(cell, filePath, GameRelease.Fallout4);
 
             // One record, one file — no sibling Persistent/Temporary/NavigationMeshes folders next
@@ -81,7 +81,7 @@ public class ContainerShallowVendoringTests
         var dir = Directory.CreateTempSubdirectory("medit-shallow-container-");
         try
         {
-            var filePath = Path.Combine(dir.FullName, "record.yaml");
+            var filePath = Path.Combine(dir.FullName, "record.json");
             await codec.SerializeAsync((IMajorRecordGetter)record, filePath, GameRelease.Fallout4);
 
             Assert.Equal([filePath], Directory.GetFiles(dir.FullName, "*", SearchOption.AllDirectories));

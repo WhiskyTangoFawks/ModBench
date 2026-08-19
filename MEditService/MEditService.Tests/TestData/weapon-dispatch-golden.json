@@ -1,0 +1,19 @@
+{
+  "FormKey": "000800:Test.esp",
+  "VersionControl": 12345,
+  "EditorID": "TestWeapon",
+  "ObjectBounds": {
+    "First": "1, 2, 3",
+    "Second": "4, 5, 6"
+  },
+  "Name": {
+    "TargetLanguage": "English",
+    "Value": "Test Weapon Name"
+  },
+  "Keywords": [
+    "000801:Test.esp"
+  ],
+  "Weight": 12.5,
+  "Value": 250,
+  "BaseDamage": 42
+}

@@ -5,7 +5,7 @@ namespace MEditService.Tests.Ledger;
 /// <summary>
 /// #368 review finding 2: <see cref="LedgerRecordPath.TryParse"/> — the reverse of
 /// <see cref="LedgerRecordPath.For"/> that <see cref="MEditService.Core.Ledger.LedgerStatusQuery"/>
-/// leans on to name every changed record without a YAML read — had no direct coverage of its own
+/// leans on to name every changed record without a JSON read — had no direct coverage of its own
 /// before this; every existing exercise of it went through ASCII-only paths inside the API host, so
 /// a genuine parse defect (the non-ASCII quoting regression, finding 1) reached production without
 /// a single test failing here. Real git and the API host are the wrong seam for this: it's a pure
@@ -43,17 +43,24 @@ public sealed class LedgerRecordPathTests
 
     [Theory]
     // Too few / too many path segments.
-    [InlineData("Vendor.esp.ledger/npc_/000800.yaml")]
-    [InlineData("Vendor.esp.ledger/npc_/Vendor.esp/extra/000800.yaml")]
+    [InlineData("Vendor.esp.ledger/npc_/000800.json")]
+    [InlineData("Vendor.esp.ledger/npc_/Vendor.esp/extra/000800.json")]
     // First segment missing the load-bearing ".ledger" suffix.
-    [InlineData("Vendor.esp/npc_/Vendor.esp/000800.yaml")]
-    // Last segment missing the load-bearing ".yaml" suffix.
+    [InlineData("Vendor.esp/npc_/Vendor.esp/000800.json")]
+    // Last segment missing the load-bearing ".json" suffix.
     [InlineData("Vendor.esp.ledger/npc_/Vendor.esp/000800.txt")]
     [InlineData("Vendor.esp.ledger/npc_/Vendor.esp/000800")]
-    // A bare ".ledger"/".yaml" — the suffix matches but strips to an empty plugin name / local id,
+    // A bare ".ledger"/".json" — the suffix matches but strips to an empty plugin name / local id,
     // which is never a real identity (nothing For() produces can look like this).
-    [InlineData(".ledger/npc_/Vendor.esp/000800.yaml")]
-    [InlineData("Vendor.esp.ledger/npc_/Vendor.esp/.yaml")]
+    [InlineData(".ledger/npc_/Vendor.esp/000800.json")]
+    [InlineData("Vendor.esp.ledger/npc_/Vendor.esp/.json")]
+    // #412: a well-formed *old-style* path (correct shape, correct segment count, correct
+    // ".ledger" prefix) using the retired ".yaml" suffix must now be rejected outright, not parsed
+    // as if nothing changed — proves TryParse doesn't keep a dual-format fallback lingering after
+    // the JSON kernel swap. Written and run red before the production suffix constant flipped
+    // (today's pre-#412 code still accepts ".yaml" here, so this case failed for the right reason:
+    // Assert.False(ok) tripped because TryParse returned true).
+    [InlineData("Vendor.esp.ledger/npc_/Vendor.esp/000800.yaml")]
     public void TryParse_MalformedPaths_FailsCleanly(string relativePath)
     {
         // Malformed input must fail outright, not return a *wrong* parse (review finding 2) — a

@@ -44,7 +44,7 @@ public class RecordTypeDispatchTests
         var dir = Directory.CreateTempSubdirectory("medit-dispatch-npc-");
         try
         {
-            var filePath = Path.Combine(dir.FullName, "npc.yaml");
+            var filePath = Path.Combine(dir.FullName, "npc.json");
 
             // The public seam takes IMajorRecordGetter, not INpcGetter — proves the caller never
             // has to name the concrete type to serialize, only to deserialize back into one.
@@ -72,7 +72,7 @@ public class RecordTypeDispatchTests
         var dir = Directory.CreateTempSubdirectory("medit-dispatch-cell-");
         try
         {
-            var filePath = Path.Combine(dir.FullName, "cell.yaml");
+            var filePath = Path.Combine(dir.FullName, "cell.json");
 
             await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
             var roundTripped = (Cell)await codec.DeserializeAsync(filePath, typeof(Cell), GameRelease.Fallout4);
@@ -106,7 +106,7 @@ public class RecordTypeDispatchTests
         var dir = Directory.CreateTempSubdirectory("medit-dispatch-unsupported-");
         try
         {
-            var filePath = Path.Combine(dir.FullName, "unsupported.yaml");
+            var filePath = Path.Combine(dir.FullName, "unsupported.json");
             await codec.SerializeAsync(npc, filePath, GameRelease.Fallout4);
 
             // The deserialize-by-type overload is where an unresolvable type is easiest to name

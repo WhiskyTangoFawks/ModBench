@@ -4,8 +4,8 @@ using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization;
+using Mutagen.Bethesda.Serialization.Newtonsoft;
 using Mutagen.Bethesda.Serialization.Streams;
-using Mutagen.Bethesda.Serialization.Yaml;
 
 namespace MEditService.Core.Serialization;
 
@@ -35,12 +35,12 @@ namespace MEditService.Core.Serialization;
 /// </summary>
 public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 {
-    private static readonly MutagenSerializationWriterKernel<YamlSerializationWriterKernel, YamlWritingUnit> WriterKernel = new();
-    private static readonly YamlSerializationReaderKernel ReaderKernel = new();
+    private static readonly MutagenSerializationWriterKernel<NewtonsoftJsonSerializationWriterKernel, JsonWritingUnit> WriterKernel = new();
+    private static readonly NewtonsoftJsonSerializationReaderKernel ReaderKernel = new();
 
     // Closed generic MethodInfos, cached per record type (Serialize) / per (record type, reader
     // type) pair (Deserialize) — resolved once, reused for every record of that type. TWriter/
-    // TReaderKernel never vary (always the Yaml kernel pair above), so the cache key never needs to
+    // TReaderKernel never vary (always the Json kernel pair above), so the cache key never needs to
     // carry them.
     private static readonly ConcurrentDictionary<Type, MethodInfo> SerializeMethods = new();
     private static readonly ConcurrentDictionary<(Type Record, Type Reader), MethodInfo> DeserializeMethods = new();
@@ -51,9 +51,20 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         // caller yet (that's #370, and the ACs say nothing about directory-creation policy) — this
         // is exactly the "machinery now, use it later" shape the root CLAUDE.md's Minimal-by-Default
         // rule rejects. #370's caller decides that policy with its own test.
+        //
+        // Buffered in memory rather than streamed straight to filePath, deliberately: AC4's
+        // identical-state-identical-bytes promise is cross-platform (#414 pins the other half of
+        // this same invariant, core.autocrlf=false at repo init), but Newtonsoft's JsonTextWriter
+        // has no public NewLine of its own to pin — confirmed by reflection (JsonTextWriter declares
+        // no NewLine property at all) and by decompiling WriteIndent(), which reads
+        // `_writer.NewLine` off its own *private*, unreachable inner TextWriter. JsonWritingUnit
+        // builds that inner writer itself with no injection point, so there is no supported way to
+        // reach in and pin it before the first indent is written. Buffering and normalizing after
+        // the fact is therefore this codec's own responsibility, not a kernel configuration knob —
+        // same shape as the trailing newline below, which the kernel also doesn't provide.
         var directory = Path.GetDirectoryName(filePath);
-        using var stream = File.Create(filePath);
-        var streamPackage = new StreamPackage(stream, directory ?? string.Empty);
+        using var buffer = new MemoryStream();
+        var streamPackage = new StreamPackage(buffer, directory ?? string.Empty);
         var writer = WriterKernel.GetNewObject(streamPackage);
         var metaData = new SerializationMetaData(gameRelease, null, null, null, cancel);
 
@@ -62,11 +73,20 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         await task.ConfigureAwait(false);
         WriterKernel.Finalize(streamPackage, writer);
 
+        // Two canonical-formatting guarantees the kernel itself doesn't make (AC4): no \r anywhere
+        // (normalizes whatever the platform's Environment.NewLine produced for the kernel's own
+        // indentation to bare \n — see the buffering comment above) and exactly one trailing \n
+        // (the kernel's own Finalize writes the closing brace and nothing after it).
+        var normalized = buffer.ToArray().Where(b => b != (byte)'\r').ToArray();
+        await using var output = File.Create(filePath);
+        await output.WriteAsync(normalized, cancel).ConfigureAwait(false);
+        output.WriteByte((byte)'\n');
+
         logger.LogTrace("Serialized record {FormKey} to {FilePath}", record.FormKey, filePath);
     }
 
-    /// <summary>Reads a record back from its YAML text.</summary>
-    /// <param name="filePath">Path to read the record's YAML text from.</param>
+    /// <summary>Reads a record back from its JSON text.</summary>
+    /// <param name="filePath">Path to read the record's JSON text from.</param>
     /// <param name="recordType">The concrete record type to construct (e.g. <c>typeof(Npc)</c>) —
     /// the text itself carries no self-describing type tag, so the caller (which already knows the
     /// type from its own ledger path/schema) states it.</param>
@@ -94,7 +114,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
             var generated = FindGeneratedSerializationType(t);
             var open = generated.GetMethod("Serialize", BindingFlags.Public | BindingFlags.Static)
                 ?? throw new RecordTypeSerializationUnsupportedException(t, generated, "Serialize");
-            return open.MakeGenericMethod(typeof(YamlSerializationWriterKernel), typeof(YamlWritingUnit));
+            return open.MakeGenericMethod(typeof(NewtonsoftJsonSerializationWriterKernel), typeof(JsonWritingUnit));
         });
 
     private static MethodInfo ResolveDeserializeMethod(Type recordType, Type readerType) =>
