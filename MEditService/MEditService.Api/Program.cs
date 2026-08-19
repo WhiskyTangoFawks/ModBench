@@ -127,8 +127,6 @@ try
     app.MapPluginEndpoints();
     app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
-    app.MapChangeEndpoints();
-    app.MapLedgerEndpoints();
 
     var cliArgs = CliArgs.Parse(args);
     if (cliArgs.DataFolderPath != null)

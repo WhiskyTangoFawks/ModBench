@@ -88,22 +88,6 @@ public sealed class EndpointReceptionLoggingTests
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("NewPlugin.esp"));
     }
 
-    // --- ChangeEndpoints.PatchRecord ---
-
-    [Fact]
-    public void PatchRecord_NoSessionLoaded_StillLogsReceivedWithFormKey()
-    {
-        // Early-return-before-any-work shape distinct from SessionEndpoints' validation failure:
-        // here the guard is "no session loaded" rather than input validation.
-        var (loggerFactory, entries) = CapturingLoggerFactory();
-        using var _ = loggerFactory;
-        var req = new PatchRecordRequest("Plugin.esp", [], "user", null);
-
-        ChangeEndpoints.PatchRecord("000001:Plugin.esp", req, new StubSessionManager(), new StubEditOrchestrator(), loggerFactory);
-
-        Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("000001:Plugin.esp"));
-    }
-
     // --- WorldspaceEndpoints.GetWorldspaces ---
 
     [Fact]

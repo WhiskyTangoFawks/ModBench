@@ -23,7 +23,9 @@ public sealed class SwaggerSchemaTests
     // $ref cannot carry a sibling `nullable` keyword.
     [Theory]
     [InlineData("FieldMetadata", "elementType", "FieldMetadata")] // FieldMetadata? ElementType
-    [InlineData("PendingChange", "recordResolution", "FormKeyResolution")] // FormKeyResolution? RecordResolution
+    // #410: was PendingChange.recordResolution until the pending-change wire surface retired
+    // (ADR-0041); retargeted to a surviving read-path model with the same nullable-object shape.
+    [InlineData("CompareResult", "vmad", "VmadCompare")] // VmadCompare? Vmad
     public async Task NullableRefProperty_IsNullableViaAllOfWrapper(string schemaName, string propertyName, string refTarget)
     {
         var root = await GetSchemaAsync();

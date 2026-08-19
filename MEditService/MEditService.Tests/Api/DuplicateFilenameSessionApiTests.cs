@@ -159,62 +159,6 @@ public sealed class DuplicateFilenameSessionApiTests(LoadedApiFixture<TestPlugin
     }
 
     [Fact]
-    public async Task CopyAsOverrideFromTheShadowedColumn_CopiesThatColumnsContent()
-    {
-        using var fx = BuildTwoCopies();
-        await LoadWinningCopyThenShadowedCopy(fx);
-
-        // Reading a shadowed copy is not editing it (ADR-0036), so copy-as-override *out* of its
-        // column is allowed — and must take that column's record, not whichever copy a filename
-        // happens to resolve to. This is the write-path half of "every action invoked on one
-        // copy's column affects only that copy".
-        var copy = await _client.PostAsJsonAsync(
-            $"/records/{Uri.EscapeDataString("000800:Shared.esp")}/copy-to/{Uri.EscapeDataString("Target.esp")}",
-            new { source = "user", sourcePlugin = "Shared.esp", sourceOrigin = "ModB" });
-        copy.EnsureSuccessStatusCode();
-
-        var staged = await copy.Content.ReadFromJsonAsync<JsonElement>();
-        // EditorID is a column of its own, not a reflected field, so it never appears among staged
-        // changes — the copies carry a distinguishing NPC Name for exactly this assertion.
-        var name = staged.EnumerateArray()
-            .Single(c => c.GetProperty("fieldPath").GetString() == "name")
-            .GetProperty("newValue").GetString();
-
-        Assert.Equal("NameFromModB", name);
-    }
-
-    // #281: Copy as New Record is the same contract — an explicit templateSourceOrigin names which
-    // copy of the filename supplies the template fields, and must not be displaced by the origin
-    // the filename alone would resolve to (ModA, the load-order copy).
-    [Fact]
-    public async Task CopyAsNewFromTheShadowedColumn_CopiesThatColumnsContent()
-    {
-        using var fx = BuildTwoCopies();
-        await LoadWinningCopyThenShadowedCopy(fx);
-
-        var create = await _client.PostAsJsonAsync(
-            $"/plugins/{Uri.EscapeDataString("Target.esp")}/records",
-            new
-            {
-                templateFormKey = "000800:Shared.esp",
-                templateSourcePlugin = "Shared.esp",
-                templateSourceOrigin = "ModB",
-                source = "user",
-            });
-        create.EnsureSuccessStatusCode();
-
-        var formKey = (await create.Content.ReadFromJsonAsync<JsonElement>())
-            .GetProperty("formKey").GetString();
-        var staged = await _client.GetFromJsonAsync<JsonElement>(
-            $"/changes?formKey={Uri.EscapeDataString(formKey!)}");
-        var name = staged.EnumerateArray()
-            .Single(c => c.GetProperty("fieldPath").GetString() == "name")
-            .GetProperty("newValue").GetString();
-
-        Assert.Equal("NameFromModB", name);
-    }
-
-    [Fact]
     public async Task UnloadingTheShadowedCopy_LeavesNoRowNoColumnAndNoRecords()
     {
         using var fx = BuildTwoCopies();

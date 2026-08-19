@@ -60,9 +60,6 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
 
     [Theory]
     [InlineData("createPlugin", 503)]
-    [InlineData("patch", 500)]
-    [InlineData("copy", 500)]
-    [InlineData("save", 400)]
     [InlineData("recordTypes", 503)]
     [InlineData("conditionFunctions", 503)]
     [InlineData("conditionRunOnTargets", 503)]
@@ -79,25 +76,17 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         await using var app = new WebApplicationFactory<Program>();
         var client = app.CreateClient();
 
-        var formKey = Uri.EscapeDataString(_fixture.Npc1FormKey.ToString());
-        var plugin = Uri.EscapeDataString(TestPluginFixture.PluginName);
         var realPluginPath = Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName);
 
         var resp = op switch
         {
             "createPlugin" => await client.PostAsJsonAsync("/plugins/create", new { name = "New.esp" }),
-            "patch" => await client.PatchAsJsonAsync($"/records/{formKey}", new
-            {
-                plugin = TestPluginFixture.PluginName,
-                fields = new Dictionary<string, object?> { ["editor_id"] = "x" },
-            }),
-            "copy" => await client.PostAsJsonAsync($"/plugins/{plugin}/records", new { recordType = "npc_" }),
             "recordTypes" => await client.GetAsync("/record-types"),
             "conditionFunctions" => await client.GetAsync("/condition-functions"),
             "conditionRunOnTargets" => await client.GetAsync("/condition-run-on-targets"),
             "loadPlugin" => await client.PostAsJsonAsync("/plugins/load", new { path = realPluginPath, origin = "ModA" }),
             "unloadPlugin" => await client.PostAsJsonAsync("/plugins/unload", new { plugin = TestPluginFixture.PluginName, origin = "ModA" }),
-            _ => await client.PostAsync($"/change-groups/{Guid.NewGuid()}/save", null),
+            _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Unknown operation"),
         };
 
         AssertIsProblemDetails(resp, expectedStatus);

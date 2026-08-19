@@ -23,21 +23,6 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
     }
 
     [Fact]
-    public async Task Patch_ImmutablePlugin_Returns409()
-    {
-        var formKey = Uri.EscapeDataString(_fixture.UserNpcFormKey.ToString());
-
-        var resp = await _client.PatchAsJsonAsync($"/records/{formKey}", new
-        {
-            plugin = ImmutablePluginFixture.ImmutablePluginName,
-            fields = new Dictionary<string, object?> { ["editor_id"] = "Hacked" },
-            source = "user",
-        });
-
-        Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
-    }
-
-    [Fact]
     public async Task CreatePlugin_CreatesFileAndReturnsPlugin()
     {
         var resp = await _client.PostAsJsonAsync("/plugins/create", new { name = "NewMod.esp" });
@@ -73,17 +58,4 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 
-    [Fact]
-    public async Task PostPluginRecords_ImmutablePlugin_Returns409()
-    {
-        var plugin = Uri.EscapeDataString(ImmutablePluginFixture.ImmutablePluginName);
-
-        var resp = await _client.PostAsJsonAsync($"/plugins/{plugin}/records", new
-        {
-            recordType = "npc_",
-            source = "user",
-        });
-
-        Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
-    }
 }
