@@ -103,4 +103,36 @@ public class RecordTextCodecInMemoryTests
         Assert.NotEmpty(leaves);
         Assert.Empty(divergent);
     }
+
+    /// <summary>
+    /// A container record's children are written to their own files under <c>.FilePerRecord()</c>,
+    /// and their folders are created straight through the serializer's <c>IFileSystem</c>. Indexing
+    /// reads containers by the tens of thousands, so "serialize this record" must not touch the
+    /// disk at all — measured before this was suppressed: one real Quest created 1,057 directories,
+    /// one per dialogue topic, in the process's working directory.
+    ///
+    /// Asserted over a real, densely-populated container rather than a synthetic one: the folder
+    /// creation happens per child-bearing collection, so a container with empty collections proves
+    /// nothing (the serializer returns early on an empty list).
+    /// </summary>
+    [Fact]
+    public async Task SerializeToBytesAsync_ForAPopulatedContainer_TouchesNoFilesystem()
+    {
+        using var overlay = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
+            GameRelease.Fallout4);
+        var quest = ((IFallout4ModGetter)overlay).Quests.First(q => q.DialogTopics.Count > 0);
+
+        // The serializer builds child paths relative to the StreamPackage's folder, which the
+        // in-memory path leaves empty — so anything it creates lands in the process's working
+        // directory. Snapshotting that directory is enough to see it, and unlike setting the
+        // working directory it mutates no state other tests share.
+        var workingDirectory = Directory.GetCurrentDirectory();
+        var before = Directory.GetDirectories(workingDirectory).ToHashSet(StringComparer.Ordinal);
+
+        var bytes = await Codec().SerializeToBytesAsync(quest, GameRelease.Fallout4);
+
+        Assert.NotEmpty(bytes);
+        Assert.Equal(before, Directory.GetDirectories(workingDirectory).ToHashSet(StringComparer.Ordinal));
+    }
 }

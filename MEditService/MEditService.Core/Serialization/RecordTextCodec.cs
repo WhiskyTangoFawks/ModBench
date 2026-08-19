@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO.Abstractions;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -6,6 +7,8 @@ using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
 using Mutagen.Bethesda.Serialization.Streams;
+using Noggog;
+using Noggog.IO;
 
 namespace MEditService.Core.Serialization;
 
@@ -117,7 +120,8 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         using var buffer = new MemoryStream();
         var streamPackage = new StreamPackage(buffer, directory);
         var writer = WriterKernel.GetNewObject(streamPackage);
-        var metaData = new SerializationMetaData(gameRelease, null, null, null, cancel);
+        var metaData = new SerializationMetaData(
+            gameRelease, null, NoRecordFolders.Instance, DiscardChildRecordStreams.Instance, cancel);
 
         var serialize = ResolveSerializeMethod(record.GetType());
         var task = (Task)serialize.Invoke(null, [writer, record, WriterKernel, metaData])!;
@@ -236,16 +240,69 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
     private const string OverlaySuffix = "BinaryOverlay";
 
+    /// <summary>
+    /// Sends every <i>child</i> record's bytes nowhere. Under <c>.FilePerRecord()</c> a container
+    /// (Cell/Worldspace/Quest/DialogTopic) writes each child major record to its own file through
+    /// <c>SerializationMetaData.StreamCreator</c>, which defaults to one that creates real files
+    /// and directories — measured: serializing a populated Cell with no destination folder created
+    /// <c>Persistent/</c> and <c>Temporary/</c> directories in the process's working directory.
+    ///
+    /// Discarding them is the correct outcome, not a workaround: a child record is its own ledger
+    /// entry and its own indexed row (ADR-0041/#387 — the parent's file carries only the parent's
+    /// fields, which is exactly what the parent's own stream already receives), so anything written
+    /// here would be a duplicate of a record handled in its own right. This makes the parent's
+    /// bytes shallow by construction, for a getter straight off a binary overlay, with no mutable
+    /// copy to strip.
+    /// </summary>
+    private sealed class DiscardChildRecordStreams : ICreateStream
+    {
+        internal static readonly DiscardChildRecordStreams Instance = new();
+
+        public Stream GetStreamFor(IFileSystem fileSystem, FilePath path, bool write) => Stream.Null;
+    }
+
+    /// <summary>
+    /// The other half of the same suppression: a container's child folders are created directly
+    /// through <c>SerializationMetaData.FileSystem.Directory.CreateDirectory</c> (see Mutagen
+    /// Serialization's MajorRecordListParallelHelper / BlockParallelHelper / XYBlockParallelHelper),
+    /// not through the stream creator above, so redirecting streams alone does not stop them.
+    /// Measured before this existed: serializing one real Quest created 1,057 directories — one per
+    /// dialogue topic — in the process's working directory, and a load-order-wide index would do
+    /// that for every container record it reads.
+    ///
+    /// Only <see cref="IDirectory.CreateDirectory(string)"/> is neutralized, and only to the extent
+    /// of not touching the disk: it still returns a real <see cref="IDirectoryInfo"/> for the path
+    /// (which the callers ignore), and every other filesystem operation behaves normally, so this
+    /// cannot quietly disable a legitimate write elsewhere in the codec — the only writes this
+    /// class's own file path makes are the temp+rename in <see cref="SerializeAsync"/>, which go
+    /// through <see cref="File"/> directly and never through this.
+    /// </summary>
+    private sealed class NoRecordFolders : FileSystem
+    {
+        internal static readonly NoRecordFolders Instance = new();
+
+        private readonly Lazy<IDirectory> _directory;
+
+        private NoRecordFolders() => _directory = new Lazy<IDirectory>(() => new NonCreatingDirectory(this));
+
+        public override IDirectory Directory => _directory.Value;
+
+        private sealed class NonCreatingDirectory(IFileSystem fileSystem) : DirectoryWrapper(fileSystem)
+        {
+            public override IDirectoryInfo CreateDirectory(string path) => FileSystem.DirectoryInfo.New(path);
+        }
+    }
+
     private static bool TryFindGeneratedSerializationType(Type recordType, out Type found)
     {
-        if (LookupGeneratedType(recordType.Name) is { } direct)
+        if (LookupGeneratedType(recordType, recordType.Name) is { } direct)
         {
             found = direct;
             return true;
         }
 
         if (recordType.Name.EndsWith(OverlaySuffix, StringComparison.Ordinal)
-            && LookupGeneratedType(recordType.Name[..^OverlaySuffix.Length]) is { } viaOverlayName)
+            && LookupGeneratedType(recordType, recordType.Name[..^OverlaySuffix.Length]) is { } viaOverlayName)
         {
             found = viaOverlayName;
             return true;
@@ -255,8 +312,15 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         return false;
     }
 
-    private static Type? LookupGeneratedType(string concreteTypeName) =>
-        typeof(RecordTextCodec).Assembly.GetType($"Mutagen.Bethesda.Fallout4.{concreteTypeName}_Serialization");
+    // The generated class shares the record type's own namespace (Mutagen.Bethesda.<Game>), and
+    // lives in *this* assembly rather than the game assembly (see FindGeneratedSerializationType).
+    // Taking the namespace from the record rather than naming a game is what keeps this mechanism
+    // game-generic (root CLAUDE.md): #413 makes this codec the ingest path for every record, so a
+    // hardcoded game here would mean a Skyrim or Starfield session indexing nothing at all. What
+    // stays per-game is only which types the generator was seeded for — see
+    // RecordTextCodecGeneratorSeed, which is one file and deliberately concrete.
+    private static Type? LookupGeneratedType(Type recordType, string concreteTypeName) =>
+        typeof(RecordTextCodec).Assembly.GetType($"{recordType.Namespace}.{concreteTypeName}_Serialization");
 }
 
 /// <summary>
