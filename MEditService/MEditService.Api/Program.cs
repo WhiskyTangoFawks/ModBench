@@ -68,25 +68,9 @@ try
     builder.Services.AddSingleton<ISessionManager, SessionManager>();
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
-    // ADR-0040/#370: internal Modbench state, not request-scoped — the default lives under
-    // %LOCALAPPDATA%/mEdit/ledgers (LedgerOptions), same convention as the existing log path.
-    // Test hosts override this singleton via WebApplicationFactory.WithWebHostBuilder rather than
-    // an environment variable (env vars are process-global; xUnit test classes share one process).
-    builder.Services.AddSingleton(LedgerOptions.Default);
-    builder.Services.AddSingleton<LedgerRepository>();
     builder.Services.AddSingleton<RecordTextCodec>();
-    builder.Services.AddSingleton<LedgerRecordFieldReader>();
-    builder.Services.AddSingleton<RecordReverter>();
-    builder.Services.AddSingleton<LedgerStatusQuery>();
-    builder.Services.AddSingleton<LedgerLifecycleReconciler>();
 
     var app = builder.Build();
-
-    // #372: replays whatever cross-repo-save journal a prior process left behind — before any
-    // request is served (RunAsync hasn't been called yet), so recovery always finishes ahead of the
-    // first attempt that could touch the same origins. Best-effort/non-throwing by construction (see
-    // LedgerRepository.Recover's own remarks); no extra try/catch needed here.
-    app.Services.GetRequiredService<LedgerRepository>().Recover();
 
     // #343: one summary line per request instead of ASP.NET Core's own six-line pipeline log (now
     // silenced by appsettings.json's Microsoft.AspNetCore: Warning override — a different category
