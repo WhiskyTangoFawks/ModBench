@@ -22,12 +22,6 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe('createRecordSessionClient', () => {
-  it('exposes the record-session operations', () => {
-    const client = createRecordSessionClient(5172);
-    for (const m of ['load', 'save', 'revert', 'copyTo', 'removeOverride', 'copyAsNew', 'groupMembers', 'saveGroup', 'revertGroup', 'conditionRunOnTargets']) {
-      expect(client).toHaveProperty(m);
-    }
-  });
 
   it('constructs distinct clients per port', () => {
     expect(createRecordSessionClient(5172)).not.toBe(createRecordSessionClient(5173));
@@ -52,11 +46,10 @@ describe('RecordSessionClient.load', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('issues compare, changes, and plugins in parallel', async () => {
+  it('issues compare and plugins in parallel', async () => {
     await createRecordSessionClient(5172).load('000001:A.esp');
     const urls = fetchMock.mock.calls.map(c => (typeof c[0] === 'string' ? c[0] : c[0].url));
     expect(urls.some(u => u.includes('/records/000001%3AA.esp/compare'))).toBe(true);
-    expect(urls.some(u => u.includes('/changes?formKey=000001%3AA.esp'))).toBe(true);
     expect(urls.some(u => u.endsWith('/plugins'))).toBe(true);
   });
 
@@ -65,7 +58,6 @@ describe('RecordSessionClient.load', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.result.conflictAll).toBe('OnlyOne');
-    expect(r.changes).toEqual([{ id: 'c1' }]);
     // Immutable-set resolution lives behind the client (issue #122 AC). #209: the raw plugin
     // list itself is no longer exposed on LoadResult — it fetches /plugins internally only to
     // derive this set, since its only consumer (the deleted PluginTargetPicker/Add Master
@@ -156,7 +148,6 @@ describe('RecordSessionClient.load', () => {
     const r = await createRecordSessionClient(5172).load('000001:A.esp');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.changes).toBeNull();
     expect(r.immutableSet).toBeNull();
     expect(r.notInLoadOrderSet).toBeNull();
   });
@@ -203,130 +194,6 @@ describe('RecordSessionClient.load', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.conflictsComputed).toBe(false);
-  });
-});
-
-describe('RecordSessionClient writes', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
-  beforeEach(() => {
-    fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ ok: true })));
-    vi.stubGlobal('fetch', fetchMock);
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('save PATCHes the record with the user change payload', async () => {
-    await createRecordSessionClient(5172).save('000001:A.esp', 'A.esp', { Name: 'x' });
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.method).toBe('PATCH');
-    expect(req.url).toContain('/records/000001%3AA.esp');
-    expect(await req.clone().json()).toMatchObject({ plugin: 'A.esp', fields: { Name: 'x' }, source: 'user' });
-  });
-
-  it('save threads changeType when given', async () => {
-    await createRecordSessionClient(5172).save('000001:A.esp', 'A.esp', { p: {} }, 'vmad_struct_op');
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(await req.clone().json()).toMatchObject({ changeType: 'vmad_struct_op' });
-  });
-
-  it('revert DELETEs the change', async () => {
-    await createRecordSessionClient(5172).revert('abc');
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.method).toBe('DELETE');
-    expect(req.url).toContain('/changes/abc');
-  });
-
-  it('copyTo POSTs to the copy-to endpoint', async () => {
-    await createRecordSessionClient(5172).copyTo('000001:A.esp', 'B.esp');
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.method).toBe('POST');
-    expect(req.url).toContain('/records/000001%3AA.esp/copy-to/B.esp');
-    expect(await req.clone().json()).toEqual({});
-  });
-
-  // Issue #202: Copy as Override copies the right-clicked column, not necessarily the winner —
-  // sourcePlugin, when given, must reach the backend in the request body.
-  it('copyTo includes sourcePlugin in the request body when given', async () => {
-    await createRecordSessionClient(5172).copyTo('000001:A.esp', 'B.esp', 'C.esp');
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(await req.clone().json()).toEqual({ sourcePlugin: 'C.esp' });
-  });
-
-  // #281 / #34: sourceOrigin names *which* copy of that filename the clicked column is — without
-  // it the backend resolves the origin from the filename, which mis-targets a shadowed copy.
-  it('copyTo includes sourceOrigin alongside sourcePlugin when given', async () => {
-    await createRecordSessionClient(5172).copyTo('000001:A.esp', 'B.esp', 'C.esp', 'ModA');
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(await req.clone().json()).toEqual({ sourcePlugin: 'C.esp', sourceOrigin: 'ModA' });
-  });
-
-  it('removeOverride POSTs a delete-records request', async () => {
-    await createRecordSessionClient(5172).removeOverride('000001:A.esp', 'A.esp');
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.url).toContain('/records/delete');
-    expect(await req.clone().json()).toEqual({ records: [{ formKey: '000001:A.esp', plugin: 'A.esp' }] });
-  });
-
-  // #281: Copy as New Record is one backend call — the template-source triple replaces the old
-  // create-blank-then-patch-every-field choreography (the backend reads the named copy's own
-  // fields and derives the record type from the template).
-  it('copyAsNew POSTs a create with the template-source triple', async () => {
-    await createRecordSessionClient(5172).copyAsNew('000001:A.esp', 'B.esp', 'C.esp', 'ModA');
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.url).toContain('/plugins/B.esp/records');
-    expect(await req.clone().json()).toEqual({
-      source: 'user',
-      templateFormKey: '000001:A.esp',
-      templateSourcePlugin: 'C.esp',
-      templateSourceOrigin: 'ModA',
-    });
-  });
-
-  it('returns a typed error result for a non-ok response', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ detail: 'read-only' }, 409));
-    const result = await createRecordSessionClient(5172).save('000001:A.esp', 'A.esp', {});
-    expect(result).toEqual({ ok: false, status: 409, error: { detail: 'read-only' } });
-  });
-
-  it('saveGroup POSTs to the change-group save endpoint', async () => {
-    await createRecordSessionClient(5172).saveGroup('g1');
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.method).toBe('POST');
-    expect(req.url).toContain('/change-groups/g1/save');
-  });
-
-  it('saveGroup returns a typed success result', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ byPlugin: {}, reindexFailure: null }));
-    const result = await createRecordSessionClient(5172).saveGroup('g1');
-    expect(result).toEqual({ ok: true, data: { byPlugin: {}, reindexFailure: null } });
-  });
-
-  it('revertGroup DELETEs the whole component by member change id', async () => {
-    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
-    await createRecordSessionClient(5172).revertGroup('g1');
-    const req = fetchMock.mock.calls[0][0] as Request;
-    expect(req.method).toBe('DELETE');
-    expect(req.url).toContain('/changes/group/g1');
-  });
-});
-
-describe('RecordSessionClient.groupMembers', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
-  beforeEach(() => {
-    fetchMock = vi.fn(() => Promise.resolve(jsonResponse([{ id: 'c1' }, { id: 'c2' }])));
-    vi.stubGlobal('fetch', fetchMock);
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('GETs the changes in the component the change id belongs to', async () => {
-    const members = await createRecordSessionClient(5172).groupMembers('c1');
-    const url = typeof fetchMock.mock.calls[0][0] === 'string' ? fetchMock.mock.calls[0][0] : fetchMock.mock.calls[0][0].url;
-    expect(url).toContain('/changes?groupId=c1');
-    expect(members).toEqual([{ id: 'c1' }, { id: 'c2' }]);
-  });
-
-  it('returns [] when the read fails, so the panel can fall back to a plain revert', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({}, 500));
-    expect(await createRecordSessionClient(5172).groupMembers('c1')).toEqual([]);
   });
 });
 

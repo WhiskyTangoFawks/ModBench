@@ -18,7 +18,7 @@ public class RecordTextCodecGeneratorSeedTests
     // PlacementWalker.Walk, which legitimately take a mod for indexing and have nothing to do with
     // this ledger codec. That check holds today and goes red if this namespace's own public surface
     // ever grows a whole-mod-accepting method — including a constructor, not just a method: checked
-    // separately below (GetMethods alone does not see constructors, and a stage-2
+    // separately below (GetMethods alone does not see constructors, and a later
     // `LedgerWriter(IFallout4ModGetter)` is exactly the surface AC2 forbids).
     [Fact]
     public void SerializationNamespace_ExposesNoPublicApiAcceptingAWholeModType()

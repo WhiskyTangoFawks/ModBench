@@ -18,7 +18,7 @@ public sealed class SessionManagerLoadExplicitTests
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-        return new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        return new SessionManager(factory);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class SessionManagerLoadExplicitTests
         var reflector = SharedSchemaReflector.Instance;
         var innerFactory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var factory = new ThrowingOnIndexRepositoryFactory(innerFactory, "Bad.esp");
-        using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        using var manager = new SessionManager(factory);
 
         manager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 

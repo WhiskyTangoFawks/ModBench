@@ -10,7 +10,7 @@ public static class ConditionPath
 {
     public const string Prefix = @"CTDA\";
 
-    // A whole-list restage (add/remove/move) stages at the bare owning-field path, not a
+    // A whole-list rewrite (add/remove/move) targets the bare owning-field path, not a
     // CTDA\-prefixed one, per ADR-0019 (array indices have no stable identity, so arity/order
     // changes replace the whole list, not one element). Recognizing *which* bare field names are
     // actually condition-owning fields (#154: a record may have more than one — e.g. Quest's

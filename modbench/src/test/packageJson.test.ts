@@ -64,25 +64,11 @@ describe('package.json Loadout header view (#247)', () => {
   });
 });
 
-describe('package.json Pending Changes gates on staged work, not view mode (#273 Slice A)', () => {
-  const sidebarViews = () => pkg.contributes.views.modbench as { id: string; name: string; when?: string }[];
-
-  it('is visible exactly when modbench.hasPendingChanges is true, never on modbench.viewMode', () => {
-    const view = sidebarViews().find((v) => v.id === 'modbench.changeGroupTree');
-    expect(view!.when).toBe('modbench.hasPendingChanges');
-  });
-});
-
 // VS Code has no view nesting/grouping within a container, so a "Plugins - " title prefix is the
-// only available way to say Pending Changes and Referenced By are sub-functionality of the one
-// Plugins tree, not siblings of equal standing (ADR-0035).
-describe('package.json "Plugins - …" naming for Pending Changes and Referenced By (#273 Slice B)', () => {
-  it('names the Pending Changes view "Plugins - Pending Changes"', () => {
-    const sidebarViews = pkg.contributes.views.modbench as { id: string; name: string }[];
-    const view = sidebarViews.find((v) => v.id === 'modbench.changeGroupTree');
-    expect(view!.name).toBe('Plugins - Pending Changes');
-  });
-
+// only available way to say Referenced By is sub-functionality of the one Plugins tree, not a
+// sibling of equal standing (ADR-0035). #410: the Pending Changes view it also covered retired
+// with the model behind it.
+describe('package.json "Plugins - …" naming for Referenced By (#273 Slice B)', () => {
   it('names the Referenced By view "Plugins - Referenced By"', () => {
     const referencedByViews = pkg.contributes.views.modbenchReferencedBy as { id: string; name: string }[];
     const view = referencedByViews.find((v) => v.id === 'modbench.referencedByTree');
@@ -363,15 +349,6 @@ describe('package.json title-bar rubric (#247)', () => {
       expect(entries.every((e) => e.when.includes('modbench.workspaceIsMo2Instance'))).toBe(true);
     });
 
-  // Rule 4 again, on the one pair where the cost is highest: Save All and Revert All sat
-  // side by side as identical-weight icons, one of them irreversible.
-  it('keeps Revert All out of the navigation group while Save All stays an icon', () => {
-    const revert = titleMenus().find((e) => e.command === 'modbench.revertAllGroups');
-    const save = titleMenus().find((e) => e.command === 'modbench.saveAllGroups');
-    expect(revert!.group.startsWith('navigation')).toBe(false);
-    expect(save!.group).toBe('navigation@1');
-  });
-
   // Rule 7: Collapse All belongs on a hierarchy and nowhere else — on a flat list it is an
   // icon that does nothing. `showCollapseAll` is a createTreeView option, so the assertion
   // lives with the wiring; here we only pin which views are hierarchical.
@@ -382,28 +359,6 @@ describe('package.json title-bar rubric (#247)', () => {
     expect(sidebar).toContain('modbench.modList');
     expect(sidebar).toContain('modbench.pluginListTree');
   });
-});
-
-// #259: cloud-upload read as "syncing to a remote" (saving a pending change writes to a local
-// plugin file); discard read as an error/warning state rather than a plain discard. Save and
-// Revert now share one glyph pair everywhere they appear — per-row inline actions and the
-// view-title Save All / Revert All — even though Revert All's icon is declared but never
-// rendered today (it sits in the `1_revert` overflow group, not navigation, per the title-bar
-// rubric's rule 4; see the "keeps Revert All out of the navigation group" test above). Declaring
-// it anyway keeps the pair consistent by construction and correct if it's ever promoted.
-describe('package.json Pending Changes row action icons (#259)', () => {
-  const commandTitle = (id: string) =>
-    (pkg.contributes.commands as { command: string; icon?: string }[]).find((c) => c.command === id);
-
-  it.each(['modbench.saveGroup', 'modbench.saveAllGroups'])(
-    '%s uses $(save) — a plain save affordance, not cloud-upload', (command) => {
-      expect(commandTitle(command)!.icon).toBe('$(save)');
-    });
-
-  it.each(['modbench.revertGroup', 'modbench.revertAllGroups'])(
-    '%s uses $(close) — a plain X, not the discard/error read', (command) => {
-      expect(commandTitle(command)!.icon).toBe('$(close)');
-    });
 });
 
 describe('package.json standalone Deploy/Purge/Launch withdrawal (#186)', () => {
@@ -468,24 +423,6 @@ describe('package.json command titles and categories (#280)', () => {
   // Exhaustive both ways, same "nothing missing, nothing extra" shape as EXPECTED_COMMANDS.
   const PALETTE_GATED = [
     'modbench.openHeader',
-    'modbench.createPlaced',
-    'modbench.saveGroup',
-    'modbench.revertGroup',
-    'modbench.copyAsOverrideInto',
-    'modbench.pendingCell.reveal',
-    'modbench.pendingCell.saveGroup',
-    'modbench.pendingCell.revertGroup',
-    'modbench.copyAsNewRecord',
-    'modbench.array.add',
-    'modbench.array.remove',
-    'modbench.array.moveUp',
-    'modbench.array.moveDown',
-    'modbench.vmad.addScript',
-    'modbench.vmad.removeScript',
-    'modbench.vmad.addProperty',
-    'modbench.vmad.removeProperty',
-    'modbench.vmad.setScriptFlags',
-    'modbench.vmad.setPropertyFlags',
     'modbench.downloads.install',
     'modbench.downloads.visitNexus',
     'modbench.downloads.openFile',
@@ -508,70 +445,12 @@ describe('package.json command titles and categories (#280)', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(37);
+    expect(PALETTE_GATED).toHaveLength(19);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));
     expect(missingGate).toEqual([]);
     expect(unexpectedGate).toEqual([]);
-  });
-});
-
-// #281: one object, one context menu. The record-scoped actions — the copy family and Remove —
-// are the same command ids, in xEdit's pmuViewHeader order (copy as override, copy as new record,
-// remove — ADR-0034), on every surface that shows a record: the tree's record row, the placed row
-// and the record editor's column header. Adding a record action means adding it to every surface
-// or this fails.
-describe('package.json one record menu on every record surface (#281)', () => {
-  const menus = pkg.contributes.menus as Record<string, { command: string; when: string; group?: string }[]>;
-  const RECORD_MENU = ['modbench.copyAsOverrideInto', 'modbench.copyAsNewRecord', 'modbench.deleteRecord'];
-  const COPY_ONLY = RECORD_MENU.slice(0, 2);
-
-  /** The #281 record actions contributed for a given tree contextValue, in group order. */
-  function treeRecordMenu(viewItem: string): string[] {
-    const mentions = new RegExp(`viewItem == ${viewItem}\\b`);
-    return (menus['view/item/context'] ?? [])
-      .filter((e) => e.when.includes('modbench.pluginListTree') && mentions.test(e.when))
-      .filter((e) => RECORD_MENU.includes(e.command))
-      .sort((a, b) => (a.group ?? '').localeCompare(b.group ?? '', undefined, { numeric: true }))
-      .map((e) => e.command);
-  }
-
-  /** The #281 record actions on the column header, in group order. */
-  function columnHeaderMenu(): { command: string; when: string }[] {
-    return (menus['webview/context'] ?? [])
-      .filter((e) => e.when.includes("webviewSection == 'columnHeader'"))
-      .filter((e) => RECORD_MENU.includes(e.command))
-      .sort((a, b) => (a.group ?? '').localeCompare(b.group ?? '', undefined, { numeric: true }));
-  }
-
-  it('offers the same record actions, in the same order, on record rows, placed rows and the column header', () => {
-    expect(treeRecordMenu('record')).toEqual(RECORD_MENU);
-    expect(treeRecordMenu('refr')).toEqual(RECORD_MENU);
-    expect(columnHeaderMenu().map((e) => e.command)).toEqual(RECORD_MENU);
-  });
-
-  it('hides Remove for an immutable copy on every surface, keeping the copy family', () => {
-    expect(treeRecordMenu('recordImmutable')).toEqual(COPY_ONLY);
-    expect(treeRecordMenu('refrImmutable')).toEqual(COPY_ONLY);
-    const remove = columnHeaderMenu().find((e) => e.command === 'modbench.deleteRecord');
-    expect(remove?.when).toContain('!immutable');
-  });
-
-  it('one operation, one name: the command is titled "Remove" and the old per-surface ids are gone', () => {
-    const commands = pkg.contributes.commands as { command: string; title: string }[];
-    expect(commands.find((c) => c.command === 'modbench.deleteRecord')?.title).toBe('Remove');
-    const ids = new Set(commands.map((c) => c.command));
-    expect(ids.has('modbench.columnHeader.removeOverride')).toBe(false);
-    expect(ids.has('modbench.columnHeader.copyAsNewRecord')).toBe(false);
-    for (const [menuId, entries] of Object.entries(menus)) {
-      for (const gone of ['modbench.columnHeader.removeOverride', 'modbench.columnHeader.copyAsNewRecord']) {
-        expect(
-          entries.some((e) => e.command === gone),
-          `expected no "${menuId}" entry invoking ${gone}`,
-        ).toBe(false);
-      }
-    }
   });
 });
 
@@ -618,5 +497,53 @@ describe('package.json per-plugin Re-read on a drifted row (#279)', () => {
       ['modbench.pluginListTree.revealInExplorer', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)'],
       ['modbench.pluginListTree.rereadPlugin', 'view == modbench.pluginListTree && viewItem == pluginDrifted'],
     ]);
+  });
+});
+
+// #410/ADR-0041: the pending-change model, the Pending Changes tree (ADR-0029) and the aggregate
+// SCM provider are retired, so nothing may still be contributed for them. Read as an absence
+// assertion this would pass just as happily against an empty or mis-shaped manifest, so each check
+// pairs with a positive control drawn from the same collection — a surviving contribution that must
+// be found by the identical lookup.
+describe('package.json contributes nothing for the retired pending-change model (#410)', () => {
+  const RETIRED = /pending|changegroup|change-group|saveGroup|revertGroup|saveAllGroups|revertAllGroups|ledger/i;
+
+  it('contributes no command for a pending change, change group or the ledger SCM surface', () => {
+    const commands = (pkg.contributes.commands as { command: string; title: string }[]);
+
+    // Positive control, same list: the read commands this ticket preserves are still contributed.
+    const ids = commands.map((c) => c.command);
+    expect(ids).toContain('modbench.openCompare');
+    expect(ids).toContain('modbench.showReferencedBy');
+
+    expect(commands.filter((c) => RETIRED.test(c.command) || RETIRED.test(c.title))).toEqual([]);
+  });
+
+  it('contributes no view, view container or welcome entry for the Pending Changes tree', () => {
+    const views = Object.values(pkg.contributes.views as Record<string, { id: string; name: string }[]>).flat();
+
+    // Positive control, same flattened list.
+    expect(views.map((v) => v.id)).toContain('modbench.referencedByTree');
+
+    expect(views.filter((v) => RETIRED.test(v.id) || RETIRED.test(v.name))).toEqual([]);
+  });
+
+  it('contributes no menu entry that invokes or gates on retired pending-change state', () => {
+    const menus = Object.entries(pkg.contributes.menus as Record<string, { command?: string; when?: string }[]>)
+      .flatMap(([menu, entries]) => entries.map((e) => ({ menu, ...e })));
+
+    // Positive control, same flattened list.
+    expect(menus.some((m) => m.command === 'modbench.openHeader')).toBe(true);
+
+    expect(menus.filter((m) => RETIRED.test(m.command ?? '') || RETIRED.test(m.when ?? ''))).toEqual([]);
+  });
+
+  it('contributes no keybinding for a retired pending-change command', () => {
+    const keys = (pkg.contributes.keybindings ?? []) as { command: string; when?: string }[];
+
+    // Positive control, same list: keybindings really are being read from the manifest.
+    expect(keys.map((k) => k.command)).toContain('modbench.pluginListTree.filter');
+
+    expect(keys.filter((k) => RETIRED.test(k.command) || RETIRED.test(k.when ?? ''))).toEqual([]);
   });
 });

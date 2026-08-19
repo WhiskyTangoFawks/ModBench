@@ -2,14 +2,11 @@ import type { ApiClient, SessionStatus } from './ApiClient';
 import { errorText } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
 import { reportSkippedPlugins } from './sessionFailures';
-import type { ReindexFailure, SaveOutcome } from './saveClassification';
-import { partialSaveMessage, staleIndexMessage } from './saveClassification';
 
 export interface SessionControllerDeps {
   client: ApiClient;
   repository: PluginRepository;
   refreshTree: () => void;
-  refreshGroupTree: () => void;
   setStatusText: (text: string) => void;
   showWarning: (msg: string) => void;
   showError: (msg: string) => void;
@@ -93,54 +90,6 @@ export class SessionController {
       return;
     }
     this.deps.refreshTree();
-  }
-
-  // #281: sourcePlugin/sourceOrigin name the clicked row's own copy — the backend copies that
-  // version, not the winner (#202's column-header rule, now on every surface).
-  async copyRecordTo(formKey: string, target: string, sourcePlugin?: string, sourceOrigin?: string): Promise<void> {
-    const { error, response } = await this.deps.client.POST(
-      '/records/{formKey}/copy-to/{targetPlugin}',
-      {
-        params: { path: { formKey, targetPlugin: target } },
-        body: sourcePlugin ? { sourcePlugin, ...(sourceOrigin ? { sourceOrigin } : {}) } : {},
-      },
-    );
-    if (!response.ok) {
-      const text = errorText(error);
-      this.log(`[SessionController] copyRecordTo failed (${response.status}): ${text}`);
-      this.deps.showError(`mEdit: Copy failed — ${text}`);
-      return;
-    }
-    this.deps.refreshTree();
-    // #331 (bundled pre-existing bug fix): a tree-invoked copy stages a pending change same as a
-    // webview-staged edit does — this call was missing, so both the Pending Changes view and the
-    // new decoration provider went stale after it.
-    this.deps.refreshGroupTree();
-  }
-
-  /** #281: Copy as New Record from a tree row — one backend call; the record type is derived from
-   *  the template server-side and the fields are read off the named source copy, so no open
-   *  record panel is involved. */
-  async copyAsNewRecord(formKey: string, target: string, sourcePlugin: string, sourceOrigin?: string): Promise<void> {
-    const { error, response } = await this.deps.client.POST('/plugins/{plugin}/records', {
-      params: { path: { plugin: target } },
-      body: {
-        templateFormKey: formKey,
-        templateSourcePlugin: sourcePlugin,
-        ...(sourceOrigin ? { templateSourceOrigin: sourceOrigin } : {}),
-        source: 'user',
-      },
-    });
-    if (!response.ok) {
-      const text = errorText(error);
-      this.log(`[SessionController] copyAsNewRecord failed (${response.status}): ${text}`);
-      this.deps.showError(`mEdit: Copy failed — ${text}`);
-      return;
-    }
-    this.deps.refreshTree();
-    // #331 (bundled pre-existing bug fix): this stages a `create` change — see copyRecordTo's
-    // own comment above.
-    this.deps.refreshGroupTree();
   }
 
   /** Load the editing session from an ordered { name, path, origin, participates } list built
@@ -322,7 +271,7 @@ export class SessionController {
    *
    *  Returns whether it happened. A failure is ADR-0026's "explicit action failed" tier (the user
    *  ran a command), so it is notified as well as logged, and nothing is refreshed: the session is
-   *  exactly as it was, staged edits included. A 409 here is the ordinary "a load is still in
+   *  exactly as it was. A 409 here is the ordinary "a load is still in
    *  flight" answer, which is worth telling the user precisely because retrying will work. */
   async rereadPlugin(plugin: string, path: string, origin: string): Promise<boolean> {
     try {
@@ -344,238 +293,7 @@ export class SessionController {
     // The plugin's records were replaced and winners re-swept, so every cached page for it and
     // every conflict badge in the tree is stale.
     this.deps.refreshTree();
-    // And the re-read discarded that copy's staged edits, so the Pending Changes tree and the
-    // pending-change row decorations are describing changes the backend no longer holds — the
-    // exact stale-decoration case #331/#334 exist for.
-    this.deps.refreshGroupTree();
     return true;
   }
 
-  /** How many staged edits belong to `(plugin, origin)` — what the re-read confirm states before
-   *  they are discarded (#279).
-   *
-   *  Scoped by origin as well as filename because that pair is a staged edit's identity
-   *  (ADR-0036): two copies of one filename stage independently, and a re-read discards only the
-   *  copy it replaces. Deliberately **throws** rather than degrading to 0, unlike its neighbour
-   *  below: 0 is the one answer that silently skips the confirm, so "could not find out" has to
-   *  stay distinguishable from "nothing to lose". `rereadPlugin.ts` decides between them. */
-  async stagedChangeCount(plugin: string, origin: string): Promise<number> {
-    const { data, error, response } = await this.deps.client.GET('/changes', {});
-    if (!response.ok || !Array.isArray(data)) {
-      const text = errorText(error);
-      this.log(`[SessionController] stagedChangeCount(${plugin}) failed (${response.status}): ${text}`);
-      throw new Error(text || `GET /changes failed (${response.status})`);
-    }
-    const same = (a: string | undefined | null, b: string) => (a ?? '').toLowerCase() === b.toLowerCase();
-    return data.filter((c) => same(c.plugin, plugin) && same(c.origin, origin)).length;
-  }
-
-  /** #295: whether the backend currently holds any staged work — read live off
-   *  `GET /change-groups`, not a cached frontend signal. `modbench.hasPendingChanges` is a
-   *  write-only VS Code context key (there is no API to read one back); the Pending Changes
-   *  view's badge is a rendering side-effect of the same async fetch, not a value business
-   *  logic should key off. Gates Reload Session's confirm — a destructive reload must never
-   *  guess. Fails toward `true` (assume staged work) on a read it can't complete: a spurious
-   *  confirm costs one click, a silently-skipped one risks an unrecoverable discard. */
-  async hasPendingChanges(): Promise<boolean> {
-    try {
-      const { data, response } = await this.deps.client.GET('/change-groups', {});
-      if (!response.ok || !Array.isArray(data)) {
-        this.log(`[SessionController] hasPendingChanges: /change-groups fetch failed (${response.status}) — assuming pending work`);
-        return true;
-      }
-      return data.length > 0;
-    } catch (e) {
-      this.log(`[SessionController] hasPendingChanges threw: ${e instanceof Error ? e.message : String(e)} — assuming pending work`);
-      return true;
-    }
-  }
-
-  async deleteRecords(records: { formKey: string; plugin: string }[]): Promise<boolean> {
-    try {
-      const { error, response } = await this.deps.client.POST('/records/delete', { body: { records } });
-      if (!response.ok) {
-        const text = errorText(error);
-        this.log(`[SessionController] deleteRecords failed (${response.status}): ${text}`);
-        this.deps.showError(`mEdit: Delete failed — ${text}`);
-        return false;
-      }
-      this.deps.refreshTree();
-      // #331 (bundled pre-existing bug fix): a staged delete (or a reverted-create, when the
-      // deleted record was itself pending) is a pending-change mutation — see copyRecordTo's own
-      // comment above.
-      this.deps.refreshGroupTree();
-      return true;
-    } catch (e) {
-      this.log(`[SessionController] deleteRecords threw: ${e instanceof Error ? e.message : String(e)}`);
-      this.deps.showError(`mEdit: Delete failed — ${e instanceof Error ? e.message : String(e)}`);
-      return false;
-    }
-  }
-
-  async createPlaced(
-    plugin: string,
-    cellFormKey: string,
-    recordType: string,
-    placementGroup: string,
-    templateFormKey?: string,
-  ): Promise<void> {
-    try {
-      const { error, response } = await this.deps.client.POST(
-        '/plugins/{plugin}/cells/{cellFormKey}/placed',
-        { params: { path: { plugin, cellFormKey } }, body: { recordType, placementGroup, templateFormKey } },
-      );
-      if (!response.ok) {
-        const text = errorText(error);
-        this.log(`[SessionController] createPlaced failed (${response.status}): ${text}`);
-        this.deps.showError(`mEdit: Create placed failed — ${text}`);
-        return;
-      }
-      this.deps.refreshTree();
-      // #331 (bundled pre-existing bug fix): this stages a `create` change — see copyRecordTo's
-      // own comment above.
-      this.deps.refreshGroupTree();
-    } catch (e) {
-      this.log(`[SessionController] createPlaced threw: ${e instanceof Error ? e.message : String(e)}`);
-      this.deps.showError(`mEdit: Create placed failed — ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-
-  async saveGroup(groupId: string): Promise<void> {
-    const { data, error, response } = await this.deps.client.POST('/change-groups/{groupId}/save', {
-      params: { path: { groupId } },
-    });
-    if (response.ok || response.status === 404) {
-      // A save can succeed at the HTTP level yet leave some plugins unwritten
-      // (read-only, not found) — an integrity-tier partial outcome (ADR-0026).
-      this.reportPartialSave(data?.byPlugin ?? undefined);
-      // Or succeed on disk but fail to reindex — the file is written, only the views are stale.
-      this.reportStaleIndex(data?.reindexFailure);
-      this.deps.refreshGroupTree();
-      this.deps.refreshTree();
-      return;
-    }
-    const text = errorText(error);
-    this.log(`[SessionController] saveGroup failed (${response.status}): ${text}`);
-    this.deps.showError(`mEdit: Save failed — ${text}`);
-  }
-
-  /** Save several selected groups at once, each atomic on its whole component. Loops the
-   *  per-group endpoint (mirroring saveAllGroups) so partial-save and stale-index outcomes
-   *  are surfaced per group (ADR-0026), aggregating failures into one message. */
-  async saveGroups(groupIds: string[]): Promise<void> {
-    if (groupIds.length === 0) return;
-    return this.saveGroupList(groupIds, 'mEdit: Failed to save:');
-  }
-
-  /** Revert several selected groups at once, each atomic on its whole component. Reports
-   *  any failures in one aggregated message (ADR-0026), matching saveGroups — not N toasts. */
-  async revertGroups(groupIds: string[]): Promise<void> {
-    if (groupIds.length === 0) return;
-    const failed: string[] = [];
-    let anyReverted = false;
-    for (const id of groupIds) {
-      const { response } = await this.deps.client.DELETE('/changes/group/{groupId}', {
-        params: { path: { groupId: id } },
-      });
-      if (response.ok) anyReverted = true;
-      else {
-        failed.push(id);
-        this.log(`[SessionController] revertGroups: group ${id} failed (${response.status})`);
-      }
-    }
-    if (anyReverted) this.deps.refreshGroupTree();
-    if (failed.length > 0) this.deps.showError(`mEdit: Failed to revert: ${failed.join(', ')}`);
-  }
-
-  /** ADR-0026 integrity tier: a save that wrote some plugins but not others must be
-   *  surfaced, never silent. The backend leaves the unwritten changes queued. */
-  private reportPartialSave(byPlugin: SaveOutcome | undefined): void {
-    const message = partialSaveMessage(byPlugin);
-    if (!message) return;
-    this.log(`[SessionController] ${message}`);
-    this.deps.showError(`mEdit: ${message}`);
-  }
-
-  /** ADR-0026 integrity tier: the save committed to disk but the post-commit reindex failed, so
-   *  the record views now serve stale pre-save data. The write is done and the changes are
-   *  consumed — this is a warning to reload, never a "save failed" error. */
-  private reportStaleIndex(failure: ReindexFailure | null | undefined): void {
-    const message = staleIndexMessage(failure);
-    if (!message) return;
-    const plugins = (failure!.plugins ?? []).join(', ') || 'the saved plugins';
-    this.log(`[SessionController] reindex failed after save — index stale for ${plugins}: ${failure!.reason ?? 'unknown error'}`);
-    this.deps.showWarning(`mEdit: ${message}`);
-  }
-
-  async revertGroup(groupId: string): Promise<void> {
-    const { error, response } = await this.deps.client.DELETE('/changes/group/{groupId}', {
-      params: { path: { groupId } },
-    });
-    if (response.ok) {
-      this.deps.refreshGroupTree();
-      return;
-    }
-    const text = errorText(error);
-    this.log(`[SessionController] revertGroup failed (${response.status}): ${text}`);
-    this.deps.showError(`mEdit: Revert failed — ${text}`);
-  }
-
-  async saveAllGroups(): Promise<void> {
-    const { data, response } = await this.deps.client.GET('/change-groups', {});
-    if (!response.ok || !Array.isArray(data)) {
-      this.deps.showError('mEdit: Failed to fetch pending changes');
-      return;
-    }
-    const groups = data.filter(g => g.id);
-    if (groups.length === 0) return;
-    return this.saveGroupList(groups.map(g => g.id!), 'mEdit: Failed to save pending changes:');
-  }
-
-  /** Shared loop/aggregate body for saveGroups and saveAllGroups: save each group via the
-   *  per-group endpoint, refresh trees once if anything succeeded, and surface one aggregated
-   *  error naming every failed group (ADR-0026) — not N toasts. */
-  private async saveGroupList(groupIds: string[], failMessagePrefix: string): Promise<void> {
-    const failed: string[] = [];
-    let anySucceeded = false;
-    for (const id of groupIds) {
-      if (await this.saveOneGroup(id)) anySucceeded = true;
-      else failed.push(id);
-    }
-    if (anySucceeded) {
-      this.deps.refreshGroupTree();
-      this.deps.refreshTree();
-    }
-    if (failed.length > 0) {
-      this.deps.showError(`${failMessagePrefix} ${failed.join(', ')}`);
-    }
-  }
-
-  /** Save one group via the per-group endpoint, surfacing partial and stale-index outcomes
-   *  (ADR-0026). Returns true if the save reached the backend (HTTP ok, or 404 = already gone);
-   *  the caller aggregates failures. Shared by saveAllGroups and saveGroups; saveGroup surfaces
-   *  its own errors. */
-  private async saveOneGroup(groupId: string): Promise<boolean> {
-    const { data, response } = await this.deps.client.POST('/change-groups/{groupId}/save', {
-      params: { path: { groupId } },
-    });
-    if (response.ok || response.status === 404) {
-      this.reportPartialSave(data?.byPlugin ?? undefined);
-      this.reportStaleIndex(data?.reindexFailure);
-      return true;
-    }
-    this.log(`[SessionController] saveOneGroup: group ${groupId} failed (${response.status})`);
-    return false;
-  }
-
-  async revertAllGroups(): Promise<void> {
-    const { data, response } = await this.deps.client.GET('/change-groups', {});
-    if (!response.ok || !Array.isArray(data)) {
-      this.deps.showError('mEdit: Failed to fetch pending changes');
-      return;
-    }
-    for (const g of data.filter(g => g.id)) {
-      await this.revertGroup(g.id!);
-    }
-  }
 }

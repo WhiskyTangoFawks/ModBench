@@ -94,7 +94,7 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
     private readonly client: ApiClient,
     log?: (msg: string) => void,
     // #282: the view title's "Referenced By (N)" badge (xEdit's `Referenced By (%d)` caption) —
-    // same callback shape as PendingChangesTreeProvider's onPendingState, fired from rootNodes()
+    // a callback fired from rootNodes()
     // whenever it resolves. `undefined` means "no known count" (no active record, or a failed
     // fetch) so extension.ts never renders a misleading "(0)" for either — only a genuine
     // zero-referrer result reports 0.

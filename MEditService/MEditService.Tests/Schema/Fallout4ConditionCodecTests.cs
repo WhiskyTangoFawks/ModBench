@@ -299,7 +299,7 @@ public class Fallout4ConditionCodecTests
         Assert.Equal("Effects[2]: malformed entry", ex.Message);
     }
 
-    // ---- IsNestedConditionListField: stage-time shape check (#182, generalized to N levels #184) ----
+    // ---- IsNestedConditionListField: validation-time shape check (#182, generalized to N levels #184) ----
     // The Type-only twin of ExtractNested's per-instance discovery, used by PluginWriter.IsReadOnly
     // for a CTDA-prefixed indexed path. A separate method from IsConditionListField (#182 seam
     // decision) so the bare-fieldpath whole-list-restage gate (#183's boundary) is never loosened

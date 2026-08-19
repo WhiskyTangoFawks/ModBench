@@ -108,15 +108,4 @@ public class TableDdlBuilderTests
         cmd.CommandText = "SELECT COUNT(*) FROM duckdb_indexes() WHERE index_name = 'idx_form_references_target'";
         Assert.Equal(1L, cmd.ExecuteScalar());
     }
-
-    [Fact]
-    public void EnsureTable_CreatesPendingRefTargetIndex()
-    {
-        using var conn = OpenMemory();
-        DuckDbPendingChangeService.EnsureTable(conn);
-
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM duckdb_indexes() WHERE index_name = 'idx_pfr_target'";
-        Assert.Equal(1L, cmd.ExecuteScalar());
-    }
 }

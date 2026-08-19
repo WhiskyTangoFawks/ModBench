@@ -1,5 +1,4 @@
 using System.Text.Json;
-using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
@@ -9,12 +8,10 @@ namespace MEditService.Core.Queries;
 
 public sealed class RecordQueryService(
     ISessionManager session,
-    IPendingChangeService changes,
     ISchemaReflector schemaReflector,
     IConflictClassifier conflictClassifier) : IRecordQueryService
 {
     private readonly ISessionManager _session = session;
-    private readonly IPendingChangeService _changes = changes;
     private readonly ISchemaReflector _schemaReflector = schemaReflector;
     private readonly IConflictClassifier _conflictClassifier = conflictClassifier;
 
@@ -78,36 +75,7 @@ public sealed class RecordQueryService(
                 [.. schemas.Keys.Where(t => t != HeaderTableName)], plugin, search, limit, offset, origin);
         }
 
-        if (plugin == null || offset > 0)
-            return committed;
-
-        var committedKeys = committed.Items.Select(r => r.FormKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        // #296 review: staged-only records must scope to the same origin as the committed query
-        // above — GetStagedFormKeys has accepted an optional origin filter since #272; omitting it
-        // here (as this call originally did) let two same-filename origins' staged-only records
-        // merge through this path even though the committed side was already correctly scoped.
-        var staged = _changes.GetStagedFormKeys(plugin, type, origin)
-            .Where(s => !committedKeys.Contains(s.FormKey))
-            .ToList();
-
-        if (staged.Count == 0)
-            return committed;
-
-        var loadOrderIndex = RequireSession().Plugins
-            .FirstOrDefault(p => p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase)
-                && p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase))?.LoadOrderIndex ?? -1;
-
-        // origin! : plugin is non-null past the guard above, and origin was resolved from that same
-        // plugin nullability check at its declaration (line above), so it is non-null here too — the
-        // compiler's flow analysis doesn't carry that correlation across the guard into this closure
-        // (confirmed: CS8604 without the forgiveness), hence this instead of a second
-        // PluginOriginResolver.Resolve call.
-        var stagedSummaries = staged
-            .ConvertAll(s => new RecordSummary(s.FormKey, plugin, loadOrderIndex, IsWinner: false, EditorId: null, Origin: origin!));
-
-        return new PagedResult<RecordSummary>(
-            [.. committed.Items, .. stagedSummaries],
-            committed.Total + staged.Count);
+        return committed;
     }
 
     public RecordDetail? GetRecord(string formKey)
@@ -124,83 +92,11 @@ public sealed class RecordQueryService(
         return tableName == null ? null : repository.GetRecord(tableName, formKey, plugin, origin, winnerOnly: false);
     }
 
-    // #336/ADR-0038: replaces the deleted stage-missing-masters step, which used to stage a real
-    // pending-change row so the header's masters became the union once saved. This instead
-    // answers the union live, every time, with nothing ever staged. Mirrors exactly what that
-    // deleted step used to compute when deciding a master was missing: the record's own origin
-    // plugin (OriginPluginOf) for every staged FormKey, plus the origin plugin of every FormKey
-    // any staged content references.
-    //
-    // Order still diverges from what #337 writes, by design of that slice's scope (not a leftover
-    // bug to chase here): this method orders as [committed masters, their original stored order] +
-    // [newly-implied masters, alphabetical] — a *read-time* scheme with no notion of load order.
-    // PluginWriter (#337) instead writes Mutagen's content-derived master set sorted by the
-    // session's *current plugin load order*, unconditionally on every save. The two agree in the
-    // common case (every effective master is already committed, and committed order already
-    // matches load order) but can still diverge whenever a pending edit implies a brand-new,
-    // not-yet-committed master: this method appends it alphabetically at the end, while the write
-    // slots it wherever load order actually puts it. Aligning this method's order to load order
-    // would pull load-order knowledge into RecordQueryService, a new cross-context dependency
-    // (ADR-0038's "masters are Editing-context, load order is Mod Management's") deliberately left
-    // for a follow-up rather than folded into #337.
-    public IReadOnlyList<string> GetEffectiveMasters(string plugin, string origin)
-    {
-        var committed = GetRecordForPlugin(HeaderIndexer.FormKeyFor(plugin), plugin, origin)?.Fields
-            .FirstOrDefault(fv => fv.Metadata.Name == HeaderIndexer.MastersFieldName);
-        var masters = committed != null ? ReadStringArray(JsonSerializer.SerializeToElement(committed.Value)) : [];
-        var mastersSet = new HashSet<string>(masters, StringComparer.OrdinalIgnoreCase);
-
-        var referencedPlugins = new List<string>();
-        foreach (var (formKey, _) in _changes.GetStagedFormKeys(plugin, origin: origin))
-            if (OriginPluginOf(formKey) is { } originPlugin) referencedPlugins.Add(originPlugin);
-        foreach (var targetFormKey in _changes.GetStagedFormRefTargets(plugin, origin))
-            if (OriginPluginOf(targetFormKey) is { } refPlugin) referencedPlugins.Add(refPlugin);
-
-        // Sorted, not discovery order: the two queries above have no defined row order, so two
-        // calls over identical real facts (e.g. two same-filename/different-origin columns with
-        // identical staged content — #333/ADR-0036) must still agree byte for byte. Masters order
-        // is itself load-bearing (FormID local-master-index resolution), so an unsorted append
-        // here would risk the compare grid flagging a spurious conflict from ordering alone, not
-        // real content.
-        var missingMasters = referencedPlugins
-            .Where(p => !p.Equals(plugin, StringComparison.OrdinalIgnoreCase) && !mastersSet.Contains(p))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(p => p, StringComparer.OrdinalIgnoreCase);
-
-        return [.. masters, .. missingMasters];
-    }
-
-    // GetCompare's header-only substitution step: replaces the raw (committed/pending-overlaid)
-    // masters field with GetEffectiveMasters' derived value. `with` on a record hierarchy clones
-    // the runtime type (RecordDetail here is always actually a CompareOverride, since GetCompare
-    // is the only caller), so this stays RecordDetail-typed without a CompareOverride-specific branch.
-    private RecordDetail WithEffectiveMasters(RecordDetail detail)
-    {
-        var mastersJson = JsonSerializer.SerializeToElement(GetEffectiveMasters(detail.Plugin, detail.Origin));
-        return detail with
-        {
-            Fields = [.. detail.Fields.Select(fv =>
-                fv.Metadata.Name == HeaderIndexer.MastersFieldName ? fv with { Value = mastersJson } : fv)],
-        };
-    }
-
-    // The plugin substring of a "FormID:Plugin" FormKey string; null when malformed. #338 deleted
-    // PendingChangeGraph's copy along with the added-master edge rule that solely owned it, leaving
-    // this the only copy — not worth extracting to a shared helper for its single remaining call site.
-    // internal (not private), same as the pre-#336 EditOrchestrator copy this replaces, so the
-    // malformed-input branch stays directly unit-testable rather than only reachable through
-    // GetEffectiveMasters' well-formed-FormKey callers.
-    internal static string? OriginPluginOf(string formKey)
-    {
-        var colon = formKey.IndexOf(':');
-        return colon >= 0 && colon < formKey.Length - 1 ? formKey[(colon + 1)..] : null;
-    }
-
-    private static List<string> ReadStringArray(JsonElement el) =>
-        el.ValueKind == JsonValueKind.Array
-            ? el.EnumerateArray().Select(e => e.GetString() ?? "").ToList()
-            : [];
-
+    // #410/ADR-0041: the read-time derived-masters step (#336/ADR-0038) retires with the pending
+    // model it derived from — with no uncommitted edits there is nothing to derive, so the header's
+    // masters field is simply what the plugin committed. ADR-0038's derivation survives where
+    // plugin validity is actually at stake: inside compile, which must emit a masters list the
+    // format can encode FormIDs against.
     public string? GetRecordType(string formKey) =>
         RequireRepository().FindRecordType(formKey);
 
@@ -218,16 +114,7 @@ public sealed class RecordQueryService(
             var overrides = repository.GetAllOverrides(tableName, formKey);
             if (overrides.Count == 0) continue;
 
-            var withPending = overrides.Select(o =>
-            {
-                var pending = _changes.GetPendingFields(formKey, o.Plugin, o.Origin);
-                var current = pending == null ? o : (o with { PendingFields = pending.ToDictionary(kv => kv.Key, kv => (object?)kv.Value) });
-                // #336/ADR-0038: the header's masters field is never itself a pending row anymore
-                // (nothing stages one — GetEffectiveMasters is the only source of truth for "what
-                // will masters be"), so it needs its own substitution here rather than riding the
-                // ordinary pending-field overlay above.
-                return tableName == HeaderTableName ? WithEffectiveMasters(current) : current;
-            }).ToList();
+            var committedOverrides = overrides.ToList();
 
             var sessionPlugins = RequireSession().Plugins;
             // #34 / ADR-0036: keyed by the compound column identity, like everything else here
@@ -238,7 +125,7 @@ public sealed class RecordQueryService(
             // #267 / ADR-0035: a non-participating plugin's override is indexed and browsable but
             // never contributes to conflict classification.
             var pluginParticipates = sessionPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
-            var classification = _conflictClassifier.Classify(withPending, pluginMasters, resolveFormKey, pluginParticipates);
+            var classification = _conflictClassifier.Classify(committedOverrides, pluginMasters, resolveFormKey, pluginParticipates);
             // #272 / ADR-0036: two live bugs fixed together here, both invisible on the
             // pre-#272 suite because every fixture used the elided Data origin.
             // (1) o.Origin was omitted from the CompareOverride constructor call entirely, so
@@ -251,15 +138,15 @@ public sealed class RecordQueryService(
             //     Data-origin plugins, and #269 records the providing mod folder as origin for
             //     nearly every plugin in a real session, so this was live for essentially every
             //     conflicted record, not just a hypothetical two-origin case.
-            var annotated = withPending
+            var annotated = committedOverrides
                 .ConvertAll(o => new CompareOverride(
-                    o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields, o.PendingFields,
+                    o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields,
                     classification.PluginStates.GetValueOrDefault(ColumnKey.Of(o.Plugin, o.Origin), ConflictThis.OnlyOne),
                     Origin: o.Origin, RecordType: o.RecordType));
 
             // VMAD is outside the generic reflection pipeline, so classify it separately and fold
             // its conflict contribution into the record-level ConflictAll (computed on demand, never stored).
-            var vmadInputs = withPending
+            var vmadInputs = committedOverrides
                 .ConvertAll(o => new VmadPluginInput(o.Plugin, o.LoadOrderIndex, repository.GetVmad(formKey, o.Plugin, o.Origin), o.Origin));
             VmadCompare? vmad = null;
             var conflictAll = classification.ConflictAll;
@@ -272,7 +159,7 @@ public sealed class RecordQueryService(
 
             // Conditions (CTDA) are outside the reflection pipeline too — classify separately and
             // fold their contribution into the record-level ConflictAll, mirroring VMAD. [ADR-0032]
-            var conditionInputs = withPending
+            var conditionInputs = committedOverrides
                 .ConvertAll(o => new ConditionPluginInput(o.Plugin, o.LoadOrderIndex, repository.GetConditions(formKey, o.Plugin, o.Origin), o.Origin));
             ConditionCompare? conditions = null;
             if (conditionInputs.Any(i => i.Owners.Count > 0))
@@ -300,20 +187,6 @@ public sealed class RecordQueryService(
             .Where(x => x.Count > 0)
             .ToDictionary(x => x.Type, x => x.Count, StringComparer.OrdinalIgnoreCase);
 
-        // #296 review: scoped to the same resolved origin as the CountRecordsForPlugin loop above —
-        // GetStagedFormKeys has accepted an optional origin filter since #272; omitting it here (as
-        // this call originally did) let two same-filename origins' staged-only records merge into
-        // one plugin's record-type counts even though the committed side was already correctly
-        // scoped.
-        foreach (var recordType in _changes.GetStagedFormKeys(plugin, origin: origin)
-            .Where(s => !counts.ContainsKey(s.RecordType)
-                || repository.GetRecord(s.RecordType, s.FormKey, plugin, origin, winnerOnly: false) == null)
-            .Select(s => s.RecordType))
-        {
-            counts.TryGetValue(recordType, out var existing);
-            counts[recordType] = existing + 1;
-        }
-
         var schemas = RequireSchemas();
         return [.. counts
             .Select(kv => new PluginRecordTypeCount(kv.Key, kv.Value, schemas.DisplayNameFor(kv.Key)))
@@ -322,13 +195,6 @@ public sealed class RecordQueryService(
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
         RequireRepository().GetReferences(targetFormKey);
-
-    public IReadOnlyList<PendingChange> GetChanges(string? formKey = null, Guid? memberChangeId = null)
-    {
-        var pending = _changes.GetChanges(formKey: formKey, memberChangeId: memberChangeId);
-        var resolveFormKey = FormKeyResolutionCache.Memoize(RequireRepository().ResolveFormKey);
-        return PendingChangeResolver.ResolveAll(pending, RequireSchemas(), resolveFormKey);
-    }
 
     public VmadData? GetVmad(string formKey, string plugin, string origin) =>
         RequireRepository().GetVmad(formKey, plugin, origin);

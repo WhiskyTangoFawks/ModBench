@@ -1,4 +1,3 @@
-using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Session;
 
@@ -20,12 +19,11 @@ public interface IWorldspaceQueryService
 /// placement / cell_location side tables — everything that plugin declares (its own records and
 /// overrides), never a cross-plugin winner. See ADR-0023.
 /// </summary>
-public sealed class WorldspaceQueryService(ISessionManager session, IPendingChangeService changes) : IWorldspaceQueryService
+public sealed class WorldspaceQueryService(ISessionManager session) : IWorldspaceQueryService
 {
     private const int WorldspaceListLimit = 5000;
 
     private readonly ISessionManager _session = session;
-    private readonly IPendingChangeService _changes = changes;
 
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null)
     {
@@ -68,54 +66,7 @@ public sealed class WorldspaceQueryService(ISessionManager session, IPendingChan
     public CellReferences GetCellReferences(string plugin, string cellFormKey, string? origin = null)
     {
         origin ??= ResolveOrigin(plugin);
-        var committed = RequireRepository().GetCellReferences(plugin, cellFormKey, origin);
-        var pluginChanges = _changes.GetChanges(plugin, origin: origin);
-
-        if (pluginChanges.Count == 0)
-            return committed;
-
-        var (deleted, persistentAdded, temporaryAdded) = ClassifyPendingPlacements(pluginChanges, cellFormKey);
-
-        return deleted.Count == 0 && persistentAdded.Count == 0 && temporaryAdded.Count == 0
-            ? committed
-            : new CellReferences(
-            [
-                .. committed.Persistent
-                    .Where(r => !deleted.Contains(r.FormKey)),
-                .. persistentAdded,
-            ],
-            [
-                .. committed.Temporary
-                    .Where(r => !deleted.Contains(r.FormKey)),
-                .. temporaryAdded,
-            ]);
-    }
-
-    private static (HashSet<string> Deleted, List<PlacedSummary> PersistentAdded, List<PlacedSummary> TemporaryAdded)
-        ClassifyPendingPlacements(IReadOnlyList<PendingChange> changes, string cellFormKey)
-    {
-        var deleted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var persistentAdded = new List<PlacedSummary>();
-        var temporaryAdded = new List<PlacedSummary>();
-
-        foreach (var c in changes)
-        {
-            if (c.ChangeType == PendingChangeConstants.DeleteChangeType)
-            {
-                deleted.Add(c.FormKey);
-            }
-            else if (c.ChangeType == PendingChangeConstants.CreateChangeType
-                                 && string.Equals(c.ParentCell, cellFormKey, StringComparison.OrdinalIgnoreCase))
-            {
-                var summary = new PlacedSummary(c.FormKey, null, null, c.RecordType);
-                if (c.PlacementGroup == PendingChangeConstants.PlacementGroupPersistent)
-                    persistentAdded.Add(summary);
-                else if (c.PlacementGroup == PendingChangeConstants.PlacementGroupTemporary)
-                    temporaryAdded.Add(summary);
-            }
-        }
-
-        return (deleted, persistentAdded, temporaryAdded);
+        return RequireRepository().GetCellReferences(plugin, cellFormKey, origin);
     }
 
     public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string? origin = null) =>

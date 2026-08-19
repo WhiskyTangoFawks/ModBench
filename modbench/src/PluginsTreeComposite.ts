@@ -37,14 +37,6 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
    *  Optional — omitted in tests that don't exercise AC8's reconciliation — so a row with a
    *  backend master issue and no wired accessor just gets the backend's own wording, unreconciled. */
   orderIssueMastersOf?(row: TRow): string[] | undefined;
-  /** #331: the pending-change decoration identity URI for a plugin row, given its filename — the
-   *  composite holds no opinion on the scheme itself (that's `medit/pendingChangeRowUri.ts`,
-   *  wired in by `extension.ts`; importing it here would violate `src/test/contextBoundary.test.ts`'s
-   *  "imports nothing from either context" rule), it only knows *that* a row may need one, the
-   *  same shape as `orderIssueMastersOf` above. Optional — omitted in tests that don't exercise
-   *  this. `undefined` from the accessor itself (as opposed to the accessor being absent) means
-   *  "no plugin filename to build one from" (an error/empty-state row). */
-  pendingChangeUriOf?(pluginFile: string): vscode.Uri | undefined;
   /** #279 / ADR-0035 § Live mutation: this plugin's drift, or `undefined` for one that has not
    *  drifted **or** that nothing is currently known about. `pluginDrift.ts` deliberately makes
    *  those one value, so it is not a distinction this composite could render even if it wanted to
@@ -147,7 +139,6 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     this.applyReadOnlyNote(item, file);
     this.applyBackendDecoration(item, element as TRow, file);
     this.applyDriftDecoration(item, rawFile);
-    this.applyPendingChangeUri(item, rawFile);
 
     return item;
   }
@@ -180,20 +171,6 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     // file to read: a plugin whose name now resolves to nothing still flags and still says so in
     // its tooltip, but offering to re-read it would be offering to read nothing.
     if (drift.currentPath !== null) item.contextValue = 'pluginDrifted';
-  }
-
-  /** #331: a plugin row's pending-change decoration identity, deferring to whatever `resourceUri`
-   *  the row provider already set. `ImplicitMasterNode` (`modmanager/PluginListProvider.ts`)
-   *  already sets one of its own — a real `Data/<name>` filesystem path consumed exclusively by
-   *  `ImplicitMasterDecorationProvider` to gray a forced-loaded master's label — and `resourceUri`
-   *  is single-valued, so overwriting it here would silently break that unrelated decoration.
-   *  Implicit/forced-master rows are therefore out of scope for pending-change decoration (their
-   *  contained records still decorate individually, through RecordNode's own, unconflicting
-   *  scheme) — a deliberate exclusion (#331 review), not a gap to "fix" by clobbering the
-   *  existing assignment. */
-  private applyPendingChangeUri(item: vscode.TreeItem, file: string | undefined): void {
-    if (item.resourceUri !== undefined || file === undefined) return;
-    item.resourceUri = this.deps.pendingChangeUriOf?.(file);
   }
 
   /** Each row's own tooltip, description and icon, captured the first time this composite

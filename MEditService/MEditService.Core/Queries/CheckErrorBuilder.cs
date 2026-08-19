@@ -11,7 +11,7 @@ public static class CheckErrorBuilder
     // ADR-0031: resolve callers pass IRecordRepository.ResolveFormKey (the O(1) form_lookup read),
     // not FindRecordType's per-table scan — resolve is a raw lookup; the not-found/wrong-type/
     // valid-type distinction is computed uniformly here via FormKeyResolution.From, the same factory
-    // FieldDiff/PendingChange/VmadPropertyDiff resolution uses.
+    // FieldDiff/VmadPropertyDiff resolution uses.
     public static string? Build(FieldMetadata meta, object? value, Func<string, RecordLookupEntry?> resolve)
     {
         var entries = new List<string>();

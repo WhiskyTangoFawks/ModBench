@@ -20,13 +20,13 @@ internal sealed record LedgerRecordIdentity(string PluginFileName, string Record
 ///   <c>Directory.CreateDirectory</c> throws <see cref="DirectoryNotFoundException"/> when an
 ///   ancestor segment is an existing file, not a missing directory).
 /// - The <c>&lt;originModKey&gt;</c> segment (the record's *origin* plugin — <c>FormKey.ModKey</c>
-///   — never the plugin the edit is staged onto, which is <paramref name="pluginFileName"/> and can
+///   — never the plugin the record is written into, which is <paramref name="pluginFileName"/> and can
 ///   legitimately differ, e.g. an override edited through a patch plugin): a FormKey's local ID is
 ///   only unique within its own origin ModKey, not globally, so two records from *different*
-///   masters sharing a local ID and staged into the same target plugin would otherwise collide on
+///   masters sharing a local ID and written into the same target plugin would otherwise collide on
 ///   one path and silently clobber each other's baseline and history — confirmed as a real defect
 ///   (review, #370) before this segment existed. <c>RecordQueryService.GetRecordForPlugin</c>
-///   exists precisely because "staged onto a plugin that isn't the record's origin" is routine, not
+///   exists precisely because "held by a plugin that isn't the record's origin" is routine, not
 ///   an edge case, so this can't be assumed away.
 ///
 /// A child record's placement inside its parent (e.g. a placed ref's parent cell) is not encoded

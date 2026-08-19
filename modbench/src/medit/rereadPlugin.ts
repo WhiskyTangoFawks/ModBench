@@ -13,29 +13,20 @@ export interface DriftedPlugin {
 }
 
 export interface RereadPluginDeps {
-  /** How many staged edits belong to a given (plugin, origin) — asked about the origin being
-   *  *replaced*, since those are the ones the re-read discards. Rejecting is allowed and handled:
-   *  see `rereadDriftedPlugin`. */
-  stagedChangeCount: (plugin: string, origin: string) => Promise<number>;
-  /** The native modal (`showWarningMessage(…, { modal: true, detail })`) — resolves `true` only
-   *  if the user picked the affirmative action, `false` for Cancel/Escape/dismiss alike. */
-  confirm: (message: string, detail: string) => Promise<boolean>;
   /** `POST /plugins/reread`. Returns whether it succeeded; it does its own error surfacing. */
   reread: (plugin: string, path: string, origin: string) => Promise<boolean>;
   /** ADR-0026 "explicit action failed" tier — the user ran a command that cannot be carried out. */
   report: (message: string) => void;
 }
 
-/** Re-reads a drifted plugin, having first stated what it costs. Returns whether the re-read ran.
+/** Re-reads a drifted plugin. Returns whether the re-read ran.
  *
- *  The confirm appears only when there is staged work to lose, matching `reloadSession`: with
- *  nothing staged a re-read destroys nothing, and a modal for a harmless action trains people to
- *  dismiss the one that matters. What is never skipped is the *question* — if the count cannot be
- *  obtained, it confirms anyway, because a spurious confirm costs one click and a silently-skipped
- *  one risks an unrecoverable discard (the rule `SessionController.hasPendingChanges` already
- *  follows for Reload Session). */
+ *  #410/ADR-0041: no confirm. It existed to warn that the re-read would discard staged edits
+ *  against the copy being replaced; with the pending model gone a re-read destroys nothing, and a
+ *  modal for a harmless action trains people to dismiss the one that matters. When editing returns
+ *  as working-tree text (#415), uncommitted work is git's to report, not a modal's. */
 export async function rereadDriftedPlugin(drifted: DriftedPlugin, deps: RereadPluginDeps): Promise<boolean> {
-  const { plugin, loadedOrigin, currentOrigin, currentPath } = drifted;
+  const { plugin, currentOrigin, currentPath } = drifted;
 
   if (currentPath === null || currentOrigin === null) {
     // Reachable from the palette or from a menu rendered just before the file went away — the row
@@ -44,37 +35,5 @@ export async function rereadDriftedPlugin(drifted: DriftedPlugin, deps: RereadPl
     return false;
   }
 
-  const staged = await countStaged(plugin, loadedOrigin, deps);
-  if (staged !== 0) {
-    const edits = describeStaged(staged);
-    const confirmed = await deps.confirm(
-      `Re-read "${plugin}" from ${currentOrigin}?`,
-      `${edits} against "${plugin}" will be discarded. They were made against the copy from `
-      + `${loadedOrigin}, which is no longer the file this plugin resolves to, so they cannot be `
-      + `saved to the new one. Everything else stays as it is — no other plugin is reloaded.`,
-    );
-    if (!confirmed) return false;
-  }
-
   return deps.reread(plugin, currentPath, currentOrigin);
-}
-
-/** How the confirm names what is at stake. `undefined` is the count we could not read — stated as
- *  an unknown quantity rather than guessed at, because a modal that says "1 staged edit" over five
- *  of them is worse than one that declines to count: the user makes an irreversible decision on a
- *  number we invented. */
-function describeStaged(staged: number | undefined): string {
-  if (staged === undefined) return 'Any staged edits';
-  return staged === 1 ? '1 staged edit' : `${staged} staged edits`;
-}
-
-/** The staged-edit count, or `undefined` when it can't be read. Never 0 on failure — that would
- *  silently skip the confirm, which is the one outcome this must not produce (the rule
- *  `SessionController.hasPendingChanges` already follows for Reload Session). */
-async function countStaged(plugin: string, origin: string, deps: RereadPluginDeps): Promise<number | undefined> {
-  try {
-    return await deps.stagedChangeCount(plugin, origin);
-  } catch {
-    return undefined;
-  }
 }

@@ -5,7 +5,6 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { before, after, beforeEach, afterEach, describe, it } from 'mocha';
-import { recordRowUri } from '../../medit/pendingChangeRowUri';
 
 const TEST_PORT = 15172;
 let mockBackend: http.Server;
@@ -48,13 +47,6 @@ const MOCK_PLUGINS: MockPlugin[] = [
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let sessionLoaded = false;
 const requestLog: string[] = [];
-// #273 Slice A: GET /change-groups' answer, mutable per-test so a suite can flip staged work
-// on and off and observe modbench.hasPendingChanges (via the badge, its same-signal proxy —
-// see the toggle test) react both directions, not just once.
-let pendingGroups: Array<{ id: string; operation: string; description: string | null; changeCount: number; pluginCount: number }> = [];
-// #331: GET /changes' answer — mutable per-test so a suite can stage a decoration-worthy pending
-// change and observe PendingChangeDecorationProvider react to it, and to it being cleared.
-let pendingChanges: Array<{ formKey: string; plugin: string; changeType: string }> = [];
 // #295: lets a test change what the *next* load reports without touching MOCK_PLUGINS itself —
 // simulates a plugin's decoration-worthy state (a master issue, a load failure) changing between
 // one load and a reload of the same session.
@@ -93,8 +85,6 @@ let holdHealth = false;
 function resetMockBackend(): void {
   sessionLoaded = false;
   requestLog.length = 0;
-  pendingGroups = [];
-  pendingChanges = [];
   mockPluginsOverride = null;
   loadExplicitShouldFail = false;
   sessionStatus = { ...NO_SESSION_STATUS };
@@ -180,29 +170,6 @@ function createMockBackend(): http.Server {
     if (/^\/plugins\/[^/]+\/record-types$/.test(url)) {
       res.writeHead(sessionLoaded ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(sessionLoaded ? JSON.stringify(MOCK_RECORD_TYPES) : 'No session loaded.');
-      return;
-    }
-    // #273 Slice A: PendingChangesTreeProvider.getChildren() reads /change-groups on every root
-    // render, and only reads /changes when a group is expanded — most of this suite never does,
-    // so pendingGroups alone answers most of it. #331: PendingChangeDecorationProvider reads
-    // /changes directly on its own refresh() call, independent of any tree render.
-    if (url === '/change-groups') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(pendingGroups));
-      return;
-    }
-    if (url === '/changes') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(pendingChanges));
-      return;
-    }
-    // #368: the aggregate SCM provider's own read, refreshed alongside /change-groups and
-    // /changes above at every one of refreshPendingState's call sites — a real route (rather than
-    // falling through to the 404 below) so a suite exercising session load or PENDING_CHANGED
-    // doesn't spuriously log a fetch failure this suite isn't testing for.
-    if (url === '/ledger/status') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end('[]');
       return;
     }
     res.writeHead(404);
@@ -326,7 +293,6 @@ describe('modbench command registration', () => {
     // modbench.modList.refresh and modbench.pluginListTree.refresh — same need, three ids.
     'modbench.refresh',
     'modbench.newPlugin',
-    'modbench.copyAsOverrideInto',
     // #273 Slice D: modbench.filterPluginTree (issue #70) is gone — it duplicated
     // modbench.pluginListTree.filter over the same rows once the merged tree made this
     // command's own view (modbench.pluginTree) unreachable.
@@ -337,47 +303,6 @@ describe('modbench command registration', () => {
     // #282: the Referenced By view's own copy command — see packageJson.test.ts for its
     // view/item/context and keybinding contributions (declarative, not exercised here).
     'modbench.referencedByTree.copy',
-    'modbench.deleteRecord',
-    'modbench.saveGroup',
-    'modbench.revertGroup',
-    'modbench.saveAllGroups',
-    'modbench.revertAllGroups',
-    // #208: the pending cell's native `webview/context` menu commands — see package.json's
-    // contributes.menus["webview/context"] (gated on webviewId/webviewSection, not testable
-    // from this harness) and RecordPanel's data-vscode-context wiring (unit-tested).
-    'modbench.pendingCell.reveal',
-    'modbench.pendingCell.saveGroup',
-    'modbench.pendingCell.revertGroup',
-    // #209: the column-header's native `webview/context` menu commands — same shape as #208's
-    // pendingCell.* above (package.json's contributes.menus["webview/context"], gated on
-    // webviewId/webviewSection/immutable, not testable from this harness; and RecordPanel's
-    // data-vscode-context wiring, unit-tested). modbench.copyAsOverrideInto and
-    // modbench.deleteRecord (already listed above) are reused from this same menu — no separate
-    // command ids (#281: columnHeader.removeOverride folded into deleteRecord; Copy as New
-    // Record is one all-surface id). #202: modbench.columnHeader.copyAllToPending deleted
-    // outright — Copy as Override now covers that case via sourcePlugin instead of a fourth,
-    // near-duplicate action. #335/ADR-0038: modbench.columnHeader.addMaster is gone too — nothing
-    // may declare a master directly (content-derivation itself is #336, not yet built).
-    'modbench.copyAsNewRecord',
-    // #227: the array-element/array-parent native `webview/context` menu commands — same shape
-    // as #208/#209 above (package.json's contributes.menus["webview/context"], gated on
-    // webviewId/webviewSection, not testable from this harness; and DiffRow's data-vscode-context
-    // wiring, unit-tested in DiffRow.test.tsx/ArrayDiffRows.test.tsx).
-    'modbench.array.add',
-    'modbench.array.remove',
-    'modbench.array.moveUp',
-    'modbench.array.moveDown',
-    // #231: VMAD's own structural-op native `webview/context` menu commands — same shape as
-    // #227's array.* above (package.json gating, RecordPanel.test.tsx's own unit coverage).
-    'modbench.vmad.addScript',
-    'modbench.vmad.removeScript',
-    'modbench.vmad.addProperty',
-    'modbench.vmad.removeProperty',
-    // #231 (review): Set Script Flags/Set Property Flags — restores capability lost when
-    // VmadSection's always-visible flag `<select>`s were deleted (AC7 regression).
-    'modbench.vmad.setScriptFlags',
-    'modbench.vmad.setPropertyFlags',
-    'modbench.createPlaced',
     'modbench.modList.filter',
     'modbench.modList.clearFilter',
     'modbench.modList.switchProfile',
@@ -431,7 +356,6 @@ describe('modbench command registration', () => {
     // committed-vs-dirty raw text diff. Reached from a SourceControlResourceState's own
     // `command`, not a menu contribution, but still registered (and palette-visible) like every
     // other click-triggered command here (modbench.openEditor, ...).
-    'modbench.ledger.openDiff',
   ];
 
   it('registers all expected commands on activation', async () => {
@@ -439,37 +363,6 @@ describe('modbench command registration', () => {
     for (const cmd of EXPECTED_COMMANDS) {
       assert.ok(all.includes(cmd), `Command not registered: ${cmd}`);
     }
-  });
-});
-
-// ── Aggregate SCM provider registration (#368) ──────────────────────────────
-// Registration only — a stateless mock server can't prove the working-tree group actually
-// reflects staged/saved/reverted edits (that's refreshPendingState's own unit coverage); this
-// proves the provider is constructed and its native-surface registrations (FileDecorationProvider,
-// TextDocumentContentProvider, the diff command already asserted above) hold with no session.
-interface LedgerScmProviderLike {
-  refresh(): Promise<void>;
-  provideFileDecoration(uri: vscode.Uri): { badge?: string } | undefined;
-  provideTextDocumentContent(uri: vscode.Uri): string | undefined;
-}
-
-describe('Aggregate SCM provider construction (#368)', () => {
-  const provider = () =>
-    (ext?.exports as { ledgerScmProvider?: LedgerScmProviderLike } | undefined)?.ledgerScmProvider;
-
-  it('is constructed at activation', () => {
-    assert.ok(provider(), 'expected ledgerScmProvider to be exported from activate()');
-  });
-
-  it('answers a real GET /ledger/status without throwing, with no session loaded', async () => {
-    await assert.doesNotReject(provider()!.refresh());
-  });
-
-  it('provideFileDecoration and provideTextDocumentContent are reachable (FileDecorationProvider / TextDocumentContentProvider registration)', () => {
-    assert.strictEqual(
-      provider()!.provideFileDecoration(vscode.Uri.file('/nowhere.yaml')), undefined);
-    assert.strictEqual(
-      provider()!.provideTextDocumentContent(vscode.Uri.parse('modbench-ledger-committed:/nowhere')), undefined);
   });
 });
 
@@ -669,43 +562,6 @@ describe('Overwrite row (#82)', () => {
   });
 });
 
-// ── Pending Changes visible exactly when there is staged work (#273 Slice A) ────
-// The declarative gate itself (view.when === 'modbench.hasPendingChanges') is proven statically
-// in packageJson.test.ts. What only a live host can show is that the key actually toggles both
-// directions as staged work appears and clears — makePendingStateHandler sets the context key
-// and the view's badge from the same stagedGroups number in the same call, so the badge (public,
-// already exported on changeGroupTreeView) is the observable proxy for the key: they cannot
-// disagree by construction, and VS Code exposes no public API to read a context key's value
-// directly from a test.
-
-interface PendingChangesTreeProviderLike {
-  getChildren(element?: unknown): Promise<unknown[]>;
-}
-
-describe('Pending Changes visibility tracks staged work, both directions (#273 Slice A)', () => {
-  const exportsOf = () => ext?.exports as {
-    changeGroupTreeProvider?: PendingChangesTreeProviderLike;
-    changeGroupTreeView?: { badge?: { value: number } };
-  } | undefined;
-
-  before(() => resetMockBackend());
-  after(() => resetMockBackend());
-
-  it('sets the badge (and so modbench.hasPendingChanges) once a change group is staged', async () => {
-    pendingGroups = [{ id: 'g1', operation: 'field_edit', description: null, changeCount: 1, pluginCount: 1 }];
-    await exportsOf()!.changeGroupTreeProvider!.getChildren();
-    assert.strictEqual(exportsOf()?.changeGroupTreeView?.badge?.value, 1,
-      'badge should report 1 staged group once /change-groups returns one');
-  });
-
-  it('clears the badge (and so modbench.hasPendingChanges) once nothing is staged', async () => {
-    pendingGroups = [];
-    await exportsOf()!.changeGroupTreeProvider!.getChildren();
-    assert.strictEqual(exportsOf()?.changeGroupTreeView?.badge, undefined,
-      'badge should clear once /change-groups returns no groups — the same call path, run again, must undo itself');
-  });
-});
-
 // ── Launch mEdit → editing plugin tree populated (#75) ──────────────────────────
 
 interface TreeLike {
@@ -781,7 +637,7 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
 // removed outright, not adapted — modbench.pluginTree (the view whose title it swapped) and
 // modbench.viewMode (the key it swapped on) are both gone, so there is no mode left to reflect
 // and nothing left to assert. This comment is the suite's own tombstone; the merged tree's own
-// identity is covered by the #270 suite below, and Pending Changes' title is covered by Slice B's
+// identity is covered by the #270 suite below, and
 // packageJson.test.ts assertion (its declared name never changes at runtime).
 
 // ── Loadout stays visible through an editing session (#268) ────────────────────
@@ -1142,7 +998,7 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
 });
 
 // #295: modbench.reloadSession through the real wiring — reloadSession backed by
-// SessionController.hasPendingChanges and the reused makeEnterEditing path, not just
+// the reused makeEnterEditing path, not just
 // reloadSession's own unit seam (already covered directly, confirm/cancel included, since
 // showWarningMessage can't be driven headlessly here).
 describe('Reload Session actually reloads (#295)', () => {
@@ -1181,10 +1037,10 @@ describe('Reload Session actually reloads (#295)', () => {
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  // AC1 / AC3: nothing is staged (resetMockBackend leaves pendingGroups empty), so this must
-  // re-run the session load with no modal in the way — a real showWarningMessage would hang
-  // a headless test, so this doubles as proof the no-pending-changes path truly skips it.
-  it('re-POSTs /session/load-explicit with nothing staged, no prompt required', async () => {
+  // #410: reload no longer confirms at all (there is no uncommitted work to lose), so this must
+  // re-run the session load with no modal in the way — a real showWarningMessage would hang a
+  // headless test, so this doubles as proof the confirm is genuinely gone.
+  it('re-POSTs /session/load-explicit, no prompt required', async () => {
     const before = requestLog.filter((l) => l === 'POST /session/load-explicit').length;
 
     await vscode.commands.executeCommand('modbench.reloadSession');
@@ -1299,73 +1155,6 @@ describe('Reload Session actually reloads (#295)', () => {
   });
 });
 
-// #331 review finding: exitToLoadout() couldn't reach the decoration provider (it was a local
-// `const` inside activate(), not module-level like pluginsTree/backendManager), so a decorated
-// row kept its badge indefinitely after the session that staged it was gone — a false claim of
-// staged work in a session that no longer exists. Covers both ways exitToLoadout is reached:
-// an explicit Close mEdit, and a reload that fails partway (the same code path, a different
-// trigger — the reviewer only confirmed the close path, this pins the reload one too).
-interface PendingChangeDecorationProviderLike {
-  refresh(): Promise<void>;
-  provideFileDecoration(uri: vscode.Uri): { badge?: string } | undefined;
-}
-
-describe('Pending-change decoration does not survive exitToLoadout (#331)', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const decorations = () =>
-    (ext?.exports as { pendingChangeDecorationProvider?: PendingChangeDecorationProviderLike } | undefined)
-      ?.pendingChangeDecorationProvider;
-  const stagedUri = recordRowUri('TestMod.esp', '000001:TestMod.esp');
-  let gameDir = '';
-
-  before(async () => {
-    if (!root) return;
-    resetMockBackend();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-exit-decoration-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
-  });
-
-  after(async () => {
-    if (!root) return;
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '');
-    fs.rmSync(gameDir, { recursive: true, force: true });
-    resetMockBackend();
-  });
-
-  it('an explicit Close mEdit clears a decorated row, not just leaves it claiming a gone session', async () => {
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
-    pendingChanges = [{ formKey: '000001:TestMod.esp', plugin: 'TestMod.esp', changeType: 'field_edit' }];
-    await decorations()!.refresh();
-    assert.ok(decorations()!.provideFileDecoration(stagedUri),
-      'sanity: the row must actually be decorated before Close mEdit, or clearing it proves nothing');
-
-    await vscode.commands.executeCommand('modbench.closeMedit');
-
-    assert.strictEqual(decorations()!.provideFileDecoration(stagedUri), undefined,
-      'a session that no longer exists must not leave a row still claiming staged changes');
-  });
-
-  it('a reload that fails partway also clears a decorated row (same exitToLoadout path, a different trigger)', async () => {
-    resetMockBackend();
-    await vscode.commands.executeCommand('modbench.modList.launchMedit');
-    pendingChanges = [{ formKey: '000001:TestMod.esp', plugin: 'TestMod.esp', changeType: 'field_edit' }];
-    await decorations()!.refresh();
-    assert.ok(decorations()!.provideFileDecoration(stagedUri), 'sanity: decorated before the failing reload');
-
-    loadExplicitShouldFail = true;
-    await vscode.commands.executeCommand('modbench.reloadSession');
-
-    assert.strictEqual(decorations()!.provideFileDecoration(stagedUri), undefined,
-      'a reload that tears the session down without a replacement must clear the decoration too — SessionManager.LoadExplicitCore disposes the previous session unconditionally, same as an explicit close');
-  });
-});
-
 // #255: the Plugins tree's description names both of its narrowing axes, and the record filter
 // is a fact about the *session* — so it cannot outlive one. Same exitToLoadout path and the same
 // silent-wrong-state class as the decoration above: a readout describing a session that is gone.
@@ -1422,8 +1211,7 @@ describe('The record-filter readout does not outlive its session (#255)', () => 
 // stays written from exactly one place.
 //
 // The context key itself is not asserted here: VS Code exposes no public API to read a context
-// key's value from a test, the same wall `modbench.hasPendingChanges` hit (see its own describe
-// block above, "Pending Changes visibility tracks staged work"). What *is* observable is the code
+// key's value from a test. What *is* observable is the code
 // lens, because FilterCodeLensProvider is a genuinely registered `vscode.languages.CodeLensProvider`
 // — `vscode.executeCodeLensProvider` exercises the real instance, not a private field. Proving the
 // code lens clears on Close mEdit proves the single writer ran, and by that writer's own

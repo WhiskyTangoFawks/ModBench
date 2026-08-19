@@ -1174,7 +1174,7 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_Header_HeaderColumnApply_FlagsStagesSameBitmaskValueAfterRename()
     {
-        // Toggling a renamed flag (e.g. "ESM") must stage the same bitmask value it always has —
+        // Toggling a renamed flag (e.g. "ESM") must produce the same bitmask value it always has —
         // this is a labelling change only, not a protocol change.
         var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
         var flagsIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "flags");

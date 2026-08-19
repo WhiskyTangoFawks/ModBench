@@ -38,9 +38,9 @@ public sealed class MasterIssuesDuringLoadTests
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp");
-        using var manager = new SessionManager(gate, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        using var manager = new SessionManager(gate);
         var svc = new RecordQueryService(
-            manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+            manager, reflector, new ConflictClassifier());
 
         var load = Task.Run(() => manager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
@@ -71,11 +71,10 @@ public sealed class MasterIssuesDuringLoadTests
             .Build();
         var reflector = SharedSchemaReflector.Instance;
         using var manager = new SessionManager(
-            new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector)),
-            new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector)));
         manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
         var svc = new RecordQueryService(
-            manager, DuckDbTestFactory.MakePendingChangeService(), reflector, new ConflictClassifier());
+            manager, reflector, new ConflictClassifier());
 
         var patch = svc.GetPlugins().Single(p => p.Name == "Patch.esp");
         Assert.Contains(patch.MasterIssues ?? [], i => i.MasterName == "Ghost.esm");

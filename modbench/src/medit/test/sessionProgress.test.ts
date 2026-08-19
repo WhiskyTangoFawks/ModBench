@@ -83,7 +83,7 @@ describe('recordPanelIncompleteMessage', () => {
   });
 
   // Never Mod Management's vocabulary ("mod") as a common noun — this surface's own boundary
-  // (medit-record-editor.md: "operates on records, FormKeys, plugins, and ChangeGroups").
+  // (medit-record-editor.md: the Editing context operates on records, FormKeys and plugins).
   it('never uses "mod" as a common noun', () => {
     expect(recordPanelIncompleteMessage(false)).not.toMatch(/\bmod\b/i);
   });

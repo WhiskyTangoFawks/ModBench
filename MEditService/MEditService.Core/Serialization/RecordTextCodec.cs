@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Serialization.Yaml;
 namespace MEditService.Core.Serialization;
 
 /// <summary>
-/// Serializes a single record to per-record YAML text and back (ADR-0040 stage 1's ledger codec).
+/// Serializes a single record to per-record text and back — ADR-0041's per-record codec.
 /// Always exactly one record to one caller-given file — there is no whole-plugin entry point, by
 /// construction: this class is the only place in the assembly that calls the generated per-record
 /// <c>&lt;Type&gt;_Serialization</c> methods, and every one of its own parameters is a single

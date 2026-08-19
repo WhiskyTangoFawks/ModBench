@@ -260,7 +260,7 @@ public sealed class GameSession : IGameSession
     /// <summary>
     /// Closes a plugin the load order does not name and forgets it (#34 / ADR-0035) — the inverse
     /// of <see cref="AddUnlistedPlugin"/>. Load-order members are refused: dropping one would
-    /// change which file a filename resolves to underneath staged edits, which is a session reload,
+    /// change which file a filename resolves to underneath a loaded session, which is a reload,
     /// not a visibility toggle. Returns false when no such copy is open.
     /// </summary>
     public bool RemoveUnlistedPlugin(string pluginName, string origin)
@@ -294,7 +294,7 @@ public sealed class GameSession : IGameSession
     /// <para>
     /// The mirror image of <see cref="RemoveUnlistedPlugin"/>'s refusal to drop a load-order
     /// member. That refusal stands, and for the reason stated there — it would change which file a
-    /// filename resolves to underneath staged edits. This does exactly that, but only at the user's
+    /// filename resolves to underneath a loaded session. This does exactly that, but only at the user's
     /// explicit request and after they have been told what it costs.
     /// </para>
     /// <para>

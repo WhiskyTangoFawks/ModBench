@@ -72,8 +72,6 @@ public class WorldspaceQueryServiceTests
         public PluginResponse CreatePlugin(string n) => throw new NotSupportedException();
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
         public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
-        public Task<SaveResult> SavePlugin(string p, IReadOnlyList<PendingChange> c) => throw new NotSupportedException();
-        public Task<PreparedPluginSave> PreparePluginSave(string p, IReadOnlyList<PendingChange> c) => throw new NotSupportedException();
         public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
         public Task ReindexPlugin(string p) => throw new NotSupportedException();
         public Task ReindexPlugins(IReadOnlyList<string> p) => throw new NotSupportedException();
@@ -99,12 +97,7 @@ public class WorldspaceQueryServiceTests
     }
 
     private static WorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) =>
-        new(new StubSession(new StubReader(cells)), DuckDbTestFactory.MakePendingChangeService());
-
-    private static WorldspaceQueryService ServiceWithChanges(
-        IPendingChangeService changes,
-        CellReferences? committedRefs = null) =>
-        new(new StubSession(new StubReader([], cellRefs: committedRefs)), changes);
+        new(new StubSession(new StubReader(cells)));
 
     [Fact]
     public void GetWorldspaceBlocks_GroupsCellsIntoBlocksAndSubBlocks()
@@ -163,7 +156,7 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaces_RealRepository_ReturnsCommonwealthWorldspace()
     {
         using var fixture = new CutDownPluginFixture();
-        var svc = new WorldspaceQueryService(new StubSession(fixture.Repo), DuckDbTestFactory.MakePendingChangeService());
+        var svc = new WorldspaceQueryService(new StubSession(fixture.Repo));
 
         var result = svc.GetWorldspaces(CutDownPluginFixture.PluginFileName);
 
@@ -174,7 +167,7 @@ public class WorldspaceQueryServiceTests
     public void WorldspaceQuery_NoSession_ThrowsInvalidOperation()
     {
         // No session loaded → Repository is null → a clear InvalidOperationException, not an NRE.
-        var svc = new WorldspaceQueryService(new StubSession(null!), DuckDbTestFactory.MakePendingChangeService());
+        var svc = new WorldspaceQueryService(new StubSession(null!));
         Assert.Throws<InvalidOperationException>(() => svc.GetInteriorCells("M.esp", 50, 0));
     }
 
@@ -185,7 +178,7 @@ public class WorldspaceQueryServiceTests
             new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data"),
             new RecordSummary("0002:M.esp", "M.esp", 0, true, null, "Data"),
         ]);
-        var svc = new WorldspaceQueryService(new StubSession(reader), DuckDbTestFactory.MakePendingChangeService());
+        var svc = new WorldspaceQueryService(new StubSession(reader));
 
         var result = svc.GetWorldspaces("M.esp");
 
@@ -207,7 +200,7 @@ public class WorldspaceQueryServiceTests
         var session = new StubGameSession([
             new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA"),
         ]);
-        var svc = new WorldspaceQueryService(new StubSession(reader, session), DuckDbTestFactory.MakePendingChangeService());
+        var svc = new WorldspaceQueryService(new StubSession(reader, session));
 
         svc.GetWorldspaces("M.esp");
 
@@ -226,7 +219,7 @@ public class WorldspaceQueryServiceTests
         var session = new StubGameSession([
             new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA"),
         ]);
-        var svc = new WorldspaceQueryService(new StubSession(reader, session), DuckDbTestFactory.MakePendingChangeService());
+        var svc = new WorldspaceQueryService(new StubSession(reader, session));
 
         svc.GetWorldspaces("M.esp", origin: "ModB");
 
@@ -240,7 +233,7 @@ public class WorldspaceQueryServiceTests
         var session = new StubGameSession([
             new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA"),
         ]);
-        var svc = new WorldspaceQueryService(new StubSession(reader, session), DuckDbTestFactory.MakePendingChangeService());
+        var svc = new WorldspaceQueryService(new StubSession(reader, session));
 
         svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", origin: "ModB");
 
@@ -254,7 +247,7 @@ public class WorldspaceQueryServiceTests
         var session = new StubGameSession([
             new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA"),
         ]);
-        var svc = new WorldspaceQueryService(new StubSession(reader, session), DuckDbTestFactory.MakePendingChangeService());
+        var svc = new WorldspaceQueryService(new StubSession(reader, session));
 
         svc.GetInteriorCells("M.esp", 50, 0, origin: "ModB");
 
@@ -277,96 +270,6 @@ public class WorldspaceQueryServiceTests
 
         Assert.Single(result.Items);
         Assert.Equal("IntCell", result.Items[0].EditorId);
-    }
-
-    [Fact]
-    public void GetCellReferences_PendingCreated_AppearsUnderCell_InCorrectGroup()
-    {
-        var changes = DuckDbTestFactory.MakePendingChangeService();
-        changes.Upsert(new PendingChangeUpsert("1234:Patch.esp", "Patch.esp", "refr",
-            new() { [PendingChangeConstants.CreateFieldPath] = PendingChangeConstants.NullElement },
-            "user", null, [],
-            ChangeType: PendingChangeConstants.CreateChangeType,
-            ParentCell: "cell:Fallout4.esm", PlacementGroup: PendingChangeConstants.PlacementGroupPersistent, FormRefs: null, Origin: "Data"));
-
-        var result = ServiceWithChanges(changes).GetCellReferences("Patch.esp", "cell:Fallout4.esm");
-
-        Assert.Single(result.Persistent);
-        Assert.Equal("1234:Patch.esp", result.Persistent[0].FormKey);
-        Assert.Empty(result.Temporary);
-    }
-
-    // #296: StubSession.Session is null, so ResolveOrigin("Patch.esp") always falls back to the
-    // reserved PluginOrigin.DataDirectory ("Data") — a real non-Data origin ("ModA") on the staged
-    // change therefore must NOT overlay here. Before this fix, the pending-overlay lookup called
-    // _changes.GetChanges(plugin) with no origin argument at all, so it overlaid every origin's
-    // pending edits onto any requested plugin — this ModA-origin create would incorrectly appear
-    // under a "Data"-origin read.
-    [Fact]
-    public void GetCellReferences_PendingOverlay_ScopesToResolvedOrigin_ExcludesOtherOriginPendingCreate()
-    {
-        var changes = DuckDbTestFactory.MakePendingChangeService();
-        changes.Upsert(new PendingChangeUpsert("9999:Patch.esp", "Patch.esp", "refr",
-            new() { [PendingChangeConstants.CreateFieldPath] = PendingChangeConstants.NullElement },
-            "user", null, [],
-            ChangeType: PendingChangeConstants.CreateChangeType,
-            ParentCell: "cell:Fallout4.esm", PlacementGroup: PendingChangeConstants.PlacementGroupPersistent, FormRefs: null, Origin: "ModA"));
-
-        var result = ServiceWithChanges(changes).GetCellReferences("Patch.esp", "cell:Fallout4.esm");
-
-        Assert.Empty(result.Persistent);
-    }
-
-    // #305: the explicit-origin counterpart to the resolved-origin test just above — StubSession's
-    // Session is null here too (resolves to "Data"), but stating "ModA" explicitly must still make
-    // the ModA-origin staged create visible, proving the explicit value overrides resolution rather
-    // than merely being accepted and ignored.
-    [Fact]
-    public void GetCellReferences_ExplicitOrigin_OverridesResolvedOrigin_IncludesMatchingPendingCreate()
-    {
-        var changes = DuckDbTestFactory.MakePendingChangeService();
-        changes.Upsert(new PendingChangeUpsert("9999:Patch.esp", "Patch.esp", "refr",
-            new() { [PendingChangeConstants.CreateFieldPath] = PendingChangeConstants.NullElement },
-            "user", null, [],
-            ChangeType: PendingChangeConstants.CreateChangeType,
-            ParentCell: "cell:Fallout4.esm", PlacementGroup: PendingChangeConstants.PlacementGroupPersistent, FormRefs: null, Origin: "ModA"));
-
-        var result = ServiceWithChanges(changes).GetCellReferences("Patch.esp", "cell:Fallout4.esm", origin: "ModA");
-
-        Assert.Single(result.Persistent);
-        Assert.Equal("9999:Patch.esp", result.Persistent[0].FormKey);
-    }
-
-    [Fact]
-    public void GetCellReferences_PendingDeleted_IsHidden()
-    {
-        var committed = new CellReferences([new PlacedSummary("dead:Mod.esp", null, null, "refr")], []);
-        var changes = DuckDbTestFactory.MakePendingChangeService();
-        changes.Upsert(new PendingChangeUpsert("dead:Mod.esp", "Mod.esp", "refr",
-            new() { [PendingChangeConstants.DeleteFieldPath] = PendingChangeConstants.NullElement },
-            "user", null, [],
-            ChangeType: PendingChangeConstants.DeleteChangeType,
-            ParentCell: "cell:Fallout4.esm", FormRefs: null, PlacementGroup: null, Origin: "Data"));
-
-        var result = ServiceWithChanges(changes, committed).GetCellReferences("Mod.esp", "cell:Fallout4.esm");
-
-        Assert.Empty(result.Persistent);
-    }
-
-    [Fact]
-    public void GetCellReferences_CopiedRef_AppearsUnderTargetCell_NotOtherCell()
-    {
-        var changes = DuckDbTestFactory.MakePendingChangeService();
-        changes.Upsert(new PendingChangeUpsert("5678:Patch.esp", "Patch.esp", "refr",
-            new() { [PendingChangeConstants.CreateFieldPath] = PendingChangeConstants.NullElement },
-            "user", null, [],
-            ChangeType: PendingChangeConstants.CreateChangeType,
-            ParentCell: "target:Fallout4.esm", PlacementGroup: PendingChangeConstants.PlacementGroupTemporary, FormRefs: null, Origin: "Data"));
-
-        var svc = ServiceWithChanges(changes);
-
-        Assert.Empty(svc.GetCellReferences("Patch.esp", "other:Fallout4.esm").Temporary);
-        Assert.Single(svc.GetCellReferences("Patch.esp", "target:Fallout4.esm").Temporary);
     }
 
     [Fact]

@@ -415,7 +415,7 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     // "Effects[2].Conditions[1].Conditions" two levels deep) routes through the nested resolver
     // instead — record is always a concrete instance here (never the abstract getter-interface/
     // setter-base Type that IsNestedConditionListField has to allow for), so walking every
-    // arrayProp -> element hop down to nestedField never needs the stage-time permissive fallback:
+    // arrayProp -> element hop down to nestedField never needs the validation-time permissive fallback:
     // the live element's own GetType() is always concrete at every hop.
     public ConditionApplyResult ApplyFieldValue(
         IMajorRecord record, string fieldPath, int index, string subField, JsonElement value)
@@ -435,9 +435,9 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     // Walks each (arrayProp, index) hop on the live instance in order — e.g. Effects[2] then
     // Conditions[1] — before landing on nestedField's condition list. record is always concrete
     // here, so every hop's element GetType() is concrete too; no permissive abstract-type fallback
-    // is ever needed on this write path (that's IsNestedConditionListField's stage-time job, not
+    // is ever needed on this write path (that's IsNestedConditionListField's validation-time job, not
     // this one's). Any resolution failure at any hop (unknown array property, out-of-range index —
-    // #169's AC: caught here since only a live instance can know the real length, not the stage-time
+    // #169's AC: caught here since only a live instance can know the real length, not the validation-time
     // shape check — a null element, or the terminal property not actually being a condition list on
     // this concrete element) returns null before any mutation, so a bad nested path can never
     // produce a partial write.

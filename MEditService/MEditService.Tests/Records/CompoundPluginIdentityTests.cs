@@ -59,7 +59,7 @@ public class CompoundPluginIdentityTests
     // #296 / ADR-0036: GetRecord's own plugin filter couldn't pick one origin's copy over another's
     // even though the RecordDetail it returns has carried Origin since #272 — the one piece #272/#275
     // left unclosed for this method. origin is required (not defaulted) here: every real caller
-    // (GetRecordForPlugin, GetPluginRecordTypes's staged-reconciliation lookup) already has plugin in
+    // (GetRecordForPlugin, GetPluginRecordTypes) already has plugin in
     // hand as a concrete, non-optional value, so this mirrors GetVmad/GetConditions/GetPlacement's
     // #275 precedent, not GetRecords' nullable filter — the compiler must enumerate every call site.
     [Fact]
@@ -231,10 +231,6 @@ public class CompoundPluginIdentityTests
         var raceFormKey = modA.Races.First().FormKey.ToString();
 
         using var repo = OpenRepo();
-        // GetReferences' NOT EXISTS subquery reads pending_changes, which only DuckDbPendingChangeService's
-        // own DDL creates — bind one to this repo's connection purely for that side effect, matching how
-        // production shares one connection between the repository and the pending-change service.
-        _ = new DuckDbPendingChangeService(repo.Connection);
         repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
         repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
 

@@ -8,7 +8,7 @@ public interface IRecordReader
 {
     // origin (#296 / ADR-0036): nullable and independent of plugin, unlike GetWorldspaceCells'/
     // GetInteriorCells'/GetCellReferences' required origin — this one is a *filter*, like
-    // DuckDbPendingChangeService.BuildFilter's origin, not an identity field: plugin itself is
+    // an origin filter, not an identity field: plugin itself is
     // optional here (browsing every plugin's records is a legitimate call), so origin defaults to
     // "no additional constraint" (trailing, like BuildFilter's own origin) rather than forcing every
     // existing plugin/search/limit/offset call site to change just to keep compiling.
@@ -17,7 +17,7 @@ public interface IRecordReader
     // global-winner lookup) legitimately supplies neither — but no default, so every call site must
     // say explicitly whether it has one rather than silently keeping the pre-#296 filename-only
     // behavior. Every call site that supplies a non-null plugin already has a concrete origin in
-    // hand (GetRecordForPlugin, GetPluginRecordTypes's staged lookup), so this mirrors
+    // hand (GetRecordForPlugin, GetPluginRecordTypes), so this mirrors
     // GetVmad/GetConditions/GetPlacement's required-parameter precedent, not GetRecords' own
     // trailing-default filter.
     RecordDetail? GetRecord(string tableName, string formKey, string? plugin, string? origin, bool winnerOnly);
@@ -39,9 +39,9 @@ public interface IRecordReader
 
     // O(1) form_key -> (record type, EditorID) lookup against the winning override, backed by the
     // form_lookup index-time table (ADR-0031). Prefer this over FindRecordType for any resolution
-    // that runs per FormKey value in a hot response path (CheckErrorBuilder, FieldDiff/PendingChange/
+    // that runs per FormKey value in a hot response path (CheckErrorBuilder, FieldDiff/
     // VmadPropertyDiff resolution) — FindRecordType's per-table scan stays only for callers that
-    // already have a table name and merely need existence (e.g. reference validation at stage time).
+    // already have a table name and merely need existence (e.g. reference validation).
     RecordLookupEntry? ResolveFormKey(string formKey);
 
     // Form keys of records native to the plugin (the FormKey's own ModKey == plugin), across all

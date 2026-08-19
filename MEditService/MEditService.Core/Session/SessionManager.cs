@@ -1,5 +1,4 @@
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using Microsoft.Extensions.Logging;
@@ -13,25 +12,13 @@ namespace MEditService.Core.Session;
 
 public sealed class SessionManager(
     IRecordRepositoryFactory repositoryFactory,
-    IPluginWriter writer,
-    IPendingChangeService? pendingChanges = null,
     ILogger<SessionManager>? logger = null,
-    IModImporter? modImporter = null,
-    // #392: optional the same way pendingChanges/modImporter are — every production DI registration
-    // supplies one (Program.cs), but a test constructing SessionManager directly for a scenario that
-    // has nothing to do with the ledger shouldn't have to.
-    LedgerLifecycleReconciler? ledgerReconciler = null) : ISessionManager, IDisposable
+    IModImporter? modImporter = null) : ISessionManager, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger<SessionManager> _logger = logger ?? NullLogger<SessionManager>.Instance;
     private readonly IRecordRepositoryFactory _repositoryFactory = repositoryFactory;
-    private readonly IPluginWriter _writer = writer;
-    private readonly IPendingChangeLifecycle? _changeLifecycle = pendingChanges as IPendingChangeLifecycle;
-    // #279: a re-read discards the staged edits belonging to the copy it replaces, so this needs
-    // the service itself, not only its lifecycle half.
-    private readonly IPendingChangeService? _pendingChanges = pendingChanges;
     private readonly IModImporter _modImporter = modImporter ?? new DefaultModImporter();
-    private readonly LedgerLifecycleReconciler? _ledgerReconciler = ledgerReconciler;
     private GameSession? _session;
     private IRecordRepository? _repository;
     private readonly Dictionary<string, uint> _nextFormIds = new(StringComparer.OrdinalIgnoreCase);
@@ -44,7 +31,7 @@ public sealed class SessionManager(
     // another arrives. Two mechanisms, because one is not enough: the token *asks* the loop to stop,
     // and the gate waits until it actually has. Cancelling without draining is the dangerous half —
     // it would let a teardown dispose the DuckDB connection while the loop is still writing to it,
-    // which is a native crash rather than an exception, taking the backend and any staged edits with
+    // which is a native crash rather than an exception, taking the backend and the loaded session with
     // it. Deliberately not _lock: the loading thread takes _lock briefly on every plugin, so a
     // waiter holding it could never be signalled.
     private readonly SemaphoreSlim _loadGate = new(1, 1);
@@ -212,9 +199,6 @@ public sealed class SessionManager(
             _nextFormIds.Clear();
             _indexed.Clear();
             _conflictsComputed = false;
-            // Before the loop: pending changes rebind to this connection and ensure their table, and
-            // a read arriving mid-load must not find that table missing.
-            _changeLifecycle?.OnSessionLoaded(repository.Connection);
             _session = session;
             _repository = repository;
             _dataFolderPath = dataFolderPath;
@@ -296,34 +280,6 @@ public sealed class SessionManager(
         repository.UpdateWinners();
         lock (_lock) _conflictsComputed = true;
 
-        ReconcileLedgerLifecycle(session, repository);
-    }
-
-    // #392: session load is the only point Editing re-observes each origin folder's current
-    // physical contents — nothing in Modbench deletes or renames a plugin file itself, so there is
-    // no hook to fire on a delete that never happens. Best-effort, same convention as
-    // EditOrchestrator.VendorOnFirstTouch and LedgerGroupCommitter: a failure here must never turn
-    // an already-successful load into a reported one, and the reconciler's own per-origin-folder
-    // loop already isolates one folder's failure from the rest — this catch is only the outermost
-    // safety net. GetAwaiter().GetResult() bridges the reconciler's async API into this fully
-    // synchronous load path, the same bridge EditOrchestrator.VendorOnFirstTouch already uses for
-    // RecordVendor's own async ledger call.
-    private void ReconcileLedgerLifecycle(GameSession session, IRecordRepository repository)
-    {
-        if (_ledgerReconciler == null) return;
-
-        try
-        {
-            _ledgerReconciler.ReconcileAsync(
-                session.Plugins,
-                (recordType, formKeyString, plugin, origin) =>
-                    repository.GetRecord(recordType, formKeyString, plugin, origin, winnerOnly: false) != null)
-                .GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Ledger lifecycle reconciliation failed for this session load; left for the next one");
-        }
     }
 
     public PluginResponse CreatePlugin(string name)
@@ -415,92 +371,6 @@ public sealed class SessionManager(
         }
     }
 
-    public async Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes)
-    {
-        var (metadata, _, gameRelease) = RequirePlugin(plugin);
-        var result = await _writer.SaveAsync(
-            metadata.Path, changes, gameRelease, BuildTypedLinkCache(gameRelease), MastersWritingOrder());
-        await ReindexPlugin(plugin);
-        return result;
-    }
-
-    public async Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes)
-    {
-        var (metadata, _, gameRelease) = RequirePlugin(plugin);
-        return await _writer.PrepareAsync(
-            metadata.Path, changes, gameRelease, BuildTypedLinkCache(gameRelease), MastersWritingOrder());
-    }
-
-    // Typed link cache over the session's load-order getters; the placed-record write paths in
-    // PluginWriter need the typed cache for GetOrAddAsOverride (see TypedLinkCacheFactory).
-    private ILinkCache BuildTypedLinkCache(GameRelease gameRelease)
-    {
-        lock (_lock)
-        {
-            // #34: load-order members only. A plugin loaded outside the load order is not in the
-            // game's load order by definition, and Mutagen's LoadOrder refuses a second listing
-            // for a filename it already holds — the write paths this cache serves only ever
-            // target load-order plugins anyway.
-            var mods = _session!.Plugins
-                .Where(p => p.InLoadOrder)
-                .Select(p => _session.GetMod(p.Name, p.Origin))
-                .OfType<IModGetter>()
-                .ToList();
-            return TypedLinkCacheFactory.Create(mods, gameRelease);
-        }
-    }
-
-    // #337/ADR-0038: what PluginWriter orders the written masters list by, and — just as load-
-    // bearing — the completeness guarantee that keeps WithMastersListOrdering from throwing
-    // MissingModException when Iterate's content-sync needs a master this list doesn't name (not
-    // defensive padding: proved reachable, not hypothetical — see below). Session-wide rather than
-    // scoped to the plugin being saved: nothing on PendingChange records which plugin a copy's
-    // fields originated from, and per-change-origin scoping would need new plumbing to track it.
-    // Every session plugin's name, unioned with every session plugin's own already-committed
-    // Masters (one hop, not recursive — justified below) is simpler and provably total instead.
-    //
-    // Result is the same for every plugin in a given session — deliberately not parameterized by
-    // which one is being saved.
-    //
-    // Proof of totality: every FormKey Iterate could ever need as a new master for the plugin being
-    // saved comes from a FormLink embedded somewhere in that plugin's post-edit content. That
-    // FormLink arrived one of two ways. (1) It was already on the plugin's own on-disk content
-    // before this save — closed over that plugin's own on-disk masters (its own PluginMetadata.
-    // Masters) at binary-parse time, since Mutagen resolves a local master index into a ModKey
-    // using only the parsed file's own master-list metadata, never anything external — the same
-    // #277 "declared-but-absent master" shape as before, just now stated for any session plugin,
-    // not only the save target. (2) It arrived via a pending change's NewValue. Every pending
-    // change's NewValue is either schema-validated (EditOrchestrator.ValidateReferences, on
-    // StageEdit's and CreateRecordCore's template-copy path), which requires the FormKey resolve
-    // via RecordQueryService — i.e. belong to an *indexed*, hence session-loaded, plugin — or
-    // copied verbatim from an existing record's already-resolved fields (CopyRecordTo, which skips
-    // ValidateReferences — confirmed reachable via review: a copy can carry a FormLink the source
-    // plugin alone declares as a master). CopyRecordTo's only source, RecordQueryService.GetRecord/
-    // GetRecordForPlugin, reads committed (indexed) data only, never a pending overlay, so that
-    // source record is itself on-disk content of some session-loaded plugin — closed over *that*
-    // plugin's own on-disk masters by the same parse-time argument as (1). Either way, every
-    // possible new master is a name in _session.Plugins or a name in some session plugin's own
-    // already-committed Masters — exactly this union. One hop suffices because PluginMetadata.
-    // Masters is already each plugin's own fully-resolved master list; nothing here ever needs to
-    // chase a master's own masters transitively.
-    private List<string> MastersWritingOrder()
-    {
-        lock (_lock)
-        {
-            var ordered = _session!.Plugins.OrderBy(p => p.LoadOrderIndex).ToList();
-            return ordered
-                .Select(p => p.Name)
-                .Concat(ordered.SelectMany(p => p.Masters))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
-    }
-
-    /// <summary>
-    /// #279 / ADR-0035 § Live mutation: re-reads one plugin from the copy a mod-level change has
-    /// made its name resolve to, and re-indexes only that plugin. Never automatic — the drifted row
-    /// offers this, the user asks for it, and the confirm has already stated what it costs.
-    /// </summary>
     public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin)
     {
         if (string.IsNullOrWhiteSpace(newPath))
@@ -544,19 +414,6 @@ public sealed class SessionManager(
             // Rebind first — it opens the new file, which is the failure-prone half, and it leaves
             // the session untouched if that open throws.
             var metadata = _session!.RebindPlugin(previous, newPath, newOrigin);
-
-            // Then the staged edits belonging to the copy that just went away. Discarded, not
-            // migrated and not left alone: pending_changes is keyed on (form_key, origin, plugin)
-            // and reads overlay by origin, so a change left behind is invisible yet still live —
-            // and SavePlugin resolves its write target by *filename*, so it would later be written
-            // into the new copy's file having been authored against bytes that no longer exist
-            // (ADR-0026's silent-wrong-state tier). Migrating them is worse still: their OldValue
-            // describes those same vanished bytes. Deliberately before the re-index rather than
-            // after it: if indexing then throws, staged edits are gone but nothing is left
-            // invisible-but-live, which is the safer of the two bad outcomes.
-            var discarded = _pendingChanges?.Revert(metadata.Name, formKey: null, origin: previous.Origin) ?? 0;
-            if (discarded > 0)
-                _logger.LogInformation("Discarded {Count} staged change(s) against {Plugin} from {Origin}", discarded, plugin, previous.Origin);
 
             repository.Unindex(previous.Name, previous.Origin);
             var mod = _session.GetMod(metadata.Name, metadata.Origin)!;
@@ -702,7 +559,6 @@ public sealed class SessionManager(
 
     private void DisposeCurrentSession()
     {
-        _changeLifecycle?.OnSessionUnloaded();
         _session?.Dispose();
         _session = null;
         _repository?.Dispose();

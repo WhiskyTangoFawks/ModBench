@@ -1,21 +1,17 @@
 import React from 'react';
 import { FormKeyLink } from './FormKeyLink';
-import { VmadObjectEditor } from './VmadObjectEditor';
 import type { FormKeyResolution } from './types';
 
 const OBJ_RE = /^(.+?)\s*(\[-?\d+\])\s*$/;
 
 // Issue #231: the `renderCell` dispatch target for `FieldMetadata.type === 'vmadObject'` — the
-// unified-tree caller of #229's VmadObjectEditor, now that a VMAD object property is an ordinary
-// row rather than a bespoke one. Builds the same compact read view VmadSection's own leafContent
-// used to (a FormKeyLink plus the trailing "[alias]"), from the same "FormKey [Alias]" string the
-// property's raw value already is — VmadObjectEditor itself still owns its own read/edit toggle
-// (the one place in the grid that isn't the shared click-to-edit lifecycle every other leaf uses,
-// per #229's own doc comment: a (FormKey, alias) pair the shared FormKeyCell alone can't
-// represent).
-export function VmadObjectCell({ value, onCommit, onOpen, resolution }: Readonly<{
+// compact read view for a VMAD object property (a FormKeyLink plus the trailing "[alias]"), built
+// from the same "FormKey [Alias]" string the property's raw value already is.
+//
+// #410/ADR-0041: read-only. #229's VmadObjectEditor — the (FormKey, alias) pair editor this cell
+// wrapped — retired with the write path behind it; the link still follows, which is a read.
+export function VmadObjectCell({ value, onOpen, resolution }: Readonly<{
   value: unknown;
-  onCommit: (v: unknown) => void;
   onOpen: (fk: string) => void;
   resolution?: FormKeyResolution;
 }>) {
@@ -32,13 +28,5 @@ export function VmadObjectCell({ value, onCommit, onOpen, resolution }: Readonly
     )
     : <span style={{ opacity: 0.35 }}>—</span>;
 
-  return (
-    <VmadObjectEditor
-      value={value}
-      read={read}
-      onCommit={v => onCommit(v)}
-      onOpen={onOpen}
-      resolution={resolution}
-    />
-  );
+  return read;
 }

@@ -13,7 +13,7 @@ namespace MEditService.Tests.Api;
 
 /// <summary>
 /// A loaded NPC session whose post-commit reindex always throws. Drives #127's stale-index case
-/// through the real save path (file swap + pending-changes commit still happen) and the
+/// through the real save path (the file swap still happens) and the
 /// <see cref="ISessionManager.ReindexPlugins"/> seam — not by reaching into PluginSaver internals.
 /// </summary>
 public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposable
@@ -84,8 +84,6 @@ public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposa
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => inner.LoadUnlistedPlugin(path, origin);
         public void UnloadUnlistedPlugin(string plugin, string origin) => inner.UnloadUnlistedPlugin(plugin, origin);
         public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => inner.RereadPlugin(plugin, newPath, newOrigin);
-        public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => inner.SavePlugin(plugin, changes);
-        public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes) => inner.PreparePluginSave(plugin, changes);
         public string ReserveFormKey(string plugin) => inner.ReserveFormKey(plugin);
         public void SetFilter(string sql) => inner.SetFilter(sql);
         public void ClearFilter() => inner.ClearFilter();

@@ -15,7 +15,7 @@ namespace MEditService.Tests.Serialization;
 /// types via reflection on the generated class name — see RecordTextCodec's own doc comment).
 ///
 /// Two positive types on purpose, not one: Npc (a plain record — the type #370's primary API
-/// fixtures actually stage edits against) and Cell (a container-shaped type, built here with no
+/// fixtures actually exercise) and Cell (a container-shaped type, built here with no
 /// children populated so it stays one file regardless of shallow-vendoring policy — that policy is
 /// Slice F's concern, not dispatch's). Proving dispatch against two differently-shaped generated
 /// classes is what distinguishes "resolves for the one type someone tried" from "resolves by a
