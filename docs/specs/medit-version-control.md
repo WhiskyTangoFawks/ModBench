@@ -1,6 +1,10 @@
 # Version control — Surface Specification (Track, branch, compile)
 
-**Status: Designed, not yet implemented.** This is the Track/Compile surface spec the
+**Status: partially implemented — Track shipped (#414); everything else designed, not yet
+implemented.** Track is live end to end: preset QuickPick, progress-reported eager
+serialization, pristine `main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256`
+trailers, checked-out `edit` branch, parked `refs/medit/last-compile/<plugin>` ref, and
+native SCM registration via `vscode.git` `openRepository`. This is the Track/Compile surface spec the
 milestone-5 rebuild names ([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
 and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417). It is written ahead of
 implementation deliberately — the closeout slice (#418) trues it up to **Implemented**,
