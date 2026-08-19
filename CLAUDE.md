@@ -39,6 +39,13 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 - Mod Management (`modbench/src/modmanager/`) never calls the C# backend — pure
   TS/Node. mEdit is the inverse: thin extension-side view; logic lives in
   `MEditService/`, not webview/extension host.
+- **Never assume exclusive ownership of a file on disk.** MO2, xEdit, other mod
+  managers, and the user directly can create, edit, move, or delete any mod file
+  or plugin outside Modbench at any time. Every mechanism that tracks state
+  derived from disk (indexes, hashes, hidden repos, caches) must be able to
+  detect and recover from that file having changed without Modbench's
+  knowledge — never assume the last write Modbench made is still the current
+  state.
 - `references/` (not `.references/`) — grep-only local clones, never modify:
   Mutagen (`docs/Big-Cheat-Sheet.md`), TES5Edit (`wbDefinitionsFO4.pas`: `wbArrayS` =
   sorted, `wbArray` = unsorted), `modorganizer/` (MO2 C++, e.g.
