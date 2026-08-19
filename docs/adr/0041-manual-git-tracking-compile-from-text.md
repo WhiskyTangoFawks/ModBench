@@ -209,3 +209,54 @@ the suite is green again before the arc closes.
   defects (#387) requires library-level control the CLI doesn't expose.
 - **Change-group gating at commit** — git's own model is that history may hold
   non-building states; the only door where plugin validity is at stake is compile.
+
+#### Provenance mechanics, refusal posture, and uniform Track *(amendment, 2026-08-19)*
+
+Settled in the same-day design follow-up (review conversation on the rebuilt milestone;
+walked through the full external-action space against MO2's actual `meta.ini` behavior).
+
+**Save & Compile commits — to a parked ref, never to the branch.** Each compile snapshots
+the compiled working tree as a real commit object (the `git stash create` mechanism:
+no HEAD, branch, or index movement) at **`refs/medit/last-compile/<plugin>`**, its message
+carrying a `Binary-SHA256` trailer for the binary it produced. This is the reference for
+"the binary as Modbench last wrote it": external-change detection and crash repair (#381)
+compare the on-disk binary against one ref read; the watcher uses it to ignore Modbench's
+own writes. The ref advances only after the binary write lands (inside the journal's
+recovery unit), is untouched by every porcelain gesture the user can make (rebase, amend,
+squash), preserves the exact source tree each binary came from, keeps a free audit trail
+in its reflog, and lets superseded snapshots fall to gc. A missing or orphaned ref
+degrades to asking the user, never to guessing. Track initializes the ref to the pristine
+snapshot so detection is uniform from the first moment. Commit-to-the-branch (auto-commit
+per save, or compile refusing a dirty tree) was considered and rejected: it resurrects
+the superseded commit=save, spams history or forces a commit per tweak-test iteration,
+and multiplies rebase conflicts across machine commits.
+
+**`meta.ini` is a source, never tracked content.** Baseline trailers become
+`Upstream-Version`, `Binary-SHA256`, `Meta-SHA256` — all optional (authored and
+manually-installed mods may lack a meta), read from `meta.ini` as opaque bytes by the
+backend at track/baseline time (observation, not a cross-context payload; the boundary
+object is unchanged). The file itself is never committed: mod-manager metadata mixes
+provenance with mutable workflow state — one MO2 update check rewrites `meta.ini` across
+every mod (`lastNexusQuery`) — and a tracked copy would mass-dirty every repo and jam
+refuse-over-dirt rebases. General rule: **never track a file that changes for non-content
+reasons.** When Modbench later owns installation, its install pipeline writes the same
+trailers firsthand and pre-answers the external-change dialog; the `Meta-SHA256` tell
+degrades gracefully to a fallback for out-of-band changes.
+
+**Trailers may inform defaults, never actions.** Narrowing the "never by classification
+machinery" clause: machinery may read trailers to pre-select the default answer in a
+dialog the user answers (external change with `Meta-SHA256` changed defaults to
+"upstream update", unchanged to "your own edit") — never to act without one. The dialog's
+UX is pinned explicitly on #417 and folds into the Track/Compile surface spec on ship.
+
+**Refusal posture follows git: refuse, and the user fixes it.** An offered rebase with
+any uncommitted dirt refuses with a message naming the paths — commit/stash/discard are
+the user's gestures; automation may be layered on later, not now. Compile refuses states
+it cannot emit without changing FormKeys (ledger paths and DB keys are FormKey-keyed; a
+silent renumber would rewrite the source out from under itself) — multi-plugin renumber
+scenarios are deferred to compile-time design when a real need arrives.
+
+**Track is uniform; Authored vs Modified is workflow, not a mode.** Track always
+serializes, commits pristine to `main`, and checks out the edit branch. "Authored" is the
+workflow of merging into `main` at will; "Modified" is the workflow of keeping `main`
+pristine. Modbench stores no mode and nothing branches on the distinction.
