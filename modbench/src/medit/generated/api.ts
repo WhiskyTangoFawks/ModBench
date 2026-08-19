@@ -4,182 +4,6 @@
  */
 
 export interface paths {
-    "/records/{formKey}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["GetRecord"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["PatchRecord"];
-        trace?: never;
-    };
-    "/records/{formKey}/copy-to/{targetPlugin}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["CopyRecordTo"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/records/delete": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["DeleteRecords"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/records/{formKey}/renumber": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["RenumberRecord"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/{plugin}/records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["CreateRecord"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/{plugin}/cells/{cellFormKey}/placed": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["CreatePlacedRecord"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/change-groups": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["GetChangeGroups"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/changes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["GetChanges"];
-        put?: never;
-        post?: never;
-        delete: operations["BulkDeleteChanges"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/changes/group/{groupId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["DeleteChangeGroup"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/changes/{changeId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["DeleteChange"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/change-groups/{groupId}/save": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["SaveChangeGroup"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/health": {
         parameters: {
             query?: never;
@@ -188,22 +12,6 @@ export interface paths {
             cookie?: never;
         };
         get: operations["Health"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ledger/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["GetLedgerStatus"];
         put?: never;
         post?: never;
         delete?: never;
@@ -364,6 +172,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["GetRecords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/records/{formKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetRecord"];
         put?: never;
         post?: never;
         delete?: never;
@@ -553,18 +377,6 @@ export interface components {
             /** Format: int32 */
             total?: number;
         };
-        ChangeGroup: {
-            /** Format: uuid */
-            id?: string;
-            operation?: string | null;
-            description?: string | null;
-            /** Format: date-time */
-            createdAt?: string;
-            /** Format: int32 */
-            changeCount?: number;
-            /** Format: int32 */
-            pluginCount?: number;
-        };
         CompareOverride: {
             formKey?: string | null;
             plugin?: string | null;
@@ -574,9 +386,6 @@ export interface components {
             editorId?: string | null;
             fields?: components["schemas"]["FieldValue"][] | null;
             origin?: string | null;
-            pendingFields?: {
-                [key: string]: unknown;
-            } | null;
             recordType?: string | null;
             conflictThis?: components["schemas"]["ConflictThis"];
         };
@@ -630,42 +439,8 @@ export interface components {
         ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictCritical";
         /** @enum {string} */
         ConflictThis: "OnlyOne" | "Master" | "IdenticalToMaster" | "Override" | "ConflictWins" | "ConflictLoses";
-        CopyRecordRequest: {
-            source?: string | null;
-            sourcePlugin?: string | null;
-            sourceOrigin?: string | null;
-        };
-        CreatePlacedRecordRequest: {
-            recordType?: string | null;
-            placementGroup?: string | null;
-            templateFormKey?: string | null;
-            source?: string | null;
-        };
         CreatePluginRequest: {
             name?: string | null;
-        };
-        CreateRecordRequest: {
-            recordType?: string | null;
-            templateFormKey?: string | null;
-            source?: string | null;
-            templateSourcePlugin?: string | null;
-            templateSourceOrigin?: string | null;
-        };
-        CreateRecordResult: {
-            formKey?: string | null;
-            /** Format: uuid */
-            groupId?: string;
-        };
-        DeleteRecordTarget: {
-            formKey?: string | null;
-            plugin?: string | null;
-        };
-        DeleteRecordsRequest: {
-            records?: components["schemas"]["DeleteRecordTarget"][] | null;
-        };
-        DeleteRecordsResponse: {
-            stagedGroup?: components["schemas"]["ChangeGroup"] | null;
-            revertedFormKeys?: string[] | null;
         };
         ExplicitPlugin: {
             name?: string | null;
@@ -718,17 +493,6 @@ export interface components {
             name?: string | null;
             origin?: string | null;
         };
-        /** @enum {string} */
-        LedgerChangeKind: "Modified" | "Added" | "Deleted" | "Renamed" | "Unknown";
-        LedgerStatusEntry: {
-            plugin?: string | null;
-            origin?: string | null;
-            recordType?: string | null;
-            formKey?: string | null;
-            changeKind?: components["schemas"]["LedgerChangeKind"];
-            recordPath?: string | null;
-            committedText?: string | null;
-        };
         LoadPluginRequest: {
             path?: string | null;
             origin?: string | null;
@@ -759,42 +523,6 @@ export interface components {
             formKey?: string | null;
             text?: string | null;
             decodedValue?: string | null;
-        };
-        PatchRecordRequest: {
-            plugin?: string | null;
-            fields?: {
-                [key: string]: unknown;
-            } | null;
-            source?: string | null;
-            description?: string | null;
-            changeType?: string | null;
-        };
-        PatchRecordValidationError: {
-            fieldErrors?: components["schemas"]["ReferenceValidationError"][] | null;
-            detail?: string | null;
-        };
-        PendingChange: {
-            /** Format: uuid */
-            id?: string;
-            formKey?: string | null;
-            plugin?: string | null;
-            fieldPath?: string | null;
-            recordType?: string | null;
-            oldValue?: unknown;
-            newValue?: unknown;
-            source?: string | null;
-            description?: string | null;
-            /** Format: date-time */
-            changedAt?: string;
-            changeType?: string | null;
-            parentCell?: string | null;
-            placementGroup?: string | null;
-            resolutions?: {
-                [key: string]: components["schemas"]["FormKeyResolution"];
-            } | null;
-            recordResolution?: components["schemas"]["FormKeyResolution"] | null;
-            recordTypeDisplayName?: string | null;
-            origin?: string | null;
         };
         PlacedSummary: {
             formKey?: string | null;
@@ -848,9 +576,6 @@ export interface components {
             editorId?: string | null;
             fields?: components["schemas"]["FieldValue"][] | null;
             origin?: string | null;
-            pendingFields?: {
-                [key: string]: unknown;
-            } | null;
             recordType?: string | null;
         };
         RecordSummary: {
@@ -875,39 +600,10 @@ export interface components {
             editorId?: string | null;
             origin?: string | null;
         };
-        ReferenceValidationError: {
-            fieldPath?: string | null;
-            value?: string | null;
-            reason?: string | null;
-            expectedTypes?: string[] | null;
-        };
-        ReindexFailure: {
-            plugins?: string[] | null;
-            reason?: string | null;
-        };
-        RenumberRecordRequest: {
-            /** Format: int32 */
-            newFormId?: number;
-            plugin?: string | null;
-            source?: string | null;
-        };
         RereadPluginRequest: {
             plugin?: string | null;
             path?: string | null;
             origin?: string | null;
-        };
-        SaveGroupResponse: {
-            byPlugin?: {
-                [key: string]: components["schemas"]["SaveResult"];
-            } | null;
-            reindexFailure?: components["schemas"]["ReindexFailure"] | null;
-        };
-        SaveResult: {
-            backupPath?: string | null;
-            applied?: string[] | null;
-            readOnly?: string[] | null;
-            notFound?: string[] | null;
-            createFailed?: string[] | null;
         };
         SessionFilterRequest: {
             sql?: string | null;
@@ -1012,555 +708,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    GetRecord: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                formKey: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecordDetail"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    PatchRecord: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                formKey: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PatchRecordRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PendingChange"][];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PatchRecordValidationError"];
-                };
-            };
-        };
-    };
-    CopyRecordTo: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                formKey: string;
-                targetPlugin: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CopyRecordRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PendingChange"][];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PatchRecordValidationError"];
-                };
-            };
-        };
-    };
-    DeleteRecords: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DeleteRecordsRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeleteRecordsResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    RenumberRecord: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                formKey: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RenumberRecordRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChangeGroup"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    CreateRecord: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plugin: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateRecordRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreateRecordResult"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    CreatePlacedRecord: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plugin: string;
-                cellFormKey: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreatePlacedRecordRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreateRecordResult"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unprocessable Content */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    GetChangeGroups: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChangeGroup"][];
-                };
-            };
-        };
-    };
-    GetChanges: {
-        parameters: {
-            query?: {
-                formKey?: string;
-                groupId?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PendingChange"][];
-                };
-            };
-        };
-    };
-    BulkDeleteChanges: {
-        parameters: {
-            query?: {
-                plugin?: string;
-                formKey?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": number;
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    DeleteChangeGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                groupId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    DeleteChange: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                changeId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    SaveChangeGroup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                groupId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SaveGroupResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     Health: {
         parameters: {
             query?: never;
@@ -1576,26 +723,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    GetLedgerStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerStatusEntry"][];
-                };
             };
         };
     };
@@ -1955,6 +1082,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecordSummaryPagedResult"];
+                };
+            };
+        };
+    };
+    GetRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

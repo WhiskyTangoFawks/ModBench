@@ -4,7 +4,6 @@ import type {
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
 } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
-import { recordRowUri } from './pendingChangeRowUri';
 
 const PAGE_SIZE = 50;
 
@@ -62,7 +61,6 @@ export class RecordNode extends vscode.TreeItem {
     // carrying a staged change. `origin` (when set) is a shadowed, permanently read-only copy;
     // the derivation itself (decorationKindFor) is what refuses to decorate it, not this
     // assignment — see pendingChangeDecoration.ts.
-    this.resourceUri = recordRowUri(record.plugin, record.formKey, origin);
     this.command = {
       command: 'modbench.openEditor',
       title: 'Open Record',
@@ -102,7 +100,6 @@ export class WorldspaceNode extends vscode.TreeItem {
     // #331: see RecordNode's own resourceUri comment above — a worldspace is formKey-addressable
     // and editable via Open Record just like a flat record row, so an undecorated one must not be
     // mistakable for "no pending changes" (ADR-0035).
-    this.resourceUri = recordRowUri(plugin, worldspace.formKey, origin);
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: worldspace.formKey, label }] };
   }
 }
@@ -131,7 +128,6 @@ export class CellNode extends vscode.TreeItem {
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'cell';
     // #331: see RecordNode's own resourceUri comment above.
-    this.resourceUri = recordRowUri(plugin, cell.formKey, origin);
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: cell.formKey, label }] };
   }
 }
@@ -165,7 +161,6 @@ export class PlacedNode extends vscode.TreeItem {
     super(label, vscode.TreeItemCollapsibleState.None);
     this.contextValue = immutable ? 'refrImmutable' : 'refr';
     // #331: see RecordNode's own resourceUri comment above.
-    this.resourceUri = recordRowUri(plugin, placed.formKey, origin);
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: placed.formKey, label }] };
   }
 }

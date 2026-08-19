@@ -100,11 +100,6 @@
           "id": "modbench.downloads",
           "name": "Downloads",
           "visibility": "collapsed"
-        },
-        {
-          "id": "modbench.changeGroupTree",
-          "name": "Plugins - Pending Changes",
-          "when": "modbench.hasPendingChanges"
         }
       ],
       "modbenchReferencedBy": [
@@ -203,11 +198,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.ledger.openDiff",
-        "title": "Open Diff",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.deleteRecord",
         "title": "Remove",
         "category": "Modbench"
@@ -215,45 +205,6 @@
       {
         "command": "modbench.createPlaced",
         "title": "Create Placed…",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.saveGroup",
-        "title": "Save Pending Change",
-        "icon": "$(save)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.revertGroup",
-        "title": "Revert Pending Change",
-        "icon": "$(close)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.saveAllGroups",
-        "title": "Save All Pending Changes",
-        "icon": "$(save)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.revertAllGroups",
-        "title": "Revert All Pending Changes",
-        "icon": "$(close)",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.pendingCell.reveal",
-        "title": "Reveal in Pending Changes Tree",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.pendingCell.saveGroup",
-        "title": "Save Group",
-        "category": "Modbench"
-      },
-      {
-        "command": "modbench.pendingCell.revertGroup",
-        "title": "Revert Group",
         "category": "Modbench"
       },
       {
@@ -536,27 +487,7 @@
           "when": "false"
         },
         {
-          "command": "modbench.saveGroup",
-          "when": "false"
-        },
-        {
-          "command": "modbench.revertGroup",
-          "when": "false"
-        },
-        {
           "command": "modbench.copyAsOverrideInto",
-          "when": "false"
-        },
-        {
-          "command": "modbench.pendingCell.reveal",
-          "when": "false"
-        },
-        {
-          "command": "modbench.pendingCell.saveGroup",
-          "when": "false"
-        },
-        {
-          "command": "modbench.pendingCell.revertGroup",
           "when": "false"
         },
         {
@@ -771,16 +702,6 @@
           "command": "modbench.downloads.sortBy",
           "when": "view == modbench.downloads",
           "group": "1_sort"
-        },
-        {
-          "command": "modbench.saveAllGroups",
-          "when": "view == modbench.changeGroupTree && modbench.hasPendingChanges",
-          "group": "navigation@1"
-        },
-        {
-          "command": "modbench.revertAllGroups",
-          "when": "view == modbench.changeGroupTree && modbench.hasPendingChanges",
-          "group": "1_revert"
         }
       ],
       "editor/title": [
@@ -820,11 +741,6 @@
           "command": "modbench.createPlaced",
           "when": "view == modbench.pluginListTree && (viewItem == placedGroup-persistent || viewItem == placedGroup-temporary)",
           "group": "modbench@1"
-        },
-        {
-          "command": "modbench.saveGroup",
-          "when": "view == modbench.changeGroupTree && viewItem == pendingGroup",
-          "group": "inline"
         },
         {
           "command": "modbench.openEditor",
@@ -950,29 +866,9 @@
           "command": "modbench.pluginListTree.rereadPlugin",
           "when": "view == modbench.pluginListTree && viewItem == pluginDrifted",
           "group": "pluginActions@2"
-        },
-        {
-          "command": "modbench.revertGroup",
-          "when": "view == modbench.changeGroupTree && viewItem == pendingGroup",
-          "group": "inline"
         }
       ],
       "webview/context": [
-        {
-          "command": "modbench.pendingCell.reveal",
-          "when": "webviewId == 'modbench' && webviewSection == 'pendingCell'",
-          "group": "modbench@1"
-        },
-        {
-          "command": "modbench.pendingCell.saveGroup",
-          "when": "webviewId == 'modbench' && webviewSection == 'pendingCell'",
-          "group": "modbench@2"
-        },
-        {
-          "command": "modbench.pendingCell.revertGroup",
-          "when": "webviewId == 'modbench' && webviewSection == 'pendingCell'",
-          "group": "modbench@3"
-        },
         {
           "command": "modbench.copyAsOverrideInto",
           "when": "webviewId == 'modbench' && webviewSection == 'columnHeader'",

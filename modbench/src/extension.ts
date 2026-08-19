@@ -5,34 +5,20 @@ import * as fs from 'fs';
 import * as cp from 'child_process';
 import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
-import { createApiClient, type ApiClient, type MasterIssue, type LedgerStatusEntry } from './medit/ApiClient';
+import { createApiClient, type ApiClient, type MasterIssue } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController, type SessionLoadProgress } from './medit/SessionController';
 import { makeLoadProgressHandler } from './medit/sessionProgress';
-import { reloadSession } from './medit/reloadSession';
-import { LoadMoreNode, PlacedGroupNode, PlacedNode, PluginTreeNode, PluginTreeProvider, RecordNode, headerFormKeyFor } from './medit/PluginTreeProvider';
-import { PendingChangesTreeProvider, PendingGroupNode, PendingLeafNode, type PendingTreeNode } from './medit/PendingChangesTreeProvider';
-import { PendingChangeDecorationProvider } from './medit/PendingChangeDecorationProvider';
-import { pluginRowUri } from './medit/pendingChangeRowUri';
-import { LedgerScmProvider, LEDGER_COMMITTED_SCHEME, LEDGER_OPEN_DIFF_COMMAND } from './medit/LedgerScmProvider';
-import { refreshPendingState, buildPendingStateTargets, type PendingStateRefreshTargets } from './medit/refreshPendingState';
+import { LoadMoreNode, PluginTreeNode, PluginTreeProvider, headerFormKeyFor } from './medit/PluginTreeProvider';
 import {
   ReferencedByTreeProvider, ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode,
 } from './medit/ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
 import { ApiPluginRepository } from './medit/PluginRepository';
-import { copyTargetPlugins, type CopyGesture } from './medit/copyTargetPlugins';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
-import {
-  EXTENSION_TO_WEBVIEW, type ArrayElementContext, type ArrayParentContext,
-  type ColumnHeaderContext, type ExtensionToWebview, type PendingCellContext,
-  type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext,
-} from './medit/messages';
-import {
-  routeRecordPanelMessage, revealPendingChange, pickScriptNameViaInputBox,
-  type RevealDeps, type RouteRecordPanelMessageDeps,
-} from './medit/recordPanelMessageRouter';
+import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './medit/messages';
+import { routeRecordPanelMessage, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './modmanager/ModListProvider';
@@ -136,14 +122,6 @@ function withPluginsViewProgress(work: () => Promise<void>): Promise<void> {
 // pluginsTree directly above — the session starting/stopping is what tells its record rows which
 // plugins are immutable (Remove hidden via contextValue), through the same choke points.
 let recordBrowserProvider: PluginTreeProvider | undefined;
-// #331: module level for the same reason as pluginsTree/recordBrowserProvider above —
-// exitToLoadout (a module-level function, called from several failure paths too) has to be able
-// to clear it, and a local `const` inside activate() is structurally unreachable from there.
-let pendingChangeDecorationProvider: PendingChangeDecorationProvider | undefined;
-// #368: same reason as pendingChangeDecorationProvider directly above — exitToLoadout clears the
-// working-tree group the same way, and for the same race (backendManager.stop() vs. one more
-// momentarily-live response).
-let ledgerScmProvider: LedgerScmProvider | undefined;
 // #295: `enterEditing` itself, built once inside `registerLoadoutView`. Module level for the
 // same reason as the above — not a registration-order race (registerLoadoutSurfaces, which
 // calls registerLoadoutView, already runs before registerEditorCommands registers
@@ -170,26 +148,6 @@ const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
   getTreeItem: () => { throw new Error('unreachable — NOT_MO2_INSTANCE_PROVIDER never yields children'); },
   getChildren: () => [],
 };
-
-/** The staged-work signal, applied to both surfaces that report it: the context key that
- *  gates Save All / Revert All, and (#247) the view's numeric badge, which is how staged work
- *  stays visible on the activity-bar icon while the view is collapsed. One number drives both,
- *  so they cannot disagree. No badge at zero — a "0" reads as a state worth looking at.
- *
- *  The view is passed as a getter because it is constructed after the provider that reports
- *  into it; by the time a count arrives, it exists (same ordering note as createReferencedByTree). */
-function makePendingStateHandler(
-  getView: () => vscode.TreeView<PendingTreeNode> | undefined,
-): (stagedGroups: number) => void {
-  return (stagedGroups) => {
-    void vscode.commands.executeCommand('setContext', 'modbench.hasPendingChanges', stagedGroups > 0);
-    const view = getView();
-    if (!view) return;
-    view.badge = stagedGroups === 0
-      ? undefined
-      : { value: stagedGroups, tooltip: `${stagedGroups} pending change group${stagedGroups === 1 ? '' : 's'}` };
-  };
-}
 
 /** #270 / #276 / #277: which plugin files the running session actually holds — the session's own
  *  list, not the one we sent it, because the backend prepends the game's implicit masters and
@@ -288,10 +246,6 @@ function exitToLoadout(): void {
   // which plugins *this* session's records matched, same reasoning as drift just above.
   matchingPlugins = undefined;
   recordBrowserProvider?.setImmutablePlugins([]);
-  // #331: a direct reset, not refresh() — see PendingChangeDecorationProvider.clear()'s own
-  // comment for why a live re-fetch here would race backendManager.stop() below.
-  pendingChangeDecorationProvider?.clear();
-  ledgerScmProvider?.clear(); // #368: same reasoning, same race, same fix.
   backendManager?.stop();
 }
 
@@ -359,24 +313,6 @@ function createReferencedByTree(
   return { referencedByTreeProvider, referencedByTreeView, activeRecordSubscription };
 }
 
-// #368: the aggregate SCM provider's construction + registration — pulled out of `activate` for
-// the same reason createReferencedByTree above was (line budget), not because it needs to be
-// reusable. Pushes its own disposables (the source control itself, its badge, the committed-text
-// virtual documents its diff command opens, and the diff command) rather than returning them for
-// activate() to spread, since nothing else in activate() needs to touch any of the four.
-function registerLedgerScmProvider(
-  context: vscode.ExtensionContext, repository: ApiPluginRepository, log: (msg: string) => void,
-): LedgerScmProvider {
-  const provider = new LedgerScmProvider(repository, log);
-  context.subscriptions.push(
-    provider,
-    vscode.window.registerFileDecorationProvider(provider),
-    vscode.workspace.registerTextDocumentContentProvider(LEDGER_COMMITTED_SCHEME, provider),
-    vscode.commands.registerCommand(LEDGER_OPEN_DIFF_COMMAND, (entry: LedgerStatusEntry) => provider.openDiff(entry)),
-  );
-  return provider;
-}
-
 export function activate(context: vscode.ExtensionContext) {
   const cfg = vscode.workspace.getConfiguration('modbench');
   const port: number = cfg.get('backendPort') ?? 5172;
@@ -395,11 +331,6 @@ export function activate(context: vscode.ExtensionContext) {
   const repository = new ApiPluginRepository(client, log);
   const treeProvider = new PluginTreeProvider(repository, log);
   recordBrowserProvider = treeProvider;
-  const changeGroupTreeProvider = new PendingChangesTreeProvider(
-    client, log, makePendingStateHandler(() => changeGroupTreeView));
-  pendingChangeDecorationProvider = new PendingChangeDecorationProvider(client, log); // #331 — module-level, see its declaration
-  ledgerScmProvider = registerLedgerScmProvider(context, repository, log); // #368 — module-level, see its declaration
-  const pendingStateTargets = buildPendingStateTargets(changeGroupTreeProvider, pendingChangeDecorationProvider, ledgerScmProvider); // #368 review AC3 gap
   const openPanels = new Map<string, vscode.WebviewPanel>();
   const recordPanels = new Set<vscode.WebviewPanel>();
   // #282: the Referenced By view's input — which record panel is active and what FormKey it
@@ -414,7 +345,6 @@ export function activate(context: vscode.ExtensionContext) {
     repository,
     log,
     refreshTree: () => treeProvider.refresh(),
-    refreshGroupTree: () => { void refreshPendingState(pendingStateTargets, true, log); }, // #331/#368: see refreshPendingState's own doc comment
     setStatusText: (t) => { statusBarItem.text = t; },
     showWarning: (msg) => { void vscode.window.showWarningMessage(msg); },
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
@@ -422,23 +352,15 @@ export function activate(context: vscode.ExtensionContext) {
     refreshMatchingPlugins: () => { void refreshMatchingPlugins(repository, outputChannel); },
     notifyConflictsComputed: () => broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED }),
   });
-  const changeGroupTreeView: vscode.TreeView<PendingTreeNode> = vscode.window.createTreeView('modbench.changeGroupTree', {
-    treeDataProvider: changeGroupTreeProvider,
-    canSelectMany: true,
-    // #247 rule 7: hierarchical — a multi-member ChangeGroup expands into its member leaves.
-    showCollapseAll: true,
-  });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
-  const { modListProvider, downloadsProvider, pluginListProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, pendingStateTargets, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository) });
+  const { modListProvider, downloadsProvider, pluginListProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository) });
 
   context.subscriptions.push(
-    changeGroupTreeView,
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
-    vscode.window.registerFileDecorationProvider(pendingChangeDecorationProvider), // #331
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, changeGroupTreeProvider, changeGroupTreeView, referencedByTreeView, log, outputChannel, pendingChangeDecorationProvider, ledgerScmProvider,
+      context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, log, outputChannel,
     }),
   );
 
@@ -454,7 +376,7 @@ export function activate(context: vscode.ExtensionContext) {
   // the merged tree's children.
   return {
     modListProvider, downloadsProvider, pluginListProvider, pluginsTree, pluginListView: pluginsTreeView, treeProvider,
-    changeGroupTreeProvider, changeGroupTreeView, pendingChangeDecorationProvider, ledgerScmProvider, outputChannel,
+    outputChannel,
   };
 }
 
@@ -473,34 +395,19 @@ interface EditorCommandDeps {
   controller: SessionController;
   repository: ApiPluginRepository;
   scriptsPath: string;
-  // Issue #140: the record panel's Pending column reveals a change into the Pending Changes
-  // tree — resolve the change id here, then TreeView.reveal it.
-  changeGroupTreeProvider: PendingChangesTreeProvider;
-  changeGroupTreeView: vscode.TreeView<PendingTreeNode>;
   // Issue #282: the Referenced By view itself — needed for its Copy command's selection
-  // fallback (`.selection`), same shape as treeView/changeGroupTreeView above. The provider is
+  // fallback (`.selection`). The provider is
   // no longer threaded here: nothing in this file retargets it directly anymore (createReferencedByTree
   // wires that to activeRecordTracker once, in `activate`).
   referencedByTreeView: vscode.TreeView<ReferencedByTreeNode>;
   log: (msg: string) => void;
   outputChannel: vscode.LogOutputChannel;
-  // #331: refreshed alongside changeGroupTreeProvider whenever the webview reports a pending-
-  // change mutation (PENDING_CHANGED) — see registerRecordViewCommands' `reveal.decorations`.
-  pendingChangeDecorationProvider: PendingChangeDecorationProvider;
-  // #368: same reasoning as pendingChangeDecorationProvider directly above — see
-  // registerRecordViewCommands' `reveal.ledgerScm`.
-  ledgerScmProvider: LedgerScmProvider | undefined;
 }
 
 /** Editor-side commands, grouped so no single registrar exceeds the size budget. */
 function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   return [
     ...registerRecordViewCommands(deps),
-    ...registerChangeGroupCommands(deps),
-    ...registerCopyCreateCommands(deps),
-    ...registerColumnHeaderCommands(deps),
-    ...registerArrayOpCommands(deps),
-    ...registerVmadOpCommands(deps),
   ];
 }
 
@@ -508,21 +415,15 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
 function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
     context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, scriptsPath,
-    changeGroupTreeProvider, changeGroupTreeView, referencedByTreeView, log, outputChannel, repository, pendingChangeDecorationProvider, ledgerScmProvider,
+    referencedByTreeView, outputChannel, repository,
   } = deps;
-  const reveal: RevealDeps = {
-    provider: changeGroupTreeProvider, view: changeGroupTreeView, log,
-    reporter: makeReporter(outputChannel, 'revealPendingChange'),
-    decorations: pendingChangeDecorationProvider, // #331: PENDING_CHANGED refreshes this the same way it refreshes the tree above
-    ledgerScm: ledgerScmProvider, // #368: same reasoning — see refreshPendingState.
-  };
   // #210/#211/#212/#225/#230: formKeyPicker/conditionFunctionPicker/revertGroupConfirm/
   // addScriptName/clipboardRead/extendedFieldEditor are left undefined here — each `reply` must
   // post back to the one panel that asked (never a broadcast), so openRecordPanel rebuilds these
   // bundles per panel at the onDidReceiveMessage call site rather than sharing one instance the
   // way reveal/channel are.
   const routerDeps: RouteRecordPanelMessageDeps = {
-    reveal, channel: outputChannel, formKeyPicker: undefined, conditionFunctionPicker: undefined,
+    channel: outputChannel, formKeyPicker: undefined, conditionFunctionPicker: undefined,
     revertGroupConfirm: undefined, addScriptName: undefined, clipboardRead: undefined, extendedFieldEditor: undefined,
     // Issue #224: COPY_TO_CLIPBOARD's ADR-0026 surfacing on a failed clipboard write — shared
     // like `channel` above, not rebuilt per panel, since there's no per-panel reply to route.
@@ -544,7 +445,6 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One,
         { routerDeps, recordPanels, repository, activeRecordTracker });
     }),
-    ...registerPendingCellCommands(reveal, recordPanels),
     vscode.commands.registerCommand('modbench.loadMore', (node: LoadMoreNode) => treeProvider.loadMore(node)),
     vscode.commands.registerCommand('modbench.newPlugin', async () => {
       const name = await promptPluginName();
@@ -629,29 +529,24 @@ function registerReloadSessionCommand(controller: SessionController, outputChann
       void vscode.window.showErrorMessage('Modbench: There is no editing session to reload.');
       return;
     }
-    await reloadSession({
-      hasPendingChanges: () => controller.hasPendingChanges(),
-      confirm: async () => (await vscode.window.showWarningMessage(
-        'Modbench: Reload the session? Backend state is rebuilt from the current modlist — any staged changes not yet saved will be discarded.',
-        { modal: true }, 'Reload',
-      )) === 'Reload',
-      // #295 AC4: matches modbench.modList.launchMedit's own try/catch — enterEditing's own
-      // undefined-failures branch (loadExplicitSession) already calls exitToLoadout() itself,
-      // but every *other* way it can fail (buildExplicitPluginsWithOrigin rethrowing a non-ENOENT
-      // readdir error, backendManager.start() rejecting, …) would otherwise propagate unhandled,
-      // leaving the tree claiming a session that either never came up or is now half-torn-down.
-      reload: async () => {
-        try {
-          // #307 AC2: the progress indicator moved into enterEditing itself, addressed at the
-          // Plugins view's header — two indicators for one operation was noise.
-          await enter();
-        } catch (err) {
-          outputChannel.error(`[extension] reloadSession failed: ${err instanceof Error ? err.message : String(err)}`);
-          exitToLoadout();
-          void vscode.window.showErrorMessage('Modbench: Failed to reload the session.');
-        }
-      },
-    });
+    // #410/ADR-0041: reloads outright, with no confirm. #295's confirm existed only to warn that
+    // a reload discards staged edits; with the pending model gone a reload rebuilds read state and
+    // destroys nothing.
+    //
+    // #295 AC4: matches modbench.modList.launchMedit's own try/catch — enterEditing's own
+    // undefined-failures branch (loadExplicitSession) already calls exitToLoadout() itself, but
+    // every *other* way it can fail (buildExplicitPluginsWithOrigin rethrowing a non-ENOENT readdir
+    // error, backendManager.start() rejecting, …) would otherwise propagate unhandled, leaving the
+    // tree claiming a session that either never came up or is now half-torn-down.
+    try {
+      // #307 AC2: the progress indicator moved into enterEditing itself, addressed at the Plugins
+      // view's header — two indicators for one operation was noise.
+      await enter();
+    } catch (err) {
+      outputChannel.error(`[extension] reloadSession failed: ${err instanceof Error ? err.message : String(err)}`);
+      exitToLoadout();
+      void vscode.window.showErrorMessage('Modbench: Failed to reload the session.');
+    }
   });
 }
 
@@ -683,450 +578,8 @@ function registerReferencedByCopyCommand(
     });
 }
 
-// #208: the pending cell's right-click menu is VS Code's own `webview/context` contribution now
-// (contributes.menus in package.json) — these are the three commands it invokes, each receiving
-// the cell's merged data-vscode-context object (at minimum `changeId`) as its sole argument.
-// Reveal's work (resolving a changeId to a Pending Changes tree node) is entirely
-// extension-host-side, so it calls the existing revealPendingChange directly — no webview round
-// trip. Save Group/Revert Group's work (RecordSessionClient HTTP, the multi-member confirm
-// dialog, the partial-save/stale-reindex banner) only exists in the webview, so those broadcast
-// to every open record panel; each self-filters on whether it holds the changeId.
-function registerPendingCellCommands(reveal: RevealDeps, recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
-  const broadcast = (
-    type: typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP | typeof EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP,
-    changeId: string | undefined,
-  ) => {
-    if (!changeId) return;
-    for (const panel of recordPanels) void panel.webview.postMessage({ type, changeId } satisfies ExtensionToWebview);
-  };
-  return [
-    vscode.commands.registerCommand('modbench.pendingCell.reveal', (ctx?: PendingCellContext) => {
-      if (ctx?.changeId) void revealPendingChange(ctx.changeId, reveal);
-    }),
-    vscode.commands.registerCommand('modbench.pendingCell.saveGroup', (ctx?: PendingCellContext) => {
-      broadcast(EXTENSION_TO_WEBVIEW.PENDING_CELL_SAVE_GROUP, ctx?.changeId);
-    }),
-    vscode.commands.registerCommand('modbench.pendingCell.revertGroup', (ctx?: PendingCellContext) => {
-      broadcast(EXTENSION_TO_WEBVIEW.PENDING_CELL_REVERT_GROUP, ctx?.changeId);
-    }),
-  ];
-}
-
-/** Delete records and save/revert change groups. */
-/** The component a node acts on (keyed by a member change id, ADR-0028): a group node is
- *  its own component, a top-level singleton is a group of one, and a member resolves to the
- *  multi-member group it belongs to. canSelectMany lets a member land in a selection, so we
- *  map it to its group rather than silently drop it (ADR-0026). Empty/error nodes yield none. */
-function owningComponent(node: PendingTreeNode): { componentId: string; group?: PendingGroupNode } | undefined {
-  if (node instanceof PendingGroupNode) return { componentId: node.componentId, group: node };
-  if (node instanceof PendingLeafNode) {
-    if (node.contextValue === 'pendingGroup') return { componentId: node.componentId };
-    if (node.parent) return { componentId: node.parent.componentId, group: node.parent };
-  }
-  return undefined;
-}
-
-/** The full multi-selection when several nodes are chosen, else the single invoked node. */
-function selectedPendingNodes(node?: PendingTreeNode, allSelected?: PendingTreeNode[]): PendingTreeNode[] {
-  if (allSelected?.length) return allSelected;
-  return node ? [node] : [];
-}
-
-/** Deduped component ids across the selection — two members of one group collapse to it. */
-function selectedComponentIds(node?: PendingTreeNode, allSelected?: PendingTreeNode[]): string[] {
-  const ids = selectedPendingNodes(node, allSelected)
-    .map(owningComponent)
-    .filter((r): r is { componentId: string; group?: PendingGroupNode } => !!r)
-    .map(r => r.componentId);
-  return [...new Set(ids)];
-}
-
-/** The multi-member groups a save/revert would touch — selected group nodes plus the owning
- *  groups of any selected members — deduped, so a confirmation can list all linked edits. */
-function selectedGroups(node?: PendingTreeNode, allSelected?: PendingTreeNode[]): PendingGroupNode[] {
-  const groups = new Map<string, PendingGroupNode>();
-  for (const n of selectedPendingNodes(node, allSelected)) {
-    const g = owningComponent(n)?.group;
-    if (g) groups.set(g.componentId, g);
-  }
-  return [...groups.values()];
-}
-
-/** #270: record nodes now appear in two views, so "what is selected" is no longer one view's
- *  question. VS Code passes the clicked node and the full selection for a context-menu
- *  invocation, but nothing at all for the Delete keybinding — hence the fallback, which follows
- *  whichever plugin tree the user last selected in rather than naming one of them. */
-let lastRecordSelection: readonly (RecordNode | PlacedNode)[] = [];
-
-function trackRecordSelection(view: vscode.TreeView<PluginTreeNode | PluginListNode>): vscode.Disposable {
-  return view.onDidChangeSelection((e) => {
-    const records = e.selection.filter((n): n is RecordNode | PlacedNode => n instanceof RecordNode || n instanceof PlacedNode);
-    if (records.length > 0) lastRecordSelection = records;
-    else if (e.selection.length > 0) lastRecordSelection = []; // selected something that isn't a record
-  });
-}
-
-// #281: one operation, one name — xEdit calls this Remove in all three of its menus (ADR-0034),
-// and the column header's old columnHeader.removeOverride was already the same backend call
-// (POST /records/delete), so it folds into modbench.deleteRecord rather than staying a second
-// command. Column-header-invoked it broadcasts (the open panel does HTTP + refresh + error
-// surfacing itself, as with the copy commands); the confirm is the same modal either way.
-function makeRemoveRecordHandler(deps: EditorCommandDeps) {
-  const { controller, recordPanels } = deps;
-
-  const removeFromColumnHeader = async (ctx: ColumnHeaderContext): Promise<void> => {
-    const answer = await vscode.window.showWarningMessage(
-      `Remove "${ctx.formKey}" from ${ctx.plugin}?`, { modal: true }, 'Remove');
-    if (answer !== 'Remove') return;
-    broadcastToRecordPanels(recordPanels, {
-      type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_REMOVE_OVERRIDE, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
-    });
-  };
-
-  const resolveTargets = (item?: RecordNode | PlacedNode, allSelected?: (RecordNode | PlacedNode)[]) => {
-    if (allSelected?.length) return allSelected;
-    return lastRecordSelection.length ? [...lastRecordSelection] : item ? [item] : [];
-  };
-
-  return async (item?: RecordNode | PlacedNode | ColumnHeaderContext, allSelected?: (RecordNode | PlacedNode)[]) => {
-    if (item && !(item instanceof RecordNode) && !(item instanceof PlacedNode)) {
-      return removeFromColumnHeader(item);
-    }
-
-    const toTarget = (n: RecordNode | PlacedNode) =>
-      n instanceof PlacedNode
-        ? { formKey: n.placed.formKey ?? '', plugin: n.plugin }
-        : { formKey: n.record.formKey, plugin: n.record.plugin };
-    const toName = (n: RecordNode | PlacedNode) =>
-      n instanceof PlacedNode
-        ? (n.placed.editorId ?? n.placed.formKey ?? '')
-        : (n.record.editorId ?? n.record.formKey);
-
-    const targets = resolveTargets(item, allSelected);
-    if (targets.length === 0) {
-      vscode.window.showErrorMessage('Modbench: Select one or more records in the tree first.');
-      return;
-    }
-    // #281: the menu hides Remove on an immutable row, but a multi-select (or the Delete key)
-    // can still assemble a batch that includes one — refuse the whole batch up front, naming
-    // why, rather than letting some of a confirmed selection fail at the backend.
-    const readOnlyCount = targets.filter(n => n.contextValue?.endsWith('Immutable')).length;
-    if (readOnlyCount > 0) {
-      vscode.window.showErrorMessage(
-        `Modbench: ${readOnlyCount} of the selected records are read-only and can't be removed.`);
-      return;
-    }
-    const names = targets.map(toName).join(', ');
-    const label = targets.length === 1 ? `Remove "${names}"?` : `Remove ${targets.length} records?`;
-    const answer = await vscode.window.showWarningMessage(label, { modal: true }, 'Remove');
-    if (answer !== 'Remove') return;
-    await controller.deleteRecords(targets.map(toTarget));
-  };
-}
-
-function registerChangeGroupCommands(deps: EditorCommandDeps): vscode.Disposable[] {
-  const { controller } = deps;
-  return [
-    // #273: the old modbench.pluginTree that fed `lastRecordSelection` here is gone — the merged
-    // Plugins tree (modbench.pluginListTree) already feeds the same tracker from its own
-    // registration (registerPluginListView), so nothing here needs to re-register it.
-    vscode.commands.registerCommand('modbench.deleteRecord', makeRemoveRecordHandler(deps)),
-    vscode.commands.registerCommand(
-      'modbench.saveGroup',
-      async (node?: PendingTreeNode, allSelected?: PendingTreeNode[]) => {
-        const ids = selectedComponentIds(node, allSelected);
-        if (ids.length === 0) return;
-        if (ids.length === 1) await controller.saveGroup(ids[0]);
-        else await controller.saveGroups(ids);
-      }),
-    vscode.commands.registerCommand(
-      'modbench.revertGroup',
-      async (node?: PendingTreeNode, allSelected?: PendingTreeNode[]) => {
-        const ids = selectedComponentIds(node, allSelected);
-        if (ids.length === 0) return;
-        // A revert takes the whole component, so when a multi-member group is in the
-        // selection — directly or via one of its members — name every linked edit that
-        // travels with it (ADR-0029); the user never sees a raw 409 for a partial revert.
-        const groups = selectedGroups(node, allSelected);
-        if (groups.length > 0) {
-          const members = groups.flatMap(g =>
-            // Issue #110: xEdit-parity display name, matching the Pending Changes tree's own
-            // leaf label; falls back to the raw signature for an older/stale API contract.
-            g.members.map(m => `${m.recordTypeDisplayName ?? m.recordType ?? ''} / ${m.formKey ?? ''} · ${m.fieldPath ?? ''}`));
-          const label = groups.length > 1 ? `Revert ${groups.length} groups?` : 'Revert this group?';
-          const answer = await vscode.window.showWarningMessage(
-            `${label} All linked edits are reverted together.`,
-            { modal: true, detail: members.join('\n') },
-            'Revert');
-          if (answer !== 'Revert') return;
-        }
-        if (ids.length === 1) await controller.revertGroup(ids[0]);
-        else await controller.revertGroups(ids);
-      }),
-    vscode.commands.registerCommand('modbench.saveAllGroups', async () => {
-      await controller.saveAllGroups();
-    }),
-    vscode.commands.registerCommand('modbench.revertAllGroups', async () => {
-      // #247 rule 4: destructive, so it lives in the overflow menu behind a modal — the
-      // native confirm surface, not a rendered one. Discarding every staged edit is not
-      // undoable, and it sat one mis-click from Save All while both were title-bar icons.
-      const confirm = await vscode.window.showWarningMessage(
-        'Discard all pending changes?', { modal: true }, 'Revert All',
-      );
-      if (confirm !== 'Revert All') return;
-      await controller.revertAllGroups();
-    }),
-  ];
-}
-
-// #209: the "New Plugin…" affordance every target-plugin QuickPick offers (Copy as Override…,
-// and — new in #209 — Copy as New Record, now that they share this same picker).
-const NEW_PLUGIN_LABEL = '$(add) New Plugin…';
-
-// #209: extracted from modbench.copyAsOverrideInto's command body (previously the only caller)
-// so Copy as New Record can share it too — "no second picker implementation survives" applies
-// to this QuickPick construction, not just the deleted React components. #347: the two gestures'
-// candidate lists differ (copyTargetPlugins), so callers name their own gesture rather than
-// passing a bare exclusion string — a mixed-up boolean at a call site reads as "false", a
-// mixed-up gesture name reads as wrong.
-async function pickTargetPlugin(
-  repository: ApiPluginRepository, controller: SessionController, sourcePlugin: string, gesture: CopyGesture,
-): Promise<string | undefined> {
-  const allPlugins = await repository.getPlugins();
-  const mutablePlugins = copyTargetPlugins(allPlugins, sourcePlugin, gesture);
-  const items: vscode.QuickPickItem[] = [
-    { label: NEW_PLUGIN_LABEL, description: 'Create a new plugin and copy into it' },
-    ...mutablePlugins.map(p => ({ label: p.name, description: `[${p.loadOrderIndex}]` })),
-  ];
-  const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Select target plugin' });
-  if (!picked) return undefined;
-  if (picked.label !== NEW_PLUGIN_LABEL) return picked.label;
-  const name = await promptPluginName();
-  if (!name) return undefined;
-  await controller.createPlugin(name);
-  return name;
-}
-
-// #209: shared by every column-header command below whose real work only exists in the webview
-// (see messages.ts' COLUMN_HEADER_* doc comment for why) — same broadcast-and-self-filter shape
-// as #208's Save/Revert Group, just keyed on `formKey` instead of `changeId`.
 function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, msg: ExtensionToWebview) {
   for (const panel of recordPanels) void panel.webview.postMessage(msg);
-}
-
-// #281: the one record-scoped context every surface produces — the clicked row's or column's own
-// copy of the record ((plugin, origin), ADR-0036) — so the record commands below accept any
-// surface's node and stop caring which one it was. The target is still whatever the surface
-// points at: a tree row names its own plugin, the column header its own column (#202).
-function recordSourceOf(arg: RecordNode | PlacedNode | ColumnHeaderContext):
-  { formKey: string; plugin: string; origin?: string } {
-  if (arg instanceof PlacedNode) return { formKey: arg.placed.formKey, plugin: arg.plugin, origin: arg.origin };
-  if (arg instanceof RecordNode) return { formKey: arg.record.formKey, plugin: arg.record.plugin, origin: arg.origin };
-  return { formKey: arg.formKey, plugin: arg.plugin, origin: arg.origin };
-}
-
-/** Copy-as-override and create-placed record commands. */
-function registerCopyCreateCommands(deps: EditorCommandDeps): vscode.Disposable[] {
-  const { repository, controller, recordPanels } = deps;
-  return [
-    // #209: accepts any record surface's context (recordSourceOf). #281: every surface now names
-    // its own copy as the source — the backend copies the clicked row's/column's version of the
-    // record, never silently the winner (#202's column-header rule, extended to the tree; the
-    // tree used to copy the winner because its rows carried no plugin). The two call shapes still
-    // diverge after the target is picked: tree-invoked calls controller.copyRecordTo directly;
-    // column-header-invoked broadcasts instead, so the mutation runs through the webview's own
-    // already-working handleCopyTo (HTTP + refresh + error surfacing) rather than re-deriving
-    // that in the extension host and leaving the open panel stale.
-    vscode.commands.registerCommand('modbench.copyAsOverrideInto', async (arg?: RecordNode | PlacedNode | ColumnHeaderContext) => {
-      if (!arg) {
-        vscode.window.showErrorMessage('Modbench: No record selected.');
-        return;
-      }
-      const source = recordSourceOf(arg);
-
-      const targetPlugin = await pickTargetPlugin(repository, controller, source.plugin, 'copy-as-override');
-      if (!targetPlugin) return;
-
-      if (arg instanceof RecordNode || arg instanceof PlacedNode) {
-        await controller.copyRecordTo(source.formKey, targetPlugin, source.plugin, source.origin);
-      } else {
-        // #272: sourceOrigin identifies *which* column alongside sourcePlugin.
-        broadcastToRecordPanels(recordPanels, {
-          type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_OVERRIDE, formKey: source.formKey,
-          sourcePlugin: arg.plugin, sourceOrigin: arg.origin, targetPlugin,
-        });
-      }
-    }),
-    vscode.commands.registerCommand('modbench.createPlaced', async (node?: PlacedGroupNode) => {
-      if (!node) return;
-      const recordType = await vscode.window.showQuickPick(
-        [{ label: 'REFR', description: 'Placed object' }, { label: 'ACHR', description: 'Placed actor' }],
-        { placeHolder: 'Select placed record type' },
-      );
-      if (!recordType) return;
-      const templateFormKey = await vscode.window.showInputBox({
-        prompt: 'Template FormKey (optional — leave blank for empty record)',
-        placeHolder: 'e.g. 000001A4:Fallout4.esm',
-      });
-      await controller.createPlaced(
-        node.plugin, node.cellFormKey, recordType.label.toLowerCase(),
-        node.group, templateFormKey || undefined,
-      );
-    }),
-  ];
-}
-
-// #209: split out from registerCopyCreateCommands to stay under the file's size budget; Copy as
-// New Record shares pickTargetPlugin with modbench.copyAsOverrideInto rather than re-implementing
-// it. #281: modbench.copyAsNewRecord (was columnHeader.copyAsNewRecord) is on every record
-// surface now — tree-invoked it goes through the controller (one backend call; no open panel is
-// required or involved), column-header-invoked it still broadcasts so the open panel refreshes
-// itself. The column header's Remove folded into modbench.deleteRecord (registerChangeGroup-
-// Commands) the same way — one operation, one name.
-// #202: Copy All to Pending deleted outright (not just unwired) — Copy as Override
-// (modbench.copyAsOverrideInto above) now covers that case via sourcePlugin.
-function registerColumnHeaderCommands(deps: EditorCommandDeps): vscode.Disposable[] {
-  const { repository, controller, recordPanels } = deps;
-  return [
-    vscode.commands.registerCommand('modbench.copyAsNewRecord', async (arg?: RecordNode | PlacedNode | ColumnHeaderContext) => {
-      if (!arg) {
-        vscode.window.showErrorMessage('Modbench: No record selected.');
-        return;
-      }
-      const source = recordSourceOf(arg);
-      const targetPlugin = await pickTargetPlugin(repository, controller, source.plugin, 'copy-as-new');
-      if (!targetPlugin) return;
-      if (arg instanceof RecordNode || arg instanceof PlacedNode) {
-        await controller.copyAsNewRecord(source.formKey, targetPlugin, source.plugin, source.origin);
-      } else {
-        broadcastToRecordPanels(recordPanels, {
-          type: EXTENSION_TO_WEBVIEW.COLUMN_HEADER_COPY_AS_NEW_RECORD, formKey: source.formKey,
-          sourcePlugin: arg.plugin, sourceOrigin: arg.origin, targetPlugin,
-        });
-      }
-    }),
-  ];
-}
-
-// #227: Add/Remove/Move Up/Move Down's native `webview/context` menu commands — same
-// broadcast-and-self-filter shape as #208's pendingCell.*/#209's columnHeader.* above (see
-// messages.ts' ARRAY_* doc comment for why), but simpler than either: there is no async
-// extension-host-side work at all (no HTTP, no QuickPick, no confirm dialog) — the whole
-// mutation lives in the webview's own React state (onArrayEdit/onArrayAdd, pure since #142), so
-// each handler just repackages data-vscode-context's payload and broadcasts it. `data-vscode-
-// context`'s presence is the only gate (DiffRow never emits it for a sorted array or an
-// immutable column, mirroring #142's original arrayEdit/onArrayAdd gate), so unlike
-// columnHeader.removeOverride's `when`-clause-only immutable gate, there's nothing extra to
-// check here either.
-function registerArrayOpCommands(deps: EditorCommandDeps): vscode.Disposable[] {
-  const { recordPanels } = deps;
-  return [
-    vscode.commands.registerCommand('modbench.array.add', (ctx?: ArrayParentContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_ADD, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName,
-      });
-    }),
-    vscode.commands.registerCommand('modbench.array.remove', (ctx?: ArrayElementContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName, index: ctx.index,
-      });
-    }),
-    vscode.commands.registerCommand('modbench.array.moveUp', (ctx?: ArrayElementContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName, index: ctx.index,
-      });
-    }),
-    vscode.commands.registerCommand('modbench.array.moveDown', (ctx?: ArrayElementContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName, index: ctx.index,
-      });
-    }),
-  ];
-}
-
-// Issue #231 (review): Set Script Flags/Set Property Flags' own QuickPick choices — VMAD's fixed,
-// stable flag vocabulary (the binary format's own enum). Mirrored here rather than imported from
-// `webview/src/vmadOps.ts` across the webview/extension-host process boundary (nothing else on
-// this side needs that module, and there is no existing precedent for `extension.ts` reaching
-// into `webview/src` — see vmadTreeAdapter.ts's own SCRIPT_FLAGS for the webview-side copy, used
-// to build a script's read-only Flags row).
-const VMAD_SCRIPT_FLAGS = ['Local', 'Inherited', 'Removed', 'InheritedAndRemoved'] as const;
-const VMAD_PROP_FLAGS = ['Edited', 'Removed'] as const;
-
-// Issue #231: VMAD's own structural-op commands — same broadcast-and-self-filter shape as
-// registerArrayOpCommands above, reached from the "Scripts (VMAD)" wrapper row (Add Script), a
-// script row (Remove Script, Add Property, Set Script Flags), or a property row (Remove
-// Property, Set Property Flags). Add Script is the one with extension-host-side async work of
-// its own (pickScriptNameViaInputBox, the same native input box the pre-#231 webview-triggered
-// "Add Script" already used) — a dismissed box (null) broadcasts nothing, same as every other
-// cancellable native picker in this file. Add Property collects three fields at once (#229's one
-// deliberate webview-modal exception), so its command has nothing to collect itself: it only
-// tells the webview which script/plugin to open the dialog for. Set Script/Property Flags each
-// run their own native QuickPick here too — a small, static, non-record-dependent enum, the same
-// shape Add Script's input box already is — and broadcast nothing at all when dismissed.
-function registerVmadOpCommands(deps: EditorCommandDeps): vscode.Disposable[] {
-  const { recordPanels } = deps;
-  return [
-    vscode.commands.registerCommand('modbench.vmad.addScript', async (ctx?: VmadScriptsContext) => {
-      if (!ctx) return;
-      const name = await pickScriptNameViaInputBox();
-      if (name == null) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_ADD_SCRIPT, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, name,
-      });
-    }),
-    vscode.commands.registerCommand('modbench.vmad.removeScript', (ctx?: VmadScriptContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_SCRIPT, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, scriptName: ctx.scriptName,
-      });
-    }),
-    vscode.commands.registerCommand('modbench.vmad.addProperty', (ctx?: VmadScriptContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, scriptName: ctx.scriptName,
-      });
-    }),
-    vscode.commands.registerCommand('modbench.vmad.removeProperty', (ctx?: VmadPropertyContext) => {
-      if (!ctx) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_REMOVE_PROPERTY, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
-        scriptName: ctx.scriptName, propName: ctx.propName,
-      });
-    }),
-    // Issue #231 (review): "Seeded with the current value" means the script's own current flag is
-    // sorted to the front of the QuickPick's item array — the exact same convention the
-    // condition-function picker already uses (showQuickPick has no activeItem option the way
-    // QuickPick does), not a new pattern.
-    vscode.commands.registerCommand('modbench.vmad.setScriptFlags', async (ctx?: VmadScriptContext) => {
-      if (!ctx) return;
-      const items = ctx.currentFlags && (VMAD_SCRIPT_FLAGS as readonly string[]).includes(ctx.currentFlags)
-        ? [ctx.currentFlags, ...VMAD_SCRIPT_FLAGS.filter(f => f !== ctx.currentFlags)]
-        : [...VMAD_SCRIPT_FLAGS];
-      const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Script flags' });
-      if (!picked) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_SET_SCRIPT_FLAGS, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
-        scriptName: ctx.scriptName, flags: picked,
-      });
-    }),
-    // Issue #231 (review): no current-value seed — the read model never carried a real
-    // per-property flag even before this ticket (the deleted PropertyFlagsControl's own comment:
-    // "set-only, defaults to Edited"), so there is nothing to sort to the front here.
-    vscode.commands.registerCommand('modbench.vmad.setPropertyFlags', async (ctx?: VmadPropertyContext) => {
-      if (!ctx) return;
-      const picked = await vscode.window.showQuickPick([...VMAD_PROP_FLAGS], { placeHolder: 'Property flags' });
-      if (!picked) return;
-      broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.VMAD_SET_PROPERTY_FLAGS, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
-        scriptName: ctx.scriptName, propName: ctx.propName, flags: picked,
-      });
-    }),
-  ];
 }
 
 interface ModListCoreDeps {
@@ -1395,7 +848,6 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     // #277 / ADR-0037 AC8: lets the composite reconcile the order-aware badge with session state
     // by master name, instead of two decorations that can disagree.
     orderIssueMastersOf,
-    pendingChangeUriOf: pluginRowUri, // #331: composite's own guard keeps this off ImplicitMasterNode rows
     driftOf: (file) => tracker.driftOf(file), // #279
     // #278 / ADR-0035 amending ADR-0018: matchingPlugins is refreshed off the module-level
     // refreshMatchingPlugins function above, whenever SessionController's setFilter/clearFilter
@@ -1428,7 +880,6 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
       new ImplicitMasterDecorationProvider(dataFolder, () => pluginListProvider.implicitMasterNames()),
     ),
     ...wireDriftTracker(tracker, instanceRoot, composite),
-    trackRecordSelection(pluginListView),
     pluginListView.onDidChangeCheckboxState(async (e) => {
       for (const [node, state] of e.items) {
         if (node.kind !== 'plugin') continue;
@@ -1571,9 +1022,6 @@ function registerRereadCommand(
     const ran = await rereadDriftedPlugin(
       { plugin, loadedOrigin: drift.loadedOrigin, currentOrigin: drift.currentOrigin, currentPath: drift.currentPath },
       {
-      stagedChangeCount: (p, origin) => controller.stagedChangeCount(p, origin),
-      confirm: async (message, detail) =>
-        await vscode.window.showWarningMessage(message, { modal: true, detail }, 'Re-read') === 'Re-read',
       reread: (p, path, origin) => controller.rereadPlugin(p, path, origin),
       report: (message) => {
         outputChannel.warn(`[extension] ${message}`);
@@ -1750,11 +1198,6 @@ interface LoadoutViewDeps {
   outputChannel: vscode.LogOutputChannel;
   revealLog: () => void;
   controller: SessionController;
-  // #368 review (AC3 gap): the one shared bundle every refreshPendingState call site now draws
-  // from — see its own construction site in `activate` and buildPendingStateTargets's doc comment.
-  // Replaces what used to be three separate provider fields threaded down to the one place in this
-  // chain that used any of them (makeEnterEditing's own refresh call).
-  pendingStateTargets: PendingStateRefreshTargets;
   /** #270: the record browser the Plugins tree's rows expand into. Threaded from `activate`,
    *  which owns the single instance both plugin trees read through. */
   recordBrowser: PluginTreeProvider;
@@ -1767,7 +1210,7 @@ interface LoadoutViewDeps {
  *  tests), or undefined with a neutral log when no workspace is open, or when the
  *  workspace isn't an MO2 instance (#192 — the Mods view shows welcome content instead). */
 function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void } | undefined {
-  const { context, log, outputChannel, revealLog, controller, pendingStateTargets, recordBrowser, sessionPluginFiles } = deps;
+  const { context, log, outputChannel, revealLog, controller, recordBrowser, sessionPluginFiles } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
     outputChannel.info('[extension] No workspace folder open — Mod List view not registered.');
@@ -1807,7 +1250,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
       createModListView(modListProvider, modlistSource, outputChannel);
 
     const { runModAction, promptModName, warnIfFomod } = makeModActionHelpers(modListProvider, outputChannel);
-    const enterEditing = makeEnterEditing({ instanceRoot, modlistSource, controller, pendingStateTargets, outputChannel, revealLog, sessionPluginFiles });
+    const enterEditing = makeEnterEditing({ instanceRoot, modlistSource, controller, outputChannel, revealLog, sessionPluginFiles });
     // #295: the one assignment — see the module-level declaration's comment for why this can't
     // be threaded as a parameter instead.
     enterEditingFn = enterEditing;
@@ -2070,9 +1513,6 @@ interface EnterEditingDeps {
   instanceRoot: string;
   modlistSource: Mo2ModlistSource;
   controller: SessionController;
-  // #368 review (AC3 gap): see LoadoutViewDeps' own comment — one shared bundle, refreshed (with
-  // retainOnFailure: false) once the session load completes, replacing three separate fields.
-  pendingStateTargets: PendingStateRefreshTargets;
   outputChannel: vscode.LogOutputChannel;
   /** #270: the plugin files the loaded session holds — read once the session is up, to decide
    *  which rows can expand. */
@@ -2089,7 +1529,7 @@ interface EnterEditingDeps {
  *  Takes no progress reporter as a result. */
 function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
   const {
-    instanceRoot, modlistSource, controller, pendingStateTargets,
+    instanceRoot, modlistSource, controller,
     outputChannel, revealLog, sessionPluginFiles,
   } = deps;
   const enter = async (): Promise<void> => {
@@ -2150,12 +1590,6 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
         return;
       }
       await controller.syncFilterState();
-      // #331/#368: a fresh session starts with no pending changes and no ledger working-tree
-      // dirt, but state left over from a previous session (or a crash-restart reload mid-edit)
-      // must not survive into this one — retainOnFailure: false, since there is no trustworthy
-      // baseline from *this* session to fall back on. pendingStateTargets (built once in
-      // `activate`) is the same bundle refreshGroupTree above shares — see its own comment.
-      void refreshPendingState(pendingStateTargets, false, (msg) => outputChannel.warn(msg));
       await applyLoadedSessionToTree(sessionPluginFiles, result.failures, outputChannel, treeProgress.lastTotalPlugins());
       outputChannel.info('[extension] editing session ready');
   };

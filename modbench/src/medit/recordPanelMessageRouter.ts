@@ -1,60 +1,11 @@
 import * as vscode from 'vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from './messages';
-import type { PendingChangesTreeProvider, PendingTreeNode } from './PendingChangesTreeProvider';
 import type { Reporter } from '../modmanager/deployer';
 import type { RecordSummary } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
 import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
-import { refreshPendingState } from './refreshPendingState';
-
-// Issue #140: reveal deps bundled into one optional param so a record panel not wired for
-// reveal (there is exactly one, but keeping the seam explicit) still compiles — and so
-// openRecordPanel's own parameter count doesn't grow every time the panel needs one more
-// thing from the extension host.
-export interface RevealDeps {
-  provider: PendingChangesTreeProvider;
-  view: vscode.TreeView<PendingTreeNode>;
-  log: (msg: string) => void;
-  reporter: Reporter;
-  // #331: the Plugins-tree pending-change decoration provider — refreshed alongside `provider`
-  // on every PENDING_CHANGED message, so a staged/reverted/saved change decorates live without
-  // depending on the Pending Changes view being visible (that view's own fetch is; this one
-  // performs its own — see PendingChangeDecorationProvider's doc comment).
-  decorations: { refresh(): void };
-  // #368: the aggregate SCM provider's working-tree group — same reasoning as `decorations`
-  // above, refreshed through the same shared call (refreshPendingState) rather than paired by
-  // hand a second time. Optional: a record panel opened before the provider exists (there is
-  // none today, but the seam stays honest) still compiles.
-  ledgerScm?: { refresh(): void };
-}
-
-// Issue #140/#208: resolves a pending change id to a tree node and reveals it, expanding a
-// multi-member group's parent and showing the tree if it was collapsed or not visible
-// (`focus: true`). No record semantics live here — resolution is the provider's job
-// (`resolveChange`), this is purely the VS Code plumbing the webview can't do itself. A
-// change that is no longer pending (already saved or reverted) resolves to `undefined` and
-// is logged, not thrown (ADR-0026-style: recoverable, not a toast). Exported: issue #208's
-// native `modbench.pendingCell.reveal` command calls this directly (the work is entirely
-// extension-host-side — TreeProvider/TreeView — so unlike Save Group/Revert Group it never
-// needs to round-trip through the webview).
-export async function revealPendingChange(changeId: string, deps: RevealDeps | undefined): Promise<void> {
-  if (!deps) return;
-  try {
-    const node = await deps.provider.resolveChange(changeId);
-    if (!node) {
-      deps.log(`[revealPendingChange] change ${changeId} is no longer pending (saved or reverted)`);
-      return;
-    }
-    await deps.view.reveal(node, { select: true, focus: true, expand: true });
-  } catch (err) {
-    // An explicit user action failed (they clicked the cell), so ADR-0026 wants a notification,
-    // not a silent log — unlike the no-longer-pending branch above, which is recoverable.
-    deps.reporter.report('error', 'Could not reveal that pending change.', err instanceof Error ? err.message : String(err));
-  }
-}
 
 export interface RouteRecordPanelMessageDeps {
-  reveal: RevealDeps | undefined;
   // #200: the leveled 'Modbench' channel (#198) the webview has no direct route to — the
   // webview composes the full message text (it has the plugin/field/record identity), this is
   // a pure level→method forward, no VS Code types beyond the injected Pick.
@@ -62,7 +13,7 @@ export interface RouteRecordPanelMessageDeps {
   // Issue #210: bundled like RevealDeps above — `reply` is rebuilt per panel at the
   // onDidReceiveMessage call site (it must post back to the one panel that asked, never a
   // broadcast — see messages.ts' FORM_KEY_PICKED doc comment), so this whole bundle is
-  // reconstructed per message rather than shared like `reveal`/`channel`.
+  // reconstructed per message rather than shared like `channel`.
   formKeyPicker: FormKeyPickerDeps | undefined;
   // Issue #211: same per-message reconstruction as formKeyPicker above, for the same reason —
   // the reply must go back to the one panel that asked.
@@ -399,14 +350,6 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
   const m = msg as WebviewToExtension;
   if (m.type === WEBVIEW_TO_EXTENSION.OPEN_RECORD) {
     await vscode.commands.executeCommand('modbench.openEditor', { formKey: m.formKey, label: m.formKey });
-  } else if (m.type === WEBVIEW_TO_EXTENSION.PENDING_CHANGED) {
-    if (deps.reveal) {
-      await refreshPendingState({
-        changeGroupTree: deps.reveal.provider,
-        pendingChangeDecoration: deps.reveal.decorations,
-        ledgerScm: deps.reveal.ledgerScm,
-      }, true, (msg) => deps.channel.warn(msg));
-    }
   } else if (m.type === WEBVIEW_TO_EXTENSION.LOG) {
     deps.channel[m.level](m.message);
   } else if (m.type === WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD) {

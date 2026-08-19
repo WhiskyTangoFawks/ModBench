@@ -29,12 +29,11 @@ vi.mock('./extendedFieldEditor', () => ({
 }));
 
 import {
-  routeRecordPanelMessage, revealPendingChange, pickFormKeyViaQuickPick, pickConditionFunctionViaQuickPick,
+  routeRecordPanelMessage, pickFormKeyViaQuickPick, pickConditionFunctionViaQuickPick,
   confirmRevertGroupViaNativeDialog, pickScriptNameViaInputBox, normalizeFormKeyQuery,
-  type RevealDeps, type FormKeyPickerDeps, type ConditionFunctionPickerDeps, type RouteRecordPanelMessageDeps,
+  type FormKeyPickerDeps, type ConditionFunctionPickerDeps, type RouteRecordPanelMessageDeps,
 } from './recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
-import type { PendingTreeNode } from './PendingChangesTreeProvider';
 import type { RecordSummary } from './ApiClient';
 
 // Issue #174: routeRecordPanelMessage is the extracted, unit-testable body of
@@ -42,8 +41,6 @@ import type { RecordSummary } from './ApiClient';
 // for every message the record editor webview posts up. Pulled out here specifically so this
 // logic (the pre-existing OPEN_RECORD branch and the PENDING_CHANGED/LOG branches) has a seam
 // that doesn't require a real VS Code test harness. Issue #208: REVEAL_PENDING_CHANGE is no
-// longer one of these branches — reveal is now the native `modbench.pendingCell.reveal`
-// command calling the exported `revealPendingChange` directly (see the describe block below),
 // since resolving a changeId to a tree node never needed the webview in the first place.
 
 beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); showWarningMessage.mockClear(); showInputBox.mockClear(); });
@@ -95,34 +92,6 @@ function makeFakeQuickPick() {
   };
 }
 
-function fakeReveal(overrides: Partial<{
-  resolveChange: (id: string) => Promise<PendingTreeNode | undefined>;
-  reveal: (node: PendingTreeNode, opts: unknown) => Promise<void>;
-}> = {}): {
-  reveal: RevealDeps; log: ReturnType<typeof vi.fn>; report: ReturnType<typeof vi.fn>;
-  revealFn: ReturnType<typeof vi.fn>; refresh: ReturnType<typeof vi.fn>; decorationsRefresh: ReturnType<typeof vi.fn>;
-  ledgerScmRefresh: ReturnType<typeof vi.fn>;
-} {
-  const log = vi.fn();
-  const report = vi.fn();
-  const refresh = vi.fn();
-  const decorationsRefresh = vi.fn();
-  const ledgerScmRefresh = vi.fn();
-  const revealFn = vi.fn(overrides.reveal ?? (() => Promise.resolve()));
-  const resolveChange = overrides.resolveChange ?? (() => Promise.resolve({ id: 'node' } as unknown as PendingTreeNode));
-  return {
-    reveal: {
-      provider: { resolveChange, refresh } as unknown as RevealDeps['provider'],
-      view: { reveal: revealFn } as unknown as RevealDeps['view'],
-      log,
-      reporter: { report },
-      decorations: { refresh: decorationsRefresh },
-      ledgerScm: { refresh: ledgerScmRefresh },
-    },
-    log, report, revealFn, refresh, decorationsRefresh, ledgerScmRefresh,
-  };
-}
-
 // Issue #234: every routeRecordPanelMessage call site needs a full RouteRecordPanelMessageDeps —
 // baseDeps() is the "nothing wired" state (matches most call sites verbatim: reveal/formKeyPicker/
 // conditionFunctionPicker/revertGroupConfirm/addScriptName/clipboardRead/extendedFieldEditor all
@@ -134,7 +103,6 @@ function fakeReveal(overrides: Partial<{
 // is never lost to this helper.
 function baseDeps(): RouteRecordPanelMessageDeps {
   return {
-    reveal: undefined,
     channel: fakeChannel(),
     formKeyPicker: undefined,
     conditionFunctionPicker: undefined,
@@ -165,54 +133,14 @@ describe('routeRecordPanelMessage', () => {
   });
 
   it('an unrecognized message type is a no-op', async () => {
-    const { reveal, refresh, revealFn } = fakeReveal();
-
-    await routeRecordPanelMessage({ type: 'somethingElse' }, makeDeps({ reveal }));
+    await routeRecordPanelMessage({ type: 'somethingElse' }, makeDeps());
 
     expect(executeCommand).not.toHaveBeenCalled();
-    expect(refresh).not.toHaveBeenCalled();
-    expect(revealFn).not.toHaveBeenCalled();
   });
 
   it('a non-object message is a no-op', async () => {
     await expect(routeRecordPanelMessage('not an object', makeDeps())).resolves.toBeUndefined();
     await expect(routeRecordPanelMessage(null, makeDeps())).resolves.toBeUndefined();
-  });
-
-  // Issue #174: the new branch — every successful pending-change mutation in the webview
-  // posts PENDING_CHANGED, and the tree needs to refresh in response.
-  it('PENDING_CHANGED refreshes the pending changes tree provider', async () => {
-    const { reveal, refresh } = fakeReveal();
-
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, makeDeps({ reveal }));
-
-    expect(refresh).toHaveBeenCalledTimes(1);
-  });
-
-  // #331: the Plugins-tree decoration provider needs the same signal, at the same call site —
-  // otherwise a field edit staged through the webview would never decorate.
-  it('PENDING_CHANGED also refreshes the pending-change decoration provider', async () => {
-    const { reveal, decorationsRefresh } = fakeReveal();
-
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, makeDeps({ reveal }));
-
-    expect(decorationsRefresh).toHaveBeenCalledTimes(1);
-  });
-
-  // #368: the aggregate SCM provider needs the same signal, at the same call site, for the same
-  // reason #331 gave the decoration provider one — otherwise a field edit staged through the
-  // webview would never appear on the Source Control panel until some unrelated refresh happened
-  // to fire. Goes through refreshPendingState (the shared signal path), not a hand-paired call.
-  it('PENDING_CHANGED also refreshes the ledger SCM provider', async () => {
-    const { reveal, ledgerScmRefresh } = fakeReveal();
-
-    await routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, makeDeps({ reveal }));
-
-    expect(ledgerScmRefresh).toHaveBeenCalledTimes(1);
-  });
-
-  it('PENDING_CHANGED with reveal deps undefined is a no-op, not a throw', async () => {
-    await expect(routeRecordPanelMessage({ type: WEBVIEW_TO_EXTENSION.PENDING_CHANGED }, makeDeps())).resolves.toBeUndefined();
   });
 
   // Issue #200: the webview has no route to the 'Modbench' channel of its own — LOG is the
@@ -282,43 +210,6 @@ describe('routeRecordPanelMessage', () => {
     )).resolves.toBeUndefined();
 
     expect(report).toHaveBeenCalledWith('error', 'Could not copy to the clipboard.', 'clipboard unavailable');
-  });
-});
-
-// Issue #208: reveal moved off the webview↔extension message bridge entirely — the native
-// `modbench.pendingCell.reveal` command calls this function directly with the changeId from
-// the merged data-vscode-context object, so it's exercised here as a plain function call
-// rather than through routeRecordPanelMessage's dispatch (these are the same four behaviors
-// the old REVEAL_PENDING_CHANGE branch covered above, unchanged).
-describe('revealPendingChange (issue #208)', () => {
-  it('reveals a resolvable change selected/focused/expanded', async () => {
-    const node = { id: 'chg-1' } as unknown as PendingTreeNode;
-    const { reveal, revealFn } = fakeReveal({ resolveChange: () => Promise.resolve(node) });
-
-    await revealPendingChange('chg-1', reveal);
-
-    expect(revealFn).toHaveBeenCalledWith(node, { select: true, focus: true, expand: true });
-  });
-
-  it('a change no longer pending logs and does not reveal', async () => {
-    const { reveal, revealFn, log } = fakeReveal({ resolveChange: () => Promise.resolve(undefined) });
-
-    await revealPendingChange('chg-1', reveal);
-
-    expect(revealFn).not.toHaveBeenCalled();
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('chg-1'));
-  });
-
-  it('reports an error (not a throw) when resolution fails', async () => {
-    const { reveal, report } = fakeReveal({ resolveChange: () => Promise.reject(new Error('boom')) });
-
-    await expect(revealPendingChange('chg-1', reveal)).resolves.toBeUndefined();
-
-    expect(report).toHaveBeenCalledWith('error', expect.any(String), 'boom');
-  });
-
-  it('with reveal deps undefined is a no-op', async () => {
-    await expect(revealPendingChange('chg-1', undefined)).resolves.toBeUndefined();
   });
 });
 
