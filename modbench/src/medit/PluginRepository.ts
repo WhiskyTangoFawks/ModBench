@@ -1,6 +1,6 @@
 import type { components } from './generated/api';
 import type {
-  ApiClient, PluginMetadata, MasterIssue, RecordSummary, SessionStatus,
+  ApiClient, PluginMetadata, MasterIssue, RecordSummary, SessionStatus, TrackStatus, TrackPhase,
   WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
 } from './ApiClient';
 import { errorText } from './ApiClient';
@@ -11,6 +11,16 @@ type GeneratedRecordSummary = components['schemas']['RecordSummary'];
 type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 function toMasterIssue(i: GeneratedMasterIssue): MasterIssue {
   return { masterName: i.masterName ?? '', kind: i.kind ?? 'DirectlyMissing' };
+}
+
+// #414 review F2: the generated TrackPhase type is a numeric union (0|1|2|3) — Swashbuckle's
+// schema generation doesn't pick up the global JsonStringEnumConverter for every enum (SessionState
+// above has the identical, already-accepted mismatch), but the wire bytes are the real string
+// values ("Idle", "Parsing", ...), confirmed against the live endpoint. Cast through `unknown`
+// rather than trust the generated numeric type, same avoidance this file already gives origin/
+// masterIssues optionality elsewhere.
+function toTrackPhase(phase: unknown): TrackPhase {
+  return typeof phase === 'string' ? (phase as TrackPhase) : 'Idle';
 }
 
 // #275 / ADR-0036: the backend always populates PluginResponse.Origin with a real, non-empty
@@ -104,6 +114,9 @@ export interface PluginRepository {
   // from getPlugins() rather than folded into it: this one answers while the session is still
   // incomplete, and it is the only read that can distinguish "not looked yet" from "no conflict".
   getSessionStatus(): Promise<SessionStatus>;
+  // #414 review F2: the Track gesture's own progress, polled alongside the in-flight track POST —
+  // same idiom as getSessionStatus above.
+  getTrackStatus(): Promise<TrackStatus>;
   // origin (#34 / ADR-0036): which copy of `plugin` to read, when the session holds two files of
   // one filename. Optional — an ordinary load-order row has no origin to give, and the backend
   // resolves that case from the load order, where a filename is unambiguous.
@@ -175,6 +188,18 @@ export class ApiPluginRepository implements PluginRepository {
       indexedPlugins: (data?.indexedPlugins ?? []).map((p) => p.name ?? ''),
       conflictsComputed: data?.conflictsComputed ?? false,
       failures: (data?.failures ?? []).map((f) => ({ name: f.name ?? '', reason: f.reason ?? 'Unknown error' })),
+    };
+  }
+
+  // #414 review F2: same "always 200, never degrade a fault into a fake idle" posture as
+  // getSessionStatus above.
+  async getTrackStatus(): Promise<TrackStatus> {
+    const { data, error, response } = await this.client.GET('/plugins/track/status', {});
+    this.ensureOk('GET /plugins/track/status', response, error);
+    return {
+      phase: toTrackPhase(data?.phase),
+      recordsDone: data?.recordsDone ?? 0,
+      recordsTotal: data?.recordsTotal ?? 0,
     };
   }
 

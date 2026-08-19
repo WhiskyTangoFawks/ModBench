@@ -83,4 +83,18 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
 
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
     }
+
+    // #414 review F2: GET /plugins/track/status — polled alongside the in-flight POST. This test
+    // only asserts the at-rest answer (nothing running); TrackServiceTests' own
+    // TrackAsync_ProgressAdvancesDuringATrack_ObservableMidFlight covers the in-flight case at the
+    // service seam this endpoint is a thin read over.
+    [Fact]
+    public async Task GetTrackStatus_WithNothingInFlight_IsIdle()
+    {
+        var response = await _client.GetAsync("/plugins/track/status");
+
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Idle", body.GetProperty("phase").GetString());
+    }
 }

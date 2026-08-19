@@ -132,6 +132,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/track/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetTrackStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/record-types": {
         parameters: {
             query?: never;
@@ -654,6 +670,19 @@ export interface components {
             conflictsComputed?: boolean;
             failures?: components["schemas"]["PluginLoadFailure"][] | null;
         };
+        /**
+         * Format: int32
+         * @enum {integer}
+         */
+        TrackPhase: 0 | 1 | 2 | 3;
+        TrackProgress: {
+            origin?: string | null;
+            phase?: components["schemas"]["TrackPhase"];
+            /** Format: int32 */
+            recordsDone?: number;
+            /** Format: int32 */
+            recordsTotal?: number;
+        };
         TrackRequest: {
             origin?: string | null;
             preset?: string | null;
@@ -1060,6 +1089,26 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetTrackStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackProgress"];
                 };
             };
         };

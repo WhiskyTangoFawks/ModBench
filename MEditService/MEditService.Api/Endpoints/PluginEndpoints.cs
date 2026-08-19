@@ -81,6 +81,19 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
+        // #414 review F2: polled alongside the still in-flight POST /plugins/track, same idiom
+        // GET /session/status already established for the session load — always 200 (TrackProgress.
+        // Idle when nothing is running), no session dependency, since progress lives on the
+        // singleton TrackService itself.
+        app.MapGet("/plugins/track/status", (TrackService trackService, ILoggerFactory loggerFactory) =>
+        {
+            loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogTrace("Received GetTrackStatus");
+            return Results.Ok(trackService.Progress);
+        })
+            .WithName("GetTrackStatus")
+            .WithTags(Tag)
+            .Produces<TrackProgress>();
+
         return app;
     }
 

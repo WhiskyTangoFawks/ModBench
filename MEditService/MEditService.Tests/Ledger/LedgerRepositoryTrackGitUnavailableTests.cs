@@ -15,11 +15,17 @@ public sealed class LedgerRepositoryTrackGitUnavailableTests
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-track-nogit-").FullName;
         var previousPath = Environment.GetEnvironmentVariable("PATH");
+        var previousGitConfigNoSystem = Environment.GetEnvironmentVariable("GIT_CONFIG_NOSYSTEM");
         try
         {
             // Scrub PATH for this process (and the child processes it spawns) so "git" genuinely
             // cannot be found — a real repro of the missing-git-on-PATH environment, not a mock.
             Environment.SetEnvironmentVariable("PATH", string.Empty);
+            // #414 review F5: belt-and-braces alongside PATH — a host /etc/gitconfig plays no part
+            // in this scenario (git never launches at all), but scrubbing it keeps this test's
+            // environment-scrubbing posture consistent with LedgerRepositoryTrackConfigTests'
+            // identity-fallback test, which does depend on it.
+            Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", "1");
 
             var files = new[] { new PristineFile("Test.esp.ledger/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             var ex = Assert.Throws<GitUnavailableException>(() =>
@@ -31,6 +37,7 @@ public sealed class LedgerRepositoryTrackGitUnavailableTests
         finally
         {
             Environment.SetEnvironmentVariable("PATH", previousPath);
+            Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", previousGitConfigNoSystem);
             Directory.Delete(modFolder, recursive: true);
         }
     }

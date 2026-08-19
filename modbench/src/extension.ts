@@ -16,6 +16,7 @@ import {
 import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
 import { ApiPluginRepository } from './medit/PluginRepository';
 import { trackedModFoldersOf, registerTrackedRepositories } from './medit/trackedRepositories';
+import { trackProgressMessage } from './medit/trackProgress';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './medit/messages';
@@ -997,8 +998,12 @@ function registerTrackCommand(
     if (!choice) return;
 
     await withPluginsViewProgress(async () => {
-      say(`Tracking "${origin}"…`);
-      const ok = await controller.track(origin, choice.label as 'Edits' | 'Everything');
+      say(trackProgressMessage(origin, { phase: 'Idle', recordsDone: 0, recordsTotal: 0 }));
+      const ok = await controller.track(origin, choice.label as 'Edits' | 'Everything', {
+        // #414 review F2: "reports progress" (AC4) — narrates the same Plugins-view message this
+        // command already showed a static version of, updated on each poll tick.
+        onProgress: (status) => say(trackProgressMessage(origin, status)),
+      });
       if (!ok) return;
       void vscode.window.showInformationMessage(`Modbench: Tracked "${origin}".`);
       await onTracked();

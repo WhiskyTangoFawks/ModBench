@@ -82,6 +82,8 @@ function makeRepository({
     getActiveFilter: vi.fn().mockResolvedValue(activeFilter),
     getPlugins: vi.fn().mockResolvedValue(plugins),
     getSessionStatus: vi.fn().mockResolvedValue(makeStatus()),
+    // #414 review F2.
+    getTrackStatus: vi.fn().mockResolvedValue({ phase: 'Idle', recordsDone: 0, recordsTotal: 0 }),
     getRecordTypes: vi.fn().mockResolvedValue([]),
     getRecords: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   } as any;
@@ -783,6 +785,81 @@ describe('SessionController.track', () => {
 
     expect(ok).toBe(false);
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
+  });
+});
+
+// #414 review F2: "reports progress" (AC4) — polled off GET /plugins/track/status alongside the
+// still in-flight track POST, the identical seam/idiom the load-progress suite above tests
+// (a held POST + fake timers, no VS Code types).
+describe('SessionController.track progress polling', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  /** A track POST that stays in flight until the returned `finish` is called — mirrors
+   *  `heldLoad()` above; the whole point is what happens *during* that window. */
+  function heldTrack() {
+    let finish!: () => void;
+    const held = new Promise((resolve) => {
+      finish = () => resolve({ response: { ok: true }, data: { origin: 'ModA' } });
+    });
+    return { POST: vi.fn().mockReturnValue(held), finish };
+  }
+
+  it('reports each poll\'s progress to onProgress while the track POST is still in flight', async () => {
+    const { POST, finish } = heldTrack();
+    const repository = makeRepository();
+    repository.getTrackStatus
+      .mockResolvedValueOnce({ phase: 'Serializing', recordsDone: 10, recordsTotal: 100 })
+      .mockResolvedValueOnce({ phase: 'Serializing', recordsDone: 50, recordsTotal: 100 });
+    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST }, repository }));
+    const onProgress = vi.fn();
+
+    const track = ctrl.track('ModA', 'Edits', { onProgress });
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(onProgress).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: 'Serializing', recordsDone: 10, recordsTotal: 100 }),
+    );
+    await vi.advanceTimersByTimeAsync(500);
+    expect(onProgress).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: 'Serializing', recordsDone: 50, recordsTotal: 100 }),
+    );
+    expect(onProgress).toHaveBeenCalledTimes(2);
+
+    finish();
+    await track;
+  });
+
+  it('stops polling once the track POST settles, so a finished track leaves no timer running', async () => {
+    const { POST, finish } = heldTrack();
+    const repository = makeRepository();
+    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST }, repository }));
+    const onProgress = vi.fn();
+
+    const track = ctrl.track('ModA', 'Edits', { onProgress });
+    finish();
+    await track;
+    repository.getTrackStatus.mockClear();
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(repository.getTrackStatus).not.toHaveBeenCalled();
+  });
+
+  it('a track with no onProgress polls nothing at all', async () => {
+    const { POST, finish } = heldTrack();
+    const repository = makeRepository();
+    const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST }, repository }));
+
+    const track = ctrl.track('ModA', 'Edits');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(repository.getTrackStatus).not.toHaveBeenCalled();
+
+    finish();
+    await track;
   });
 });
 

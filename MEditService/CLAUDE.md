@@ -40,7 +40,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
 | `Edits/` | Staging and persisting user edits | `PendingChangeService`, `PluginWriter`, `SaveResult` |
 | `Serialization/` | Per-record text ledger codec (ADR-0040 stage 1) | `RecordTextCodec`, `RecordTextCodecCustomization` |
-| `Ledger/` | Vendoring a record into its origin's hidden git repo on first touch (ADR-0040, #370) | `RecordVendor`, `LedgerRepository`, `GitCli`, `ContainerStripFields` |
+| `Ledger/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, and the Track gesture that populates it (ADR-0041, #414) | `LedgerRepository`, `TrackService`, `GitCli`, `PristineFile`, `ContainerStripFields` |
 
 Place code by ownership: `ColumnSpec` (`Schema/`) carries both read extractor + write Apply delegate; `PluginWriter` writes to disk, doesn't call back into the repository; DTOs in `Queries/Models.cs`. Delete dead code.
 

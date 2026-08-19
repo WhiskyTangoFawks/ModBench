@@ -57,6 +57,19 @@ export interface SessionStatus {
   failures: { name: string; reason: string }[];
 }
 
+/** #414 review F2: what `TrackService` can say about a Track in flight right now —
+ *  `GET /plugins/track/status`, polled alongside the in-flight `POST /plugins/track`, the same
+ *  idiom `SessionStatus`/`GET /session/status` above already established. `'Idle'` means nothing
+ *  is running (the poll's own rest state, and what the endpoint answers before any Track and
+ *  again once one finishes). */
+export type TrackPhase = 'Idle' | 'Parsing' | 'Serializing' | 'Committing';
+
+export interface TrackStatus {
+  phase: TrackPhase;
+  recordsDone: number;
+  recordsTotal: number;
+}
+
 export interface RecordSummary {
   formKey: string;
   plugin: string;

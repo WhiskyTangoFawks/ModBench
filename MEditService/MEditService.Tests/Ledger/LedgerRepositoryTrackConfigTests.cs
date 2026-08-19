@@ -48,11 +48,16 @@ public sealed class LedgerRepositoryTrackConfigTests
         var previousHome = Environment.GetEnvironmentVariable("HOME");
         var previousXdg = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
         var previousGitConfigGlobal = Environment.GetEnvironmentVariable("GIT_CONFIG_GLOBAL");
+        var previousGitConfigNoSystem = Environment.GetEnvironmentVariable("GIT_CONFIG_NOSYSTEM");
         try
         {
             Environment.SetEnvironmentVariable("HOME", emptyHome);
             Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Path.Combine(emptyHome, ".config"));
             Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", Path.Combine(emptyHome, "nonexistent-gitconfig"));
+            // #414 review F5: HOME/XDG/GIT_CONFIG_GLOBAL only scrub the *global* scope — a host
+            // /etc/gitconfig (system scope) could still leak a real user.name/user.email in and
+            // silently make this "fresh machine" repro not one.
+            Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", "1");
 
             Track(modFolder);
 
@@ -65,6 +70,7 @@ public sealed class LedgerRepositoryTrackConfigTests
             Environment.SetEnvironmentVariable("HOME", previousHome);
             Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", previousXdg);
             Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", previousGitConfigGlobal);
+            Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", previousGitConfigNoSystem);
             Directory.Delete(modFolder, recursive: true);
             Directory.Delete(emptyHome, recursive: true);
         }
