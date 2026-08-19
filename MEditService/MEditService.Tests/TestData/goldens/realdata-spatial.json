@@ -1,0 +1,289 @@
+{
+  "CellReferences": {
+    "00DB41:Fallout4.esm": {
+      "Persistent": [],
+      "Temporary": [
+        {
+          "BaseFormKey": "113E15:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C6C13:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "04801D:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C6E68:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "195CC5:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "23F752:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "18BA50:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "23F753:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "195CC6:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "23F754:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "195CC6:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "23F755:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "18BA51:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "23F762:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "195CC5:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "23F763:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "133850:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "23F764:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "133850:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "23F765:Fallout4.esm",
+          "RecordType": "refr"
+        }
+      ]
+    },
+    "00DB42:Fallout4.esm": {
+      "Persistent": [],
+      "Temporary": [
+        {
+          "BaseFormKey": "053262:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C4FB3:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "0516A3:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C4FB4:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "053262:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C4FB5:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "0516A3:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C4FB6:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "0516A3:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C4FB7:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "05325E:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C4FB8:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "053262:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C4FB9:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "0BD5C2:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C4FD9:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "0585A8:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C4FE2:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "0585A8:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C4FE3:Fallout4.esm",
+          "RecordType": "refr"
+        }
+      ]
+    },
+    "00DB43:Fallout4.esm": {
+      "Persistent": [],
+      "Temporary": [
+        {
+          "BaseFormKey": "01F52A:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "0D2B6E:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "01F517:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "0D2B6F:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "0219A0:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "0D2B70:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "04A074:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "0D2C56:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "032936:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "0D2C64:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "05325E:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "0D2C66:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "133865:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "0D2C80:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "13385A:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "0D2C8D:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "19B426:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C500F:Fallout4.esm",
+          "RecordType": "refr"
+        },
+        {
+          "BaseFormKey": "08B675:Fallout4.esm",
+          "EditorId": null,
+          "FormKey": "1C5954:Fallout4.esm",
+          "RecordType": "refr"
+        }
+      ]
+    }
+  },
+  "InteriorCells": [
+    {
+      "CellX": null,
+      "CellY": null,
+      "EditorId": "CroupManor01",
+      "FormKey": "03C0F0:Fallout4.esm"
+    },
+    {
+      "CellX": null,
+      "CellY": null,
+      "EditorId": "MinutemenHoldingCell",
+      "FormKey": "0782A8:Fallout4.esm"
+    },
+    {
+      "CellX": null,
+      "CellY": null,
+      "EditorId": "PackInSpotlight_Swivel_OffNEWStorageCell",
+      "FormKey": "092A18:Fallout4.esm"
+    }
+  ],
+  "Placements": {
+    "0782AA:Fallout4.esm": {
+      "FormKey": "0782AA:Fallout4.esm",
+      "ParentCell": "0782A8:Fallout4.esm",
+      "PlacementGroup": "temporary",
+      "PosX": 2304,
+      "PosY": 2336,
+      "PosZ": 256
+    },
+    "0782B7:Fallout4.esm": {
+      "FormKey": "0782B7:Fallout4.esm",
+      "ParentCell": "0782A8:Fallout4.esm",
+      "PlacementGroup": "temporary",
+      "PosX": -1431.6484,
+      "PosY": 1437.554,
+      "PosZ": 3200.438
+    },
+    "0782B8:Fallout4.esm": {
+      "FormKey": "0782B8:Fallout4.esm",
+      "ParentCell": "0782A8:Fallout4.esm",
+      "PlacementGroup": "persistent",
+      "PosX": 2173.0906,
+      "PosY": 2216.0007,
+      "PosZ": 256
+    }
+  },
+  "WorldspaceCells": {
+    "000800:mEditTestSubset.esm": [
+      {
+        "BlockX": 0,
+        "BlockY": 0,
+        "CellX": 7,
+        "CellY": 7,
+        "EditorId": null,
+        "FormKey": "00DB41:Fallout4.esm",
+        "SubX": 0,
+        "SubY": 0
+      },
+      {
+        "BlockX": 0,
+        "BlockY": 0,
+        "CellX": 6,
+        "CellY": 7,
+        "EditorId": null,
+        "FormKey": "00DB42:Fallout4.esm",
+        "SubX": 0,
+        "SubY": 0
+      },
+      {
+        "BlockX": 0,
+        "BlockY": 0,
+        "CellX": 5,
+        "CellY": 7,
+        "EditorId": null,
+        "FormKey": "00DB43:Fallout4.esm",
+        "SubX": 0,
+        "SubY": 0
+      },
+      {
+        "BlockX": null,
+        "BlockY": null,
+        "CellX": 0,
+        "CellY": 0,
+        "EditorId": null,
+        "FormKey": "018AA2:Fallout4.esm",
+        "SubX": null,
+        "SubY": null
+      }
+    ]
+  }
+}
