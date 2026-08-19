@@ -26,8 +26,10 @@ public sealed class RecordTextCodecCustomization : ICustomize
     // OmitLastModifiedData/OmitTimestampData are verified no-ops at this scope, not assumed: a
     // Weapon built with a deliberately non-default VersionControl round-trips it unchanged
     // (RecordTextCodecTests.SerializeAsync_ThenDeserializeAsync_IsFieldFaithful has no exclusion
-    // list), and the serialized YAML is byte-identical with and without these two calls (checked
-    // directly during #367's implementation, not inferred from the field-fidelity result alone).
+    // list), and the serialized JSON is byte-identical with and without these two calls — verified again at
+    // #412's YAML-to-JSON kernel swap (temporarily dropping both calls and diffing the
+    // regenerated golden weapon fixture byte-for-byte), not just carried forward on the strength
+    // of the original #367 verification, which was against YAML output.
     // Weapon just has nothing they touch, not "nothing on a record" in general:
     // OmitTimestampData suppresses any object's Timestamp/PersistentTimestamp/TemporaryTimestamp/
     // SubCellsTimestamp fields (CustomizationDriver.WrapOmission) — three of those ARE major-record

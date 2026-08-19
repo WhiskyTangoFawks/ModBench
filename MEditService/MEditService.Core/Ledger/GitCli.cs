@@ -45,7 +45,7 @@ internal static class GitCli
         // Read both streams concurrently, not sequentially: reading stdout to completion before
         // touching stderr (or vice versa) is the classic .NET Process deadlock — a child that fills
         // one OS pipe buffer (~64 KB) while the parent blocks fully draining the other wedges both
-        // sides. Unlikely at this class's typical payloads (a single-record YAML diff, a short `git
+        // sides. Unlikely at this class's typical payloads (a single-record JSON diff, a short `git
         // log`) but not bounded by construction, so not safe to leave sequential.
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start the git process.");
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
