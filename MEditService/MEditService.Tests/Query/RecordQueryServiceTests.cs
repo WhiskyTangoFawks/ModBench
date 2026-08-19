@@ -22,7 +22,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        _manager = new SessionManager(factory);
         _manager.Load(fixture.DataFolder, fixture.PluginsTxtPath, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
@@ -56,8 +56,7 @@ public sealed class RecordQueryServiceTests : IDisposable
                 new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800)))
             .Build();
         using var manager = new SessionManager(
-            new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)),
-            new PluginWriter(SharedSchemaReflector.Instance, NullLogger<PluginWriter>.Instance));
+            new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
         var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
 
@@ -88,8 +87,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             })
             .Build();
         using var manager = new SessionManager(
-            new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)),
-            new PluginWriter(SharedSchemaReflector.Instance, NullLogger<PluginWriter>.Instance));
+            new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
         var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
 
@@ -340,7 +338,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            using var manager = new SessionManager(factory);
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
@@ -435,7 +433,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            using var manager = new SessionManager(factory);
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
@@ -701,7 +699,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-        using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        using var manager = new SessionManager(factory);
         manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
         test(new RecordQueryService(manager, reflector, new ConflictClassifier()));
     }
@@ -874,7 +872,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            using var manager = new SessionManager(factory);
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
@@ -913,7 +911,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            using var manager = new SessionManager(factory);
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
@@ -942,7 +940,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            using var manager = new SessionManager(factory);
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
@@ -958,7 +956,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-        var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        var manager = new SessionManager(factory);
         return new RecordQueryService(manager, reflector, new ConflictClassifier());
     }
 
@@ -1169,8 +1167,6 @@ public sealed class RecordQueryServiceTests : IDisposable
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
         public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
         public string ReserveFormKey(string plugin) => throw new NotSupportedException();
-        public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
-        public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
         public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new NotSupportedException();

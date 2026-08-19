@@ -30,7 +30,7 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        _manager = new SessionManager(factory);
         _manager.Load(fixture.DataFolder, fixture.PluginsTxtPath, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }

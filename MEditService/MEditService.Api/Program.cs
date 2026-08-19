@@ -63,11 +63,9 @@ try
     builder.Services.AddSingleton<ITableDdlBuilder, TableDdlBuilder>();
     builder.Services.AddSingleton<IRecordRepositoryFactory, DuckDbRecordRepositoryFactory>();
     builder.Services.AddSingleton<IConflictClassifier, ConflictClassifier>();
-    builder.Services.AddSingleton<IPluginWriter, PluginWriter>();
+    builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
     builder.Services.AddSingleton<ISessionManager, SessionManager>();
-    builder.Services.AddSingleton<DuckDbPendingChangeService>();
-    builder.Services.AddSingleton<IPendingChangeService>(sp => sp.GetRequiredService<DuckDbPendingChangeService>());
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
     // ADR-0040/#370: internal Modbench state, not request-scoped — the default lives under
@@ -77,14 +75,10 @@ try
     builder.Services.AddSingleton(LedgerOptions.Default);
     builder.Services.AddSingleton<LedgerRepository>();
     builder.Services.AddSingleton<RecordTextCodec>();
-    builder.Services.AddSingleton<RecordVendor>();
-    builder.Services.AddSingleton<LedgerGroupCommitter>();
     builder.Services.AddSingleton<LedgerRecordFieldReader>();
     builder.Services.AddSingleton<RecordReverter>();
     builder.Services.AddSingleton<LedgerStatusQuery>();
     builder.Services.AddSingleton<LedgerLifecycleReconciler>();
-    builder.Services.AddSingleton<IEditOrchestrator, EditOrchestrator>();
-    builder.Services.AddSingleton<PluginSaver>();
 
     var app = builder.Build();
 

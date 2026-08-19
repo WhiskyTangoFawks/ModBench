@@ -231,10 +231,6 @@ public class CompoundPluginIdentityTests
         var raceFormKey = modA.Races.First().FormKey.ToString();
 
         using var repo = OpenRepo();
-        // GetReferences' NOT EXISTS subquery reads pending_changes, which only DuckDbPendingChangeService's
-        // own DDL creates — bind one to this repo's connection purely for that side effect, matching how
-        // production shares one connection between the repository and the pending-change service.
-        _ = new DuckDbPendingChangeService(repo.Connection);
         repo.Index(modA, loadOrderIndex: 0, origin: "ModA", participates: true);
         repo.Index(modB, loadOrderIndex: 1, origin: "ModB", participates: true);
 

@@ -133,32 +133,12 @@ public sealed class EndpointReceptionLoggingTests
             new(name, name, 0, false, false, [], 0, false, true, "Data", [], true);
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
         public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
-        public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
-        public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
         public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new NotSupportedException();
         public string ReserveFormKey(string plugin) => throw new NotSupportedException();
         public void SetFilter(string sql) => throw new NotSupportedException();
         public void ClearFilter() => throw new NotSupportedException();
-    }
-
-    private sealed class StubEditOrchestrator : IEditOrchestrator
-    {
-        public StageEditResult StageEdit(
-            string formKey, string plugin, Dictionary<string, System.Text.Json.JsonElement> fields,
-            string source, string? description, string? changeType = null) =>
-            new StageEditResult.NoSession();
-        public StageEditResult CopyRecordTo(string formKey, string targetPlugin, string source, string? sourcePlugin = null, string? sourceOrigin = null) => throw new NotSupportedException();
-        public Task<StageEditResult> RevertRecordToLedgerCommitAsync(string formKey, string plugin, string commitish, string source) => throw new NotSupportedException();
-        public CreateRecordOutcome CreateRecord(string plugin, string? recordType, string? templateFormKey, string source,
-            string? templateSourcePlugin = null, string? templateSourceOrigin = null) =>
-            throw new NotSupportedException();
-        public CreateRecordOutcome CreatePlacedRecord(string plugin, string recordType, string parentCell, string placementGroup,
-            string? templateFormKey, string source) => throw new NotSupportedException();
-        public DeleteRecordsResult DeleteRecords(IReadOnlyList<(string FormKey, string Plugin)> targets, string source) =>
-            throw new NotSupportedException();
-        public RenumberResult Renumber(string formKey, uint newFormId, string plugin, string source) => throw new NotSupportedException();
     }
 
     private sealed class StubWorldspaceQueryService : IWorldspaceQueryService
@@ -188,7 +168,5 @@ public sealed class EndpointReceptionLoggingTests
         public IReadOnlyList<string> GetConditionFunctions() => throw new NotSupportedException();
         public IReadOnlyList<string> GetConditionRunOnTargets() => throw new NotSupportedException();
         public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => throw new NotSupportedException();
-        public IReadOnlyList<PendingChange> GetChanges(string? formKey = null, Guid? memberChangeId = null) =>
-            throw new NotSupportedException();
     }
 }

@@ -58,7 +58,7 @@ public sealed class BinaryRoundTripGateTests
             File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
             var original = await File.ReadAllBytesAsync(pluginPath);
 
-            var writer = new PluginWriter(SharedSchemaReflector.Instance, NullLogger<PluginWriter>.Instance);
+            var writer = new PluginWriter(NullLogger<PluginWriter>.Instance);
 
             await ProductionSave(pluginPath, writer);
             var write1 = await File.ReadAllBytesAsync(pluginPath);
@@ -91,7 +91,7 @@ public sealed class BinaryRoundTripGateTests
         var linkCache = TypedLinkCacheFactory.Create([overlay], GameRelease.Fallout4);
         string[] loadOrder = [CutDownPluginFixture.PluginFileName, "Fallout4.esm"];
 
-        await writer.SaveAsync(pluginPath, [], GameRelease.Fallout4, linkCache, loadOrder);
+        await writer.SaveAsync(pluginPath, GameRelease.Fallout4, loadOrder);
     }
 
     /// <summary>

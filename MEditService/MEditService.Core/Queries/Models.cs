@@ -225,43 +225,4 @@ public record ExplicitPlugin(string Name, string Path, string Origin, bool? Part
 // two same-filename sources referencing the same target were indistinguishable in the result.
 public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId, string Origin);
 
-public record CreateRecordResult(string FormKey, Guid GroupId);
-
-// A save reports success even when the post-commit reindex failed: the file is written and the
-// pending changes are consumed, only the read model is stale. `ReindexFailure` is null on the
-// happy path and populated otherwise, so the frontend can surface the stale-index warning
-// (#127, ADR-0026 integrity tier). Mirrors SessionLoadResponse.Failures' structured shape.
-public record SaveGroupResponse(
-    IReadOnlyDictionary<string, SaveResult> ByPlugin,
-    ReindexFailure? ReindexFailure);
-
-public record BlockedReference(
-    string TargetFormKey,
-    string SourceFormKey,
-    string SourcePlugin,
-    string FieldPath,
-    string RecordType,
-    string? EditorId);
-
-public record DeleteRecordTarget(string FormKey, string Plugin);
-
-// #143 / #147: DeleteRecords has three outcomes (staged delete, reverted create, or a mix of both),
-// but they all land on the same 200 — one status code answered by multiple distinct response bodies
-// is the #147 anti-pattern (Swashbuckle has no oneOf machinery for it and silently keeps only the
-// last-declared .Produces<T>() type). This envelope keeps the wire honest: exactly one documented
-// schema, with the two fields null when their outcome didn't happen. StagedGroup is non-null when
-// any target staged a delete; RevertedFormKeys lists every target reverted instead — never both
-// null, and both populated for a mixed batch.
-public record DeleteRecordsResponse(ChangeGroup? StagedGroup, IReadOnlyList<string>? RevertedFormKeys);
-
-public record DeleteRecordsRequest(IReadOnlyList<DeleteRecordTarget> Records);
-
-// #147: PatchRecord/CopyRecordTo's 422 had the same anti-pattern as #143's DeleteRecords 200 —
-// one status code, two undeclared shapes (a bare ReferenceValidationError[] for reference/
-// append-only/type-mismatch/null-not-allowed failures, ProblemDetails for read-only-fields/
-// ESL-ineligible). This envelope keeps the wire honest: exactly one documented 422 schema.
-// FieldErrors is non-null for reference-style failures; Detail is non-null for the rest — never
-// both populated (unlike DeleteRecordsResponse, StageEditResult only ever reports one outcome).
-public record PatchRecordValidationError(IReadOnlyList<ReferenceValidationError>? FieldErrors, string? Detail);
-
 public record HealthResponse(string Status);

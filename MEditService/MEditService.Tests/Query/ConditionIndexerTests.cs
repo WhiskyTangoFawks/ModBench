@@ -312,16 +312,11 @@ public sealed class ConditionIndexerTests : IDisposable
 
     // The actual issue-described behavior, one level above the raw table checks above: a record
     // referenced only by a condition (never by an ordinary field or VMAD) must appear in
-    // GetReferences' result — i.e. show up in the Referenced-By tab. GetReferences also queries
-    // pending_changes (to exclude a since-overridden ref), a table only DuckDbPendingChangeService
-    // creates — every other GetReferences test in this suite wires one onto the shared connection
-    // for the same reason (DeleteRecordsTests.MakeOrchestratorWithChanges).
+    // GetReferences' result — i.e. show up in the Referenced-By tab.
     [Fact]
     public void GetReferences_RecordReferencedOnlyByCondition_ReturnsReferencingRecord()
     {
         using var repo = LoadedRepository();
-        using var changes = new DuckDbPendingChangeService(repo.Connection);
-
         var references = repo.GetReferences(_referenceTargetFormKey.ToString());
 
         var reference = Assert.Single(references);

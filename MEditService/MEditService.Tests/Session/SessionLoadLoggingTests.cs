@@ -33,7 +33,7 @@ public sealed class SessionLoadLoggingTests
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-        return new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), logger: logger);
+        return new SessionManager(factory, logger);
     }
 
     [Fact]

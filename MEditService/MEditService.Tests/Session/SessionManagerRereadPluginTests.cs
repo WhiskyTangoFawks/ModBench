@@ -19,13 +19,11 @@ namespace MEditService.Tests.Session;
 // and must never try.
 public sealed class SessionManagerRereadPluginTests
 {
-    private static (SessionManager Manager, DuckDbPendingChangeService Changes) MakeManager()
+    private static SessionManager MakeManager()
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-        var changes = DuckDbTestFactory.MakePendingChangeService();
-        var manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), changes);
-        return (manager, changes);
+        return new SessionManager(factory);
     }
 
     /// <summary>Writes another physical copy of <paramref name="name"/> into its own folder, with
@@ -67,7 +65,7 @@ public sealed class SessionManagerRereadPluginTests
             .BuildScattered();
         var newPath = WriteCopy(fx.Root, "mod-ModB", "A.esp", "FromModB");
 
-        var (manager, _) = MakeManager();
+        var manager = MakeManager();
         using (manager)
         {
             ISessionManager sessionManager = manager;
@@ -89,7 +87,7 @@ public sealed class SessionManagerRereadPluginTests
             .BuildScattered();
         var newPath = WriteCopy(fx.Root, "mod-ModB", "A.esp", "FromModB");
 
-        var (manager, _) = MakeManager();
+        var manager = MakeManager();
         using (manager)
         {
             ISessionManager sessionManager = manager;
@@ -110,45 +108,6 @@ public sealed class SessionManagerRereadPluginTests
         }
     }
 
-    // The consequence the re-read confirm has to state before it happens (#279 AC6). Discarded
-    // rather than migrated or left alone: pending_changes is keyed on (form_key, origin, plugin)
-    // and reads overlay by origin, so a change left behind is invisible but still live — and
-    // SavePlugin resolves its write target by *filename*, so it would later be written into the
-    // new copy's file, having been authored against bytes that are gone. That is the silent-
-    // wrong-state tier of ADR-0026; discarding is the only honest option, which is why the user is
-    // told first.
-    [Fact]
-    public void RereadPlugin_DiscardsStagedEditsAgainstTheCopyItReplaces()
-    {
-        FormKey npcKey = default;
-        using var fx = new PluginFixtureBuilder("sm-reread-staged")
-            .WithPlugin("A.esp", mod => npcKey = mod.Npcs.AddNew("FromModA").FormKey, origin: "ModA")
-            .BuildScattered();
-        var newPath = WriteCopy(fx.Root, "mod-ModB", "A.esp", "FromModB");
-
-        var (manager, changes) = MakeManager();
-        using (manager)
-        {
-            ISessionManager sessionManager = manager;
-            sessionManager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-            changes.Upsert(new PendingChangeUpsert(
-                npcKey.ToString(), "A.esp", "Npc",
-                new Dictionary<string, JsonElement> { ["aggression"] = JsonDocument.Parse("\"Frenzied\"").RootElement.Clone() },
-                "user", null,
-                new Dictionary<string, JsonElement> { ["aggression"] = JsonDocument.Parse("\"Unaggressive\"").RootElement.Clone() },
-                null, "field_edit", null, null, "ModA"));
-            Assert.NotEmpty(changes.GetChanges("A.esp"));
-
-            sessionManager.RereadPlugin("A.esp", newPath, "ModB");
-
-            Assert.Empty(changes.GetChanges("A.esp"));
-        }
-    }
-
-    // A re-read that arrives mid-load is refused, not queued and above all not run: the indexing
-    // loop is writing to the very repository it would unindex from, and taking the exclusive right
-    // (EnterExclusive) would *cancel* the load the user is watching. The endpoint maps this to 409,
-    // the same "nothing went wrong, ask again" answer the session-load contract already gives.
     [Fact]
     public async Task RereadPlugin_WhileALoadIsInFlight_IsRefusedWithoutDisturbingTheLoad()
     {
@@ -162,7 +121,7 @@ public sealed class SessionManagerRereadPluginTests
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp");
-        using var manager = new SessionManager(gate, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        using var manager = new SessionManager(gate);
         ISessionManager sessionManager = manager;
 
         var load = Task.Run(() => sessionManager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
@@ -238,7 +197,7 @@ public sealed class SessionManagerRereadPluginTests
                     "Unload completed while a re-read was mid-mutation — the session can be disposed underneath it");
             });
 
-        manager = new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        manager = new SessionManager(factory);
         using (manager)
         {
             ISessionManager sessionManager = manager;
@@ -270,7 +229,7 @@ public sealed class SessionManagerRereadPluginTests
         // the reserved key names which file the counter came from.
         var newPath = WriteCopy(fx.Root, "mod-ModB", "A.esp", "FromModB", extraRecords: 2);
 
-        var (manager, _) = MakeManager();
+        var manager = MakeManager();
         using (manager)
         {
             ISessionManager sessionManager = manager;
@@ -300,7 +259,7 @@ public sealed class SessionManagerRereadPluginTests
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
             .BuildScattered();
 
-        var (manager, _) = MakeManager();
+        var manager = MakeManager();
         using (manager)
         {
             ISessionManager sessionManager = manager;
@@ -319,7 +278,7 @@ public sealed class SessionManagerRereadPluginTests
             .BuildScattered();
         var newPath = WriteCopy(fx.Root, "mod-ModB", "A.esp", "FromModB");
 
-        var (manager, _) = MakeManager();
+        var manager = MakeManager();
         using (manager)
         {
             ISessionManager sessionManager = manager;
@@ -339,7 +298,7 @@ public sealed class SessionManagerRereadPluginTests
             .BuildScattered();
         var newPath = WriteCopy(fx.Root, "mod-ModB", "Absent.esp", "Whatever");
 
-        var (manager, _) = MakeManager();
+        var manager = MakeManager();
         using (manager)
         {
             ISessionManager sessionManager = manager;
@@ -359,7 +318,7 @@ public sealed class SessionManagerRereadPluginTests
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
             .BuildScattered();
 
-        var (manager, _) = MakeManager();
+        var manager = MakeManager();
         using (manager)
         {
             ISessionManager sessionManager = manager;
@@ -375,7 +334,7 @@ public sealed class SessionManagerRereadPluginTests
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
             .BuildScattered();
 
-        var (manager, _) = MakeManager();
+        var manager = MakeManager();
         using (manager)
         {
             ISessionManager sessionManager = manager;

@@ -20,16 +20,11 @@ public class SessionManagerTests(TestPluginFixture fixture)
 
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
-    private static PendingChange MakePendingChange(string formKey, string plugin, string fieldPath, string recordType, string json) =>
-        new(Guid.NewGuid(), formKey, plugin, fieldPath, recordType,
-            J("null"), J(json), "user", null, DateTime.UtcNow, "field_edit", null,
-            null, null, null, null, "Data");
-
     private static SessionManager MakeManager(IModImporter? modImporter = null)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
-        return new SessionManager(factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance),
+        return new SessionManager(factory,
             modImporter: modImporter);
     }
 
@@ -39,7 +34,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         var spy = new SpyRepositoryFactory(inner);
-        using var manager = new SessionManager(spy, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        using var manager = new SessionManager(spy);
 
         manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
 
@@ -118,100 +113,8 @@ public class SessionManagerTests(TestPluginFixture fixture)
         Assert.Equal(GameRelease.Fallout4, manager.Session!.GameRelease);
     }
 
-    // --- SavePlugin ---
 
-    [Fact]
-    public async Task SavePlugin_WritableField_ReturnsSaveResultWithApplied()
-    {
-        FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("sm-save")
-            .WithPlugin("TestPlugin.esp", mod =>
-                npcKey = mod.Npcs.AddNew("SaveTestNPC").FormKey)
-            .Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var change = MakePendingChange(npcKey.ToString(), "TestPlugin.esp", "aggression", "npc_", "\"Frenzied\"");
 
-            var result = await manager.SavePlugin("TestPlugin.esp", [change]);
-
-            Assert.Contains("aggression", result.Applied);
-            Assert.Empty(result.ReadOnly);
-            Assert.Empty(result.NotFound);
-        }
-    }
-
-    // #337/ADR-0038: the saved master list's order follows the session's current plugin load
-    // order (Plugins.txt declaration order here), not alphabetical — pinned end-to-end through the
-    // real production wiring (Load → SavePlugin), not just PluginWriter's own loadOrder parameter
-    // in isolation (see PluginWriterMastersTests for that unit-level pin).
-    [Fact]
-    public async Task SavePlugin_MastersOrder_MatchesSessionLoadOrder()
-    {
-        var data = new PluginFixtureBuilder("sm-masters-order")
-            // Deliberately reverse-alphabetical Plugins.txt order: CCC before AAA.
-            .WithPlugin("CCC.esm", mod => mod.Npcs.AddNew("CccNpc"))
-            .WithPlugin("AAA.esm", mod => mod.Npcs.AddNew("AaaNpc"))
-            .WithPlugin("Active.esp", (mod, priorMods) =>
-            {
-                mod.ModHeader.Author = "Original Author";
-                mod.Npcs.GetOrAddAsOverride(priorMods[0].Npcs.First()); // CCC.esm
-                mod.Npcs.GetOrAddAsOverride(priorMods[1].Npcs.First()); // AAA.esm
-            })
-            .Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var change = MakePendingChange("000000:Active.esp", "Active.esp", "author", "header", "\"New Author\"");
-
-            await manager.SavePlugin("Active.esp", [change]);
-
-            var activePath = Path.Combine(data.DataFolder, "Active.esp");
-            using var saved = Fallout4Mod.CreateFromBinaryOverlay(
-                new ModPath(ModKey.FromFileName("Active.esp"), activePath), Fallout4Release.Fallout4);
-            Assert.Equal(["CCC.esm", "AAA.esm"], saved.MasterReferences.Select(r => r.Master.FileName.ToString()));
-        }
-    }
-
-    // #337/ADR-0038 hardening: a load-order member can carry a *committed* master that the session
-    // never separately loaded (disabled/uninstalled/otherwise absent from the profile — #277's
-    // "declared-but-absent master" shape). Mutagen's WithMastersListOrdering throws
-    // MissingModException for any master its content-sync needs that is missing from the given
-    // list — proven directly against Mutagen before relying on it — so completeness of that list is
-    // a correctness property, not an optimization: this must still save without throwing.
-    [Fact]
-    public async Task SavePlugin_ContentReferencesMasterAbsentFromSession_SavesWithoutThrowing()
-    {
-        var data = new PluginFixtureBuilder("sm-masters-absent")
-            .WithPlugin("Known.esm", mod => mod.Npcs.AddNew("KnownNpc"))
-            .WithPlugin("Active.esp", (mod, priorMods) =>
-            {
-                mod.ModHeader.Author = "Original Author";
-                mod.Npcs.GetOrAddAsOverride(priorMods[0].Npcs.First()); // Known.esm: a real session member
-                // "Missing.esm" is never built or listed anywhere — Active.esp's own committed
-                // content references it directly, exactly like a plugin whose declared master
-                // isn't present in the current profile.
-                mod.Npcs.AddNew("ActiveNpc").Keywords = [new FormLink<IKeywordGetter>(FormKey.Factory("000001:Missing.esm"))];
-            })
-            .Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var change = MakePendingChange("000000:Active.esp", "Active.esp", "author", "header", "\"New Author\"");
-
-            await manager.SavePlugin("Active.esp", [change]);
-
-            var activePath = Path.Combine(data.DataFolder, "Active.esp");
-            using var saved = Fallout4Mod.CreateFromBinaryOverlay(
-                new ModPath(ModKey.FromFileName("Active.esp"), activePath), Fallout4Release.Fallout4);
-            Assert.Equal(
-                ["Known.esm", "Missing.esm"],
-                saved.MasterReferences.Select(r => r.Master.FileName.ToString()));
-        }
-    }
 
     // --- CreatePlugin ---
 
@@ -402,77 +305,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         Assert.Equal(parsed1.ID + 1, parsed2.ID);
     }
 
-    [Fact]
-    public async Task SavePlugin_CreatePlacedInMasterCell_LandsRefUnderOverrideCell()
-    {
-        // Proves the production save path hands the writer a typed link cache: a placed REFR created
-        // under a cell that lives only in a master is pulled into the active plugin as a cell override.
-        FormKey cellFk = default;
-        var data = new PluginFixtureBuilder("sm-placed-create")
-            .WithPlugin("Master.esp", mod =>
-            {
-                var wrld = mod.Worldspaces.AddNew("PlacedWorld");
-                var cell = new Cell(mod) { EditorID = "ExtCell", Grid = new CellGrid { Point = new Noggog.P2Int(1, 2) } };
-                cellFk = cell.FormKey;
-                var sub = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
-                sub.Items.Add(cell);
-                var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
-                block.Items.Add(sub);
-                wrld.SubCells.Add(block);
-            })
-            .WithPlugin("Active.esp", mod =>
-                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Master.esp") }))
-            .Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-            var newRefFk = manager.ReserveFormKey("Active.esp");
-            var createChange = new PendingChange(
-                Guid.NewGuid(), newRefFk, "Active.esp", "$create", "refr",
-                J("null"), J("null"), "user", null, DateTime.UtcNow, "create",
-                ParentCell: cellFk.ToString(), PlacementGroup: "persistent", Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
-
-            await manager.SavePlugin("Active.esp", [createChange]);
-
-            var activePath = Path.Combine(data.DataFolder, "Active.esp");
-            using var saved = ModFactory.ImportGetter(
-                new ModPath(ModKey.FromFileName("Active.esp"), activePath), GameRelease.Fallout4);
-            var cell = saved.EnumerateMajorRecords().OfType<ICellGetter>().Single(c => c.FormKey == cellFk);
-            Assert.Contains(cell.Persistent, p => p.FormKey == FormKey.Factory(newRefFk));
-        }
-    }
-
-    [Fact]
-    public async Task SavePlugin_WithCreateChange_ReloadPicksUpBumpedNextFormID()
-    {
-        var data = new PluginFixtureBuilder("sm-create-nfid")
-            .WithPlugin("TestPlugin.esp", mod => mod.Npcs.AddNew("SeedNPC"))
-            .Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-
-            var reservedFk = manager.ReserveFormKey("TestPlugin.esp");
-            FormKey.TryFactory(reservedFk, out var parsedFk);
-
-            var createChange = new PendingChange(
-                Guid.NewGuid(), reservedFk, "TestPlugin.esp", "$create", "npc_",
-                J("null"), J("null"), "user", null, DateTime.UtcNow, "create", null, PlacementGroup: null, Resolutions: null, RecordResolution: null, RecordTypeDisplayName: null, Origin: "Data");
-
-            await manager.SavePlugin("TestPlugin.esp", [createChange]);
-
-            // Reload so _nextFormIds picks up the updated NextFormID written by SaveAsync
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var nextFk = manager.ReserveFormKey("TestPlugin.esp");
-            FormKey.TryFactory(nextFk, out var nextParsed);
-
-            Assert.True(nextParsed.ID > parsedFk.ID,
-                $"Expected NextFormID > {parsedFk.ID:X6} after save with create change; got {nextParsed.ID:X6}");
-        }
-    }
 
     [Fact]
     public void CreatePlugin_SeedsNextFormIds_PluginIsImmediatelyReservable()
@@ -509,56 +342,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         }
     }
 
-    [Fact]
-    public async Task SavePlugin_AfterSave_RepositoryReflectsNewFieldValue()
-    {
-        FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("sm-reindex")
-            .WithPlugin("TestPlugin.esp", mod =>
-            {
-                var npc = mod.Npcs.AddNew("ReindexTestNPC");
-                npc.Aggression = Npc.AggressionType.Unaggressive;
-                npcKey = npc.FormKey;
-            })
-            .Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var change = MakePendingChange(npcKey.ToString(), "TestPlugin.esp", "aggression", "npc_", "\"Frenzied\"");
 
-            await manager.SavePlugin("TestPlugin.esp", [change]);
-
-            var detail = manager.Repository!.GetRecord("npc_", npcKey.ToString(), "TestPlugin.esp", "Data", winnerOnly: false)!;
-            var aggressionValue = detail.Fields.First(f => f.Metadata.Name == "aggression").Value?.ToString();
-            Assert.Equal("Frenzied", aggressionValue);
-        }
-    }
-
-    [Fact]
-    public async Task SavePlugin_AfterSave_RecordRemainsWinner()
-    {
-        FormKey npcKey = default;
-        var data = new PluginFixtureBuilder("sm-save-winner")
-            .WithPlugin("TestPlugin.esp", mod =>
-            {
-                var npc = mod.Npcs.AddNew("WinnerNPC");
-                npc.Aggression = Npc.AggressionType.Unaggressive;
-                npcKey = npc.FormKey;
-            })
-            .Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var change = MakePendingChange(npcKey.ToString(), "TestPlugin.esp", "aggression", "npc_", "\"Frenzied\"");
-
-            await manager.SavePlugin("TestPlugin.esp", [change]);
-
-            var result = manager.Repository!.GetRecords("npc_", "TestPlugin.esp", null, 100, 0);
-            Assert.All(result.Items, r => Assert.True(r.IsWinner));
-        }
-    }
 
     [Fact]
     public void CreatePlugin_NoSession_ThrowsInvalidOperationException()
@@ -650,26 +434,6 @@ public class SessionManagerTests(TestPluginFixture fixture)
         }
     }
 
-    // --- SavePlugin guard clauses ---
-
-    [Fact]
-    public async Task SavePlugin_NoSession_ThrowsInvalidOperationException()
-    {
-        using var manager = MakeManager();
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => manager.SavePlugin("SomePlugin.esp", []));
-        Assert.Contains("No session", ex.Message);
-    }
-
-    [Fact]
-    public async Task SavePlugin_UnknownPlugin_ThrowsKeyNotFoundException()
-    {
-        using var manager = MakeLoadedManager();
-        var ex = await Assert.ThrowsAsync<KeyNotFoundException>(
-            () => manager.SavePlugin("DoesNotExist.esp", []));
-        Assert.Contains("not found", ex.Message);
-    }
-
     // --- Disposal actually releases resources ---
 
     [Fact]
@@ -741,10 +505,15 @@ public class SessionManagerTests(TestPluginFixture fixture)
             using var manager = MakeManager();
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-            // Write the change to disk bypassing ReindexPlugin
-            var change = MakePendingChange(npcKey.ToString(), "Plugin.esp", "aggression", "npc_", "\"Frenzied\"");
-            using var prepared = await manager.PreparePluginSave("Plugin.esp", [change]);
-            prepared.Commit();
+            // #410: the binary changes underneath the session with nothing in Modbench told about
+            // it — written straight through Mutagen, which is also the shape the never-assume-
+            // exclusive-ownership rule cares about (xEdit or MO2 rewriting the file between reads).
+            var pluginPath = Path.Combine(data.DataFolder, "Plugin.esp");
+            var onDisk = Fallout4Mod.CreateFromBinary(
+                new ModPath(ModKey.FromFileName("Plugin.esp"), pluginPath), Fallout4Release.Fallout4);
+            onDisk.Npcs.First(n => n.FormKey == npcKey).Aggression = Npc.AggressionType.Frenzied;
+            manager.Session!.GetMod("Plugin.esp", "Data");
+            onDisk.WriteToBinary(pluginPath);
 
             await manager.ReindexPlugins(["Plugin.esp"]);
 

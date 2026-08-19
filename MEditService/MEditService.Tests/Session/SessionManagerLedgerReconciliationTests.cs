@@ -60,7 +60,7 @@ public sealed class SessionManagerLedgerReconciliationTests
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             var reconciler = new LedgerLifecycleReconciler(ledger, NullLogger<LedgerLifecycleReconciler>.Instance);
             using var manager = new SessionManager(
-                factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), ledgerReconciler: reconciler);
+                factory, ledgerReconciler: reconciler);
             ISessionManager sessionManager = manager;
 
             var explicitPlugins = new List<ExplicitPluginInput> { new("StillHere.esp", stillHerePath, "ModA", true) };
@@ -104,7 +104,7 @@ public sealed class SessionManagerLedgerReconciliationTests
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         using var manager = new SessionManager(
-            factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), logger: logger);
+            factory, logger: logger);
         ISessionManager sessionManager = manager;
 
         sessionManager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
@@ -167,7 +167,7 @@ public sealed class SessionManagerLedgerReconciliationTests
             var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
             var reconciler = new LedgerLifecycleReconciler(ledger, NullLogger<LedgerLifecycleReconciler>.Instance);
             using var manager = new SessionManager(
-                factory, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance), ledgerReconciler: reconciler);
+                factory, ledgerReconciler: reconciler);
             ISessionManager sessionManager = manager;
 
             // Load order: Master first, Candidate second (loses the winner race), Other last (wins)

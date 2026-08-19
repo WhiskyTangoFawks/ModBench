@@ -174,8 +174,6 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
         public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
-        public Task<SaveResult> SavePlugin(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
-        public Task<PreparedPluginSave> PreparePluginSave(string plugin, IReadOnlyList<PendingChange> changes) => throw new NotSupportedException();
         public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
         public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new NotSupportedException();
@@ -292,68 +290,6 @@ public sealed class CompareResultColumnKeyIntegrityTests
         Assert.Equal(ConflictThis.Master, modA.ConflictThis);
         Assert.Equal(ConflictThis.IdenticalToMaster, modB.ConflictThis);
     }
-
-    // #336/ADR-0038: GetCompare substitutes GetEffectiveMasters' derived value into the header's
-    // masters field before classification runs. Two same-filename, different-origin columns with
-    // identical *real* committed masters and identical *real* staged references (staged
-    // independently, under each origin, in reversed insertion order to try to provoke any latent
-    // `SELECT DISTINCT` row-order difference between the two independent derivations) must still
-    // classify as no conflict — a derived value is not exempt from the #272 regression this file
-    // otherwise guards, and an ordering-only difference between two logically-identical lists would
-    // be exactly that: a false conflict with no real divergence behind it.
-    [Fact]
-    public void GetCompare_TwoOriginsIdenticalDerivedMasters_NoSpuriousConflictOnMastersField()
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
-
-        var reflector = SharedSchemaReflector.Instance;
-        var ddl = new TableDdlBuilder(reflector);
-        using var repo = new DuckDbRecordRepository(reflector, ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, 0, origin: "ModA", participates: true);
-        repo.Index((IModGetter)mod, 1, origin: "ModB", participates: true);
-        repo.UpdateWinners();
-
-        var changes = new DuckDbPendingChangeService(repo.Connection);
-        var headerFormKey = HeaderIndexer.FormKeyFor("Shared.esp");
-
-        // Same two implied masters, staged independently per origin, in reversed order between the
-        // two — nothing here makes the two derivations share any code path beyond both querying
-        // the same unordered SELECT DISTINCT.
-        changes.Upsert(new PendingChangeUpsert(
-            "000001:AAA.esm", "Shared.esp", "npc_", new() { ["editorId"] = J("\"FromA1\"") },
-            "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
-            ParentCell: null, PlacementGroup: null, Origin: "ModA"));
-        changes.Upsert(new PendingChangeUpsert(
-            "000002:ZZZ.esm", "Shared.esp", "npc_", new() { ["editorId"] = J("\"FromA2\"") },
-            "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
-            ParentCell: null, PlacementGroup: null, Origin: "ModA"));
-        changes.Upsert(new PendingChangeUpsert(
-            "000003:ZZZ.esm", "Shared.esp", "npc_", new() { ["editorId"] = J("\"FromB1\"") },
-            "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
-            ParentCell: null, PlacementGroup: null, Origin: "ModB"));
-        changes.Upsert(new PendingChangeUpsert(
-            "000004:AAA.esm", "Shared.esp", "npc_", new() { ["editorId"] = J("\"FromB2\"") },
-            "user", null, [], FormRefs: null, ChangeType: PendingChangeConstants.FieldEditChangeType,
-            ParentCell: null, PlacementGroup: null, Origin: "ModB"));
-
-        var plugins = new[] { new PluginMetadata("Shared.esp", "", 0, false, false, [], 1, false, Origin: "Data") };
-        var session = new FakeSessionManager(new FakeGameSession(plugins), repo);
-        var svc = new RecordQueryService(session, reflector, new ConflictClassifier());
-
-        var compare = svc.GetCompare(headerFormKey);
-
-        Assert.NotNull(compare);
-        Assert.Equal(2, compare.Overrides.Count);
-
-        var mastersDiff = compare.Diffs.Single(d => d.FieldName == "masters");
-        Assert.Equal(ConflictAll.NoConflict, mastersDiff.ConflictAll);
-        Assert.All(mastersDiff.CellStates.Values, state =>
-            Assert.True(state is ConflictThis.Master or ConflictThis.IdenticalToMaster,
-                $"masters field wrongly shows {state} across identical-content columns"));
-    }
-
-    private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
     private static void AssertEveryColumnDictKeyIsValid(JsonElement element, HashSet<string> validKeys)
     {

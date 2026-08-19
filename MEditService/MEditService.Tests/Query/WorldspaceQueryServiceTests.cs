@@ -72,8 +72,6 @@ public class WorldspaceQueryServiceTests
         public PluginResponse CreatePlugin(string n) => throw new NotSupportedException();
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
         public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
-        public Task<SaveResult> SavePlugin(string p, IReadOnlyList<PendingChange> c) => throw new NotSupportedException();
-        public Task<PreparedPluginSave> PreparePluginSave(string p, IReadOnlyList<PendingChange> c) => throw new NotSupportedException();
         public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
         public Task ReindexPlugin(string p) => throw new NotSupportedException();
         public Task ReindexPlugins(IReadOnlyList<string> p) => throw new NotSupportedException();

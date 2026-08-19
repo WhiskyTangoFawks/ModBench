@@ -1,17 +1,18 @@
 namespace MEditService.Core.Edits;
 
-public sealed class PreparedPluginSave(string tmpPath, string finalPath, SaveResult result) : IDisposable
+public sealed class PreparedPluginSave(string tmpPath, string finalPath, string backupPath) : IDisposable
 {
-    private string? _backupPath;
+    private string? _rollbackPath;
 
-    public SaveResult Result => result;
+    /// <summary>The timestamped user-facing <c>.bak</c> this attempt created (ADR-0008).</summary>
+    public string BackupPath => backupPath;
 
     public void Commit()
     {
-        _backupPath = finalPath + ".medit-rollback";
+        _rollbackPath = finalPath + ".medit-rollback";
         // overwrite:true so a stale backup left behind by a prior crash doesn't permanently
         // block saves of this plugin
-        File.Move(finalPath, _backupPath, overwrite: true);
+        File.Move(finalPath, _rollbackPath, overwrite: true);
         // finalPath is guaranteed gone at this point (the line above just moved it away, or
         // threw), so no overwrite is needed here
         File.Move(tmpPath, finalPath);
@@ -21,19 +22,19 @@ public sealed class PreparedPluginSave(string tmpPath, string finalPath, SaveRes
     // user-facing .bak that PrepareAsync already created for this now-abandoned attempt.
     public void Rollback()
     {
-        if (_backupPath == null) return;
-        File.Move(_backupPath, finalPath, overwrite: true);
-        _backupPath = null;
+        if (_rollbackPath == null) return;
+        File.Move(_rollbackPath, finalPath, overwrite: true);
+        _rollbackPath = null;
         // File.Delete no-ops on a missing path, so no need to check File.Exists first
-        if (!string.IsNullOrEmpty(result.BackupPath))
-            File.Delete(result.BackupPath);
+        if (!string.IsNullOrEmpty(backupPath))
+            File.Delete(backupPath);
     }
 
     public void Dispose()
     {
         try
         {
-            if (_backupPath != null) File.Delete(_backupPath); // committed but never rolled back; best-effort
+            if (_rollbackPath != null) File.Delete(_rollbackPath); // committed but never rolled back; best-effort
             File.Delete(tmpPath); // no-op if already moved
             var tmpDir = Path.GetDirectoryName(tmpPath)!;
             if (Directory.Exists(tmpDir))

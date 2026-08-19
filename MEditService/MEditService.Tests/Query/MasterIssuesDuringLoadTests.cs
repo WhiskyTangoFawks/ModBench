@@ -38,7 +38,7 @@ public sealed class MasterIssuesDuringLoadTests
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp");
-        using var manager = new SessionManager(gate, new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+        using var manager = new SessionManager(gate);
         var svc = new RecordQueryService(
             manager, reflector, new ConflictClassifier());
 
@@ -71,8 +71,7 @@ public sealed class MasterIssuesDuringLoadTests
             .Build();
         var reflector = SharedSchemaReflector.Instance;
         using var manager = new SessionManager(
-            new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector)),
-            new PluginWriter(reflector, NullLogger<PluginWriter>.Instance));
+            new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector)));
         manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
         var svc = new RecordQueryService(
             manager, reflector, new ConflictClassifier());
