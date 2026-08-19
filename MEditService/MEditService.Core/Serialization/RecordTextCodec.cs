@@ -250,9 +250,18 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// Discarding them is the correct outcome, not a workaround: a child record is its own ledger
     /// entry and its own indexed row (ADR-0041/#387 — the parent's file carries only the parent's
     /// fields, which is exactly what the parent's own stream already receives), so anything written
-    /// here would be a duplicate of a record handled in its own right. This makes the parent's
-    /// bytes shallow by construction, for a getter straight off a binary overlay, with no mutable
-    /// copy to strip.
+    /// here would be a duplicate of a record handled in its own right.
+    ///
+    /// <b>This does NOT make the parent shallow.</b> An earlier revision of this comment claimed it
+    /// did — that a getter straight off a binary overlay needed no mutable copy to strip — and the
+    /// claim is measurably false. Serializing every container in the committed cut-down plugin both
+    /// ways (overlay getter, vs. deep-parsed setter + <c>ContainerStripFields.StripInPlace</c>)
+    /// found three populated exterior Cells whose overlay bytes still inline their children:
+    /// <c>00DB41:Fallout4.esm</c> at 58,419 B against 12,959 B stripped, <c>00DB42</c> at
+    /// 59,070/16,912, <c>00DB43</c> at 63,281/15,889. Suppressing the child <i>streams and
+    /// folders</i> stops the filesystem writes; it does not stop the parent's own stream from
+    /// carrying the children. Ingest therefore still deep-copies and strips a container before
+    /// serializing it (#413 D8); this class is responsible only for the disk side.
     /// </summary>
     private sealed class DiscardChildRecordStreams : ICreateStream
     {
@@ -351,12 +360,17 @@ public sealed class RecordTypeSerializationUnsupportedException : Exception
     {
     }
 
+    // The expected name is derived from the record type's own namespace, not a named game — the
+    // same derivation RecordTextCodec.LookupGeneratedType makes (#413 D5). Hardcoding "Fallout4"
+    // here would have a Skyrim or Starfield record report a path the lookup never tried, which is
+    // worse than no message at all: the reader would go looking for the wrong missing type.
     private static string BuildMessage(Type recordType, Type? generatedType, string? missingMethodName) =>
         generatedType == null
             ? $"No generated serializer found for record type '{recordType.Name}' — expected " +
-              $"'Mutagen.Bethesda.Fallout4.{recordType.Name}_Serialization' in this assembly. " +
-              "RecordTextCodecGeneratorSeed seeds generation for the whole FO4 record schema; if a " +
-              "real record type lands here, the seed shape (or this naming convention) needs revisiting."
+              $"'{recordType.Namespace}.{recordType.Name}_Serialization' in this assembly. " +
+              "RecordTextCodecGeneratorSeed seeds generation per game, and is seeded for the whole " +
+              "FO4 record schema today; if a real record type lands here, the seed shape (or this " +
+              "naming convention) needs revisiting."
             : $"Generated type '{generatedType.FullName}' has no public static '{missingMethodName}' " +
               "method — the generator's output shape may have changed.";
 }
