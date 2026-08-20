@@ -4,6 +4,8 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Tests.TestSupport;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -333,6 +335,41 @@ public class SessionManagerTests(TestPluginFixture fixture)
         }
     }
 
+    // Review finding #1: SetFilter runs raw SQL, so its re-run inside ReapplyFilter can fault for
+    // reasons SetFilter's own initial validation never saw — and by the time any of ReapplyFilter's
+    // 8 call sites reaches it, the write it followed is already durable. It must degrade to a stale
+    // filter and a warning, never a 500 over a gesture that actually succeeded.
+    [Fact]
+    public async Task ReindexPlugin_WhenReapplyingTheFilterFaults_DoesNotThrow_AndLogsAWarningNamingTheException()
+    {
+        var data = new PluginFixtureBuilder("reindex-filter-fault")
+            .WithPlugin("Plugin.esp", mod => mod.Npcs.AddNew("Npc"))
+            .Build();
+        using (data)
+        {
+            var reflector = SharedSchemaReflector.Instance;
+            var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
+            var faulting = new FaultingSetFilterRepositoryFactory(inner);
+            var entries = new List<LogEntry>();
+            using var loggerFactory = LoggerFactory.Create(b =>
+            {
+                b.SetMinimumLevel(LogLevel.Debug);
+                b.AddProvider(new CollectingLoggerProvider(entries));
+            });
+            using var manager = new SessionManager(faulting, loggerFactory.CreateLogger<SessionManager>());
+
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.SetFilter("SELECT form_key FROM npc_");
+            faulting.FaultNextCall = true;
+
+            var ex = await Record.ExceptionAsync(() => manager.ReindexPlugin("Plugin.esp"));
+
+            Assert.Null(ex);
+            Assert.Contains(entries, e =>
+                e.Level == LogLevel.Warning && e.Message.Contains("simulated re-materialization fault", StringComparison.Ordinal));
+        }
+    }
+
     // --- helpers ---
 
     private sealed class SpyRepositoryFactory(IRecordIndexFactory inner) : IRecordIndexFactory
@@ -348,6 +385,35 @@ public class SessionManagerTests(TestPluginFixture fixture)
             return _inner.Create(gameRelease);
         }
     }
+
+    // A real DuckDbRecordIndex wrapped through DelegatingRecordIndex (TestSupport) with one member
+    // intercepted — real DuckDB behaviour everywhere except the one call this test needs to fault.
+    private sealed class FaultingSetFilterRepositoryFactory(IRecordIndexFactory inner) : IRecordIndexFactory
+    {
+        public bool FaultNextCall;
+
+        public IRecordIndex Create(GameRelease gameRelease) => new FaultingSetFilterRepository(inner.Create(gameRelease), this);
+    }
+
+    private sealed class FaultingSetFilterRepository(IRecordIndex inner, FaultingSetFilterRepositoryFactory owner)
+        : DelegatingRecordIndex(inner)
+    {
+        public override void SetFilter(string? sql)
+        {
+            if (owner.FaultNextCall)
+            {
+                owner.FaultNextCall = false;
+                throw new FakeDbFault("simulated re-materialization fault");
+            }
+            base.SetFilter(sql);
+        }
+    }
+
+    // DuckDBException itself (DuckDB.NET.Data) is the real type SetFilter's SQL execution actually
+    // throws, but every one of its constructors is internal to that assembly — this is the smallest
+    // concrete DbException the catch clause can be proven against from outside it. The catch is typed
+    // on the DbException base, so which concrete subtype arrives is not the thing under test here.
+    private sealed class FakeDbFault(string message) : System.Data.Common.DbException(message);
 
 
 

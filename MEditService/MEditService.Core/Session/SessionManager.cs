@@ -553,8 +553,23 @@ public sealed class SessionManager(
     {
         lock (_lock)
         {
-            if (_session?.FilterSql is { } sql && _repository is not null)
+            if (_session?.FilterSql is not { } sql || _repository is null) return;
+            try
+            {
                 _repository.SetFilter(sql);
+            }
+            catch (System.Data.Common.DbException ex)
+            {
+                // The write this followed (a ledger file, a re-indexed binary) is already durable by
+                // the time every one of this method's 8 call sites reaches it — propagating here would
+                // 500 a gesture that actually succeeded, over a table that is only ever a filtered
+                // *view* of otherwise-correct data. Degrades to serving the stale `_filter` rather
+                // than losing the write; the warning is what makes that degradation observable instead
+                // of a silent lie.
+                _logger.LogWarning(ex,
+                    "Could not re-materialize the active filter ({Error}); filtered listings may be " +
+                    "stale until the filter is reapplied", ex.Message);
+            }
         }
     }
 

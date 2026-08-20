@@ -138,6 +138,15 @@ public interface ISessionManager
     /// would make every one of those call sites carry its own guard clause, or worse would turn
     /// <c>Ledger.LedgerFreshness</c>'s "a read must never throw" posture into a lie.
     /// </para>
+    /// <para>
+    /// <b>Never throws.</b> A re-materialization fault (the filter SQL itself faulting against the
+    /// index's new state) is logged as a warning naming the exception and degrades to serving the
+    /// stale <c>_filter</c> table rather than propagating — by the time this runs on every mutation
+    /// call site, the write it followed (a ledger file, a binary re-index) is already durable, so
+    /// letting the fault escape here would 500 a gesture that actually succeeded. Same posture as the
+    /// no-op branch above, extended to a failure that only surfaces once the filter is re-run, not at
+    /// <see cref="SetFilter"/>'s own validation time.
+    /// </para>
     /// </summary>
     void ReapplyFilter();
 }

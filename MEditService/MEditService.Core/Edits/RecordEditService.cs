@@ -275,11 +275,6 @@ public sealed class RecordEditService(
 
             RenumberTheRecordItself(index, plugin, modFolder, formKey, targetFormKey, release);
             writtenRepos.Add($"{plugin.Name} ({plugin.Origin})");
-            // #422: the whole cascade's worth of referencer edits and the record's own re-creation
-            // under a new FormKey, re-applied once rather than per write — cheaper and no less
-            // correct, since SetFilter re-derives the full matching set regardless of how many rows
-            // moved since it was last run.
-            sessions.ReapplyFilter();
         }
         catch (Exception ex)
         {
@@ -301,6 +296,16 @@ public sealed class RecordEditService(
                 $"Renumbering {formKey} to {targetFormKey} failed after writing to: {string.Join(", ", writtenRepos)}. " +
                 "Those repos now hold working-tree dirt from this partial renumber — review and revert " +
                 $"in the Source Control panel as needed. Underlying error: {ex.Message}", ex);
+        }
+        finally
+        {
+            // #422: on both outcomes, not just success — a mid-cascade failure still leaves whatever
+            // referencer rewrites already landed (writtenRepos) durably on disk before the throw above,
+            // and _filter must not stay stale for those just because the record's own rewrite is what
+            // failed. Re-applied once rather than per write — cheaper and no less correct, since
+            // SetFilter re-derives the full matching set regardless of how many rows moved since it was
+            // last run.
+            sessions.ReapplyFilter();
         }
 
         logger.LogInformation(

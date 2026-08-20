@@ -123,6 +123,60 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Contains(index.GetReferencedBy(result.NewFormKey!), r => r.FormKey == two.ReferencerNpc.ToString());
     }
 
+    // Review finding #2: the reapply that only ran on the try block's success path left _filter
+    // stale for whatever referencer rewrites had already landed durably before the target's own
+    // write failed — the same honest-partial-state doctrine the writtenRepos disclosure follows.
+    // Chmod-mid-cascade technique from PluginCompileServiceJournalTests: the target mod folder is
+    // made unwritable *after* fixture setup (so tracking itself succeeds), so RenumberTheRecordItself
+    // — the cascade's last, single-repo step — is what fails, once RewriteReferenceField has already
+    // durably rewritten the referencer's FormLink.
+    [Fact]
+    public void RenumberRecord_WhenTheTargetsOwnWriteFailsAfterReferencersLanded_FilterReflectsTheReferencerWrite()
+    {
+        using var two = TwoModFixture.Create(trackReferencer: true);
+        const string requestedTarget = "900000:Base.esm";
+
+        // Matches nothing yet: form_references still points every source at TargetRace's *old*
+        // FormKey, not the one this renumber is about to move it to.
+        two.Sessions.SetFilter(
+            $"SELECT source_form_key AS form_key FROM form_references " +
+            $"WHERE target_form_key = '{requestedTarget}' AND field_path = 'race'");
+        Assert.Equal(0, two.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+
+        Chmod(two.TargetModFolder, "500"); // read+execute only — the new race ledger file can't be created
+        try
+        {
+            var ex = Assert.Throws<IOException>(() =>
+                ServiceFor(two.Sessions).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString(), requestedTarget));
+            Assert.Contains(TwoModFixture.ReferencerPluginName, ex.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Chmod(two.TargetModFolder, "700"); // restored before TwoModFixture.Dispose() needs to clean up
+        }
+
+        // The referencer's rewrite is durably on disk (write order: referencers first, target last),
+        // so the filter — re-materialized even though the overall gesture threw — must show it.
+        var result = two.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        Assert.Equal(1, result.Total);
+        Assert.Equal(two.ReferencerNpc.ToString(), result.Items[0].FormKey);
+    }
+
+    // Process-shelled rather than File.Set/GetUnixFileMode — same reasoning as
+    // PluginCompileServiceJournalTests.Chmod (this project's runtime is Linux-only per root
+    // CLAUDE.md, but that .NET API is flagged platform-unsafe regardless). Recursive: the write this
+    // needs to block lands several directories under the mod folder's own root, in a subdirectory
+    // Track already created and left writable.
+    private static void Chmod(string path, string mode)
+    {
+        using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "chmod", ["-R", mode, path])
+        { RedirectStandardError = true })!;
+        process.WaitForExit();
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"chmod {mode} {path} failed: {process.StandardError.ReadToEnd()}");
+    }
+
     [Fact]
     public void RenumberRecord_Refuses_WhenAReferencerIsUntracked_NamingIt_AndWritesNothing()
     {
