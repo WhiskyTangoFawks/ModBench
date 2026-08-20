@@ -179,6 +179,12 @@ using git.
 - **A created plugin is ordinary working-tree text on its destination mod's edit branch** — no
   Authored mode, no provenance flag. "Authored" is what merging to `main` at will already means
   (ADR-0041 amendment); a created plugin arrives no differently than any other tracked edit.
+- **Accepted residue, not rolled back** (#288 review): the "new mod" destination registers the
+  mod folder in `modlist.txt` (via the ordinary install path) *before* the create call that
+  writes the plugin into it, so a backend failure on that call leaves an empty, disabled, but
+  registered mod behind — visible in the Mods tree, harmless, and the user's own delete undoes
+  it. Deliberate, the same posture the mega-plugin Track cost and every other accepted cost in
+  this spec already takes: named, not engineered around.
 
 ### Track
 

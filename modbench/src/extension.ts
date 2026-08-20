@@ -1236,6 +1236,12 @@ async function pickPluginDestination(
   if (!modName) return undefined;
   const staging = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'medit-newmod-'));
   try {
+    // Accepted residue (#288 review), the frontend's twin of PluginEndpoints.CreatePlugin's own
+    // GitUnavailableException-catch comment: the mod folder is registered here, before the create
+    // POST below even runs. If that POST then fails, the mod stays registered — empty and
+    // disabled, same as any fresh install — rather than being rolled back. Visible in the Mods
+    // tree, harmless, and the user's own delete-the-mod-folder undoes it; not engineered around,
+    // per the ruling.
     await modlistSource.installMod(modName, staging, {});
   } finally {
     await fs.promises.rm(staging, { recursive: true, force: true });
