@@ -207,7 +207,11 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         DuckDBAppender documentAppender, IMajorRecordGetter record, string recordType,
         string plugin, string origin, int loadOrderIndex, GameRelease gameRelease)
     {
-        var body = _codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult();
+        // D8: a container is serialized from a stripped deep copy, everything else from the getter
+        // ingest already holds. Children are their own documents; a parent carrying them would store
+        // the same data twice and hold a body no ledger file can match.
+        var toSerialize = ContainerStripFields.StrippedForSerialization(record);
+        var body = _codec.SerializeToBytesAsync(toSerialize, gameRelease).GetAwaiter().GetResult();
 
         var row = documentAppender.CreateRow();
         row.AppendValue(record.FormKey.ToString());

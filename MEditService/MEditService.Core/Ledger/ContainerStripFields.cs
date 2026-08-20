@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Reflection;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Ledger;
@@ -38,13 +40,92 @@ internal static class ContainerStripFields
     /// <summary>
     /// Clears (list fields) or nulls (single reference fields, e.g. <c>Landscape</c>/<c>TopCell</c>)
     /// <paramref name="record"/>'s child-major fields in place, if its type is one of the known
-    /// container shapes; a no-op for every other type. In place, not a copy: called once, on a
-    /// freshly deep-parsed record that is about to be serialized for the first time and then
-    /// discarded (the deep-parsed mod it came from is disposed right after) — nothing else reads the
-    /// pre-strip state, so there is nothing a copy would protect. A record re-read from its own
-    /// ledger text is already shallow (the ledger never held the children to begin with), so this is
-    /// never called on that path.
+    /// container shapes; a no-op for every other type. In place, not a copy, because both callers
+    /// hand it something already private to them and about to be serialized and discarded — Track's
+    /// freshly deep-parsed record (whose mod is disposed right after), or the deep copy
+    /// <see cref="StrippedForSerialization"/> just made for ingest. Nothing else reads the pre-strip
+    /// state either way, so there is nothing a copy here would protect. A record re-read from its
+    /// own ledger text is already shallow (the ledger never held the children to begin with), so
+    /// this is never called on that path.
     /// </summary>
+    /// <summary>
+    /// The form of <paramref name="record"/> that should be serialized: itself for the ~95% of
+    /// records that are not containers, or a stripped deep copy for the ones that are.
+    ///
+    /// <para>Ingest holds read-only binary-overlay getters, and <see cref="StripInPlace"/> needs a
+    /// setter — hence the copy, which is the whole cost of this path and why it is taken only for
+    /// container types (measured on a real corpus: 156K of 3.08M records, ~5%). The copy is
+    /// <b>necessary</b>, not defensive: suppressing the serializer's per-child streams and folders
+    /// keeps the codec off the filesystem but does not stop a populated exterior cell's own stream
+    /// from carrying its children — three such cells in the committed cut-down plugin serialize to
+    /// 58,419 / 59,070 / 63,281 bytes raw against 12,959 / 16,912 / 15,889 stripped.</para>
+    ///
+    /// <para>The copy reproduces the deep-parse path's bytes: across all 3,940 records of that
+    /// plugin, copy-then-strip agrees with parse-then-strip on 3,939. The one exception is a
+    /// reader-fidelity difference, not a stripping one (#369 — Cell <c>092A18</c>'s
+    /// <c>Lighting.Versioning</c>), and a deep copy cannot close it because it faithfully copies the
+    /// overlay's own divergent values. That residual is the measured, documented hole in
+    /// <see cref="GitBlobHash"/>'s one-directional semantics.</para>
+    /// </summary>
+    internal static IMajorRecordGetter StrippedForSerialization(IMajorRecordGetter record)
+    {
+        if (!IsContainer(record.GetType())) return record;
+
+        var copy = DeepCopy(record);
+        StripInPlace(copy);
+        return copy;
+    }
+
+    // A binary overlay's runtime type is "<ConcreteName>BinaryOverlay" — the same Mutagen naming
+    // convention RecordTextCodec's own dispatch relies on. Normalizing here means the container
+    // table above stays keyed by the concrete type name alone and reads the same whether it is
+    // handed an overlay getter (ingest) or an already-deep-parsed setter (Track).
+    private const string OverlaySuffix = "BinaryOverlay";
+
+    private static bool IsContainer(Type recordType)
+    {
+        var name = recordType.Name;
+        if (name.EndsWith(OverlaySuffix, StringComparison.Ordinal))
+            name = name[..^OverlaySuffix.Length];
+        return ByTypeName.ContainsKey(name);
+    }
+
+    private static readonly ConcurrentDictionary<Type, MethodInfo> DeepCopyMethods = new();
+
+    /// <summary>
+    /// Loqui generates a polymorphic <c>DeepCopy</c> on each game's own major-record mixin
+    /// (<c>Mutagen.Bethesda.&lt;Game&gt;.&lt;Game&gt;MajorRecordMixIn</c>) which dispatches to the
+    /// record's real type — handed a <c>CellBinaryOverlay</c> it returns a <c>Cell</c>, not a
+    /// truncated base record. Resolved by reflection from the record type's <i>own namespace</i>
+    /// rather than by naming a game, for the same reason the codec's serializer lookup is
+    /// (root CLAUDE.md, #413 D5): this runs for every container in every session, so a hardcoded
+    /// game would mean a Skyrim or Starfield container silently failing to strip.
+    /// </summary>
+    private static IMajorRecord DeepCopy(IMajorRecordGetter record)
+    {
+        var method = DeepCopyMethods.GetOrAdd(record.GetType(), static type =>
+        {
+            var game = type.Namespace?.Split('.').LastOrDefault()
+                ?? throw new InvalidOperationException($"Record type '{type}' has no namespace to derive a game from.");
+            var mixInName = $"{type.Namespace}.{game}MajorRecordMixIn";
+            var mixIn = type.Assembly.GetType(mixInName)
+                ?? throw new InvalidOperationException(
+                    $"No '{mixInName}' found in {type.Assembly.GetName().Name} — a container record cannot be " +
+                    "copied for stripping, so its document would carry its children.");
+
+            // The two-parameter (getter, TranslationMask) overload; the others take error masks this
+            // has no use for.
+            return Array.Find(
+                       mixIn.GetMethods(BindingFlags.Public | BindingFlags.Static),
+                       m => m.Name == "DeepCopy"
+                            && m.GetParameters() is { Length: 2 } p
+                            && p[0].ParameterType.IsAssignableFrom(type))
+                   ?? throw new InvalidOperationException($"'{mixInName}' has no two-parameter DeepCopy overload.");
+        });
+
+        return (IMajorRecord)method.Invoke(null, [record, null])!;
+    }
+
     internal static void StripInPlace(IMajorRecord record)
     {
         if (!ByTypeName.TryGetValue(record.GetType().Name, out var fields)) return;
