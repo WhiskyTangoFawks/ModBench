@@ -19,6 +19,9 @@ function baseProps() {
     override: override(),
     isImmutable: false,
     inLoadOrder: true,
+    // #415: tracked by default, so every pre-existing case here keeps describing an editable
+    // column exactly as it did — the untracked cases opt in explicitly below.
+    isTracked: true,
     showOriginInline: false,
     collapsed: false,
     onToggleCollapse: vi.fn(),
@@ -141,5 +144,39 @@ describe('PluginHeader', () => {
   it('does not render an Add Master… button', () => {
     render(<PluginHeader {...baseProps()} />);
     expect(screen.queryByText('Add Master…')).not.toBeInTheDocument();
+  });
+});
+
+// #415 AC4 / ADR-0041 (User Story 2): "an untracked plugin is visibly read-only with the way out
+// named". Visibly, i.e. before the user attempts an edit and is refused — which is why this lives
+// on the column header rather than only in the refusal the backend returns.
+describe('PluginHeader — untracked signposting (#415)', () => {
+  it('marks an untracked column read-only on screen, not only in a tooltip', () => {
+    render(<PluginHeader {...baseProps()} isTracked={false} />);
+
+    expect(screen.getByText('(untracked)')).toBeTruthy();
+  });
+
+  it('names the Track command as the way out', () => {
+    render(<PluginHeader {...baseProps()} isTracked={false} />);
+
+    expect(screen.getByTitle(/Track/)).toBeTruthy();
+  });
+
+  it('signposts the patch-plugin path instead for a master that cannot be tracked at all', () => {
+    // The other half of AC4: Track does not apply to a vanilla or DLC master, so its signposting
+    // must not name it. Offering a command that cannot work here is the dead end the AC forbids.
+    render(<PluginHeader {...baseProps()} isImmutable isTracked={false} />);
+
+    const title = screen.getByTitle(/patch/i);
+    expect(title).toBeTruthy();
+    expect(title.getAttribute('title')).not.toMatch(/Track/);
+  });
+
+  it('says nothing at all once the mod is tracked', () => {
+    render(<PluginHeader {...baseProps()} isTracked />);
+
+    expect(screen.queryByText('(untracked)')).toBeNull();
+    expect(screen.queryByText('(read-only)')).toBeNull();
   });
 });

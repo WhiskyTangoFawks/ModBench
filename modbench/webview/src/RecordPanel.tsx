@@ -443,6 +443,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         override={col.override}
                         isImmutable={isImmutable}
                         inLoadOrder={inLoadOrder}
+                        isTracked={trackedSet.has(col.key)}
                         showOriginInline={collidingPluginNames.has(col.override.plugin)}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleColumnCollapse(col.key)}

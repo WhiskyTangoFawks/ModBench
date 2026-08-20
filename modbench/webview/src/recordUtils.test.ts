@@ -52,6 +52,25 @@ describe('readOnlyReason', () => {
   it('is "notInLoadOrder" for an immutable column the load order does not name', () => {
     expect(readOnlyReason(true, false)).toBe('notInLoadOrder');
   });
+
+  // #415 / ADR-0041: "editing requires tracking; viewing never does". A mutable, loaded plugin in
+  // an untracked mod folder is read-only for a reason that is one command away from gone, which is
+  // why it needs its own value rather than folding into the two above — each names a different way
+  // out, and offering the wrong one is worse than offering none.
+  it('is "untracked" for an otherwise editable column whose mod has no repository', () => {
+    expect(readOnlyReason(false, true, false)).toBe('untracked');
+  });
+
+  it('is null once that same column is tracked', () => {
+    expect(readOnlyReason(false, true, true)).toBeNull();
+  });
+
+  // Precedence, not an accident of ordering: a vanilla master cannot be tracked at all, so hearing
+  // "run Track on it" would send the user somewhere that leads nowhere.
+  it('prefers the reason the user cannot fix over the one they can', () => {
+    expect(readOnlyReason(true, true, false)).toBe('vanillaMaster');
+    expect(readOnlyReason(true, false, false)).toBe('notInLoadOrder');
+  });
 });
 
 // #304 / ADR-0036: "origin inline only on collision" — computed from the overrides a single

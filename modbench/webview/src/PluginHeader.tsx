@@ -13,6 +13,10 @@ interface PluginHeaderProps {
   // this component used to also set it on its own root <div> nested inside that <th>, and CSS
   // opacity compounds on nesting — 0.55 twice renders at ~0.30, not the intended 0.55).
   inLoadOrder: boolean;
+  // #415 / ADR-0041: whether this plugin's mod folder is tracked. Distinct from the two flags
+  // above and checked after them — an immutable plugin's read-only-ness is not something tracking
+  // can lift, so its own reason wins (see recordUtils.ts's readOnlyReason).
+  isTracked: boolean;
   // #304 / ADR-0036: "origin appears inline in the header only when two loaded copies share a
   // filename" — decided by the caller (RecordPanel, via recordUtils.ts's collidingFilenames over
   // the compare response's own overrides), never recomputed here.
@@ -48,10 +52,18 @@ interface PluginHeaderProps {
 // `modbench.pluginListTree` — `docs/specs/mods.md`/`plugins.md`), named as navigable surfaces, not
 // imported Mod Management vocabulary — CONTEXT-MAP.md's boundary forbids the word "mod" as a
 // common noun and "priority" as a mechanism, not the proper name of a surface the user can go to.
-const READ_ONLY_TEXT: Record<'vanillaMaster' | 'notInLoadOrder', { label: string; title: string }> = {
+//
+// #415 / ADR-0041: `untracked` joins them, and vanillaMaster's tooltip gains the sentence it was
+// always missing — the way out. AC4 asks for two different signposts because there are two
+// different answers: a plugin in a mod folder is one Track away from editable, while a base-game
+// master can never be tracked at all and its blessed path is a patch plugin instead. Neither
+// message names the other's way out; that is asserted, not left to review.
+const READ_ONLY_TEXT: Record<'vanillaMaster' | 'notInLoadOrder' | 'untracked', { label: string; title: string }> = {
   vanillaMaster: {
     label: '(read-only)',
-    title: 'This is a vanilla, DLC, or Creation Club master and can never be edited.',
+    title:
+      'This is a vanilla, DLC, or Creation Club master and can never be edited. '
+      + 'To change what it defines, author a patch plugin holding the override and edit that.',
   },
   notInLoadOrder: {
     label: '(not loaded)',
@@ -59,6 +71,17 @@ const READ_ONLY_TEXT: Record<'vanillaMaster' | 'notInLoadOrder', { label: string
       'This copy plays no part in what the game actually loads, so editing it here changes '
       + 'nothing anywhere. Whether this file loads, and which copy, is decided in the Mods and '
       + 'Plugins views.',
+  },
+  // The friction here is deliberate (ADR-0041): editing someone else's plugin in place is the
+  // community's own anti-pattern, so tracking is a decision the user makes rather than something
+  // that happens to them. Which is exactly why the label has to say the friction is one command
+  // deep — a read-only column with no stated way out reads as a defect, not as a choice.
+  untracked: {
+    label: '(untracked)',
+    title:
+      'This plugin\u2019s mod is not tracked, so its records are read-only. '
+      + 'Run \u201cModbench: Track Mod\u201d on it once to start editing \u2014 '
+      + 'its records become text in the mod\u2019s own git repository, and your edits show up in Source Control.',
   },
 };
 
@@ -71,9 +94,9 @@ const READ_ONLY_TEXT: Record<'vanillaMaster' | 'notInLoadOrder', { label: string
 // any more; the header record's masters field still renders through the ordinary compare-grid
 // rows below, read-only.
 export function PluginHeader({
-  override: o, isImmutable, inLoadOrder, showOriginInline, collapsed, onToggleCollapse,
+  override: o, isImmutable, inLoadOrder, isTracked, showOriginInline, collapsed, onToggleCollapse,
 }: PluginHeaderProps) {
-  const reason = readOnlyReason(isImmutable, inLoadOrder);
+  const reason = readOnlyReason(isImmutable, inLoadOrder, isTracked);
   return (
     <div>
       {/* Issue #3: left-click the plugin-name chip collapses/expands this column. ADR-0036:

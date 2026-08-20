@@ -30,11 +30,27 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
 // InLoadOrder:false, so the two are never independent on the wire today — but a reader that only
 // checked isImmutable couldn't tell them apart, and PluginHeader needs to: the tooltip names a
 // different cause, and only the second dims (ADR-0035's "non-participating copies render dimmed").
-export type ReadOnlyReason = 'vanillaMaster' | 'notInLoadOrder' | null;
+// #415 / ADR-0041: `untracked` joins the two, and is the only one of the three the user can undo —
+// "editing requires tracking; viewing never does", and the escape is one command, once, per mod.
+export type ReadOnlyReason = 'vanillaMaster' | 'notInLoadOrder' | 'untracked' | null;
 
-export function readOnlyReason(isImmutable: boolean, inLoadOrder: boolean): ReadOnlyReason {
-  if (!isImmutable) return null;
-  return inLoadOrder ? 'vanillaMaster' : 'notInLoadOrder';
+/**
+ * Why this column cannot be written, or null when it can.
+ *
+ * Ordered by what the user can do about it, deliberately: the two reasons they cannot fix here come
+ * first, so a vanilla master is never told to run Track — a command that does not apply to it and
+ * would send them somewhere that leads nowhere. Naming the wrong way out is worse than naming none
+ * (AC4: "no silent dead UI" is about dead *ends*, not only about silence).
+ *
+ * `isTracked` defaults true so a caller that has not learned about tracking yet keeps its
+ * pre-#415 answer rather than silently reporting every column as untracked; the record editor,
+ * which is the surface that gates on it, always passes it.
+ */
+export function readOnlyReason(
+  isImmutable: boolean, inLoadOrder: boolean, isTracked = true,
+): ReadOnlyReason {
+  if (isImmutable) return inLoadOrder ? 'vanillaMaster' : 'notInLoadOrder';
+  return isTracked ? null : 'untracked';
 }
 
 // #304 / ADR-0036: "origin appears inline in the header only when two loaded copies share a
