@@ -15,7 +15,7 @@ import {
   setEnabledInText,
   unlistedModNames,
 } from './modlistText';
-import { movePluginsInText, setPluginEnabledInText } from './pluginsText';
+import { appendPluginInText, movePluginsInText, setPluginEnabledInText } from './pluginsText';
 import { parseMetaIni, writeMetaIni } from './metaIni';
 import { setUninstalledInText } from './downloads';
 import { readGameName, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
@@ -273,6 +273,10 @@ export class Mo2ModlistSource implements IModlistSource {
 
   async reorderPlugins(pluginNames: string[], toIndex: number): Promise<void> {
     await this.modifyPlugins((t) => movePluginsInText(t, pluginNames, toIndex));
+  }
+
+  async appendPlugin(pluginName: string): Promise<void> {
+    await this.modifyPlugins((t) => appendPluginInText(t, pluginName));
   }
 
   /** Non-comment, non-blank plugins.txt lines in order (leading `*` retained). */

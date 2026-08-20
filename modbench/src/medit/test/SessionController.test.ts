@@ -141,26 +141,45 @@ function makeDeps(overrides: Partial<SessionControllerDeps> = {}): SessionContro
 describe('SessionController.createPlugin', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('POSTs to /plugins/create and refreshes tree on success', async () => {
+  // #288: the destination (path/origin) is now the caller's — Mod Management's QuickPick, not an
+  // implicit write into the Data folder — and the created plugin's own name comes back from the
+  // response rather than being assumed, so the composition root's plugins.txt append names
+  // whatever the backend actually wrote.
+  it('POSTs to /plugins/create with the destination and returns the created plugin\'s name', async () => {
     const deps = makeDeps();
     const ctrl = new SessionController(deps);
 
-    await ctrl.createPlugin('MyPatch.esp');
+    const result = await ctrl.createPlugin('MyPatch.esp', '/mods/MyMod', 'MyMod');
 
     expect(deps.client.POST).toHaveBeenCalledWith(
       '/plugins/create',
-      expect.objectContaining({ body: { name: 'MyPatch.esp' } }),
+      expect.objectContaining({ body: { name: 'MyPatch.esp', path: '/mods/MyMod', origin: 'MyMod' } }),
     );
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
+    expect(result).toEqual({ name: 'test.esp' });
   });
 
-  it('shows error and does not refresh tree on failure', async () => {
+  // The rival this guards against is #288's own starting point: createPlugin used to refresh the
+  // tree itself immediately on success. Under #288 the tree must not refresh until the caller's
+  // own plugins.txt append has also landed — refreshing here would show a plugin the load order
+  // doesn't name yet — so refreshTree becomes strictly the composition root's call, never this
+  // method's own.
+  it('never refreshes the tree itself — that is the caller\'s job, after its own plugins.txt append', async () => {
+    const deps = makeDeps();
+    const ctrl = new SessionController(deps);
+
+    await ctrl.createPlugin('MyPatch.esp', '/mods/MyMod', 'MyMod');
+
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  it('shows error and returns undefined on failure', async () => {
     const deps = makeDeps({ client: makeClient({ createPluginOk: false }) });
     const ctrl = new SessionController(deps);
 
-    await ctrl.createPlugin('MyPatch.esp');
+    const result = await ctrl.createPlugin('MyPatch.esp', '/mods/MyMod', 'MyMod');
 
     expect(deps.showError).toHaveBeenCalledOnce();
+    expect(result).toBeUndefined();
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 });

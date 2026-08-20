@@ -73,6 +73,25 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
     expect([...code.matchAll(/\b(records?|formkeys?|editorids?)\b/gi)].map((m) => m[0])).toEqual([]);
   });
 
+  // #288: three modmanager files the New Plugin gesture touched, none of them the merged tree's
+  // own row/child/composite/filter/drift set above but all of them the same shape — plain
+  // modmanager/ modules reachable from the composition root, exactly what let a medit import slip
+  // in unnoticed until a reviewer's manual read caught it (review comment on #288). Held to the
+  // same "imports nothing from Editing" bar PluginListProvider's own check uses, not the stricter
+  // "nothing but vscode" bar the composition-root joiners (composite/nameFilter/pluginDrift) get —
+  // these have real modmanager-internal dependencies, just never a medit/ one.
+  it('pluginDestination.ts imports nothing from Editing', () => {
+    expect(importsOf(read('modmanager/pluginDestination.ts')).filter((s) => s.includes('medit'))).toEqual([]);
+  });
+
+  it('Mo2ModlistSource.ts imports nothing from Editing', () => {
+    expect(importsOf(read('modmanager/mo2/Mo2ModlistSource.ts')).filter((s) => s.includes('medit'))).toEqual([]);
+  });
+
+  it('model.ts imports nothing from Editing', () => {
+    expect(importsOf(read('modmanager/model.ts')).filter((s) => s.includes('medit'))).toEqual([]);
+  });
+
   it('the row provider contains no record vocabulary', () => {
     // #276: "immutable"/"read-only" pinned alongside the original record vocabulary — Editing's
     // "Immutable plugin" (read-only-for-editing) is a distinct concept from this row's own

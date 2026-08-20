@@ -38,7 +38,7 @@ public class SessionManagerThreadSafetyTests(TestPluginFixture fixture)
 
         // If CreatePlugin() calls Load() from inside lock(_lock) with a non-reentrant lock,
         // the same thread deadlocks. Use a timeout to catch that case.
-        var task = Task.Run(() => manager.CreatePlugin("NewPlugin.esp"));
+        var task = Task.Run(() => manager.CreatePlugin("NewPlugin.esp", Path.Combine(data.DataFolder, "SomeMod"), "SomeMod"));
         var completed = await Task.WhenAny(task, Task.Delay(5000));
 
         Assert.Same(task, completed); // timed out = deadlock
@@ -52,7 +52,7 @@ public class SessionManagerThreadSafetyTests(TestPluginFixture fixture)
         using var manager = MakeManager();
         manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-        var task = Task.Run(() => manager.CreatePlugin("Created.esp"));
+        var task = Task.Run(() => manager.CreatePlugin("Created.esp", Path.Combine(data.DataFolder, "SomeMod"), "SomeMod"));
         var completed = await Task.WhenAny(task, Task.Delay(5000));
         Assert.Same(task, completed);
 

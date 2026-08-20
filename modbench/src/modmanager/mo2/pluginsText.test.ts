@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parsePlugins, setPluginEnabledInText, movePluginsInText, dropIndexForMove } from './pluginsText';
+import { parsePlugins, setPluginEnabledInText, movePluginsInText, dropIndexForMove, appendPluginInText } from './pluginsText';
 import type { PluginEntry } from '../model';
 
 const fixtureDir = join(__dirname, '..', 'test', 'fixtures', 'mo2-instance');
@@ -70,6 +70,43 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
     const input = defaultPlugins();
     const disabled = setPluginEnabledInText(input, 'Unofficial Fallout 4 Patch.esp', false);
     expect(setPluginEnabledInText(disabled, 'Unofficial Fallout 4 Patch.esp', true)).toBe(input);
+  });
+});
+
+// #288: the New Plugin gesture's own append — a created plugin's line, always enabled, always at
+// the bottom (the winning end: "bottom wins record overrides", per this file's own header comment
+// — the natural default for a plugin the user is actively authoring).
+describe('appendPluginInText — byte-faithful append at the winning end', () => {
+  it('appends an enabled entry line after the last existing entry, preserving everything before it', () => {
+    const input = defaultPlugins();
+    const out = appendPluginInText(input, 'NewPlugin.esp');
+    expect(out).toBe(input + '*NewPlugin.esp\r\n');
+  });
+
+  it('appends to an empty file', () => {
+    expect(appendPluginInText('', 'Only.esp')).toBe('*Only.esp\n');
+  });
+
+  it('preserves a trailing comment/blank line by landing before it, not after', () => {
+    const input = '*A.esp\r\nB.esp\r\n# trailing comment\r\n';
+    const out = appendPluginInText(input, 'New.esp');
+    expect(out).toBe('*A.esp\r\nB.esp\r\n*New.esp\r\n# trailing comment\r\n');
+  });
+
+  it('matches the file\'s own EOL style when the last line lacks a trailing newline', () => {
+    const input = '*A.esp\r\nB.esp';
+    const out = appendPluginInText(input, 'New.esp');
+    expect(out).toBe('*A.esp\r\nB.esp\r\n*New.esp\r\n');
+  });
+
+  it('preserves a leading BOM', () => {
+    const out = appendPluginInText('﻿*First.esp\r\n', 'Second.esp');
+    expect(out).toBe('﻿*First.esp\r\n*Second.esp\r\n');
+  });
+
+  it('throws when the name already exists (never a silent duplicate line)', () => {
+    const input = defaultPlugins();
+    expect(() => appendPluginInText(input, 'Unofficial Fallout 4 Patch.esp')).toThrow(/Unofficial Fallout 4 Patch\.esp/);
   });
 });
 

@@ -46,6 +46,21 @@ public sealed class SwaggerSchemaTests
             allOf[0].GetProperty("$ref").GetString());
     }
 
+    // #288: no suite-wide declared-vs-thrown ProducesProblem audit exists yet (a repo-wide one is
+    // out of scope for this ticket) — this is a route-local regression guard for the two #309
+    // riders CreatePlugin carried: an undeclared 503 (Swashbuckle would otherwise emit
+    // `content?: never` for it, per MEditService/CLAUDE.md's endpoint invariant) and, before this
+    // fix, a second condition that also collapsed to 503 despite meaning something else entirely.
+    [Fact]
+    public async Task CreatePluginRoute_DeclaresEveryStatusItsHandlerCanReturn()
+    {
+        var root = await GetSchemaAsync();
+        var responses = root.GetProperty("paths").GetProperty("/plugins/create").GetProperty("post").GetProperty("responses");
+
+        var declared = responses.EnumerateObject().Select(p => p.Name).ToHashSet();
+        Assert.Equal(new HashSet<string> { "200", "400", "409", "500", "503" }, declared);
+    }
+
     // Slice 2: a non-nullable object-typed property (required ref) must stay a bare $ref — the
     // filter must not wrap indiscriminately, only genuinely-nullable properties.
     [Fact]

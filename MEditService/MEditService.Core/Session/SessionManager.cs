@@ -52,8 +52,6 @@ public sealed class SessionManager(
 
     private const string NoSessionMessage = "No session loaded.";
 
-    private string? _dataFolderPath;
-    private string? _pluginsTxtPath;
     private GameRelease _gameRelease;
 
     public IGameSession? Session { get { lock (_lock) return _session; } }
@@ -90,7 +88,7 @@ public sealed class SessionManager(
             dataFolderPath, pluginsTxtPath, gameRelease);
 
         RunLoad(
-            dataFolderPath, pluginsTxtPath, gameRelease,
+            gameRelease,
             logger => new GameSession(dataFolderPath, pluginsTxtPath, gameRelease, logger),
             "Creating game session (reading plugins list and opening binary overlays)",
             "Session load complete", "Session load failed");
@@ -109,7 +107,7 @@ public sealed class SessionManager(
 
         // No plugins.txt for an explicit session; the game directory is the implicit-master root.
         RunLoad(
-            gameDirectory, pluginsTxtPath: null, gameRelease, buildSession,
+            gameRelease, buildSession,
             "Creating explicit game session from scattered paths",
             "Explicit session load complete", "Explicit session load failed");
     }
@@ -126,7 +124,7 @@ public sealed class SessionManager(
     /// </para>
     /// </summary>
     private void RunLoad(
-        string dataFolderPath, string? pluginsTxtPath, GameRelease gameRelease,
+        GameRelease gameRelease,
         Func<ILogger?, GameSession> buildSession, string buildingMessage, string completeMessage, string failedMessage)
     {
         EnterExclusive();
@@ -138,7 +136,7 @@ public sealed class SessionManager(
             var session = buildSession(_logger);
             // IndexAndStore tears down a session it has already published; this covers the window
             // before that, where the failure belongs to nobody else.
-            try { IndexAndStore(session, gameRelease, dataFolderPath, pluginsTxtPath, token); }
+            try { IndexAndStore(session, gameRelease, token); }
             catch { session.Dispose(); throw; }
             _logger.LogDebug("{Step}", completeMessage);
         }
@@ -189,8 +187,7 @@ public sealed class SessionManager(
     //
     // Deliberately NOT called under _lock: holding it across the loop is exactly what made every
     // read wait for the whole load. The lock now covers only the publish/teardown transitions.
-    private void IndexAndStore(
-        GameSession session, GameRelease gameRelease, string dataFolderPath, string? pluginsTxtPath, CancellationToken token)
+    private void IndexAndStore(GameSession session, GameRelease gameRelease, CancellationToken token)
     {
         _logger.LogDebug("Initializing DuckDB record repository");
         var repository = _repositoryFactory.Create(gameRelease);
@@ -201,8 +198,6 @@ public sealed class SessionManager(
             _conflictsComputed = false;
             _session = session;
             _repository = repository;
-            _dataFolderPath = dataFolderPath;
-            _pluginsTxtPath = pluginsTxtPath;
             _gameRelease = gameRelease;
         }
 
@@ -299,10 +294,27 @@ public sealed class SessionManager(
 
     }
 
-    public PluginResponse CreatePlugin(string name)
+    /// <summary>
+    /// #288 / ADR-0041: the New Plugin gesture, re-scoped from writing straight into the game's Data
+    /// folder to landing in whatever <paramref name="path"/>/<paramref name="origin"/> the caller
+    /// resolved (Mod Management's destination QuickPick — overwrite/, an existing mod, or a freshly
+    /// installed mod folder; see <c>PluginEndpoints.CreatePlugin</c>'s doc comment for the full
+    /// division of labour). This method's job stops at the session boundary: it writes the binary,
+    /// opens it as a genuine load-order participant (<see cref="GameSession.AddCreatedPlugin"/>) and
+    /// indexes it, the same three steps <see cref="LoadUnlistedPlugin"/> already does for a plugin
+    /// opened mid-session. It never touches <c>plugins.txt</c> — Mod Management owns that file
+    /// (CONTEXT-MAP.md), and appending the load-order line is now the caller's job, done only once
+    /// this call (and any Track it triggers) has actually succeeded, so the load order can never
+    /// name a file this method didn't finish writing.
+    /// </summary>
+    public PluginResponse CreatePlugin(string name, string path, string origin)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Plugin name cannot be empty.", nameof(name));
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("Destination path cannot be empty.", nameof(path));
+        if (string.IsNullOrWhiteSpace(origin))
+            throw new ArgumentException("Origin cannot be empty.", nameof(origin));
 
         var ext = Path.GetExtension(name);
         if (!ext.Equals(".esp", StringComparison.OrdinalIgnoreCase) &&
@@ -317,10 +329,14 @@ public sealed class SessionManager(
             if (_session is null)
                 throw new InvalidOperationException(NoSessionMessage);
 
-            if (_pluginsTxtPath is null)
-                throw new InvalidOperationException("Cannot create a plugin in an explicit session — no plugins.txt to update.");
+            // Never-assume-exclusive-ownership: the destination may be a mod folder nothing has
+            // written into yet (a brand-new mod, or overwrite/ before its first file) — Mod
+            // Management is expected to have created a real mod folder itself for the "new mod"
+            // destination (installMod), but this guards the overwrite/ case and any other caller
+            // defensively rather than assuming the folder exists.
+            Directory.CreateDirectory(path);
 
-            var filePath = Path.Combine(_dataFolderPath!, name);
+            var filePath = Path.Combine(path, name);
             if (File.Exists(filePath))
                 throw new IOException($"Plugin file already exists: {name}");
 
@@ -328,9 +344,9 @@ public sealed class SessionManager(
             var mod = ModFactory.Activator(modKey, _gameRelease);
             mod.WriteToBinary(filePath);
 
-            File.AppendAllText(_pluginsTxtPath!, $"*{name}\n");
-
-            var metadata = _session.AddPlugin(filePath);
+            var metadata = _session.AddCreatedPlugin(filePath, origin);
+            var openedMod = _session.GetMod(metadata.Name, metadata.Origin)!;
+            _repository!.Index(openedMod, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
             return PluginResponse.FromMetadata(metadata);
         }
     }

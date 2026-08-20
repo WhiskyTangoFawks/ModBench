@@ -44,13 +44,17 @@ public interface ISessionManager
     void Unload();
 
     /// <summary>
-    /// Creates a new empty plugin file in the data folder, appends it to plugins.txt, and reloads the session.
-    /// Returns the <see cref="PluginResponse"/> for the newly created plugin.
+    /// #288 / ADR-0041: creates a new empty plugin file at <paramref name="path"/>/<paramref
+    /// name="name"/>, opens it into the live session as a genuine load-order participant under
+    /// <paramref name="origin"/>, and indexes it. Returns the <see cref="PluginResponse"/> for the
+    /// newly created plugin. Never touches <c>plugins.txt</c> — appending the load-order line is
+    /// the caller's job (Mod Management's own writer, or a script/agent's own per ADR-0024).
     /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
-    /// Throws <see cref="ArgumentException"/> if the name has an invalid extension.
+    /// Throws <see cref="ArgumentException"/> if the name has an invalid extension, or the name,
+    /// path, or origin is empty.
     /// Throws <see cref="System.IO.IOException"/> if the file already exists.
     /// </summary>
-    PluginResponse CreatePlugin(string name);
+    PluginResponse CreatePlugin(string name, string path, string origin);
 
     /// <summary>
     /// Opens and indexes a plugin file the effective load order does not name — a copy shadowed by

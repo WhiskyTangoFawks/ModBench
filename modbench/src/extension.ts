@@ -46,6 +46,7 @@ import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './mo
 import { deploy, isDeployed, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
 import { buildExplicitPluginsWithOrigin, resolveCurrentPluginOrigins } from './modmanager/explicitSession';
+import { resolvePluginDestination, type PluginDestinationChoice } from './modmanager/pluginDestination';
 import { detectRoot } from './modmanager/install/detectRoot';
 import { extractArchive } from './modmanager/install/extractArchive';
 import {
@@ -409,13 +410,14 @@ export function activate(context: vscode.ExtensionContext) {
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
   const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics);
-  const { modListProvider, downloadsProvider, pluginListProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository), showCrashRepairOffers });
+  const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository), showCrashRepairOffers });
 
   context.subscriptions.push(
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerPluginRowCommands(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
+    registerCreatePluginCommand(controller, modlistSource, instanceRoot, pluginListProvider, outputChannel),
     // #417: started once at activation, not per session — see the function's own doc comment.
     { dispose: startExternalChangeDialogPolling(repository, controller, outputChannel, log) },
     ...registerEditorCommands({
@@ -658,10 +660,6 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
         { routerDeps, recordPanels, activeRecordTracker });
     }),
     vscode.commands.registerCommand('modbench.loadMore', (node: LoadMoreNode) => treeProvider.loadMore(node)),
-    vscode.commands.registerCommand('modbench.newPlugin', async () => {
-      const name = await promptPluginName();
-      if (name) await controller.createPlugin(name);
-    }),
     ...registerFilterCommands(scriptsPath, controller),
     // #273: reaches every plugin-bearing merged-tree row (modmanager's PluginListNode, not
     // medit's own PluginNode) via pluginFileOf() — the same row-agnostic adapter the composite
@@ -1204,6 +1202,120 @@ function registerTrackCommand(
   });
 }
 
+/** #288 / ADR-0041: New Plugin's destination QuickPick — the composition root joining both
+ *  bounded contexts in one gesture (precedent: `makeEnterEditing`). `overwrite/` is listed first
+ *  so it is the QuickPick's pre-highlighted default (`showQuickPick` has no `activeItem` option;
+ *  array order is the only way to pre-highlight, same convention `modbench.vmad.setScriptFlags`
+ *  already uses) — Enter alone accepts it, preserving the xEdit-under-MO2 reflex. "New mod…"
+ *  creates the mod folder itself via `installMod` with an empty source dir before returning, so it
+ *  registers in `modlist.txt` and the Mods tree the same way any other install does — free, not
+ *  reinvented. Returns undefined if the user cancels any prompt. */
+async function pickPluginDestination(
+  modlistSource: Mo2ModlistSource, instanceRoot: string,
+): Promise<{ path: string; origin: string } | undefined> {
+  const picked = await vscode.window.showQuickPick(
+    [
+      { label: 'overwrite/', description: "MO2's overwrite folder", choice: { kind: 'overwrite' } as PluginDestinationChoice },
+      { label: 'Existing mod…', choice: { kind: 'existingMod' } as const },
+      { label: 'New mod…', choice: { kind: 'newMod' } as const },
+    ],
+    { placeHolder: 'Where should the new plugin live?' },
+  );
+  if (!picked) return undefined;
+
+  if (picked.choice.kind === 'overwrite') return resolvePluginDestination(instanceRoot, picked.choice);
+
+  if (picked.choice.kind === 'existingMod') {
+    const entries = await modlistSource.readModlist();
+    const modNames = entries.filter((e) => e.kind === 'mod').map((e) => e.name);
+    const modName = await vscode.window.showQuickPick(modNames, { placeHolder: 'Which mod?' });
+    return modName ? resolvePluginDestination(instanceRoot, { kind: 'existingMod', modName }) : undefined;
+  }
+
+  const modName = await vscode.window.showInputBox({ prompt: 'New mod name' });
+  if (!modName) return undefined;
+  const staging = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'medit-newmod-'));
+  try {
+    // Accepted residue (#288 review), the frontend's twin of PluginEndpoints.CreatePlugin's own
+    // GitUnavailableException-catch comment: the mod folder is registered here, before the create
+    // POST below even runs. If that POST then fails, the mod stays registered — empty and
+    // disabled, same as any fresh install — rather than being rolled back. Visible in the Mods
+    // tree, harmless, and the user's own delete-the-mod-folder undoes it; not engineered around,
+    // per the ruling.
+    await modlistSource.installMod(modName, staging, {});
+  } finally {
+    await fs.promises.rm(staging, { recursive: true, force: true });
+  }
+  return resolvePluginDestination(instanceRoot, { kind: 'newMod', modName });
+}
+
+/** #288 / ADR-0041: `modbench.newPlugin` — creation lands as tracked working-tree text. Editing's
+ *  create endpoint writes the file, Tracks the destination if needed, and indexes it; only once
+ *  that has actually succeeded does Mod Management's own writer (`appendPlugin`) add the load-order
+ *  line — never the other way around, so the load order can never name a file that doesn't yet
+ *  exist. Registered unconditionally (the command exists in every activation), but needs a live
+ *  Loadout to have anywhere to put the plugin — the Plugins tree it's contributed to
+ *  (`modbench.pluginListTree`) only renders with one anyway, so the guard below is defensive, not
+ *  the normal path. */
+// Split out of registerCreatePluginCommand purely to stay under its complexity budget (same
+// reasoning as registerFilterCommands/makeOnRecordEdited elsewhere in this file) — the load-order
+// append and its own failure mode (created but unregistered — a real, surfaced state, not silently
+// dropped) is one coherent step.
+async function appendCreatedPluginToLoadOrder(
+  modlistSource: Mo2ModlistSource, pluginListProvider: PluginListProvider, pluginName: string, outputChannel: vscode.LogOutputChannel,
+): Promise<void> {
+  try {
+    await modlistSource.appendPlugin(pluginName);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    outputChannel.error(`[extension] newPlugin: created "${pluginName}" but could not add it to plugins.txt: ${message}`);
+    void vscode.window.showErrorMessage(
+      `Modbench: Created "${pluginName}", but could not add it to the load order — add it manually in the Plugins tree.`,
+    );
+    pluginListProvider.invalidate();
+    return;
+  }
+  pluginListProvider.invalidate();
+  void vscode.window.showInformationMessage(`Modbench: Created "${pluginName}".`);
+}
+
+function registerCreatePluginCommand(
+  controller: SessionController,
+  modlistSource: Mo2ModlistSource | undefined,
+  instanceRoot: string | undefined,
+  pluginListProvider: PluginListProvider | undefined,
+  outputChannel: vscode.LogOutputChannel,
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.newPlugin', async () => {
+    if (!modlistSource || !instanceRoot || !pluginListProvider) {
+      outputChannel.error('[extension] newPlugin: no Loadout available — need an open MO2 instance workspace.');
+      void vscode.window.showErrorMessage('Modbench: New Plugin needs an open MO2 instance workspace.');
+      return;
+    }
+
+    const name = await promptPluginName();
+    if (!name) return;
+
+    let destination: { path: string; origin: string } | undefined;
+    try {
+      destination = await pickPluginDestination(modlistSource, instanceRoot);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      outputChannel.error(`[extension] newPlugin: could not prepare the destination: ${message}`);
+      void vscode.window.showErrorMessage(`Modbench: Could not prepare the destination — ${message}`);
+      return;
+    }
+    if (!destination) return; // user cancelled a prompt
+
+    // SessionController.createPlugin already surfaces its own failure (ADR-0026) — nothing more
+    // to do here than stop.
+    const created = await controller.createPlugin(name, destination.path, destination.origin);
+    if (!created) return;
+
+    await appendCreatedPluginToLoadOrder(modlistSource, pluginListProvider, created.name, outputChannel);
+  });
+}
+
 /** #427: the three lifecycle gestures — create, delete, renumber — as Plugins-tree row commands on
  *  the record browser (ADR-0034: xEdit hosts Add/Remove/Change FormID in its own tree's context
  *  menu, not the grid — this is the tree, not the record editor's field grid). Titled to match
@@ -1725,6 +1837,10 @@ async function onModCheckboxChanged(
  *  read off `activate`'s exports. */
 function registerLoadoutSurfaces(deps: Omit<LoadoutViewDeps, 'revealLog'>): {
   modListProvider?: ModListProvider; downloadsProvider?: DownloadsProvider; pluginListProvider?: PluginListProvider;
+  // #288: forwarded so the composition root can wire modbench.newPlugin's destination QuickPick —
+  // both are undefined together with the providers above, on the same no-workspace/not-an-MO2-
+  // instance paths registerLoadoutView already bails on.
+  modlistSource?: Mo2ModlistSource; instanceRoot?: string;
 } {
   const { context, outputChannel } = deps;
   registerDeploymentModeContext(context);
@@ -1734,6 +1850,8 @@ function registerLoadoutSurfaces(deps: Omit<LoadoutViewDeps, 'revealLog'>): {
     modListProvider: loadout?.modListProvider,
     downloadsProvider: loadout?.downloadsProvider,
     pluginListProvider: loadout?.pluginListProvider,
+    modlistSource: loadout?.modlistSource,
+    instanceRoot: loadout?.instanceRoot,
   };
 }
 
