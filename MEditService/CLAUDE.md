@@ -4,7 +4,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 
 ## Invariants
 
-- Binary plugins = source of truth; DuckDB = indexed read model of committed data. Reads only via `IRecordRepository`, never Mutagen directly.
+- Binary plugins = source of truth; DuckDB = indexed read model of committed data. Reads only via `IRecordReads`/`IRecordIndex`, never Mutagen directly.
 - Records table key: `(form_key, origin, plugin)` — one row per (origin, plugin) per FormKey. `origin` (ADR-0036, amends ADR-0006) is the mod folder that provided the file, or a reserved `PluginOrigin` value; `plugin` alone is not a unique identity. #271/#272 closed every gap deliberately left filename-only-keyed for the record editor's own single-record field reads: VMAD, conditions, header and `form_lookup` indexing/delete/winner-join (`DuckDbRecordRepository`); `IRecordReader.GetVmad`/`GetConditions`/`GetPlacement`; the `pending_changes` read/delete surface itself — `IPendingChangeService.GetChanges`, `GetPendingFields`, `RemoveFieldsWithPrefix`, `GetStagedFormKeys`, `GetPendingNativeFormKeyChanges`, `Revert` all take/filter by `origin`; and `pending_form_references`. #275 closed the wire/DTO shims layered on top: `PluginResponse`/`RecordDetail`/`CompareOverride`/`PendingChangeUpsert`/`GroupMember`/`PendingChange`/`ExplicitPlugin`/`PluginMetadata` all require `Origin` (or `origin`) rather than defaulting it, and the origin-less `LoadExplicit` overloads (`GameSession`/`ISessionManager`/`SessionManager`, including the `ISessionManager` default-interface method that used to discard origin) are gone. #296 closed the remaining read surfaces (Worldspace tree, Referenced By, record listing/lookup, plugin record-type counts, ESL native-FormKey validation): `GetWorldspaceCells`/`GetInteriorCells`/`GetCellReferences`/`GetRecordForPlugin`/`CountRecordsForPlugin`/`GetNativeFormKeys` all take a required, non-nullable `origin` (plugin is never optional at any of their call sites, mirroring GetVmad/GetConditions/GetPlacement). `GetRecord` (`IRecordReader`) takes a required-but-*nullable* `origin` instead — no default, but nullable like its own nullable `plugin`, because its global-winner lookup (`IRecordQueryService.GetRecord(formKey)`) legitimately passes both as null; only `GetRecordForPlugin`, its non-nullable wrapper, gets the plain required treatment. `GetRecords`/`SearchRecords` take a nullable `origin` *filter* instead (plugin itself is optional there — browsing every plugin is legitimate — mirroring `DuckDbPendingChangeService.BuildFilter`'s own origin parameter); `RecordSummary` and `ReferenceResult` both gained an `Origin` field; `WorldspaceQueryService.GetCellReferences`'s pending-overlay call and `IRecordQueryService.GetPluginRecordTypes` resolve origin server-side via the new shared `PluginOriginResolver` (Session/) rather than taking it as a wire parameter, since no frontend caller has ever had origin to supply on these routes. `IRecordQueryService.GetChanges` lost its `plugin` parameter entirely (deleted, not origin-threaded — nothing ever called it) rather than gaining one; `formKey`/`memberChangeId` are real, kept as-is.
 
   #34's backend half closed the last of the compound-identity gaps *inside the session*: `GameSession` keys its opened mods by `(origin, filename)` and `GetMod` requires an origin; `AddUnlistedPlugin`/`RemoveUnlistedPlugin` + `SessionManager.LoadUnlistedPlugin`/`UnloadUnlistedPlugin` + `POST /plugins/load`/`/plugins/unload` open and index (or drop) a plugin file the effective load order does not name — read-only, non-participating, and absent from Mutagen's `LoadOrder` entirely, which refuses a second listing per ModKey. `PluginMetadata`/`PluginResponse` carry `InLoadOrder`, which `Participates` cannot express (a disabled `plugins.txt` line is still in the load order and still a legitimate write target). `IRecordIndexer.Unindex` is `Index`'s inverse, table for table — ADR-0035's "hidden means absent" is unloading, never filtering. `RecordQueryService.GetCompare`'s `pluginMasters`/`pluginParticipates` are `ColumnKey`-keyed (they threw outright on a duplicate filename, not merely mis-keyed), as are all three classifiers' participation filters. `PluginOriginResolver.Resolve` and `SessionManager.RequirePlugin` resolve **only among load-order members**, which restores the property that makes bare filenames safe as write targets: `plugins.txt` cannot list a name twice. `IEditOrchestrator.CopyRecordTo` takes `sourceOrigin` so a copy binds to the column it was invoked on. `GetRecords`/`GetPluginRecordTypes` take an optional `origin` — stated by a caller that knows which copy it is browsing, else resolved from the load order as since #296.
@@ -26,7 +26,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   `form_references`, `placement`, `cell_location`, `plugins`, `header`) are populated from it at
   ingest. The reflected per-type wide tables are gone — each type's name is now a generated
   `json_extract` **view** over `records`, which is what keeps user filter SQL working unchanged.
-  - **Typed reads reconstitute; they never read the views.** `GetRecord`/`GetAllOverrides`
+  - **Typed reads reconstitute; they never read the views.** `GetDocument`/`GetOverrideStack`
     deserialize the document through `RecordTextCodec` and run the same `ColumnSpec.Extract`
     delegates the wide tables were filled with, so values are identical by construction. The
     published relational schema is a contract for **the SQL door only** (user filters,
@@ -40,6 +40,18 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     is how a GLOB is read back as `GlobalFloat` rather than the schema's discovery winner.
   - The header is the one surviving per-type table: a `ModHeader` is not an `IMajorRecordGetter`, so
     it has no document to project a view over.
+- **The record-index seam is `IRecordReads`/`IRecordIndex`** (#421), replacing `IRecordRepository`/
+  `IRecordReader`/`IRecordIndexer` and absorbing the query service's read-model pass-throughs
+  (`GetRecordForPlugin`/`GetRecordType`/`GetNativeFormKeys`/`GetPlacement`/`GetVmad`/`GetConditions` —
+  all endpoint-orphaned, deleted rather than kept as redundant forwarding; VMAD/condition
+  reconstitution survives at the query-service level, `Queries/RecordDocumentCodecs`, operating on
+  `RecordDocument.Body` — rejected from the seam itself, same as raw SQL). `PluginKey(Name, Origin)`
+  is the compound identity on every seam member, ingest included, replacing every bare
+  `(string plugin, string origin)` pair. `IRecordIndex.At(RecordRef)` repositions every read; #421
+  ships `RecordRef.Head` answering identically to the default `RecordRef.Effective` (both map onto
+  the single `LedgerRef.Committed` value `records.ref` carries) — inert until #415 gives them
+  independent state. No `Connection` property and no SQL crosses this seam except `SetFilter`
+  (invariant 8) — the concrete `DuckDbRecordIndex` keeps one, for white-box tests only.
 - Every write backs up the target plugin first (timestamped `.bak`) — cross-session undo depends on it; new write paths must not skip this. [ADR-0008](../docs/adr/0008-timestamped-binary-backups.md)
 - FormLinks validate at stage time, not apply time — existence+type checked before entering pending-change state. [ADR-0020](../docs/adr/0020-reference-validation-at-stage-time.md)
 - Partial-success endpoints return a structured failures collection (named record, e.g. `SessionLoadResponse.Failures`) — never swallow a partial outcome or use stringly-typed errors; frontend decides surfacing. [ADR-0026](../docs/adr/0026-error-surfacing-policy.md)
@@ -55,7 +67,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | ------ | ---- | ------- |
 | `Session/` | Live game environment and lifecycle | `GameSession`, `SessionManager`, `PluginMetadata` |
 | `Schema/` | Static knowledge of Mutagen record types — read and write | `SchemaReflector`, `RecordTableSchema`, `ColumnSpec`, `FieldMetadataMapper` |
-| `Records/` | DuckDB index over documents: ingest, query, DDL + view generation | `IRecordRepository`, `DuckDbRecordRepository`, `TableDdlBuilder`, `RecordViewBuilder` |
+| `Records/` | DuckDB index over documents: ingest, query, DDL + view generation | `IRecordReads`, `IRecordIndex`, `DuckDbRecordIndex`, `PluginKey`, `TableDdlBuilder`, `RecordViewBuilder` |
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
 | `Edits/` | Staging and persisting user edits | `PendingChangeService`, `PluginWriter`, `SaveResult` |
 | `Serialization/` | Per-record text ledger codec (ADR-0040 stage 1) | `RecordTextCodec`, `RecordTextCodecCustomization` |

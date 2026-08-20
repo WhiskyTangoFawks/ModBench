@@ -16,7 +16,7 @@ namespace MEditService.Tests.Records;
 /// reflected per-type wide tables (ADR-0041).
 ///
 /// Asserted <b>through the SQL door</b> (plain <c>SELECT</c> against the connection), not through
-/// <c>IRecordReader</c>, deliberately: the published relational schema is a contract in its own right
+/// <c>IRecordReads</c>, deliberately: the published relational schema is a contract in its own right
 /// for user filter SQL and <c>medit.query</c> scripts (invariant 8), and the typed C# surface is
 /// explicitly *not* that contract. A test that could only see this table through a repository method
 /// would pass just as happily if the table were shaped wrong but the method compensated.
